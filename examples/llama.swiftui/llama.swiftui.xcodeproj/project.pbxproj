@@ -7,51 +7,32 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		542376082B0D9BFB008E6A1C /* ggml-quants.c in Sources */ = {isa = PBXBuildFile; fileRef = 542376072B0D9BFB008E6A1C /* ggml-quants.c */; settings = {COMPILER_FLAGS = "-O3"; }; };
-		5423760B2B0D9C4B008E6A1C /* ggml-backend.c in Sources */ = {isa = PBXBuildFile; fileRef = 5423760A2B0D9C4B008E6A1C /* ggml-backend.c */; settings = {COMPILER_FLAGS = "-O3"; }; };
-		542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
-		542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09B2AC8723900A8AEE9 /* ggml.c */; settings = {COMPILER_FLAGS = "-DGGML_USE_ACCELERATE -DGGML_USE_METAL -DGGML_USE_K_QUANTS -O3"; }; };
-		542EA0A02AC8725700A8AEE9 /* ggml-alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */; settings = {COMPILER_FLAGS = "-O3"; }; };
-		542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A12AC8729100A8AEE9 /* llama.cpp */; settings = {COMPILER_FLAGS = "-DGGML_USE_K_QUANTS -DGGML_USE_METAL -O3"; }; };
 		549479CB2AC9E16000E0F78B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 549479CA2AC9E16000E0F78B /* Metal.framework */; };
-		549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */ = {isa = PBXBuildFile; fileRef = 549479C52AC9E0F200E0F78B /* ggml-metal.m */; settings = {COMPILER_FLAGS = "-fno-objc-arc -DGGML_SWIFT -DGGML_USE_METAL -O3"; }; };
 		7FA3D2B32B2EA2F600543F92 /* DownloadButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA3D2B22B2EA2F600543F92 /* DownloadButton.swift */; };
 		8A1C83772AC328BD0096AF73 /* llama_swiftuiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1C83762AC328BD0096AF73 /* llama_swiftuiApp.swift */; };
 		8A1C83792AC328BD0096AF73 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1C83782AC328BD0096AF73 /* ContentView.swift */; };
 		8A1C837B2AC328BE0096AF73 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A1C837A2AC328BE0096AF73 /* Assets.xcassets */; };
-		8A1C837E2AC328BE0096AF73 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A1C837D2AC328BE0096AF73 /* Preview Assets.xcassets */; };
 		8A39BE0A2AC7601100BFEB40 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8A39BE092AC7601000BFEB40 /* Accelerate.framework */; };
 		8A3F84242AC4C891005E2EE8 /* models in Resources */ = {isa = PBXBuildFile; fileRef = 8A3F84232AC4C891005E2EE8 /* models */; };
 		8A907F332AC7138A006146EA /* LibLlama.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A907F322AC7134E006146EA /* LibLlama.swift */; };
 		8A9F7C4D2AC332EE008AE1EA /* LlamaState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */; };
+		DF810E132B4A5BA200301144 /* llama in Frameworks */ = {isa = PBXBuildFile; productRef = DF810E122B4A5BA200301144 /* llama */; };
+		F1FE20E22B465ECA00B45541 /* LoadCustomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		542376062B0D9BEA008E6A1C /* ggml-quants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-quants.h"; path = "../../ggml-quants.h"; sourceTree = "<group>"; };
-		542376072B0D9BFB008E6A1C /* ggml-quants.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ggml-quants.c"; path = "../../ggml-quants.c"; sourceTree = "<group>"; };
-		542376092B0D9C40008E6A1C /* ggml-backend.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "ggml-backend.h"; path = "../../ggml-backend.h"; sourceTree = "<group>"; };
-		5423760A2B0D9C4B008E6A1C /* ggml-backend.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ggml-backend.c"; path = "../../ggml-backend.c"; sourceTree = "<group>"; };
-		542EA09B2AC8723900A8AEE9 /* ggml.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ggml.c; path = ../../ggml.c; sourceTree = "<group>"; };
-		542EA09C2AC8723900A8AEE9 /* ggml.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ggml.h; path = ../../ggml.h; sourceTree = "<group>"; };
-		542EA09E2AC8725700A8AEE9 /* ggml-alloc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-alloc.h"; path = "../../ggml-alloc.h"; sourceTree = "<group>"; };
-		542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ggml-alloc.c"; path = "../../ggml-alloc.c"; sourceTree = "<group>"; };
-		542EA0A12AC8729100A8AEE9 /* llama.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = llama.cpp; path = ../../llama.cpp; sourceTree = "<group>"; };
-		542EA0A22AC8729100A8AEE9 /* llama.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = llama.h; path = ../../llama.h; sourceTree = "<group>"; };
-		549479C52AC9E0F200E0F78B /* ggml-metal.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = "ggml-metal.m"; path = "../../ggml-metal.m"; sourceTree = "<group>"; };
-		549479C62AC9E0F200E0F78B /* ggml-metal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-metal.h"; path = "../../ggml-metal.h"; sourceTree = "<group>"; };
-		549479C82AC9E10B00E0F78B /* ggml-metal.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; name = "ggml-metal.metal"; path = "../../ggml-metal.metal"; sourceTree = "<group>"; };
 		549479CA2AC9E16000E0F78B /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		7FA3D2B22B2EA2F600543F92 /* DownloadButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DownloadButton.swift; sourceTree = "<group>"; };
-		8A08D20A2AC73B1500FE6CD4 /* bridging-header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bridging-header.h"; sourceTree = "<group>"; };
 		8A1C83732AC328BD0096AF73 /* llama.swiftui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = llama.swiftui.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A1C83762AC328BD0096AF73 /* llama_swiftuiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = llama_swiftuiApp.swift; sourceTree = "<group>"; };
 		8A1C83782AC328BD0096AF73 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		8A1C837A2AC328BE0096AF73 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		8A1C837D2AC328BE0096AF73 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		8A39BE092AC7601000BFEB40 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		8A3F84232AC4C891005E2EE8 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = llama.swiftui/Resources/models; sourceTree = "<group>"; };
 		8A907F322AC7134E006146EA /* LibLlama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibLlama.swift; sourceTree = "<group>"; };
 		8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaState.swift; sourceTree = "<group>"; };
+		DF2D2FE72B4A59BE00FCB72D /* llama.cpp */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = llama.cpp; path = ../..; sourceTree = "<group>"; };
+		F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadCustomButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DF810E132B4A5BA200301144 /* llama in Frameworks */,
 				549479CB2AC9E16000E0F78B /* Metal.framework in Frameworks */,
 				8A39BE0A2AC7601100BFEB40 /* Accelerate.framework in Frameworks */,
 			);
@@ -67,30 +49,10 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		8A08D1F62AC7383900FE6CD4 /* llama.cpp */ = {
-			isa = PBXGroup;
-			children = (
-				5423760A2B0D9C4B008E6A1C /* ggml-backend.c */,
-				542376092B0D9C40008E6A1C /* ggml-backend.h */,
-				542376062B0D9BEA008E6A1C /* ggml-quants.h */,
-				542376072B0D9BFB008E6A1C /* ggml-quants.c */,
-				549479C82AC9E10B00E0F78B /* ggml-metal.metal */,
-				549479C62AC9E0F200E0F78B /* ggml-metal.h */,
-				549479C52AC9E0F200E0F78B /* ggml-metal.m */,
-				542EA09B2AC8723900A8AEE9 /* ggml.c */,
-				542EA09C2AC8723900A8AEE9 /* ggml.h */,
-				542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */,
-				542EA09E2AC8725700A8AEE9 /* ggml-alloc.h */,
-				542EA0A12AC8729100A8AEE9 /* llama.cpp */,
-				542EA0A22AC8729100A8AEE9 /* llama.h */,
-			);
-			name = llama.cpp;
-			sourceTree = "<group>";
-		};
 		8A1C836A2AC328BD0096AF73 = {
 			isa = PBXGroup;
 			children = (
-				8A08D1F62AC7383900FE6CD4 /* llama.cpp */,
+				DF2D2FE72B4A59BE00FCB72D /* llama.cpp */,
 				8A907F312AC7134E006146EA /* llama.cpp.swift */,
 				8A3F84232AC4C891005E2EE8 /* models */,
 				8A1C83752AC328BD0096AF73 /* llama.swiftui */,
@@ -115,17 +77,8 @@
 				8A9F7C4A2AC332BF008AE1EA /* UI */,
 				8A1C83762AC328BD0096AF73 /* llama_swiftuiApp.swift */,
 				8A1C837A2AC328BE0096AF73 /* Assets.xcassets */,
-				8A1C837C2AC328BE0096AF73 /* Preview Content */,
 			);
 			path = llama.swiftui;
-			sourceTree = "<group>";
-		};
-		8A1C837C2AC328BE0096AF73 /* Preview Content */ = {
-			isa = PBXGroup;
-			children = (
-				8A1C837D2AC328BE0096AF73 /* Preview Assets.xcassets */,
-			);
-			path = "Preview Content";
 			sourceTree = "<group>";
 		};
 		8A39BE082AC7601000BFEB40 /* Frameworks */ = {
@@ -155,7 +108,6 @@
 		8A907F312AC7134E006146EA /* llama.cpp.swift */ = {
 			isa = PBXGroup;
 			children = (
-				8A08D20A2AC73B1500FE6CD4 /* bridging-header.h */,
 				8A907F322AC7134E006146EA /* LibLlama.swift */,
 			);
 			path = llama.cpp.swift;
@@ -166,6 +118,7 @@
 			children = (
 				7FA3D2B22B2EA2F600543F92 /* DownloadButton.swift */,
 				8A1C83782AC328BD0096AF73 /* ContentView.swift */,
+				F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -195,6 +148,7 @@
 			);
 			name = llama.swiftui;
 			packageProductDependencies = (
+				DF810E122B4A5BA200301144 /* llama */,
 			);
 			productName = llama.swiftui;
 			productReference = 8A1C83732AC328BD0096AF73 /* llama.swiftui.app */;
@@ -241,9 +195,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */,
 				8A3F84242AC4C891005E2EE8 /* models in Resources */,
-				8A1C837E2AC328BE0096AF73 /* Preview Assets.xcassets in Resources */,
 				8A1C837B2AC328BE0096AF73 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -255,17 +207,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				542376082B0D9BFB008E6A1C /* ggml-quants.c in Sources */,
-				549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */,
-				542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */,
+				F1FE20E22B465ECA00B45541 /* LoadCustomButton.swift in Sources */,
 				8A907F332AC7138A006146EA /* LibLlama.swift in Sources */,
-				542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */,
 				8A9F7C4D2AC332EE008AE1EA /* LlamaState.swift in Sources */,
 				8A1C83792AC328BD0096AF73 /* ContentView.swift in Sources */,
 				8A1C83772AC328BD0096AF73 /* llama_swiftuiApp.swift in Sources */,
 				7FA3D2B32B2EA2F600543F92 /* DownloadButton.swift in Sources */,
-				542EA0A02AC8725700A8AEE9 /* ggml-alloc.c in Sources */,
-				5423760B2B0D9C4B008E6A1C /* ggml-backend.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -395,11 +342,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"llama.swiftui/Preview Content\"";
 				DEVELOPMENT_TEAM = STLSG3FG8Q;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -416,11 +361,12 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bachittle.llama-swift";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "llama.cpp.swift/bridging-header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Debug;
 		};
@@ -428,11 +374,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"llama.swiftui/Preview Content\"";
 				DEVELOPMENT_TEAM = STLSG3FG8Q;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -449,10 +393,11 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bachittle.llama-swift";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "llama.cpp.swift/bridging-header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Release;
 		};
@@ -478,6 +423,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DF810E122B4A5BA200301144 /* llama */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = llama;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8A1C836B2AC328BD0096AF73 /* Project object */;
 }

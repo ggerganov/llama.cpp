@@ -9,7 +9,7 @@
   git,
   python3,
   mpi,
-  openblas, # TODO: Use the generic `blas` so users could switch betwen alternative implementations
+  openblas, # TODO: Use the generic `blas` so users could switch between alternative implementations
   cudaPackages,
   darwin,
   rocmPackages,

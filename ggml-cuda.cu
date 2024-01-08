@@ -119,9 +119,28 @@
 #define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
 #define CC_VOLTA      700
 #define CC_OFFSET_AMD 1000000
+#define CC_RDNA1      (CC_OFFSET_AMD + 1010)
 #define CC_RDNA2      (CC_OFFSET_AMD + 1030)
+#define CC_RDNA3      (CC_OFFSET_AMD + 1100)
 
 #define GGML_CUDA_MAX_NODES 8192
+
+// define this if you want to always fallback to MMQ kernels and not use cuBLAS for matrix multiplication
+// on modern hardware, using cuBLAS is recommended as it utilizes F16 tensor cores which are very performant
+// for large computational tasks. the drawback is that this requires some extra amount of VRAM:
+// -  7B quantum model: +100-200 MB
+// - 13B quantum model: +200-400 MB
+//
+//#define GGML_CUDA_FORCE_MMQ
+
+// TODO: improve this to be correct for more hardware
+//       for example, currently fails for GeForce GTX 1660 which is TURING arch (> VOLTA) but does not have tensor cores
+#if !defined(GGML_CUDA_FORCE_MMQ)
+#define CUDA_USE_TENSOR_CORES
+#endif
+
+// max batch size to use MMQ kernels when tensor cores are available
+#define MMQ_MAX_BATCH_SIZE 32
 
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
@@ -164,7 +183,7 @@ static __device__ __forceinline__ int __vsubss4(const int a, const int b) {
 static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
 #if defined(__gfx906__) || defined(__gfx908__) || defined(__gfx90a__) || defined(__gfx1030__)
     c = __builtin_amdgcn_sdot4(a, b, c, false);
-#elif defined(__gfx1100__)
+#elif defined(RDNA3)
     c = __builtin_amdgcn_sudot4( true, a, true, b, c, false);
 #elif defined(__gfx1010__) || defined(__gfx900__)
     int tmp1;
@@ -188,23 +207,6 @@ static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
     return c;
 }
 #endif // defined(GGML_USE_HIPBLAS)
-
-// define this if you want to always fallback to MMQ kernels and not use cuBLAS for matrix multiplication
-// on modern hardware, using cuBLAS is recommended as it utilizes F16 tensor cores which are very performant
-// for large computational tasks. the drawback is that this requires some extra amount of VRAM:
-// -  7B quantum model: +100-200 MB
-// - 13B quantum model: +200-400 MB
-//
-//#define GGML_CUDA_FORCE_MMQ
-
-// TODO: improve this to be correct for more hardware
-//       for example, currently fails for GeForce GTX 1660 which is TURING arch (> VOLTA) but does not have tensor cores
-#if !defined(GGML_CUDA_FORCE_MMQ) && (!defined(GGML_USE_HIPBLAS) || defined(RDNA3))
-#define CUDA_USE_TENSOR_CORES
-#endif
-
-// max batch size to use MMQ kernels when tensor cores are available
-#define MMQ_MAX_BATCH_SIZE 32
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -1870,14 +1872,6 @@ static __device__ void convert_f16(const void * vx, const int ib, const int iqs,
     v.y = x[ib + iqs + 1];
 }
 
-static __device__ void convert_f32(const void * vx, const int ib, const int iqs, dfloat2 & v){
-    const float * x = (const float *) vx;
-
-    // automatic half -> float type cast if dfloat == float
-    v.x = x[ib + iqs + 0];
-    v.y = x[ib + iqs + 1];
-}
-
 static __global__ void quantize_q8_1(const float * __restrict__ x, void * __restrict__ vy, const int kx, const int kx_padded) {
     const int ix = blockDim.x*blockIdx.x + threadIdx.x;
 
@@ -1981,7 +1975,7 @@ static __global__ void k_get_rows_float(
 
 template <int qk, int qr, dequantize_kernel_t dequantize_kernel, typename dst_t>
 static __global__ void dequantize_block(const void * __restrict__ vx, dst_t * __restrict__ y, const int k) {
-    const int i = blockDim.x*blockIdx.x + 2*threadIdx.x;
+    const int i = 2*(blockDim.x*blockIdx.x + threadIdx.x);
 
     if (i >= k) {
         return;
@@ -1998,6 +1992,19 @@ static __global__ void dequantize_block(const void * __restrict__ vx, dst_t * __
 
     y[iybs + iqs + 0]        = v.x;
     y[iybs + iqs + y_offset] = v.y;
+}
+
+template <typename src_t, typename dst_t>
+static __global__ void convert_unary(const void * __restrict__ vx, dst_t * __restrict__ y, const int k) {
+    const int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+    if (i >= k) {
+        return;
+    }
+
+    const src_t * x = (src_t *) vx;
+
+    y[i] = x[i];
 }
 
 // VDR = vec dot ratio, how many contiguous integers each thread processes when the vec dot kernel is called
@@ -5607,7 +5614,7 @@ static void quantize_row_q8_1_cuda(const float * x, void * vy, const int kx, con
 
 template <int qk, int qr, dequantize_kernel_t dequantize_kernel, typename dst_t>
 static void dequantize_block_cuda(const void * __restrict__ vx, dst_t * __restrict__ y, const int k, cudaStream_t stream) {
-    const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
+    const int num_blocks = (k + 2*CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / (2*CUDA_DEQUANTIZE_BLOCK_SIZE);
     dequantize_block<qk, qr, dequantize_kernel><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
@@ -5657,6 +5664,12 @@ static void dequantize_row_q6_K_cuda(const void * vx, dst_t * y, const int k, cu
 #endif
 }
 
+template <typename src_t, typename dst_t>
+static void convert_unary_cuda(const void * __restrict__ vx, dst_t * __restrict__ y, const int k, cudaStream_t stream) {
+    const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
+    convert_unary<src_t><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
+}
+
 static to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
     switch (type) {
         case GGML_TYPE_Q4_0:
@@ -5680,7 +5693,7 @@ static to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
         case GGML_TYPE_Q6_K:
             return dequantize_row_q6_K_cuda;
         case GGML_TYPE_F32:
-            return dequantize_block_cuda<1, 1, convert_f32>;
+            return convert_unary_cuda<float>;
         default:
             return nullptr;
     }
@@ -5709,7 +5722,7 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
         case GGML_TYPE_Q6_K:
             return dequantize_row_q6_K_cuda;
         case GGML_TYPE_F16:
-            return dequantize_block_cuda<1, 1, convert_f16>;
+            return convert_unary_cuda<half>;
         default:
             return nullptr;
     }
@@ -8661,13 +8674,12 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     }
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-    const bool fp16_performance_good = true;
 
-#ifdef RDNA3
-    const bool use_mul_mat_q = false;
-#else
-    const bool use_mul_mat_q = true;
-#endif // RDNA3
+    const bool fp16_performance_good = min_compute_capability >= CC_RDNA1;
+    bool               use_mul_mat_q = ggml_is_quantized(src0->type);
+#ifdef CUDA_USE_TENSOR_CORES
+    use_mul_mat_q = use_mul_mat_q && min_compute_capability < CC_RDNA3;
+#endif // CUDA_USE_TENSOR_CORES
 
 #else
 
@@ -9909,7 +9921,7 @@ static void ggml_backend_cuda_graph_plan_compute(ggml_backend_t backend, ggml_ba
     UNUSED(plan);
 }
 
-static void ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+static bool ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_context_cuda * cuda_ctx = (ggml_backend_context_cuda *)backend->context;
 
     ggml_cuda_set_main_device(cuda_ctx->device);
@@ -9966,6 +9978,8 @@ static void ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph 
     }
 
     UNUSED(backend);
+
+    return true;
 }
 
 static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
@@ -10038,14 +10052,19 @@ static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, const ggml_ten
                 }
                 return false;
             } break;
+        case GGML_OP_DUP:
+        case GGML_OP_REPEAT:
+        case GGML_OP_CONCAT:
+            {
+                ggml_type src0_type = op->src[0]->type;
+                return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
+            } break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
         case GGML_OP_PERMUTE:
         case GGML_OP_TRANSPOSE:
         case GGML_OP_NORM:
-        case GGML_OP_REPEAT:
-        case GGML_OP_DUP:
         case GGML_OP_ADD:
         case GGML_OP_MUL:
         case GGML_OP_DIV:
@@ -10062,7 +10081,6 @@ static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, const ggml_ten
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGSORT:
         case GGML_OP_ACC:
-        case GGML_OP_CONCAT:
         case GGML_OP_GROUP_NORM:
         case GGML_OP_UPSCALE:
         case GGML_OP_PAD:

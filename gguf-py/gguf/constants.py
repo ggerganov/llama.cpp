@@ -46,6 +46,8 @@ class Keys:
         HEAD_COUNT_KV     = "{arch}.attention.head_count_kv"
         MAX_ALIBI_BIAS    = "{arch}.attention.max_alibi_bias"
         CLAMP_KQV         = "{arch}.attention.clamp_kqv"
+        KEY_LENGTH        = "{arch}.attention.key_length"
+        VALUE_LENGTH      = "{arch}.attention.value_length"
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
 

@@ -147,6 +147,27 @@ static std::string get_ftype(int ftype) {
 }
 
 //
+// image data
+//
+
+// RGB uint8 image
+struct clip_image_u8 {
+    int nx;
+    int ny;
+
+    std::vector<uint8_t> buf;
+};
+
+// RGB float32 image (NHWC)
+// Memory layout: RGBRGBRGB...
+struct clip_image_f32 {
+    int nx;
+    int ny;
+
+    std::vector<float> buf;
+};
+
+//
 // clip layers
 //
 
@@ -204,16 +225,21 @@ struct clip_vision_model {
 };
 
 struct clip_ctx {
-    bool has_text_encoder = false;
-    bool has_vision_encoder = false;
+    bool has_text_encoder    = false;
+    bool has_vision_encoder  = false;
     bool has_llava_projector = false;
+
     struct clip_vision_model vision_model;
+
     float image_mean[3];
     float image_std[3];
     bool use_gelu = false;
     int32_t ftype = 1;
-    struct ggml_context * ctx;
+
     struct gguf_context * ctx_gguf;
+    struct ggml_context * ctx_data;
+
+    std::vector<uint8_t> buf_compute_meta;
 
     // memory buffers to evaluate the model
     ggml_backend_buffer_t params_buffer = NULL;
@@ -222,7 +248,7 @@ struct clip_ctx {
     ggml_allocr * compute_alloc = NULL;
 };
 
-static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_image_f32_batch * imgs) {
+static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs) {
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return nullptr;
@@ -243,13 +269,14 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     //const int projection_dim = hparams.projection_dim;
     const float eps = hparams.eps;
     int batch_size = imgs->size;
-    if(ctx->has_llava_projector) {
+    if (ctx->has_llava_projector) {
         GGML_ASSERT(batch_size == 1);
     }
+
     struct ggml_init_params params = {
-        /*.mem_size =*/ GGML_DEFAULT_GRAPH_SIZE * ggml_tensor_overhead() + ggml_graph_overhead(),
-        /*.mem_buffer =*/ NULL,
-        /*.no_alloc =*/ true,
+        /*.mem_size   =*/ ctx->buf_compute_meta.size(),
+        /*.mem_buffer =*/ ctx->buf_compute_meta.data(),
+        /*.no_alloc   =*/ true,
     };
 
     struct ggml_context * ctx0 = ggml_init(params);
@@ -272,7 +299,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
                 for (int k = 0; k < 3; k++) {
                     for (int y = 0; y < ny; y++) {
                         for (int x = 0; x < nx; x++) {
-                            data[(b * 3 * n) + k * n + y * nx + x] = imgs->data[b].data[3 * (y * nx + x) + k];
+                            data[(b * 3 * n) + k * n + y * nx + x] = imgs->data[b].buf[3 * (y * nx + x) + k];
                         }
                     }
                 }
@@ -413,7 +440,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         ggml_allocr_alloc(ctx->compute_alloc, patches);
         if (!ggml_allocr_is_measure(ctx->compute_alloc)) {
             int* patches_data = (int*)malloc(ggml_nbytes(patches));
-            for (int i = 0; i < num_positions; i++) {
+            for (int i = 0; i < num_patches; i++) {
                 patches_data[i] = i + 1;
             }
             ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
@@ -561,8 +588,8 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             /*.no_alloc =*/ true,
         };
 
-        new_clip->ctx = ggml_init(params);
-        if (!new_clip->ctx) {
+        new_clip->ctx_data = ggml_init(params);
+        if (!new_clip->ctx_data) {
             fprintf(stderr, "%s: ggml_init() failed\n", __func__);
             clip_free(new_clip);
             return nullptr;
@@ -579,7 +606,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         for (int i = 0; i < n_tensors; ++i) {
             const char * name = gguf_get_tensor_name(ctx, i);
             struct ggml_tensor * t = ggml_get_tensor(meta, name);
-            struct ggml_tensor * cur = ggml_dup_tensor(new_clip->ctx, t);
+            struct ggml_tensor * cur = ggml_dup_tensor(new_clip->ctx_data, t);
             ggml_set_name(cur, name);
         }
 
@@ -588,7 +615,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         ggml_allocr* alloc = ggml_allocr_new_from_buffer(new_clip->params_buffer);
         for (int i = 0; i < n_tensors; ++i) {
             const char * name = gguf_get_tensor_name(ctx, i);
-            struct ggml_tensor * cur = ggml_get_tensor(new_clip->ctx, name);
+            struct ggml_tensor * cur = ggml_get_tensor(new_clip->ctx_data, name);
             ggml_allocr_alloc(alloc, cur);
             const size_t offset = gguf_get_data_offset(ctx) + gguf_get_tensor_offset(ctx, i);
             fin.seekg(offset, std::ios::beg);
@@ -617,20 +644,20 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         // load vision model
         auto & vision_model = new_clip->vision_model;
         auto & hparams = vision_model.hparams;
-        hparams.hidden_size = get_u32(ctx, format(KEY_N_EMBD, "vision"));
-        hparams.n_head = get_u32(ctx, format(KEY_N_HEAD, "vision"));
+        hparams.hidden_size    = get_u32(ctx, format(KEY_N_EMBD, "vision"));
+        hparams.n_head         = get_u32(ctx, format(KEY_N_HEAD, "vision"));
         hparams.n_intermediate = get_u32(ctx, format(KEY_N_FF, "vision"));
-        hparams.n_layer = get_u32(ctx, format(KEY_N_BLOCK, "vision"));
-        hparams.image_size = get_u32(ctx, KEY_IMAGE_SIZE);
-        hparams.patch_size = get_u32(ctx, KEY_PATCH_SIZE);
+        hparams.n_layer        = get_u32(ctx, format(KEY_N_BLOCK, "vision"));
+        hparams.image_size     = get_u32(ctx, KEY_IMAGE_SIZE);
+        hparams.patch_size     = get_u32(ctx, KEY_PATCH_SIZE);
         hparams.projection_dim = get_u32(ctx, format(KEY_PROJ_DIM, "vision"));
-        hparams.eps = get_f32(ctx, format(KEY_LAYER_NORM_EPS, "vision"));
+        hparams.eps            = get_f32(ctx, format(KEY_LAYER_NORM_EPS, "vision"));
 
         int idx_mean = get_key_idx(ctx, KEY_IMAGE_MEAN);
-        int idx_std = get_key_idx(ctx, KEY_IMAGE_STD);
+        int idx_std  = get_key_idx(ctx, KEY_IMAGE_STD);
         for (int i = 0; i < 3; ++i) {
             new_clip->image_mean[i] = *((const float *)gguf_get_arr_data(ctx, idx_mean));
-            new_clip->image_std[i] = *((const float *)gguf_get_arr_data(ctx, idx_std));
+            new_clip->image_std[i]  = *((const float *)gguf_get_arr_data(ctx, idx_std));
         }
 
         if (verbosity >= 2) {
@@ -644,35 +671,35 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             printf("v_n_layer          %d\n", hparams.n_layer);
         }
 
-        vision_model.patch_embeddings = get_tensor(new_clip->ctx, TN_PATCH_EMBD);
-        vision_model.class_embedding = get_tensor(new_clip->ctx, TN_CLASS_EMBD);
-        vision_model.position_embeddings = get_tensor(new_clip->ctx, format(TN_POS_EMBD, "v"));
-        vision_model.pre_ln_w = get_tensor(new_clip->ctx, format(TN_LN_PRE, "v", "weight"));
-        vision_model.pre_ln_b = get_tensor(new_clip->ctx, format(TN_LN_PRE, "v", "bias"));
-        vision_model.mm_0_w = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 0, "weight"));
-        vision_model.mm_0_b = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 0, "bias"));
-        vision_model.mm_2_w = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 2, "weight"));
-        vision_model.mm_2_b = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 2, "bias"));
+        vision_model.patch_embeddings    = get_tensor(new_clip->ctx_data, TN_PATCH_EMBD);
+        vision_model.class_embedding     = get_tensor(new_clip->ctx_data, TN_CLASS_EMBD);
+        vision_model.position_embeddings = get_tensor(new_clip->ctx_data, format(TN_POS_EMBD, "v"));
+        vision_model.pre_ln_w            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "weight"));
+        vision_model.pre_ln_b            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "bias"));
+        vision_model.mm_0_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "weight"));
+        vision_model.mm_0_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "bias"));
+        vision_model.mm_2_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "weight"));
+        vision_model.mm_2_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "bias"));
 
         vision_model.layers.resize(hparams.n_layer);
         for (int il = 0; il < hparams.n_layer; ++il) {
             auto & layer = vision_model.layers[il];
-            layer.k_w = get_tensor(new_clip->ctx, format(TN_ATTN_K, "v", il, "weight"));
-            layer.q_w = get_tensor(new_clip->ctx, format(TN_ATTN_Q, "v", il, "weight"));
-            layer.v_w = get_tensor(new_clip->ctx, format(TN_ATTN_V, "v", il, "weight"));
-            layer.o_w = get_tensor(new_clip->ctx, format(TN_ATTN_OUTPUT, "v", il, "weight"));
-            layer.ln_1_w = get_tensor(new_clip->ctx, format(TN_LN_1, "v", il, "weight"));
-            layer.ln_2_w = get_tensor(new_clip->ctx, format(TN_LN_2, "v", il, "weight"));
-            layer.ff_i_w = get_tensor(new_clip->ctx, format(TN_FFN_DOWN, "v", il, "weight"));
-            layer.ff_o_w = get_tensor(new_clip->ctx, format(TN_FFN_UP, "v", il, "weight"));
-            layer.k_b = get_tensor(new_clip->ctx, format(TN_ATTN_K, "v", il, "bias"));
-            layer.q_b = get_tensor(new_clip->ctx, format(TN_ATTN_Q, "v", il, "bias"));
-            layer.v_b = get_tensor(new_clip->ctx, format(TN_ATTN_V, "v", il, "bias"));
-            layer.o_b = get_tensor(new_clip->ctx, format(TN_ATTN_OUTPUT, "v", il, "bias"));
-            layer.ln_1_b = get_tensor(new_clip->ctx, format(TN_LN_1, "v", il, "bias"));
-            layer.ln_2_b = get_tensor(new_clip->ctx, format(TN_LN_2, "v", il, "bias"));
-            layer.ff_i_b = get_tensor(new_clip->ctx, format(TN_FFN_DOWN, "v", il, "bias"));
-            layer.ff_o_b = get_tensor(new_clip->ctx, format(TN_FFN_UP, "v", il, "bias"));
+            layer.k_w    = get_tensor(new_clip->ctx_data, format(TN_ATTN_K,      "v", il, "weight"));
+            layer.q_w    = get_tensor(new_clip->ctx_data, format(TN_ATTN_Q,      "v", il, "weight"));
+            layer.v_w    = get_tensor(new_clip->ctx_data, format(TN_ATTN_V,      "v", il, "weight"));
+            layer.o_w    = get_tensor(new_clip->ctx_data, format(TN_ATTN_OUTPUT, "v", il, "weight"));
+            layer.ln_1_w = get_tensor(new_clip->ctx_data, format(TN_LN_1,        "v", il, "weight"));
+            layer.ln_2_w = get_tensor(new_clip->ctx_data, format(TN_LN_2,        "v", il, "weight"));
+            layer.ff_i_w = get_tensor(new_clip->ctx_data, format(TN_FFN_DOWN,    "v", il, "weight"));
+            layer.ff_o_w = get_tensor(new_clip->ctx_data, format(TN_FFN_UP,      "v", il, "weight"));
+            layer.k_b    = get_tensor(new_clip->ctx_data, format(TN_ATTN_K,      "v", il, "bias"));
+            layer.q_b    = get_tensor(new_clip->ctx_data, format(TN_ATTN_Q,      "v", il, "bias"));
+            layer.v_b    = get_tensor(new_clip->ctx_data, format(TN_ATTN_V,      "v", il, "bias"));
+            layer.o_b    = get_tensor(new_clip->ctx_data, format(TN_ATTN_OUTPUT, "v", il, "bias"));
+            layer.ln_1_b = get_tensor(new_clip->ctx_data, format(TN_LN_1,        "v", il, "bias"));
+            layer.ln_2_b = get_tensor(new_clip->ctx_data, format(TN_LN_2,        "v", il, "bias"));
+            layer.ff_i_b = get_tensor(new_clip->ctx_data, format(TN_FFN_DOWN,    "v", il, "bias"));
+            layer.ff_o_b = get_tensor(new_clip->ctx_data, format(TN_FFN_UP,      "v", il, "bias"));
         }
     }
 
@@ -680,8 +707,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
     new_clip->ctx_gguf = ctx;
 
-// measure mem requirement and allocate
+    // measure mem requirement and allocate
     {
+        new_clip->buf_compute_meta.resize(GGML_DEFAULT_GRAPH_SIZE * ggml_tensor_overhead() + ggml_graph_overhead());
         new_clip->compute_alloc = ggml_allocr_new_measure_from_backend(new_clip->backend);
         clip_image_f32_batch batch;
         batch.size = 1;
@@ -697,26 +725,27 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     return new_clip;
 }
 
-clip_image_u8 * make_clip_image_u8() {
-    auto img = new clip_image_u8();
-    return img;
+struct clip_image_u8 * clip_image_u8_init() {
+    return new clip_image_u8();
 }
-clip_image_f32 * make_clip_image_f32() { return new clip_image_f32(); }
 
-void clip_image_u8_free(clip_image_u8 * img) { if (img->data) { delete[] img->data; } delete img; }
-void clip_image_f32_free(clip_image_f32 * img) { if (img->data) { delete[] img->data; } delete img; }
+struct clip_image_f32 * clip_image_f32_init() {
+    return new clip_image_f32();
+}
+
+void clip_image_u8_free (struct clip_image_u8  * img) { delete img; }
+void clip_image_f32_free(struct clip_image_f32 * img) { delete img; }
 
 static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_image_u8 * img) {
     img->nx = nx;
     img->ny = ny;
-    img->size = nx * ny * 3;
-    img->data = new uint8_t[img->size]();
-    memcpy(img->data, data, img->size);
+    img->buf.resize(3 * nx * ny);
+    memcpy(img->buf.data(), data, img->buf.size());
 }
 
 bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
     int nx, ny, nc;
-    auto data = stbi_load(fname, &nx, &ny, &nc, 3);
+    auto * data = stbi_load(fname, &nx, &ny, &nc, 3);
     if (!data) {
         fprintf(stderr, "%s: failed to load image '%s'\n", __func__, fname);
         return false;
@@ -728,7 +757,7 @@ bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
 
 bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img) {
     int nx, ny, nc;
-    auto data = stbi_load_from_memory(bytes, bytes_length, &nx, &ny, &nc, 3);
+    auto * data = stbi_load_from_memory(bytes, bytes_length, &nx, &ny, &nc, 3);
     if (!data) {
         fprintf(stderr, "%s: failed to decode image bytes\n", __func__);
         return false;
@@ -740,7 +769,7 @@ bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length
 
 // normalize: x = (x - mean) / std
 // TODO: implement bicubic interpolation instead of linear.
-bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32 * res, const bool pad2square) {
+bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32 * res, const bool pad2square) {
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return false;
@@ -749,18 +778,17 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
     // the logic below is to pad the shorter side to the longer side with a background color: rgb(122, 116, 104)
     // see https://github.com/haotian-liu/LLaVA/blob/e854a2bf85118c504f6f16bf5c3c7c92f8fa8c6b/llava/conversation.py#L113-L156
 
-    clip_image_u8 * temp = make_clip_image_u8(); // we will keep the input image data here temporarily
+    clip_image_u8 * temp = clip_image_u8_init(); // we will keep the input image data here temporarily
     if (pad2square && img->nx != img->ny) {
         int longer_side = std::max(img->nx, img->ny);
         temp->nx = longer_side;
         temp->ny = longer_side;
-        temp->size = 3 * longer_side * longer_side;
-        temp->data = new uint8_t[temp->size]();
-        uint8_t bc[3] = {122, 116, 104}; // background color in RGB from LLaVA
+        temp->buf.resize(3 * longer_side * longer_side);
+        const uint8_t bc[3] = {122, 116, 104}; // background color in RGB from LLaVA
 
         // fill with background color
-        for (size_t i = 0; i < temp->size; i++) {
-            temp->data[i] = bc[i % 3];
+        for (size_t i = 0; i < temp->buf.size(); i++) {
+            temp->buf[i] = bc[i % 3];
         }
 
         // copy from the input image
@@ -768,17 +796,16 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
             for (int x = 0; x < img->nx; x++) {
                 const int i = 3 * (y * img->nx + x);
                 const int j = 3 * (y * temp->nx + x);
-                temp->data[j] = img->data[i];
-                temp->data[j+1] = img->data[i+1];
-                temp->data[j+2] = img->data[i+2];
+                temp->buf[j]   = img->buf[i];
+                temp->buf[j+1] = img->buf[i+1];
+                temp->buf[j+2] = img->buf[i+2];
             }
         }
     } else {
-        temp->nx   = img->nx;
-        temp->ny   = img->ny;
-        temp->size = img->size;
-        temp->data = new uint8_t[temp->size]();
-        memcpy(&temp->data[0], &img->data[0], temp->size); // copy
+        temp->nx = img->nx;
+        temp->ny = img->ny;
+        temp->buf.resize(img->buf.size());
+        memcpy(temp->buf.data(), img->buf.data(), temp->buf.size());
     }
 
     const int nx = temp->nx;
@@ -789,8 +816,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
 
     res->nx = nx2;
     res->ny = ny2;
-    res->size = 3 * nx2 * ny2;
-    res->data = new float[res->size]();
+    res->buf.resize(3 * nx2 * ny2);
 
     const float scale = std::max(nx, ny) / (float)ctx->vision_model.hparams.image_size;
 
@@ -821,10 +847,10 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
                 const int j10 = 3 * (y1 * nx + x0) + c;
                 const int j11 = 3 * (y1 * nx + x1) + c;
 
-                const float v00 = temp->data[j00];
-                const float v01 = temp->data[j01];
-                const float v10 = temp->data[j10];
-                const float v11 = temp->data[j11];
+                const float v00 = temp->buf[j00];
+                const float v01 = temp->buf[j01];
+                const float v10 = temp->buf[j10];
+                const float v11 = temp->buf[j11];
 
                 const float v0 = v00 * (1.0f - dx) + v01 * dx;
                 const float v1 = v10 * (1.0f - dx) + v11 * dx;
@@ -835,7 +861,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
 
                 const int i = 3 * (y * nx3 + x) + c;
 
-                res->data[i] = ((float(v2) / 255.0f) - m3[c]) / s3[c];
+                res->buf[i] = ((float(v2) / 255.0f) - m3[c]) / s3[c];
             }
         }
     }
@@ -845,12 +871,13 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
 }
 
 void clip_free(clip_ctx * ctx) {
-    ggml_free(ctx->ctx);
+    ggml_free(ctx->ctx_data);
     gguf_free(ctx->ctx_gguf);
+
     delete ctx;
 }
 
-bool clip_image_encode(const clip_ctx * ctx, const int n_threads, clip_image_f32 * img, float * vec) {
+bool clip_image_encode(struct clip_ctx * ctx, const int n_threads, clip_image_f32 * img, float * vec) {
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return false;
@@ -862,8 +889,7 @@ bool clip_image_encode(const clip_ctx * ctx, const int n_threads, clip_image_f32
     return clip_image_batch_encode(ctx, n_threads, &imgs, vec);
 }
 
-bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const clip_image_f32_batch * imgs, float * vec) {
-
+bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_image_f32_batch * imgs, float * vec) {
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return false;
@@ -906,31 +932,32 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     ggml_type type = GGML_TYPE_Q4_1;
 
     switch (itype) {
-    case 2:
-        type = GGML_TYPE_Q4_0;
-        break;
-    case 3:
-        type = GGML_TYPE_Q4_1;
-        break;
-    case 6:
-        type = GGML_TYPE_Q5_0;
-        break;
-    case 7:
-        type = GGML_TYPE_Q5_1;
-        break;
-    case 8:
-        type = GGML_TYPE_Q8_0;
-        break;
-    default:
-        fprintf(stderr, "%s: invalid quantization type %d\n", __func__, itype);
-        return false;
+        case 2:
+            type = GGML_TYPE_Q4_0;
+            break;
+        case 3:
+            type = GGML_TYPE_Q4_1;
+            break;
+        case 6:
+            type = GGML_TYPE_Q5_0;
+            break;
+        case 7:
+            type = GGML_TYPE_Q5_1;
+            break;
+        case 8:
+            type = GGML_TYPE_Q8_0;
+            break;
+        default:
+            fprintf(stderr, "%s: invalid quantization type %d\n", __func__, itype);
+            return false;
     };
 
-    auto ctx_clip = clip_model_load(fname_inp, 2);
-    const auto & ctx_src = ctx_clip->ctx_gguf;
-    const auto & ctx_data = ctx_clip->ctx;
+    auto * ctx_clip = clip_model_load(fname_inp, 2);
 
-    auto ctx_out = gguf_init_empty();
+    const auto & ctx_src = ctx_clip->ctx_gguf;
+    const auto & ctx_data = ctx_clip->ctx_data;
+
+    auto * ctx_out = gguf_init_empty();
     gguf_set_kv(ctx_out, ctx_src);
     gguf_set_val_u32(ctx_out, "general.quantization_version", GGML_QNT_VERSION);
     gguf_set_val_u32(ctx_out, "general.file_type", itype);

@@ -6,6 +6,29 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
+  # Optional binary cache
+  nixConfig = {
+    extra-substituters = [
+      # Populated by the CI in ggerganov/llama.cpp
+      "https://llama-cpp.cachix.org"
+
+      # A development cache for nixpkgs imported with `config.cudaSupport = true`.
+      # Populated by https://hercules-ci.com/github/SomeoneSerge/nixpkgs-cuda-ci.
+      # This lets one skip building e.g. the CUDA-enabled openmpi.
+      # TODO: Replace once nix-community obtains an official one.
+      "https://cuda-maintainers.cachix.org"
+    ];
+
+    # Verify these are the same keys as published on
+    # - https://app.cachix.org/cache/llama-cpp
+    # - https://app.cachix.org/cache/cuda-maintainers
+    extra-trusted-public-keys = [
+      "llama-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc="
+      "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
+    ];
+  };
+
+
   # For inspection, use `nix flake show github:ggerganov/llama.cpp` or the nix repl:
   #
   # ```bash
@@ -74,26 +97,48 @@
           {
             config,
             lib,
+            system,
             pkgs,
             pkgsCuda,
             pkgsRocm,
             ...
           }:
           {
+            # Unlike `.#packages`, legacyPackages may contain values of
+            # arbitrary types (including nested attrsets) and may even throw
+            # exceptions. This attribute isn't recursed into by `nix flake
+            # show` either.
+            #
+            # You can add arbitrary scripts to `.devops/nix/scope.nix` and
+            # access them as `nix build .#llamaPackages.${scriptName}` using
+            # the same path you would with an overlay.
+            legacyPackages = {
+              llamaPackages = pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+            };
+
             # We don't use the overlay here so as to avoid making too many instances of nixpkgs,
             # cf. https://zimbatm.com/notes/1000-instances-of-nixpkgs
             packages =
               {
-                default = (pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+                default = config.legacyPackages.llamaPackages.llama-cpp;
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
                 opencl = config.packages.default.override { useOpenCL = true; };
-                cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
-                rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+                cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };
                 mpi-cuda = config.packages.default.override { useMpi = true; };
+              }
+              // lib.optionalAttrs (system == "x86_64-linux") {
+                rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
               };
+
+            # Packages exposed in `.#checks` will be built by the CI and by
+            # `nix flake check`. Currently we expose all packages, but we could
+            # make more granular choices
+            checks = config.packages;
           };
       };
 }

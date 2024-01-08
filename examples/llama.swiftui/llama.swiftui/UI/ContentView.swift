@@ -103,6 +103,8 @@ struct ContentView: View {
                     ContentView.cleanupModelCaches()
                     llamaState.cacheCleared = true
                 }
+
+                LoadCustomButton(llamaState: llamaState)
             }
             .padding(.top, 4)
             .font(.system(size: 12))

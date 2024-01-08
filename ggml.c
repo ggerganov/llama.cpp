@@ -4770,8 +4770,11 @@ struct ggml_tensor * ggml_get_rows(
     }
 
     // TODO: implement non F32 return
-    //struct ggml_tensor * result = ggml_new_tensor_2d(ctx, a->type, a->ne[0], b->ne[0]);
-    struct ggml_tensor * result = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, a->ne[0], b->ne[0], b->ne[1], b->ne[2]);
+    enum ggml_type type = GGML_TYPE_F32;
+    if (a->type == GGML_TYPE_I32) {
+        type = a->type;
+    }
+    struct ggml_tensor * result = ggml_new_tensor_4d(ctx, type, a->ne[0], b->ne[0], b->ne[1], b->ne[2]);
 
     result->op   = GGML_OP_GET_ROWS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6942,14 +6945,165 @@ static void ggml_compute_forward_dup_f32(
     }
 }
 
+// A simplified version of ggml_compute_forward_dup that doesn't do float upcasting, and just plain old memcpy.
+static void ggml_compute_forward_dup_bytes(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+    GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
+    GGML_ASSERT(src0->type == dst->type);
+
+    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+        return;
+    }
+
+    if (ggml_is_contiguous(src0) && ggml_is_contiguous(dst)) {
+        ggml_compute_forward_dup_same_cont(params, src0, dst);
+        return;
+    }
+
+    GGML_TENSOR_UNARY_OP_LOCALS;
+
+    const size_t type_size = ggml_type_size(src0->type);
+    const int ith = params->ith; // thread index
+    const int nth = params->nth; // number of threads
+
+
+    // parallelize by rows
+    const int nr = ne01;
+    // number of rows per thread
+    const int dr = (nr + nth - 1) / nth;
+    // row range for this thread
+    const int ir0 = dr * ith;
+    const int ir1 = MIN(ir0 + dr, nr);
+
+    if (src0->type == dst->type &&
+        ne00 == ne0 &&
+        nb00 == type_size && nb0 == type_size) {
+        // copy by rows
+        const size_t rs = ne00 * type_size;
+        for (int64_t i03 = 0; i03 < ne03; i03++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                for (int64_t i01 = ir0; i01 < ir1; i01++) {
+                    memcpy(
+                        ((char *)  dst->data + i01*nb1  + i02*nb2  + i03*nb3),
+                        ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03),
+                        rs);
+                }
+            }
+        }
+        return;
+    }
+
+    if (ggml_is_contiguous(dst)) {
+        size_t id = 0;
+        char * dst_ptr = (char *) dst->data;
+        const size_t rs = ne00 * type_size;
+
+        if (nb00 == type_size) {
+            // src0 is contigous on first dimension, copy by rows
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    id += rs * ir0;
+                    for (int64_t i01 = ir0; i01 < ir1; i01++) {
+                        const char * src0_ptr = (char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03;
+                        memcpy(dst_ptr + id, src0_ptr, rs);
+                        id += rs;
+                    }
+                    id += rs * (ne01 - ir1);
+                }
+            }
+        } else {
+            //printf("%s: this is not optimal - fix me\n", __func__);
+
+            for (int64_t i03 = 0; i03 < ne03; i03++) {
+                for (int64_t i02 = 0; i02 < ne02; i02++) {
+                    id += rs * ir0;
+                    for (int64_t i01 = ir0; i01 < ir1; i01++) {
+                        for (int64_t i00 = 0; i00 < ne00; i00++) {
+                            const char * src0_ptr = (char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03;
+                            memcpy(dst_ptr + id, src0_ptr, type_size);
+
+                            id += type_size;
+                        }
+                    }
+                    id += rs * (ne01 - ir1);
+                }
+            }
+        }
+
+        return;
+    }
+
+    // dst counters
+
+    int64_t i10 = 0;
+    int64_t i11 = 0;
+    int64_t i12 = 0;
+    int64_t i13 = 0;
+
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        for (int64_t i02 = 0; i02 < ne02; i02++) {
+            i10 += ne00 * ir0;
+            while (i10 >= ne0) {
+                i10 -= ne0;
+                if (++i11 == ne1) {
+                    i11 = 0;
+                    if (++i12 == ne2) {
+                        i12 = 0;
+                        if (++i13 == ne3) {
+                            i13 = 0;
+                        }
+                    }
+                }
+            }
+            for (int64_t i01 = ir0; i01 < ir1; i01++) {
+                for (int64_t i00 = 0; i00 < ne00; i00++) {
+                    const char * src0_ptr = ((char *) src0->data + i00*nb00 + i01*nb01 + i02*nb02 + i03*nb03);
+                          char * dst_ptr  = ((char *)  dst->data + i10*nb0  + i11*nb1  + i12*nb2  + i13*nb3);
+
+                    memcpy(dst_ptr, src0_ptr, type_size);
+
+                    if (++i10 == ne0) {
+                        i10 = 0;
+                        if (++i11 == ne1) {
+                            i11 = 0;
+                            if (++i12 == ne2) {
+                                i12 = 0;
+                                if (++i13 == ne3) {
+                                    i13 = 0;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            i10 += ne00 * (ne01 - ir1);
+            while (i10 >= ne0) {
+                i10 -= ne0;
+                if (++i11 == ne1) {
+                    i11 = 0;
+                    if (++i12 == ne2) {
+                        i12 = 0;
+                        if (++i13 == ne3) {
+                            i13 = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 static void ggml_compute_forward_dup(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
-    if (ggml_is_contiguous(src0) && ggml_is_contiguous(dst) && src0->type == dst->type) {
-        ggml_compute_forward_dup_same_cont(params, src0, dst);
+    if (src0->type == dst->type) {
+        ggml_compute_forward_dup_bytes(params, src0, dst);
         return;
     }
+
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -8408,10 +8562,12 @@ static void ggml_compute_forward_repeat(
         struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
+        case GGML_TYPE_I16:
             {
                 ggml_compute_forward_repeat_f16(params, src0, dst);
             } break;
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_repeat_f32(params, src0, dst);
             } break;
@@ -8554,6 +8710,7 @@ static void ggml_compute_forward_concat(
     struct ggml_tensor* dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_concat_f32(params, src0, src1, dst);
             } break;
@@ -9551,10 +9708,10 @@ static void ggml_compute_forward_group_norm(
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
 // helper function to determine if it is better to use BLAS or not
 // for large matrices, BLAS is faster
-static bool ggml_compute_forward_mul_mat_use_blas(
-        const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+static bool ggml_compute_forward_mul_mat_use_blas(struct ggml_tensor * dst) {
+    const struct ggml_tensor * src0 = dst->src[0];
+    const struct ggml_tensor * src1 = dst->src[1];
+
     //const int64_t ne00 = src0->ne[0];
     //const int64_t ne01 = src0->ne[1];
 
@@ -9634,7 +9791,7 @@ static void ggml_compute_forward_mul_mat(
 #endif
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
+    if (ggml_compute_forward_mul_mat_use_blas(dst)) {
         if (params->ith != 0) {
             return;
         }
@@ -10678,6 +10835,7 @@ static void ggml_compute_forward_get_rows(
                 ggml_compute_forward_get_rows_f16(params, src0, src1, dst);
             } break;
         case GGML_TYPE_F32:
+        case GGML_TYPE_I32:
             {
                 ggml_compute_forward_get_rows_f32(params, src0, src1, dst);
             } break;
@@ -16159,29 +16317,6 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
 
                 //n_tasks = MIN(n_threads, MAX(1, nr0/128));
                 //printf("nr0 = %8d, nr1 = %8d, nr0*nr1 = %8d, n_tasks%d\n", nr0, nr1, nr0*nr1, n_tasks);
-
-#if defined(GGML_USE_CUBLAS)
-                if (ggml_cuda_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#elif defined(GGML_USE_VULKAN)
-                if (ggml_vk_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#elif defined(GGML_USE_CLBLAST)
-                if (ggml_cl_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#endif
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                if (ggml_compute_forward_mul_mat_use_blas(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#endif
             } break;
         case GGML_OP_MUL_MAT_ID:
             {
@@ -16354,6 +16489,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             state->shared->node_n += 1;
             return (thread_ret_t) GGML_EXIT_ABORTED;
         }
+
         if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
             // all other threads are finished and spinning
             // do finalize and init here so we don't have synchronize again
@@ -16419,14 +16555,18 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         } else {
             // wait for other threads to finish
             const int last = node_n;
+
+            const bool do_yield = last < 0 || cgraph->nodes[last]->op == GGML_OP_MUL_MAT;
+
             while (true) {
                 // TODO: this sched_yield can have significant impact on the performance - either positive or negative
                 //       depending on the workload and the operating system.
                 //       since it is not clear what is the best approach, it should potentially become user-configurable
                 //       ref: https://github.com/ggerganov/ggml/issues/291
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                sched_yield();
-#endif
+                // UPD:  adding the do_yield flag seems to resolve the issue universally
+                if (do_yield) {
+                    sched_yield();
+                }
 
                 node_n = atomic_load(&state->shared->node_n);
                 if (node_n != last) break;
@@ -16505,7 +16645,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     } else
 #endif
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                    if (ggml_compute_forward_mul_mat_use_blas(node->src[0], node->src[1], node)) {
+                    if (ggml_compute_forward_mul_mat_use_blas(node)) {
                         if (node->src[0]->type != GGML_TYPE_F32) {
                             // here we need memory just for single 2D matrix from src0
                             cur = ggml_type_size(GGML_TYPE_F32)*(node->src[0]->ne[0]*node->src[0]->ne[1]);
