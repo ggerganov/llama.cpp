@@ -1,8 +1,5 @@
 import Foundation
-
-// To use this in your own project, add llama.cpp as a swift package dependency
-// and uncomment this import line.
-// import llama
+import llama
 
 enum LlamaError: Error {
     case couldNotInitializeContext
