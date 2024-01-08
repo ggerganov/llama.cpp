@@ -10225,7 +10225,7 @@ struct llama_data_file_context : llama_data_context {
 static void llama_copy_state_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
     // copy rng
     {
-        std::stringstream rng_ss;
+        std::ostringstream rng_ss;
         rng_ss << ctx->rng;
 
         const size_t rng_size = rng_ss.str().size();
@@ -10361,7 +10361,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         memcpy(&rng_size,   inp, sizeof(rng_size));    inp += sizeof(rng_size);
         memcpy(&rng_buf[0], inp, LLAMA_MAX_RNG_STATE); inp += LLAMA_MAX_RNG_STATE;
 
-        std::stringstream rng_ss;
+        std::istringstream rng_ss;
         rng_ss.str(std::string(&rng_buf[0], rng_size));
         rng_ss >> ctx->rng;
 
