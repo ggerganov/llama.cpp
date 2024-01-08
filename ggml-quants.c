@@ -2442,7 +2442,7 @@ void dequantize_row_iq2_xxs(const block_iq2_xxs * restrict x, float * restrict y
 
         for (int ib32 = 0; ib32 < QK_K/32; ++ib32) {
             memcpy(aux32, x[i].qs + 4*ib32, 2*sizeof(uint32_t));
-            const float db = d * (0.5f + (aux32[1] >> 28));
+            const float db = d * (0.5f + (aux32[1] >> 28)) * 0.25f;
             for (int l = 0; l < 4; ++l) {
                 const uint8_t * grid = (const uint8_t *)(iq2xxs_grid + aux8[l]);
                 const uint8_t  signs = ksigns_iq2xs[(aux32[1] >> 7*l) & 127];
