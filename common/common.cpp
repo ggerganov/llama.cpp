@@ -920,7 +920,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 #endif
     printf("  -gan N, --grp-attn-n N\n");
     printf("                        group-attention factor (default: %d)\n", params.grp_attn_n);
-    printf("  -gat N, --grp-attn-w N\n");
+    printf("  -gaw N, --grp-attn-w N\n");
     printf("                        group-attention width (default: %.1f)\n", (double)params.grp_attn_w);
     printf("  --verbose-prompt      print prompt before generation\n");
     printf("  -dkvc, --dump-kv-cache\n");
