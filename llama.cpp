@@ -9795,12 +9795,8 @@ struct llama_context * llama_new_context_with_model(
                 ggml_type_name(type_v), (float)memory_size_v / (1024.0f * 1024.0f));
         }
 
-        // resized during inference
-        if (params.logits_all) {
-            ctx->logits.reserve(hparams.n_vocab*cparams.n_batch);
-        } else {
-            ctx->logits.reserve(hparams.n_vocab);
-        }
+        // resized during inference, reserve maximum
+        ctx->logits.reserve(hparams.n_vocab*cparams.n_batch);
 
         if (params.embedding){
             ctx->embedding.resize(hparams.n_embd);
