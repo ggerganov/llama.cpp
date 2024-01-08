@@ -325,6 +325,11 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
     std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
 
+    fprintf(stderr, "%s: n_tokens: %ld\n", __func__, tokens.size());
+    fprintf(stderr, "%s: n_ctx: %d\n", __func__, n_ctx);
+    fprintf(stderr, "%s: n_batch: %d\n", __func__, n_batch);
+    fprintf(stderr, "%s: num batches per chunk processing: %d\n", __func__, int((n_ctx + n_batch - 1) / n_batch));
+
     for (int i = 0; i < n_chunk; ++i) {
         const int start =     i * n_ctx;
         const int end   = start + n_ctx;

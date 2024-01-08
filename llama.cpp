@@ -4500,6 +4500,23 @@ struct llm_build_context {
 
         ggml_build_forward_expand(gf, cur);
 
+        for (int i = 0; i < gf->n_nodes; ++ i) {
+            ggml_tensor * t = gf->nodes[i];
+            LLAMA_LOG_INFO("%s: Tensor name [%s]\n", __func__, t->name);
+            LLAMA_LOG_INFO("%s: \tOP [%s]\n", __func__, ggml_op_string(t->op));
+            LLAMA_LOG_INFO("%s: \tBackend [%s]\n", __func__, ggml_backend_type_string(t->backend));
+            LLAMA_LOG_INFO("%s: \tShape (", __func__);
+            for (int j = 0; j < GGML_MAX_DIMS; ++ j) {
+                LLAMA_LOG_INFO("%ld", t->ne[GGML_MAX_DIMS - 1 - j]);
+                if (j != GGML_MAX_DIMS - 1) {
+                    LLAMA_LOG_INFO(", ");
+                } else {
+                    LLAMA_LOG_INFO(")\n");
+                }
+            }
+        }
+        exit(-1);
+
         return gf;
     }
 
@@ -6437,7 +6454,7 @@ static int llama_decode_internal(
     res->backend = GGML_BACKEND_CPU;
 #endif
 
-    // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
+    LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance

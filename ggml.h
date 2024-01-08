@@ -490,6 +490,10 @@ extern "C" {
         GGML_LOG_LEVEL_DEBUG = 5
     };
 
+    const char * ggml_backend_type_string(enum ggml_backend_type backend_type);
+
+    const char * ggml_op_string(enum ggml_op op);
+
     // ggml object
     struct ggml_object {
         size_t offs;
@@ -511,7 +515,7 @@ extern "C" {
 
         struct ggml_backend_buffer * buffer;
 
-        int64_t ne[GGML_MAX_DIMS]; // number of elements
+        int64_t ne[GGML_MAX_DIMS]; // number of elements, [batch size,  , seq len, hidden dim]
         size_t  nb[GGML_MAX_DIMS]; // stride in bytes:
                                    // nb[0] = ggml_type_size(type)
                                    // nb[1] = nb[0]   * (ne[0] / ggml_blck_size(type)) + padding

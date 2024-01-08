@@ -260,6 +260,178 @@ typedef double ggml_float;
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 //
+// enum strings
+//
+
+const char * ggml_backend_type_string(enum ggml_backend_type backend_type) {
+    switch (backend_type) {
+        case 0:
+            return "GGML_BACKEND_CPU";
+        case 10:
+            return "GGML_BACKEND_GPU";
+        case 20:
+            return "GGML_BACKEND_GPU_SPLIT";
+        default:
+            return "WRONG_BACKEND_TYPE";
+    }
+    return "";
+}
+
+const char * ggml_op_string(enum ggml_op op) {
+    switch (op) {
+        case 0:
+            return "GGML_OP_NONE";
+        case 1:
+            return "GGML_OP_DUP";
+        case 2:
+            return "GGML_OP_ADD";
+        case 3:
+            return "GGML_OP_ADD1";
+        case 4:
+            return "GGML_OP_ACC";
+        case 5:
+            return "GGML_OP_SUB";
+        case 6:
+            return "GGML_OP_MUL";
+        case 7:
+            return "GGML_OP_DIV";
+        case 8:
+            return "GGML_OP_SQR";
+        case 9:
+            return "GGML_OP_SQRT";
+        case 10:
+            return "GGML_OP_LOG";
+        case 11:
+            return "GGML_OP_SUM";
+        case 12:
+            return "GGML_OP_SUM_ROWS";
+        case 13:
+            return "GGML_OP_MEAN";
+        case 14:
+            return "GGML_OP_ARGMAX";
+        case 15:
+            return "GGML_OP_REPEAT";
+        case 16:
+            return "GGML_OP_REPEAT_BACK";
+        case 17:
+            return "GGML_OP_CONCAT";
+        case 18:
+            return "GGML_OP_SILU_BACK";
+        case 19:
+            return "GGML_OP_NORM"; // normalize
+        case 20:
+            return "GGML_OP_RMS_NORM";
+        case 21:
+            return "GGML_OP_RMS_NORM_BACK";
+        case 22:
+            return "GGML_OP_GROUP_NORM";
+        case 23:
+            return "GGML_OP_MUL_MAT";
+        case 24:
+            return "GGML_OP_MUL_MAT_ID";
+        case 25:
+            return "GGML_OP_OUT_PROD";
+        case 26:
+            return "GGML_OP_SCALE";
+        case 27:
+            return "GGML_OP_SET";
+        case 28:
+            return "GGML_OP_CPY";
+        case 29:
+            return "GGML_OP_CONT";
+        case 30:
+            return "GGML_OP_RESHAPE";
+        case 31:
+            return "GGML_OP_VIEW";
+        case 32:
+            return "GGML_OP_PERMUTE";
+        case 33:
+            return "GGML_OP_TRANSPOSE";
+        case 34:
+            return "GGML_OP_GET_ROWS";
+        case 35:
+            return "GGML_OP_GET_ROWS_BACK";
+        case 36:
+            return "GGML_OP_DIAG";
+        case 37:
+            return "GGML_OP_DIAG_MASK_INF";
+        case 38:
+            return "GGML_OP_DIAG_MASK_ZERO";
+        case 39:
+            return "GGML_OP_SOFT_MAX";
+        case 40:
+            return "GGML_OP_SOFT_MAX_BACK";
+        case 41:
+            return "GGML_OP_ROPE";
+        case 42:
+            return "GGML_OP_ROPE_BACK";
+        case 43:
+            return "GGML_OP_ALIBI";
+        case 44:
+            return "GGML_OP_CLAMP";
+        case 45:
+            return "GGML_OP_CONV_TRANSPOSE_1D";
+        case 46:
+            return "GGML_OP_IM2COL";
+        case 47:
+            return "GGML_OP_CONV_TRANSPOSE_2D";
+        case 48:
+            return "GGML_OP_POOL_1D";
+        case 49:
+            return "GGML_OP_POOL_2D";
+        case 50:
+            return "GGML_OP_UPSCALE"; // nearest interpolate
+        case 51:
+            return "GGML_OP_PAD";
+        case 52:
+            return "GGML_OP_ARGSORT";
+        case 53:
+            return "GGML_OP_LEAKY_RELU";
+        case 54:
+            return "GGML_OP_FLASH_ATTN";
+        case 55:
+            return "GGML_OP_FLASH_FF";
+        case 56:
+            return "GGML_OP_FLASH_ATTN_BACK";
+        case 57:
+            return "GGML_OP_WIN_PART";
+        case 58:
+            return "GGML_OP_WIN_UNPART";
+        case 59:
+            return "GGML_OP_GET_REL_POS";
+        case 60:
+            return "GGML_OP_ADD_REL_POS";
+        case 61:
+            return "GGML_OP_UNARY";
+        case 62:
+            return "GGML_OP_MAP_UNARY";
+        case 63:
+            return "GGML_OP_MAP_BINARY";
+        case 64:
+            return "GGML_OP_MAP_CUSTOM1_F32";
+        case 65:
+            return "GGML_OP_MAP_CUSTOM2_F32";
+        case 66:
+            return "GGML_OP_MAP_CUSTOM3_F32";
+        case 67:
+            return "GGML_OP_MAP_CUSTOM1";
+        case 68:
+            return "GGML_OP_MAP_CUSTOM2";
+        case 69:
+            return "GGML_OP_MAP_CUSTOM3";
+        case 70:
+            return "GGML_OP_CROSS_ENTROPY_LOSS";
+        case 71:
+            return "GGML_OP_CROSS_ENTROPY_LOSS_BACK";
+        case 72:
+            return "GGML_OP_COUNT";
+        default:
+            return "WRONG_OP";
+    }
+    return "";
+}
+
+//
 // global data
 //
 
