@@ -9797,7 +9797,7 @@ struct llama_context * llama_new_context_with_model(
 
         // resized during inference
         if (params.logits_all) {
-            ctx->logits.reserve(cparams.n_ctx*hparams.n_vocab);
+            ctx->logits.reserve(hparams.n_vocab*cparams.n_batch);
         } else {
             ctx->logits.reserve(hparams.n_vocab);
         }
