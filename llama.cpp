@@ -1557,6 +1557,7 @@ struct llama_model {
 
     std::vector<llama_layer> layers;
 
+    llama_split_mode split_mode;
     int main_gpu;
     int n_gpu_layers;
 
@@ -1610,13 +1611,18 @@ struct llama_context {
     llama_context(const llama_model & model) : model(model), t_start_us(model.t_start_us), t_load_us(model.t_load_us) {}
     ~llama_context() {
         ggml_backend_sched_free(sched);
-        // TODO: free all backends
-        ggml_backend_free(backend);
+
+        for (ggml_backend_t backend : backends) {
+            ggml_backend_free(backend);
+        }
     }
 
     llama_cparams cparams;
 
-    ggml_backend_t backend = nullptr;
+    std::vector<ggml_backend_t> backends;
+#ifdef GGML_USE_METAL
+    ggml_backend_t backend_metal = nullptr;
+#endif
     ggml_backend_t backend_cpu = nullptr;
 
     const llama_model & model;
@@ -3148,6 +3154,7 @@ static bool llm_load_tensors(
 
     auto & hparams = model.hparams;
 
+    model.split_mode   = split_mode;
     model.main_gpu     = main_gpu;
     model.n_gpu_layers = n_gpu_layers;
 
@@ -6204,8 +6211,8 @@ static int llama_decode_internal(
 #endif
 
 #ifdef GGML_USE_METAL
-    if (ggml_backend_is_metal(lctx.backend)) {
-        ggml_backend_metal_set_n_cb(lctx.backend, n_threads);
+    if (ggml_backend_is_metal(lctx.backend_metal)) {
+        ggml_backend_metal_set_n_cb(lctx.backend_metal, n_threads);
     }
 #endif
 
@@ -9180,27 +9187,33 @@ struct llama_context * llama_new_context_with_model(
     GGML_ASSERT(hparams.n_embd_head_v % ggml_blck_size(type_v) == 0);
 
     if (!hparams.vocab_only) {
-        std::vector<ggml_backend_t> backends;
-
         // initialize backends
-        // FIXME: only initialize the backends that are actually used
-        // this is important for CUDA split buffers, only the main_gpu backend should be initialized
 #ifdef GGML_USE_METAL
         if (model->n_gpu_layers > 0) {
-            ctx->backend = ggml_backend_metal_init();
-            if (ctx->backend == nullptr) {
+            ctx->backend_metal = ggml_backend_metal_init();
+            if (ctx->backend_metal == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Metal backend\n", __func__);
             }
-            backends.push_back(ctx->backend);
+            ctx->backends.push_back(ctx->backend_metal);
         }
 #elif defined(GGML_USE_CUBLAS)
         if (model->n_gpu_layers > 0) {
-            for (int device = 0; device < ggml_backend_cuda_get_device_count(); ++device) {
-                ctx->backend = ggml_backend_cuda_init(device);
-                if (ctx->backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize CUDA backend for device %d\n", __func__, device);
+            // with split_mode LLAMA_SPLIT_NONE or LLAMA_SPLIT_ROW, only the main GPU backend is used
+            if (model->split_mode == LLAMA_SPLIT_ROW || model->split_mode == LLAMA_SPLIT_NONE) {
+                ggml_backend_t backend = ggml_backend_cuda_init(model->main_gpu);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, model->main_gpu);
                 }
-                backends.push_back(ctx->backend);
+                ctx->backends.push_back(backend);
+            } else {
+                // LLAMA_SPLIT_LAYER requires a backend for each GPU
+                for (int device = 0; device < ggml_backend_cuda_get_device_count(); ++device) {
+                    ggml_backend_t backend = ggml_backend_cuda_init(device);
+                    if (backend == nullptr) {
+                        LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, device);
+                    }
+                    ctx->backends.push_back(backend);
+                }
             }
         }
 #endif
@@ -9210,7 +9223,7 @@ struct llama_context * llama_new_context_with_model(
             delete ctx;
             return nullptr;
         }
-        backends.push_back(ctx->backend_cpu);
+        ctx->backends.push_back(ctx->backend_cpu);
 
         if (!llama_kv_cache_init(ctx->kv_self, ctx->model, type_k, type_v,
                 cparams.n_ctx, cparams.offload_kqv)) {
@@ -9252,7 +9265,7 @@ struct llama_context * llama_new_context_with_model(
             // buffer used to store the computation graph and the tensor meta data
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*LLAMA_MAX_NODES + ggml_graph_overhead());
 
-            ctx->sched = ggml_backend_sched_new(backends.data(), backends.size());
+            ctx->sched = ggml_backend_sched_new(ctx->backends.data(), ctx->backends.size());
             ctx->alloc = ggml_backend_sched_get_tallocr(ctx->sched, ctx->backend_cpu);
 
             // build worst-case graph
@@ -9268,7 +9281,7 @@ struct llama_context * llama_new_context_with_model(
             LLAMA_LOG_INFO("%s: graph splits (measure): %d\n", __func__, n_splits);
             ctx->alloc = ggml_backend_sched_get_tallocr(ctx->sched, ctx->backend_cpu);
 
-            for (ggml_backend_t backend : backends) {
+            for (ggml_backend_t backend : ctx->backends) {
                 ggml_backend_buffer_t buf = ggml_backend_sched_get_buffer(ctx->sched, backend);
                 LLAMA_LOG_INFO("%s: %10s compute buffer size = %8.2f MiB\n", __func__,
                         ggml_backend_name(backend),
