@@ -9199,10 +9199,12 @@ struct llama_context * llama_new_context_with_model(
 #elif defined(GGML_USE_CUBLAS)
         if (model->n_gpu_layers > 0) {
             // with split_mode LLAMA_SPLIT_NONE or LLAMA_SPLIT_ROW, only the main GPU backend is used
-            if (model->split_mode == LLAMA_SPLIT_ROW || model->split_mode == LLAMA_SPLIT_NONE) {
+            if (model->split_mode == LLAMA_SPLIT_NONE || model->split_mode == LLAMA_SPLIT_ROW) {
                 ggml_backend_t backend = ggml_backend_cuda_init(model->main_gpu);
                 if (backend == nullptr) {
                     LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, model->main_gpu);
+                    llama_free(ctx);
+                    return nullptr;
                 }
                 ctx->backends.push_back(backend);
             } else {
@@ -9211,6 +9213,8 @@ struct llama_context * llama_new_context_with_model(
                     ggml_backend_t backend = ggml_backend_cuda_init(device);
                     if (backend == nullptr) {
                         LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, device);
+                        llama_free(ctx);
+                        return nullptr;
                     }
                     ctx->backends.push_back(backend);
                 }
