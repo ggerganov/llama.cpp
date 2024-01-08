@@ -2446,6 +2446,18 @@ struct llama_model_loader {
         }
     }
 
+    void get_mapping_range(size_t * first, size_t * last, ggml_context * ctx) const {
+        GGML_ASSERT(mapping);
+
+        *first = mapping->size;
+        *last  = 0;
+        for (ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor; tensor = ggml_get_next_tensor(ctx, tensor)) {
+            const size_t offs = file_offset(ggml_get_name(tensor));
+            *first = std::min(*first, offs);
+            *last  = std::max(*last,  offs + ggml_nbytes(tensor));
+        }
+    }
+
     // for backwards compatibility, does not support ggml-backend
     void load_data_for(struct ggml_tensor * cur) const {
         const size_t offs = file_offset(ggml_get_name(cur));
@@ -3733,15 +3745,19 @@ static bool llm_load_tensors(
         ggml_context * ctx = it.second;
         ggml_backend_buffer_t buf = nullptr;
 
-        // TODO: do not use the whole model mapping for the buffer, only the region containing the tensors
-        // this is important for metal: if the entire model could be mapped to a metal buffer, then we could use metal for all layers
+        // only the region containing the tensors in the model is mapped to the backend buffer
+        // this is important for metal: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
         if (ml.use_mmap && buft == llama_default_buffer_type_cpu(true)) {
-            buf = ggml_backend_cpu_buffer_from_ptr(ml.mapping->addr, ml.mapping->size);
+            size_t first, last;
+            ml.get_mapping_range(&first, &last, ctx);
+            buf = ggml_backend_cpu_buffer_from_ptr((char *) ml.mapping->addr + first, last - first);
         }
 #ifdef GGML_USE_METAL
         else if (ml.use_mmap && buft == ggml_backend_metal_buffer_type()) {
             const size_t max_size = ggml_get_max_tensor_size(ctx);
-            buf = ggml_backend_metal_buffer_from_ptr(ml.mapping->addr, ml.mapping->size, max_size);
+            size_t first, last;
+            ml.get_mapping_range(&first, &last, ctx);
+            buf = ggml_backend_metal_buffer_from_ptr((char *) ml.mapping->addr + first, last - first, max_size);
         }
 #endif
         else {
@@ -5922,7 +5938,6 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_tokens = true;
         }
 
-        // FIXME: allocating this conditionally will result in issues with the measure allocator
         if (!alloc_inp_embd && strcmp(name, "inp_embd") == 0 && batch.embd) {
             ggml_tallocr_alloc(lctx.alloc, cur);
 
