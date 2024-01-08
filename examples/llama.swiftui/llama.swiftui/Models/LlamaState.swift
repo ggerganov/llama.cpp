@@ -26,7 +26,7 @@ class LlamaState: ObservableObject {
         loadModelsFromDisk()
         loadDefaultModels()
     }
-    
+
     private func loadModelsFromDisk() {
         do {
             let documentsURL = getDocumentsDirectory()
@@ -46,11 +46,11 @@ class LlamaState: ObservableObject {
         } catch {
             messageLog += "Error!\n"
         }
-        
+
         for model in defaultModels {
             let fileURL = getDocumentsDirectory().appendingPathComponent(model.filename)
             if FileManager.default.fileExists(atPath: fileURL.path) {
-               
+
             } else {
                 var undownloadedModel = model
                 undownloadedModel.status = "download"
@@ -112,8 +112,8 @@ class LlamaState: ObservableObject {
             messageLog += "Load a model from the list below\n"
         }
     }
-    
-    
+
+
     private func updateDownloadedModels(modelName: String, status: String) {
         undownloadedModels.removeAll { $0.name == modelName }
     }

@@ -52,7 +52,7 @@ struct DownloadButton: View {
                     print("Writing to \(filename) completed")
 
                     llamaState.cacheCleared = false
-                    
+
                     let model = Model(name: modelName, url: modelUrl, filename: filename, status: "downloaded")
                     llamaState.downloadedModels.append(model)
                     status = "downloaded"

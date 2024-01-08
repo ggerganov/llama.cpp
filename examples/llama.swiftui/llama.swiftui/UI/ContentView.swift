@@ -51,7 +51,7 @@ struct ContentView: View {
             }
             .padding()
             .navigationBarTitle("Model Settings", displayMode: .inline)
-                       
+
         }
     }
 
@@ -74,7 +74,7 @@ struct ContentView: View {
         }
     }
     struct DrawerView: View {
-        
+
         @ObservedObject var llamaState: LlamaState
         @State private var showingHelp = false
         func delete(at offsets: IndexSet) {
@@ -87,7 +87,7 @@ struct ContentView: View {
                     print("Error deleting file: \(error)")
                 }
             }
-            
+
             // Remove models from downloadedModels array
             llamaState.downloadedModels.remove(atOffsets: offsets)
         }
@@ -114,7 +114,7 @@ struct ContentView: View {
                         DownloadButton(llamaState: llamaState, modelName: model.name, modelUrl: model.url, filename: model.filename)
                     }
                 }
-               
+
             }
             .listStyle(GroupedListStyle())
             .navigationBarTitle("Model Settings", displayMode: .inline).toolbar {
