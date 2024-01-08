@@ -182,65 +182,85 @@ GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
 
 @dataclass
 class Params:
-    n_vocab:        int
-    n_embd:         int
-    n_layer:        int
-    n_ctx:          int
-    n_ff:           int
-    n_head:         int
-    n_head_kv:      int
-    n_experts:      int | None = None
-    n_experts_used: int | None = None
-    f_norm_eps:     float | None = None
+    n_vocab: int
+    n_embd: int
+    n_layer: int
+    n_ctx: int
+    n_ff: int
+    n_head: int
+    n_head_kv: int
+    f_norm_eps: Optional[float] = None
+    n_experts: Optional[int] = None
+    n_experts_used: Optional[int] = None
 
-    rope_scaling_type: gguf.RopeScalingType | None = None
-    f_rope_freq_base: float | None = None
-    f_rope_scale: float | None = None
-    n_orig_ctx: int | None = None
-    rope_finetuned: bool | None = None
+    rope_scaling_type: Optional[gguf.RopeScalingType] = None
+    f_rope_freq_base: Optional[float] = None
+    f_rope_scale: Optional[float] = None
+    n_orig_ctx: Optional[int] = None
+    rope_finetuned: Optional[bool] = None
 
-    ftype: GGMLFileType | None = None
+    ftype: Optional[GGMLFileType] = None
 
     # path to the directory containing the model files
-    path_model: Path | None = None
+    path_model: Optional[Path] = None
 
     @staticmethod
-    def guessed(model: LazyModel) -> Params:
+    def guessed(model: LazyModel) -> "Params":
         # try transformer naming first
-        n_vocab, n_embd = model["model.embed_tokens.weight"].shape if "model.embed_tokens.weight" in model else model["tok_embeddings.weight"].shape
+        n_vocab, n_embd = (
+            model["model.embed_tokens.weight"].shape
+            if "model.embed_tokens.weight" in model
+            else model["tok_embeddings.weight"].shape
+        )
 
         # try transformer naming first
         if "model.layers.0.self_attn.q_proj.weight" in model:
-            n_layer = next(i for i in itertools.count() if f"model.layers.{i}.self_attn.q_proj.weight" not in model)
-        elif "model.layers.0.self_attn.W_pack.weight" in model:   # next: try baichuan naming
-            n_layer = next(i for i in itertools.count() if f"model.layers.{i}.self_attn.W_pack.weight" not in model)
+            n_layer = next(
+                i
+                for i in itertools.count()
+                if f"model.layers.{i}.self_attn.q_proj.weight" not in model
+            )
+        elif (
+            "model.layers.0.self_attn.W_pack.weight" in model
+        ):  # next: try baichuan naming
+            n_layer = next(
+                i
+                for i in itertools.count()
+                if f"model.layers.{i}.self_attn.W_pack.weight" not in model
+            )
         else:
-            n_layer = next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
+            n_layer = next(
+                i
+                for i in itertools.count()
+                if f"layers.{i}.attention.wq.weight" not in model
+            )
 
         if n_layer < 1:
-            raise Exception("failed to guess 'n_layer'. This model is unknown or unsupported.\n"
-                            "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
+            raise Exception(
+                "failed to guess 'n_layer'. This model is unknown or unsupported.\n"
+                "Suggestion: provide 'config.json' of the model in the same directory containing model files."
+            )
 
-        n_head = n_embd // 128 # guessed
-        n_mult = 256           # guessed
+        n_head = n_embd // 128  # guessed
+        n_mult = 256  # guessed
 
         # TODO: verify this
         n_ff = int(2 * (4 * n_embd) / 3)
         n_ff = n_mult * ((n_ff + n_mult - 1) // n_mult)
 
         return Params(
-            n_vocab    = n_vocab,
-            n_embd     = n_embd,
-            n_layer    = n_layer,
-            n_ctx      = -1,
-            n_ff       = n_ff,
-            n_head     = n_head,
-            n_head_kv  = n_head,
-            f_norm_eps = 1e-5,
+            n_vocab=n_vocab,
+            n_embd=n_embd,
+            n_layer=n_layer,
+            n_ctx=-1,
+            n_ff=n_ff,
+            n_head=n_head,
+            n_head_kv=n_head,
+            f_norm_eps=1e-5,
         )
 
     @staticmethod
-    def loadHFTransformerJson(model: LazyModel, config_path: Path) -> Params:
+    def load_transformers_config(model: LazyModel, config_path: Path) -> "Params":
         config = json.load(open(config_path))
 
         rope_scaling_type = f_rope_scale = n_orig_ctx = rope_finetuned = None
@@ -253,20 +273,22 @@ class Params:
                 rope_scaling_type = gguf.RopeScalingType.LINEAR
             elif typ == "yarn":
                 rope_scaling_type = gguf.RopeScalingType.YARN
-                n_orig_ctx = rope_scaling['original_max_position_embeddings']
-                rope_finetuned = rope_scaling['finetuned']
+                n_orig_ctx = rope_scaling["original_max_position_embeddings"]
+                rope_finetuned = rope_scaling["finetuned"]
             else:
-                raise NotImplementedError(f'Unknown rope scaling type: {typ}')
+                raise NotImplementedError(f"Unknown rope scaling type: {typ}")
 
         if "max_sequence_length" in config:
             n_ctx = config["max_sequence_length"]
         elif "max_position_embeddings" in config:
             n_ctx = config["max_position_embeddings"]
         else:
-            raise Exception("failed to guess 'n_ctx'. This model is unknown or unsupported.\n"
-                            "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
+            raise Exception(
+                "failed to guess 'n_ctx'. This model is unknown or unsupported.\n"
+                "Suggestion: provide 'config.json' of the model in the same directory containing model files."
+            )
 
-        n_experts      = None
+        n_experts = None
         n_experts_used = None
 
         if "num_local_experts" in config:
@@ -274,30 +296,30 @@ class Params:
             n_experts_used = config["num_experts_per_tok"]
 
         return Params(
-            n_vocab           = config["vocab_size"],
-            n_embd            = config["hidden_size"],
-            n_layer           = config["num_hidden_layers"],
-            n_ctx             = n_ctx,
-            n_ff              = config["intermediate_size"],
-            n_head            = (n_head := config["num_attention_heads"]),
-            n_head_kv         = config.get("num_key_value_heads", n_head),
-            n_experts         = n_experts,
-            n_experts_used    = n_experts_used,
-            f_norm_eps        = config["rms_norm_eps"],
-            f_rope_freq_base  = config.get("rope_theta"),
-            rope_scaling_type = rope_scaling_type,
-            f_rope_scale      = f_rope_scale,
-            n_orig_ctx        = n_orig_ctx,
-            rope_finetuned    = rope_finetuned,
+            n_vocab=config["vocab_size"],
+            n_embd=config["hidden_size"],
+            n_layer=config["num_hidden_layers"],
+            n_ctx=n_ctx,
+            n_ff=config["intermediate_size"],
+            n_head=(n_head := config["num_attention_heads"]),
+            n_head_kv=config.get("num_key_value_heads", n_head),
+            n_experts=n_experts,
+            n_experts_used=n_experts_used,
+            f_norm_eps=config["rms_norm_eps"],
+            f_rope_freq_base=config.get("rope_theta"),
+            rope_scaling_type=rope_scaling_type,
+            f_rope_scale=f_rope_scale,
+            n_orig_ctx=n_orig_ctx,
+            rope_finetuned=rope_finetuned,
         )
 
     # LLaMA v2 70B params.json
     # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1}
     @staticmethod
-    def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
+    def load_torch_params(model: LazyModel, config_path: Path) -> "Params":
         config = json.load(open(config_path))
 
-        n_experts      = None
+        n_experts = None
         n_experts_used = None
         f_rope_freq_base = None
 
@@ -320,37 +342,37 @@ class Params:
 
         if config.get("moe"):
             n_ff = model["layers.0.feed_forward.experts.0.w1.weight"].shape[0]
-            n_experts      = config["moe"]["num_experts"]
+            n_experts = config["moe"]["num_experts"]
             n_experts_used = config["moe"]["num_experts_per_tok"]
             f_rope_freq_base = 1e6
 
         return Params(
-            n_vocab          = model["tok_embeddings.weight"].shape[0],
-            n_embd           = config["dim"],
-            n_layer          = config["n_layers"],
-            n_ctx            = n_ctx,
-            n_ff             = n_ff,
-            n_head           = (n_head := config["n_heads"]),
-            n_head_kv        = config.get("n_kv_heads", n_head),
-            n_experts        = n_experts,
-            n_experts_used   = n_experts_used,
-            f_norm_eps       = config["norm_eps"],
-            f_rope_freq_base = config.get("rope_theta", f_rope_freq_base),
+            n_vocab=config.get("vocab_size", model["tok_embeddings.weight"].shape[0]),
+            n_embd=config["dim"],
+            n_layer=config["n_layers"],
+            n_ctx=n_ctx,
+            n_ff=n_ff,
+            n_head=(n_head := config["n_heads"]),
+            n_head_kv=config.get("n_kv_heads", n_head),
+            n_experts=n_experts,
+            n_experts_used=n_experts_used,
+            f_norm_eps=config["norm_eps"],
+            f_rope_freq_base=config.get("rope_theta", f_rope_freq_base),
         )
 
     @staticmethod
-    def load(model_plus: ModelPlus) -> Params:
-        hf_config_path   = model_plus.paths[0].parent / "config.json"
+    def load(model_plus: ModelPlus) -> "Params":
+        hf_config_path = model_plus.paths[0].parent / "config.json"
         orig_config_path = model_plus.paths[0].parent / "params.json"
 
         if hf_config_path.exists():
-            params = Params.loadHFTransformerJson(model_plus.model, hf_config_path)
+            params = Params.load_transformers_config(model_plus.model, hf_config_path)
         elif orig_config_path.exists():
-            params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
-        elif model_plus.format != 'none':
+            params = Params.load_torch_params(model_plus.model, orig_config_path)
+        elif model_plus.format != "none":
             params = Params.guessed(model_plus.model)
         else:
-            raise ValueError('Cannot guess params when model format is none')
+            raise ValueError("Cannot guess params when model format is none")
 
         params.path_model = model_plus.paths[0].parent
 
