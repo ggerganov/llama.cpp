@@ -484,6 +484,10 @@ extern "C" {
                        llama_pos   p1,
                        llama_pos   delta);
 
+    // Integer division of the positions by factor of `d > 1`
+    // If the KV cache is RoPEd, the KV data is updated accordingly
+    // p0 < 0 : [0,  p1]
+    // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_div(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
