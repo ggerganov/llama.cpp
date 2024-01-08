@@ -5248,13 +5248,15 @@ static __global__ void soft_max_f16(const float * x, const float * y, float * ds
     half  * buf_iw = data_soft_max_f16 + 0; // shared memory buffer for inter-warp communication
     // (shared memory) buffer to cache values between iterations:
     half2 * vals = vals_smem ? (half2 *) (buf_iw + WARP_SIZE) : (half2 *) (dst + rowx*ncols_data);
+    // if the buffer is larger than max. shared memory per block, use dst as temp. buffer instead
+    // in that case col_smem == col_data must be enforced to avoid race conditions
 
     half2 max_val = make_half2(-INFINITY, -INFINITY);
 
 #pragma unroll
     for (int col0 = 0; col0 < ncols_smem; col0 += block_size) {
-        const int col_smem = col0 + tid;
         const int col_data = 2*col0 + 2*WARP_SIZE*warp_id + lane_id;
+        const int col_smem = vals_smem ? col0 + tid : col_data;
 
         const int ix = rowx*ncols_data + col_data;
         const int iy = rowy*ncols_data + col_data;
@@ -5270,7 +5272,7 @@ static __global__ void soft_max_f16(const float * x, const float * y, float * ds
         } else {
             val.y = x[ix + WARP_SIZE]*scale + (y ? y[iy + WARP_SIZE] : 0.0f);
         }
-        if (!need_check || col_smem < ncols_smem) {
+        if (!need_check || col_smem < (vals_smem ? ncols_smem : ncols_data)) {
             vals[col_smem] = val;
         }
         max_val = __hmax2(max_val, val);
@@ -5299,9 +5301,9 @@ static __global__ void soft_max_f16(const float * x, const float * y, float * ds
 
 #pragma unroll
     for (int col0 = 0; col0 < ncols_smem; col0 += block_size) {
-        const int col_smem = col0 + tid;
+        const int col_smem = vals_smem ? col0 + tid : 2*col0 + 2*warp_id*WARP_SIZE + lane_id;
 
-        if (ncols_template == 0 && col_smem >= ncols_smem) {
+        if (ncols_template == 0 && col_smem >= (vals_smem ? ncols_smem : ncols_data)) {
             break;
         }
 
@@ -5334,8 +5336,8 @@ static __global__ void soft_max_f16(const float * x, const float * y, float * ds
 
 #pragma unroll
     for (int col0 = 0; col0 < ncols_smem; col0 += block_size) {
-        const int col_smem = col0 + tid;
         const int col_data = 2*col0 + 2*WARP_SIZE*warp_id + lane_id;
+        const int col_smem = vals_smem ? col0 + tid : col_data;
 
         const int idst = rowx*ncols_data + col_data;
         const half2 result = vals[col_smem] * inv_sum;
