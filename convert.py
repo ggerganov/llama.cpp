@@ -1355,6 +1355,83 @@ def load_some_model(path: Path) -> ModelPlus:
     return model_plus
 
 
+class VocabFactory:
+    def __init__(self, path: Path):
+        self.path = path
+        self.files = {
+            "tokenizer.model": None,
+            "vocab.json": None,
+            "tokenizer.json": None,
+        }
+        self._detect_files()
+
+    def _detect_files(self):
+        for file in self.files.keys():
+            file_path = self.path / file
+            parent_file_path = self.path.parent / file
+            if file_path.exists():
+                self.files[file] = file_path
+            elif parent_file_path.exists():
+                self.files[file] = parent_file_path
+
+    def _select_file(self, vocabtype: Optional[str]) -> Path:
+        if vocabtype in ["spm", "bpe"]:
+            # For SentencePiece and BPE, return specific files as before
+            file_key = "tokenizer.model" if vocabtype == "spm" else "vocab.json"
+            if self.files[file_key]:
+                return self.files[file_key]
+            else:
+                raise FileNotFoundError(f"{vocabtype} {file_key} not found.")
+        elif vocabtype == "hfft":
+            # For Hugging Face Fast Tokenizer, return the directory path instead of a specific file
+            return self.path
+        else:
+            raise ValueError(f"Unsupported vocabulary type {vocabtype}")
+
+    def _create_special_vocab(
+        self,
+        vocab: Vocab,
+        vocabtype: str,
+        model_parent_path: Path,
+    ) -> gguf.SpecialVocab:
+        load_merges = vocabtype == "bpe"
+        n_vocab = vocab.vocab_size if hasattr(vocab, "vocab_size") else None
+        return gguf.SpecialVocab(
+            model_parent_path,
+            load_merges=load_merges,
+            special_token_types=None,  # Predetermined or passed as a parameter
+            n_vocab=n_vocab,
+        )
+
+    def load_vocab(
+        self, vocabtype: str, model_parent_path: Path
+    ) -> Tuple[Vocab, gguf.SpecialVocab]:
+        path = self._select_file(vocabtype)
+        print(f"Loading vocab file '{path}', type '{vocabtype}'")
+
+        added_tokens_path = path.parent / "added_tokens.json"
+        if vocabtype == "bpe":
+            vocab = BpeVocab(
+                path, added_tokens_path if added_tokens_path.exists() else None
+            )
+        elif vocabtype == "spm":
+            vocab = SentencePieceVocab(
+                path, added_tokens_path if added_tokens_path.exists() else None
+            )
+        elif vocabtype == "hfft":
+            vocab = HfVocab(
+                path, added_tokens_path if added_tokens_path.exists() else None
+            )
+        else:
+            raise ValueError(f"Unsupported vocabulary type {vocabtype}")
+        special_vocab = self._create_special_vocab(
+            vocab,
+            vocabtype,
+            model_parent_path,
+        )
+        return vocab, special_vocab
+
+
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
     namestr = {
         GGMLFileType.AllF32:    "f32",
