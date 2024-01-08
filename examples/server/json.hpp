@@ -11227,7 +11227,7 @@ class binary_reader
                 }
                 if (is_ndarray) // ndarray dimensional vector can only contain integers, and can not embed another array
                 {
-                    return sax->parse_error(chars_read, get_token_string(), parse_error::create(113, chars_read, exception_message(input_format, "ndarray dimentional vector is not allowed", "size"), nullptr));
+                    return sax->parse_error(chars_read, get_token_string(), parse_error::create(113, chars_read, exception_message(input_format, "ndarray dimensional vector is not allowed", "size"), nullptr));
                 }
                 std::vector<size_t> dim;
                 if (JSON_HEDLEY_UNLIKELY(!get_ubjson_ndarray_size(dim)))
