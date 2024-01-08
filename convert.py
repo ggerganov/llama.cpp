@@ -868,13 +868,17 @@ class LazyUnpickler(pickle.Unpickler):
     CLASSES: dict[tuple[str, str], Any] = {
         # getattr used here as a workaround for mypy not being smart enough to determine
         # the staticmethods have a __func__ attribute.
-        ('torch._tensor', '_rebuild_from_type_v2'): getattr(rebuild_from_type_v2, '__func__'),
-        ('torch._utils', '_rebuild_tensor_v2'): getattr(lazy_rebuild_tensor_v2, '__func__'),
-        ('torch', 'BFloat16Storage'): LazyStorageKind(DT_BF16),
-        ('torch', 'HalfStorage'): LazyStorageKind(DT_F16),
-        ('torch', 'FloatStorage'): LazyStorageKind(DT_F32),
-        ('torch', 'IntStorage'): LazyStorageKind(DT_I32),
-        ('torch', 'Tensor'): LazyTensor,
+        ("torch._tensor", "_rebuild_from_type_v2"): getattr(
+            rebuild_from_type_v2, "__func__"
+        ),
+        ("torch._utils", "_rebuild_tensor_v2"): getattr(
+            lazy_rebuild_tensor_v2, "__func__"
+        ),
+        ("torch", "BFloat16Storage"): LazyStorageKind(DT_BF16),
+        ("torch", "HalfStorage"): LazyStorageKind(DT_F16),
+        ("torch", "FloatStorage"): LazyStorageKind(DT_F32),
+        ("torch", "IntStorage"): LazyStorageKind(DT_I32),
+        ("torch", "Tensor"): LazyTensor,
     }
 
     def find_class(self, module: str, name: str) -> Any:
@@ -985,16 +989,17 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
 def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
     if params.n_vocab != vocab.vocab_size:
         if params.n_vocab == vocab.vocab_size:
-            print("Ignoring added_tokens.json since model matches vocab size without it.")
-            vocab.added_tokens_dict = OrderedDict()
-            vocab.vocab_size = vocab.vocab_size
+            print(
+                "Ignoring added_tokens.json since model matches vocab size without it."
+            )
             return
-
         if pad_vocab and params.n_vocab > vocab.vocab_size:
             pad_count = params.n_vocab - vocab.vocab_size
-            print(f'Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>')
+            print(
+                f"Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>"
+            )
             for i in range(1, (params.n_vocab - vocab.vocab_size) + 1):
-                vocab.added_tokens_dict[f'<dummy{i:05}>'] = -1
+                vocab.added_tokens_dict[f"<dummy{i:05}>"] = -1
             vocab.vocab_size = params.n_vocab
             return
         msg = f"Vocab size mismatch (model has {params.n_vocab}, but {vocab.fname_tokenizer}"
@@ -1002,7 +1007,14 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
         if vocab.vocab_size < params.n_vocab < vocab.vocab_size + 20:
             msg += f"  Most likely you are missing added_tokens.json (should be in {vocab.fname_tokenizer.parent})."
         if vocab.vocab_size < params.n_vocab:
-            msg += " Possibly try using the --padvocab option."
+            msg += " Add the --pad-vocab option and try again."
+
+        # Check if params.n_vocab is -1 and issue a warning
+        if params.n_vocab == -1:
+            warnings.warn(
+                "WARNING: The model's vocab size is set to -1 in params.json. Please update it manually."
+            )
+
         raise Exception(msg)
 
 
@@ -1287,19 +1299,6 @@ def load_some_model(path: Path) -> ModelPlus:
 
     model_plus = merge_multifile_models(models_plus)
     return model_plus
-
-
-def find_vocab_file_path(path: Path, vocab_file: str) -> Optional[Path]:
-    path2 = path / vocab_file
-    # Use `.parent` instead of /.. to handle the symlink case better.
-    path3 = path.parent / vocab_file
-
-    if path2.exists():
-        return path2
-    if path3.exists():
-        return path3
-
-    return None
 
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
