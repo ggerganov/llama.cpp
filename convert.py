@@ -1432,17 +1432,18 @@ class VocabFactory:
         return vocab, special_vocab
 
 
-def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
+def default_output_file(model_paths: list[Path], file_type: GGMLFileType) -> Path:
     namestr = {
-        GGMLFileType.AllF32:    "f32",
+        GGMLFileType.AllF32: "f32",
         GGMLFileType.MostlyF16: "f16",
-        GGMLFileType.MostlyQ8_0:"q8_0",
+        GGMLFileType.MostlyQ8_0: "q8_0",
     }[file_type]
     ret = model_paths[0].parent / f"ggml-model-{namestr}.gguf"
     if ret in model_paths:
         sys.stderr.write(
             f"Error: Default output path ({ret}) would overwrite the input. "
-            "Please explicitly specify a path using --outfile.\n")
+            "Please explicitly specify a path using --out-file.\n"
+        )
         sys.exit(1)
     return ret
 
@@ -1452,29 +1453,107 @@ def do_dump_model(model_plus: ModelPlus) -> None:
     print(f"model_plus.format = {model_plus.format!r}")
     print(f"model_plus.vocab = {model_plus.vocab!r}")
     for name, lazy_tensor in model_plus.model.items():
-        print(f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}")
+        print(
+            f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}"
+        )
 
 
-def main(args_in: list[str] | None = None) -> None:
+def get_argument_parser() -> ArgumentParser:
     output_choices = ["f32", "f16"]
     if np.uint32(1) == np.uint32(1).newbyteorder("<"):
         # We currently only support Q8_0 output on little endian systems.
         output_choices.append("q8_0")
-    parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
-    parser.add_argument("--awq-path",    type=Path,              help="Path to scale awq cache file", default=None)
-    parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
-    parser.add_argument("--dump-single", action="store_true",    help="don't convert, just show what's in a single model file")
-    parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
-    parser.add_argument("--outtype",     choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
-    parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
-    parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
-    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
-    parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
-    parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default = DEFAULT_CONCURRENCY)
-    parser.add_argument("--bigendian",   action="store_true",    help="model is executed on big endian machine")
-    parser.add_argument("--padvocab", action="store_true", help="add pad tokens when model vocab expects more than tokenizer metadata provides")
 
-    args = parser.parse_args(args_in)
+    parser = argparse.ArgumentParser(
+        description="Convert a LLaMa model to a GGML compatible file"
+    )
+
+    parser.add_argument(
+        "model",
+        type=Path,
+        help="Directory containing the model file or the model file itself (*.pth, *.pt, *.bin)",
+    )
+
+    parser.add_argument(
+        "--awq-path",
+        type=Path,
+        help="Path to the Activation-aware Weight Quantization cache file",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--dump",
+        action="store_true",
+        help="Display the model content without converting it",
+    )
+
+    parser.add_argument(
+        "--dump-single",
+        action="store_true",
+        help="Display the content of a single model file without conversion",
+    )
+
+    parser.add_argument(
+        "--vocab-only",
+        action="store_true",
+        help="Extract and output only the vocabulary",
+    )
+
+    parser.add_argument(
+        "--out-type",
+        choices=output_choices,
+        help="Output format - note: q8_0 may be very slow (default: f16 or f32 based on input)",
+    )
+
+    parser.add_argument(
+        "--vocab-dir",
+        type=Path,
+        help="Directory containing the tokenizer.model, if separate from the model file",
+    )
+
+    parser.add_argument(
+        "--vocab-type",
+        choices=["spm", "bpe", "hfft"],  # hfft: Hugging Face Fast Tokenizer
+        default="spm",
+        help="The vocabulary format used to define the tokenizer model (default: spm)",
+    )
+
+    parser.add_argument(
+        "--pad-vocab",
+        action="store_true",
+        help="Add padding tokens when the model's vocabulary size exceeds the tokenizer metadata",
+    )
+
+    parser.add_argument(
+        "--out-file",
+        type=Path,
+        help="Specify the path for the output file (default is based on input)",
+    )
+
+    parser.add_argument(
+        "--ctx", type=int, help="Model training context (default is based on input)"
+    )
+
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        help=f"Concurrency used for conversion (default: {DEFAULT_CONCURRENCY})",
+        default=DEFAULT_CONCURRENCY,
+    )
+
+    parser.add_argument(
+        "--big-endian",
+        action="store_true",
+        help="Indicate that the model is executed on a big-endian machine",
+    )
+
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> None:
+    parser = get_argument_parser()
+    args = parser.parse_args(argv)
+
     if args.awq_path:
         sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
         from awq.apply_awq import add_scale_weights
