@@ -70,7 +70,7 @@ static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block s
 // 2-bit quantization
 // weight is represented as x = a * q + b
 // 16 blocks of 16 elements each
-// Effectively 2.5625 bits per weight
+// Effectively 2.625 bits per weight
 typedef struct {
     uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
     uint8_t qs[QK_K/4];      // quants

@@ -90,7 +90,7 @@ extern "C" {
         void                      (*graph_plan_compute)(ggml_backend_t backend, ggml_backend_graph_plan_t plan);
 
         // compute graph without a plan
-        void (*graph_compute)(ggml_backend_t backend, struct ggml_cgraph * cgraph);
+        bool (*graph_compute)(ggml_backend_t backend, struct ggml_cgraph * cgraph);
 
         // check if the backend supports an operation
         bool (*supports_op)(ggml_backend_t backend, const struct ggml_tensor * op);
