@@ -7263,14 +7263,14 @@ void ggml_vec_dot_iq2_xxs_q8_K(const int n, float * restrict s, const void * res
         for (int ib32 = 0; ib32 < QK_K/32; ib32 += 2) {
             q8b = vld1q_s8_x4(q8); q8 += 64;
             memcpy(aux32, q2, 4*sizeof(uint32_t)); q2 += 8;
-            q2u.val[0] = vcombine_u8(vld1_u8((const void *)(iq2xxs_grid + aux8[ 0])), vld1_u8((const void *)(iq2xxs_grid + aux8[ 1])));
-            q2u.val[1] = vcombine_u8(vld1_u8((const void *)(iq2xxs_grid + aux8[ 2])), vld1_u8((const void *)(iq2xxs_grid + aux8[ 3])));
-            q2u.val[2] = vcombine_u8(vld1_u8((const void *)(iq2xxs_grid + aux8[ 8])), vld1_u8((const void *)(iq2xxs_grid + aux8[ 9])));
-            q2u.val[3] = vcombine_u8(vld1_u8((const void *)(iq2xxs_grid + aux8[10])), vld1_u8((const void *)(iq2xxs_grid + aux8[11])));
-            q2s.val[0] = vcombine_u8(vld1_u8((const void *)(signs64 + ((aux32[1] >>  0) & 127))), vld1_u8((const void *)(signs64 + ((aux32[1] >>  7) & 127))));
-            q2s.val[1] = vcombine_u8(vld1_u8((const void *)(signs64 + ((aux32[1] >> 14) & 127))), vld1_u8((const void *)(signs64 + ((aux32[1] >> 21) & 127))));
-            q2s.val[2] = vcombine_u8(vld1_u8((const void *)(signs64 + ((aux32[3] >>  0) & 127))), vld1_u8((const void *)(signs64 + ((aux32[3] >>  7) & 127))));
-            q2s.val[3] = vcombine_u8(vld1_u8((const void *)(signs64 + ((aux32[3] >> 14) & 127))), vld1_u8((const void *)(signs64 + ((aux32[3] >> 21) & 127))));
+            q2u.val[0] = vcombine_s8(vld1_s8((const void *)(iq2xxs_grid + aux8[ 0])), vld1_s8((const void *)(iq2xxs_grid + aux8[ 1])));
+            q2u.val[1] = vcombine_s8(vld1_s8((const void *)(iq2xxs_grid + aux8[ 2])), vld1_s8((const void *)(iq2xxs_grid + aux8[ 3])));
+            q2u.val[2] = vcombine_s8(vld1_s8((const void *)(iq2xxs_grid + aux8[ 8])), vld1_s8((const void *)(iq2xxs_grid + aux8[ 9])));
+            q2u.val[3] = vcombine_s8(vld1_s8((const void *)(iq2xxs_grid + aux8[10])), vld1_s8((const void *)(iq2xxs_grid + aux8[11])));
+            q2s.val[0] = vcombine_s8(vld1_s8((const void *)(signs64 + ((aux32[1] >>  0) & 127))), vld1_s8((const void *)(signs64 + ((aux32[1] >>  7) & 127))));
+            q2s.val[1] = vcombine_s8(vld1_s8((const void *)(signs64 + ((aux32[1] >> 14) & 127))), vld1_s8((const void *)(signs64 + ((aux32[1] >> 21) & 127))));
+            q2s.val[2] = vcombine_s8(vld1_s8((const void *)(signs64 + ((aux32[3] >>  0) & 127))), vld1_s8((const void *)(signs64 + ((aux32[3] >>  7) & 127))));
+            q2s.val[3] = vcombine_s8(vld1_s8((const void *)(signs64 + ((aux32[3] >> 14) & 127))), vld1_s8((const void *)(signs64 + ((aux32[3] >> 21) & 127))));
             q2u.val[0] = vmulq_s8(q2u.val[0], q2s.val[0]);
             q2u.val[1] = vmulq_s8(q2u.val[1], q2s.val[1]);
             q2u.val[2] = vmulq_s8(q2u.val[2], q2s.val[2]);
