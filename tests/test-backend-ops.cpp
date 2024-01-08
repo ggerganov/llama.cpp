@@ -474,17 +474,17 @@ struct test_case {
             printf("compare failed ");
         }
 
-        if (ud.ok && cmp_ok) {
-            printf("\033[1;32mOK\033[0m\n");
-        } else {
-            printf("\033[1;31mFAIL\033[0m\n");
-        }
-
         ggml_backend_buffer_free(buf);
 
         ggml_free(ctx);
 
-        return ud.ok;
+        if (ud.ok && cmp_ok) {
+            printf("\033[1;32mOK\033[0m\n");
+            return true;
+        }
+
+        printf("\033[1;31mFAIL\033[0m\n");
+        return false;
     }
 
     bool eval_perf(ggml_backend_t backend, const char * op_name) {
