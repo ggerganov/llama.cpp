@@ -40,6 +40,7 @@ models-mnt
 /lookup
 /main
 /metal
+/passkey
 /perplexity
 /q8dot
 /quantize
