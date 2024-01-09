@@ -448,59 +448,29 @@ endif()
 
 
 if (LLAMA_SYCL)
-    set(ENABLE_AOT ats)
-    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "IntelLLVM")
-	    message(WARNING "${CMAKE_C_COMPILER_ID} Need IntelLLVM for SYCL")
+    if ( NOT DEFINED ENV{ONEAPI_ROOT})
+	message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
     endif()
-    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "IntelLLVM")
-        message(WARNING "${CMAKE_CXX_COMPILER_ID} Need IntelLLVM for SYCL")
-    endif()
+    
+    #todo: AOT
 
     find_package(IntelSYCL REQUIRED)
 
-    # Check SYCL support by the compiler
-    check_cxx_compiler_flag("-fsycl" _fsycl_option)
-    if (_fsycl_option)
-	    #set (CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES} "/opt/intel/oneapi/compiler/2024.0/include")
-        CHECK_INCLUDE_FILE_CXX("sycl/sycl.hpp" _sycl_header "-fsycl")
-	    set (_sycl_header "/opt/intel/oneapi/compiler/2024.0/include/sycl/sycl.hpp")
-        if (NOT _sycl_header)
-            CHECK_INCLUDE_FILE_CXX("CL/sycl.hpp" _sycl_header_old "-fsycl")
-        endif()
-        if (_sycl_header OR _sycl_header_old)
-            set(_sycl_support TRUE)
-        endif()
-    endif()
+    #add_compile_definitions(GGML_SYCL_F16)
+    add_compile_definitions(GGML_USE_SYCL)
 
-    if (_sycl_support)
-	    #add_compile_definitions(GGML_USE_CUBLAS)
-	add_compile_definitions(GGML_USE_SYCL)
-	    #add_compile_definitions(GGML_SYCL_F16)
-	add_compile_options(-I./)
-        add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include)
-        add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include/sycl)
-        add_compile_options(-I/opt/intel/oneapi/dpcpp-ct/2024.0/include)
-        add_compile_options(-I/opt/intel/oneapi/2024.0/include)
+    add_compile_options(-I./) #include DPCT 
+    add_compile_options(-I/${ONEAPI_ROOT}/2024.0/include)
 
-	    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-narrowing")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-narrowing")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
 
-        set(GGML_HEADERS_SYCL ggml.h ggml-sycl.h)
-        set(GGML_SOURCES_SYCL ggml-sycl.cpp)
+    set(GGML_HEADERS_SYCL ggml.h ggml-sycl.h)
+    set(GGML_SOURCES_SYCL ggml-sycl.cpp)
 
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl  mkl_sycl_blas mkl_sycl_lapack mkl_sycl_dft mkl_sycl_sparse mkl_sycl_vm mkl_sycl_rng mkl_sycl_stats mkl_sycl_data_fitting mkl_intel_ilp64 mkl_tbb_thread)
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
 
-        #add_library(ggml-sycl OBJECT ${GGML_SOURCES_SYCL} ${GGML_HEADERS_SYCL})
-        #add_executable(${PROJECT_NAME} ${GGML_SOURCES_SYCL} ${GGML_HEADERS_SYCL})
-        #target_link_libraries(ggml-sycl PRIVATE sycl)
-        #target_compile_options(${PROJECT_NAME} PRIVATE ${CMAKE_CXX_FLAGS})
-        #set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl)
-	#add_sycl_to_target({})
-
-    else()
-        message(FATAL_ERROR "SYCL Support is not present")
-    endif()
 endif()
 
 
