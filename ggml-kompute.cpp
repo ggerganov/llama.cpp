@@ -1,5 +1,7 @@
-#include "ggml-kompute.h"
 #include "ggml.h"
+#include "ggml-backend.h"
+#include "ggml-backend-impl.h"
+#include "ggml-kompute.h"
 
 // These are generated at build time by cmake custom command
 #include "shaderop_scale.h"
@@ -488,16 +490,28 @@ void ggml_vk_free_memory(ggml_vk_memory &memory)
 }
 
 static
-decltype(ggml_kompute_context::buffers)::iterator ggml_vk_find_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t, uint64_t & offset) {
+ggml_vk_memory * ggml_vk_find_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t, uint64_t & offset) {
+    // compatibility with ggml-backend
+    if (t->buffer && t->buffer->buft == ggml_backend_kompute_buffer_type()) {
+        ggml_vk_memory * buf_ctx = (ggml_vk_memory *) t->buffer->context;
+
+        const intptr_t ioffs = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(buf_ctx->data);
+
+        GGML_ASSERT(ioffs >= 0 && ioffs + ggml_nbytes(t) <= (int64_t)t->buffer->size);
+
+        offset = (uint64_t)ioffs;
+        return buf_ctx;
+     }
+
     for (auto it = ctx->buffers.begin(); ; it++) {
         if (it == ctx->buffers.end()) {
             fprintf(stderr, "%s: Failed to find tensor %p\n", __func__, t->data);
-            return it;
+            return nullptr;
         }
         if (it->data <= t->data &&
                 reinterpret_cast<intptr_t>(it->data) + it->size >= (reinterpret_cast<intptr_t>(t->data) + ggml_nbytes(t))) {
             offset = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(it->data);
-            return it;
+            return &*it;
         }
     }
 }
@@ -505,8 +519,8 @@ decltype(ggml_kompute_context::buffers)::iterator ggml_vk_find_tensor(struct ggm
 static
 const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t, uint32_t *alignedOffset) {
     uint64_t originalOffset = 0;
-    auto res = ggml_vk_find_tensor(ctx, t, originalOffset);
-    if (res == ctx->buffers.end()) {
+    auto * res = ggml_vk_find_tensor(ctx, t, originalOffset);
+    if (!res) {
         static std::shared_ptr<kp::Tensor> nullTensor = nullptr;
         return nullTensor;
     }
@@ -1628,4 +1642,157 @@ kp::Tensor::TensorDataTypes
 kp::TensorT<uint8_t>::dataType()
 {
     return TensorDataTypes::eUnsignedInt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// backend interface
+
+static const char * ggml_backend_kompute_buffer_get_name(ggml_backend_buffer_t buffer) {
+    GGML_UNUSED(buffer);
+    return "Kompute";
+}
+
+static void ggml_backend_kompute_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+    auto * memory = (ggml_vk_memory *)buffer->context;
+    if (ggml_vk_has_device()) {
+        ggml_vk_free_memory(*memory);
+    }
+    delete memory;
+}
+
+static void * ggml_backend_kompute_buffer_get_base(ggml_backend_buffer_t buffer) {
+    return ((ggml_vk_memory *)buffer->context)->data;
+}
+
+static void ggml_backend_kompute_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+    memcpy((char *)tensor->data + offset, data, size);
+    ggml_vk_h2d_buffer(*(ggml_vk_memory *)buffer->context);
+}
+
+static void ggml_backend_kompute_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
+    ggml_vk_d2h_buffer(*(ggml_vk_memory *)buffer->context);
+    memcpy(data, (const char *)tensor->data + offset, size);
+}
+
+static void ggml_backend_kompute_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    auto * memory = (ggml_vk_memory *)buffer->context;
+    memset(memory->data, value, buffer->size);
+    ggml_vk_h2d_buffer(*memory);
+}
+
+static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
+    /* .get_name        = */ ggml_backend_kompute_buffer_get_name,
+    /* .free_buffer     = */ ggml_backend_kompute_buffer_free_buffer,
+    /* .get_base        = */ ggml_backend_kompute_buffer_get_base,
+    /* .init_tensor     = */ NULL,
+    /* .set_tensor      = */ ggml_backend_kompute_buffer_set_tensor,
+    /* .get_tensor      = */ ggml_backend_kompute_buffer_get_tensor,
+    /* .cpy_tensor      = */ NULL,
+    /* .clear           = */ ggml_backend_kompute_buffer_clear,
+    /* .reset           = */ NULL,
+};
+
+// default buffer type
+
+static const char * ggml_backend_kompute_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+    GGML_UNUSED(buft);
+    return "Kompute";
+}
+
+static ggml_backend_buffer_t ggml_backend_kompute_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    auto * ctx = new ggml_vk_memory(ggml_vk_allocate(size));
+    return ggml_backend_buffer_init(buft, ggml_backend_kompute_buffer_i, ctx, size);
+}
+
+static size_t ggml_backend_kompute_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
+    GGML_UNUSED(buft);
+    return 32;
+}
+
+static bool ggml_backend_kompute_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
+    GGML_UNUSED(buft);
+    return ggml_backend_is_kompute(backend);
+}
+
+ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(void) {
+    static struct ggml_backend_buffer_type ggml_backend_buffer_type_kompute = {
+        /* .iface = */ {
+            /* .get_name         = */ ggml_backend_kompute_buffer_type_get_name,
+            /* .alloc_buffer     = */ ggml_backend_kompute_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_kompute_buffer_type_get_alignment,
+            /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
+            /* .supports_backend = */ ggml_backend_kompute_buffer_type_supports_backend,
+            /* .is_host          = */ NULL,
+        },
+        /* .context = */ NULL,
+    };
+
+    return &ggml_backend_buffer_type_kompute;
+}
+
+// backend
+
+static const char * ggml_backend_kompute_name(ggml_backend_t backend) {
+    GGML_UNUSED(backend);
+    return "Kompute";
+}
+
+static void ggml_backend_kompute_free(ggml_backend_t backend) {
+    struct ggml_kompute_context * ctx = (struct ggml_kompute_context *)backend->context;
+    ggml_vk_free_device();
+    ggml_vk_free(ctx);
+    delete backend;
+}
+
+static ggml_backend_buffer_type_t ggml_backend_kompute_get_default_buffer_type(ggml_backend_t backend) {
+    GGML_UNUSED(backend);
+    return ggml_backend_kompute_buffer_type();
+}
+
+static bool ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+    auto * ctx = (ggml_kompute_context *)backend->context;
+    ggml_vk_graph_compute(ctx, cgraph);
+    return true;
+}
+
+static bool ggml_backend_kompute_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
+    GGML_UNUSED(backend);
+    GGML_UNUSED(op);
+    return true; // TODO: implement
+}
+
+static struct ggml_backend_i kompute_backend_i = {
+    /* .get_name                = */ ggml_backend_kompute_name,
+    /* .free                    = */ ggml_backend_kompute_free,
+    /* .get_default_buffer_type = */ ggml_backend_kompute_get_default_buffer_type,
+    /* .set_tensor_async        = */ NULL,
+    /* .get_tensor_async        = */ NULL,
+    /* .cpy_tensor_async        = */ NULL,
+    /* .synchronize             = */ NULL,
+    /* .graph_plan_create       = */ NULL,
+    /* .graph_plan_free         = */ NULL,
+    /* .graph_plan_compute      = */ NULL,
+    /* .graph_compute           = */ ggml_backend_kompute_graph_compute,
+    /* .supports_op             = */ ggml_backend_kompute_supports_op,
+};
+
+ggml_backend_t ggml_backend_kompute_init() {
+    if (!ggml_vk_has_device()) {
+        fprintf(stderr, "%s: error: device was not initialized\n", __func__);
+        return nullptr;
+    }
+
+    struct ggml_kompute_context * ctx = ggml_vk_init();
+
+    ggml_backend_t kompute_backend = new ggml_backend {
+        /* .interface = */ kompute_backend_i,
+        /* .context   = */ ctx,
+    };
+
+    return kompute_backend;
+}
+
+bool ggml_backend_is_kompute(ggml_backend_t backend) {
+    return backend && backend->iface.get_name == ggml_backend_kompute_name;
 }
