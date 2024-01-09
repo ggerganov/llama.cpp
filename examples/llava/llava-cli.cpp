@@ -243,6 +243,9 @@ int main(int argc, char ** argv) {
     }
 
     auto image_embed = load_image(ctx_llava, &params);
+    if (!image_embed) {
+        return 1;
+    }
 
     // process the prompt
     process_prompt(ctx_llava, image_embed, &params, params.prompt);
