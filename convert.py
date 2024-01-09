@@ -1246,6 +1246,37 @@ def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileT
     raise Exception(f"Unexpected combination of types: {name_to_type}")
 
 
+def model_parameter_count(model: LazyModel) -> int:
+    total_model_parameters = 0
+    for i, (name, lazy_tensor) in enumerate(model.items()):
+        sum_weights_in_tensor = 1
+        for dim in lazy_tensor.shape:
+            sum_weights_in_tensor *= dim
+        total_model_parameters += sum_weights_in_tensor
+    return total_model_parameters
+
+
+def model_parameter_count_rounded_notation(model_params_count: int) -> str:
+    if model_params_count > 1e12 :
+        # Trillions Of Parameters
+        scaled_model_params = model_params_count * 1e-12
+        scale_suffix = "T"
+    elif model_params_count > 1e9 :
+        # Billions Of Parameters
+        scaled_model_params = model_params_count * 1e-9
+        scale_suffix = "B"
+    elif model_params_count > 1e6 :
+        # Millions Of Parameters
+        scaled_model_params = model_params_count * 1e-6
+        scale_suffix = "M"
+    else: 
+        # Thousands Of Parameters
+        scaled_model_params = model_params_count * 1e-3
+        scale_suffix = "K"
+
+    return f"{round(scaled_model_params)}{scale_suffix}"
+
+
 def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
     return {name: tensor.astype(output_type.type_for_tensor(name, tensor))
             for (name, tensor) in model.items()}
@@ -1432,13 +1463,20 @@ class VocabFactory:
         return vocab, special_vocab
 
 
-def default_output_file(model_paths: list[Path], file_type: GGMLFileType) -> Path:
-    namestr = {
-        GGMLFileType.AllF32: "f32",
+def default_outfile(model_paths: list[Path], file_type: GGMLFileType, params: Params, model_params_count: int) -> Path:
+    quantization = {
+        GGMLFileType.AllF32:    "f32",
         GGMLFileType.MostlyF16: "f16",
         GGMLFileType.MostlyQ8_0: "q8_0",
     }[file_type]
-    ret = model_paths[0].parent / f"ggml-model-{namestr}.gguf"
+
+    parameters = model_parameter_count_rounded_notation(model_params_count)
+
+    name = "ggml-model"
+    if params.path_model is not None:
+        name = params.path_model.name
+
+    ret = model_paths[0].parent / f"{name}-{parameters}-{quantization}.gguf"
     if ret in model_paths:
         sys.stderr.write(
             f"Error: Default output path ({ret}) would overwrite the input. "
@@ -1580,6 +1618,9 @@ def main(argv: Optional[list[str]] = None) -> None:
             model={}, paths=[args.model / "dummy"], format="none", vocab=None
         )
 
+    model_params_count = model_parameter_count(model_plus.model)
+    print(f"model parameters count : {model_params_count} ({model_parameter_count_rounded_notation(model_params_count)})")
+
     if args.dump:
         do_dump_model(model_plus)
         return
@@ -1631,11 +1672,18 @@ def main(argv: Optional[list[str]] = None) -> None:
     if model_plus.vocab is not None and args.vocab_dir is None:
         vocab = model_plus.vocab
 
-    model = model_plus.model
-    model = convert_model_names(model, params)
-    ftype = pick_output_type(model, args.outtype)
-    model = convert_to_output_type(model, ftype)
-    outfile = args.outfile or default_output_file(model_plus.paths, ftype)
+    # FIXME: Try to respect vocab_dir somehow?
+    print(f"Vocab info: {vocab}")
+    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent,
+                                      load_merges = True,
+                                      n_vocab = vocab.vocab_size)
+
+    print(f"Special vocab info: {special_vocab}")
+    model   = model_plus.model
+    model   = convert_model_names(model, params)
+    ftype   = pick_output_type(model, args.outtype)
+    model   = convert_to_output_type(model, ftype)
+    outfile = args.outfile or default_outfile(model_plus.paths, ftype, params, model_params_count)
 
     params.ftype = ftype
     print(f"Writing {outfile}, format {ftype}")
