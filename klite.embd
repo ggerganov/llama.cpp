@@ -5953,6 +5953,7 @@ Current version: 105
 		let avg = (a1+a2)*0.5;
 		let diff = Math.abs(a2 - a1)*0.5;
 		document.getElementById("temperature").value = avg.toFixed(3);
+		document.getElementById("temperature_slide").value = document.getElementById("temperature").value;
 		document.getElementById("dynatemp_range").value = diff.toFixed(3);
 
 		document.getElementById("dynatempcontainer").classList.add("hidden");
