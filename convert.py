@@ -48,9 +48,7 @@ except ModuleNotFoundError as e:
 if "NO_LOCAL_GGUF" not in os.environ:
     # Use absolute path to the gguf-py directory
     gguf_py_dir = str(Path(__file__).resolve().parent / "gguf-py")
-    print(
-        gguf_py_dir
-    )  # NOTE: Remove this once path is verified after changes are completed
+    print(gguf_py_dir)  # NOTE: Remove this once path is verified after changes are completed
     if gguf_py_dir not in sys.path:
         sys.path.insert(1, gguf_py_dir)
 
@@ -79,7 +77,6 @@ DEFAULT_CONCURRENCY = 8
 # data types
 #
 
-
 # TODO: Clean up and refactor data types
 @dataclass(frozen=True)
 class DataType:
@@ -96,16 +93,10 @@ class UnquantizedDataType(DataType):
     pass
 
 
-DT_F16 = UnquantizedDataType(
-    "F16", dtype=np.dtype(np.float16), valid_conversions=["F32", "Q8_0"]
-)
-DT_F32 = UnquantizedDataType(
-    "F32", dtype=np.dtype(np.float32), valid_conversions=["F16", "Q8_0"]
-)
-DT_I32 = UnquantizedDataType("I32", dtype=np.dtype(np.int16), valid_conversions=[])
-DT_BF16 = UnquantizedDataType(
-    "BF16", dtype=np.dtype(np.uint16), valid_conversions=["F32", "F16", "Q8_0"]
-)
+DT_F16  = UnquantizedDataType('F16',  dtype = np.dtype(np.float16), valid_conversions = ['F32', 'Q8_0'])
+DT_F32  = UnquantizedDataType('F32',  dtype = np.dtype(np.float32), valid_conversions = ['F16', 'Q8_0'])
+DT_I32  = UnquantizedDataType('I32',  dtype = np.dtype(np.int16),   valid_conversions = [])
+DT_BF16 = UnquantizedDataType('BF16', dtype = np.dtype(np.uint16),  valid_conversions = ['F32', 'F16', 'Q8_0'])
 
 
 @dataclass(frozen=True)
@@ -115,12 +106,10 @@ class QuantizedDataType(DataType):
     ggml_type: gguf.GGMLQuantizationType
 
     def quantize(self, arr: NDArray) -> NDArray:
-        raise NotImplementedError(f"Quantization for {self.name} not implemented")
+        raise NotImplementedError(f'Quantization for {self.name} not implemented')
 
     def elements_to_bytes(self, n_elements: int) -> int:
-        assert (
-            n_elements % self.block_size == 0
-        ), f"Invalid number of elements {n_elements} for {self.name} with block size {self.block_size}"
+        assert n_elements % self.block_size == 0, f'Invalid number of elements {n_elements} for {self.name} with block size {self.block_size}'
         return self.quantized_dtype.itemsize * (n_elements // self.block_size)
 
 
@@ -128,47 +117,38 @@ class QuantizedDataType(DataType):
 class Q8_0QuantizedDataType(QuantizedDataType):
     # Mini Q8_0 quantization in Python!
     def quantize(self, arr: NDArray) -> NDArray:
-        assert (
-            arr.size % self.block_size == 0 and arr.size != 0
-        ), f"Bad array size {arr.size}"
-        assert arr.dtype == np.float32, f"Bad array type {arr.dtype}"
+        assert arr.size % self.block_size == 0 and arr.size != 0, f'Bad array size {arr.size}'
+        assert arr.dtype == np.float32, f'Bad array type {arr.dtype}'
         n_blocks = arr.size // self.block_size
         blocks = arr.reshape((n_blocks, self.block_size))
         # Much faster implementation of block quantization contributed by @Cebtenzzre
 
         def quantize_blocks_q8_0(blocks: NDArray) -> Iterable[tuple[Any, Any]]:
-            d = abs(blocks).max(axis=1) / np.float32(127)
-            with np.errstate(divide="ignore"):
+            d = abs(blocks).max(axis = 1) / np.float32(127)
+            with np.errstate(divide = 'ignore'):
                 qs = (blocks / d[:, None]).round()
             qs[d == 0] = 0
             yield from zip(d, qs)
-
-        return np.fromiter(
-            quantize_blocks_q8_0(blocks), count=n_blocks, dtype=self.quantized_dtype
-        )
+        return np.fromiter(quantize_blocks_q8_0(blocks), count = n_blocks, dtype = self.quantized_dtype)
 
 
-DT_Q8_0 = Q8_0QuantizedDataType(
-    "Q8_0",
-    dtype=np.dtype(np.float32),
-    valid_conversions=[],
-    ggml_type=gguf.GGMLQuantizationType.Q8_0,
-    block_size=32,
-    quantized_dtype=np.dtype([("d", "<f2"), ("qs", "i1", (32,))]),
-)
+DT_Q8_0 = Q8_0QuantizedDataType('Q8_0',
+                                dtype = np.dtype(np.float32), valid_conversions = [],
+                                ggml_type = gguf.GGMLQuantizationType.Q8_0, block_size = 32,
+                                quantized_dtype = np.dtype([('d', '<f2'), ('qs', 'i1', (32,))]))
 
 # Quantized types skipped here because they may also map to np.float32
 NUMPY_TYPE_TO_DATA_TYPE: dict[np.dtype[Any], DataType] = {}
 for dt in (DT_BF16, DT_F16, DT_F32, DT_I32):
     if dt.dtype in NUMPY_TYPE_TO_DATA_TYPE:
-        raise ValueError(f"Invalid duplicate data type {dt}")
+        raise ValueError(f'Invalid duplicate data type {dt}')
     NUMPY_TYPE_TO_DATA_TYPE[dt.dtype] = dt
 
 SAFETENSORS_DATA_TYPES: dict[str, DataType] = {
-    "BF16": DT_BF16,
-    "F16": DT_F16,
-    "F32": DT_F32,
-    "I32": DT_I32,
+    'BF16': DT_BF16,
+    'F16': DT_F16,
+    'F32': DT_F32,
+    'I32': DT_I32,
 }
 
 # TODO: match this with `llama_ftype`
@@ -177,8 +157,8 @@ SAFETENSORS_DATA_TYPES: dict[str, DataType] = {
 
 
 class GGMLFileType(enum.IntEnum):
-    AllF32 = 0
-    MostlyF16 = 1  # except 1d tensors
+    AllF32     = 0
+    MostlyF16  = 1  # except 1d tensors
     MostlyQ8_0 = 7  # except 1d tensors
 
     def type_for_tensor(self, name: str, tensor: LazyTensor) -> DataType:
@@ -190,8 +170,8 @@ class GGMLFileType(enum.IntEnum):
 
 
 GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
-    GGMLFileType.AllF32: DT_F32,
-    GGMLFileType.MostlyF16: DT_F16,
+    GGMLFileType.AllF32    : DT_F32,
+    GGMLFileType.MostlyF16 : DT_F16,
     GGMLFileType.MostlyQ8_0: DT_Q8_0,
 }
 
@@ -586,13 +566,8 @@ class HfVocab:
             token_text = reverse_vocab[token_id].encode("utf-8")
 
             # Yield token text, score, and type
-            yield (
-                token_text,
-                self.get_token_score(token_id),
-                self.get_token_type(
-                    token_id,
-                    self.special_ids,  # Reuse already stored special IDs
-                ),
+            yield token_text, self.get_token_score(token_id), self.get_token_type(
+                token_id, self.special_ids  # Reuse already stored special IDs
             )
 
     def get_token_type(self, token_id: int, special_ids: set) -> gguf.TokenType:
@@ -642,43 +617,28 @@ def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
     # print( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
     if n_head_kv is not None and n_head != n_head_kv:
         n_head = n_head_kv
-    return (
-        weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
-        .swapaxes(1, 2)
-        .reshape(weights.shape)
-    )
+    return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+            .swapaxes(1, 2)
+            .reshape(weights.shape))
 
 
 class Tensor(metaclass=ABCMeta):
     data_type: DataType
 
     @abstractmethod
-    def astype(self, data_type: DataType) -> Tensor:
-        ...
-
+    def astype(self, data_type: DataType) -> Tensor: ...
     @abstractmethod
-    def permute(self, n_head: int, n_head_kv: int) -> Tensor:
-        ...
-
+    def permute(self, n_head: int, n_head_kv: int) -> Tensor: ...
     @abstractmethod
-    def permute_part(
-        self, n_part: int, n_head: int, n_head_kv: int
-    ) -> UnquantizedTensor:
-        ...
-
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor: ...
     @abstractmethod
-    def part(self, n_part: int) -> UnquantizedTensor:
-        ...
-
+    def part(self, n_part: int) -> UnquantizedTensor: ...
     @abstractmethod
-    def to_ggml(self) -> GGMLCompatibleTensor:
-        ...
+    def to_ggml(self) -> GGMLCompatibleTensor: ...
 
 
 def bf16_to_fp32(bf16_arr: np.ndarray[Any, np.dtype[np.uint16]]) -> NDArray:
-    assert (
-        bf16_arr.dtype == np.uint16
-    ), f"Input array should be of dtype uint16, but got {bf16_arr.dtype}"
+    assert bf16_arr.dtype == np.uint16, f"Input array should be of dtype uint16, but got {bf16_arr.dtype}"
     fp32_arr = bf16_arr.astype(np.uint32) << 16
     return fp32_arr.view(np.float32)
 
@@ -698,13 +658,9 @@ class UnquantizedTensor(Tensor):
     def to_ggml(self) -> UnquantizedTensor:
         return self
 
-    def permute_part(
-        self, n_part: int, n_head: int, n_head_kv: int
-    ) -> UnquantizedTensor:
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor:
         r = self.ndarray.shape[0] // 3
-        return UnquantizedTensor(
-            permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head, n_head_kv)
-        )
+        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head, n_head_kv))
 
     def part(self, n_part: int) -> UnquantizedTensor:
         r = self.ndarray.shape[0] // 3
@@ -714,9 +670,7 @@ class UnquantizedTensor(Tensor):
         return UnquantizedTensor(permute(self.ndarray, n_head, n_head_kv))
 
 
-def load_unquantized(
-    lazy_tensor: LazyTensor, expected_dtype: Any = None, convert: bool = False
-) -> NDArray:
+def load_unquantized(lazy_tensor: LazyTensor, expected_dtype: Any = None, convert: bool = False) -> NDArray:
     tensor = lazy_tensor.load()
     assert isinstance(tensor, UnquantizedTensor)
 
@@ -727,9 +681,7 @@ def load_unquantized(
         if convert:
             tensor.ndarray = tensor.ndarray.astype(expected_dtype)
         else:
-            raise ValueError(
-                f"expected this tensor to have dtype {expected_dtype}, got {tensor.ndarray.dtype}"
-            )
+            raise ValueError(f'expected this tensor to have dtype {expected_dtype}, got {tensor.ndarray.dtype}')
 
     return tensor.ndarray
 
@@ -747,9 +699,8 @@ class LazyTensor:
     def load(self) -> Tensor:
         ret = self._load()
         # Should be okay if it maps to the same numpy type?
-        assert ret.data_type == self.data_type or (
-            self.data_type.dtype == ret.data_type.dtype
-        ), (self.data_type, ret.data_type, self.description)
+        assert ret.data_type == self.data_type or (self.data_type.dtype == ret.data_type.dtype), \
+            (self.data_type, ret.data_type, self.description)
         return ret
 
     def astype(self, data_type: DataType) -> LazyTensor:
@@ -757,29 +708,21 @@ class LazyTensor:
 
         def load() -> Tensor:
             return self.load().astype(data_type)
-
-        return LazyTensor(
-            load, self.shape, data_type, f"convert({data_type}) {self.description}"
-        )
+        return LazyTensor(load, self.shape, data_type, f'convert({data_type}) {self.description}')
 
     def validate_conversion_to(self, data_type: DataType) -> None:
-        if (
-            data_type != self.data_type
-            and data_type.name not in self.data_type.valid_conversions
-        ):
-            raise ValueError(
-                f"Cannot validate conversion from {self.data_type} to {data_type}."
-            )
+        if data_type != self.data_type and data_type.name not in self.data_type.valid_conversions:
+            raise ValueError(f'Cannot validate conversion from {self.data_type} to {data_type}.')
 
 
-LazyModel: TypeAlias = "dict[str, LazyTensor]"
+LazyModel: TypeAlias = 'dict[str, LazyTensor]'
 
 
 @dataclass
 class ModelPlus:
     model: LazyModel
     paths: list[Path]  # Where this was read from.
-    format: Literal["ggml", "torch", "safetensors", "none"]
+    format: Literal['ggml', 'torch', 'safetensors', 'none']
     vocab: Vocab | None  # For GGML models (which have vocab built in), the vocab.
 
 
@@ -797,11 +740,9 @@ def merge_sharded(models: list[LazyModel]) -> LazyModel:
         if len(lazy_tensors[0].shape) == 1:
             # the tensor is just duplicated in every file
             return lazy_tensors[0]
-        if (
-            name.startswith("tok_embeddings.")
-            or name.endswith(".attention.wo.weight")
-            or name.endswith(".feed_forward.w2.weight")
-        ):
+        if name.startswith('tok_embeddings.') or \
+           name.endswith('.attention.wo.weight') or \
+           name.endswith('.feed_forward.w2.weight'):
             # split by columns
             axis = 1
         else:
@@ -814,16 +755,8 @@ def merge_sharded(models: list[LazyModel]) -> LazyModel:
             ndarrays = [load_unquantized(tensor) for tensor in lazy_tensors]
             concatenated: NDArray = np.concatenate(ndarrays, axis=axis)
             return UnquantizedTensor(concatenated)
-
-        description = (
-            "concatenated[["
-            + "] | [".join(lt.description for lt in lazy_tensors)
-            + "]]"
-        )
-        return LazyTensor(
-            load, concatenated_shape, lazy_tensors[0].data_type, description
-        )
-
+        description = 'concatenated[[' + '] | ['.join(lt.description for lt in lazy_tensors) + ']]'
+        return LazyTensor(load, concatenated_shape, lazy_tensors[0].data_type, description)
     return {name: convert(name) for name in names}
 
 
@@ -853,38 +786,23 @@ def merge_multifile_models(models_plus: list[ModelPlus]) -> ModelPlus:
 def permute_lazy(lazy_tensor: LazyTensor, n_head: int, n_head_kv: int) -> LazyTensor:
     def load() -> Tensor:
         return lazy_tensor.load().permute(n_head, n_head_kv)
-
-    return LazyTensor(
-        load,
-        lazy_tensor.shape,
-        lazy_tensor.data_type,
-        f"permute({n_head}, {n_head_kv}) " + lazy_tensor.description,
-    )
+    return LazyTensor(load, lazy_tensor.shape, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
 
 
-def permute_part_lazy(
-    lazy_tensor: LazyTensor, n_part: int, n_head: int, n_head_kv: int
-) -> LazyTensor:
+def permute_part_lazy(lazy_tensor: LazyTensor, n_part: int, n_head: int, n_head_kv: int) -> LazyTensor:
     def load() -> Tensor:
         return lazy_tensor.load().permute_part(n_part, n_head, n_head_kv)
-
     s = lazy_tensor.shape.copy()
     s[0] = s[0] // 3
-    return LazyTensor(
-        load,
-        s,
-        lazy_tensor.data_type,
-        f"permute({n_head}, {n_head_kv}) " + lazy_tensor.description,
-    )
+    return LazyTensor(load, s, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
 
 
 def part_lazy(lazy_tensor: LazyTensor, n_part: int) -> LazyTensor:
     def load() -> Tensor:
         return lazy_tensor.load().part(n_part)
-
     s = lazy_tensor.shape.copy()
     s[0] = s[0] // 3
-    return LazyTensor(load, s, lazy_tensor.data_type, "part " + lazy_tensor.description)
+    return LazyTensor(load, s, lazy_tensor.data_type, 'part ' + lazy_tensor.description)
 
 
 # Functionality that simulates `torch.load` but where individual tensors are
@@ -914,11 +832,11 @@ class LazyUnpickler(pickle.Unpickler):
         self.zip_file = zip_file
 
     def persistent_load(self, pid: Any) -> Any:
-        assert pid[0] == "storage"
+        assert pid[0] == 'storage'
         assert isinstance(pid[1], LazyStorageKind)
         data_type = pid[1].data_type
         filename_stem = pid[2]
-        filename = f"{self.data_base_path}/{filename_stem}"
+        filename = f'{self.data_base_path}/{filename_stem}'
         info = self.zip_file.getinfo(filename)
 
         def load(offset: int, elm_count: int) -> NDArray:
@@ -929,31 +847,18 @@ class LazyUnpickler(pickle.Unpickler):
             data = fp.read(size)
             assert len(data) == size
             return np.frombuffer(data, dtype)
-
-        description = f"storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}"
+        description = f'storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}'
         return LazyStorage(load=load, kind=pid[1], description=description)
 
     @staticmethod
-    def lazy_rebuild_tensor_v2(
-        storage: Any,
-        storage_offset: Any,
-        size: Any,
-        stride: Any,
-        requires_grad: Any,
-        backward_hooks: Any,
-        metadata: Any = None,
-    ) -> LazyTensor:
+    def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,
+                               requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
         assert isinstance(storage, LazyStorage)
 
         def load() -> UnquantizedTensor:
             elm_count = stride[0] * size[0]
-            return UnquantizedTensor(
-                storage.load(storage_offset, elm_count).reshape(size)
-            )
-
-        description = (
-            f"pickled storage_offset={storage_offset} in {storage.description}"
-        )
+            return UnquantizedTensor(storage.load(storage_offset, elm_count).reshape(size))
+        description = f'pickled storage_offset={storage_offset} in {storage.description}'
         return LazyTensor(load, list(size), storage.kind.data_type, description)
 
     @staticmethod
@@ -977,56 +882,47 @@ class LazyUnpickler(pickle.Unpickler):
     }
 
     def find_class(self, module: str, name: str) -> Any:
-        if not module.startswith("torch"):
+        if not module.startswith('torch'):
             return super().find_class(module, name)
         return self.CLASSES[(module, name)]
 
 
 def lazy_load_torch_file(outer_fp: IO[bytes], path: Path) -> ModelPlus:
     zf = zipfile.ZipFile(outer_fp)
-    pickle_paths = [name for name in zf.namelist() if name.endswith(".pkl")]
+    pickle_paths = [name for name in zf.namelist() if name.endswith('.pkl')]
     assert len(pickle_paths) == 1, pickle_paths
-    pickle_fp = zf.open(pickle_paths[0], "r")
-    unpickler = LazyUnpickler(
-        pickle_fp, data_base_path=pickle_paths[0][:-4], zip_file=zf
-    )
+    pickle_fp = zf.open(pickle_paths[0], 'r')
+    unpickler = LazyUnpickler(pickle_fp,
+                              data_base_path=pickle_paths[0][:-4],
+                              zip_file=zf)
     model = unpickler.load()
-    if "model" in model:
-        model = model["model"]
+    if 'model' in model: model = model['model']
     as_dict = dict(model.items())
-    return ModelPlus(model=as_dict, paths=[path], format="torch", vocab=None)
+    return ModelPlus(model=as_dict, paths=[path], format='torch', vocab=None)
 
 
 def lazy_load_safetensors_file(fp: IO[bytes], path: Path) -> ModelPlus:
-    (header_size,) = struct.unpack("<Q", fp.read(8))
+    header_size, = struct.unpack('<Q', fp.read(8))
     header: dict[str, dict[str, Any]] = json.loads(fp.read(header_size))
     # Use mmap for the actual data to avoid race conditions with the file offset.
     mapped = memoryview(mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ))
-    byte_buf = mapped[8 + header_size :]
+    byte_buf = mapped[8 + header_size:]
 
     def convert(info: dict[str, Any]) -> LazyTensor:
-        data_type = SAFETENSORS_DATA_TYPES[info["dtype"]]
+        data_type = SAFETENSORS_DATA_TYPES[info['dtype']]
         numpy_dtype = data_type.dtype
-        shape: list[int] = info["shape"]
-        begin, end = info["data_offsets"]
+        shape: list[int] = info['shape']
+        begin, end = info['data_offsets']
         assert 0 <= begin <= end <= len(byte_buf)
         assert end - begin == math.prod(shape) * numpy_dtype.itemsize
         buf = byte_buf[begin:end]
 
         def load() -> UnquantizedTensor:
-            return UnquantizedTensor(
-                np.frombuffer(buf, dtype=numpy_dtype).reshape(shape)
-            )
-
-        description = (
-            f"safetensors begin={begin} end={end} type={data_type} path={path}"
-        )
+            return UnquantizedTensor(np.frombuffer(buf, dtype=numpy_dtype).reshape(shape))
+        description = f'safetensors begin={begin} end={end} type={data_type} path={path}'
         return LazyTensor(load, shape, data_type, description)
-
-    model = {
-        name: convert(info) for (name, info) in header.items() if name != "__metadata__"
-    }
-    return ModelPlus(model=model, paths=[path], format="safetensors", vocab=None)
+    model = {name: convert(info) for (name, info) in header.items() if name != '__metadata__'}
+    return ModelPlus(model=model, paths=[path], format='safetensors', vocab=None)
 
 
 def must_read(fp: IO[bytes], length: int) -> bytes:
@@ -1038,34 +934,28 @@ def must_read(fp: IO[bytes], length: int) -> bytes:
 
 @functools.lru_cache(maxsize=None)
 def lazy_load_file(path: Path) -> ModelPlus:
-    fp = open(path, "rb")
+    fp = open(path, 'rb')
     first8 = fp.read(8)
     fp.seek(0)
-    if first8[:2] == b"PK":
+    if first8[:2] == b'PK':
         # A zip file, i.e. PyTorch format
         return lazy_load_torch_file(fp, path)
-    elif struct.unpack("<Q", first8)[0] < 16 * 1024 * 1024:
+    elif struct.unpack('<Q', first8)[0] < 16 * 1024 * 1024:
         # Probably safetensors
         return lazy_load_safetensors_file(fp, path)
     else:
         raise ValueError(f"unknown format: {path}")
 
 
-In = TypeVar("In")
-Out = TypeVar("Out")
+In = TypeVar('In')
+Out = TypeVar('Out')
 
 
-def bounded_parallel_map(
-    func: Callable[[In], Out],
-    iterable: Iterable[In],
-    concurrency: int,
-    max_workers: int | None = None,
-    use_processpool_executor: bool = False,
-) -> Iterable[Out]:
-    """Parallel map, but with backpressure.  If the caller doesn't call `next`
+def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], concurrency: int, max_workers: int | None = None, use_processpool_executor: bool = False) -> Iterable[Out]:
+    '''Parallel map, but with backpressure.  If the caller doesn't call `next`
     fast enough, this will stop calling `func` at some point rather than
     letting results pile up in memory.  Specifically, there is a max of one
-    output value buffered per thread."""
+    output value buffered per thread.'''
     if concurrency < 2:
         yield from map(func, iterable)
         # Not reached.
@@ -1075,7 +965,7 @@ def bounded_parallel_map(
         executor_class = ProcessPoolExecutor
     else:
         executor_class = ThreadPoolExecutor
-    with executor_class(max_workers=max_workers) as executor:
+    with executor_class(max_workers = max_workers) as executor:
         futures: list[concurrent.futures.Future[Out]] = []
         done = False
         for _ in range(concurrency):
@@ -1342,31 +1232,23 @@ class OutputFile:
 
 
 def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileType:
-    wq_type = model[
-        gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0) + ".weight"
-    ].data_type
+    wq_type = model[gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0) + ".weight"].data_type
 
     if output_type_str == "f32" or (output_type_str is None and wq_type == DT_F32):
         return GGMLFileType.AllF32
-    if output_type_str == "f16" or (
-        output_type_str is None and wq_type in (DT_F16, DT_BF16)
-    ):
+    if output_type_str == "f16" or (output_type_str is None and wq_type in (DT_F16, DT_BF16)):
         return GGMLFileType.MostlyF16
     if output_type_str == "q8_0":
         return GGMLFileType.MostlyQ8_0
 
-    name_to_type = {
-        name: lazy_tensor.data_type for (name, lazy_tensor) in model.items()
-    }
+    name_to_type = {name: lazy_tensor.data_type for (name, lazy_tensor) in model.items()}
 
     raise Exception(f"Unexpected combination of types: {name_to_type}")
 
 
 def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
-    return {
-        name: tensor.astype(output_type.type_for_tensor(name, tensor))
-        for (name, tensor) in model.items()
-    }
+    return {name: tensor.astype(output_type.type_for_tensor(name, tensor))
+            for (name, tensor) in model.items()}
 
 
 def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
@@ -1379,43 +1261,21 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     for i in itertools.count():
         if f"model.layers.{i}.self_attn.q_proj.weight" in model:
             print(f"Permuting layer {i}")
-            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(
-                model[f"model.layers.{i}.self_attn.q_proj.weight"],
-                params.n_head,
-                params.n_head,
-            )
-            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_lazy(
-                model[f"model.layers.{i}.self_attn.k_proj.weight"],
-                params.n_head,
-                params.n_head_kv,
-            )
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head)
+            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head, params.n_head_kv)
             # tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
             print(f"Unpacking and permuting layer {i}")
-            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(
-                model[f"model.layers.{i}.self_attn.W_pack.weight"],
-                0,
-                params.n_head,
-                params.n_head,
-            )
-            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(
-                model[f"model.layers.{i}.self_attn.W_pack.weight"],
-                1,
-                params.n_head,
-                params.n_head_kv,
-            )
-            tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy(
-                model[f"model.layers.{i}.self_attn.W_pack.weight"], 2
-            )
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
+            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
+            tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
             del tmp[f"model.layers.{i}.self_attn.W_pack.weight"]
         else:
             break
 
     out: LazyModel = {}
     for name, lazy_tensor in model.items():
-        tensor_type, name_new = tmap.get_type_and_name(
-            name, try_suffixes=(".weight", ".bias")
-        ) or (None, None)
+        tensor_type, name_new = tmap.get_type_and_name(name, try_suffixes = (".weight", ".bias")) or (None, None)
         if name_new is None:
             raise Exception(f"Unexpected tensor name: {name}")
 
@@ -1423,26 +1283,24 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
             print(f"skipping tensor {name_new}")
             continue
 
-        print(
-            f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}"
-        )
+        print(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
         out[name_new] = lazy_tensor
 
     return out
 
 
 def nth_multifile_path(path: Path, n: int) -> Path | None:
-    """Given any path belonging to a multi-file model (e.g. foo.bin.1), return
+    '''Given any path belonging to a multi-file model (e.g. foo.bin.1), return
     the nth path in the model.
-    """
+    '''
     # Support the following patterns:
     patterns: list[tuple[str, str]] = [
         # - x.00.pth, x.01.pth, etc.
-        (r"\.[0-9]{2}\.pth$", f".{n:02}.pth"),
+        (r'\.[0-9]{2}\.pth$', f'.{n:02}.pth'),
         # - x-00001-of-00002.bin, x-00002-of-00002.bin, etc.
-        (r"-[0-9]{5}-of-(.*)$", rf"-{n:05}-of-\1"),
+        (r'-[0-9]{5}-of-(.*)$', fr'-{n:05}-of-\1'),
         # x.bin, x.bin.1, etc.
-        (r"(\.[0-9]+)?$", r"\1" if n == 0 else rf"\1.{n}"),
+        (r'(\.[0-9]+)?$', r'\1' if n == 0 else fr'\1.{n}')
     ]
     for regex, replacement in patterns:
         if re.search(regex, path.name):
@@ -1453,9 +1311,9 @@ def nth_multifile_path(path: Path, n: int) -> Path | None:
 
 
 def find_multifile_paths(path: Path) -> list[Path]:
-    """Given any path belonging to a multi-file model (e.g. foo.bin.1), return
+    '''Given any path belonging to a multi-file model (e.g. foo.bin.1), return
     the whole list of paths in the model.
-    """
+    '''
     ret: list[Path] = []
     for i in itertools.count():
         nth_path = nth_multifile_path(path, i)
@@ -1471,7 +1329,7 @@ def find_multifile_paths(path: Path) -> list[Path]:
 
 
 def load_some_model(path: Path) -> ModelPlus:
-    """Load a model of any supported format."""
+    '''Load a model of any supported format.'''
     # Be extra-friendly and accept either a file or a directory:
     if path.is_dir():
         # Check if it's a set of safetensors files first
@@ -1479,19 +1337,12 @@ def load_some_model(path: Path) -> ModelPlus:
         files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             # Try the PyTorch patterns too, with lower priority
-            globs = [
-                "consolidated.00.pth",
-                "pytorch_model-00001-of-*.bin",
-                "*.pt",
-                "pytorch_model.bin",
-            ]
+            globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt", "pytorch_model.bin"]
             files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             raise Exception(f"Can't find model in directory {path}")
         if len(files) > 1:
-            raise Exception(
-                f"Found multiple models in {path}, not sure which to pick: {files}"
-            )
+            raise Exception(f"Found multiple models in {path}, not sure which to pick: {files}")
         path = files[0]
 
     paths = find_multifile_paths(path)
