@@ -10,6 +10,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
+- New SOTA quantized models, including pure 2-bits: https://huggingface.co/ikawrakow
 - Collecting Apple Silicon performance stats:
   - M-series: https://github.com/ggerganov/llama.cpp/discussions/4167
   - A-series: https://github.com/ggerganov/llama.cpp/discussions/4508
@@ -118,6 +119,7 @@ as the main playground for developing new features for the [ggml](https://github
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
 - Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp)
+- JS/TS (llama.cpp server client): [lgrammel/modelfusion](https://modelfusion.dev/integration/model-provider/llamacpp)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
 - Rust: [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
@@ -135,6 +137,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [semperai/amica](https://github.com/semperai/amica)
 - [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
+- [iohub/collama](https://github.com/iohub/coLLaMA)
 
 ---
 

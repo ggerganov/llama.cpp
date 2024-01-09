@@ -103,6 +103,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q5_K_S        = 16, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q5_K_M        = 17, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q6_K          = 18, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ2_XXS       = 19, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -483,6 +484,17 @@ extern "C" {
                        llama_pos   p0,
                        llama_pos   p1,
                        llama_pos   delta);
+
+    // Integer division of the positions by factor of `d > 1`
+    // If the KV cache is RoPEd, the KV data is updated accordingly
+    // p0 < 0 : [0,  p1]
+    // p1 < 0 : [p0, inf)
+    LLAMA_API void llama_kv_cache_seq_div(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id,
+                       llama_pos   p0,
+                       llama_pos   p1,
+                             int   d);
 
     //
     // State / sessions

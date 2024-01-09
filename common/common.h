@@ -62,6 +62,8 @@ struct gpt_params {
     int32_t main_gpu                        = 0;     // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};   // how split tensors should be distributed across GPUs
     int32_t n_beams                         = 0;     // if non-zero then use beam search of given width.
+    int32_t grp_attn_n                      = 1;     // group-attention factor
+    int32_t grp_attn_w                      = 512;   // group-attention width
     float   rope_freq_base                  = 0.0f;  // RoPE base frequency
     float   rope_freq_scale                 = 0.0f;  // RoPE frequency scaling factor
     float   yarn_ext_factor                 = -1.0f; // YaRN extrapolation mix factor

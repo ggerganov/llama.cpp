@@ -1903,6 +1903,28 @@ static void llama_kv_cache_seq_shift(
     cache.head = new_head != cache.size ? new_head : 0;
 }
 
+static void llama_kv_cache_seq_div(
+        struct llama_kv_cache & cache,
+                 llama_seq_id   seq_id,
+                    llama_pos   p0,
+                    llama_pos   p1,
+                          int   d) {
+    if (p0 < 0) p0 = 0;
+    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+
+    for (uint32_t i = 0; i < cache.size; ++i) {
+        if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
+            cache.has_shift = true;
+
+            {
+                llama_pos p_old = cache.cells[i].pos;
+                cache.cells[i].pos   /= d;
+                cache.cells[i].delta += cache.cells[i].pos - p_old;
+            }
+        }
+    }
+}
+
 //
 // model loading and saving
 //
@@ -2180,7 +2202,11 @@ struct llama_model_loader {
                     type_max   = type;
                 }
 
-                // LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+                // TODO: make runtime configurable
+#if 0
+                struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
+                LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, ggml_get_name(meta), ggml_type_name(type), llama_format_tensor_shape(meta).c_str());
+#endif
             }
 
             switch (type_max) {
@@ -2196,6 +2222,7 @@ struct llama_model_loader {
                 case GGML_TYPE_Q4_K: ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M; break;
                 case GGML_TYPE_Q5_K: ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M; break;
                 case GGML_TYPE_Q6_K: ftype = LLAMA_FTYPE_MOSTLY_Q6_K;   break;
+                case GGML_TYPE_IQ2_XXS: ftype = LLAMA_FTYPE_MOSTLY_IQ2_XXS; break;
                 default:
                     {
                         LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
@@ -2567,6 +2594,7 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "Q5_K - Small";
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "Q5_K - Medium";
         case LLAMA_FTYPE_MOSTLY_Q6_K:   return "Q6_K";
+        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:return "IQ2_XSS - 2.0625 bpw";
 
         default: return "unknown, may not work";
     }
@@ -4773,7 +4801,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -4897,7 +4924,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * pos;
@@ -4996,9 +5022,7 @@ struct llm_build_context {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
-        const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         const int64_t n_rot = n_embd_head_k / 2;
 
@@ -5210,9 +5234,7 @@ struct llm_build_context {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
-        const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -5305,7 +5327,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -5401,7 +5422,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -5728,7 +5748,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * attn_norm_output;
@@ -5952,7 +5971,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * pos;
@@ -9023,6 +9041,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q5_K_S:
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: quantized_type = GGML_TYPE_Q5_K; break;
         case LLAMA_FTYPE_MOSTLY_Q6_K:   quantized_type = GGML_TYPE_Q6_K; break;
+        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:quantized_type = GGML_TYPE_IQ2_XXS; break;
 
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
@@ -10147,7 +10166,19 @@ void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
 }
 
 void llama_kv_cache_seq_shift(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
+    if (delta == 0) {
+        return;
+    }
+
     llama_kv_cache_seq_shift(ctx->kv_self, seq_id, p0, p1, delta);
+}
+
+void llama_kv_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
+    if (d == 1) {
+        return;
+    }
+
+    llama_kv_cache_seq_div(ctx->kv_self, seq_id, p0, p1, d);
 }
 
 // Returns the *maximum* size of the state
