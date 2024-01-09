@@ -24,6 +24,7 @@ import gguf
 
 ###### MODEL DEFINITIONS ######
 
+
 class SentencePieceTokenTypes(IntEnum):
     NORMAL = 1
     UNKNOWN = 2
