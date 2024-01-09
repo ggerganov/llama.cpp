@@ -988,35 +988,34 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
 
 
 def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
-    if params.n_vocab != vocab.vocab_size:
-        if params.n_vocab == vocab.vocab_size:
-            print(
-                "Ignoring added_tokens.json since model matches vocab size without it."
-            )
-            return
-        if pad_vocab and params.n_vocab > vocab.vocab_size:
-            pad_count = params.n_vocab - vocab.vocab_size
-            print(
-                f"Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>"
-            )
-            for i in range(1, (params.n_vocab - vocab.vocab_size) + 1):
-                vocab.added_tokens_dict[f"<dummy{i:05}>"] = -1
-            vocab.vocab_size = params.n_vocab
-            return
-        msg = f"Vocab size mismatch (model has {params.n_vocab}, but {vocab.fname_tokenizer}"
-        msg += f" has {vocab.vocab_size})."
-        if vocab.vocab_size < params.n_vocab < vocab.vocab_size + 20:
-            msg += f"  Most likely you are missing added_tokens.json (should be in {vocab.fname_tokenizer.parent})."
-        if vocab.vocab_size < params.n_vocab:
-            msg += " Add the --pad-vocab option and try again."
+    # Handle special case where the model's vocab size is not set
+    if params.n_vocab == -1:
+        raise ValueError(
+            "The model's vocab size is set to -1 in params.json. Please update it manually."
+        )
 
-        # Check if params.n_vocab is -1 and issue a warning
-        if params.n_vocab == -1:
-            warnings.warn(
-                "WARNING: The model's vocab size is set to -1 in params.json. Please update it manually."
-            )
+    # Check for a vocab size mismatch
+    if params.n_vocab == vocab.vocab_size:
+        print("Ignoring added_tokens.json since model matches vocab size without it.")
+        return
 
-        raise Exception(msg)
+    if pad_vocab and params.n_vocab > vocab.vocab_size:
+        pad_count = params.n_vocab - vocab.vocab_size
+        print(
+            f"Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>"
+        )
+        for i in range(1, pad_count + 1):
+            vocab.added_tokens_dict[f"<dummy{i:05}>"] = -1
+        vocab.vocab_size = params.n_vocab
+        return
+
+    msg = f"Vocab size mismatch (model has {params.n_vocab}, but {vocab.fname_tokenizer} has {vocab.vocab_size})."
+    if vocab.vocab_size < params.n_vocab < vocab.vocab_size + 20:
+        msg += f"  Most likely you are missing added_tokens.json (should be in {vocab.fname_tokenizer.parent})."
+    if vocab.vocab_size < params.n_vocab:
+        msg += " Add the --pad-vocab option and try again."
+
+    raise Exception(msg)
 
 
 class OutputFile:
