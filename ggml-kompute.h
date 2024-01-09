@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ggml-backend.h"
+
 #include <cstddef>
 #include <vector>
 #include <string>
@@ -55,3 +57,17 @@ void ggml_vk_d2h_all(struct ggml_kompute_context * ctx);
 void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
 void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
 void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf);
+
+//
+// backend API
+// user-code should use only these functions
+//
+
+// forward declaration
+typedef struct ggml_backend * ggml_backend_t;
+
+GGML_API ggml_backend_t ggml_backend_kompute_init(void);
+
+GGML_API bool ggml_backend_is_kompute(ggml_backend_t backend);
+
+GGML_API ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(void);

@@ -760,63 +760,6 @@ static std::string llama_format_win_err(DWORD err) {
 }
 #endif
 
-// TODO(jared): remove this
-struct llama_buffer {
-    void * data = NULL;
-    size_t size = 0;
-#ifdef GGML_USE_KOMPUTE
-    ggml_vk_memory memory;
-#endif
-
-    // fallback to malloc / free
-    // useful in cases where CUDA can try to allocate PINNED memory
-    bool fallback = false;
-
-    void resize(size_t n) {
-        llama_host_free(data);
-
-#ifdef GGML_USE_KOMPUTE
-        if (ggml_vk_has_device()) {
-            this->memory = ggml_vk_allocate(n);
-            this->data = (uint8_t*)memory.data;
-            this->size = n;
-            return;
-        }
-#endif
-        data = llama_host_malloc(n);
-        if (!data) {
-            fallback = true;
-            data = malloc(n);
-        } else {
-            fallback = false;
-        }
-
-        GGML_ASSERT(data);
-        size = n;
-    }
-
-    ~llama_buffer() {
-        if (data) {
-#ifdef GGML_USE_KOMPUTE
-            if (memory.data) {
-                if (ggml_vk_has_device()) {
-                    ggml_vk_free_memory(memory);
-                }
-                data = NULL;
-                return;
-            }
-#endif
-            if (fallback) { // NOLINT
-                free(data);
-            } else {
-                llama_host_free(data);
-            }
-        }
-
-        data = NULL;
-    }
-};
-
 template <typename T>
 struct no_init {
     T value;
@@ -1288,6 +1231,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
     buft = ggml_backend_cuda_buffer_type(gpu);
 #elif defined(GGML_USE_CLBLAST)
     buft = ggml_backend_opencl_buffer_type();
+#elif defined(GGML_USE_KOMPUTE)
+    buft = ggml_backend_kompute_buffer_type();
 #endif
 
     if (buft == nullptr) {
@@ -1720,11 +1665,6 @@ struct llama_context {
     ggml_backend_sched_t sched = nullptr;
     // allocator for the input tensors
     ggml_tallocr * alloc = nullptr;
-
-// TODO(jared): remove this
-#if defined(GGML_USE_KOMPUTE)
-    ggml_kompute_context * ctx_kompute = NULL;
-#endif
 
     // temporary buffer for copying data to/from the backend
     std::vector<no_init<uint8_t>> buf_copy;
@@ -4362,10 +4302,6 @@ struct llm_build_context {
 
     std::vector<uint8_t> & buf_compute_meta;
 
-#ifdef GGML_USE_KOMPUTE
-    ggml_kompute_context * ctx_kompute;
-#endif
-
     struct ggml_context * ctx0 = nullptr;
 
     // TODO: consider making the entire interface noexcept
@@ -4405,10 +4341,6 @@ struct llm_build_context {
         do_rope_shift    (worst_case || kv_self.has_shift),
         cb               (cb),
         buf_compute_meta (lctx.buf_compute_meta)
-// TODO(jared): remove this
-#ifdef GGML_USE_KOMPUTE
-      , ctx_kompute   (lctx.ctx_kompute)
-#endif
         {
             // all initializations should be done in init()
         }
@@ -6028,11 +5960,6 @@ static struct ggml_cgraph * llama_build_graph(
     bool alloc_inp_KQ_mask  = false;
     bool alloc_inp_K_shift  = false;
 
-    // TODO(jared): do we still need this?
-#ifdef GGML_USE_KOMPUTE
-    const bool needs_h2d_all = lctx.ctx_kompute && !ggml_vk_has_h2d_all(lctx.ctx_kompute);
-#endif
-
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
     // TODO: improve handling of input and output tensors, then replace this with ggml_set_name
     llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name, int il) {
@@ -6149,22 +6076,6 @@ static struct ggml_cgraph * llama_build_graph(
 
             alloc_inp_K_shift = true;
         }
-
-        // TODO(jared): this shouldn't be needed anymore
-#ifdef GGML_USE_KOMPUTE
-        if (lctx.ctx_kompute && !needs_h2d_all) {
-            const char * offload_tensors[] = {"inp_tokens", "inp_pos", "KQ_mask", "K_shift"};
-            for (auto off : offload_tensors) {
-                if (strcmp(name, off) == 0) {
-                    ggml_vk_h2d_tensor(lctx.ctx_kompute, cur);
-                    break;
-                }
-            }
-            if (strcmp(name, "inp_embd") == 0 && !batch.token) {
-                ggml_vk_h2d_tensor(lctx.ctx_kompute, cur);
-            }
-        }
-#endif
     };
 
     struct ggml_cgraph * result = NULL;
@@ -6229,12 +6140,6 @@ static struct ggml_cgraph * llama_build_graph(
         default:
             GGML_ASSERT(false);
     }
-
-#ifdef GGML_USE_KOMPUTE
-        if (needs_h2d_all) {
-            ggml_vk_h2d_all(lctx.ctx_kompute);
-        }
-#endif
 
     llm.free();
 
@@ -6373,25 +6278,6 @@ static int llama_decode_internal(
 #ifdef GGML_USE_METAL
     if (ggml_backend_is_metal(lctx.backend_metal)) {
         ggml_backend_metal_set_n_cb(lctx.backend_metal, n_threads);
-    }
-#elif defined(GGML_USE_KOMPUTE)
-    if (lctx.ctx_kompute && n_tokens == 1) {
-        ggml_vk_graph_compute(lctx.ctx_kompute, gf);
-        ggml_vk_d2h_tensor(lctx.ctx_kompute, res);
-    } else {
-        if (lctx.ctx_kompute) {
-            for (int il = 0; il < hparams.n_layer; ++il) {
-                ggml_vk_d2h_tensor(lctx.ctx_kompute, kv_self.k_l[il]);
-                ggml_vk_d2h_tensor(lctx.ctx_kompute, kv_self.v_l[il]);
-            }
-        }
-        ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
-        if (lctx.ctx_kompute) {
-            for (int il = 0; il < hparams.n_layer; ++il) {
-                ggml_vk_h2d_tensor(lctx.ctx_kompute, kv_self.k_l[il]);
-                ggml_vk_h2d_tensor(lctx.ctx_kompute, kv_self.v_l[il]);
-            }
-        }
     }
 #endif
 
@@ -9446,6 +9332,16 @@ struct llama_context * llama_new_context_with_model(
                 }
             }
         }
+#elif defined(GGML_USE_KOMPUTE)
+        if (ggml_vk_has_device() && model->n_gpu_layers > 0) {
+            auto * backend = ggml_backend_kompute_init();
+            if (backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
+        }
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
@@ -9518,23 +9414,6 @@ struct llama_context * llama_new_context_with_model(
                         ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
             }
         }
-
-        // TODO(jared): remove this
-#if defined(GGML_USE_KOMPUTE)
-        if (ggml_vk_has_device() && model->n_gpu_layers > 0) {
-            // this allocates all Vulkan resources and memory buffers
-            ctx->ctx_kompute = ggml_vk_init();
-
-            const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
-
-            printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
-
-            ggml_vk_add_buffer(ctx->ctx_kompute, "data", ctx->model.buf.memory);
-            ggml_vk_add_buffer(ctx->ctx_kompute, "eval", ctx->buf_compute.memory);
-            ggml_vk_add_buffer(ctx->ctx_kompute, "kv", ctx->kv_self.buf.memory);
-            ggml_vk_add_buffer(ctx->ctx_kompute, "alloc", ctx->buf_alloc.memory);
-        }
-#endif
     }
 
 #ifdef GGML_USE_MPI
@@ -9555,9 +9434,6 @@ struct llama_context * llama_new_context_with_model(
 }
 
 void llama_free(struct llama_context * ctx) {
-#ifdef GGML_USE_KOMPUTE
-    ggml_vk_free(ctx->ctx_kompute);
-#endif
     delete ctx;
 #ifdef GGML_USE_KOMPUTE
     ggml_vk_free_device();
