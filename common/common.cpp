@@ -220,6 +220,20 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_ctx = std::stoi(argv[i]);
+        } else if (arg == "--grp-attn-n" || arg == "-gan") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+
+            params.grp_attn_n = std::stoi(argv[i]);
+        } else if (arg == "--grp-attn-w" || arg == "-gaw") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+
+            params.grp_attn_w = std::stoi(argv[i]);
         } else if (arg == "--rope-freq-base") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -916,6 +930,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
     printf("                        or for intermediate results and KV (with split-mode = row) (default: %d)\n", params.main_gpu);
 #endif
+    printf("  -gan N, --grp-attn-n N\n");
+    printf("                        group-attention factor (default: %d)\n", params.grp_attn_n);
+    printf("  -gaw N, --grp-attn-w N\n");
+    printf("                        group-attention width (default: %.1f)\n", (double)params.grp_attn_w);
     printf("  --verbose-prompt      print prompt before generation\n");
     printf("  -dkvc, --dump-kv-cache\n");
     printf("                        verbose print of the KV cache\n");

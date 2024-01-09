@@ -21,7 +21,7 @@ let package = Package(
             name: "llama",
             dependencies: ["ggml"],
             path: ".",
-            exclude: [],
+            exclude: ["ggml-metal.metal"],
             sources: [
                 "llama.cpp",
             ],
