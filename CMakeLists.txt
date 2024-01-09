@@ -486,7 +486,7 @@ if (LLAMA_SYCL)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
 
-        set(GGML_HEADERS_SYCL ggml-cuda.h ggml.h ggml-sycl.hpp)
+        set(GGML_HEADERS_SYCL ggml.h ggml-sycl.h)
         set(GGML_SOURCES_SYCL ggml-sycl.cpp)
 
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl  mkl_sycl_blas mkl_sycl_lapack mkl_sycl_dft mkl_sycl_sparse mkl_sycl_vm mkl_sycl_rng mkl_sycl_stats mkl_sycl_data_fitting mkl_intel_ilp64 mkl_tbb_thread)

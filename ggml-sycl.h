@@ -10,10 +10,8 @@ extern "C" {
 #define GGML_SYCL_MAX_DEVICES       16
 #define GGML_SYCL_NAME "SYCL"
 
-// Always success. To check if SYCL is actually loaded, use `ggml_sycl_loaded`.
 GGML_API void   ggml_init_sycl(void);
 
-// Returns `true` if there are available SYCL devices and cublas loads successfully; otherwise, it returns `false`.
 GGML_API bool   ggml_sycl_loaded(void);
 
 GGML_API void * ggml_sycl_host_malloc(size_t size);
@@ -41,7 +39,6 @@ GGML_API bool   ggml_sycl_compute_forward(struct ggml_compute_params * params, s
 GGML_API int    ggml_sycl_get_device_count(void);
 GGML_API void   ggml_sycl_get_device_description(int device, char * description, size_t description_size);
 
-// backend API
 GGML_API ggml_backend_t ggml_backend_sycl_init(int device);
 
 GGML_API bool ggml_backend_is_sycl(ggml_backend_t backend);
@@ -49,7 +46,6 @@ GGML_API int  ggml_backend_sycl_get_device(ggml_backend_t backend);
 
 GGML_API ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device);
 
-// pinned host buffer for use with CPU backend for faster copies between CPU and GPU
 GGML_API ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type(void);
 
 int get_main_device();

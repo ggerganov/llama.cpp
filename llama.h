@@ -7,7 +7,7 @@
 #include "ggml-cuda.h"
 #define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
 #elif defined(GGML_USE_SYCL)
-#include "ggml-sycl.hpp"
+#include "ggml-sycl.h"
 #define LLAMA_MAX_DEVICES GGML_SYCL_MAX_DEVICES
 #else
 #define LLAMA_MAX_DEVICES 1

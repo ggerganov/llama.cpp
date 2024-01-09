@@ -249,7 +249,7 @@ inline static void * ggml_aligned_malloc(size_t size) {
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #elif defined(GGML_USE_SYCL)
-#include "ggml-sycl.hpp"
+#include "ggml-sycl.h"
 #endif
 
 // floating point type used to accumulate sums
