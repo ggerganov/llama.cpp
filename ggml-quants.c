@@ -7250,9 +7250,9 @@ void ggml_vec_dot_iq2_xxs_q8_K(const int n, float * restrict s, const void * res
     uint32_t aux32[4];
     const uint8_t * aux8 = (const uint8_t *)aux32;
 
-    int8x16x4_t q2u;
-    int8x16x4_t q2s;
-    int8x16x4_t q8b;
+    ggml_int8x16x4_t q2u;
+    ggml_int8x16x4_t q2s;
+    ggml_int8x16x4_t q8b;
 
     float sumf = 0;
     for (int i = 0; i < nb; ++i) {
