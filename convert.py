@@ -991,7 +991,7 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
     # Handle special case where the model's vocab size is not set
     if params.n_vocab == -1:
         raise ValueError(
-            "The model's vocab size is set to -1 in params.json. Please update it manually."
+            f"The model's vocab size is set to -1 in params.json. Please update it manually. Maybe {vocab.vocab_size}?"
         )
 
     # Check for a vocab size mismatch
