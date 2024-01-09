@@ -11185,7 +11185,8 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             } else if (llama_is_control_token(model->vocab, token)) {
                 ;
             } else {
-                GGML_ASSERT_CONTINUE(false);
+                //just hide invalid tokens
+                //GGML_ASSERT_CONTINUE(false);
             }
             break;
         }

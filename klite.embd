@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 104
+Current version: 105
 -Concedo
 -->
 
@@ -5944,6 +5944,30 @@ Current version: 104
 		document.getElementById("groupselectcontainer").classList.add("hidden");
 		document.getElementById("imagestylecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
+	}
+
+	function confirm_dynatemp()
+	{
+		let a1 = parseFloat(document.getElementById("dynatemp_min").value);
+		let a2 = parseFloat(document.getElementById("dynatemp_max").value);
+		let avg = (a1+a2)*0.5;
+		let diff = Math.abs(a2 - a1)*0.5;
+		document.getElementById("temperature").value = avg.toFixed(3);
+		document.getElementById("dynatemp_range").value = diff.toFixed(3);
+
+		document.getElementById("dynatempcontainer").classList.add("hidden");
+	}
+	function show_dynatemp()
+	{
+		let currtmp = parseFloat(document.getElementById("temperature").value);
+		let currrng = parseFloat(document.getElementById("dynatemp_range").value);
+		let a1 = currtmp - currrng;
+		let a2 = currtmp + currrng;
+		a1 = a1<0?0:a1;
+		a2 = a2<0?0:a2;
+		document.getElementById("dynatemp_min").value = a1.toFixed(2);
+		document.getElementById("dynatemp_max").value = a2.toFixed(2);
+		document.getElementById("dynatempcontainer").classList.remove("hidden");
 	}
 
 	function explain_horde()
@@ -12510,7 +12534,7 @@ Current version: 104
 								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
 								id="presence_penalty"></td>
 								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="dynatemp_range"></td>
+								id="dynatemp_range" ><button type="button" class="btn btn-primary" style="padding:1px 3px;font-size:8px;" onclick="show_dynatemp()">Help</button></td>
 								</tr>
 
 
@@ -12950,6 +12974,32 @@ Current version: 104
 			<div class="popupfooter">
 				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_image();hide_popups();">Delete Image</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="dynatempcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Dynamic Temperature Wizard</div>
+			</div>
+			<div class="inlinelabel">
+			Dynamic temperature is specified by a Temperature Value and a Temperature Range. Actual temperature is allowed to be automatically adjusted dynamically between (DynaTemp ± DynaRange).<br><br>
+			For ease of use, a simple converter is provided here. Setting both values to the same temperature disables DynaTemp.<br><br>
+			</div>
+
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Minimum Temperature: </div>
+				<input type="text" inputmode="decimal" id="dynatemp_min" style="width:60px">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Maximum Temperature: </div>
+				<input type="text" inputmode="decimal" id="dynatemp_max" style="width:60px">
+			</div>
+
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirm_dynatemp()">Ok</button>
 			</div>
 		</div>
 	</div>
