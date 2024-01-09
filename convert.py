@@ -77,6 +77,7 @@ DEFAULT_CONCURRENCY = 8
 # data types
 #
 
+
 # TODO: Clean up and refactor data types
 @dataclass(frozen=True)
 class DataType:
