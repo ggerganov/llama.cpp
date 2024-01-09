@@ -255,6 +255,8 @@
 #define GGML_UNREACHABLE() GGML_ASSERT(!"statement should not be reached")
 #elif defined(__GNUC__)
 #define GGML_UNREACHABLE() __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define GGML_UNREACHABLE() __assume(0)
 #else
 #define GGML_UNREACHABLE() ((void) 0)
 #endif
@@ -337,6 +339,7 @@ extern "C" {
         GGML_TYPE_Q5_K = 13,
         GGML_TYPE_Q6_K = 14,
         GGML_TYPE_Q8_K = 15,
+        GGML_TYPE_IQ2_XXS = 16,
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,
@@ -371,6 +374,7 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_K = 12, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q5_K = 13, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q6_K = 14, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_XXS = 15, // except 1d tensors
     };
 
     // available tensor operations:
@@ -484,7 +488,8 @@ extern "C" {
     enum ggml_log_level {
         GGML_LOG_LEVEL_ERROR = 2,
         GGML_LOG_LEVEL_WARN = 3,
-        GGML_LOG_LEVEL_INFO = 4
+        GGML_LOG_LEVEL_INFO = 4,
+        GGML_LOG_LEVEL_DEBUG = 5
     };
 
     // ggml object
@@ -1094,13 +1099,13 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_scale(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            float                 s);
 
     // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_scale_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            float                 s);
 
     // b -> view(a,offset,nb1,nb2,3), return modified a
     GGML_API struct ggml_tensor * ggml_set(
@@ -2064,6 +2069,7 @@ extern "C" {
     GGML_API size_t ggml_quantize_q4_K(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q5_K(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q6_K(const float * src, void * dst, int n, int k, int64_t * hist);
+    GGML_API size_t ggml_quantize_iq2_xxs(const float * src, void * dst, int n, int k, int64_t * hist);
 
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
 
@@ -2195,6 +2201,7 @@ extern "C" {
     //
 
     GGML_API int ggml_cpu_has_avx        (void);
+    GGML_API int ggml_cpu_has_avx_vnni   (void);
     GGML_API int ggml_cpu_has_avx2       (void);
     GGML_API int ggml_cpu_has_avx512     (void);
     GGML_API int ggml_cpu_has_avx512_vbmi(void);

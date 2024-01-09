@@ -39,73 +39,11 @@ static bool eval_string(struct llama_context * ctx_llama, const char* str, int n
     return true;
 }
 
-// TODO: use common/sampling.h
-static llama_token sample_id(llama_context * ctx_llama, gpt_params & params) {
-    auto & sparams = params.sparams;
-
-    // out of user input, sample next token
-    const float   temp      = sparams.temp;
-    const int32_t top_k     = sparams.top_k <= 0 ? llama_n_vocab(llama_get_model(ctx_llama)) : sparams.top_k;
-    const float   top_p     = sparams.top_p;
-    const float   tfs_z     = sparams.tfs_z;
-    const float   typical_p = sparams.typical_p;
-    // const int32_t repeat_last_n   = sparams.repeat_last_n < 0 ? n_ctx : sparams.repeat_last_n;
-    // const float   repeat_penalty  = sparams.repeat_penalty;
-    // const float   alpha_presence  = sparams.presence_penalty;
-    // const float   alpha_frequency = sparams.frequency_penalty;
-    const int     mirostat     = sparams.mirostat;
-    const float   mirostat_tau = sparams.mirostat_tau;
-    const float   mirostat_eta = sparams.mirostat_eta;
-    // const bool    penalize_nl     = sparams.penalize_nl;
-
-    llama_token id = 0;
-    {
-        auto logits  = llama_get_logits(ctx_llama);
-        auto n_vocab = llama_n_vocab(llama_get_model(ctx_llama));
-
-        // Apply params.logit_bias map
-        for (auto it = sparams.logit_bias.begin(); it != sparams.logit_bias.end(); it++) {
-            logits[it->first] += it->second;
-        }
-
-        std::vector<llama_token_data> candidates;
-        candidates.reserve(n_vocab);
-        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-            candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
-        }
-
-        llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-
-        if (temp <= 0) {
-              // Greedy sampling
-            id = llama_sample_token_greedy(ctx_llama, &candidates_p);
-        } else {
-            if (mirostat == 1) {
-                static float mirostat_mu = 2.0f * mirostat_tau;
-                const  int mirostat_m    = 100;
-                llama_sample_temp(ctx_llama, &candidates_p, temp);
-                id = llama_sample_token_mirostat(ctx_llama, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
-            } else if (mirostat == 2) {
-                static float mirostat_mu = 2.0f * mirostat_tau;
-                llama_sample_temp(ctx_llama, &candidates_p, temp);
-                id = llama_sample_token_mirostat_v2(ctx_llama, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
-            } else {
-                  // Temperature sampling
-                llama_sample_top_k(ctx_llama, &candidates_p, top_k, 1);
-                llama_sample_tail_free(ctx_llama, &candidates_p, tfs_z, 1);
-                llama_sample_typical(ctx_llama, &candidates_p, typical_p, 1);
-                llama_sample_top_p(ctx_llama, &candidates_p, top_p, 1);
-                llama_sample_temp(ctx_llama, &candidates_p, temp);
-                id = llama_sample_token(ctx_llama, &candidates_p);
-            }
-        }
-    }
-
-    return id;
-}
-
-static const char * sample(struct llama_context * ctx_llama, gpt_params & params, int * n_past) {
-    int id = sample_id(ctx_llama, params);
+static const char * sample(struct llama_sampling_context * ctx_sampling,
+                           struct llama_context * ctx_llama,
+                           int * n_past) {
+    const llama_token id = llama_sampling_sample(ctx_sampling, ctx_llama, NULL);
+    llama_sampling_accept(ctx_sampling, ctx_llama, id, true);
     static std::string ret;
     if (id == llama_token_eos(llama_get_model(ctx_llama))) {
         ret = "</s>";
@@ -174,8 +112,8 @@ struct llava_context {
 };
 
 static void show_additional_info(int /*argc*/, char ** argv) {
-    printf("\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
-    printf("  note: a lower temperature value like 0.1 is recommended for better quality.\n");
+    fprintf(stderr, "\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
+    fprintf(stderr, "  note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
 static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_params * params) {
@@ -185,7 +123,7 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_para
     auto prompt = params->prompt;
     if (prompt_contains_image(prompt)) {
         if (!params->image.empty()) {
-            printf("using base64 encoded image instead of command line image path\n");
+            fprintf(stderr, "using base64 encoded image instead of command line image path\n");
         }
         embed = llava_image_embed_make_with_prompt_base64(ctx_llava->ctx_clip, params->n_threads, prompt);
         if (!embed) {
@@ -217,16 +155,19 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     // generate the response
 
-    printf("\n");
+    fprintf(stderr, "\n");
+
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params->sparams);
 
     for (int i = 0; i < max_tgt_len; i++) {
-        const char * tmp = sample(ctx_llava->ctx_llama, *params, &n_past);
+        const char * tmp = sample(ctx_sampling, ctx_llava->ctx_llama, &n_past);
         if (strcmp(tmp, "</s>") == 0) break;
 
         printf("%s", tmp);
         fflush(stdout);
     }
 
+    llama_sampling_free(ctx_sampling);
     printf("\n");
 }
 
@@ -302,6 +243,9 @@ int main(int argc, char ** argv) {
     }
 
     auto image_embed = load_image(ctx_llava, &params);
+    if (!image_embed) {
+        return 1;
+    }
 
     // process the prompt
     process_prompt(ctx_llava, image_embed, &params, params.prompt);

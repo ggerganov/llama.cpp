@@ -30,6 +30,12 @@ sd=`dirname $0`
 cd $sd/../
 SRC=`pwd`
 
+CMAKE_EXTRA=""
+
+if [ ! -z ${GG_BUILD_METAL} ]; then
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_METAL_SHADER_DEBUG=ON"
+fi
+
 ## helpers
 
 # download a file if it does not exist or if it is outdated
@@ -81,8 +87,8 @@ function gg_run_ctest_debug {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Debug ..     ) 2>&1 | tee -a $OUT/${ci}-cmake.log
-    (time make -j                               ) 2>&1 | tee -a $OUT/${ci}-make.log
+    (time cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                          ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     (time ctest --output-on-failure -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
 
@@ -109,8 +115,8 @@ function gg_run_ctest_release {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release ..   ) 2>&1 | tee -a $OUT/${ci}-cmake.log
-    (time make -j                               ) 2>&1 | tee -a $OUT/${ci}-make.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                            ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     if [ -z ${GG_BUILD_LOW_PERF} ]; then
         (time ctest --output-on-failure ) 2>&1 | tee -a $OUT/${ci}-ctest.log

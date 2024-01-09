@@ -333,6 +333,12 @@ class GGUFWriter:
     def add_head_count_kv(self, count: int) -> None:
         self.add_uint32(Keys.Attention.HEAD_COUNT_KV.format(arch=self.arch), count)
 
+    def add_key_length(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.KEY_LENGTH.format(arch=self.arch), length)
+
+    def add_value_length(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.VALUE_LENGTH.format(arch=self.arch), length)
+
     def add_max_alibi_bias(self, bias: float) -> None:
         self.add_float32(Keys.Attention.MAX_ALIBI_BIAS.format(arch=self.arch), bias)
 

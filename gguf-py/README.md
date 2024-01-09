@@ -3,7 +3,7 @@
 This is a Python package for writing binary files in the [GGUF](https://github.com/ggerganov/ggml/pull/302)
 (GGML Universal File) format.
 
-See [convert-llama-hf-to-gguf.py](https://github.com/ggerganov/llama.cpp/blob/master/convert-llama-hf-to-gguf.py)
+See [convert-llama-hf-to-gguf.py](https://github.com/ggerganov/llama.cpp/blob/master/convert-hf-to-gguf.py)
 as an example for its usage.
 
 ## Installation

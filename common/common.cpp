@@ -220,6 +220,20 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_ctx = std::stoi(argv[i]);
+        } else if (arg == "--grp-attn-n" || arg == "-gan") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+
+            params.grp_attn_n = std::stoi(argv[i]);
+        } else if (arg == "--grp-attn-w" || arg == "-gaw") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+
+            params.grp_attn_w = std::stoi(argv[i]);
         } else if (arg == "--rope-freq-base") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -904,6 +918,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif // GGML_USE_CUBLAS
 #endif
+    printf("  -gan N, --grp-attn-n N\n");
+    printf("                        group-attention factor (default: %d)\n", params.grp_attn_n);
+    printf("  -gaw N, --grp-attn-w N\n");
+    printf("                        group-attention width (default: %.1f)\n", (double)params.grp_attn_w);
     printf("  --verbose-prompt      print prompt before generation\n");
     printf("  -dkvc, --dump-kv-cache\n");
     printf("                        verbose print of the KV cache\n");
@@ -1394,6 +1412,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "build_number: %d\n",        LLAMA_BUILD_NUMBER);
     fprintf(stream, "cpu_has_arm_fma: %s\n",     ggml_cpu_has_arm_fma()     ? "true" : "false");
     fprintf(stream, "cpu_has_avx: %s\n",         ggml_cpu_has_avx()         ? "true" : "false");
+    fprintf(stream, "cpu_has_avx_vnni: %s\n",    ggml_cpu_has_avx_vnni()    ? "true" : "false");
     fprintf(stream, "cpu_has_avx2: %s\n",        ggml_cpu_has_avx2()        ? "true" : "false");
     fprintf(stream, "cpu_has_avx512: %s\n",      ggml_cpu_has_avx512()      ? "true" : "false");
     fprintf(stream, "cpu_has_avx512_vbmi: %s\n", ggml_cpu_has_avx512_vbmi() ? "true" : "false");

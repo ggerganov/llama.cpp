@@ -5,6 +5,7 @@
 // GGML internal header
 
 #include <assert.h>
+#include <stdlib.h> // load `stdlib.h` before other headers to work around MinGW bug: https://sourceforge.net/p/mingw-w64/bugs/192/
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h> // memcpy

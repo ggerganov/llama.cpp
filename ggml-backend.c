@@ -195,11 +195,14 @@ void ggml_backend_graph_plan_compute(ggml_backend_t backend, ggml_backend_graph_
     ggml_backend_synchronize(backend);
 }
 
-void ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    backend->iface.graph_compute(backend, cgraph);
+bool ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+    if (!backend->iface.graph_compute(backend, cgraph)) {
+        return false;
+    }
 
     // TODO: optional sync
     ggml_backend_synchronize(backend);
+    return true;
 }
 
 bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
@@ -297,7 +300,7 @@ static void ggml_backend_registry_init(void) {
 void ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data) {
     GGML_ASSERT(ggml_backend_registry_count < GGML_MAX_BACKENDS_REG);
 
-    int id = ggml_backend_registry_count;
+    size_t id = ggml_backend_registry_count;
 
     ggml_backend_registry[id] = (struct ggml_backend_reg) {
         /* .name                = */ {0},
@@ -330,6 +333,8 @@ size_t ggml_backend_reg_find_by_name(const char * name) {
             return i;
         }
     }
+
+    // not found
     return SIZE_MAX;
 }
 
@@ -340,15 +345,15 @@ ggml_backend_t ggml_backend_reg_init_backend_from_str(const char * backend_str) 
     const char * params = strchr(backend_str, ':');
     char backend_name[128];
     if (params == NULL) {
-        strcpy(backend_name, backend_str);
+        snprintf(backend_name, sizeof(backend_name), "%s", backend_str);
         params = "";
     } else {
-        strncpy(backend_name, backend_str, params - backend_str);
-        backend_name[params - backend_str] = '\0';
+        snprintf(backend_name, sizeof(backend_name), "%.*s", (int)(params - backend_str), backend_str);
         params++;
     }
 
     size_t backend_i = ggml_backend_reg_find_by_name(backend_name);
+
     if (backend_i == SIZE_MAX) {
         fprintf(stderr, "%s: backend %s not found\n", __func__, backend_name);
         return NULL;
@@ -396,18 +401,12 @@ static void ggml_backend_cpu_buffer_free_buffer(ggml_backend_buffer_t buffer) {
 }
 
 static void ggml_backend_cpu_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-
     memcpy((char *)tensor->data + offset, data, size);
 
     GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_cpu_buffer_get_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-
     memcpy(data, (const char *)tensor->data + offset, size);
 
     GGML_UNUSED(buffer);
@@ -601,7 +600,7 @@ static void ggml_backend_cpu_graph_plan_compute(ggml_backend_t backend, ggml_bac
     GGML_UNUSED(backend);
 }
 
-static void ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+static bool ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
     struct ggml_cplan cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
@@ -615,13 +614,18 @@ static void ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_c
     cplan.work_data = cpu_ctx->work_data;
 
     ggml_graph_compute(cgraph, &cplan);
+    return true;
 }
 
 static bool ggml_backend_cpu_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
-    return true;
+    switch (op->op) {
+        case GGML_OP_MUL_MAT:
+            return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_internal_get_type_traits(op->src[0]->type).vec_dot_type;
+        default:
+            return true;
+    }
 
     GGML_UNUSED(backend);
-    GGML_UNUSED(op);
 }
 
 static struct ggml_backend_i cpu_backend_i = {

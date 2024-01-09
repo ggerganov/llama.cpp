@@ -134,6 +134,11 @@ int main(int argc, char * argv[]) {
             continue;
         }
 
+        if ((ggml_type)i == GGML_TYPE_IQ2_XXS) {
+            printf("Skip %s due to missing quantization functionality\n", ggml_type_name((ggml_type) i));
+            continue;
+        }
+
         printf("Testing %s\n", ggml_type_name((ggml_type) i));
 
         if (qfns.from_float && qfns.to_float) {

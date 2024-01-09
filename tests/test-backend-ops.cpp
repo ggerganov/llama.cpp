@@ -15,19 +15,18 @@
 #include <thread>
 #include <vector>
 
-
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
     size_t size = ggml_nelements(tensor);
     std::vector<float> data(size);
 
 #if 0
-    std::default_random_engine generator(rd());
+    static std::default_random_engine generator(1234);
     std::uniform_real_distribution<float> distribution(min, max);
 
     for (size_t i = 0; i < size; i++) {
         data[i] = distribution(generator);
     }
-#endif
+#else
     auto init_thread = [&](size_t start, size_t end) {
         std::random_device rd;
         std::default_random_engine generator(rd());
@@ -49,6 +48,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
     for (auto & t : threads) {
         t.join();
     }
+#endif
 
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
@@ -58,6 +58,9 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         int64_t hist[16];
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size, hist);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
+    } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
+        // This is going to create some weird integers though.
+        ggml_backend_tensor_set(tensor, data.data(), 0, ggml_nbytes(tensor));
     } else {
         GGML_ASSERT(false);
     }
@@ -87,8 +90,13 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                         tv.push_back(*(float *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I32) {
                         tv.push_back((float)*(int32_t *) &buf[i]);
+                    } else if (t->type == GGML_TYPE_I16) {
+                        tv.push_back((float)*(int16_t *) &buf[i]);
+                    } else if (t->type == GGML_TYPE_I8) {
+                        tv.push_back((float)*(int8_t *) &buf[i]);
                     } else if (quantized) {
-                        tt.to_float(&buf[i], vq.data(), bs);
+                        std::vector<float> vq(ggml_blck_size(t->type));
+                        tt.to_float(&buf[i], vq.data(), ggml_blck_size(t->type));
                         tv.insert(tv.end(), vq.begin(), vq.end());
                     } else {
                         GGML_ASSERT(false);
@@ -350,12 +358,17 @@ struct test_case {
         fflush(stdout);
 
         // check if backends support op
+        bool supported = true;
         for (ggml_backend_t backend : {backend1, backend2}) {
             if (!ggml_backend_supports_op(backend, out)) {
-                printf("not supported\n");
-                ggml_free(ctx);
-                return true;
+                printf("not supported [%s] ", ggml_backend_name(backend));
+                supported = false;
             }
+        }
+        if (!supported) {
+            printf("\n");
+            ggml_free(ctx);
+            return true;
         }
 
         // post-graph sentinel
@@ -379,15 +392,21 @@ struct test_case {
         struct callback_userdata {
             bool   ok;
             double max_err;
+            ggml_backend_t backend1;
+            ggml_backend_t backend2;
         };
 
         callback_userdata ud {
             true,
             max_nmse_err(),
+            backend1,
+            backend2
         };
 
         auto callback = [](int index, ggml_tensor * t1, ggml_tensor * t2, void * user_data) -> bool {
             callback_userdata * ud = (callback_userdata *) user_data;
+            const char * bn1 = ggml_backend_name(ud->backend1);
+            const char * bn2 = ggml_backend_name(ud->backend2);
 
             if (t1->op == GGML_OP_NONE) {
                 // sentinels must be unchanged
@@ -409,7 +428,7 @@ struct test_case {
             for (size_t i = 0; i < f1.size(); i++) {
                 // check for nans
                 if (std::isnan(f1[i]) || std::isnan(f2[i])) {
-                    printf("[%s] NaN at index %zu (%f %f) ", ggml_op_desc(t1), i, f1[i], f2[i]);
+                    printf("[%s] NaN at index %zu (%s=%f %s=%f) ", ggml_op_desc(t1), i, bn1, f1[i], bn2, f2[i]);
                     ud->ok = false;
                     return true;
                 }
@@ -417,12 +436,12 @@ struct test_case {
                 if (isinf_or_max(f1[i]) || isinf_or_max(f2[i])) {
                     if (isinf_or_max(f1[i]) && isinf_or_max(f2[i])) {
                         if (std::signbit(f1[i]) != std::signbit(f2[i])) {
-                            printf("[%s] inf sign mismatch: %f %f ", ggml_op_desc(t1), f1[i], f2[i]);
+                            printf("[%s] inf sign mismatch: %s=%f %s=%f ", ggml_op_desc(t1), bn1, f1[i], bn2, f2[i]);
                             ud->ok = false;
                             return true;
                         }
                     } else {
-                        printf("[%s] inf mismatch: %f %f ", ggml_op_desc(t1), f1[i], f2[i]);
+                        printf("[%s] inf mismatch: %s=%f %s=%f ", ggml_op_desc(t1), bn1, f1[i], bn2, f2[i]);
                         ud->ok = false;
                         return true;
                     }
@@ -431,8 +450,8 @@ struct test_case {
 
             double err = nmse(f1.data(), f2.data(), f1.size());
             if (err > ud->max_err) {
-                printf("[%s] NMSE = %f ", ggml_op_desc(t1), err);
-                //for (int i = 0; i < f1.size(); i++) {
+                printf("[%s] NMSE = %.9f > %.9f ", ggml_op_desc(t1), err, ud->max_err);
+                //for (int i = 0; i < (int) f1.size(); i++) {
                 //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
                 //}
                 //printf("\n");
@@ -656,17 +675,26 @@ struct test_repeat : public test_case {
 struct test_dup : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
+    const std::array<int64_t, 4> permute;
+    bool _use_permute;
 
     std::string vars() override {
-        return VARS_TO_STR2(type, ne);
+        std::string v = VARS_TO_STR2(type, ne);
+        if (_use_permute) v += "," + VAR_TO_STR(permute);
+        return v;
     }
 
     test_dup(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 1})
-        : type(type), ne(ne) {}
+            std::array<int64_t, 4> ne = {10, 10, 10, 1},
+            std::array<int64_t, 4> permute = {0, 0, 0, 0})
+        : type(type), ne(ne), permute(permute),
+            _use_permute(permute[0] + permute[1] + permute[2] + permute[3] > 0) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * src = ggml_new_tensor(ctx, type, 4, ne.data());
+        if (_use_permute) {
+            src = ggml_permute(ctx, src, permute[0], permute[1], permute[2], permute[3]);
+        }
         ggml_tensor * out = ggml_dup(ctx, src);
         return out;
     }
@@ -766,18 +794,19 @@ struct test_bin_bcast : public test_case {
 struct test_scale : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
+    float scale;
 
     std::string vars() override {
-        return VARS_TO_STR2(type, ne);
+        return VARS_TO_STR3(type, ne, scale);
     }
 
     test_scale(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 10})
-        : type(type), ne(ne) {}
+            std::array<int64_t, 4> ne = {10, 10, 10, 10},
+            float scale = 2.0f)
+        : type(type), ne(ne), scale(scale) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
-        ggml_tensor * scale = ggml_new_tensor_1d(ctx, type, 1);
         ggml_tensor * out = ggml_scale(ctx, a, scale);
         return out;
     }
@@ -1420,6 +1449,7 @@ struct test_moe : public test_case {
 
 static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op_name) {
     std::vector<std::unique_ptr<test_case>> test_cases;
+    std::default_random_engine rng(0);
 
     const ggml_type all_types[] = {
         GGML_TYPE_F32, GGML_TYPE_F16,
@@ -1444,14 +1474,26 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
             }
         }
     }
+    for (int b : {1, 7}) {
+        for (bool v : {false, true}) {
+            test_cases.emplace_back(new test_get_rows(GGML_TYPE_I32, 256, 5, 4, b, v));
+        }
+    }
 
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 1, 1, 1}));
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {2, 1, 1, 1}));
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 2, 1, 1}));
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 1, 2, 1}));
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 1, 1, 2}));
+    test_cases.emplace_back(new test_repeat(GGML_TYPE_I32, {10, 10, 10, 10}, {2, 1, 1, 1}));
+    test_cases.emplace_back(new test_repeat(GGML_TYPE_I16, {10, 10, 10, 10}, {1, 1, 1, 2}));
 
-    test_cases.emplace_back(new test_dup());
+    test_cases.emplace_back(new test_dup(GGML_TYPE_F32));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_F16));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_I32));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_I16));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {0, 2, 1, 3}));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {1, 2, 0, 3}));
 
     for (ggml_type type : all_types) {
        test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {256, 10, 10, 1}));
@@ -1504,8 +1546,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     }
 
     for (ggml_type type_a : all_types) {
-        for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
-            // FIXME: CPU crashes on f16xf16
+        for (ggml_type type_b : {GGML_TYPE_F32, GGML_TYPE_F16}) {
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, { 1,  1}, {1, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {1, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {2, 1}));
@@ -1543,7 +1584,19 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_diag_mask_inf(GGML_TYPE_F32, {10, 10, 10,  1}, 5));
     test_cases.emplace_back(new test_diag_mask_inf(GGML_TYPE_F32, {10, 10, 10, 10}, 5));
 
-    test_cases.emplace_back(new test_soft_max());
+    std::uniform_int_distribution<> dist_ne1(1, 50);
+    int exponent = 1;
+    while (exponent < (1 << 17)) {
+        std::uniform_int_distribution<> dist_ne0(exponent, 2*exponent);
+
+        for (int n = 0; n < 10; ++n) {
+            int64_t ne0 = dist_ne0(rng);
+            int64_t ne1 = dist_ne1(rng);
+            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}));
+        }
+
+        exponent <<= 1;
+    }
 
     for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
         test_cases.emplace_back(new test_rope(type, {128,  32, 10, 1}, 128, 0, 512)); // llama 7B
@@ -1560,7 +1613,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 
     test_cases.emplace_back(new test_alibi());
     test_cases.emplace_back(new test_im2col());
-    test_cases.emplace_back(new test_concat());
+    test_cases.emplace_back(new test_concat(GGML_TYPE_F32));
+    test_cases.emplace_back(new test_concat(GGML_TYPE_I32));
 
     for (ggml_sort_order order : {GGML_SORT_ASC, GGML_SORT_DESC}) {
         test_cases.emplace_back(new test_argsort(GGML_TYPE_F32, {8, 1, 1, 1}, order));
