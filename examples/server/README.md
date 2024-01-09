@@ -179,29 +179,25 @@ node index.js
 * Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
 
 
-- `completion_probabilities: List[Completion]`: A list of probabilities for each token in the completion, if available. Note the type/schema of Completion is:
+- `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has the following structure:
 
 ```
-{'$defs': {'Probability': {'properties': {'prob': {'description': 'The probability of the token.',
-     'title': 'Prob',
-     'type': 'number'},
-    'tok_str': {'description': 'The string representation of the token.',
-     'title': 'Tok Str',
-     'type': 'string'}},
-   'required': ['prob', 'tok_str'],
-   'title': 'Probability',
-   'type': 'object'}},
- 'properties': {'content': {'description': 'The content associated with the probabilities.',
-   'title': 'Content',
-   'type': 'string'},
-  'probs': {'description': 'A list of probabilities for each token.',
-   'items': {'$ref': '#/$defs/Probability'},
-   'title': 'Probs',
-   'type': 'array'}},
- 'required': ['content', 'probs'],
- 'title': 'Completion',
- 'type': 'object'}
- ```
+{
+  "content": "<the token selected by the model>",
+  "probs": [
+    {
+      "prob": float,
+      "tok_str": "<most likely token>"
+    },
+    {
+      "prob": float,
+      "tok_str": "<second most likely tonen>"
+    },
+    ...
+  ]
+},
+```
+Notice that each `probs` is an array of length `n_probs`.
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string. 
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
