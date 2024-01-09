@@ -7250,9 +7250,9 @@ void ggml_vec_dot_iq2_xxs_q8_K(const int n, float * restrict s, const void * res
     uint32_t aux32[4];
     const uint8_t * aux8 = (const uint8_t *)aux32;
 
-    int8x16x4_t q2u;
-    int8x16x4_t q2s;
-    int8x16x4_t q8b;
+    ggml_int8x16x4_t q2u;
+    ggml_int8x16x4_t q2s;
+    ggml_int8x16x4_t q8b;
 
     float sumf = 0;
     for (int i = 0; i < nb; ++i) {
@@ -7261,7 +7261,7 @@ void ggml_vec_dot_iq2_xxs_q8_K(const int n, float * restrict s, const void * res
         const int8_t   * restrict q8 = y[i].qs;
         float sumf1 = 0, sumf2 = 0;
         for (int ib32 = 0; ib32 < QK_K/32; ib32 += 2) {
-            q8b = vld1q_s8_x4(q8); q8 += 64;
+            q8b = ggml_vld1q_s8_x4(q8); q8 += 64;
             memcpy(aux32, q2, 4*sizeof(uint32_t)); q2 += 8;
             q2u.val[0] = vcombine_s8(vld1_s8((const void *)(iq2xxs_grid + aux8[ 0])), vld1_s8((const void *)(iq2xxs_grid + aux8[ 1])));
             q2u.val[1] = vcombine_s8(vld1_s8((const void *)(iq2xxs_grid + aux8[ 2])), vld1_s8((const void *)(iq2xxs_grid + aux8[ 3])));
