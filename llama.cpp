@@ -1204,8 +1204,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer
     ggml_backend_buffer_type_t buft = nullptr;
 
 #if defined(GGML_USE_CUBLAS)
-    // in some cases such as the KV cache, there is no benefit to using a host buffer,
-    // since the data is never copied to the GPU
+    // host buffers should only be used when data is expected to be copied to/from the GPU
     if (host_buffer) {
         buft = ggml_backend_cuda_host_buffer_type();
     }
@@ -1228,6 +1227,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
     buft = ggml_backend_metal_buffer_type();
 #elif defined(GGML_USE_CUBLAS)
     buft = ggml_backend_cuda_buffer_type(gpu);
+#elif defined(GGML_USE_CLBLAST)
+    buft = ggml_backend_opencl_buffer_type();
 #endif
 
     if (buft == nullptr) {
@@ -1695,6 +1696,10 @@ static bool llama_kv_cache_init(
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
+#ifdef GGML_USE_CLBLAST
+    offload = false;
+#endif
+
     // count used buffer types
     std::map<ggml_backend_buffer_type_t, int> buft_layer_count;
     if (offload) {
@@ -1702,9 +1707,10 @@ static bool llama_kv_cache_init(
             buft_layer_count[model.buft_layer[i].buft]++;
         }
     } else {
-        buft_layer_count[llama_default_buffer_type_cpu(false)] = n_layer;
+        buft_layer_count[llama_default_buffer_type_cpu(true)] = n_layer;
     }
 
+    // create a context for each buffer type
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
     for (auto & it : buft_layer_count) {
         int n_layers = it.second;
@@ -2413,26 +2419,12 @@ struct llama_model_loader {
     }
 
     void init_mapping(bool prefetch = true, llama_mlock * lmlock = nullptr) {
-        /*
-        // prefetch only CPU tensors
-        if (use_mmap) {
-            size_t size_pref = 0; // prefetch
-
-            for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
-                struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
-                if (cur->backend == buffer_type_cpu) {
-                    size_t tensor_end = gguf_get_tensor_offset(ctx_gguf, i) + ggml_nbytes(cur);
-                    size_pref = std::max(size_pref, tensor_end);
-                }
-            }
-            mapping.reset(new llama_mmap(&file, gguf_get_data_offset(ctx_gguf) + size_pref, ggml_is_numa()));
-        }
-        */
         // prefetch the whole file - all the data is needed anyway
         if (use_mmap) {
             mapping.reset(new llama_mmap(&file, prefetch ? -1 : 0, ggml_is_numa()));
         }
 
+        // compute the total size of all tensors for progress reporting
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
             struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
             size_data += ggml_nbytes(cur);
@@ -3173,16 +3165,15 @@ static bool llm_load_tensors(
     model.main_gpu     = main_gpu;
     model.n_gpu_layers = n_gpu_layers;
 
-    size_t ctx_size = ggml_tensor_overhead()*ml.n_tensors;
-
     const int64_t n_layer     = hparams.n_layer;
     const int64_t i_gpu_start = std::max((int64_t) hparams.n_layer - n_gpu_layers, (int64_t) 0);
 
-
-    // there is very little benefit to offloading the input layers, so always keep it on the CPU
+    // there is very little benefit to offloading the input layer, so always keep it on the CPU
     model.buft_input = llama_default_buffer_type_cpu(true);
+
     model.buft_layer.resize(n_layer);
-    // cpu layers
+
+    // assign cpu layers
     for (int64_t i = 0; i < i_gpu_start; ++i) {
         model.buft_layer[i] = llama_default_buffer_type_cpu(true);
     }
@@ -3191,11 +3182,8 @@ static bool llm_load_tensors(
     if (split_mode == LLAMA_SPLIT_LAYER) {
         // calculate the split points
         int device_count = ggml_backend_cuda_get_device_count();
+        bool all_zero = tensor_split == nullptr || std::all_of(tensor_split, tensor_split + device_count, [](float x) { return x == 0.0f; });
         float splits[GGML_CUDA_MAX_DEVICES];
-        if (tensor_split != nullptr) {
-            std::copy(tensor_split, tensor_split + device_count, splits);
-        }
-        bool all_zero = tensor_split == nullptr || std::all_of(splits, splits + device_count, [](float x) { return x == 0.0f; });
         if (all_zero) {
             // default split, by free memory
             for (int i = 0; i < device_count; ++i) {
@@ -3204,7 +3192,11 @@ static bool llm_load_tensors(
                 ggml_backend_cuda_get_device_memory(i, &total, &free);
                 splits[i] = free;
             }
+        } else {
+            std::copy(tensor_split, tensor_split + device_count, splits);
         }
+
+        // sum and normalize the splits to get the split points
         float split_sum = 0.0f;
         for (int i = 0; i < device_count; ++i) {
             split_sum += splits[i];
@@ -3214,15 +3206,15 @@ static bool llm_load_tensors(
             splits[i] /= split_sum;
         }
 
-        // assign GPU layers according to the splits to the devices
+        // assign the repeating layers to the devices according to the splits
         int act_gpu_layers = std::min(n_gpu_layers, (int)n_layer + 1);
         for (int64_t i = i_gpu_start; i < n_layer; ++i) {
             int layer_gpu = std::upper_bound(splits, splits + device_count, float(i - i_gpu_start)/act_gpu_layers) - splits;
             model.buft_layer[i] = llama_default_buffer_type_offload(layer_gpu);
         }
-        // output layer
+        // assign the output layer
         if (n_gpu_layers > n_layer) {
-            int layer_gpu = std::upper_bound(splits, splits + device_count, float(n_layer)/act_gpu_layers) - splits;
+            int layer_gpu = std::upper_bound(splits, splits + device_count, float(act_gpu_layers - 1)/act_gpu_layers) - splits;
             model.buft_output = llama_default_buffer_type_offload(layer_gpu);
         } else {
             model.buft_output = llama_default_buffer_type_cpu(true);
@@ -3234,16 +3226,17 @@ static bool llm_load_tensors(
         if (split_mode == LLAMA_SPLIT_ROW) {
             split_buft = llama_default_buffer_type_split(main_gpu, tensor_split);
         } else {
+            // LLAMA_SPLIT_NONE or LLAMA_SPLIT_LAYER in backends where it is not supported
             split_buft = llama_default_buffer_type_offload(main_gpu);
         }
-        // repeating layers
+        // assign the repeating layers
         for (int64_t i = i_gpu_start; i < n_layer; ++i) {
             model.buft_layer[i] = {
                 split_buft,
                 llama_default_buffer_type_offload(main_gpu)
             };
         }
-        // output layer
+        // assign the output layer
         if (n_gpu_layers > n_layer) {
             model.buft_output = {
                 split_buft,
@@ -3266,6 +3259,7 @@ static bool llm_load_tensors(
     }
 
     // create one context per buffer type
+    size_t ctx_size = ggml_tensor_overhead()*ml.n_tensors;
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
     for (auto & it : buft_layer_count) {
         struct ggml_init_params params = {
@@ -3289,14 +3283,11 @@ static bool llm_load_tensors(
         const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa();
         const int64_t n_embd_v_gqa = hparams.n_embd_v_gqa();
         const int64_t n_embd_gqa   = n_embd_v_gqa;
-        const int64_t n_layer      = hparams.n_layer;
         const int64_t n_vocab      = hparams.n_vocab;
         const int64_t n_ff         = hparams.n_ff;
 
         GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
-        // FIXME: for metal, it may be better to put the input on the GPU context - however it may make no difference in practice,
-        // and it would increase the metal buffer size
         ggml_context * ctx_input        = ctx_map.at(model.buft_input.buft);
         ggml_context * ctx_output       = ctx_map.at(model.buft_output.buft);
         ggml_context * ctx_output_split = ctx_map.at(model.buft_output.buft_matrix);
@@ -3617,8 +3608,8 @@ static bool llm_load_tensors(
 
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
 
-                        layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd * 3});
-                        layer.bqkv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd * 3});
+                        layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd*3});
+                        layer.bqkv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd*3});
                         layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
@@ -3736,8 +3727,7 @@ static bool llm_load_tensors(
 
     ml.init_mapping(true, use_mlock ? &model.mlock_mmap : nullptr);
 
-    // create backend buffers
-
+    // create the backend buffers
     std::vector<std::pair<ggml_context *, ggml_backend_buffer_t>> ctx_bufs;
 
     for (auto & it : ctx_map) {
@@ -3745,8 +3735,9 @@ static bool llm_load_tensors(
         ggml_context * ctx = it.second;
         ggml_backend_buffer_t buf = nullptr;
 
-        // only the region containing the tensors in the model is mapped to the backend buffer
-        // this is important for metal: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
+        // only the mmap region containing the tensors in the model is mapped to the backend buffer
+        // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
+        // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
         if (ml.use_mmap && buft == llama_default_buffer_type_cpu(true)) {
             size_t first, last;
             ml.get_mapping_range(&first, &last, ctx);
@@ -3771,7 +3762,7 @@ static bool llm_load_tensors(
             throw std::runtime_error("failed to allocate buffer");
         }
         // indicate that this buffer contains weights
-        // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are always scheduled to the backend that contains the weight
+        // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
         ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
         model.bufs.push_back(buf);
         ctx_bufs.emplace_back(ctx, buf);
@@ -3803,7 +3794,7 @@ static bool llm_load_tensors(
         }
     }
 
-    // load data
+    // load tensor data
     for (auto & it : ctx_bufs) {
         ggml_context * ctx = it.first;
         ggml_backend_buffer_t buf = it.second;
@@ -3849,7 +3840,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, cons
             return -2;
         }
     } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("error loading model: %s\n", err.what());
+        LLAMA_LOG_ERROR("%s: error loading model: %s\n", __func__, err.what());
         return -1;
     }
 

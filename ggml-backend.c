@@ -103,11 +103,11 @@ void ggml_backend_buffer_init_tensor(ggml_backend_buffer_t buffer, struct ggml_t
 }
 
 size_t ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer) {
-    return ggml_backend_buft_get_alignment(ggml_backend_buffer_type(buffer));
+    return ggml_backend_buft_get_alignment(ggml_backend_buffer_get_type(buffer));
 }
 
 size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
-    return ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type(buffer), tensor);
+    return ggml_backend_buft_get_alloc_size(ggml_backend_buffer_get_type(buffer), tensor);
 }
 
 void ggml_backend_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
@@ -115,15 +115,21 @@ void ggml_backend_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
 }
 
 bool ggml_backend_buffer_is_host(ggml_backend_buffer_t buffer) {
-    return ggml_backend_buft_is_host(ggml_backend_buffer_type(buffer));
+    return ggml_backend_buft_is_host(ggml_backend_buffer_get_type(buffer));
 }
 
 void ggml_backend_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage) {
     buffer->usage = usage;
 }
 
-ggml_backend_buffer_type_t ggml_backend_buffer_type(ggml_backend_buffer_t buffer) {
+ggml_backend_buffer_type_t ggml_backend_buffer_get_type(ggml_backend_buffer_t buffer) {
     return buffer->buft;
+}
+
+void ggml_backend_buffer_reset(ggml_backend_buffer_t buffer) {
+    if (buffer->iface.reset) {
+        buffer->iface.reset(buffer);
+    }
 }
 
 // backend
@@ -431,13 +437,13 @@ static void ggml_backend_cpu_buffer_get_tensor(ggml_backend_buffer_t buffer, con
     GGML_UNUSED(buffer);
 }
 
-static void ggml_backend_cpu_buffer_cpy_tensor_from(ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst) {
+static void ggml_backend_cpu_buffer_cpy_tensor_from(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
     ggml_backend_tensor_get(src, dst->data, 0, ggml_nbytes(src));
 
     GGML_UNUSED(buffer);
 }
 
-static void ggml_backend_cpu_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst) {
+static void ggml_backend_cpu_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
     ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
 
     GGML_UNUSED(buffer);
@@ -457,6 +463,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
     /* .cpy_tensor_from = */ ggml_backend_cpu_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_cpu_buffer_cpy_tensor_to,
     /* .clear           = */ ggml_backend_cpu_buffer_clear,
+    /* .reset           = */ NULL,
 };
 
 // for buffers from ptr, free is not called
@@ -470,6 +477,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i_from_ptr = {
     /* .cpy_tensor_from = */ ggml_backend_cpu_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_cpu_buffer_cpy_tensor_to,
     /* .clear           = */ ggml_backend_cpu_buffer_clear,
+    /* .reset           = */ NULL,
 };
 
 static const size_t TENSOR_ALIGNMENT = 64; // should be enough for AVX 512
@@ -554,7 +562,6 @@ static ggml_backend_buffer_t ggml_backend_cpu_hbm_buffer_type_alloc_buffer(ggml_
         return NULL;
     }
 
-    // FIXME: this is a hack to avoid having to implement a new buffer type
     ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);
     buffer->buft = buft;
     buffer->iface.get_name = ggml_backend_cpu_hbm_buffer_get_name;
@@ -610,7 +617,7 @@ struct ggml_backend_plan_cpu {
     struct ggml_cgraph cgraph;
 };
 
-static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(ggml_backend_t backend, const struct ggml_cgraph * cgraph) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
     struct ggml_backend_plan_cpu * cpu_plan = malloc(sizeof(struct ggml_backend_plan_cpu));
@@ -1371,14 +1378,10 @@ void ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgr
     sched_reset(sched);
 }
 
-void ggml_backend_sched_graph_split(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
+void ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
     GGML_ASSERT((int)sched->hash_set.size >= graph->n_nodes + GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS);
 
     sched_split_graph(sched, graph);
-}
-
-void ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
-    ggml_backend_sched_graph_split(sched, graph);
     sched_alloc_splits(sched);
     sched_compute_splits(sched);
     sched_reset(sched);
@@ -1410,7 +1413,7 @@ void ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml
 
 void ggml_backend_view_init(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
     GGML_ASSERT(tensor->buffer == NULL);
-    //GGML_ASSERT(tensor->data == NULL); // views of pre-allocted tensors may have the data set, but still need to be initialized
+    //GGML_ASSERT(tensor->data == NULL); // views of pre-allocated tensors may have the data set in ggml_new_tensor, but still need to be initialized by the backend
     GGML_ASSERT(tensor->view_src != NULL);
     GGML_ASSERT(tensor->view_src->buffer != NULL);
     GGML_ASSERT(tensor->view_src->data != NULL);

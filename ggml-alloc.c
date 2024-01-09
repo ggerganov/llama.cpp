@@ -229,6 +229,7 @@ void ggml_tallocr_reset(ggml_tallocr_t alloc) {
         alloc->free_blocks[0].size = SIZE_MAX/2; // restrict maximum size of a measure allocator to half size_t max to avoid overflows
     } else {
         alloc->free_blocks[0].size = ggml_backend_buffer_get_size(alloc->buffer) - align_offset;
+        ggml_backend_buffer_reset(alloc->buffer);
     }
 }
 

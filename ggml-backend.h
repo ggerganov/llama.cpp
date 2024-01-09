@@ -40,7 +40,8 @@ extern "C" {
     GGML_API void                       ggml_backend_buffer_clear         (ggml_backend_buffer_t buffer, uint8_t value);
     GGML_API bool                       ggml_backend_buffer_is_host       (ggml_backend_buffer_t buffer);
     GGML_API void                       ggml_backend_buffer_set_usage     (ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
-    GGML_API ggml_backend_buffer_type_t ggml_backend_buffer_type          (ggml_backend_buffer_t buffer);
+    GGML_API ggml_backend_buffer_type_t ggml_backend_buffer_get_type      (ggml_backend_buffer_t buffer);
+    GGML_API void                       ggml_backend_buffer_reset         (ggml_backend_buffer_t buffer);
 
 
     //
@@ -163,11 +164,6 @@ extern "C" {
 
     // Allocate and compute graph on the backend scheduler
     GGML_API void ggml_backend_sched_graph_compute(
-            ggml_backend_sched_t sched,
-            struct ggml_cgraph * graph);
-
-    // Split without computing - only useful to find the number of splits
-    GGML_API void ggml_backend_sched_graph_split(
             ggml_backend_sched_t sched,
             struct ggml_cgraph * graph);
 
