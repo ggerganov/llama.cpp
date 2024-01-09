@@ -873,7 +873,7 @@ class OutputFile:
         if params.n_ctx == 4096:
             name = "LLaMA v2"
         elif params.path_model is not None:
-            name = str(params.path_model.parent).split('/')[-1]
+            name = params.path_model.name
 
         self.gguf.add_name                (name)
         self.gguf.add_context_length      (params.n_ctx)
