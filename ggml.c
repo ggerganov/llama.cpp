@@ -16557,7 +16557,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             atomic_store(&state->shared->n_active, n_threads);
             atomic_store(&state->shared->node_n,   node_n);
         } else {
-            // wait for other threads to finish
+           // wait for other threads to finish
             const int last = node_n;
 
             const bool do_yield = last < 0 || cgraph->nodes[last]->op == GGML_OP_MUL_MAT;
@@ -16573,7 +16573,8 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 }
 
                 node_n = atomic_load(&state->shared->node_n);
-            } while (node_n == last);
+                if (node_n != last) break;
+            };
         }
 
         // check if we should stop
