@@ -65,7 +65,7 @@ test: $(TEST_TARGETS)
 			./$$test_target; \
 		fi; \
 		if [ $$? -ne 0 ]; then \
-			printf 'Test $$test_target FAILED!\n\n' $$test_target; \
+			printf 'Test %s FAILED!\n\n' $$test_target; \
 			failures=$$(( failures + 1 )); \
 		else \
 			printf 'Test %s passed.\n\n' $$test_target; \
