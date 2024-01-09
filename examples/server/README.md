@@ -199,7 +199,7 @@ node index.js
 ```
 Notice that each `probs` is an array of length `n_probs`.
 
-- `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string. 
+- `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
 - `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
 - `model`: The path to the model loaded with `-m`
