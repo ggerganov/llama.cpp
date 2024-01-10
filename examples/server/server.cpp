@@ -2509,6 +2509,9 @@ json oaicompat_completion_params_parse(
     //
     // https://platform.openai.com/docs/api-reference/chat/create
     llama_sampling_params default_sparams;
+    slot_params default_params;
+    
+    // the parameters below should be similar to launch_slot_with_data 
     llama_params["model"]             = json_value(body, "model", std::string("uknown"));
     llama_params["prompt"]            = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
@@ -2529,6 +2532,11 @@ json oaicompat_completion_params_parse(
     llama_params["repeat_last_n"]     = json_value(body, "repeat_last_n", default_sparams.penalty_last_n);
     llama_params["ignore_eos"]        = json_value(body, "ignore_eos", false);
     llama_params["tfs_z"]             = json_value(body, "tfs_z", default_sparams.tfs_z);
+    llama_params["n_keep"]            = json_value(body, "n_keep", default_params.n_keep);
+    llama_params["seed"]              = json_value(body, "seed", default_params.seed);
+    llama_params["min_p"]             = json_value(body, "min_p", default_sparams.min_p);
+    llama_params["penalty_repeat"]    = json_value(body, "repeat_penalty", default_sparams.penalty_repeat);
+    llama_params["n_probs"]           = json_value(body, "n_probs", default_sparams.n_probs);
 
     if (body.count("grammar") != 0) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
