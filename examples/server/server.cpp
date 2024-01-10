@@ -2939,8 +2939,8 @@ int main(int argc, char **argv)
 
 
     svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
-        // Perform necessary internal status checks here
-        // For demonstration purposes, we'll simply return a status of 'ok'
+        // in real-world applications, it's common to first query the /health endpoint of the server to make sure it's running
+        // it will return "ok" only after the model is successfully loaded by the server.
         res.set_content(R"({"status": "ok"})", "application/json");
         res.status = 200; // HTTP OK
     });
