@@ -380,6 +380,39 @@ class Params:
         return params
 
 
+@dataclass
+class Metadata:
+    name: Optional[str] = None
+    author: Optional[str] = None
+    version: Optional[str] = None
+    url: Optional[str] = None
+    description: Optional[str] = None
+    licence: Optional[str] = None
+    source_url: Optional[str] = None
+    source_hf_repo: Optional[str] = None
+
+    @staticmethod
+    def load(metadata_path: Path) -> "Metadata":
+        if metadata_path is None or not metadata_path.exists():
+            return Metadata()
+
+        with open(metadata_path, 'r') as file:
+            data = json.load(file)
+
+        # Create a new Metadata instance
+        metadata = Metadata()
+
+        # Assigning values to Metadata attributes if they exist in the JSON file
+        metadata.name = data.get("general.name")
+        metadata.author = data.get("general.author")
+        metadata.version = data.get("general.version")
+        metadata.url = data.get("general.url")
+        metadata.description = data.get("general.description")
+        metadata.license = data.get("general.license")
+ 
+        return metadata
+
+
 class BpeVocab:  # GPT
     def __init__(
         self, fname_tokenizer: Path, fname_added_tokens: Optional[Path]
@@ -1026,16 +1059,37 @@ class OutputFile:
             fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess
         )
 
-    def add_meta_arch(self, params: Params) -> None:
+    def add_meta_model(self, params: Params, metadata: Metadata) -> None:
+        # Metadata About The Model And It's Provenence
         name = "LLaMA"
-
-        # TODO: better logic to determine model name
-        if params.n_ctx == 4096:
-            name = "LLaMA v2"
+        if metadata is not None and metadata.name is not None:
+            name = metadata.name
         elif params.path_model is not None:
             name = str(params.path_model.parent).split("/")[-1]
+        elif params.n_ctx == 4096:
+            # Heuristic detection of LLaMA v2 model
+            name = "LLaMA v2"
 
         self.gguf.add_name(name)
+
+        if metadata is not None:
+            if metadata.author is not None:
+                self.gguf.add_author(metadata.author)
+            if metadata.version is not None:
+                self.gguf.add_version(metadata.version)
+            if metadata.url is not None:
+                self.gguf.add_url(metadata.url)
+            if metadata.description is not None:
+                self.gguf.add_description(metadata.description)
+            if metadata.licence is not None:
+                self.gguf.add_licence(metadata.licence)
+            if metadata.source_url is not None:
+                self.gguf.add_source_url(metadata.source_url)
+            if metadata.source_hf_repo is not None:
+                self.gguf.add_source_hf_repo(metadata.source_hf_repo)
+
+    def add_meta_arch(self, params: Params) -> None:
+        # Metadata About The Neural Architecture Itself
         self.gguf.add_context_length(params.n_ctx)
         self.gguf.add_embedding_length(params.n_embd)
         self.gguf.add_block_count(params.n_layer)
@@ -1146,12 +1200,14 @@ class OutputFile:
         svocab: gguf.SpecialVocab,
         endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
         pad_vocab: bool = False,
+        metadata: Metadata = None,
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
+        of.add_meta_model(params, metadata)
         of.add_meta_arch(params)
         of.add_meta_vocab(vocab)
         of.add_meta_special_vocab(svocab)
@@ -1184,12 +1240,14 @@ class OutputFile:
         concurrency: int = DEFAULT_CONCURRENCY,
         endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
         pad_vocab: bool = False,
+        metadata: Metadata = None,
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
+        of.add_meta_model(params, metadata)
         of.add_meta_arch(params)
         of.add_meta_vocab(vocab)
         of.add_meta_special_vocab(svocab)
@@ -1463,7 +1521,7 @@ class VocabFactory:
         return vocab, special_vocab
 
 
-def default_outfile(model_paths: list[Path], file_type: GGMLFileType, params: Params, model_params_count: int) -> Path:
+def default_outfile(model_paths: list[Path], file_type: GGMLFileType, params: Params, model_params_count: int, metadata: Metadata) -> Path:
     quantization = {
         GGMLFileType.AllF32:    "f32",
         GGMLFileType.MostlyF16: "f16",
@@ -1472,11 +1530,17 @@ def default_outfile(model_paths: list[Path], file_type: GGMLFileType, params: Pa
 
     parameters = model_parameter_count_rounded_notation(model_params_count)
 
+    version = ""
+    if metadata is not None and metadata.version is not None:
+        version = f"-{metadata.version}"
+
     name = "ggml-model"
-    if params.path_model is not None:
+    if metadata is not None and metadata.name is not None:
+        name = metadata.name
+    elif params.path_model is not None:
         name = params.path_model.name
 
-    ret = model_paths[0].parent / f"{name}-{parameters}-{quantization}.gguf"
+    ret = model_paths[0].parent / f"{name}{version}-{parameters}-{quantization}.gguf"
     if ret in model_paths:
         sys.stderr.write(
             f"Error: Default output path ({ret}) would overwrite the input. "
@@ -1585,12 +1649,21 @@ def get_argument_parser() -> ArgumentParser:
         help="Indicate that the model is executed on a big-endian machine",
     )
 
+    # https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#general-metadata
+    parser.add_argument(
+        "--metadata",
+        type=Path,
+        help="Specify the path for a metadata file",
+    )
+
     return parser
 
 
 def main(argv: Optional[list[str]] = None) -> None:
     parser = get_argument_parser()
     args = parser.parse_args(argv)
+
+    metadata = Metadata.load(args.metadata)
 
     if args.awq_path:
         sys.path.insert(1, str(Path(__file__).resolve().parent / "awq-py"))
@@ -1665,6 +1738,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             special_vocab,
             endianess=endianess,
             pad_vocab=args.pad_vocab,
+            metadata=metadata,
         )
         print(f"Wrote {outfile}")
         return
@@ -1683,7 +1757,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     model   = convert_model_names(model, params)
     ftype   = pick_output_type(model, args.outtype)
     model   = convert_to_output_type(model, ftype)
-    outfile = args.outfile or default_outfile(model_plus.paths, ftype, params, model_params_count)
+    outfile = args.outfile or default_outfile(model_plus.paths, ftype, params, model_params_count, metadata)
 
     params.ftype = ftype
     print(f"Writing {outfile}, format {ftype}")
@@ -1698,6 +1772,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         concurrency=args.concurrency,
         endianess=endianess,
         pad_vocab=args.pad_vocab,
+        metadata=metadata,
     )
     print(f"Wrote {outfile}")
 

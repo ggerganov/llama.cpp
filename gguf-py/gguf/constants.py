@@ -24,6 +24,7 @@ class Keys:
         ALIGNMENT            = "general.alignment"
         NAME                 = "general.name"
         AUTHOR               = "general.author"
+        VERSION              = "general.version"
         URL                  = "general.url"
         DESCRIPTION          = "general.description"
         LICENSE              = "general.license"
