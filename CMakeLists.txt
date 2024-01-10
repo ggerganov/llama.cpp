@@ -118,9 +118,9 @@ if (LLAMA_CUBLAS)
         else()
             message("CUDA Toolkit Version: ${CUDAToolkit_VERSION}")
             if(CUDAToolkit_VERSION VERSION_GREATER 12)
-                 set(CMAKE_CUDA_ARCHITECTURES "52;61;70") # lowest CUDA 12 standard + lowest for integer intrinsics
+                 set(CMAKE_CUDA_ARCHITECTURES "all-major") # lowest CUDA 12 standard + lowest for integer intrinsics
             else()
-                 set(CMAKE_CUDA_ARCHITECTURES "37;52;61;70") # lowest CUDA 12 standard + lowest for integer intrinsics
+                 set(CMAKE_CUDA_ARCHITECTURES "all-major") # lowest CUDA 12 standard + lowest for integer intrinsics
             endif()
         endif()
     endif()
