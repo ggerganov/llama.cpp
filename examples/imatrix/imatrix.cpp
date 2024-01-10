@@ -33,31 +33,25 @@ struct StatParams {
     bool        collect_output_weight = false;
 };
 
-static void ik_save_statistics(const char * fname, const std::unordered_map<std::string, Stats>& stats, int ncall) {
-    std::ofstream out(fname, std::ios::binary);
-    int n_entries = stats.size();
-    out.write((const char*)&n_entries, sizeof(n_entries));
-    for (auto& p : stats) {
-        int len = p.first.size();
-        out.write((const char*)&len, sizeof(len));
-        out.write(p.first.c_str(), len);
-        out.write((const char*)&p.second.ncall, sizeof(p.second.ncall));
-        int nval = p.second.values.size();
-        out.write((const char*)&nval, sizeof(nval));
-        if (nval > 0) out.write((const char*)p.second.values.data(), nval*sizeof(float));
-    }
-    fprintf(stderr, "%s: stored collected data after %d calls in %s\n",__func__,ncall,fname);
-}
+class IMatrixCollector {
+public:
+    IMatrixCollector() = default;
+    void set_parameters(StatParams&& params) { m_params = std::move(params); }
+    void collect_imatrix(const struct ggml_tensor * src0, const struct ggml_tensor * src1);
+    void save_imatrix() const;
+private:
+    std::unordered_map<std::string, Stats> m_stats;
+    StatParams                             m_params;
+    std::mutex                             m_mutex;
+    int                                    m_last_call = 0;
+};
 
-static void ik_collect_imatrix(const struct ggml_tensor * src0, const struct ggml_tensor * src1) {
-    static int last_call = 0;
-    static std::mutex mutex;
+void IMatrixCollector::collect_imatrix(const struct ggml_tensor * src0, const struct ggml_tensor * src1) {
     if (src1->ne[1] < 16 || src1->type != GGML_TYPE_F32) return;
-    //if (strncmp(src0->name, "blk.", 4) != 0 && strcmp(src0->name, "output.weight") != 0) return;
-    if (strncmp(src0->name, "blk.", 4) != 0) return;
-    std::lock_guard<std::mutex> lock(mutex);
-    auto& g_stats = ik_get_stats();
-    auto& e = g_stats[src0->name];
+    if (!(strncmp(src0->name, "blk.", 4) == 0 || (m_params.collect_output_weight && strcmp(src0->name, "output.weight") == 0))) return;
+    //if (strncmp(src0->name, "blk.", 4) != 0) return;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto& e = m_stats[src0->name];
     if (e.values.empty()) {
         e.values.resize(src1->ne[0], 0);
     }
@@ -66,19 +60,87 @@ static void ik_collect_imatrix(const struct ggml_tensor * src0, const struct ggm
         exit(1); //GGML_ASSERT(false);
     }
     ++e.ncall;
-    printf("%s[%d]: %s, %d x %d, %d\n",__func__,last_call,src0->name,(int)src1->ne[0],(int)src1->ne[1],(int)src1->type);
+    printf("%s[%d]: %s, %d x %d, %d\n",__func__,m_last_call,src0->name,(int)src1->ne[0],(int)src1->ne[1],(int)src1->type);
     for (int row = 0; row < (int)src1->ne[1]; ++row) {
         const float * x = (const float *)src1->data + row * src1->ne[0];
         for (int j = 0; j < (int)src1->ne[0]; ++j) {
             e.values[j] += x[j]*x[j];
         }
     }
-    if (e.ncall > last_call) {
-        last_call = e.ncall;
-        if (last_call % 10 == 0) {
-            ik_save_statistics("stats.dat", g_stats, last_call);
+    if (e.ncall > m_last_call) {
+        m_last_call = e.ncall;
+        if (m_last_call % m_params.n_output_frequency == 0) {
+            save_imatrix();
         }
     }
+}
+
+void IMatrixCollector::save_imatrix() const {
+    const char * fname = m_params.ofile.empty() ? "imatrix.dat" : m_params.ofile.c_str();
+    std::ofstream out(fname, std::ios::binary);
+    int n_entries = m_stats.size();
+    out.write((const char*)&n_entries, sizeof(n_entries));
+    for (auto& p : m_stats) {
+        int len = p.first.size();
+        out.write((const char*)&len, sizeof(len));
+        out.write(p.first.c_str(), len);
+        out.write((const char*)&p.second.ncall, sizeof(p.second.ncall));
+        int nval = p.second.values.size();
+        out.write((const char*)&nval, sizeof(nval));
+        if (nval > 0) out.write((const char*)p.second.values.data(), nval*sizeof(float));
+    }
+    fprintf(stderr, "%s: stored collected data after %d calls in %s\n",__func__,m_last_call,fname);
+}
+
+static IMatrixCollector g_collector;
+
+//static void ik_save_statistics(const char * fname, const std::unordered_map<std::string, Stats>& stats, int ncall) {
+//    std::ofstream out(fname, std::ios::binary);
+//    int n_entries = stats.size();
+//    out.write((const char*)&n_entries, sizeof(n_entries));
+//    for (auto& p : stats) {
+//        int len = p.first.size();
+//        out.write((const char*)&len, sizeof(len));
+//        out.write(p.first.c_str(), len);
+//        out.write((const char*)&p.second.ncall, sizeof(p.second.ncall));
+//        int nval = p.second.values.size();
+//        out.write((const char*)&nval, sizeof(nval));
+//        if (nval > 0) out.write((const char*)p.second.values.data(), nval*sizeof(float));
+//    }
+//    fprintf(stderr, "%s: stored collected data after %d calls in %s\n",__func__,ncall,fname);
+//}
+
+static void ik_collect_imatrix(const struct ggml_tensor * src0, const struct ggml_tensor * src1) {
+    g_collector.collect_imatrix(src0, src1);
+    //static int last_call = 0;
+    //static std::mutex mutex;
+    //if (src1->ne[1] < 16 || src1->type != GGML_TYPE_F32) return;
+    ////if (strncmp(src0->name, "blk.", 4) != 0 && strcmp(src0->name, "output.weight") != 0) return;
+    //if (strncmp(src0->name, "blk.", 4) != 0) return;
+    //std::lock_guard<std::mutex> lock(mutex);
+    //auto& g_stats = ik_get_stats();
+    //auto& e = g_stats[src0->name];
+    //if (e.values.empty()) {
+    //    e.values.resize(src1->ne[0], 0);
+    //}
+    //else if (e.values.size() != (size_t)src1->ne[0]) {
+    //    fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", src0->name, (int)e.values.size(), (int)src1->ne[0]);
+    //    exit(1); //GGML_ASSERT(false);
+    //}
+    //++e.ncall;
+    //printf("%s[%d]: %s, %d x %d, %d\n",__func__,last_call,src0->name,(int)src1->ne[0],(int)src1->ne[1],(int)src1->type);
+    //for (int row = 0; row < (int)src1->ne[1]; ++row) {
+    //    const float * x = (const float *)src1->data + row * src1->ne[0];
+    //    for (int j = 0; j < (int)src1->ne[0]; ++j) {
+    //        e.values[j] += x[j]*x[j];
+    //    }
+    //}
+    //if (e.ncall > last_call) {
+    //    last_call = e.ncall;
+    //    if (last_call % 10 == 0) {
+    //        ik_save_statistics("stats.dat", g_stats, last_call);
+    //    }
+    //}
 }
 
 
@@ -273,7 +335,9 @@ int main(int argc, char ** argv) {
 
     StatParams sparams;
     std::vector<char*> args;
-    for (int iarg = 1; iarg < argc-1; ++iarg) {
+    args.push_back(argv[0]);
+    int iarg = 1;
+    for (; iarg < argc-1; ++iarg) {
         std::string arg{argv[iarg]};
         if (arg == "-o" || arg == "--output-file") {
             sparams.ofile = argv[++iarg];
@@ -287,6 +351,9 @@ int main(int argc, char ** argv) {
             args.push_back(argv[iarg]);
         }
     }
+    if (iarg < argc) {
+        args.push_back(argv[iarg]);
+    }
 
     gpt_params params;
     params.n_batch = 512;
@@ -294,7 +361,10 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    ggml_set_stat_collection(ik_collect_imatrix);
+    g_collector.set_parameters(std::move(sparams));
+
+    ggml_set_imatrix_collection(ik_collect_imatrix);
+    ggml_set_imatrix_collection(ik_collect_imatrix);
 
     params.logits_all = true;
     params.n_batch = std::min(params.n_batch, params.n_ctx);
@@ -340,12 +410,14 @@ int main(int argc, char ** argv) {
     if (!OK) {
         return 1;
     }
-    auto& stats = ik_get_stats();
-    int ncall = 0;
-    for (auto& s : stats) {
-        ncall = std::max(ncall, s.second.ncall);
-    }
-    ik_save_statistics(sparams.ofile.c_str(), stats, ncall);
+
+    g_collector.save_imatrix();
+    //auto& stats = ik_get_stats();
+    //int ncall = 0;
+    //for (auto& s : stats) {
+    //    ncall = std::max(ncall, s.second.ncall);
+    //}
+    //ik_save_statistics(sparams.ofile.c_str(), stats, ncall);
 
     llama_print_timings(ctx);
 

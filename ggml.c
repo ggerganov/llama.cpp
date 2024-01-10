@@ -396,7 +396,7 @@ static void ggml_vec_dot_f16(const int n, float * restrict s, ggml_fp16_t * rest
 
 ggml_collect_imatrix_t g_imatrix_collect = NULL;
 
-void ggml_set_stat_collection(ggml_collect_imatrix_t imatrix_collect) {
+void ggml_set_imatrix_collection(ggml_collect_imatrix_t imatrix_collect) {
     g_imatrix_collect = imatrix_collect;
 }
 

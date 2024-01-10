@@ -2077,7 +2077,7 @@ extern "C" {
     // Importance matrix
     //
     typedef void(*ggml_collect_imatrix_t)(const struct ggml_tensor * src0, const struct ggml_tensor * src1);
-    GGML_API void ggml_set_stat_collection(ggml_collect_imatrix_t imatrix_collect);
+    GGML_API void ggml_set_imatrix_collection(ggml_collect_imatrix_t imatrix_collect);
 
     //
     // gguf
