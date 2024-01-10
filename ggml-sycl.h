@@ -49,6 +49,7 @@ GGML_API ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device);
 GGML_API ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type(void);
 
 int get_main_device();
+void print_ggml_tensor(const char*name, struct ggml_tensor *src);
 
 #ifdef  __cplusplus
 }

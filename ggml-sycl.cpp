@@ -10,6 +10,12 @@
 #include <stdio.h>
 #include <vector>
 #include <cmath>
+#include <iostream>
+#include <fstream>
+
+#include <stdio.h>
+#include <stdlib.h>
+
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
@@ -21,7 +27,6 @@
 #include "ggml-backend-impl.h"
 
 static int g_ggml_sycl_debug=0;
-
 #define GGML_SYCL_DEBUG(...) do{if(g_ggml_sycl_debug) printf(__VA_ARGS__);}while(0)
 
 #define CHECK_TRY_ERROR(expr)                                                  \
@@ -38,6 +43,7 @@ static int g_ggml_sycl_debug=0;
 
 // #define DEBUG_SYCL_MALLOC
 
+static int g_work_group_size = 0;
 // typedef sycl::half ggml_fp16_t;
 
 #define __SYCL_ARCH__ DPCT_COMPATIBILITY_TEMP
@@ -351,7 +357,7 @@ static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUA
 
 #define MAX_STREAMS 8
 static dpct::queue_ptr g_syclStreams[GGML_SYCL_MAX_DEVICES][MAX_STREAMS] = {
-    {&dpct::get_in_order_queue()}};
+    {0}};
 
 struct ggml_tensor_extra_gpu {
     void * data_device[GGML_SYCL_MAX_DEVICES]; // 1 pointer for each device for split tensors
@@ -420,6 +426,49 @@ static void bad_arch(const sycl::stream &stream_ct1) {
     std::exit(1);
 
     (void) bad_arch; // suppress unused function warning
+}
+
+//todo: debug for crash in some case
+void print_ggml_tensor(const char*name, struct ggml_tensor *src){
+    if(!g_ggml_sycl_debug) return;
+    char filename[1024];
+    sprintf(filename, "%s.txt", name);
+    printf("GGML Tensor:%s save to %s:\n", name, filename);
+
+    size_t total_size = ggml_nbytes(src);
+    const bool src_on_device = src->backend == GGML_BACKEND_GPU || src->backend == GGML_BACKEND_GPU_SPLIT;
+    float *local_buf = NULL;
+    // printf("total_size %d2, src_on_device %d\n", total_size, src_on_device);
+    if(src_on_device) {
+        local_buf = (float *) ggml_sycl_host_malloc(total_size);
+        // printf("local buf %p size %d bytes\n", local_buf, total_size);
+        ggml_sycl_set_device(g_main_device);
+        dpct::queue_ptr main_stream = g_syclStreams[g_main_device_index][0];
+
+        ggml_tensor_extra_gpu * src_extra = (ggml_tensor_extra_gpu *)  src->extra;
+
+        // printf("zjy before memcpy local_buf=%p, src->data=%p\n", local_buf, src->data);
+        main_stream->memcpy(local_buf, src_extra->data_device[g_main_device_index], total_size);
+    }
+    else {
+        local_buf = (float *)src->data;
+        // printf("local buf from src-> data %p\n", local_buf);
+    }
+
+    size_t total_elements = ggml_nelements(src);
+    std::ofstream logfile;
+    logfile.open(filename);
+    // printf("local buf element %d\n", total_elements);
+    for(int i=0; i<total_elements; i++){
+        if((i+1)%20 ==0) logfile <<std::endl;
+        else logfile << local_buf[i] <<" ";
+    }
+    logfile <<std::endl;
+    logfile.close();
+
+    // printf("before free %p\n", local_buf);
+    if(src_on_device) ggml_sycl_host_free(local_buf);
+    // printf("free done\n");
 }
 
 static __dpct_inline__ float warp_reduce_sum(float x,
@@ -661,9 +710,8 @@ static void sqr_f32(const float * x, float * dst, const int k,
     dst[i] = x[i] * x[i];
 }
 
-template <int block_size>
 static void norm_f32(const float * x, float * dst, const int ncols, const float eps,
-                     const sycl::nd_item<3> &item_ct1, sycl::float2 *s_sum) {
+                     const sycl::nd_item<3> &item_ct1, sycl::float2 *s_sum, int block_size) {
     const int row = item_ct1.get_group(2) * item_ct1.get_local_range(1) +
                     item_ct1.get_local_id(1);
     const int tid = item_ct1.get_local_id(2);
@@ -764,9 +812,8 @@ static void pad_f32(const float  *x, float *dst, const int ne0, const int ne00, 
     }
 }
 
-template <int block_size>
 static void group_norm_f32(const float * x, float * dst, const int group_size, const int ne_elements, const float eps,
-                           const sycl::nd_item<3> &item_ct1, float *s_sum) {
+                           const sycl::nd_item<3> &item_ct1, float *s_sum, int block_size) {
     int start = item_ct1.get_group(2) * group_size;
     int end = start + group_size;
 
@@ -842,9 +889,8 @@ static void group_norm_f32(const float * x, float * dst, const int group_size, c
     }
 }
 
-template <int block_size>
 static void rms_norm_f32(const float * x, float * dst, const int ncols, const float eps,
-                         const sycl::nd_item<3> &item_ct1, float *s_sum) {
+                         const sycl::nd_item<3> &item_ct1, float *s_sum, int block_size) {
     const int row = item_ct1.get_group(2) * item_ct1.get_local_range(1) +
                     item_ct1.get_local_id(1);
     const int tid = item_ct1.get_local_id(2);
@@ -5656,12 +5702,13 @@ static void norm_f32_sycl(const float *x, float *dst, const int ncols,
                                   block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                     [[intel::reqd_sub_group_size(32)]] {
-                        norm_f32<WARP_SIZE>(x, dst, ncols, eps, item_ct1,
-                                            s_sum_acc_ct1.get_pointer());
+                        norm_f32(x, dst, ncols, eps, item_ct1,
+                                            s_sum_acc_ct1.get_pointer(), WARP_SIZE);
                     });
         });
     } else {
-        const sycl::range<3> block_dims(1, 1, 1024);
+        const int work_group_size = g_work_group_size;
+        const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:17: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
@@ -5676,8 +5723,8 @@ static void norm_f32_sycl(const float *x, float *dst, const int ncols,
                                   block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                     [[intel::reqd_sub_group_size(32)]] {
-                        norm_f32<1024>(x, dst, ncols, eps, item_ct1,
-                                       s_sum_acc_ct1.get_pointer());
+                        norm_f32(x, dst, ncols, eps, item_ct1,
+                                       s_sum_acc_ct1.get_pointer(), work_group_size);
                     });
         });
     }
@@ -5700,18 +5747,20 @@ static void group_norm_f32_sycl(const float *x, float *dst,
                                   block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                     [[intel::reqd_sub_group_size(32)]] {
-                        group_norm_f32<WARP_SIZE>(
+                        group_norm_f32(
                             x, dst, group_size, ne_elements, eps_ct4, item_ct1,
-                            s_sum_acc_ct1.get_pointer());
+                            s_sum_acc_ct1.get_pointer(), WARP_SIZE);
                     });
         });
     } else {
-        const sycl::range<3> block_dims(1, 1, 1024);
+        const int work_group_size = g_work_group_size;
+        const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:18: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
+
         stream->submit([&](sycl::handler &cgh) {
             sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(32),
                                                          cgh);
@@ -5723,9 +5772,9 @@ static void group_norm_f32_sycl(const float *x, float *dst,
                                   block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                     [[intel::reqd_sub_group_size(32)]] {
-                        group_norm_f32<1024>(x, dst, group_size, ne_elements,
+                        group_norm_f32(x, dst, group_size, ne_elements,
                                              eps_ct4, item_ct1,
-                                             s_sum_acc_ct1.get_pointer());
+                                             s_sum_acc_ct1.get_pointer(), work_group_size);
                     });
         });
     }
@@ -5789,12 +5838,13 @@ static void rms_norm_f32_sycl(const float *x, float *dst, const int ncols,
                                   block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                     [[intel::reqd_sub_group_size(32)]] {
-                        rms_norm_f32<WARP_SIZE>(x, dst, ncols, eps, item_ct1,
-                                                s_sum_acc_ct1.get_pointer());
+                        rms_norm_f32(x, dst, ncols, eps, item_ct1,
+                                                s_sum_acc_ct1.get_pointer(), WARP_SIZE);
                     });
         });
     } else {
-        const sycl::range<3> block_dims(1, 1, 1024);
+        const int work_group_size = g_work_group_size;
+        const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:19: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
@@ -5809,8 +5859,8 @@ static void rms_norm_f32_sycl(const float *x, float *dst, const int ncols,
                                   block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                     [[intel::reqd_sub_group_size(32)]] {
-                        rms_norm_f32<1024>(x, dst, ncols, eps, item_ct1,
-                                           s_sum_acc_ct1.get_pointer());
+                        rms_norm_f32(x, dst, ncols, eps, item_ct1,
+                                           s_sum_acc_ct1.get_pointer(), work_group_size);
                     });
         });
     }
@@ -8067,7 +8117,7 @@ static void *ggml_sycl_pool_malloc_leg(size_t size, size_t *actual_size) try {
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_index()));
-    GGML_SYCL_DEBUG("ggml_sycl_pool_malloc_leg index %d\n", id);
+    // GGML_SYCL_DEBUG("ggml_sycl_pool_malloc_leg index %d\n", id);
 #ifdef DEBUG_SYCL_MALLOC
     int nnz = 0;
     size_t max_size = 0;
@@ -8110,9 +8160,11 @@ static void *ggml_sycl_pool_malloc_leg(size_t size, size_t *actual_size) try {
     void * ptr;
     size_t look_ahead_size = (size_t) (1.05 * size);
     look_ahead_size = 256 * ((look_ahead_size + 255)/256);
+
+    const dpct::queue_ptr stream = g_syclStreams[id][0];
     SYCL_CHECK(
         CHECK_TRY_ERROR(ptr = (void *)sycl::malloc_device(
-                             look_ahead_size, dpct::get_in_order_queue())));
+                             look_ahead_size, *stream)));
     *actual_size = look_ahead_size;
     g_sycl_pool_size[id] += look_ahead_size;
 
@@ -8135,6 +8187,7 @@ static void ggml_sycl_pool_free_leg(void *ptr, size_t size) try {
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_index()));
 
+    const dpct::queue_ptr stream = g_syclStreams[id][0];
     for (int i = 0; i < MAX_SYCL_BUFFERS; ++i) {
         sycl_buffer& b = g_sycl_buffer_pool[id][i];
         if (b.ptr == nullptr) {
@@ -8144,7 +8197,7 @@ static void ggml_sycl_pool_free_leg(void *ptr, size_t size) try {
         }
     }
     fprintf(stderr, "WARNING: sycl buffer pool full, increase MAX_SYCL_BUFFERS\n");
-    SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(ptr, dpct::get_in_order_queue())));
+    SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(ptr, *stream)));
     g_sycl_pool_size[id] -= size;
 }
 catch (sycl::exception const &exc) {
@@ -8236,7 +8289,7 @@ struct sycl_pool_alloc {
     T * alloc(size_t size) {
         GGML_ASSERT(ptr == nullptr);
         ptr = (T *) ggml_sycl_pool_malloc(size * sizeof(T), &this->actual_size);
-        GGML_SYCL_DEBUG("alloc %lu return %p actual size=%lu\n", size * sizeof(T), ptr, this->actual_size);
+        // GGML_SYCL_DEBUG("alloc %lu return %p actual size=%lu\n", size * sizeof(T), ptr, this->actual_size);
         return ptr;
     }
 
@@ -8297,6 +8350,14 @@ int get_sycl_env(const char* env_name, int default_val){
             user_number=default_val;
         }
     return user_number;
+}
+
+int get_work_group_size(int user_device_id){
+    dpct::device_info prop;
+    dpct::get_device_info(
+        prop,
+        dpct::dev_mgr::instance().get_device(user_device_id));
+    return prop.get_max_work_group_size();
 }
 
 void ggml_init_sycl() try {
@@ -8403,9 +8464,10 @@ void ggml_init_sycl() try {
                         dpct::get_current_device().create_queue()));
             }
 
+            const dpct::queue_ptr stream = g_syclStreams[device_inx][0];
             // create sycl handle
             SYCL_CHECK(CHECK_TRY_ERROR(g_sycl_handles[device_inx] =
-                                              &dpct::get_in_order_queue()));
+                                              stream));
             /*
             DPCT1027:89: The call to syclSetMathMode was replaced with 0
             because this functionality is redundant in SYCL.
@@ -8420,6 +8482,7 @@ void ggml_init_sycl() try {
         g_device_count = 1;
         ggml_sycl_set_main_device(user_device_id);
         ggml_sycl_set_device(user_device_id);
+        g_work_group_size = get_work_group_size(user_device_id);
         fprintf(stderr, "Using Device %d\n", user_device_id);
 
         // for (int id = 0; id < g_all_sycl_device_count; ++id) {
@@ -8468,6 +8531,7 @@ void *ggml_sycl_host_malloc(size_t size) try {
     }
 
     void * ptr = nullptr;
+    //allow to use dpct::get_in_order_queue() for host malloc
     dpct::err0 err = CHECK_TRY_ERROR(
         ptr = (void *)sycl::malloc_host(size, dpct::get_in_order_queue()));
     /*
@@ -8504,6 +8568,7 @@ catch (sycl::exception const &exc) {
 }
 
 void ggml_sycl_host_free(void *ptr) try {
+    //allow to use dpct::get_in_order_queue() for host malloc
     SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(ptr, dpct::get_in_order_queue())));
 }
 catch (sycl::exception const &exc) {
@@ -9595,16 +9660,14 @@ static void ggml_sycl_op_flatten(const ggml_tensor *src0,
 
     ggml_sycl_set_device(g_main_device);
     dpct::queue_ptr main_stream = g_syclStreams[g_main_device_index][0];
-    GGML_SYCL_DEBUG("g_main_device_index=%d, src0=%p main_stream=%p src0_on_device=%d\n",
-        g_main_device_index, src0, main_stream, src0_on_device);
+    // GGML_SYCL_DEBUG("g_main_device_index=%d, main_stream=%p src0_on_device=%d, src1_on_device=%d, dst_on_device=%d\n",
+        // g_main_device_index, main_stream, src0_on_device, src1_on_device, dst_on_device);
 
     if (src0_on_device) {
         src0_ddf = (float *) src0_extra->data_device[g_main_device_index];
     } else {
         src0_ddf = src0_f.alloc(ggml_nelements(src0));
-        GGML_SYCL_DEBUG("g_main_device_index=%d, src0_ddf=%p\n", g_main_device_index, src0_ddf);
-
-        GGML_SYCL_DEBUG("before ggml_sycl_cpy_tensor_2d src0_ddf=%p, src0=%p\n", src0_ddf, src0);
+        // GGML_SYCL_DEBUG("before ggml_sycl_cpy_tensor_2d src0_ddf=%p, src0=%p\n", src0_ddf, src0);
         SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src0_ddf, src0, 0, 0, 0, nrows0, main_stream));
     }
 
@@ -9613,7 +9676,7 @@ static void ggml_sycl_op_flatten(const ggml_tensor *src0,
             src1_ddf = (float *) src1_extra->data_device[g_main_device_index];
         } else {
             src1_ddf = src1_f.alloc(ggml_nelements(src1));
-            SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src1_ddf, src1, 0, 0, 0, nrows1, main_stream));
+            // SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src1_ddf, src1, 0, 0, 0, nrows1, main_stream));
         }
     }
     if (dst_on_device) {
@@ -9622,8 +9685,8 @@ static void ggml_sycl_op_flatten(const ggml_tensor *src0,
         dst_ddf = dst_f.alloc(ggml_nelements(dst));
     }
 
-    GGML_SYCL_DEBUG("op src0=%p, src1=%p, dst=%p, src0_ddf=%p, src1_ddf=%p, dst_ddf=%p, main_stream=%p\n",
-        src0, src1, dst, src0_ddf, src1_ddf, dst_ddf, main_stream);
+    // GGML_SYCL_DEBUG("op src0=%p, src1=%p, dst=%p, src0_ddf=%p, src1_ddf=%p, dst_ddf=%p, main_stream=%p\n",
+        // src0, src1, dst, src0_ddf, src1_ddf, dst_ddf, main_stream);
     // do the computation
     op(src0, src1, dst, src0_ddf, src1_ddf, dst_ddf, main_stream);
     /*
@@ -9642,13 +9705,12 @@ static void ggml_sycl_op_flatten(const ggml_tensor *src0,
         SYCL_CHECK(CHECK_TRY_ERROR(
             dpct::get_current_device().queues_wait_and_throw()));
     }
+    // print_ggml_tensor("tensor", dst);
 }
 catch (sycl::exception const &exc) {
 
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
             << ", line:" << __LINE__ << std::endl;
-  int *foo = (int*)-1;
-  printf("%d\n", *foo);
   std::exit(1);
 }
 
@@ -10479,21 +10541,21 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 
     if (!split && all_on_device && !use_xmx && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
         // KQ single-batch
-        GGML_SYCL_DEBUG("ggml_sycl_mul_mat_vec_p021\n");
+        // GGML_SYCL_DEBUG("ggml_sycl_mul_mat_vec_p021\n");
         ggml_sycl_mul_mat_vec_p021(src0, src1, dst);
     } else if (!split && all_on_device && !use_xmx && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
         // KQV single-batch
-        GGML_SYCL_DEBUG("ggml_sycl_mul_mat_vec_nc\n");
+        // GGML_SYCL_DEBUG("ggml_sycl_mul_mat_vec_nc\n");
         ggml_sycl_mul_mat_vec_nc(src0, src1, dst);
     } else if (!split && all_on_device && use_xmx && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1)) {
         // KQ + KQV multi-batch
-        GGML_SYCL_DEBUG("ggml_sycl_mul_mat_mat_batched_sycl\n");
+        // GGML_SYCL_DEBUG("ggml_sycl_mul_mat_mat_batched_sycl\n");
         ggml_sycl_mul_mat_mat_batched_sycl(src0, src1, dst);
     } else if (src0->type == GGML_TYPE_F32) {
-        GGML_SYCL_DEBUG("ggml_sycl_op_mul_mat\n");
+        // GGML_SYCL_DEBUG("ggml_sycl_op_mul_mat\n");
         ggml_sycl_op_mul_mat(src0, src1, dst, ggml_sycl_op_mul_mat_sycl, false);
     } else if (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16) {
-        GGML_SYCL_DEBUG("ggml_is_quantized or GGML_TYPE_F16\n");
+        // GGML_SYCL_DEBUG("ggml_is_quantized or GGML_TYPE_F16\n");
         if (src1->ne[1] == 1 && src0->ne[0] % GGML_SYCL_DMMV_X == 0) {
 #ifdef GGML_SYCL_FORCE_DMMV
             const bool use_mul_mat_vec_q = false;
@@ -10994,6 +11056,7 @@ void ggml_sycl_transform_tensor(void *data, struct ggml_tensor *tensor) try {
             continue;
         }
         ggml_sycl_set_device(get_device_id_by_index(id));
+        const dpct::queue_ptr stream = g_syclStreams[id][0];
 
         int64_t row_low, row_high;
         if (backend == GGML_BACKEND_GPU) {
@@ -11031,20 +11094,20 @@ void ggml_sycl_transform_tensor(void *data, struct ggml_tensor *tensor) try {
 
         char * buf;
         SYCL_CHECK(CHECK_TRY_ERROR(buf = (char *)sycl::malloc_device(
-                                        size, dpct::get_in_order_queue())));
+                                        size, *stream)));
         char * buf_host = (char *)data + offset_split;
 
         // set padding to 0 to avoid possible NaN values
         if (size > original_size) {
             SYCL_CHECK(CHECK_TRY_ERROR(
-                dpct::get_in_order_queue()
-                    .memset(buf + original_size, 0, size - original_size)
-                    .wait()));
+                (*stream)
+                .memset(buf + original_size, 0, size - original_size)
+                .wait()));
         }
 
-        SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_in_order_queue()
-                                        .memcpy(buf, buf_host, original_size)
-                                        .wait()));
+        SYCL_CHECK(CHECK_TRY_ERROR((*stream)
+                                    .memcpy(buf, buf_host, original_size)
+                                    .wait()));
 
         extra->data_device[id] = buf;
 
@@ -11072,10 +11135,10 @@ void ggml_sycl_free_data(struct ggml_tensor *tensor) try {
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
     for (int64_t id = 0; id < g_device_count; ++id) {
+        const dpct::queue_ptr stream = g_syclStreams[id][0];
         if (extra->data_device[id] != nullptr) {
             SYCL_CHECK(ggml_sycl_set_device(get_device_id_by_index(id)));
-            SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(
-                extra->data_device[id], dpct::get_in_order_queue())));
+            SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(extra->data_device[id], *stream)));
         }
 
         for (int64_t is = 0; is < MAX_STREAMS; ++is) {
@@ -11142,6 +11205,8 @@ static void ggml_sycl_assign_buffers_impl(struct ggml_tensor *tensor,
     const size_t size = ggml_nbytes(tensor);
 
     SYCL_CHECK(ggml_sycl_set_device(g_main_device));
+    const dpct::queue_ptr stream = g_syclStreams[g_main_device_index][0];
+
     if (inplace && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT)) {
         ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src[0]->extra;
         char * src0_ddc = (char *) src0_extra->data_device[g_main_device_index];
@@ -11166,7 +11231,7 @@ static void ggml_sycl_assign_buffers_impl(struct ggml_tensor *tensor,
         if (data == nullptr) {
             SYCL_CHECK(CHECK_TRY_ERROR(
                 data = (char *)sycl::malloc_device(
-                    g_scratch_size, dpct::get_in_order_queue())));
+                    g_scratch_size, *stream)));
             g_scratch_buffer = data;
         }
         extra = ggml_sycl_alloc_temp_tensor_extra();
@@ -11178,9 +11243,9 @@ static void ggml_sycl_assign_buffers_impl(struct ggml_tensor *tensor,
     } else { // allocate new buffers outside of scratch
         void * data;
         SYCL_CHECK(CHECK_TRY_ERROR(data = (void *)sycl::malloc_device(
-                                        size, dpct::get_in_order_queue())));
+                                        size, *stream)));
         SYCL_CHECK(CHECK_TRY_ERROR(
-            dpct::get_in_order_queue().memset(data, 0, size).wait()));
+            (*stream).memset(data, 0, size).wait()));
         extra = new ggml_tensor_extra_gpu;
         memset(extra, 0, sizeof(*extra));
         extra->data_device[g_main_device_index] = data;
@@ -11201,9 +11266,10 @@ void ggml_sycl_assign_scratch_offset(struct ggml_tensor *tensor,
     }
     if (g_scratch_buffer == nullptr) {
         ggml_sycl_set_device(g_main_device);
+        const dpct::queue_ptr stream = g_syclStreams[g_main_device_index][0];
         SYCL_CHECK(
             CHECK_TRY_ERROR(g_scratch_buffer = (void *)sycl::malloc_device(
-                                 g_scratch_size, dpct::get_in_order_queue())));
+                                 g_scratch_size, *stream)));
     }
 
     ggml_tensor_extra_gpu * extra = ggml_sycl_alloc_temp_tensor_extra();
@@ -11236,7 +11302,8 @@ void ggml_sycl_copy_to_device(struct ggml_tensor *tensor) try {
 
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
     SYCL_CHECK(ggml_sycl_set_device(g_main_device));
-    SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_in_order_queue()
+    const dpct::queue_ptr stream = g_syclStreams[g_main_device_index][0];
+    SYCL_CHECK(CHECK_TRY_ERROR((*stream)
                                     .memcpy(extra->data_device[g_main_device_index],
                                             tensor->data, ggml_nbytes(tensor))
                                     .wait()));
@@ -11300,9 +11367,11 @@ void ggml_sycl_free_scratch() try {
     if (g_scratch_buffer == nullptr) {
         return;
     }
+    ggml_sycl_set_device(g_main_device);
+    const dpct::queue_ptr stream = g_syclStreams[g_main_device_index][0];
 
     SYCL_CHECK(CHECK_TRY_ERROR(
-        sycl::free(g_scratch_buffer, dpct::get_in_order_queue())));
+        sycl::free(g_scratch_buffer, *stream)));
     g_scratch_buffer = nullptr;
 }
 catch (sycl::exception const &exc) {
@@ -11533,8 +11602,12 @@ struct ggml_backend_buffer_context_sycl {
 static void
 ggml_backend_sycl_buffer_free_buffer(ggml_backend_buffer_t buffer) try {
     ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
+    ggml_sycl_set_device(ctx->device);
+    int device_index = get_device_index_by_id(ctx->device);
+    const dpct::queue_ptr stream = g_syclStreams[device_index][0];
+
     SYCL_CHECK(
-        CHECK_TRY_ERROR(sycl::free(ctx->dev_ptr, dpct::get_in_order_queue())));
+        CHECK_TRY_ERROR(sycl::free(ctx->dev_ptr, *stream)));
     delete ctx;
 }
 catch (sycl::exception const &exc) {
@@ -11599,11 +11672,13 @@ static void ggml_backend_sycl_buffer_set_tensor(ggml_backend_buffer_t buffer,
     ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
 
     ggml_sycl_set_device(ctx->device);
+    int device_index = get_device_index_by_id(ctx->device);
+    const dpct::queue_ptr stream = g_syclStreams[device_index][0];
     SYCL_CHECK(
         CHECK_TRY_ERROR(dpct::get_current_device().queues_wait_and_throw()));
 
     SYCL_CHECK(
-        CHECK_TRY_ERROR(dpct::get_in_order_queue()
+        CHECK_TRY_ERROR((*stream)
                              .memcpy((char *)tensor->data + offset, data, size)
                              .wait()));
 }
@@ -11622,11 +11697,14 @@ static void ggml_backend_sycl_buffer_get_tensor(ggml_backend_buffer_t buffer,
     ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
 
     ggml_sycl_set_device(ctx->device);
+    int device_index = get_device_index_by_id(ctx->device);
+    const dpct::queue_ptr stream = g_syclStreams[device_index][0];
+
     SYCL_CHECK(
         CHECK_TRY_ERROR(dpct::get_current_device().queues_wait_and_throw()));
 
     SYCL_CHECK(CHECK_TRY_ERROR(
-        dpct::get_in_order_queue()
+        (*stream)
             .memcpy(data, (const char *)tensor->data + offset, size)
             .wait()));
 }
@@ -11641,10 +11719,12 @@ static void ggml_backend_sycl_buffer_clear(ggml_backend_buffer_t buffer,
     ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
 
     ggml_sycl_set_device(ctx->device);
+    int device_index = get_device_index_by_id(ctx->device);
+    const dpct::queue_ptr stream = g_syclStreams[device_index][0];
     SYCL_CHECK(
         CHECK_TRY_ERROR(dpct::get_current_device().queues_wait_and_throw()));
 
-    SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_in_order_queue()
+    SYCL_CHECK(CHECK_TRY_ERROR((*stream)
                                     .memset(ctx->dev_ptr, value, buffer->size)
                                     .wait()));
 }
@@ -11673,12 +11753,13 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     int device = (int) (intptr_t) buft->context;
 
     ggml_sycl_set_device(device);
-
+    int device_index = get_device_index_by_id(device);
+    const dpct::queue_ptr stream = g_syclStreams[device_index][0];
     size = std::max(size, (size_t)1); // syclMalloc returns null for size 0
 
     void * dev_ptr;
     SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_device(
-                                    size, dpct::get_in_order_queue())));
+                                    size, *stream)));
 
     ggml_backend_buffer_context_sycl * ctx = new ggml_backend_buffer_context_sycl(device, dev_ptr);
 
