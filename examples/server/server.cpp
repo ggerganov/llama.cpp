@@ -2956,7 +2956,7 @@ int main(int argc, char **argv)
                 res.set_content(R"({"status": "ok"})", "application/json");
                 res.status = 200; // HTTP OK
                 break;
-            case LOADING:
+            case LOADING_MODEL:
                 res.set_content(R"({"status": "loading model"})", "application/json");
                 res.status = 503; // HTTP Service Unavailable
                 break;
