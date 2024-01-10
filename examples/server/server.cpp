@@ -2938,7 +2938,13 @@ int main(int argc, char **argv)
             });
 
 
-
+    svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        // Perform necessary internal status checks here
+        // For demonstration purposes, we'll simply return a status of 'ok'
+        res.set_content(R"({"status": "ok"})", "application/json");
+        res.status = 200; // HTTP OK
+    });
+    
     svr.Get("/v1/models", [&params](const httplib::Request&, httplib::Response& res)
             {
                 std::time_t t = std::time(0);
