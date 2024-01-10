@@ -63,6 +63,10 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
 // user-code should use only these functions
 //
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // forward declaration
 typedef struct ggml_backend * ggml_backend_t;
 
@@ -71,3 +75,7 @@ GGML_API ggml_backend_t ggml_backend_kompute_init(void);
 GGML_API bool ggml_backend_is_kompute(ggml_backend_t backend);
 
 GGML_API ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(void);
+
+#ifdef __cplusplus
+}
+#endif
