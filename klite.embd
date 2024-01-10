@@ -7600,7 +7600,7 @@ Current version: 105
 		localsettings.rep_pen_slope = cleannum(localsettings.rep_pen_slope, 0, 20);
 		localsettings.top_p = cleannum(localsettings.top_p, 0.002, 1);
 		localsettings.min_p = cleannum(localsettings.min_p, 0.0, 1);
-		localsettings.dynatemp_range = cleannum(localsettings.dynatemp_range, 0.0, 2.0);
+		localsettings.dynatemp_range = cleannum(localsettings.dynatemp_range, 0.0, 5);
 		localsettings.presence_penalty = cleannum(localsettings.presence_penalty, -2, 2);
 		localsettings.top_k = cleannum(Math.floor(localsettings.top_k), 0, 300);
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
