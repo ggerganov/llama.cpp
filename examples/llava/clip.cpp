@@ -126,24 +126,7 @@ static struct ggml_tensor * get_tensor(struct ggml_context * ctx, const std::str
 }
 
 static std::string get_ftype(int ftype) {
-    switch (ftype) {
-    case 0:
-        return "f32";
-    case 1:
-        return "f16";
-    case 2:
-        return "q4_0";
-    case 3:
-        return "q4_1";
-    case 6:
-        return "q5_0";
-    case 7:
-        return "q5_1";
-    case 8:
-        return "q8_0";
-    default:
-        throw std::runtime_error(format("%s: Unrecognized file type: %d\n", __func__, ftype));
-    }
+    return ggml_type_name(static_cast<ggml_type>(ftype));
 }
 
 //
@@ -533,6 +516,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     buffer_size += n_tensors * 128 /* CLIP PADDING */;
 
     clip_ctx * new_clip = new clip_ctx;
+
 #ifdef GGML_USE_CUBLAS
     new_clip->backend = ggml_backend_cuda_init(0);
     printf("%s: CLIP using CUDA backend\n", __func__);
@@ -542,6 +526,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     new_clip->backend = ggml_backend_metal_init();
     printf("%s: CLIP using Metal backend\n", __func__);
 #endif
+
 
     if (!new_clip->backend) {
         new_clip->backend = ggml_backend_cpu_init();
@@ -931,26 +916,8 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 
     ggml_type type = GGML_TYPE_Q4_1;
 
-    switch (itype) {
-        case 2:
-            type = GGML_TYPE_Q4_0;
-            break;
-        case 3:
-            type = GGML_TYPE_Q4_1;
-            break;
-        case 6:
-            type = GGML_TYPE_Q5_0;
-            break;
-        case 7:
-            type = GGML_TYPE_Q5_1;
-            break;
-        case 8:
-            type = GGML_TYPE_Q8_0;
-            break;
-        default:
-            fprintf(stderr, "%s: invalid quantization type %d\n", __func__, itype);
-            return false;
-    };
+    assert(itype < GGML_TYPE_COUNT);
+    type = static_cast<ggml_type>(itype);
 
     auto * ctx_clip = clip_model_load(fname_inp, 2);
 
@@ -1010,6 +977,10 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 
         if (quantize) {
             new_type = type;
+            if (new_type >= GGML_TYPE_Q2_K && name.find("embd") != std::string::npos) {
+                new_type = GGML_TYPE_Q8_0; // ggml_get_rows needs non K type
+                // fprintf(stderr, "%s: quantizing %s to %s\n", __func__, name.c_str(), ggml_type_name(new_type));
+            }
             const size_t n_elms = ggml_nelements(cur);
             float * f32_data;
 
@@ -1053,6 +1024,21 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
                 } break;
                 case GGML_TYPE_Q8_0: {
                     new_size = ggml_quantize_q8_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q2_K: {
+                    new_size = ggml_quantize_q2_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q3_K: {
+                    new_size = ggml_quantize_q3_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q4_K: {
+                    new_size = ggml_quantize_q4_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q5_K: {
+                    new_size = ggml_quantize_q5_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q6_K: {
+                    new_size = ggml_quantize_q6_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
                 } break;
                 default: {
                     fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, new_type);
