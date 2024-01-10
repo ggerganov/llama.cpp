@@ -409,7 +409,7 @@ class Metadata:
         metadata.url = data.get("general.url")
         metadata.description = data.get("general.description")
         metadata.license = data.get("general.license")
- 
+
         return metadata
 
 
@@ -1327,7 +1327,7 @@ def model_parameter_count_rounded_notation(model_params_count: int) -> str:
         # Millions Of Parameters
         scaled_model_params = model_params_count * 1e-6
         scale_suffix = "M"
-    else: 
+    else:
         # Thousands Of Parameters
         scaled_model_params = model_params_count * 1e-3
         scale_suffix = "K"
@@ -1523,9 +1523,9 @@ class VocabFactory:
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType, params: Params, model_params_count: int, metadata: Metadata) -> Path:
     quantization = {
-        GGMLFileType.AllF32:    "f32",
-        GGMLFileType.MostlyF16: "f16",
-        GGMLFileType.MostlyQ8_0: "q8_0",
+        GGMLFileType.AllF32:    "F32",
+        GGMLFileType.MostlyF16: "F16",
+        GGMLFileType.MostlyQ8_0: "Q8_0",
     }[file_type]
 
     parameters = model_parameter_count_rounded_notation(model_params_count)
