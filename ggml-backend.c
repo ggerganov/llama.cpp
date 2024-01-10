@@ -314,6 +314,12 @@ static void ggml_backend_registry_init(void) {
     extern ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void);
     ggml_backend_register("Metal", ggml_backend_reg_metal_init, ggml_backend_metal_buffer_type(), NULL);
 #endif
+
+#ifdef GGML_USE_KOMPUTE
+    extern ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data);
+    extern ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(void);
+    ggml_backend_register("Kompute", ggml_backend_reg_kompute_init, ggml_backend_kompute_buffer_type(), NULL);
+#endif
 }
 
 void ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data) {
