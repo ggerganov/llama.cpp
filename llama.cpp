@@ -4514,6 +4514,31 @@ struct llm_build_context {
                     LLAMA_LOG_INFO(")\n");
                 }
             }
+            LLAMA_LOG_INFO("%s: \tSource tensor [", __func__);
+            switch (t->op) {
+                case GGML_OP_VIEW:
+                case GGML_OP_RMS_NORM:
+                case GGML_OP_RESHAPE:
+                case GGML_OP_CPY:
+                case GGML_OP_TRANSPOSE:
+                case GGML_OP_PERMUTE:
+                case GGML_OP_CONT:
+                case GGML_OP_UNARY:
+                    LLAMA_LOG_INFO("%s", t->src[0]->name);
+                    break;
+                case GGML_OP_ROPE:
+                case GGML_OP_GET_ROWS:
+                case GGML_OP_MUL:
+                case GGML_OP_MUL_MAT:
+                case GGML_OP_SOFT_MAX:
+                case GGML_OP_ADD:
+                    LLAMA_LOG_INFO("%s, %s", t->src[0]->name, t->src[1]->name);
+                    break;
+                default:
+                    LLAMA_LOG_INFO("Unknown OP [%s]\n", ggml_op_string(t->op));
+                    exit(-1);
+            }
+            LLAMA_LOG_INFO("]\n");
         }
         exit(-1);
 
