@@ -376,6 +376,11 @@ struct test_case {
 
         // allocate
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend1);
+        if (buf == NULL) {
+            printf("failed to allocate tensors [%s] ", ggml_backend_name(backend1));
+            ggml_free(ctx);
+            return false;
+        }
 
         // build graph
         ggml_build_forward_expand(gf, out);
@@ -463,19 +468,23 @@ struct test_case {
             GGML_UNUSED(index);
         };
 
-        ggml_backend_compare_graph_backend(backend1, backend2, gf, callback, &ud);
+        const bool cmp_ok = ggml_backend_compare_graph_backend(backend1, backend2, gf, callback, &ud);
 
-        if (ud.ok) {
-            printf("\033[1;32mOK\033[0m\n");
-        } else {
-            printf("\033[1;31mFAIL\033[0m\n");
+        if (!cmp_ok) {
+            printf("compare failed ");
         }
 
         ggml_backend_buffer_free(buf);
 
         ggml_free(ctx);
 
-        return ud.ok;
+        if (ud.ok && cmp_ok) {
+            printf("\033[1;32mOK\033[0m\n");
+            return true;
+        }
+
+        printf("\033[1;31mFAIL\033[0m\n");
+        return false;
     }
 
     bool eval_perf(ggml_backend_t backend, const char * op_name) {
@@ -519,6 +528,11 @@ struct test_case {
 
         // allocate
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
+        if (buf == NULL) {
+            printf("failed to allocate tensors\n");
+            ggml_free(ctx);
+            return false;
+        }
 
         // randomize tensors
         initialize_tensors(ctx);

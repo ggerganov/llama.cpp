@@ -229,6 +229,7 @@ void ggml_tallocr_reset(ggml_tallocr_t alloc) {
         alloc->free_blocks[0].size = SIZE_MAX/2; // restrict maximum size of a measure allocator to half size_t max to avoid overflows
     } else {
         alloc->free_blocks[0].size = ggml_backend_buffer_get_size(alloc->buffer) - align_offset;
+        ggml_backend_buffer_reset(alloc->buffer);
     }
 }
 
@@ -779,10 +780,21 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
 
     if (nbytes == 0) {
         // all the tensors in the context are already allocated
+#ifndef NDEBUG
+        fprintf(stderr, "%s: all tensors in the context are already allocated\n", __func__);
+#endif
         return NULL;
     }
 
     ggml_backend_buffer_t buffer = ggml_backend_buft_alloc_buffer(buft, nbytes);
+    if (buffer == NULL) {
+        // failed to allocate buffer
+#ifndef NDEBUG
+        fprintf(stderr, "%s: failed to allocate buffer\n", __func__);
+#endif
+        return NULL;
+    }
+
     ggml_tallocr_t tallocr = ggml_tallocr_new_from_buffer(buffer);
 
     for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
