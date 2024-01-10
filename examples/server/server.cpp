@@ -2801,6 +2801,8 @@ int main(int argc, char **argv)
 
     httplib::Server svr;
 
+    ServerState server_state = LOADING_MODEL;
+
     svr.set_default_headers({{"Server", "llama.cpp"},
                              {"Access-Control-Allow-Origin", "*"},
                              {"Access-Control-Allow-Headers", "content-type"}});
@@ -2823,7 +2825,6 @@ int main(int argc, char **argv)
     });
 
 
-    ServerState server_state = LOADING_MODEL;
     // load the model
     if (!llama.load_model(params))
     {
