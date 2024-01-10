@@ -491,9 +491,11 @@ void ggml_vk_free_memory(ggml_vk_memory &memory)
 
 static
 ggml_vk_memory * ggml_vk_find_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t, uint64_t & offset) {
+    ggml_backend_buffer_t buffer = t->view_src ? t->view_src->buffer : t->buffer;
+
     // compatibility with ggml-backend
-    if (t->buffer && t->buffer->buft == ggml_backend_kompute_buffer_type()) {
-        ggml_vk_memory * buf_ctx = (ggml_vk_memory *) t->buffer->context;
+    if (buffer && buffer->buft == ggml_backend_kompute_buffer_type()) {
+        ggml_vk_memory * buf_ctx = (ggml_vk_memory *) buffer->context;
 
         const intptr_t ioffs = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(buf_ctx->data);
 
