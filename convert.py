@@ -409,6 +409,8 @@ class Metadata:
         metadata.url = data.get("general.url")
         metadata.description = data.get("general.description")
         metadata.license = data.get("general.license")
+        metadata.source_url = data.get("general.source_url")
+        metadata.source_hf_repo = data.get("general.source_hf_repo")
 
         return metadata
 
