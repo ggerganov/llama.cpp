@@ -10092,9 +10092,13 @@ struct ggml_backend_cuda_split_buffer_context {
         for (ggml_tensor_extra_gpu * extra : tensor_extras) {
             for (int id = 0; id < g_device_count; ++id) {
                 for (int64_t is = 0; is < MAX_STREAMS; ++is) {
-                    CUDA_CHECK(cudaEventDestroy(extra->events[id][is]));
+                    if (extra->events[id][is] != nullptr) {
+                        CUDA_CHECK(cudaEventDestroy(extra->events[id][is]));
+                    }
                 }
-                CUDA_CHECK(cudaFree(extra->data_device[id]));
+                if (extra->data_device[id] != nullptr) {
+                    CUDA_CHECK(cudaFree(extra->data_device[id]));
+                }
             }
             delete extra;
         }
