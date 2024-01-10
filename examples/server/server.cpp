@@ -39,7 +39,6 @@ using json = nlohmann::json;
 struct server_params
 {
     std::string hostname = "127.0.0.1";
-    std::string api_key_file;
     std::vector<std::string> api_keys;
     std::string public_path = "examples/server/public";
     int32_t port = 8080;
@@ -2092,7 +2091,19 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            sparams.api_key_file = argv[i];
+            std::ifstream key_file(argv[i]);
+            if (!key_file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            std::string key;
+            while (std::getline(key_file, key)) {
+               if (key.size() > 0) {
+                   sparams.api_keys.push_back(key);
+               }
+            }
+            key_file.close();
         }
         else if (arg == "--timeout" || arg == "-to")
         {
@@ -2790,18 +2801,6 @@ int main(int argc, char **argv)
 
     server_params_parse(argc, argv, sparams, params, llama);
 
-    // load api keys from file
-    if (!sparams.api_key_file.empty()) {
-        std::ifstream key_file(sparams.api_key_file);
-        std::string key;
-        while (std::getline(key_file, key)) {
-            if (key.size() > 0) {
-                sparams.api_keys.push_back(key);
-            }
-        }
-        key_file.close();
-    }
-
     if (params.model_alias == "unknown")
     {
         params.model_alias = params.model;
@@ -2907,7 +2906,7 @@ int main(int argc, char **argv)
     if (sparams.api_keys.size() == 1) {
         log_data["api_key"] = "api_key: ****" + sparams.api_keys[0].substr(sparams.api_keys[0].length() - 4);
     } else if (sparams.api_keys.size() > 1) {
-        log_data["api_key"] = "api_key: " + (sparams.api_key_file.empty() ? "" : sparams.api_key_file + " ") + "(" + std::to_string(sparams.api_keys.size()) + " keys loaded)";
+        log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
     }
 
     LOG_INFO("HTTP server listening", log_data);
