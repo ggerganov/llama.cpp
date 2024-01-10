@@ -2824,17 +2824,41 @@ int main(int argc, char **argv)
         }
     });
 
+    LOG_INFO("HTTP server listening", log_data);
+    // run the HTTP server in a thread - see comment below
+    std::thread t([&]()
+            {
+                if (!svr.listen_after_bind())
+                {
+                    server_state = ERROR;
+                    return 1;
+                }
+
+                return 0;
+            });
+
+    // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
+    //     "Bus error: 10" - this is on macOS, it does not crash on Linux
+    //std::thread t2([&]()
+    {
+        bool running = true;
+        while (running)
+        {
+            running = llama.update_slots();
+        }
+    }
+    //);
+
 
     // load the model
     if (!llama.load_model(params))
     {
         server_state = ERROR;
         return 1;
+    } else {
+        llama.initialize();
+        server_state = READY;
     }
-
-    llama.initialize();
-    server_state = READY;
-
 
     // Middleware for API key validation
     auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
@@ -3251,30 +3275,6 @@ int main(int argc, char **argv)
     if (!sparams.api_key.empty()) {
         log_data["api_key"] = "api_key: ****" + sparams.api_key.substr(sparams.api_key.length() - 4);
     }
-
-    LOG_INFO("HTTP server listening", log_data);
-    // run the HTTP server in a thread - see comment below
-    std::thread t([&]()
-            {
-                if (!svr.listen_after_bind())
-                {
-                    return 1;
-                }
-
-                return 0;
-            });
-
-    // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
-    //     "Bus error: 10" - this is on macOS, it does not crash on Linux
-    //std::thread t2([&]()
-    {
-        bool running = true;
-        while (running)
-        {
-            running = llama.update_slots();
-        }
-    }
-    //);
 
     t.join();
 
