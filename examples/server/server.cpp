@@ -2801,6 +2801,28 @@ int main(int argc, char **argv)
 
     httplib::Server svr;
 
+    svr.set_default_headers({{"Server", "llama.cpp"},
+                             {"Access-Control-Allow-Origin", "*"},
+                             {"Access-Control-Allow-Headers", "content-type"}});
+
+    svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        switch(server_state) {
+            case READY:
+                res.set_content(R"({"status": "ok"})", "application/json");
+                res.status = 200; // HTTP OK
+                break;
+            case LOADING_MODEL:
+                res.set_content(R"({"status": "loading model"})", "application/json");
+                res.status = 503; // HTTP Service Unavailable
+                break;
+            case ERROR:
+                res.set_content(R"({"status": "error", "error": "Model failed to load"})", "application/json");
+                res.status = 500; // HTTP Internal Server Error
+                break;
+        }
+    });
+
+
     ServerState server_state = LOADING_MODEL;
     // load the model
     if (!llama.load_model(params))
@@ -2839,9 +2861,6 @@ int main(int argc, char **argv)
         return false;
     };
 
-    svr.set_default_headers({{"Server", "llama.cpp"},
-                             {"Access-Control-Allow-Origin", "*"},
-                             {"Access-Control-Allow-Headers", "content-type"}});
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const httplib::Request &, httplib::Response &res)
@@ -2949,24 +2968,6 @@ int main(int argc, char **argv)
                     res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
                 }
             });
-
-
-    svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
-        switch(server_state) {
-            case READY:
-                res.set_content(R"({"status": "ok"})", "application/json");
-                res.status = 200; // HTTP OK
-                break;
-            case LOADING_MODEL:
-                res.set_content(R"({"status": "loading model"})", "application/json");
-                res.status = 503; // HTTP Service Unavailable
-                break;
-            case ERROR:
-                res.set_content(R"({"status": "error", "error": "Model failed to load"})", "application/json");
-                res.status = 500; // HTTP Internal Server Error
-                break;
-        }
-    });
 
 
     svr.Get("/v1/models", [&params](const httplib::Request&, httplib::Response& res)
