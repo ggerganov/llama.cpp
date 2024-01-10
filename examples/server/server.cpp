@@ -2901,18 +2901,6 @@ int main(int argc, char **argv)
                 return 0;
             });
 
-    // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
-    //     "Bus error: 10" - this is on macOS, it does not crash on Linux
-    //std::thread t2([&]()
-    {
-        bool running = true;
-        while (running)
-        {
-            running = llama.update_slots();
-        }
-    }
-    //);
-
 
     // load the model
     if (!llama.load_model(params))
@@ -3276,6 +3264,18 @@ int main(int argc, char **argv)
                 task_result result = llama.next_result(task_id);
                 return res.set_content(result.result_json.dump(), "application/json; charset=utf-8");
             });
+
+    // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
+    //     "Bus error: 10" - this is on macOS, it does not crash on Linux
+    //std::thread t2([&]()
+    {
+        bool running = true;
+        while (running)
+        {
+            running = llama.update_slots();
+        }
+    }
+    //);
 
     t.join();
 
