@@ -485,7 +485,7 @@ int main(int argc, char ** argv) {
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (!embd.empty()) {
-            // Note: n_ctx - 4 here is to match the logic for commandline prompt handling via
+            // Note: (n_ctx - 4) here is to match the logic for commandline prompt handling via
             // --prompt or --file which uses the same value.
             int max_embd_size = n_ctx - 4;
 
@@ -500,10 +500,11 @@ int main(int argc, char ** argv) {
                 fflush(stdout);
             }
 
-            // infinite text generation via context swapping
+            // infinite text generation via context swapping UNLESS n_predict == -2
             // if we run out of context:
             // - take the n_keep first tokens from the original prompt (via n_past)
             // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
+
             if (n_past + (int) embd.size() + std::max<int>(0, guidance_offset) > n_ctx) {
                 if (params.n_predict == -2) {
                     LOG_TEE("\n\n%s: context full and n_predict == -%d => stopping\n", __func__, params.n_predict);
@@ -611,12 +612,16 @@ int main(int argc, char ** argv) {
                 n_past += n_eval;
 
                 LOG("n_past = %d\n", n_past);
+                // I added the next two lines on 20240110
+                if (n_past % 256 == 0) {
+                    printf("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
+                }
             }
 
             if (!embd.empty() && !path_session.empty()) {
                 session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
                 n_session_consumed = session_tokens.size();
-            }
+                }
         }
 
         embd.clear();
