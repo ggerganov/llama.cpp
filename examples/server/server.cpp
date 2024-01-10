@@ -2799,11 +2799,11 @@ int main(int argc, char **argv)
                                 {"system_info", llama_print_system_info()},
                             });
     
-    server_state = LOADING_MODEL;
+    ServerState server_state = LOADING_MODEL;
     // load the model
     if (!llama.load_model(params))
     {
-        server_state = ERRPR;
+        server_state = ERROR;
         return 1;
     }
 
