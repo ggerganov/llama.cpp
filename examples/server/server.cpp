@@ -2798,7 +2798,9 @@ int main(int argc, char **argv)
                                 {"total_threads", std::thread::hardware_concurrency()},
                                 {"system_info", llama_print_system_info()},
                             });
-    
+
+    httplib::Server svr;
+
     ServerState server_state = LOADING_MODEL;
     // load the model
     if (!llama.load_model(params))
@@ -2810,7 +2812,6 @@ int main(int argc, char **argv)
     llama.initialize();
     server_state = READY;
 
-    httplib::Server svr;
 
     // Middleware for API key validation
     auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
