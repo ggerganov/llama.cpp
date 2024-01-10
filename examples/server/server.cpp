@@ -3242,9 +3242,8 @@ int main(int argc, char **argv)
     if (sparams.api_keys.size() == 1) {
         log_data["api_key"] = "api_key: ****" + sparams.api_keys[0].substr(sparams.api_keys[0].length() - 4);
     } else if (sparams.api_keys.size() > 1) {
-        log_data["api_key"] = "api_key: " + (sparams.api_key_file.empty() ? "" : sparams.api_key_file + " ")+ "(" + std::to_string(sparams.api_keys.size()) + " keys loaded)";
+        log_data["api_key"] = "api_key: " + (sparams.api_key_file.empty() ? "" : sparams.api_key_file + " ") + "(" + std::to_string(sparams.api_keys.size()) + " keys loaded)";
     }
-
 
     LOG_INFO("HTTP server listening", log_data);
     // run the HTTP server in a thread - see comment below
