@@ -1006,7 +1006,7 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
     // pass 2: assign backends to ops from current assignments
     // start from the end and assign the same backend to previous ops
 
-    // expand gpu backends (ie non last prio) up and down, ignoring cpu
+    // expand gpu backends (i.e. non last prio) up and down, ignoring cpu
     // thus, cpu will never be used unless weights are on cpu, or there are no gpu ops between cpu ops
 
     // pass 2.1 expand gpu up
