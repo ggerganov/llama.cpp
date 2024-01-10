@@ -146,6 +146,15 @@ static std::vector<uint8_t> base64_decode(const std::string & encoded_string)
 // parallel
 //
 
+
+enum ServerState {
+    LOADING_MODEL,  // Server is starting up, model not fully loaded yet
+    READY,          // Server is ready and model is loaded
+    ERROR           // An error occurred, load_model failed
+};
+
+
+
 enum task_type {
     COMPLETION_TASK,
     CANCEL_TASK
@@ -2789,14 +2798,17 @@ int main(int argc, char **argv)
                                 {"total_threads", std::thread::hardware_concurrency()},
                                 {"system_info", llama_print_system_info()},
                             });
-
+    
+    server_state = LOADING_MODEL;
     // load the model
     if (!llama.load_model(params))
     {
+        server_state = ERRPR;
         return 1;
     }
 
     llama.initialize();
+    server_state = READY;
 
     httplib::Server svr;
 
@@ -2939,12 +2951,23 @@ int main(int argc, char **argv)
 
 
     svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
-        // in real-world applications, it's common to first query the /health endpoint of the server to make sure it's running
-        // it will return "ok" only after the model is successfully loaded by the server.
-        res.set_content(R"({"status": "ok"})", "application/json");
-        res.status = 200; // HTTP OK
+        switch(server_state) {
+            case READY:
+                res.set_content(R"({"status": "ok"})", "application/json");
+                res.status = 200; // HTTP OK
+                break;
+            case LOADING:
+                res.set_content(R"({"status": "loading model"})", "application/json");
+                res.status = 503; // HTTP Service Unavailable
+                break;
+            case ERROR:
+                res.set_content(R"({"status": "error", "error": "Model failed to load"})", "application/json");
+                res.status = 500; // HTTP Internal Server Error
+                break;
+        }
     });
-    
+
+
     svr.Get("/v1/models", [&params](const httplib::Request&, httplib::Response& res)
             {
                 std::time_t t = std::time(0);
