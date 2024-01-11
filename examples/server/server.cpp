@@ -2906,6 +2906,7 @@ int main(int argc, char **argv)
     } else {
         llama.initialize();
         state.store(SERVER_STATE_READY);
+        LOG_INFO("model loaded", {});
     }
 
     // Middleware for API key validation
