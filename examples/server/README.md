@@ -110,6 +110,10 @@ node index.js
 ```
 
 ## API Endpoints
+- **GET** `/health`: Returns the current state of the server:
+    - `{"status": "loading model"}` if the model is still being loaded.
+    - `{"status": "error"}` if the model failed to load.
+    - `{"status": "ok"}` if the model is successfully loaded and the server is ready for further requests mentioned below.
 
 -   **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 
