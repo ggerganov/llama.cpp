@@ -185,12 +185,13 @@ extern "C" {
     struct llama_model_params {
         int32_t n_gpu_layers; // number of layers to store in VRAM
         enum llama_split_mode split_mode; // how to split the model across multiple GPUs
-        
+
         // main_gpu interpretation depends on split_mode:
         // LLAMA_SPLIT_NONE: the GPU that is used for the entire model
         // LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results
         // LLAMA_SPLIT_LAYER: ignored
         int32_t main_gpu;
+
         // proportion of the model (layers or rows) to offload to each GPU, size: LLAMA_MAX_DEVICES
         const float * tensor_split;
 
