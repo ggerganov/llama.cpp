@@ -651,7 +651,7 @@ int main(int argc, char ** argv) {
 
                 LOG("n_past = %d\n", n_past);
                 // Display total tokens alongside total time
-                if (params.token_interval > 0 && n_past % params.token_interval == 0) {
+                if (params.n_print > 0 && n_past % params.n_print == 0) {
                     LOG_TEE("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
                 }
             }

@@ -630,12 +630,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.ppl_stride = std::stoi(argv[i]);
-        } else if (arg == "-stc" || arg == "--show-token-count") {
+        } else if (arg == "-ptc" || arg == "--print-token-count") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.token_interval = std::stoi(argv[i]);
+            params.n_print = std::stoi(argv[i]);
         } else if (arg == "--ppl-output-type") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -950,8 +950,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                        advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                        types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
-    printf("  -stc N --show-token-count N\n");
-    printf("                        show consumed tokens every N tokens (default: %d)\n", params.token_interval);
+    printf("  -stc N --print-token-count N\n");
+    printf("                        print token count every N tokens (default: %d)\n", params.n_print);
     printf("\n");
 #ifndef LOG_DISABLE_LOGS
     log_print_usage();
