@@ -1,3 +1,8 @@
+#include <cerrno>   // for errno
+#include <cmath>    // for sqrtf
+#include <cstdint>  // for uint32_t, int64_t, uint8_t, int32_t, SIZE_MAX
+#include <cstdio>   // for printf, fprintf, snprintf, NULL, stderr, fclose
+#include <cstdlib>  // for exit, srand
 #include "ggml.h"
 #include "ggml-alloc.h"
 #include "llama.h"
