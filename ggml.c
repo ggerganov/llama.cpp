@@ -132,7 +132,7 @@ void ggml_print_backtrace(void) {
             "-ex", "bt -frame-info source-and-location",
             "-ex", "detach",
             "-ex", "quit",
-            NULL);
+            (char *) NULL);
     } else {
         waitpid(pid, NULL, 0);
     }
@@ -4315,13 +4315,13 @@ struct ggml_tensor * ggml_set_2d_inplace(
 static struct ggml_tensor * ggml_cpy_impl(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
-        struct ggml_tensor  * b,
-        bool inplace) {
+        struct ggml_tensor  * b) {
     GGML_ASSERT(ggml_nelements(a) == ggml_nelements(b));
 
     bool is_node = false;
 
-    if (!inplace && (a->grad || b->grad)) {
+    if (a->grad || b->grad) {
+        // inplace is false and either one have a grad
         is_node = true;
     }
 
@@ -4345,14 +4345,7 @@ struct ggml_tensor * ggml_cpy(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b) {
-    return ggml_cpy_impl(ctx, a, b, false);
-}
-
-struct ggml_tensor * ggml_cpy_inplace(
-        struct ggml_context * ctx,
-        struct ggml_tensor * a,
-        struct ggml_tensor * b) {
-    return ggml_cpy_impl(ctx, a, b, true);
+    return ggml_cpy_impl(ctx, a, b);
 }
 
 struct ggml_tensor * ggml_cast(
@@ -4376,15 +4369,14 @@ struct ggml_tensor * ggml_cast(
 
 static struct ggml_tensor * ggml_cont_impl(
         struct ggml_context * ctx,
-        struct ggml_tensor  * a,
-        bool inplace) {
+        struct ggml_tensor  * a) {
     bool is_node = false;
 
-    if (!inplace && a->grad) {
+    if (a->grad) {
         is_node = true;
     }
 
-    struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
+    struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
     ggml_format_name(result, "%s (cont)", a->name);
 
     result->op   = GGML_OP_CONT;
@@ -4397,13 +4389,7 @@ static struct ggml_tensor * ggml_cont_impl(
 struct ggml_tensor * ggml_cont(
         struct ggml_context * ctx,
         struct ggml_tensor * a) {
-    return ggml_cont_impl(ctx, a, false);
-}
-
-struct ggml_tensor * ggml_cont_inplace(
-        struct ggml_context * ctx,
-        struct ggml_tensor * a) {
-    return ggml_cont_impl(ctx, a, true);
+    return ggml_cont_impl(ctx, a);
 }
 
 // make contiguous, with new shape
