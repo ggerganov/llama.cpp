@@ -934,6 +934,7 @@ void ggml_cl_init(void) {
     if (initialized) {
         return;
     }
+    initialized = true;
 
     cl_int err;
 
