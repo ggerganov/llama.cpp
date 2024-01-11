@@ -91,9 +91,11 @@ set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for
 set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
+option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
+option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
@@ -153,9 +155,9 @@ if (APPLE AND LLAMA_ACCELERATE)
 endif()
 
 if (LLAMA_METAL)
-    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
-    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
-    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
+    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+    find_library(METAL_FRAMEWORK    Metal      REQUIRED)
+    find_library(METALKIT_FRAMEWORK MetalKit   REQUIRED)
 
     message(STATUS "Metal framework found")
     set(GGML_HEADERS_METAL ggml-metal.h)
@@ -171,6 +173,35 @@ if (LLAMA_METAL)
 
     # copy ggml-metal.metal to bin directory
     configure_file(ggml-metal.metal ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal COPYONLY)
+
+    if (LLAMA_METAL_SHADER_DEBUG)
+        # custom command to do the following:
+        #   xcrun -sdk macosx metal    -fno-fast-math -c ggml-metal.metal -o ggml-metal.air
+        #   xcrun -sdk macosx metallib                   ggml-metal.air   -o default.metallib
+        #
+        # note: this is the only way I found to disable fast-math in Metal. it's ugly, but at least it works
+        #       disabling fast math is needed in order to pass tests/test-backend-ops
+        # note: adding -fno-inline fixes the tests when using MTL_SHADER_VALIDATION=1
+        # note: unfortunately, we have to call it default.metallib instead of ggml.metallib
+        #       ref: https://github.com/ggerganov/whisper.cpp/issues/1720
+        set(XC_FLAGS -fno-fast-math -fno-inline -g)
+        if (LLAMA_QKK_64)
+            set(XC_FLAGS ${XC_FLAGS} -DQK_K=64)
+        endif()
+
+        add_custom_command(
+            OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+            COMMAND xcrun -sdk macosx metal    ${XC_FLAGS} -c ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
+            COMMAND xcrun -sdk macosx metallib                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air   -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+            DEPENDS ggml-metal.metal
+            COMMENT "Compiling Metal kernels"
+        )
+
+        add_custom_target(
+            ggml-metal ALL
+            DEPENDS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+        )
+    endif()
 
     set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
         ${FOUNDATION_LIBRARY}
@@ -199,7 +230,11 @@ if (LLAMA_BLAS)
             if (${LLAMA_BLAS_VENDOR} MATCHES "Generic")
                 pkg_check_modules(DepBLAS REQUIRED blas)
             elseif (${LLAMA_BLAS_VENDOR} MATCHES "OpenBLAS")
-                pkg_check_modules(DepBLAS REQUIRED openblas)
+                # As of openblas v0.3.22, the 64-bit is named openblas64.pc
+                pkg_check_modules(DepBLAS openblas64)
+                if (NOT DepBLAS_FOUND)
+                    pkg_check_modules(DepBLAS REQUIRED openblas)
+                endif()
             elseif (${LLAMA_BLAS_VENDOR} MATCHES "FLAME")
                 pkg_check_modules(DepBLAS REQUIRED blis)
             elseif (${LLAMA_BLAS_VENDOR} MATCHES "ATLAS")
@@ -301,6 +336,8 @@ if (LLAMA_CUBLAS)
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
         endif()
 
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cuda_driver)
+
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         # 52 == lowest CUDA 12 standard
         # 60 == f16 CUDA intrinsics
@@ -377,6 +414,9 @@ if (LLAMA_HIPBLAS)
     if (${hipblas_FOUND} AND ${hip_FOUND})
         message(STATUS "HIP and hipBLAS found")
         add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+        if (LLAMA_HIP_UMA)
+            add_compile_definitions(GGML_HIP_UMA)
+        endif()
         add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
         if (BUILD_SHARED_LIBS)
             set_target_properties(ggml-rocm PROPERTIES POSITION_INDEPENDENT_CODE ON)

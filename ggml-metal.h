@@ -87,7 +87,7 @@ int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx);
 
 // same as ggml_graph_compute but uses Metal
 // creates gf->n_threads command buffers in parallel
-void ggml_metal_graph_compute(struct ggml_metal_context * ctx, struct ggml_cgraph * gf);
+bool ggml_metal_graph_compute(struct ggml_metal_context * ctx, struct ggml_cgraph * gf);
 
 //
 // backend API
@@ -98,7 +98,10 @@ GGML_API ggml_backend_t ggml_backend_metal_init(void);
 
 GGML_API bool ggml_backend_is_metal(ggml_backend_t backend);
 
+GGML_API ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size);
+
 GGML_API void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb);
+
 GGML_API ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void);
 
 // helper to check if the device supports a specific family

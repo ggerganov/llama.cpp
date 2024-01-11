@@ -35,6 +35,13 @@ bool ggml_backend_buft_supports_backend(ggml_backend_buffer_type_t buft, ggml_ba
     return buft->iface.supports_backend(buft, backend);
 }
 
+bool ggml_backend_buft_is_host(ggml_backend_buffer_type_t buft) {
+    if (buft->iface.is_host) {
+        return buft->iface.is_host(buft);
+    }
+    return false;
+}
+
 // backend buffer
 
 ggml_backend_buffer_t ggml_backend_buffer_init(
@@ -92,6 +99,14 @@ size_t ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer) {
 
 size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
     return ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type(buffer), tensor);
+}
+
+void ggml_backend_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    buffer->iface.clear(buffer, value);
+}
+
+bool ggml_backend_buffer_is_host(ggml_backend_buffer_t buffer) {
+    return ggml_backend_buft_is_host(ggml_backend_buffer_type(buffer));
 }
 
 ggml_backend_buffer_type_t ggml_backend_buffer_type(ggml_backend_buffer_t buffer) {
@@ -180,11 +195,14 @@ void ggml_backend_graph_plan_compute(ggml_backend_t backend, ggml_backend_graph_
     ggml_backend_synchronize(backend);
 }
 
-void ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    backend->iface.graph_compute(backend, cgraph);
+bool ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+    if (!backend->iface.graph_compute(backend, cgraph)) {
+        return false;
+    }
 
     // TODO: optional sync
     ggml_backend_synchronize(backend);
+    return true;
 }
 
 bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
@@ -282,7 +300,7 @@ static void ggml_backend_registry_init(void) {
 void ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data) {
     GGML_ASSERT(ggml_backend_registry_count < GGML_MAX_BACKENDS_REG);
 
-    int id = ggml_backend_registry_count;
+    size_t id = ggml_backend_registry_count;
 
     ggml_backend_registry[id] = (struct ggml_backend_reg) {
         /* .name                = */ {0},
@@ -315,6 +333,8 @@ size_t ggml_backend_reg_find_by_name(const char * name) {
             return i;
         }
     }
+
+    // not found
     return SIZE_MAX;
 }
 
@@ -325,15 +345,15 @@ ggml_backend_t ggml_backend_reg_init_backend_from_str(const char * backend_str) 
     const char * params = strchr(backend_str, ':');
     char backend_name[128];
     if (params == NULL) {
-        strcpy(backend_name, backend_str);
+        snprintf(backend_name, sizeof(backend_name), "%s", backend_str);
         params = "";
     } else {
-        strncpy(backend_name, backend_str, params - backend_str);
-        backend_name[params - backend_str] = '\0';
+        snprintf(backend_name, sizeof(backend_name), "%.*s", (int)(params - backend_str), backend_str);
         params++;
     }
 
     size_t backend_i = ggml_backend_reg_find_by_name(backend_name);
+
     if (backend_i == SIZE_MAX) {
         fprintf(stderr, "%s: backend %s not found\n", __func__, backend_name);
         return NULL;
@@ -378,22 +398,15 @@ static void * ggml_backend_cpu_buffer_get_base(ggml_backend_buffer_t buffer) {
 
 static void ggml_backend_cpu_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     free(buffer->context);
-    GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_cpu_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-
     memcpy((char *)tensor->data + offset, data, size);
 
     GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_cpu_buffer_get_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-
     memcpy(data, (const char *)tensor->data + offset, size);
 
     GGML_UNUSED(buffer);
@@ -411,6 +424,10 @@ static void ggml_backend_cpu_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer, 
     GGML_UNUSED(buffer);
 }
 
+static void ggml_backend_cpu_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    memset(buffer->context, value, buffer->size);
+}
+
 static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
     /* .free_buffer     = */ ggml_backend_cpu_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cpu_buffer_get_base,
@@ -419,6 +436,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
     /* .get_tensor      = */ ggml_backend_cpu_buffer_get_tensor,
     /* .cpy_tensor_from = */ ggml_backend_cpu_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_cpu_buffer_cpy_tensor_to,
+    /* .clear           = */ ggml_backend_cpu_buffer_clear,
 };
 
 // for buffers from ptr, free is not called
@@ -430,6 +448,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i_from_ptr = {
     /* .get_tensor      = */ ggml_backend_cpu_buffer_get_tensor,
     /* .cpy_tensor_from = */ ggml_backend_cpu_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_cpu_buffer_cpy_tensor_to,
+    /* .clear           = */ ggml_backend_cpu_buffer_clear,
 };
 
 static const size_t TENSOR_ALIGNMENT = 64; // should be enough for AVX 512
@@ -455,19 +474,69 @@ static bool ggml_backend_cpu_buffer_type_supports_backend(ggml_backend_buffer_ty
     GGML_UNUSED(buft);
 }
 
+static bool ggml_backend_cpu_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
+    return true;
+
+    GGML_UNUSED(buft);
+}
+
 ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
-    static struct ggml_backend_buffer_type ggml_backend_buffer_type_cpu = {
+    static struct ggml_backend_buffer_type ggml_backend_cpu_buffer_type = {
         /* .iface = */ {
             /* .alloc_buffer     = */ ggml_backend_cpu_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
         },
         /* .context = */ NULL,
     };
 
-    return &ggml_backend_buffer_type_cpu;
+    return &ggml_backend_cpu_buffer_type;
 }
+
+#ifdef GGML_USE_CPU_HBM
+
+// buffer type HBM
+
+#include <hbwmalloc.h>
+
+static void ggml_backend_cpu_hbm_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+    hbw_free(buffer->context);
+}
+
+static ggml_backend_buffer_t ggml_backend_cpu_hbm_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    //void * ptr = hbw_malloc(size);
+    void * ptr;
+    int result = hbw_posix_memalign(&ptr, ggml_backend_cpu_buffer_type_get_alignment(buft), size);
+    if (result != 0) {
+        fprintf(stderr, "failed to allocate HBM buffer of size %zu\n", size);
+        return NULL;
+    }
+
+    // FIXME: this is a hack to avoid having to implement a new buffer type
+    ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);
+    buffer->buft = buft;
+    buffer->iface.free_buffer = ggml_backend_cpu_hbm_buffer_free_buffer;
+
+    return buffer;
+}
+
+ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type() {
+    static struct ggml_backend_buffer_type ggml_backend_cpu_buffer_type_hbm = {
+        /* .iface    = */ {
+            /* .alloc_buffer     = */ ggml_backend_cpu_hbm_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
+            /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
+            /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
+        },
+        /* .context  = */ NULL,
+    };
+
+    return &ggml_backend_cpu_buffer_type_hbm;
+}
+#endif
 
 struct ggml_backend_cpu_context {
     int n_threads;
@@ -505,7 +574,7 @@ static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(ggml_backend
     struct ggml_backend_plan_cpu * cpu_plan = malloc(sizeof(struct ggml_backend_plan_cpu));
 
     cpu_plan->cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
-    cpu_plan->cgraph = *cgraph;
+    cpu_plan->cgraph = *cgraph; // FIXME: deep copy
 
     if (cpu_plan->cplan.work_size > 0) {
         cpu_plan->cplan.work_data = malloc(cpu_plan->cplan.work_size);
@@ -531,7 +600,7 @@ static void ggml_backend_cpu_graph_plan_compute(ggml_backend_t backend, ggml_bac
     GGML_UNUSED(backend);
 }
 
-static void ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+static bool ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
     struct ggml_cplan cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
@@ -545,13 +614,18 @@ static void ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_c
     cplan.work_data = cpu_ctx->work_data;
 
     ggml_graph_compute(cgraph, &cplan);
+    return true;
 }
 
 static bool ggml_backend_cpu_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
-    return true;
+    switch (op->op) {
+        case GGML_OP_MUL_MAT:
+            return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_internal_get_type_traits(op->src[0]->type).vec_dot_type;
+        default:
+            return true;
+    }
 
     GGML_UNUSED(backend);
-    GGML_UNUSED(op);
 }
 
 static struct ggml_backend_i cpu_backend_i = {
@@ -1180,7 +1254,7 @@ void ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml
 // utils
 void ggml_backend_view_init(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
     GGML_ASSERT(tensor->buffer == NULL);
-    GGML_ASSERT(tensor->data == NULL);
+    //GGML_ASSERT(tensor->data == NULL); // views of pre-allocted tensors may have the data set, but still need to be initialized
     GGML_ASSERT(tensor->view_src != NULL);
     GGML_ASSERT(tensor->view_src->buffer != NULL);
     GGML_ASSERT(tensor->view_src->data != NULL);

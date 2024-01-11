@@ -1,139 +1,144 @@
 {
+  description = "Port of Facebook's LLaMA model in C/C++";
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
   };
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        name = "llama.cpp";
-        src = ./.;
-        meta.mainProgram = "llama";
-        inherit (pkgs.stdenv) isAarch32 isAarch64 isDarwin;
-        buildInputs = with pkgs; [ openmpi ];
-        osSpecific = with pkgs; buildInputs ++ (
-          if isAarch64 && isDarwin then
-            with pkgs.darwin.apple_sdk_11_0.frameworks; [
-              Accelerate
-              MetalKit
-            ]
-          else if isAarch32 && isDarwin then
-            with pkgs.darwin.apple_sdk.frameworks; [
-              Accelerate
-              CoreGraphics
-              CoreVideo
-            ]
-          else if isDarwin then
-            with pkgs.darwin.apple_sdk.frameworks; [
-              Accelerate
-              CoreGraphics
-              CoreVideo
-            ]
-          else
-            with pkgs; [ openblas ]
-        );
-        pkgs = import nixpkgs { inherit system; };
-        nativeBuildInputs = with pkgs; [ cmake ninja pkg-config ];
-        cudatoolkit_joined = with pkgs; symlinkJoin {
-          # HACK(Green-Sky): nix currently has issues with cmake findcudatoolkit
-          # see https://github.com/NixOS/nixpkgs/issues/224291
-          # copied from jaxlib
-          name = "${cudaPackages.cudatoolkit.name}-merged";
-          paths = [
-            cudaPackages.cudatoolkit.lib
-            cudaPackages.cudatoolkit.out
-          ] ++ lib.optionals (lib.versionOlder cudaPackages.cudatoolkit.version "11") [
-            # for some reason some of the required libs are in the targets/x86_64-linux
-            # directory; not sure why but this works around it
-            "${cudaPackages.cudatoolkit}/targets/${system}"
-          ];
-        };
-        llama-python =
-          pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece ]);
-        # TODO(Green-Sky): find a better way to opt-into the heavy ml python runtime
-        llama-python-extra =
-          pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece torchWithoutCuda transformers ]);
-        postPatch = ''
-          substituteInPlace ./ggml-metal.m \
-            --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
-          substituteInPlace ./*.py --replace '/usr/bin/env python' '${llama-python}/bin/python'
-        '';
-        postInstall = ''
-          mv $out/bin/main $out/bin/llama
-          mv $out/bin/server $out/bin/llama-server
-          mkdir -p $out/include
-          cp ${src}/llama.h $out/include/
-        '';
-        cmakeFlags = [ "-DLLAMA_NATIVE=OFF" "-DLLAMA_BUILD_SERVER=ON" "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_SKIP_BUILD_RPATH=ON" ];
-      in
+
+  # Optional binary cache
+  nixConfig = {
+    extra-substituters = [
+      # Populated by the CI in ggerganov/llama.cpp
+      "https://llama-cpp.cachix.org"
+
+      # A development cache for nixpkgs imported with `config.cudaSupport = true`.
+      # Populated by https://hercules-ci.com/github/SomeoneSerge/nixpkgs-cuda-ci.
+      # This lets one skip building e.g. the CUDA-enabled openmpi.
+      # TODO: Replace once nix-community obtains an official one.
+      "https://cuda-maintainers.cachix.org"
+    ];
+
+    # Verify these are the same keys as published on
+    # - https://app.cachix.org/cache/llama-cpp
+    # - https://app.cachix.org/cache/cuda-maintainers
+    extra-trusted-public-keys = [
+      "llama-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc="
+      "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
+    ];
+  };
+
+
+  # For inspection, use `nix flake show github:ggerganov/llama.cpp` or the nix repl:
+  #
+  # ```bash
+  # ❯ nix repl
+  # nix-repl> :lf github:ggerganov/llama.cpp
+  # Added 13 variables.
+  # nix-repl> outputs.apps.x86_64-linux.quantize
+  # { program = "/nix/store/00000000000000000000000000000000-llama.cpp/bin/quantize"; type = "app"; }
+  # ```
+  outputs =
+    { self, flake-parts, ... }@inputs:
+    let
+      # We could include the git revisions in the package names but those would
+      # needlessly trigger rebuilds:
+      # llamaVersion = self.dirtyShortRev or self.shortRev;
+
+      # Nix already uses cryptographic hashes for versioning, so we'll just fix
+      # the fake semver for now:
+      llamaVersion = "0.0.0";
+    in
+    flake-parts.lib.mkFlake { inherit inputs; }
+
       {
-        packages.default = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = osSpecific;
-          cmakeFlags = cmakeFlags
-            ++ (if isAarch64 && isDarwin then [
-            "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
-            "-DLLAMA_METAL=ON"
-          ] else [
-            "-DLLAMA_BLAS=ON"
-            "-DLLAMA_BLAS_VENDOR=OpenBLAS"
-          ]);
-        };
-        packages.opencl = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = with pkgs; buildInputs ++ [ clblast ];
-          cmakeFlags = cmakeFlags ++ [
-            "-DLLAMA_CLBLAST=ON"
-          ];
-        };
-        packages.cuda = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = with pkgs; buildInputs ++ [ cudatoolkit_joined ];
-          cmakeFlags = cmakeFlags ++ [
-            "-DLLAMA_CUBLAS=ON"
-          ];
-        };
-        packages.rocm = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = with pkgs.rocmPackages; buildInputs ++ [ clr hipblas rocblas ];
-          cmakeFlags = cmakeFlags ++ [
-            "-DLLAMA_HIPBLAS=1"
-            "-DCMAKE_C_COMPILER=hipcc"
-            "-DCMAKE_CXX_COMPILER=hipcc"
-            # Build all targets supported by rocBLAS. When updating search for TARGET_LIST_ROCM
-            # in github.com/ROCmSoftwarePlatform/rocBLAS/blob/develop/CMakeLists.txt
-            # and select the line that matches the current nixpkgs version of rocBLAS.
-            "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
-          ];
-        };
-        apps.llama-server = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/llama-server";
-        };
-        apps.llama-embedding = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/embedding";
-        };
-        apps.llama = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/llama";
-        };
-        apps.quantize = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/quantize";
-        };
-        apps.train-text-from-scratch = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/train-text-from-scratch";
-        };
-        apps.default = self.apps.${system}.llama;
-        devShells.default = pkgs.mkShell {
-          buildInputs = [ llama-python ];
-          packages = nativeBuildInputs ++ osSpecific;
-        };
-        devShells.extra = pkgs.mkShell {
-          buildInputs = [ llama-python-extra ];
-          packages = nativeBuildInputs ++ osSpecific;
-        };
-      });
+
+        imports = [
+          .devops/nix/nixpkgs-instances.nix
+          .devops/nix/apps.nix
+          .devops/nix/devshells.nix
+          .devops/nix/jetson-support.nix
+        ];
+
+        # An overlay can be used to have a more granular control over llama-cpp's
+        # dependencies and configuration, than that offered by the `.override`
+        # mechanism. Cf. https://nixos.org/manual/nixpkgs/stable/#chap-overlays.
+        #
+        # E.g. in a flake:
+        # ```
+        # { nixpkgs, llama-cpp, ... }:
+        # let pkgs = import nixpkgs {
+        #     overlays = [ (llama-cpp.overlays.default) ];
+        #     system = "aarch64-linux";
+        #     config.allowUnfree = true;
+        #     config.cudaSupport = true;
+        #     config.cudaCapabilities = [ "7.2" ];
+        #     config.cudaEnableForwardCompat = false;
+        # }; in {
+        #     packages.aarch64-linux.llamaJetsonXavier = pkgs.llamaPackages.llama-cpp;
+        # }
+        # ```
+        #
+        # Cf. https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html?highlight=flake#flake-format
+        flake.overlays.default =
+          (final: prev: {
+            llamaPackages = final.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+            inherit (final.llamaPackages) llama-cpp;
+          });
+
+        systems = [
+          "aarch64-darwin"
+          "aarch64-linux"
+          "x86_64-darwin" # x86_64-darwin isn't tested (and likely isn't relevant)
+          "x86_64-linux"
+        ];
+
+        perSystem =
+          {
+            config,
+            lib,
+            system,
+            pkgs,
+            pkgsCuda,
+            pkgsRocm,
+            ...
+          }:
+          {
+            # Unlike `.#packages`, legacyPackages may contain values of
+            # arbitrary types (including nested attrsets) and may even throw
+            # exceptions. This attribute isn't recursed into by `nix flake
+            # show` either.
+            #
+            # You can add arbitrary scripts to `.devops/nix/scope.nix` and
+            # access them as `nix build .#llamaPackages.${scriptName}` using
+            # the same path you would with an overlay.
+            legacyPackages = {
+              llamaPackages = pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+            };
+
+            # We don't use the overlay here so as to avoid making too many instances of nixpkgs,
+            # cf. https://zimbatm.com/notes/1000-instances-of-nixpkgs
+            packages =
+              {
+                default = config.legacyPackages.llamaPackages.llama-cpp;
+              }
+              // lib.optionalAttrs pkgs.stdenv.isLinux {
+                opencl = config.packages.default.override { useOpenCL = true; };
+                cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
+
+                mpi-cpu = config.packages.default.override { useMpi = true; };
+                mpi-cuda = config.packages.default.override { useMpi = true; };
+              }
+              // lib.optionalAttrs (system == "x86_64-linux") {
+                rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
+              };
+
+            # Packages exposed in `.#checks` will be built by the CI and by
+            # `nix flake check`. Currently we expose all packages, but we could
+            # make more granular choices
+            checks = config.packages;
+          };
+      };
 }

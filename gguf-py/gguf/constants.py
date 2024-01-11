@@ -46,6 +46,8 @@ class Keys:
         HEAD_COUNT_KV     = "{arch}.attention.head_count_kv"
         MAX_ALIBI_BIAS    = "{arch}.attention.max_alibi_bias"
         CLAMP_KQV         = "{arch}.attention.clamp_kqv"
+        KEY_LENGTH        = "{arch}.attention.key_length"
+        VALUE_LENGTH      = "{arch}.attention.value_length"
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
 
@@ -95,6 +97,8 @@ class MODEL_ARCH(IntEnum):
     BLOOM     = auto()
     STABLELM  = auto()
     QWEN      = auto()
+    PHI2      = auto()
+    PLAMO     = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -118,6 +122,7 @@ class MODEL_TENSOR(IntEnum):
     FFN_GATE        = auto()
     FFN_DOWN        = auto()
     FFN_UP          = auto()
+    FFN_ACT         = auto()
     FFN_GATE_EXP    = auto()
     FFN_DOWN_EXP    = auto()
     FFN_UP_EXP      = auto()
@@ -140,6 +145,8 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
     MODEL_ARCH.QWEN:           "qwen",
+    MODEL_ARCH.PHI2:           "phi2",
+    MODEL_ARCH.PLAMO:          "plamo",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -165,6 +172,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_GATE:        "blk.{bid}.ffn_gate",
     MODEL_TENSOR.FFN_DOWN:        "blk.{bid}.ffn_down",
     MODEL_TENSOR.FFN_UP:          "blk.{bid}.ffn_up",
+    MODEL_TENSOR.FFN_ACT:         "blk.{bid}.ffn",
     MODEL_TENSOR.FFN_GATE_EXP:    "blk.{bid}.ffn_gate.{xid}",
     MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down.{xid}",
     MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up.{xid}",
@@ -265,6 +273,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_ACT,
     ],
     MODEL_ARCH.GPTJ: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -347,9 +356,44 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
-    MODEL_ARCH.GPT2: [
-        # TODO
+    MODEL_ARCH.PLAMO: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.GPT2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.PHI2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ]
     # TODO
 }
 
