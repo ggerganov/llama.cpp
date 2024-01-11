@@ -650,7 +650,7 @@ int main(int argc, char ** argv) {
                 n_past += n_eval;
 
                 LOG("n_past = %d\n", n_past);
-                // I added the next two lines on 20240110
+                // Display total tokens alongside total time
                 if (n_past % params.token_interval == 0) {
                     printf("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
                 }
