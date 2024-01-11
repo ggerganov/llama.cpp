@@ -26,6 +26,7 @@
 #include <mutex>
 #include <chrono>
 #include <condition_variable>
+#include <atomic>
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -146,9 +147,15 @@ static std::vector<uint8_t> base64_decode(const std::string & encoded_string)
 // parallel
 //
 
+enum server_state {
+    SERVER_STATE_LOADING_MODEL,  // Server is starting up, model not fully loaded yet
+    SERVER_STATE_READY,          // Server is ready and model is loaded
+    SERVER_STATE_ERROR           // An error occurred, load_model failed
+};
+
 enum task_type {
-    COMPLETION_TASK,
-    CANCEL_TASK
+    TASK_TYPE_COMPLETION,
+    TASK_TYPE_CANCEL,
 };
 
 struct task_server {
@@ -447,8 +454,14 @@ struct llama_client_slot
     }
 
     bool has_budget(gpt_params &global_params) {
+        if (params.n_predict == -1 && global_params.n_predict == -1)
+        {
+            return true; // limitless
+        }
+
         n_remaining = -1;
-        if(params.n_predict != -1)
+
+        if (params.n_predict != -1)
         {
             n_remaining = params.n_predict - n_decoded;
         }
@@ -456,7 +469,8 @@ struct llama_client_slot
         {
             n_remaining = global_params.n_predict - n_decoded;
         }
-        return n_remaining > 0 || n_remaining == -1; // no budget || limitless
+
+        return n_remaining > 0; // no budget
     }
 
     bool available() const {
@@ -1102,7 +1116,7 @@ struct llama_server_context
         }
 
         // check the limits
-        if (slot.n_decoded > 2 && slot.has_next_token && !slot.has_budget(params))
+        if (slot.n_decoded > 0 && slot.has_next_token && !slot.has_budget(params))
         {
             slot.stopped_limit = true;
             slot.has_next_token = false;
@@ -1388,7 +1402,7 @@ struct llama_server_context
         task.data = std::move(data);
         task.infill_mode = infill;
         task.embedding_mode = embedding;
-        task.type = COMPLETION_TASK;
+        task.type = TASK_TYPE_COMPLETION;
         task.multitask_id = multitask_id;
 
         // when a completion task's prompt array is not a singleton, we split it into multiple requests
@@ -1510,7 +1524,7 @@ struct llama_server_context
         std::unique_lock<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
-        task.type = CANCEL_TASK;
+        task.type = TASK_TYPE_CANCEL;
         task.target_id = task_id;
         queue_tasks.push_back(task);
         condition_tasks.notify_one();
@@ -1546,7 +1560,7 @@ struct llama_server_context
             queue_tasks.erase(queue_tasks.begin());
             switch (task.type)
             {
-                case COMPLETION_TASK: {
+                case TASK_TYPE_COMPLETION: {
                     llama_client_slot *slot = get_slot(json_value(task.data, "slot_id", -1));
                     if (slot == nullptr)
                     {
@@ -1575,7 +1589,7 @@ struct llama_server_context
                         break;
                     }
                 } break;
-                case CANCEL_TASK: { // release slot linked with the task id
+                case TASK_TYPE_CANCEL: { // release slot linked with the task id
                     for (auto & slot : slots)
                     {
                         if (slot.task_id == task.target_id)
@@ -1703,7 +1717,6 @@ struct llama_server_context
 
             llama_batch_add(batch, slot.sampled, system_tokens.size() + slot.n_past, { slot.id }, true);
 
-            slot.n_decoded += 1;
             slot.n_past += 1;
         }
 
@@ -1921,6 +1934,7 @@ struct llama_server_context
 
                 llama_sampling_accept(slot.ctx_sampling, ctx, id, true);
 
+                slot.n_decoded += 1;
                 if (slot.n_decoded == 1)
                 {
                     slot.t_start_genereration = ggml_time_us();
@@ -2446,7 +2460,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
     }
 }
 
-
 static std::string random_string()
 {
     static const std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
@@ -2783,15 +2796,117 @@ int main(int argc, char **argv)
                                 {"system_info", llama_print_system_info()},
                             });
 
-    // load the model
-    if (!llama.load_model(params))
+    httplib::Server svr;
+
+    std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
+
+    svr.set_default_headers({{"Server", "llama.cpp"},
+                             {"Access-Control-Allow-Origin", "*"},
+                             {"Access-Control-Allow-Headers", "content-type"}});
+
+    svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        server_state current_state = state.load();
+        switch(current_state) {
+            case SERVER_STATE_READY:
+                res.set_content(R"({"status": "ok"})", "application/json");
+                res.status = 200; // HTTP OK
+                break;
+            case SERVER_STATE_LOADING_MODEL:
+                res.set_content(R"({"status": "loading model"})", "application/json");
+                res.status = 503; // HTTP Service Unavailable
+                break;
+            case SERVER_STATE_ERROR:
+                res.set_content(R"({"status": "error", "error": "Model failed to load"})", "application/json");
+                res.status = 500; // HTTP Internal Server Error
+                break;
+        }
+    });
+
+    svr.set_logger(log_server_request);
+
+    svr.set_exception_handler([](const httplib::Request &, httplib::Response &res, std::exception_ptr ep)
+            {
+                const char fmt[] = "500 Internal Server Error\n%s";
+                char buf[BUFSIZ];
+                try
+                {
+                    std::rethrow_exception(std::move(ep));
+                }
+                catch (std::exception &e)
+                {
+                    snprintf(buf, sizeof(buf), fmt, e.what());
+                }
+                catch (...)
+                {
+                    snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
+                }
+                res.set_content(buf, "text/plain; charset=utf-8");
+                res.status = 500;
+            });
+
+    svr.set_error_handler([](const httplib::Request &, httplib::Response &res)
+            {
+                if (res.status == 401)
+                {
+                    res.set_content("Unauthorized", "text/plain; charset=utf-8");
+                }
+                if (res.status == 400)
+                {
+                    res.set_content("Invalid request", "text/plain; charset=utf-8");
+                }
+                else if (res.status == 404)
+                {
+                    res.set_content("File Not Found", "text/plain; charset=utf-8");
+                    res.status = 404;
+                }
+            });
+
+    // set timeouts and change hostname and port
+    svr.set_read_timeout (sparams.read_timeout);
+    svr.set_write_timeout(sparams.write_timeout);
+
+    if (!svr.bind_to_port(sparams.hostname, sparams.port))
     {
+        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
         return 1;
     }
 
-    llama.initialize();
+    // Set the base directory for serving static files
+    svr.set_base_dir(sparams.public_path);
 
-    httplib::Server svr;
+    // to make it ctrl+clickable:
+    LOG_TEE("\nllama server listening at http://%s:%d\n\n", sparams.hostname.c_str(), sparams.port);
+
+    std::unordered_map<std::string, std::string> log_data;
+    log_data["hostname"] = sparams.hostname;
+    log_data["port"] = std::to_string(sparams.port);
+
+    if (!sparams.api_key.empty()) {
+        log_data["api_key"] = "api_key: ****" + sparams.api_key.substr(sparams.api_key.length() - 4);
+    }
+
+    LOG_INFO("HTTP server listening", log_data);
+    // run the HTTP server in a thread - see comment below
+    std::thread t([&]()
+            {
+                if (!svr.listen_after_bind())
+                {
+                    state.store(SERVER_STATE_ERROR);
+                    return 1;
+                }
+
+                return 0;
+            });
+
+    // load the model
+    if (!llama.load_model(params))
+    {
+        state.store(SERVER_STATE_ERROR);
+        return 1;
+    } else {
+        llama.initialize();
+        state.store(SERVER_STATE_READY);
+    }
 
     // Middleware for API key validation
     auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
@@ -2818,10 +2933,6 @@ int main(int argc, char **argv)
 
         return false;
     };
-
-    svr.set_default_headers({{"Server", "llama.cpp"},
-                             {"Access-Control-Allow-Origin", "*"},
-                             {"Access-Control-Allow-Headers", "content-type"}});
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const httplib::Request &, httplib::Response &res)
@@ -2929,8 +3040,6 @@ int main(int argc, char **argv)
                     res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
                 }
             });
-
-
 
     svr.Get("/v1/models", [&params](const httplib::Request&, httplib::Response& res)
             {
@@ -3148,81 +3257,6 @@ int main(int argc, char **argv)
                 const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0}, {"image_data", image_data} }, false, true, -1);
                 task_result result = llama.next_result(task_id);
                 return res.set_content(result.result_json.dump(), "application/json; charset=utf-8");
-            });
-
-    svr.set_logger(log_server_request);
-
-    svr.set_exception_handler([](const httplib::Request &, httplib::Response &res, std::exception_ptr ep)
-            {
-                const char fmt[] = "500 Internal Server Error\n%s";
-                char buf[BUFSIZ];
-                try
-                {
-                    std::rethrow_exception(std::move(ep));
-                }
-                catch (std::exception &e)
-                {
-                    snprintf(buf, sizeof(buf), fmt, e.what());
-                }
-                catch (...)
-                {
-                    snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
-                }
-                res.set_content(buf, "text/plain; charset=utf-8");
-                res.status = 500;
-            });
-
-    svr.set_error_handler([](const httplib::Request &, httplib::Response &res)
-            {
-                if (res.status == 401)
-                {
-                    res.set_content("Unauthorized", "text/plain; charset=utf-8");
-                }
-                if (res.status == 400)
-                {
-                    res.set_content("Invalid request", "text/plain; charset=utf-8");
-                }
-                else if (res.status == 404)
-                {
-                    res.set_content("File Not Found", "text/plain; charset=utf-8");
-                    res.status = 404;
-                }
-            });
-
-    // set timeouts and change hostname and port
-    svr.set_read_timeout (sparams.read_timeout);
-    svr.set_write_timeout(sparams.write_timeout);
-
-    if (!svr.bind_to_port(sparams.hostname, sparams.port))
-    {
-        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
-        return 1;
-    }
-
-    // Set the base directory for serving static files
-    svr.set_base_dir(sparams.public_path);
-
-    // to make it ctrl+clickable:
-    LOG_TEE("\nllama server listening at http://%s:%d\n\n", sparams.hostname.c_str(), sparams.port);
-
-    std::unordered_map<std::string, std::string> log_data;
-    log_data["hostname"] = sparams.hostname;
-    log_data["port"] = std::to_string(sparams.port);
-
-    if (!sparams.api_key.empty()) {
-        log_data["api_key"] = "api_key: ****" + sparams.api_key.substr(sparams.api_key.length() - 4);
-    }
-
-    LOG_INFO("HTTP server listening", log_data);
-    // run the HTTP server in a thread - see comment below
-    std::thread t([&]()
-            {
-                if (!svr.listen_after_bind())
-                {
-                    return 1;
-                }
-
-                return 0;
             });
 
     // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
