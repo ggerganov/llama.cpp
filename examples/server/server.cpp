@@ -2802,8 +2802,35 @@ int main(int argc, char **argv)
 
     svr.set_default_headers({{"Server", "llama.cpp"}});
 
+    // Middleware for API key validation
+    auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
+        // If API key is not set, skip validation
+        if (sparams.api_key.empty()) {
+            return true;
+        }
+
+        // Check for API key in the header
+        auto auth_header = req.get_header_value("Authorization");
+        std::string prefix = "Bearer ";
+        if (auth_header.substr(0, prefix.size()) == prefix) {
+            std::string received_api_key = auth_header.substr(prefix.size());
+            if (received_api_key == sparams.api_key) {
+                return true; // API key is valid
+            }
+        }
+
+        // API key is invalid or not provided
+        res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
+        res.status = 401; // Unauthorized
+
+        LOG_WARNING("Unauthorized: Invalid API Key", {});
+
+        return false;
+    };
+
+
     // CORS preflight
-    svr.Options(R"(.*)", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res) {
+    svr.Options(R"(.*)", [](const httplib::Request &req, httplib::Response &res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         res.set_header("Access-Control-Allow-Credentials", "true");
         res.set_header("Access-Control-Allow-Methods", "POST");
@@ -2914,32 +2941,6 @@ int main(int argc, char **argv)
         state.store(SERVER_STATE_READY);
         LOG_INFO("model loaded", {});
     }
-
-    // Middleware for API key validation
-    auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
-        // If API key is not set, skip validation
-        if (sparams.api_key.empty()) {
-            return true;
-        }
-
-        // Check for API key in the header
-        auto auth_header = req.get_header_value("Authorization");
-        std::string prefix = "Bearer ";
-        if (auth_header.substr(0, prefix.size()) == prefix) {
-            std::string received_api_key = auth_header.substr(prefix.size());
-            if (received_api_key == sparams.api_key) {
-                return true; // API key is valid
-            }
-        }
-
-        // API key is invalid or not provided
-        res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
-        res.status = 401; // Unauthorized
-
-        LOG_WARNING("Unauthorized: Invalid API Key", {});
-
-        return false;
-    };
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const httplib::Request &, httplib::Response &res)
