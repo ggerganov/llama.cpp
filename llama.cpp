@@ -9267,6 +9267,8 @@ struct llama_context * llama_new_context_with_model(
             ctx->backend_metal = ggml_backend_metal_init();
             if (ctx->backend_metal == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Metal backend\n", __func__);
+                llama_free(ctx);
+                return nullptr;
             }
             ctx->backends.push_back(ctx->backend_metal);
         }
@@ -9298,7 +9300,7 @@ struct llama_context * llama_new_context_with_model(
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
             LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
-            delete ctx;
+            llama_free(ctx);
             return nullptr;
         }
         ctx->backends.push_back(ctx->backend_cpu);

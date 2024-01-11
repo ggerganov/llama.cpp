@@ -1006,7 +1006,7 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
     // pass 2: assign backends to ops from current assignments
     // start from the end and assign the same backend to previous ops
 
-    // expand gpu backends (i.e. non last prio) up and down, ignoring cpu
+    // expand gpu backends (i.e. non last prio) up and down, ignoring cpu (the lowest priority backend)
     // thus, cpu will never be used unless weights are on cpu, or there are no gpu ops between cpu ops
 
     // pass 2.1 expand gpu up
@@ -1020,7 +1020,7 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             ggml_tallocr_t node_allocr = node_allocr(node);
             if (node_allocr != NULL) {
                 if (sched_allocr_prio(sched, node_allocr) == sched->n_backends - 1) {
-                    // skip cpu
+                    // skip cpu (lowest prio backend)
                     cur_allocr = NULL;
                 } else {
                     cur_allocr = node_allocr;
@@ -1043,7 +1043,7 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             ggml_tallocr_t node_allocr = node_allocr(node);
             if (node_allocr != NULL) {
                 if (sched_allocr_prio(sched, node_allocr) == sched->n_backends - 1) {
-                    // skip cpu
+                    // skip cpu (lowest prio backend)
                     cur_allocr = NULL;
                 } else {
                     cur_allocr = node_allocr;
@@ -1107,9 +1107,10 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
     // pass 4: split graph, find tensors that need to be copied
     {
         int cur_split = 0;
+        // find the backend of the first split, skipping view ops
         for (int i = 0; i < graph->n_nodes; i++) {
             struct ggml_tensor * node = graph->nodes[i];
-            if (node->view_src == NULL) {
+            if (!ggml_is_view_op(node->op)) {
                 sched->splits[0].tallocr = node_allocr(node);
                 break;
             }
