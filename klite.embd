@@ -5946,6 +5946,15 @@ Current version: 105
 		document.getElementById("advancedloadfile").classList.add("hidden");
 	}
 
+	function preview_dynatemp()
+	{
+		let a1 = parseFloat(document.getElementById("dynatemp_min").value);
+		let a2 = parseFloat(document.getElementById("dynatemp_max").value);
+		let avg = (a1+a2)*0.5;
+		let diff = Math.abs(a2 - a1)*0.5;
+		document.getElementById("dynatemp_outtemp").innerText = avg.toFixed(3);
+		document.getElementById("dynatemp_outrange").innerText = diff.toFixed(3);
+	}
 	function confirm_dynatemp()
 	{
 		let a1 = parseFloat(document.getElementById("dynatemp_min").value);
@@ -5968,6 +5977,7 @@ Current version: 105
 		a2 = a2<0?0:a2;
 		document.getElementById("dynatemp_min").value = a1.toFixed(2);
 		document.getElementById("dynatemp_max").value = a2.toFixed(2);
+		preview_dynatemp();
 		document.getElementById("dynatempcontainer").classList.remove("hidden");
 	}
 
@@ -7601,6 +7611,7 @@ Current version: 105
 		localsettings.top_p = cleannum(localsettings.top_p, 0.002, 1);
 		localsettings.min_p = cleannum(localsettings.min_p, 0.0, 1);
 		localsettings.dynatemp_range = cleannum(localsettings.dynatemp_range, 0.0, 5);
+		localsettings.dynatemp_range = (localsettings.dynatemp_range>localsettings.temperature?localsettings.temperature:localsettings.dynatemp_range);
 		localsettings.presence_penalty = cleannum(localsettings.presence_penalty, -2, 2);
 		localsettings.top_k = cleannum(Math.floor(localsettings.top_k), 0, 300);
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
@@ -11674,7 +11685,7 @@ Current version: 105
 		let newbodystr = noSystemPrompt ? input : style('sys') + input;					 // First, create the string we'll transform. Style system bubble if we should.
 		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); } // Remove the last chat bubble if prompt ends with `end_sequence`.
 		newbodystr = transformInputToAestheticStyle(newbodystr,isPreview); 						 // Transform input to aesthetic style, reduce any unnecessary spaces or newlines, and trim empty replies if they exist.
-		if (synchro_pending_stream != "") {
+		if (synchro_pending_stream != "" && !isPreview) {
 			newbodystr += getStreamingText();
 		} 		 // Add the pending stream if it's needed. This will add any streamed text to a new bubble for the AI.
 		newbodystr += contextDict.closeTag + '</p></div></div>';						 // Lastly, append the closing div so our body's raw form is completed.
@@ -12992,11 +13003,17 @@ Current version: 105
 
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Minimum Temperature: </div>
-				<input type="text" inputmode="decimal" id="dynatemp_min" style="width:60px">
+				<input type="text" oninput="preview_dynatemp()" inputmode="decimal" id="dynatemp_min" style="width:60px">
 			</div>
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Maximum Temperature: </div>
-				<input type="text" inputmode="decimal" id="dynatemp_max" style="width:60px">
+				<input type="text" oninput="preview_dynatemp()" inputmode="decimal" id="dynatemp_max" style="width:60px">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Result Temperature: <span id="dynatemp_outtemp"></span></div>
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Result DynaTemp-Range: <span id="dynatemp_outrange"></span></div>
 			</div>
 
 			<div class="popupfooter">
