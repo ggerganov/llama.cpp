@@ -1067,7 +1067,9 @@ bool ggml_metal_graph_compute(
                     GGML_ASSERT(!"unsupported op");
                 }
 
+#ifndef GGML_METAL_NDEBUG
                 [encoder pushDebugGroup:[NSString stringWithCString:ggml_op_desc(dst) encoding:NSUTF8StringEncoding]];
+#endif
 
                 const int64_t  ne00 = src0 ? src0->ne[0] : 0;
                 const int64_t  ne01 = src0 ? src0->ne[1] : 0;
@@ -2426,7 +2428,9 @@ bool ggml_metal_graph_compute(
                         }
                 }
 
+#ifndef GGML_METAL_NDEBUG
                 [encoder popDebugGroup];
+#endif
             }
 
             if (encoder != nil) {
