@@ -1067,7 +1067,7 @@ bool ggml_metal_graph_compute(
                     GGML_ASSERT(!"unsupported op");
                 }
 
-                [encoder pushDebugGroup:[NSString stringWithCString:ggml_op_desc(dst)]];
+                [encoder pushDebugGroup:[NSString stringWithCString:ggml_op_desc(dst) encoding:NSUTF8StringEncoding]];
 
                 const int64_t  ne00 = src0 ? src0->ne[0] : 0;
                 const int64_t  ne01 = src0 ? src0->ne[1] : 0;
