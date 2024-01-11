@@ -102,8 +102,6 @@ void ggml_tallocr_alloc(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
         }
     }
 
-    AT_PRINTF("block %d\n", best_fit_block);
-
     if (best_fit_block == -1) {
         // the last block is our last resort
         struct free_block * block = &alloc->free_blocks[alloc->n_free_blocks - 1];
@@ -117,6 +115,7 @@ void ggml_tallocr_alloc(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
             return;
         }
     }
+
     struct free_block * block = &alloc->free_blocks[best_fit_block];
     void * addr = block->addr;
     block->addr = (char*)block->addr + size;
@@ -128,6 +127,8 @@ void ggml_tallocr_alloc(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
             alloc->free_blocks[j] = alloc->free_blocks[j+1];
         }
     }
+
+    AT_PRINTF("block %d, addr %p\n", best_fit_block, addr);
 
     tensor->data = addr;
     tensor->buffer = alloc->buffer;

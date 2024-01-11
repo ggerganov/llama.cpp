@@ -43,7 +43,6 @@ extern "C" {
     GGML_API ggml_backend_buffer_type_t ggml_backend_buffer_get_type      (ggml_backend_buffer_t buffer);
     GGML_API void                       ggml_backend_buffer_reset         (ggml_backend_buffer_t buffer);
 
-
     //
     // Backend
     //

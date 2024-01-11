@@ -2525,14 +2525,12 @@ static void ggml_backend_metal_buffer_get_tensor(ggml_backend_buffer_t buffer, c
     UNUSED(buffer);
 }
 
-static void ggml_backend_metal_buffer_cpy_tensor_from(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
-    ggml_backend_tensor_get(src, dst->data, 0, ggml_nbytes(src));
-
-    UNUSED(buffer);
-}
-
-static void ggml_backend_metal_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
-    ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
+static bool ggml_backend_metal_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
+    if (ggml_backend_buffer_is_host(src->buffer)) {
+        memcpy(dst->data, src->data, ggml_nbytes(src));
+        return true;
+    }
+    return false;
 
     UNUSED(buffer);
 }
@@ -2550,8 +2548,7 @@ static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
     /* .init_tensor     = */ NULL,
     /* .set_tensor      = */ ggml_backend_metal_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_metal_buffer_get_tensor,
-    /* .cpy_tensor_from = */ ggml_backend_metal_buffer_cpy_tensor_from,
-    /* .cpy_tensor_to   = */ ggml_backend_metal_buffer_cpy_tensor_to,
+    /* .cpy_tensor      = */ ggml_backend_metal_buffer_cpy_tensor,
     /* .clear           = */ ggml_backend_metal_buffer_clear,
     /* .reset           = */ NULL,
 };
@@ -2774,8 +2771,7 @@ static struct ggml_backend_i ggml_backend_metal_i = {
     /* .get_default_buffer_type = */ ggml_backend_metal_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
-    /* .cpy_tensor_from_async   = */ NULL,
-    /* .cpy_tensor_to_async     = */ NULL,
+    /* .cpy_tensor_async        = */ NULL,
     /* .synchronize             = */ NULL,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
