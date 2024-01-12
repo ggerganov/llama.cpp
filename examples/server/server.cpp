@@ -2005,12 +2005,15 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     printf("  -ngl N, --n-gpu-layers N\n");
     printf("                        number of layers to store in VRAM\n");
+    printf("  -sm SPLIT_MODE, --split-mode SPLIT_MODE\n");
+    printf("                        how to split the model across multiple GPUs, one of:\n");
+    printf("                          - none: use one GPU only\n");
+    printf("                          - layer (default): split layers and KV across GPUs\n");
+    printf("                          - row: split rows across GPUs\n");
     printf("  -ts SPLIT --tensor-split SPLIT\n");
-    printf("                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    printf("  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    printf("  -nommq, --no-mul-mat-q\n");
-    printf("                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
-    printf("                        Not recommended since this is both slower and uses more VRAM.\n");
+    printf("                        fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1\n");
+    printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
+    printf("                        or for intermediate results and KV (with split-mode = row)\n");
 #endif
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
@@ -2253,6 +2256,33 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                         "See main README.md for information on enabling GPU BLAS support",
                         {{"n_gpu_layers", params.n_gpu_layers}});
 #endif
+        }
+        else if (arg == "--split-mode" || arg == "-sm")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string arg_next = argv[i];
+            if (arg_next == "none")
+            {
+                params.split_mode = LLAMA_SPLIT_NONE;
+            }
+            else if (arg_next == "layer")
+            {
+                params.split_mode = LLAMA_SPLIT_LAYER;
+            }
+            else if (arg_next == "row")
+            {
+                params.split_mode = LLAMA_SPLIT_ROW;
+            }
+            else {
+                invalid_param = true;
+                break;
+            }
+#ifndef GGML_USE_CUBLAS
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Setting the split mode has no effect.\n");
+#endif // GGML_USE_CUBLAS
         }
         else if (arg == "--tensor-split" || arg == "-ts")
         {

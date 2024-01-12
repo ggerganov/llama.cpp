@@ -2520,10 +2520,10 @@ static void ggml_backend_metal_free_device(void) {
     }
 }
 
-static void * ggml_backend_metal_buffer_get_base(ggml_backend_buffer_t buffer) {
-    struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
+static const char * ggml_backend_metal_buffer_get_name(ggml_backend_buffer_t buffer) {
+    return "Metal";
 
-    return ctx->all_data;
+    UNUSED(buffer);
 }
 
 static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) {
@@ -2541,6 +2541,12 @@ static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) 
     free(ctx);
 }
 
+static void * ggml_backend_metal_buffer_get_base(ggml_backend_buffer_t buffer) {
+    struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
+
+    return ctx->all_data;
+}
+
 static void ggml_backend_metal_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     memcpy((char *)tensor->data + offset, data, size);
 
@@ -2553,14 +2559,12 @@ static void ggml_backend_metal_buffer_get_tensor(ggml_backend_buffer_t buffer, c
     UNUSED(buffer);
 }
 
-static void ggml_backend_metal_buffer_cpy_tensor_from(ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst) {
-    ggml_backend_tensor_get(src, dst->data, 0, ggml_nbytes(src));
-
-    UNUSED(buffer);
-}
-
-static void ggml_backend_metal_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst) {
-    ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
+static bool ggml_backend_metal_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
+    if (ggml_backend_buffer_is_host(src->buffer)) {
+        memcpy(dst->data, src->data, ggml_nbytes(src));
+        return true;
+    }
+    return false;
 
     UNUSED(buffer);
 }
@@ -2572,17 +2576,24 @@ static void ggml_backend_metal_buffer_clear(ggml_backend_buffer_t buffer, uint8_
 }
 
 static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
+    /* .get_name        = */ ggml_backend_metal_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_metal_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_metal_buffer_get_base,
     /* .init_tensor     = */ NULL,
     /* .set_tensor      = */ ggml_backend_metal_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_metal_buffer_get_tensor,
-    /* .cpy_tensor_from = */ ggml_backend_metal_buffer_cpy_tensor_from,
-    /* .cpy_tensor_to   = */ ggml_backend_metal_buffer_cpy_tensor_to,
+    /* .cpy_tensor      = */ ggml_backend_metal_buffer_cpy_tensor,
     /* .clear           = */ ggml_backend_metal_buffer_clear,
+    /* .reset           = */ NULL,
 };
 
 // default buffer type
+
+static const char * ggml_backend_metal_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+    return "Metal";
+
+    UNUSED(buft);
+}
 
 static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     struct ggml_backend_metal_buffer_context * ctx = malloc(sizeof(struct ggml_backend_metal_buffer_context));
@@ -2656,6 +2667,7 @@ static bool ggml_backend_metal_buffer_type_is_host(ggml_backend_buffer_type_t bu
 ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
     static struct ggml_backend_buffer_type ggml_backend_buffer_type_metal = {
         /* .iface = */ {
+            /* .get_name         = */ ggml_backend_metal_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_metal_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_metal_buffer_type_get_alignment,
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
@@ -2679,6 +2691,14 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
     ctx->n_buffers = 0;
 
     const size_t size_page = sysconf(_SC_PAGESIZE);
+
+    // page-align the data ptr
+    {
+        const uintptr_t offs = (uintptr_t) data % size_page;
+        data  = (void *) ((char *) data - offs);
+        size += offs;
+    }
+
     size_t size_aligned = size;
     if ((size_aligned % size_page) != 0) {
         size_aligned += (size_page - (size_aligned % size_page));
@@ -2779,14 +2799,13 @@ static bool ggml_backend_metal_supports_op(ggml_backend_t backend, const struct 
     UNUSED(backend);
 }
 
-static struct ggml_backend_i metal_backend_i = {
+static struct ggml_backend_i ggml_backend_metal_i = {
     /* .get_name                = */ ggml_backend_metal_name,
     /* .free                    = */ ggml_backend_metal_free,
     /* .get_default_buffer_type = */ ggml_backend_metal_get_default_buffer_type,
     /* .set_tensor_async        = */ NULL,
     /* .get_tensor_async        = */ NULL,
-    /* .cpy_tensor_from_async   = */ NULL,
-    /* .cpy_tensor_to_async     = */ NULL,
+    /* .cpy_tensor_async        = */ NULL,
     /* .synchronize             = */ NULL,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
@@ -2805,7 +2824,7 @@ ggml_backend_t ggml_backend_metal_init(void) {
     ggml_backend_t metal_backend = malloc(sizeof(struct ggml_backend));
 
     *metal_backend = (struct ggml_backend) {
-        /* .interface = */ metal_backend_i,
+        /* .interface = */ ggml_backend_metal_i,
         /* .context   = */ ctx,
     };
 
@@ -2813,7 +2832,7 @@ ggml_backend_t ggml_backend_metal_init(void) {
 }
 
 bool ggml_backend_is_metal(ggml_backend_t backend) {
-    return backend->iface.get_name == ggml_backend_metal_name;
+    return backend && backend->iface.get_name == ggml_backend_metal_name;
 }
 
 void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
