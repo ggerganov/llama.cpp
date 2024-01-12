@@ -394,6 +394,12 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 static void ggml_vec_dot_f32(const int n, float * restrict s, const float * restrict x, const float * restrict y);
 static void ggml_vec_dot_f16(const int n, float * restrict s, ggml_fp16_t * restrict x, ggml_fp16_t * restrict y);
 
+ggml_collect_imatrix_t g_imatrix_collect = NULL;
+
+void ggml_set_imatrix_collection(ggml_collect_imatrix_t imatrix_collect) {
+    g_imatrix_collect = imatrix_collect;
+}
+
 static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
     [GGML_TYPE_I8] = {
         .type_name                = "i8",
@@ -582,6 +588,17 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .from_float               = quantize_row_iq2_xxs,
         .from_float_reference     = (ggml_from_float_t) quantize_row_iq2_xxs_reference,
         .vec_dot                  = ggml_vec_dot_iq2_xxs_q8_K,
+        .vec_dot_type             = GGML_TYPE_Q8_K,
+    },
+    [GGML_TYPE_IQ2_XS] = {
+        .type_name                = "iq2_xs",
+        .blck_size                = QK_K,
+        .type_size                = sizeof(block_iq2_xs),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_iq2_xs,
+        .from_float               = quantize_row_iq2_xs,
+        .from_float_reference     = (ggml_from_float_t) quantize_row_iq2_xs_reference,
+        .vec_dot                  = ggml_vec_dot_iq2_xs_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
     },
     [GGML_TYPE_Q8_K] = {
@@ -2123,6 +2140,7 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
         case GGML_FTYPE_MOSTLY_Q5_K:          wtype = GGML_TYPE_Q5_K;  break;
         case GGML_FTYPE_MOSTLY_Q6_K:          wtype = GGML_TYPE_Q6_K;  break;
         case GGML_FTYPE_MOSTLY_IQ2_XXS:       wtype = GGML_TYPE_IQ2_XXS;  break;
+        case GGML_FTYPE_MOSTLY_IQ2_XS:        wtype = GGML_TYPE_IQ2_XS;   break;
         case GGML_FTYPE_UNKNOWN:              wtype = GGML_TYPE_COUNT; break;
         case GGML_FTYPE_MOSTLY_Q4_1_SOME_F16: wtype = GGML_TYPE_COUNT; break;
     }
@@ -7456,6 +7474,7 @@ static void ggml_compute_forward_add(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
             {
                 ggml_compute_forward_add_q_f32(params, src0, src1, dst);
             } break;
@@ -7721,6 +7740,7 @@ static void ggml_compute_forward_add1(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
             {
                 ggml_compute_forward_add1_q_f32(params, src0, src1, dst);
             } break;
@@ -7836,6 +7856,7 @@ static void ggml_compute_forward_acc(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
         default:
             {
                 GGML_ASSERT(false);
@@ -9769,6 +9790,10 @@ static void ggml_compute_forward_mul_mat(
     const int ith = params->ith;
     const int nth = params->nth;
 
+    if (ith == 1 && g_imatrix_collect) {
+        g_imatrix_collect(src0, src1);
+    }
+
     const enum ggml_type type = src0->type;
 
     const bool src1_cont = ggml_is_contiguous(src1);
@@ -10071,6 +10096,10 @@ static void ggml_compute_forward_mul_mat_id(
         }
 
         const struct ggml_tensor * src0_cur = dst->src[cur_a + 2];
+
+        if (ith == 1 && g_imatrix_collect) {
+            g_imatrix_collect(src0_cur, src1);
+        }
 
         const void * wdata    = (src1->type == vec_dot_type) ? src1->data : params->wdata;
         const size_t row_size = ggml_row_size(vec_dot_type, ne10);
@@ -10478,6 +10507,7 @@ static void ggml_compute_forward_out_prod(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
             {
                 ggml_compute_forward_out_prod_q_f32(params, src0, src1, dst);
             } break;
@@ -10653,6 +10683,7 @@ static void ggml_compute_forward_set(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
         default:
             {
                 GGML_ASSERT(false);
@@ -10848,6 +10879,7 @@ static void ggml_compute_forward_get_rows(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
             {
                 ggml_compute_forward_get_rows_q(params, src0, src1, dst);
             } break;
@@ -11485,6 +11517,7 @@ static void ggml_compute_forward_alibi(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_Q8_K:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
@@ -11560,6 +11593,7 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_IQ2_XXS:
+        case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_Q8_K:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
@@ -18682,6 +18716,12 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 block_iq2_xxs * block = (block_iq2_xxs*)dst + start / QK_K;
                 result = ggml_quantize_iq2_xxs(src + start, block, n, n, hist);
             } break;
+        case GGML_TYPE_IQ2_XS:
+            {
+                GGML_ASSERT(start % QK_K == 0);
+                block_iq2_xs * block = (block_iq2_xs*)dst + start / QK_K;
+                result = ggml_quantize_iq2_xs(src + start, block, n, n, hist);
+            } break;
         case GGML_TYPE_F16:
             {
                 int elemsize = sizeof(ggml_fp16_t);
@@ -19037,8 +19077,8 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 (int64_t) info->ne[3];
 
             if (ne % ggml_blck_size(info->type) != 0) {
-                fprintf(stderr, "%s: tensor '%s' number of elements (%" PRId64 ") is not a multiple of block size (%d)\n",
-                        __func__, info->name.data, ne, ggml_blck_size(info->type));
+                fprintf(stderr, "%s: tensor '%s' of type %d (%s) number of elements (%" PRId64 ") is not a multiple of block size (%d)\n",
+                        __func__, info->name.data, (int)info->type, ggml_type_name(info->type), ne, ggml_blck_size(info->type));
                 fclose(file);
                 gguf_free(ctx);
                 return NULL;

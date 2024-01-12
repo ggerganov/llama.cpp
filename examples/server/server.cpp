@@ -39,7 +39,7 @@ using json = nlohmann::json;
 struct server_params
 {
     std::string hostname = "127.0.0.1";
-    std::string api_key;
+    std::vector<std::string> api_keys;
     std::string public_path = "examples/server/public";
     int32_t port = 8080;
     int32_t read_timeout = 600;
@@ -1406,7 +1406,7 @@ struct llama_server_context
         task.multitask_id = multitask_id;
 
         // when a completion task's prompt array is not a singleton, we split it into multiple requests
-        if (task.data.at("prompt").size() > 1)
+        if (task.data.count("prompt") && task.data.at("prompt").size() > 1)
         {
             lock.unlock(); // entering new func scope
             return split_multiprompt_task(task);
@@ -1577,9 +1577,9 @@ struct llama_server_context
 
                     slot->reset();
 
-                    slot->infill = task.infill_mode;
-                    slot->embedding = task.embedding_mode;
-                    slot->task_id = task.id;
+                    slot->infill       = task.infill_mode;
+                    slot->embedding    = task.embedding_mode;
+                    slot->task_id      = task.id;
                     slot->multitask_id = task.multitask_id;
 
                     if (!launch_slot_with_data(slot, task.data))
@@ -1731,7 +1731,8 @@ struct llama_server_context
                 const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty()) || !slot.images.empty();
 
                 // empty prompt passed -> release the slot and send empty response
-                if (slot.state == IDLE && slot.command == LOAD_PROMPT && !has_prompt)
+                // note: infill mode allows empty prompt
+                if (slot.state == IDLE && slot.command == LOAD_PROMPT && !has_prompt && !slot.infill)
                 {
                     slot.release();
                     slot.print_timings();
@@ -2024,6 +2025,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
     printf("  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
     printf("  --api-key API_KEY     optional api key to enhance server security. If set, requests must include this key for access.\n");
+    printf("  --api-key-file FNAME  path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
     printf("  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     printf("  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N   number of slots for process requests (default: %d)\n", params.n_parallel);
@@ -2084,7 +2086,28 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            sparams.api_key = argv[i];
+            sparams.api_keys.push_back(argv[i]);
+        }
+        else if (arg == "--api-key-file")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream key_file(argv[i]);
+            if (!key_file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            std::string key;
+            while (std::getline(key_file, key)) {
+               if (key.size() > 0) {
+                   sparams.api_keys.push_back(key);
+               }
+            }
+            key_file.close();
         }
         else if (arg == "--timeout" || arg == "-to")
         {
@@ -2545,7 +2568,7 @@ json oaicompat_completion_params_parse(
     //
     // https://platform.openai.com/docs/api-reference/chat/create
     llama_sampling_params default_sparams;
-    llama_params["model"]             = json_value(body, "model", std::string("uknown"));
+    llama_params["model"]             = json_value(body, "model", std::string("unknown"));
     llama_params["prompt"]            = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
     llama_params["temperature"]       = json_value(body, "temperature", 0.0);
@@ -2617,8 +2640,8 @@ static json format_final_response_oaicompat(const json &request, const task_resu
             {"object", streaming ? "chat.completion.chunk" : "chat.completion"},
             {"usage",
                 json{{"completion_tokens", num_tokens_predicted},
-                    {"prompt_tokens", num_prompt_tokens},
-                    {"total_tokens", num_tokens_predicted + num_prompt_tokens}}},
+                     {"prompt_tokens",     num_prompt_tokens},
+                     {"total_tokens",      num_tokens_predicted + num_prompt_tokens}}},
             {"id", gen_chatcmplid()}};
 
     if (server_verbose) {
@@ -2830,9 +2853,15 @@ int main(int argc, char **argv)
 
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
-    svr.set_default_headers({{"Server", "llama.cpp"},
-                             {"Access-Control-Allow-Origin", "*"},
-                             {"Access-Control-Allow-Headers", "content-type"}});
+    svr.set_default_headers({{"Server", "llama.cpp"}});
+
+    // CORS preflight
+    svr.Options(R"(.*)", [](const httplib::Request &req, httplib::Response &res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        res.set_header("Access-Control-Allow-Credentials", "true");
+        res.set_header("Access-Control-Allow-Methods", "POST");
+        res.set_header("Access-Control-Allow-Headers", "*");
+    });
 
     svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
         server_state current_state = state.load();
@@ -2911,8 +2940,10 @@ int main(int argc, char **argv)
     log_data["hostname"] = sparams.hostname;
     log_data["port"] = std::to_string(sparams.port);
 
-    if (!sparams.api_key.empty()) {
-        log_data["api_key"] = "api_key: ****" + sparams.api_key.substr(sparams.api_key.length() - 4);
+    if (sparams.api_keys.size() == 1) {
+        log_data["api_key"] = "api_key: ****" + sparams.api_keys[0].substr(sparams.api_keys[0].length() - 4);
+    } else if (sparams.api_keys.size() > 1) {
+        log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
     }
 
     LOG_INFO("HTTP server listening", log_data);
@@ -2936,12 +2967,13 @@ int main(int argc, char **argv)
     } else {
         llama.initialize();
         state.store(SERVER_STATE_READY);
+        LOG_INFO("model loaded", {});
     }
 
     // Middleware for API key validation
     auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
         // If API key is not set, skip validation
-        if (sparams.api_key.empty()) {
+        if (sparams.api_keys.empty()) {
             return true;
         }
 
@@ -2950,7 +2982,7 @@ int main(int argc, char **argv)
         std::string prefix = "Bearer ";
         if (auth_header.substr(0, prefix.size()) == prefix) {
             std::string received_api_key = auth_header.substr(prefix.size());
-            if (received_api_key == sparams.api_key) {
+            if (std::find(sparams.api_keys.begin(), sparams.api_keys.end(), received_api_key) != sparams.api_keys.end()) {
                 return true; // API key is valid
             }
         }
@@ -2992,9 +3024,9 @@ int main(int argc, char **argv)
                 return false;
             });
 
-    svr.Get("/props", [&llama](const httplib::Request & /*req*/, httplib::Response &res)
+    svr.Get("/props", [&llama](const httplib::Request & req, httplib::Response &res)
             {
-                res.set_header("Access-Control-Allow-Origin", "*");
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 json data = {
                     { "user_name",      llama.name_user.c_str() },
                     { "assistant_name", llama.name_assistant.c_str() }
@@ -3004,6 +3036,7 @@ int main(int argc, char **argv)
 
     svr.Post("/completion", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
             {
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 if (!validate_api_key(req, res)) {
                     return;
                 }
@@ -3071,8 +3104,9 @@ int main(int argc, char **argv)
                 }
             });
 
-    svr.Get("/v1/models", [&params](const httplib::Request&, httplib::Response& res)
+    svr.Get("/v1/models", [&params](const httplib::Request& req, httplib::Response& res)
             {
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 std::time_t t = std::time(0);
 
                 json models = {
@@ -3090,9 +3124,11 @@ int main(int argc, char **argv)
                 res.set_content(models.dump(), "application/json; charset=utf-8");
             });
 
+
     // TODO: add mount point without "/v1" prefix -- how?
     svr.Post("/v1/chat/completions", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
             {
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 if (!validate_api_key(req, res)) {
                     return;
                 }
@@ -3166,6 +3202,7 @@ int main(int argc, char **argv)
 
     svr.Post("/infill", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
             {
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 if (!validate_api_key(req, res)) {
                     return;
                 }
@@ -3238,6 +3275,7 @@ int main(int argc, char **argv)
 
     svr.Post("/tokenize", [&llama](const httplib::Request &req, httplib::Response &res)
             {
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 const json body = json::parse(req.body);
                 std::vector<llama_token> tokens;
                 if (body.count("content") != 0)
@@ -3250,6 +3288,7 @@ int main(int argc, char **argv)
 
     svr.Post("/detokenize", [&llama](const httplib::Request &req, httplib::Response &res)
             {
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 const json body = json::parse(req.body);
                 std::string content;
                 if (body.count("tokens") != 0)
@@ -3264,6 +3303,7 @@ int main(int argc, char **argv)
 
     svr.Post("/embedding", [&llama](const httplib::Request &req, httplib::Response &res)
             {
+                res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 const json body = json::parse(req.body);
                 json prompt;
                 if (body.count("content") != 0)
