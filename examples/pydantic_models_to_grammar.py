@@ -283,8 +283,7 @@ def generate_gbnf_rule_for_type(model_name, look_for_markdown_code_block, look_f
 
     if isclass(field_type) and issubclass(field_type, BaseModel):
         nested_model_name = format_model_and_field_name(field_type.__name__)
-        nested_model_rules = generate_gbnf_grammar(field_type, look_for_markdown_code_block,
-                                                   look_for_triple_quoted_string, processed_models, created_rules)
+        nested_model_rules = generate_gbnf_grammar(field_type, processed_models, created_rules)
         rules.extend(nested_model_rules)
         gbnf_type, rules = nested_model_name, rules
     elif isclass(field_type) and issubclass(field_type, Enum):
@@ -424,8 +423,6 @@ def generate_gbnf_grammar(model: Type[BaseModel], processed_models: set, created
     Generates a GBnF grammar for a given model.
 
     :param model: A Pydantic model class to generate the grammar for. Must be a subclass of BaseModel.
-    :param look_for_markdown_code_block: Look for Markdown code block
-    :param look_for_triple_quoted_string
     :param processed_models: A set of already processed models to prevent infinite recursion.
     :param created_rules: A dict containing already created rules to prevent duplicates.
     :return: A list of GBnF grammar rules in string format. And two booleans indicating if an extra markdown or triple quoted string is in the grammar.
