@@ -160,11 +160,13 @@ extern "C" {
     GGML_API ggml_backend_buffer_t ggml_backend_sched_get_buffer (ggml_backend_sched_t sched, ggml_backend_t backend);
 
     GGML_API void                  ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node, ggml_backend_t backend);
+    GGML_API ggml_backend_t        ggml_backend_sched_get_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node);
 
     // Allocate and compute graph on the backend scheduler
-    GGML_API void ggml_backend_sched_graph_compute(
-            ggml_backend_sched_t sched,
-            struct ggml_cgraph * graph);
+    GGML_API void                  ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
+
+    // Reset all assignments and allocators - must be called before using the sched allocators to allocate inputs
+    GGML_API void                  ggml_backend_sched_reset(ggml_backend_sched_t sched);
 
     //
     // Utils

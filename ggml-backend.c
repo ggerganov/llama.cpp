@@ -772,6 +772,8 @@ struct ggml_backend_sched_split {
 };
 
 struct ggml_backend_sched {
+    bool is_reset; // true if the scheduler has been reset since the last graph split
+
     int n_backends;
     ggml_backend_t backends[GGML_MAX_BACKENDS];
     ggml_tallocr_t  tallocs[GGML_MAX_BACKENDS];
@@ -968,6 +970,7 @@ static struct ggml_tensor * ggml_dup_tensor_layout(struct ggml_context * ctx, co
 static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
     // reset splits
     sched->n_splits = 0;
+    sched->is_reset = false;
 
     struct ggml_init_params params = {
         /* .mem_size =   */ sizeof(sched->context_buffer),
@@ -1327,6 +1330,8 @@ static void sched_reset(ggml_backend_sched_t sched) {
     memset(sched->hash_set.keys, 0, sizeof(sched->hash_set.keys[0]) * hash_size);
     memset(sched->node_talloc,   0, sizeof(sched->node_talloc[0])   * hash_size);
     memset(sched->node_copies,   0, sizeof(sched->node_copies[0])   * hash_size);
+
+    sched->is_reset = true;
 }
 
 ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, int n_backends, size_t graph_size) {
@@ -1351,6 +1356,8 @@ ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, int n_bac
     for (int i = 0; i < n_backends; i++) {
         sched->tallocs[i] = ggml_tallocr_new_measure_from_backend(backends[i]);
     }
+
+    sched_reset(sched);
 
     return sched;
 }
@@ -1389,9 +1396,16 @@ void ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgr
 void ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
     GGML_ASSERT((int)sched->hash_set.size >= graph->n_nodes + GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS);
 
+    if (!sched->is_reset) {
+        sched_reset(sched);
+    }
+
     sched_split_graph(sched, graph);
     sched_alloc_splits(sched);
     sched_compute_splits(sched);
+}
+
+void ggml_backend_sched_reset(ggml_backend_sched_t sched) {
     sched_reset(sched);
 }
 
@@ -1415,6 +1429,14 @@ void ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml
     int backend_index = sched_backend_prio(sched, backend);
     GGML_ASSERT(backend_index >= 0 && backend_index < sched->n_backends);
     node_allocr(node) = sched->tallocs[backend_index];
+}
+
+ggml_backend_t ggml_backend_sched_get_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node) {
+    ggml_tallocr_t allocr = node_allocr(node);
+    if (allocr == NULL) {
+        return NULL;
+    }
+    return get_allocr_backend(sched, allocr);
 }
 
 // utils

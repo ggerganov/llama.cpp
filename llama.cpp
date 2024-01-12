@@ -6218,6 +6218,8 @@ static int llama_decode_internal(
 
     //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
+    ggml_backend_sched_reset(lctx.sched);
+
     ggml_cgraph * gf = llama_build_graph(lctx, batch);
 
     // the output is always the last tensor in the graph
@@ -6311,30 +6313,33 @@ static int llama_decode_internal(
         logits_out.clear();
 #endif
 
+        ggml_backend_t res_backend = ggml_backend_sched_get_node_backend(lctx.sched, res);
+        GGML_ASSERT(res_backend != nullptr);
         if (batch.logits) {
             logits_out.resize(n_vocab * n_tokens);
             for (uint32_t i = 0; i < n_tokens; i++) {
                 if (batch.logits[i] == 0) {
                     continue;
                 }
-                ggml_backend_tensor_get(res, logits_out.data() + (n_vocab*i), (n_vocab*i)*sizeof(float), n_vocab*sizeof(float));
+                ggml_backend_tensor_get_async(res_backend, res, logits_out.data() + (n_vocab*i), (n_vocab*i)*sizeof(float), n_vocab*sizeof(float));
 #ifndef NDEBUG
                 logits_valid[i] = true;
 #endif
             }
         } else if (lctx.logits_all) {
             logits_out.resize(n_vocab * n_tokens);
-            ggml_backend_tensor_get(res, logits_out.data(), 0, n_vocab*n_tokens*sizeof(float));
+            ggml_backend_tensor_get_async(res_backend, res, logits_out.data(), 0, n_vocab*n_tokens*sizeof(float));
 #ifndef NDEBUG
             std::fill(logits_valid.begin(), logits_valid.end(), true);
 #endif
         } else {
             logits_out.resize(n_vocab);
-            ggml_backend_tensor_get(res, logits_out.data(), (n_vocab*(n_tokens - 1))*sizeof(float), n_vocab*sizeof(float));
+            ggml_backend_tensor_get_async(res_backend, res, logits_out.data(), (n_vocab*(n_tokens - 1))*sizeof(float), n_vocab*sizeof(float));
 #ifndef NDEBUG
             logits_valid[0] = true;
 #endif
         }
+        ggml_backend_synchronize(res_backend);
     }
 
     // extract embeddings
@@ -6342,7 +6347,9 @@ static int llama_decode_internal(
         auto & embedding_out = lctx.embedding;
 
         embedding_out.resize(n_embd);
-        ggml_backend_tensor_get(embeddings, embedding_out.data(), (n_embd*(n_tokens - 1))*sizeof(float), n_embd*sizeof(float));
+        ggml_backend_t embeddings_backend = ggml_backend_sched_get_node_backend(lctx.sched, embeddings);
+        ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), (n_embd*(n_tokens - 1))*sizeof(float), n_embd*sizeof(float));
+        ggml_backend_synchronize(embeddings_backend);
     }
 
     // measure the performance only for the single-token evals
