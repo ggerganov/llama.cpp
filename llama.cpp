@@ -5040,7 +5040,7 @@ struct llm_build_context {
         struct ggml_tensor * inpL;
 
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, cb);
-        cb(inpL, "imp_embd", -1);
+        cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
         struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
