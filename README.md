@@ -601,7 +601,8 @@ Building the program with BLAS support may lead to some performance improvements
 ```bash
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
-65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
+65B 30B 13B 7B tokenizer.model
+
   # [Optional] for models using BPE tokenizers
   ls ./models
   65B 30B 13B 7B vocab.json
@@ -610,7 +611,8 @@ ls ./models
 python3 -m pip install -r requirements.txt
 
 # convert the 7B model to ggml FP16 format
-python3 convert.py models/7B/
+# Use --ctx 4096 for LLaMA v2
+python3 convert.py models/7B/ --ctx 2048
 
   # [Optional] for models using BPE tokenizers
   python convert.py models/7B/ --vocabtype bpe
