@@ -191,6 +191,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.w1",                             # qwen
             "h.{bid}.mlp.c_fc",                                       # gpt2
             "transformer.h.{bid}.mlp.fc1",                            # phi2
+            "model.layers.{bid}.mlp.fc1",                             # phi2
             "model.layers.layers.{bid}.mlp.up_proj",                  # plamo
         ),
 
@@ -232,6 +233,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.dense_4h_to_h",                   # persimmon
             "h.{bid}.mlp.c_proj",                                     # gpt2
             "transformer.h.{bid}.mlp.fc2",                            # phi2
+            "model.layers.{bid}.mlp.fc2",                             # phi2
             "model.layers.layers.{bid}.mlp.down_proj",                # plamo
         ),
 
