@@ -103,7 +103,11 @@ endif
 # keep standard at C11 and C++11
 MK_CPPFLAGS = -I. -Icommon
 MK_CFLAGS   = -std=c11   -fPIC
+ifdef LLAMA_HPX
+MK_CXXFLAGS = -std=c++17 -fPIC
+else
 MK_CXXFLAGS = -std=c++11 -fPIC
+endif
 
 # -Ofast tends to produce faster code, but may not be available for some compilers.
 ifdef LLAMA_FAST
@@ -353,6 +357,46 @@ ifdef LLAMA_MPI
 	MK_CXXFLAGS += -Wno-cast-qual
 	OBJS        += ggml-mpi.o
 endif # LLAMA_MPI
+
+ifdef LLAMA_HPX
+ 	ifndef HWLOC_FOUND
+                HWLOC_PKG:=hwloc
+ 		HWLOC_REQPKG:=$(shell pkg-config --exists $(HWLOC_PKG) && echo '$(HWLOC_PKG)')
+ 		ifneq ($(HWLOC_REQPKG),)
+ 			HWLOC_FOUND:=1
+ 			HWLOC_CXXFLAGS:=$(shell pkg-config --cflags $(HWLOC_PKG))
+ 			HWLOC_LDFLAGS:=$(shell pkg-config --libs $(HWLOC_PKG))
+ 			warn := $(warning hwloc found)
+ 		else
+ 			$(warning 'hwloc' not found)
+ 		endif
+ 	endif
+
+ 	ifndef HWLOC_FOUND
+ 		$(error hwloc not found)
+ 	endif
+
+ 	ifndef HPX_FOUND
+                HPX_PKG:=hpx_component
+ 		HPX_REQPKG:=$(shell pkg-config --exists $(HPX_PKG) && echo '$(HPX_PKG)')
+ 		ifneq ($(HPX_REQPKG),)
+ 			HPX_FOUND:=1
+ 			HPX_CXXFLAGS:=$(shell pkg-config --cflags hpx_component)
+ 			HPX_LDFLAGS:=$(shell pkg-config --libs hpx_component)
+ 			warn := $(warning HPX found)
+ 		else
+ 			$(warning 'HPX' not found)
+ 		endif
+ 	endif
+
+ 	ifndef HPX_FOUND
+ 		$(error HPX not found)
+ 	endif
+
+ 	MK_CPPFLAGS += -DGGML_USE_HPX $(HWLOC_CXXFLAGS) $(HPX_CXXFLAGS)
+ 	MK_CXXFLAGS += -Wno-cast-qual $(HWLOC_CXXFLAGS) $(HPX_CXXFLAGS)
+ 	MK_LDFLAGS  += -Wno-cast-qual $(HWLOC_LDFLAGS) $(HPX_LDFLAGS)
+ endif # LLAMA_HPX
 
 ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)

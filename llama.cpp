@@ -19,6 +19,13 @@
 #ifdef GGML_USE_MPI
 #  include "ggml-mpi.h"
 #endif
+#ifdef GGML_USE_HPX
+#  include <cstdlib>
+#  include <algorithm>
+#  include <hpx/hpx_start.hpp>
+#  include <hpx/runtime_local/run_as_hpx_thread.hpp>
+#  include <hpx/execution.hpp>
+#endif
 #ifndef QK_K
 #  ifdef GGML_QKK_64
 #    define QK_K 64
@@ -8328,6 +8335,100 @@ struct quantize_state_internal {
         {}
 };
 
+#if defined(GGML_USE_HPX)
+
+static void llama_convert_tensor_internal(
+    struct ggml_tensor * tensor, std::vector<no_init<float>> & output, std::vector<hpx::future<void>> & futures,
+    const size_t nelements, const int nthread
+) {
+    if (output.size() < nelements) {
+        output.resize(nelements);
+    }
+    float * f32_output = (float *) output.data();
+
+    ggml_type_traits_t qtype;
+    if (ggml_is_quantized(tensor->type)) {
+        qtype = ggml_internal_get_type_traits(tensor->type);
+        if (qtype.to_float == NULL) {
+            throw std::runtime_error(format("type %s unsupported for integer quantization: no dequantization available", ggml_type_name(tensor->type)));
+        }
+    } else if (tensor->type != GGML_TYPE_F16) {
+        throw std::runtime_error(format("cannot dequantize/convert tensor type %s", ggml_type_name(tensor->type)));
+    }
+
+    if (nthread < 2) {
+        if (tensor->type == GGML_TYPE_F16) {
+            ggml_fp16_to_fp32_row((ggml_fp16_t *)tensor->data, f32_output, nelements);
+        } else if (ggml_is_quantized(tensor->type)) {
+            qtype.to_float(tensor->data, f32_output, nelements);
+        } else {
+            GGML_ASSERT(false); // unreachable
+        }
+        return;
+    }
+
+    size_t block_size = tensor->type == GGML_TYPE_F16 ? 1 : (size_t)ggml_blck_size(tensor->type);
+    size_t block_size_bytes = ggml_type_size(tensor->type);
+
+    GGML_ASSERT(nelements % block_size == 0);
+    size_t nblocks = nelements / block_size;
+    size_t blocks_per_thread = nblocks / nthread;
+    size_t spare_blocks = nblocks - (blocks_per_thread * nthread); // if blocks aren't divisible by thread count
+
+    size_t in_buff_offs = 0;
+    size_t out_buff_offs = 0;
+
+     hpx::future<void> fut =
+           hpx::run_as_hpx_thread([&futures, nthread, qtype, block_size, block_size_bytes, blocks_per_thread, spare_blocks, &tensor, &in_buff_offs, &f32_output, &out_buff_offs]() -> hpx::future<void>
+           {
+               for (int tnum = 1; tnum < nthread; tnum++) {
+                   size_t thr_blocks = blocks_per_thread + (tnum == nthread - 1 ? spare_blocks : 0); // num blocks for this thread
+                   size_t thr_elems = thr_blocks * block_size; // number of elements for this thread
+                   size_t thr_block_bytes = thr_blocks * block_size_bytes; // number of input bytes for this thread
+
+                   auto compute = [qtype] (ggml_type typ, uint8_t * inbuf, float * outbuf, int nels) {
+                       if (typ == GGML_TYPE_F16) {
+                           ggml_fp16_to_fp32_row((ggml_fp16_t *)inbuf, outbuf, nels);
+                       } else {
+                           qtype.to_float(inbuf, outbuf, nels);
+                       }
+                   };
+
+                   futures.push_back(hpx::async(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems));
+
+                   in_buff_offs += thr_block_bytes;
+                   out_buff_offs += thr_elems;
+               }
+
+               { 
+                   size_t thr_blocks = blocks_per_thread + (0 == nthread - 1 ? spare_blocks : 0); // num blocks for this thread
+                   size_t thr_elems = thr_blocks * block_size; // number of elements for this thread
+                   size_t thr_block_bytes = thr_blocks * block_size_bytes; // number of input bytes for this thread
+
+                   auto compute = [qtype] (ggml_type typ, uint8_t * inbuf, float * outbuf, int nels) {
+                       if (typ == GGML_TYPE_F16) {
+                           ggml_fp16_to_fp32_row((ggml_fp16_t *)inbuf, outbuf, nels);
+                       } else {
+                           qtype.to_float(inbuf, outbuf, nels);
+                       }
+                   };
+
+                   compute(tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems);
+
+                   in_buff_offs += thr_block_bytes;
+                   out_buff_offs += thr_elems;
+               }
+
+               hpx::wait_all(futures);
+               return hpx::make_ready_future<void>();
+         });
+
+    fut.wait();
+    futures.clear();
+}
+
+#else
+
 static void llama_convert_tensor_internal(
     struct ggml_tensor * tensor, std::vector<no_init<float>> & output, std::vector<std::thread> & workers,
     const size_t nelements, const int nthread
@@ -8388,6 +8489,8 @@ static void llama_convert_tensor_internal(
     for (auto & w : workers) { w.join(); }
     workers.clear();
 }
+
+#endif
 
 static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_type, const ggml_tensor * tensor, llama_ftype ftype) {
     const std::string name = ggml_get_name(tensor);
@@ -8601,9 +8704,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     size_t total_size_new = 0;
     std::vector<int64_t> hist_all(1 << 4, 0);
 
+#if defined(GGML_USE_HPX)
+    std::vector<hpx::future<void>> futures;
+    futures.reserve(nthread-1);
+    hpx::mutex mutex;
+#else
     std::vector<std::thread> workers;
     workers.reserve(nthread);
     std::mutex mutex;
+#endif
 
     int idx = 0;
 
@@ -8686,7 +8795,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor->type)));
             } else {
+#if defined(GGML_USE_HPX)
+                llama_convert_tensor_internal(tensor, f32_conv_buf, futures, nelements, nthread);
+#else
                 llama_convert_tensor_internal(tensor, f32_conv_buf, workers, nelements, nthread);
+#endif
                 f32_data = (float *) f32_conv_buf.data();
             }
 
@@ -8707,6 +8820,56 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else {
                 size_t counter = 0;
                 new_size = 0;
+
+#if defined(GGML_USE_HPX)
+                std::vector<std::array<int64_t, 1 << 4>> thread_local_hist(nthread_use);
+                std::vector<std::size_t> local_sizes(nthread_use, 0);
+                std::vector<std::size_t> counters(nthread_use, counter);
+                std::generate(counters.begin(), counters.end(), [n = 0]() mutable { return (++n) * (32 * 512); });
+
+                std::function<hpx::future<void>(const std::size_t, const std::size_t, std::vector<std::array<int64_t, 1 << 4>> &, std::vector<std::size_t> &)> computefn =
+                   [new_type, f32_data, new_data, nelements](const std::size_t thread, const std::size_t counter, std::vector<std::array<int64_t, 1 << 4>> & thread_local_hist, std::vector<std::size_t> & local_sizes) -> hpx::future<void> {
+
+                   std::array<int64_t, 1 << 4> & local_hist = thread_local_hist[thread];
+                   std::size_t & local_size = local_sizes[thread];
+                   std::size_t first = counter;
+
+                   while(true) {
+                        first = counter;
+                        if (first >= nelements) {
+                            if (local_size > 0) {
+                                for (int j=0; j<int(local_hist.size()); ++j) {
+                                    local_hist[j] += local_hist[j];
+                                }
+                            }
+                            break;
+                        }
+                        size_t last = std::min(nelements, first + chunk_size);
+                        local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
+                   } 
+                   return hpx::make_ready_future<void>();
+                };
+
+                for (int it = 1; it < nthread_use - 1; ++it) {
+                    futures.push_back(hpx::run_as_hpx_thread(computefn, it, counters[it], thread_local_hist, local_sizes));
+                }
+
+                hpx::future<void> this_fut =
+                    computefn(0, counters[0], thread_local_hist, local_sizes);
+
+                hpx::wait_all(futures);
+
+                this_fut.wait();
+
+                for(auto & local_hist : thread_local_hist) {
+                    for(auto j = 0; j < int(local_hist.size()); ++j) {
+                        hist_cur[j] += local_hist[j];
+                    }
+                }
+
+                new_size = std::reduce(local_sizes.begin(), local_sizes.end(), new_size, std::plus<std::size_t>{});
+                futures.clear();
+#else
                 auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements]() {
                     std::array<int64_t, 1 << 4> local_hist = {};
                     size_t local_size = 0;
@@ -8727,12 +8890,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
                     }
                 };
+
                 for (int it = 0; it < nthread_use - 1; ++it) {
                     workers.emplace_back(compute);
                 }
                 compute();
                 for (auto & w : workers) { w.join(); }
                 workers.clear();
+#endif
             }
 
             LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB | hist: ", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
@@ -9160,6 +9325,7 @@ void llama_backend_init(bool numa) {
         struct ggml_init_params params = { 0, NULL, false };
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
+
     }
 
     if (numa) {
@@ -9169,11 +9335,26 @@ void llama_backend_init(bool numa) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_init();
 #endif
+#ifdef GGML_USE_HPX
+    {
+        const auto nthread = std::thread::hardware_concurrency();
+        std::string thread_arg = "--hpx:threads=" + std::to_string(nthread);
+        hpx::init_params params;
+        params.cfg = { thread_arg };
+        hpx::start(nullptr, 0, nullptr, params);
+    }
+#endif
 }
 
 void llama_backend_free(void) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_free();
+#endif
+#ifdef GGML_USE_HPX
+    {
+        hpx::post([]() { hpx::finalize(); });
+        hpx::stop();
+    }
 #endif
 }
 
