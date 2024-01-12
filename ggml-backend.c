@@ -1087,6 +1087,24 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             }
         }
     }
+
+    // pass 2.4 expand rest down
+    {
+        ggml_tallocr_t cur_allocr = NULL;
+        for (int i = 0; i < graph->n_nodes; i++) {
+            struct ggml_tensor * node = graph->nodes[i];
+            if (ggml_is_view_op(node->op)) {
+                continue;
+            }
+            ggml_tallocr_t node_allocr = node_allocr(node);
+            if (node_allocr != NULL) {
+                cur_allocr = node_allocr;
+            } else {
+                node_allocr(node) = cur_allocr;
+                SET_CAUSE(node, "2.4");
+            }
+        }
+    }
 #ifdef DEBUG_PASS2
     fprintf(stderr, "PASS 2 ASSIGNMENTS\n"); sched_print_assignments(sched, graph);
 #endif
@@ -1145,6 +1163,8 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             }
 
             ggml_tallocr_t node_allocr = node_allocr(node);
+
+            GGML_ASSERT(node_allocr != NULL); // all nodes should be assigned by now
 
             if (node_allocr != cur_allocr) {
                 sched->splits[cur_split].i_end = i;
