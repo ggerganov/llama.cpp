@@ -1,39 +1,43 @@
 import SwiftUI
 
-struct DownloadButton: View {
-    @ObservedObject private var llamaState: LlamaState
-    private var modelName: String
-    private var modelUrl: String
-    private var filename: String
-
-    @State private var status: String
+struct InputButton: View {
+    @ObservedObject var llamaState: LlamaState
+    @State private var inputLink: String = ""
+    @State private var status: String = "download"
+    @State private var filename: String = ""
 
     @State private var downloadTask: URLSessionDownloadTask?
     @State private var progress = 0.0
     @State private var observation: NSKeyValueObservation?
 
+    private static func extractModelInfo(from link: String) -> (modelName: String, filename: String)? {
+        guard let url = URL(string: link),
+              let lastPathComponent = url.lastPathComponent.components(separatedBy: ".").first,
+              let modelName = lastPathComponent.components(separatedBy: "-").dropLast().joined(separator: "-").removingPercentEncoding,
+              let filename = lastPathComponent.removingPercentEncoding else {
+            return nil
+        }
+
+        return (modelName, filename)
+    }
+
     private static func getFileURL(filename: String) -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(filename)
     }
 
-    private func checkFileExistenceAndUpdateStatus() {
-    }
-
-    init(llamaState: LlamaState, modelName: String, modelUrl: String, filename: String) {
-        self.llamaState = llamaState
-        self.modelName = modelName
-        self.modelUrl = modelUrl
-        self.filename = filename
-
-        let fileURL = DownloadButton.getFileURL(filename: filename)
-        status = FileManager.default.fileExists(atPath: fileURL.path) ? "downloaded" : "download"
-    }
-
     private func download() {
+        guard let extractedInfo = InputButton.extractModelInfo(from: inputLink) else {
+            // Handle invalid link or extraction failure
+            return
+        }
+
+        let (modelName, filename) = extractedInfo
+        self.filename = filename  // Set the state variable
+
         status = "downloading"
-        print("Downloading model \(modelName) from \(modelUrl)")
-        guard let url = URL(string: modelUrl) else { return }
-        let fileURL = DownloadButton.getFileURL(filename: filename)
+        print("Downloading model \(modelName) from \(inputLink)")
+        guard let url = URL(string: inputLink) else { return }
+        let fileURL = InputButton.getFileURL(filename: filename)
 
         downloadTask = URLSession.shared.downloadTask(with: url) { temporaryURL, response, error in
             if let error = error {
@@ -53,7 +57,7 @@ struct DownloadButton: View {
 
                     llamaState.cacheCleared = false
 
-                    let model = Model(name: modelName, url: modelUrl, filename: filename, status: "downloaded")
+                    let model = Model(name: modelName, url: self.inputLink, filename: filename, status: "downloaded")
                     llamaState.downloadedModels.append(model)
                     status = "downloaded"
                 }
@@ -71,20 +75,32 @@ struct DownloadButton: View {
 
     var body: some View {
         VStack {
+            HStack {
+                TextField("Paste Quantized Download Link", text: $inputLink)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                Button(action: {
+                    downloadTask?.cancel()
+                    status = "download"
+                }) {
+                    Text("Cancel")
+                }
+            }
+
             if status == "download" {
                 Button(action: download) {
-                    Text("Download " + modelName)
+                    Text("Download Custom Model")
                 }
             } else if status == "downloading" {
                 Button(action: {
                     downloadTask?.cancel()
                     status = "download"
                 }) {
-                    Text("\(modelName) (Downloading \(Int(progress * 100))%)")
+                    Text("Downloading \(Int(progress * 100))%")
                 }
             } else if status == "downloaded" {
                 Button(action: {
-                    let fileURL = DownloadButton.getFileURL(filename: filename)
+                    let fileURL = InputButton.getFileURL(filename: self.filename)
                     if !FileManager.default.fileExists(atPath: fileURL.path) {
                         download()
                         return
@@ -95,7 +111,7 @@ struct DownloadButton: View {
                         print("Error: \(err.localizedDescription)")
                     }
                 }) {
-                    Text("Load \(modelName)")
+                    Text("Load Custom Model")
                 }
             } else {
                 Text("Unknown status")
@@ -107,18 +123,9 @@ struct DownloadButton: View {
         .onChange(of: llamaState.cacheCleared) { newValue in
             if newValue {
                 downloadTask?.cancel()
-                let fileURL = DownloadButton.getFileURL(filename: filename)
+                let fileURL = InputButton.getFileURL(filename: self.filename)
                 status = FileManager.default.fileExists(atPath: fileURL.path) ? "downloaded" : "download"
             }
         }
     }
 }
-
-// #Preview {
-//    DownloadButton(
-//        llamaState: LlamaState(),
-//        modelName: "TheBloke / TinyLlama-1.1B-1T-OpenOrca-GGUF (Q4_0)",
-//        modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_0.gguf?download=true",
-//        filename: "tinyllama-1.1b-1t-openorca.Q4_0.gguf"
-//    )
-// }

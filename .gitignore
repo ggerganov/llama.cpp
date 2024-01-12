@@ -43,6 +43,7 @@ models-mnt
 /embedding
 /gguf
 /gguf-llama-simple
+/imatrix
 /infill
 /libllama.so
 /llama-bench

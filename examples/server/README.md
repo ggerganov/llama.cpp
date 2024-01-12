@@ -23,7 +23,8 @@ Command line options:
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
 -   `--path`: path from which to serve static files (default examples/server/public)
--   `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token.
+-   `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
+-   `--api-key-file`: path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`'s.
 -   `--embedding`: Enable embedding extraction, Default: disabled.
 -   `-np N`, `--parallel N`: Set the number of slots for process requests (default: 1)
 -   `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
@@ -110,6 +111,10 @@ node index.js
 ```
 
 ## API Endpoints
+- **GET** `/health`: Returns the current state of the server:
+    - `{"status": "loading model"}` if the model is still being loaded.
+    - `{"status": "error"}` if the model failed to load.
+    - `{"status": "ok"}` if the model is successfully loaded and the server is ready for further requests mentioned below.
 
 -   **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 

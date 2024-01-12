@@ -630,6 +630,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.ppl_stride = std::stoi(argv[i]);
+        } else if (arg == "-ptc" || arg == "--print-token-count") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_print = std::stoi(argv[i]);
         } else if (arg == "--ppl-output-type") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -812,7 +818,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("\n");
     printf("options:\n");
     printf("  -h, --help            show this help message and exit\n");
-    printf("      --version         show version and build info\n");
+    printf("  --version             show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
@@ -909,7 +915,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        number of layers to store in VRAM\n");
     printf("  -ngld N, --n-gpu-layers-draft N\n");
     printf("                        number of layers to store in VRAM for the draft model\n");
-    printf("  -ts SPLIT --tensor-split SPLIT\n");
+    printf("  -ts SPLIT, --tensor-split SPLIT\n");
     printf("                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     printf("  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
 #ifdef GGML_USE_CUBLAS
@@ -944,6 +950,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                        advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                        types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
+    printf("  -ptc N, --print-token-count N\n");
+    printf("                        print token count every N tokens (default: %d)\n", params.n_print);
     printf("\n");
 #ifndef LOG_DISABLE_LOGS
     log_print_usage();
@@ -1047,6 +1055,9 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
 }
 
 static ggml_type kv_cache_type_from_str(const std::string & s) {
+    if (s == "f32") {
+        return GGML_TYPE_F32;
+    }
     if (s == "f16") {
         return GGML_TYPE_F16;
     }
