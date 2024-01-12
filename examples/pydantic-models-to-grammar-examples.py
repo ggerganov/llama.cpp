@@ -8,7 +8,7 @@ import requests
 from pydantic import BaseModel, Field
 
 import importlib
-pydantic_models_to_grammar = importlib.import_module("pydantic-models-to-grammar")
+from pydantic_models_to_grammar import generate_gbnf_grammar_and_documentation
 
 # Function to get completion on the llama.cpp server with grammar.
 def create_completion(prompt, grammar):
@@ -70,7 +70,7 @@ class Calculator(BaseModel):
 # outer_object_content is the name of outer object content.
 # model_prefix is the optional prefix for models in the documentation. (Default="Output Model")
 # fields_prefix is the prefix for the model fields in the documentation. (Default="Output Fields")
-gbnf_grammar, documentation = pydantic_models_to_grammar.generate_gbnf_grammar_and_documentation(
+gbnf_grammar, documentation = generate_gbnf_grammar_and_documentation(
     pydantic_model_list=[SendMessageToUser, Calculator], outer_object_name="function",
     outer_object_content="function_parameters", model_prefix="Function", fields_prefix="Parameters")
 
@@ -122,7 +122,7 @@ class Book(BaseModel):
 
 
 # We need no additional parameters other than our list of pydantic models.
-gbnf_grammar, documentation = pydantic_models_to_grammar.generate_gbnf_grammar_and_documentation([Book])
+gbnf_grammar, documentation = generate_gbnf_grammar_and_documentation([Book])
 
 system_message = "You are an advanced AI, tasked to create a dataset entry in JSON for a Book. The following is the expected output model:\n\n" + documentation
 

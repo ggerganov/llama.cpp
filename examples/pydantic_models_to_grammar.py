@@ -5,7 +5,7 @@ from inspect import isclass, getdoc
 from types import NoneType
 
 from pydantic import BaseModel, create_model, Field
-from typing import Any, Type, List, get_args, get_origin, Tuple, Union, Optional
+from typing import Any, Type, List, get_args, get_origin, Tuple, Union, Optional, _GenericAlias
 from enum import Enum
 from typing import get_type_hints, Callable
 import re
@@ -290,7 +290,7 @@ def generate_gbnf_rule_for_type(model_name, field_name,
         enum_rule = f"{model_name}-{field_name} ::= {' | '.join(enum_values)}"
         rules.append(enum_rule)
         gbnf_type, rules = model_name + "-" + field_name, rules
-    elif get_origin(field_type) == list:  # Array
+    elif get_origin(field_type) == list or field_type == list:  # Array
         element_type = get_args(field_type)[0]
         element_rule_name, additional_rules = generate_gbnf_rule_for_type(model_name,
                                                                           f"{field_name}-element",
@@ -301,7 +301,7 @@ def generate_gbnf_rule_for_type(model_name, field_name,
         rules.append(array_rule)
         gbnf_type, rules = model_name + "-" + field_name, rules
 
-    elif get_origin(field_type) == set:  # Array
+    elif get_origin(field_type) == set or field_type == set:  # Array
         element_type = get_args(field_type)[0]
         element_rule_name, additional_rules = generate_gbnf_rule_for_type(model_name,
                                                                           f"{field_name}-element",
@@ -335,7 +335,16 @@ def generate_gbnf_rule_for_type(model_name, field_name,
         union_rules = []
 
         for union_type in union_types:
-            if not issubclass(union_type, NoneType):
+            if isinstance(union_type, _GenericAlias):
+                union_gbnf_type, union_rules_list = generate_gbnf_rule_for_type(model_name,
+                                                                                field_name, union_type,
+                                                                                False,
+                                                                                processed_models, created_rules)
+                union_rules.append(union_gbnf_type)
+                rules.extend(union_rules_list)
+
+
+            elif not issubclass(union_type, NoneType):
                 union_gbnf_type, union_rules_list = generate_gbnf_rule_for_type(model_name,
                                                                                 field_name, union_type,
                                                                                 False,
