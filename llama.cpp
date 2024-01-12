@@ -5530,7 +5530,6 @@ struct llm_build_context {
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_head == hparams.n_rot);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
