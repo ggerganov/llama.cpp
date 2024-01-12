@@ -817,10 +817,17 @@ class PersimmonModel(Model):
         hidden_size = self.hparams["hidden_size"]
 
         self.gguf_writer.add_name('persimmon-8b-chat')
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hidden_size)
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
-        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
+
+        # NOTE: not sure about this change - why does the model not have a rope dimension count when it is smaller
+        #       than the head size?
+        #       ref: https://github.com/ggerganov/llama.cpp/pull/4889
+        #self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
+        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count // 2)
+
         self.gguf_writer.add_head_count(head_count)
         self.gguf_writer.add_head_count_kv(head_count_kv)
         self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
