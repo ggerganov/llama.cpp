@@ -9240,6 +9240,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                     }
                 }
             }
+            if ((new_type == GGML_TYPE_IQ2_XXS ||
+                 new_type == GGML_TYPE_IQ2_XS  ||
+                (new_type == GGML_TYPE_Q2_K && params->ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && strcmp(tensor->name, "token_embd.weight") != 0)) && !imatrix) {
+                fprintf(stderr, "\n\n============================================================\n");
+                fprintf(stderr, "Missing importance matrix for tensor %s in a very low-bit quantization\n", tensor->name);
+                fprintf(stderr, "The result will be garbage, so bailing out\n");
+                fprintf(stderr, "============================================================\n\n");
+                throw std::runtime_error(format("Missing importance matrix for tensor %s in a very low-bit quantization", tensor->name));
+            }
 
             float * f32_data;
 
