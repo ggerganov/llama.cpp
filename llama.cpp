@@ -8924,9 +8924,23 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         if (arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
             new_type = GGML_TYPE_Q8_0;
         }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS) {
+            new_type = GGML_TYPE_Q5_K;
+        }
         else if (new_type != GGML_TYPE_Q8_0) {
             new_type = GGML_TYPE_Q6_K;
         }
+    } else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS) {
+        if (name.find("attn_v.weight") != std::string::npos) {
+            if (qs.model.hparams.n_gqa() >= 4 || qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q4_K;
+            else new_type = GGML_TYPE_Q2_K;
+            ++qs.i_attention_wv;
+        }
+        else if (name.find("ffn_down") != std::string::npos) {
+            if (qs.i_feed_forward_w2 < qs.n_feed_forward_w2/8) new_type = GGML_TYPE_Q2_K;
+            ++qs.i_feed_forward_w2;
+        }
+        else if (name == "token_embd.weight") new_type = GGML_TYPE_Q2_K;
     } else if (name.find("attn_v.weight") != std::string::npos) {
         if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
@@ -9089,6 +9103,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     if (params->only_copy) {
         ftype = model.ftype;
     }
+    const std::unordered_map<std::string, std::vector<float>> * imatrix_data = nullptr;
+    if (params->imatrix) {
+        imatrix_data = static_cast<const std::unordered_map<std::string, std::vector<float>>*>(params->imatrix);
+        if (imatrix_data) {
+            printf("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
+        }
+    }
 
     const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
@@ -9146,6 +9167,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     // placeholder for the meta data
     ::zeros(fout, meta_size);
 
+    std::set<ggml_type> used_iq2;
+
     for (int i = 0; i < ml.n_tensors; ++i) {
         struct ggml_tensor * tensor = ml.get_tensor_meta(i);
 
@@ -9198,6 +9221,26 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         } else {
             const size_t nelements = ggml_nelements(tensor);
 
+            if ((new_type == GGML_TYPE_IQ2_XXS || new_type == GGML_TYPE_IQ2_XS) && used_iq2.find(new_type) == used_iq2.end()) {
+                ggml_init_iq2_quantization(new_type);
+                used_iq2.insert(new_type);
+            }
+
+            const float * imatrix = nullptr;
+            if (imatrix_data) {
+                auto it = imatrix_data->find(tensor->name);
+                if (it == imatrix_data->end()) {
+                    printf("\n====== %s: did not find weights for %s\n", __func__, tensor->name);
+                } else {
+                    if (it->second.size() == (size_t)tensor->ne[0]) {
+                        imatrix = it->second.data();
+                    } else {
+                        printf("\n====== %s: imatrix size %d is different from tensor size %d for %s\n", __func__,
+                                int(it->second.size()), int(tensor->ne[0]), tensor->name);
+                    }
+                }
+            }
+
             float * f32_data;
 
             if (tensor->type == GGML_TYPE_F32) {
@@ -9218,21 +9261,28 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.data();
             std::array<int64_t, 1 << 4> hist_cur = {};
 
-            static const int chunk_size = 32 * 512;
+            const int n_per_row = tensor->ne[0];
+            const int nrows = nelements / n_per_row;
+
+            static const int min_chunk_size = 32 * 512;
+            const int chunk_size = n_per_row >= min_chunk_size ? n_per_row : n_per_row * ((min_chunk_size + n_per_row - 1)/n_per_row);
+
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
             if (nthread_use < 2) {
-                new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements, hist_cur.data());
+                new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nrows, n_per_row, hist_cur.data(), imatrix);
             } else {
-                size_t counter = 0;
+                int counter = 0;
                 new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements]() {
+                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, chunk_size,
+                     nrows, n_per_row, imatrix]() {
                     std::array<int64_t, 1 << 4> local_hist = {};
+                    const int nrows_per_chunk = chunk_size / n_per_row;
                     size_t local_size = 0;
                     while (true) {
                         std::unique_lock<std::mutex> lock(mutex);
-                        size_t first = counter; counter += chunk_size;
-                        if (first >= nelements) {
+                        int first_row = counter; counter += nrows_per_chunk;
+                        if (first_row >= nrows) {
                             if (local_size > 0) {
                                 for (int j=0; j<int(local_hist.size()); ++j) {
                                     hist_cur[j] += local_hist[j];
@@ -9242,8 +9292,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                             break;
                         }
                         lock.unlock();
-                        size_t last = std::min(nelements, first + chunk_size);
-                        local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
+                        const int this_nrow = std::min(nrows - first_row, nrows_per_chunk);
+                        local_size += ggml_quantize_chunk(new_type, f32_data, new_data,
+                                first_row * n_per_row, this_nrow, n_per_row, local_hist.data(), imatrix);
                     }
                 };
                 for (int it = 0; it < nthread_use - 1; ++it) {
@@ -9254,7 +9305,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 workers.clear();
             }
 
-            LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB | hist: ", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
+            LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
             int64_t tot_count = 0;
             for (size_t i = 0; i < hist_cur.size(); i++) {
                 hist_all[i] += hist_cur[i];
@@ -9262,6 +9313,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             }
 
             if (tot_count > 0) {
+                LLAMA_LOG_INFO(" | hist: ");
                 for (size_t i = 0; i < hist_cur.size(); i++) {
                     LLAMA_LOG_INFO("%5.3f ", hist_cur[i] / float(nelements));
                 }
@@ -9289,6 +9341,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 
     fout.close();
+
+    for (auto type : used_iq2) {
+        ggml_deinit_iq2_quantization(type);
+    }
 
     gguf_free(ctx_out);
 

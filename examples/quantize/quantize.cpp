@@ -82,7 +82,7 @@ static void usage(const char * executable) {
     printf("  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     printf("  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
     printf("  --pure: Disable k-quant mixtures and quantize all tensors to the same type\n");
-    printf("  --imatrix file_name: use data in file_name as importance matrix for quant optimizations\n");
+    printf("  --imatrixfile_name: use data in file_name as importance matrix for quant optimizations\n");
     printf("  --include-weights tensor_name: use importance matrix for this/these tensor(s)\n");
     printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
@@ -93,7 +93,7 @@ static void usage(const char * executable) {
         } else {
             printf("          ");
         }
-        printf("%-6s : %s\n", it.name.c_str(), it.desc.c_str());
+        printf("%-7s : %s\n", it.name.c_str(), it.desc.c_str());
     }
     exit(1);
 }
@@ -147,11 +147,11 @@ static void load_imatrix(const std::string& imatrix_file, std::unordered_map<std
 static void prepare_imatrix(const std::string& imatrix_file,
         const std::vector<std::string>& included_weights,
         const std::vector<std::string>& excluded_weights,
-        std::unordered_map<std::string, std::vector<float>> imatrix_data) {
+        std::unordered_map<std::string, std::vector<float>>& imatrix_data) {
     if (!imatrix_file.empty()) {
         load_imatrix(imatrix_file, imatrix_data);
     }
-    if (imatrix_file.empty()) {
+    if (imatrix_data.empty()) {
         return;
     }
     if (!excluded_weights.empty()) {
@@ -175,6 +175,9 @@ static void prepare_imatrix(const std::string& imatrix_file,
         }
         imatrix_data = std::move(tmp);
     }
+    if (!imatrix_data.empty()) {
+        printf("%s: have %d importance matrix entries\n", __func__, int(imatrix_data.size()));
+    }
 }
 
 int main(int argc, char ** argv) {
@@ -195,19 +198,19 @@ int main(int argc, char ** argv) {
             params.allow_requantize = true;
         } else if (strcmp(argv[arg_idx], "--pure") == 0) {
             params.pure = true;
-        } else if (strcmp(argv[arg_idx], "-im") == 0 || strcmp(argv[arg_idx], "--importance-matrix") == 0) {
+        } else if (strcmp(argv[arg_idx], "--imatrix") == 0) {
             if (arg_idx < argc-1) {
                 imatrix_file = argv[++arg_idx];
             } else {
                 usage(argv[0]);
             }
-        } else if (strcmp(argv[arg_idx], "-iw") == 0 || strcmp(argv[arg_idx], "--include-weights") == 0) {
+        } else if (strcmp(argv[arg_idx], "--include-weights") == 0) {
             if (arg_idx < argc-1) {
                 included_weights.push_back(argv[++arg_idx]);
             } else {
                 usage(argv[0]);
             }
-        } else if (strcmp(argv[arg_idx], "-ew") == 0 || strcmp(argv[arg_idx], "--exclude-weights") == 0) {
+        } else if (strcmp(argv[arg_idx], "--exclude-weights") == 0) {
             if (arg_idx < argc-1) {
                 excluded_weights.push_back(argv[++arg_idx]);
             } else {
@@ -219,6 +222,7 @@ int main(int argc, char ** argv) {
     }
 
     if (argc - arg_idx < 2) {
+        printf("%s: bad arguments\n", argv[0]);
         usage(argv[0]);
     }
     if (!included_weights.empty() && !excluded_weights.empty()) {
