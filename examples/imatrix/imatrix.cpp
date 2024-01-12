@@ -321,7 +321,6 @@ int main(int argc, char ** argv) {
     g_collector.set_parameters(std::move(sparams));
 
     ggml_set_imatrix_collection(ik_collect_imatrix);
-    ggml_set_imatrix_collection(ik_collect_imatrix);
 
     params.logits_all = true;
     params.n_batch = std::min(params.n_batch, params.n_ctx);
