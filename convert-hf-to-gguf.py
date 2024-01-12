@@ -825,7 +825,7 @@ class PersimmonModel(Model):
         # NOTE: not sure about this change - why does the model not have a rope dimension count when it is smaller
         #       than the head size?
         #       ref: https://github.com/ggerganov/llama.cpp/pull/4889
-        #self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
+        # self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
         self.gguf_writer.add_rope_dimension_count(hidden_size // head_count // 2)
 
         self.gguf_writer.add_head_count(head_count)
