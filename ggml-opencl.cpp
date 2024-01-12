@@ -2004,8 +2004,7 @@ static ggml_backend_buffer_i ggml_backend_opencl_buffer_interface = {
     /* .init_tensor     = */ ggml_backend_opencl_buffer_init_tensor,
     /* .set_tensor      = */ ggml_backend_opencl_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_opencl_buffer_get_tensor,
-    /* .cpy_tensor_from = */ NULL,
-    /* .cpy_tensor_to   = */ NULL,
+    /* .cpy_tensor      = */ NULL,
     /* .clear           = */ ggml_backend_opencl_buffer_clear,
     /* .reset           = */ ggml_backend_opencl_buffer_reset,
 };
