@@ -9368,10 +9368,21 @@ struct llama_context * llama_new_context_with_model(
         }
 
         {
+            // buffer types used for the compute buffer of each backend
+            std::vector<ggml_backend_buffer_type_t> backend_buft;
+            for (auto * backend : ctx->backends) {
+                if (ggml_backend_is_cpu(backend)) {
+                    // use host buffers for the CPU backend compute buffer
+                    backend_buft.push_back(llama_default_buffer_type_cpu(true));
+                } else {
+                    backend_buft.push_back(ggml_backend_get_default_buffer_type(backend));
+                }
+            }
+
             // buffer used to store the computation graph and the tensor meta data
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*LLAMA_MAX_NODES + ggml_graph_overhead());
 
-            ctx->sched = ggml_backend_sched_new(ctx->backends.data(), ctx->backends.size(), LLAMA_MAX_NODES);
+            ctx->sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(), ctx->backends.size(), LLAMA_MAX_NODES);
             ctx->alloc = ggml_backend_sched_get_tallocr(ctx->sched, ctx->backend_cpu);
 
             // build worst-case graph
@@ -9390,7 +9401,7 @@ struct llama_context * llama_new_context_with_model(
             for (ggml_backend_t backend : ctx->backends) {
                 ggml_backend_buffer_t buf = ggml_backend_sched_get_buffer(ctx->sched, backend);
                 LLAMA_LOG_INFO("%s: %10s compute buffer size = %8.2f MiB\n", __func__,
-                        ggml_backend_name(backend),
+                        ggml_backend_buffer_name(buf),
                         ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
             }
         }

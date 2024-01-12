@@ -776,6 +776,7 @@ struct ggml_backend_sched {
 
     int n_backends;
     ggml_backend_t backends[GGML_MAX_BACKENDS];
+    ggml_backend_buffer_type_t bufts[GGML_MAX_BACKENDS];
     ggml_tallocr_t  tallocs[GGML_MAX_BACKENDS];
 
     ggml_gallocr_t galloc;
@@ -1334,7 +1335,7 @@ static void sched_reset(ggml_backend_sched_t sched) {
     sched->is_reset = true;
 }
 
-ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, int n_backends, size_t graph_size) {
+ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, ggml_backend_buffer_type_t * bufts, int n_backends, size_t graph_size) {
     GGML_ASSERT(n_backends > 0);
     GGML_ASSERT(n_backends <= GGML_MAX_BACKENDS);
 
@@ -1348,13 +1349,14 @@ ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, int n_bac
     sched->n_backends = n_backends;
     for (int i = 0; i < n_backends; i++) {
         sched->backends[i] = backends[i];
+        sched->bufts[i] = bufts ? bufts[i] : ggml_backend_get_default_buffer_type(backends[i]);
     }
 
     sched->galloc = ggml_gallocr_new();
 
     // init measure allocs for each backend
     for (int i = 0; i < n_backends; i++) {
-        sched->tallocs[i] = ggml_tallocr_new_measure_from_backend(backends[i]);
+        sched->tallocs[i] = ggml_tallocr_new_measure_from_buft(sched->bufts[i]);
     }
 
     sched_reset(sched);
@@ -1387,7 +1389,7 @@ void ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgr
     for (int i = 0; i < sched->n_backends; i++) {
         size_t size = ggml_tallocr_max_size(sched->tallocs[i]);
         ggml_tallocr_free(sched->tallocs[i]);
-        sched->tallocs[i] = ggml_tallocr_new_from_backend(sched->backends[i], size);
+        sched->tallocs[i] = ggml_tallocr_new_from_buft(sched->bufts[i], size);
     }
 
     sched_reset(sched);
