@@ -1055,6 +1055,9 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
 }
 
 static ggml_type kv_cache_type_from_str(const std::string & s) {
+    if (s == "f32") {
+        return GGML_TYPE_F32;
+    }
     if (s == "f16") {
         return GGML_TYPE_F16;
     }
