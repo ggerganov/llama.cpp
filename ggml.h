@@ -2068,6 +2068,12 @@ extern "C" {
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
 
     //
+    // Importance matrix
+    //
+    typedef void(*ggml_collect_imatrix_t)(const struct ggml_tensor * src0, const struct ggml_tensor * src1);
+    GGML_API void ggml_set_imatrix_collection(ggml_collect_imatrix_t imatrix_collect);
+
+    //
     // gguf
     //
 
