@@ -11,8 +11,9 @@ else
   export GGML_SYCL_DEVICE=0
 fi
 echo GGML_SYCL_DEVICE=$GGML_SYCL_DEVICE
-#export GGML_SYCL_DEBUG=1
+export GGML_SYCL_DEBUG=1
 #export GGML_SYCL_LIST_DEVICE=1
 #./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "${INPUT1}" -e -n 400 -ngl 33 -c 2048
-./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "${INPUT2}" -n 400 -e -ngl 33
+#./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "${INPUT2}" -n 400 -e -ngl 33
+./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "${INPUT2}" -n 5 -e -ngl 33 -t 1 -s 0
 

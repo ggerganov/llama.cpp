@@ -428,15 +428,17 @@ static void bad_arch(const sycl::stream &stream_ct1) {
     (void) bad_arch; // suppress unused function warning
 }
 
-//todo: debug for crash in some case
-void print_ggml_tensor(const char*name, struct ggml_tensor *src){
+void log_ggml_var_device(const char*name, float *src, size_t total_elements, bool src_on_device){
     if(!g_ggml_sycl_debug) return;
+    if(!src){
+        printf("GGML Tensor:%s skip to save for NULL pointer\n", name);
+        return;
+    }
     char filename[1024];
     sprintf(filename, "%s.txt", name);
-    printf("GGML Tensor:%s save to %s:\n", name, filename);
+    printf("GGML Tensor:%s save to %s\n", name, filename);
 
-    size_t total_size = ggml_nbytes(src);
-    const bool src_on_device = src->backend == GGML_BACKEND_GPU || src->backend == GGML_BACKEND_GPU_SPLIT;
+    size_t total_size = total_elements*sizeof(float);
     float *local_buf = NULL;
     // printf("total_size %d2, src_on_device %d\n", total_size, src_on_device);
     if(src_on_device) {
@@ -445,17 +447,16 @@ void print_ggml_tensor(const char*name, struct ggml_tensor *src){
         ggml_sycl_set_device(g_main_device);
         dpct::queue_ptr main_stream = g_syclStreams[g_main_device_index][0];
 
-        ggml_tensor_extra_gpu * src_extra = (ggml_tensor_extra_gpu *)  src->extra;
-
         // printf("zjy before memcpy local_buf=%p, src->data=%p\n", local_buf, src->data);
-        main_stream->memcpy(local_buf, src_extra->data_device[g_main_device_index], total_size);
+        printf("zjy log dst_ddf=%p main_stream=%p g_main_device_index=%d\n", src,
+            main_stream, g_main_device_index);
+        main_stream->memcpy(local_buf, src, total_size);
     }
     else {
-        local_buf = (float *)src->data;
+        local_buf = (float *)src;
         // printf("local buf from src-> data %p\n", local_buf);
     }
 
-    size_t total_elements = ggml_nelements(src);
     std::ofstream logfile;
     logfile.open(filename);
     // printf("local buf element %d\n", total_elements);
@@ -466,9 +467,44 @@ void print_ggml_tensor(const char*name, struct ggml_tensor *src){
     logfile <<std::endl;
     logfile.close();
 
-    // printf("before free %p\n", local_buf);
     if(src_on_device) ggml_sycl_host_free(local_buf);
-    // printf("free done\n");
+}
+
+//todo: debug for crash in some case
+void print_ggml_tensor(const char*name, struct ggml_tensor *src){
+    if(!g_ggml_sycl_debug) return;
+    if(!src){
+        printf("GGML Tensor:%s skip to save for NULL pointer\n", name);
+        return;
+    }
+
+    size_t total_elements = ggml_nelements(src);
+
+    const bool src_on_device = src->backend == GGML_BACKEND_GPU || src->backend == GGML_BACKEND_GPU_SPLIT;
+    float *src_data =NULL;
+    if(src_on_device) {
+        ggml_tensor_extra_gpu * src_extra = (ggml_tensor_extra_gpu *)  src->extra;
+        src_data = (float*)src_extra->data_device[g_main_device_index];
+    }
+    else {
+        src_data = (float *)src->data;
+    }
+
+    log_ggml_var_device(name, src_data, total_elements, src_on_device);
+}
+
+static int log_file_name_idx=0;
+void log_tensor_with_cnt(const char* name, struct ggml_tensor * src, int stop_cnt) {
+    stop_cnt = 4;
+    if(log_file_name_idx>=stop_cnt) return;
+    char filename[1280];
+    sprintf(filename, "%s_%07d", name, log_file_name_idx);
+    log_file_name_idx++;
+    print_ggml_tensor(filename, src);
+    // print_ggml_tensor("ggml_sycl_rms_norm_src0", (ggml_tensor *)src0);
+    // print_ggml_tensor("ggml_sycl_rms_norm_src1", (ggml_tensor *)src1);
+    // int *ptr = NULL;
+    // *ptr = 0;
 }
 
 static __dpct_inline__ float warp_reduce_sum(float x,
@@ -8588,7 +8624,7 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
     if (src->backend == GGML_BACKEND_CPU) {
         kind = dpct::host_to_device;
         src_ptr = (char *) src->data;
-        GGML_SYCL_DEBUG("ggml_sycl_cpy_tensor_2d  GGML_BACKEND_CPU src_ptr %p\n", src_ptr);
+        // GGML_SYCL_DEBUG("ggml_sycl_cpy_tensor_2d  GGML_BACKEND_CPU src_ptr %p\n", src_ptr);
     } else if (src->backend == GGML_BACKEND_GPU || src->backend == GGML_BACKEND_GPU_SPLIT) {
         GGML_ASSERT(src->backend != GGML_BACKEND_GPU_SPLIT || (i1_low == 0 && i1_high == src->ne[1]));
         kind = dpct::device_to_device;
@@ -8596,10 +8632,10 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
         int id;
         SYCL_CHECK(CHECK_TRY_ERROR(
             id = get_current_device_index()));
-        GGML_SYCL_DEBUG("current device index %d\n", id);
+        // GGML_SYCL_DEBUG("current device index %d\n", id);
         src_ptr = (char *) extra->data_device[id];
     } else {
-        GGML_SYCL_DEBUG("GGML_ASSERT(false)\n");
+        // GGML_SYCL_DEBUG("GGML_ASSERT(false)\n");
         GGML_ASSERT(false);
     }
     char * dst_ptr = (char *) dst;
@@ -8616,7 +8652,7 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
 
     const char * x = src_ptr + i1_low*nb1 + i2*nb2 + i3*nb3;
     if (nb0 == ts && nb1 == ts*ne0/bs) {
-        GGML_SYCL_DEBUG("stream->memcpy: dst_ptr=%p, x=%p, size=%lu\n", dst_ptr, x, i1_diff * nb1);
+        // GGML_SYCL_DEBUG("stream->memcpy: dst_ptr=%p, x=%p, size=%lu\n", dst_ptr, x, i1_diff * nb1);
         // return CHECK_TRY_ERROR(stream->memcpy(dst_ptr, x, i1_diff * nb1));
         return CHECK_TRY_ERROR(dpct::async_dpct_memcpy(dst_ptr, x, i1_diff * nb1,
                                     kind, *stream));
@@ -9681,6 +9717,7 @@ static void ggml_sycl_op_flatten(const ggml_tensor *src0,
     }
     if (dst_on_device) {
         dst_ddf = (float *) dst_extra->data_device[g_main_device_index];
+        // printf("zjy dst_ddf=%p main_stream=%p g_main_device_index=%d\n", dst_ddf, main_stream, g_main_device_index);
     } else {
         dst_ddf = dst_f.alloc(ggml_nelements(dst));
     }
@@ -10120,6 +10157,9 @@ static void ggml_sycl_get_rows(const ggml_tensor * src0, const ggml_tensor * src
 static void ggml_sycl_add(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_add);
+    // log_tensor_with_cnt("log_ggml_sycl_add_src0", (struct ggml_tensor *) src0, 6);
+    // log_tensor_with_cnt("log_ggml_sycl_add_src1", (struct ggml_tensor *)src1, 6);
+    // log_tensor_with_cnt("log_ggml_sycl_add_dst", dst, 6);
 }
 
 static void ggml_sycl_acc(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -10130,6 +10170,10 @@ static void ggml_sycl_acc(const ggml_tensor * src0, const ggml_tensor * src1, gg
 static void ggml_sycl_mul(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_mul);
+    // log_tensor_with_cnt("log_ggml_sycl_mul_src0", (struct ggml_tensor *)src0, 6);
+    // log_tensor_with_cnt("log_ggml_sycl_mul_src1", (struct ggml_tensor *)src1, 6);
+    // log_tensor_with_cnt("log_ggml_sycl_mul_dst", dst, 6);
+
 }
 
 static void ggml_sycl_div(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
@@ -10197,9 +10241,16 @@ static void ggml_sycl_pad(const ggml_tensor * src0, const ggml_tensor * src1, gg
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_pad);
 }
 
+
 static void ggml_sycl_rms_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_rms_norm);
+    log_tensor_with_cnt("log_ggml_sycl_rms_norm_src0", (struct ggml_tensor *)src0, 6);
+    log_tensor_with_cnt("log_ggml_sycl_rms_norm_src1", (struct ggml_tensor *)src1, 6);
+    log_tensor_with_cnt("log_ggml_sycl_rms_norm_dst", dst, 6);
+
+    // int *ptr = NULL;
+    // *ptr = 0;
 }
 
 bool ggml_sycl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
