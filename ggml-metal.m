@@ -2229,9 +2229,9 @@ static bool ggml_metal_graph_compute(
             [encoder endEncoding];
 
             [command_buffer commit];
-            
+
             [command_buffer waitUntilCompleted];
-            
+
             MTLCommandBufferStatus status = [command_buffer status];
             if (status != MTLCommandBufferStatusCompleted) {
                 all_buffers_succeeded = false;
