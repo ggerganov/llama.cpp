@@ -1350,14 +1350,17 @@ struct llama_server_context
             res.result_json["model"] = slot.oaicompat_model;
         }
 
+        queue_results.push_back(res);
+        condition_results.notify_all();
+
+        // done with results, unlock
+        lock.unlock();
+
         // parent multitask, if any, needs to be updated
         if (slot.multitask_id != -1)
         {
             update_multi_task(slot.multitask_id, slot.task_id, res);
         }
-
-        queue_results.push_back(res);
-        condition_results.notify_all();
     }
 
     void send_embedding(llama_client_slot &slot)
@@ -1603,6 +1606,7 @@ struct llama_server_context
         }
 
         // remove finished multitasks from the queue of multitasks, and add the corresponding result to the result queue
+        std::vector<task_result> agg_results;
         auto queue_iterator = queue_multitasks.begin();
         while (queue_iterator != queue_multitasks.end())
         {
@@ -1623,8 +1627,9 @@ struct llama_server_context
                 }
                 aggregate_result.result_json = json{ "results", result_jsons };
 
-                std::lock_guard<std::mutex> lock(mutex_results);
-                queue_results.push_back(aggregate_result);
+
+                agg_results.push_back(aggregate_result);
+
                 condition_results.notify_all();
 
                 queue_iterator = queue_multitasks.erase(queue_iterator);
@@ -1634,6 +1639,13 @@ struct llama_server_context
                 ++queue_iterator;
             }
         }
+
+        // done with tasks, unlock
+        lock.unlock();
+
+        // copy aggregate results of complete multi-tasks to the results queue
+        std::lock_guard<std::mutex> lock_results(mutex_results);
+        queue_results.insert(queue_results.end(), agg_results.begin(), agg_results.end());
     }
 
     bool update_slots() {
@@ -1835,7 +1847,7 @@ struct llama_server_context
 
                     slot.cache_tokens = prompt_tokens;
 
-                    if (slot.n_past == slot.num_prompt_tokens)
+                    if (slot.n_past == slot.num_prompt_tokens && slot.n_past > 0)
                     {
                         // we have to evaluate at least 1 token to generate logits.
                         LOG_TEE("slot %d : we have to evaluate at least 1 token to generate logits\n", slot.id);
@@ -2005,12 +2017,15 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
     printf("  -ngl N, --n-gpu-layers N\n");
     printf("                        number of layers to store in VRAM\n");
+    printf("  -sm SPLIT_MODE, --split-mode SPLIT_MODE\n");
+    printf("                        how to split the model across multiple GPUs, one of:\n");
+    printf("                          - none: use one GPU only\n");
+    printf("                          - layer (default): split layers and KV across GPUs\n");
+    printf("                          - row: split rows across GPUs\n");
     printf("  -ts SPLIT --tensor-split SPLIT\n");
-    printf("                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    printf("  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    printf("  -nommq, --no-mul-mat-q\n");
-    printf("                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
-    printf("                        Not recommended since this is both slower and uses more VRAM.\n");
+    printf("                        fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1\n");
+    printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
+    printf("                        or for intermediate results and KV (with split-mode = row)\n");
 #endif
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
@@ -2253,6 +2268,33 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                         "See main README.md for information on enabling GPU BLAS support",
                         {{"n_gpu_layers", params.n_gpu_layers}});
 #endif
+        }
+        else if (arg == "--split-mode" || arg == "-sm")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string arg_next = argv[i];
+            if (arg_next == "none")
+            {
+                params.split_mode = LLAMA_SPLIT_NONE;
+            }
+            else if (arg_next == "layer")
+            {
+                params.split_mode = LLAMA_SPLIT_LAYER;
+            }
+            else if (arg_next == "row")
+            {
+                params.split_mode = LLAMA_SPLIT_ROW;
+            }
+            else {
+                invalid_param = true;
+                break;
+            }
+#ifndef GGML_USE_CUBLAS
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Setting the split mode has no effect.\n");
+#endif // GGML_USE_CUBLAS
         }
         else if (arg == "--tensor-split" || arg == "-ts")
         {
