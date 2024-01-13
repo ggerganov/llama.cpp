@@ -1350,14 +1350,17 @@ struct llama_server_context
             res.result_json["model"] = slot.oaicompat_model;
         }
 
+        queue_results.push_back(res);
+        condition_results.notify_all();
+
+        // done with results, unlock
+        lock.unlock();
+
         // parent multitask, if any, needs to be updated
         if (slot.multitask_id != -1)
         {
             update_multi_task(slot.multitask_id, slot.task_id, res);
         }
-
-        queue_results.push_back(res);
-        condition_results.notify_all();
     }
 
     void send_embedding(llama_client_slot &slot)
@@ -1603,6 +1606,7 @@ struct llama_server_context
         }
 
         // remove finished multitasks from the queue of multitasks, and add the corresponding result to the result queue
+        std::vector<task_result> agg_results;
         auto queue_iterator = queue_multitasks.begin();
         while (queue_iterator != queue_multitasks.end())
         {
@@ -1623,8 +1627,9 @@ struct llama_server_context
                 }
                 aggregate_result.result_json = json{ "results", result_jsons };
 
-                std::lock_guard<std::mutex> lock(mutex_results);
-                queue_results.push_back(aggregate_result);
+
+                agg_results.push_back(aggregate_result);
+
                 condition_results.notify_all();
 
                 queue_iterator = queue_multitasks.erase(queue_iterator);
@@ -1634,6 +1639,13 @@ struct llama_server_context
                 ++queue_iterator;
             }
         }
+
+        // done with tasks, unlock
+        lock.unlock();
+
+        // copy aggregate results of complete multi-tasks to the results queue
+        std::lock_guard<std::mutex> lock_results(mutex_results);
+        queue_results.insert(queue_results.end(), agg_results.begin(), agg_results.end());
     }
 
     bool update_slots() {
