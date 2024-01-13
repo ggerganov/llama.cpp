@@ -578,8 +578,11 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
             { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_GATE_INP,    "blk.%d.ffn_gate_inp" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_DOWN_EXP,    "blk.%d.ffn_down.%d" },
+            { LLM_TENSOR_FFN_UP_EXP,      "blk.%d.ffn_up.%d" },
         },
     },
     {
@@ -1425,16 +1428,20 @@ struct llama_layer {
     struct ggml_tensor * ffn_down; // w2
     struct ggml_tensor * ffn_up;   // w3
 
+    // ff bias
+    struct ggml_tensor * ffn_down_b; // b2
+    struct ggml_tensor * ffn_up_b;   // b3
+    struct ggml_tensor * ffn_act;
+
     // ff MoE
     struct ggml_tensor * ffn_gate_inp;
     struct ggml_tensor * ffn_gate_exp[LLAMA_MAX_EXPERTS];
     struct ggml_tensor * ffn_down_exp[LLAMA_MAX_EXPERTS];
     struct ggml_tensor * ffn_up_exp  [LLAMA_MAX_EXPERTS];
 
-    // ff bias
-    struct ggml_tensor * ffn_down_b; // b2
-    struct ggml_tensor * ffn_up_b;   // b3
-    struct ggml_tensor * ffn_act;
+    // ff MoE bias
+    struct ggml_tensor * ffn_down_b_exp[LLAMA_MAX_EXPERTS];
+    struct ggml_tensor * ffn_up_b_exp  [LLAMA_MAX_EXPERTS];
 };
 
 struct llama_kv_cell {
@@ -3696,11 +3703,29 @@ static bool llm_load_tensors(
                         layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
                         layer.bo   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd});
 
-                        layer.ffn_down   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
-                        layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd});
+                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd}, false);
 
-                        layer.ffn_up     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
-                        layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
+                        if (layer.ffn_gate_inp == nullptr) {
+                            GGML_ASSERT(hparams.n_expert      == 0);
+                            GGML_ASSERT(hparams.n_expert_used == 0);
+
+                            layer.ffn_down   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
+                            layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd});
+
+                            layer.ffn_up     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
+                            layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
+                        } else {
+                            GGML_ASSERT(hparams.n_expert      > 0);
+                            GGML_ASSERT(hparams.n_expert_used > 0);
+
+                            for (uint32_t x = 0; x < hparams.n_expert; ++x) {
+                                layer.ffn_down_exp[x]   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), {n_ff, n_embd});
+                                layer.ffn_down_b_exp[x] = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN_EXP, "bias", i, x),   {n_embd});
+
+                                layer.ffn_up_exp[x]     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), {n_embd, n_ff});
+                                layer.ffn_up_b_exp[x]   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP_EXP,   "bias", i, x),   {n_ff});
+                            }
+                        }
                     }
                 } break;
             case LLM_ARCH_PLAMO:
@@ -5704,7 +5729,7 @@ struct llm_build_context {
             }
 
             // FF
-            {
+            if (model.layers[il].ffn_gate_inp == nullptr) {
                 ffn_output = llm_build_ffn(ctx0, attn_norm_output,
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
@@ -5712,6 +5737,62 @@ struct llm_build_context {
                         NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(ffn_output, "ffn_out", il);
+            } else {
+                // MoE branch
+                ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
+                cb(logits, "ffn_moe_logits", il);
+
+                ggml_tensor * probs = ggml_soft_max(ctx0, logits); // [n_tokens, num_experts]
+                cb(probs, "ffn_moe_probs", il);
+
+                // select experts
+                ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_expert_used); // [n_tokens, num_experts_per_tok]
+                cb(selected_experts->src[0], "ffn_moe_argsort", il);
+
+                ggml_tensor * weights = ggml_get_rows(ctx0,
+                        ggml_reshape_3d(ctx0, probs, 1, n_expert, n_tokens), selected_experts);
+                cb(weights, "ffn_moe_weights", il);
+
+                weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens); // [n_tokens, num_experts_per_tok]
+
+                ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights);
+                cb(weights_sum, "ffn_moe_weights_sum", il);
+
+                weights = ggml_div(ctx0, weights, weights_sum); // [n_tokens, num_experts_per_tok]
+                cb(weights, "ffn_moe_weights_norm", il);
+
+                // compute expert outputs
+                ggml_tensor * moe_out = nullptr;
+
+                for (int i = 0; i < n_expert_used; ++i) {
+                    ggml_tensor * cur_expert;
+
+                    ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exp, n_expert, selected_experts, i, cur);
+#pragma message "TODO: implement ggml_add_id"
+                    //cur_up = ggml_add_id(ctx0, cur_up, model.layers[il].ffn_up_b_exp, n_expert, selected_experts, i);
+                    cb(cur_up, "ffn_moe_up", il);
+
+                    cur_up = ggml_gelu(ctx0, cur_up);
+                    cb(cur_up, "ffn_moe_gelu", il);
+
+                    cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exp, n_expert, selected_experts, i, cur_up); // [n_tokens, n_embd]
+#pragma message "TODO: implement ggml_add_id"
+                    //cur_expert = ggml_add_id(ctx0, cur_expert, model.layers[il].ffn_down_b_exp, n_expert, selected_experts, i);
+                    cb(cur_expert, "ffn_moe_down", il);
+
+                    cur_expert = ggml_mul(ctx0, cur_expert,
+                            ggml_view_2d(ctx0, weights, 1, n_tokens, weights->nb[1], i*weights->nb[0]));
+                    cb(cur_expert, "ffn_moe_weighted", il);
+
+                    if (i == 0) {
+                        moe_out = cur_expert;
+                    } else {
+                        moe_out = ggml_add(ctx0, moe_out, cur_expert);
+                        cb(moe_out, "ffn_moe_out", il);
+                    }
+                }
+
+                ffn_output = moe_out;
             }
 
             cur = ggml_add(ctx0, cur, ffn_output);

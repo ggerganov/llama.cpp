@@ -1080,9 +1080,14 @@ class Phi2Model(Model):
     def set_gguf_parameters(self):
         block_count = get_key_opts(self.hparams, ["num_hidden_layers", "n_layer"])
 
-        rot_pct = get_key_opts(self.hparams, ["partial_rotary_factor"])
         n_embd = get_key_opts(self.hparams, ["hidden_size", "n_embd"])
         n_head = get_key_opts(self.hparams, ["num_attention_heads", "n_head"])
+
+        if "partial_rotary_factor" in self.hparams:
+            rot_pct = get_key_opts(self.hparams, ["partial_rotary_factor"])
+            n_rot = int(rot_pct * n_embd) // n_head
+        else:
+            n_rot = get_key_opts(self.hparams, ["rotary_dim", "n_rot"])
 
         self.gguf_writer.add_name("Phi2")
         self.gguf_writer.add_context_length(get_key_opts(self.hparams, ["n_positions", "max_position_embeddings"]))
@@ -1093,9 +1098,13 @@ class Phi2Model(Model):
         self.gguf_writer.add_head_count(n_head)
         self.gguf_writer.add_head_count_kv(n_head)
         self.gguf_writer.add_layer_norm_eps(get_key_opts(self.hparams, ["layer_norm_epsilon", "layer_norm_eps"]))
-        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
+        self.gguf_writer.add_rope_dimension_count(n_rot)
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_add_bos_token(False)
+
+        # phixtral
+        self.gguf_writer.add_expert_count(self.hparams.get("num_local_experts", 0))
+        self.gguf_writer.add_expert_used_count(self.hparams.get("num_experts_per_tok", 0))
 
 
 class PlamoModel(Model):
