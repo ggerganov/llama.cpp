@@ -398,9 +398,6 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             struct ggml_metal_kernel * kernel = &ctx->kernels[e]; \
             kernel->function = [ctx->library newFunctionWithName:@"kernel_"#name]; \
             kernel->pipeline = [ctx->device newComputePipelineStateWithFunction:kernel->function error:&error]; \
-            GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
-                    (int) kernel->pipeline.maxTotalThreadsPerThreadgroup, \
-                    (int) kernel->pipeline.threadExecutionWidth); \
             if (error) { \
                 GGML_METAL_LOG_ERROR("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
                 return NULL; \
