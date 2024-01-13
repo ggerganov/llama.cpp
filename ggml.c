@@ -19184,7 +19184,7 @@ void gguf_free(struct gguf_context * ctx) {
 
     if (ctx->kv) {
         // free string memory - not great..
-        for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
+        for (uint64_t i = 0; i < ctx->header.n_kv; ++i) {
             struct gguf_kv * kv = &ctx->kv[i];
 
             if (kv->key.data) {
@@ -19200,7 +19200,7 @@ void gguf_free(struct gguf_context * ctx) {
             if (kv->type == GGUF_TYPE_ARRAY) {
                 if (kv->value.arr.data) {
                     if (kv->value.arr.type == GGUF_TYPE_STRING) {
-                        for (uint32_t j = 0; j < kv->value.arr.n; ++j) {
+                        for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
                             struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[j];
                             if (str->data) {
                                 free(str->data);
@@ -19216,7 +19216,7 @@ void gguf_free(struct gguf_context * ctx) {
     }
 
     if (ctx->infos) {
-        for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+        for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
 
             if (info->name.data) {
