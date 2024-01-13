@@ -72,7 +72,7 @@ extern "C" {
 
     // tensor copy between different backends
     GGML_API void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst);
-    GGML_API void ggml_backend_tensor_copy_async(ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst); // automatic fallback to sync copy
+    GGML_API void ggml_backend_tensor_copy_async(ggml_backend_t src_backend, ggml_backend_t dst_backend, struct ggml_tensor * src, struct ggml_tensor * dst); // automatic fallback to sync copy
 
     //
     // CPU backend

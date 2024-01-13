@@ -279,24 +279,24 @@ void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst
     }
 }
 
-void ggml_backend_tensor_copy_async(ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst) {
+void ggml_backend_tensor_copy_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, struct ggml_tensor * src, struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_layout(src, dst) && "cannot copy tensors with different layouts");
 
     if (src == dst) {
         return;
     }
 
-    if (ggml_backend_buft_supports_backend(src->buffer->buft, backend) && ggml_backend_buft_supports_backend(dst->buffer->buft, backend)) {
-        if (backend->iface.cpy_tensor_async != NULL) {
-            if (backend->iface.cpy_tensor_async(backend, src, dst)) {
-                return;
-            }
+    if (backend_dst->iface.cpy_tensor_async != NULL) {
+        if (backend_dst->iface.cpy_tensor_async(backend_src, backend_dst, src, dst)) {
+            return;
         }
     }
 
     size_t nbytes = ggml_nbytes(src);
     if (ggml_backend_buffer_is_host(src->buffer)) {
-        ggml_backend_tensor_set_async(backend, dst, src->data, 0, nbytes);
+        // wait for src to be ready before copy
+        ggml_backend_synchronize(backend_src);
+        ggml_backend_tensor_set_async(backend_dst, dst, src->data, 0, nbytes);
     }
     else {
         ggml_backend_tensor_copy(src, dst);
@@ -1304,6 +1304,7 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
         // copy the input tensors to the split backend
         uint64_t copy_start_us = ggml_time_us();
         for (int j = 0; j < split->n_inputs; j++) {
+            ggml_backend_t input_backend = get_allocr_backend(sched, node_allocr(split->inputs[j]));
             struct ggml_tensor * input = split->inputs[j];
             struct ggml_tensor * input_cpy = sched->node_copies[hash_id(input)][split_backend_id];
 
@@ -1312,7 +1313,7 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
 
             // TODO: avoid this copy if it was already copied in a previous split, and the input didn't change
             // this is important to avoid copying constants such as KQ_mask and inp_pos multiple times
-            ggml_backend_tensor_copy_async(split_backend, input, input_cpy);
+            ggml_backend_tensor_copy_async(input_backend, split_backend, input, input_cpy);
         }
         //ggml_backend_synchronize(split_backend); // necessary to measure copy time
         int64_t copy_end_us = ggml_time_us();

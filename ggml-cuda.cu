@@ -10763,11 +10763,32 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggm
     CUDA_CHECK(cudaMemcpyAsync(data, (const char *)tensor->data + offset, size, cudaMemcpyDeviceToHost, g_cudaStreams[cuda_ctx->device][0]));
 }
 
-static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst) {
-    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
+static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, const ggml_tensor * src, ggml_tensor * dst) {
+    if (!ggml_backend_is_cuda(backend_src) || !ggml_backend_is_cuda(backend_dst)) {
+        return false;
+    }
 
-    if (dst->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && ggml_backend_buffer_is_cuda(src->buffer)) {
-        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx->device][0]));
+    if (!ggml_backend_buffer_is_cuda(src->buffer) || !ggml_backend_buffer_is_cuda(dst->buffer)) {
+        return false;
+    }
+
+    ggml_backend_cuda_context * cuda_ctx_src = (ggml_backend_cuda_context *)backend_src->context;
+    ggml_backend_cuda_context * cuda_ctx_dst = (ggml_backend_cuda_context *)backend_dst->context;
+
+    if (backend_src == backend_dst) {
+        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
+    } else {
+        cudaEvent_t event;
+        CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+
+        // record event on src stream
+        CUDA_CHECK(cudaEventRecord(event, g_cudaStreams[cuda_ctx_src->device][0]));
+        // wait on dst stream
+        CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[cuda_ctx_dst->device][0], event, 0));
+        // copy
+        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
+
+        CUDA_CHECK(cudaEventDestroy(event));
         return true;
     }
 
