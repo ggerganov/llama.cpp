@@ -24,8 +24,6 @@
 
 #define UNUSED(x) (void)(x)
 
-#define GGML_MAX_CONCUR (2*GGML_DEFAULT_GRAPH_SIZE)
-
 #define GGML_METAL_MAX_KERNELS 256
 
 struct ggml_metal_buffer {
@@ -182,9 +180,6 @@ struct ggml_metal_context {
 
     struct ggml_metal_kernel kernels[GGML_METAL_MAX_KERNELS];
 
-    int concur_list[GGML_MAX_CONCUR];
-    int concur_list_len;
-
     bool support_simdgroup_reduction;
     bool support_simdgroup_mm;
 };
@@ -200,7 +195,6 @@ struct ggml_metal_context {
 @implementation GGMLMetalClass
 @end
 
-
 static void ggml_metal_default_log_callback(enum ggml_log_level level, const char * msg, void * user_data) {
     fprintf(stderr, "%s", msg);
 
@@ -210,11 +204,6 @@ static void ggml_metal_default_log_callback(enum ggml_log_level level, const cha
 
 ggml_log_callback ggml_metal_log_callback = ggml_metal_default_log_callback;
 void * ggml_metal_log_user_data = NULL;
-
-void ggml_metal_log_set_callback(ggml_log_callback log_callback, void * user_data) {
-    ggml_metal_log_callback  = log_callback;
-    ggml_metal_log_user_data = user_data;
-}
 
 GGML_ATTRIBUTE_FORMAT(2, 3)
 static void ggml_metal_log(enum ggml_log_level level, const char * format, ...){
@@ -238,7 +227,18 @@ static void ggml_metal_log(enum ggml_log_level level, const char * format, ...){
     }
 }
 
-struct ggml_metal_context * ggml_metal_init(int n_cb) {
+static void * ggml_metal_host_malloc(size_t n) {
+    void * data = NULL;
+    const int result = posix_memalign((void **) &data, sysconf(_SC_PAGESIZE), n);
+    if (result != 0) {
+        GGML_METAL_LOG_ERROR("%s: error: posix_memalign failed\n", __func__);
+        return NULL;
+    }
+
+    return data;
+}
+
+static struct ggml_metal_context * ggml_metal_init(int n_cb) {
     GGML_METAL_LOG_INFO("%s: allocating\n", __func__);
 
     id<MTLDevice> device;
@@ -264,7 +264,6 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     ctx->n_cb   = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
     ctx->queue  = [ctx->device newCommandQueue];
     ctx->n_buffers = 0;
-    ctx->concur_list_len = 0;
 
     ctx->d_queue = dispatch_queue_create("ggml-metal", DISPATCH_QUEUE_CONCURRENT);
 
@@ -531,7 +530,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     return ctx;
 }
 
-void ggml_metal_free(struct ggml_metal_context * ctx) {
+static void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_LOG_INFO("%s: deallocating\n", __func__);
 
     for (int i = 0; i < ctx->n_buffers; ++i) {
@@ -555,33 +554,6 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     dispatch_release(ctx->d_queue);
 
     free(ctx);
-}
-
-void * ggml_metal_host_malloc(size_t n) {
-    void * data = NULL;
-    const int result = posix_memalign((void **) &data, sysconf(_SC_PAGESIZE), n);
-    if (result != 0) {
-        GGML_METAL_LOG_ERROR("%s: error: posix_memalign failed\n", __func__);
-        return NULL;
-    }
-
-    return data;
-}
-
-void ggml_metal_host_free(void * data) {
-    free(data);
-}
-
-void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
-    ctx->n_cb = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
-}
-
-int ggml_metal_if_optimized(struct ggml_metal_context * ctx) {
-    return ctx->concur_list_len;
-}
-
-int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx) {
-    return ctx->concur_list;
 }
 
 // temporarily defined here for compatibility between ggml-backend and the old API
@@ -654,209 +626,6 @@ static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, stru
     GGML_METAL_LOG_ERROR("%s: error: buffer is nil\n", __func__);
 
     return nil;
-}
-
-bool ggml_metal_add_buffer(
-        struct ggml_metal_context * ctx,
-                     const char * name,
-                           void * data,
-                         size_t   size,
-                         size_t   max_size) {
-    if (ctx->n_buffers >= GGML_METAL_MAX_BUFFERS) {
-        GGML_METAL_LOG_ERROR("%s: error: too many buffers\n", __func__);
-        return false;
-    }
-
-    if (data) {
-        // verify that the buffer does not overlap with any of the existing buffers
-        for (int i = 0; i < ctx->n_buffers; ++i) {
-            const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
-
-            if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
-                GGML_METAL_LOG_ERROR("%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
-                return false;
-            }
-        }
-
-        const size_t size_page = sysconf(_SC_PAGESIZE);
-
-        size_t size_aligned = size;
-        if ((size_aligned % size_page) != 0) {
-            size_aligned += (size_page - (size_aligned % size_page));
-        }
-
-        // the buffer fits into the max buffer size allowed by the device
-        if (size_aligned <= ctx->device.maxBufferLength) {
-            ctx->buffers[ctx->n_buffers].name = name;
-            ctx->buffers[ctx->n_buffers].data = data;
-            ctx->buffers[ctx->n_buffers].size = size;
-
-            ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
-
-            if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                GGML_METAL_LOG_ERROR("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MiB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
-                return false;
-            }
-
-            GGML_METAL_LOG_INFO("%s: allocated '%-16s' buffer, size = %8.2f MiB", __func__, name, size_aligned / 1024.0 / 1024.0);
-
-            ++ctx->n_buffers;
-        } else {
-            // this overlap between the views will guarantee that the tensor with the maximum size will fully fit into
-            // one of the views
-            const size_t size_ovlp = ((max_size + size_page - 1) / size_page + 1) * size_page; // round-up 2 pages just in case
-            const size_t size_step = ctx->device.maxBufferLength - size_ovlp;
-            const size_t size_view = ctx->device.maxBufferLength;
-
-            for (size_t i = 0; i < size; i += size_step) {
-                const size_t size_step_aligned = (i + size_view <= size) ? size_view : (size_aligned - i);
-
-                ctx->buffers[ctx->n_buffers].name = name;
-                ctx->buffers[ctx->n_buffers].data = (void *) ((uint8_t *) data + i);
-                ctx->buffers[ctx->n_buffers].size = size_step_aligned;
-
-                ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
-
-                if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                    GGML_METAL_LOG_ERROR("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MiB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
-                    return false;
-                }
-
-                GGML_METAL_LOG_INFO("%s: allocated '%-16s' buffer, size = %8.2f MiB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
-                if (i + size_step < size) {
-                    GGML_METAL_LOG_INFO("\n");
-                }
-
-                ++ctx->n_buffers;
-            }
-        }
-
-#if TARGET_OS_OSX
-        GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
-                ctx->device.currentAllocatedSize / 1024.0 / 1024.0,
-                ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
-
-        if (ctx->device.currentAllocatedSize > ctx->device.recommendedMaxWorkingSetSize) {
-            GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
-        } else {
-            GGML_METAL_LOG_INFO("\n");
-        }
-#else
-        GGML_METAL_LOG_INFO(", (%8.2f)\n", ctx->device.currentAllocatedSize / 1024.0 / 1024.0);
-#endif
-    }
-
-    return true;
-}
-
-void ggml_metal_set_tensor(
-        struct ggml_metal_context * ctx,
-        struct ggml_tensor * t) {
-    size_t offs;
-    id<MTLBuffer> id_dst = ggml_metal_get_buffer(ctx, t, &offs);
-
-    memcpy((void *) ((uint8_t *) id_dst.contents + offs), t->data, ggml_nbytes(t));
-}
-
-void ggml_metal_get_tensor(
-        struct ggml_metal_context * ctx,
-        struct ggml_tensor * t) {
-    size_t offs;
-    id<MTLBuffer> id_src = ggml_metal_get_buffer(ctx, t, &offs);
-
-    memcpy(t->data, (void *) ((uint8_t *) id_src.contents + offs), ggml_nbytes(t));
-}
-
-void ggml_metal_graph_find_concurrency(
-        struct ggml_metal_context * ctx,
-        struct ggml_cgraph * gf, bool check_mem) {
-    int search_depth = gf->n_nodes; //we only find concurrency in this range to avoid wasting too much time
-    int nodes_unused[GGML_MAX_CONCUR];
-
-    for (int i = 0; i < GGML_MAX_CONCUR; i++) { ctx->concur_list[i] = 0; }
-    for (int i = 0; i < gf->n_nodes;     i++) { nodes_unused[i]     = 1; }
-    ctx->concur_list_len = 0;
-
-    int n_left    = gf->n_nodes;
-    int n_start   = 0; // all nodes before n_start at nodes_unused array have been sorted and store back to ctx->concur_list
-    int level_pos = 0; // at ctx->concur_list, the last layer (level) ends at level_pos
-
-    while (n_left > 0) {
-        // number of nodes at a layer (that can be issued concurrently)
-        int concurrency = 0;
-        for (int i = n_start; i < ((n_start + search_depth > gf->n_nodes) ? gf->n_nodes : n_start + search_depth); i++) {
-            if (nodes_unused[i]) {
-                // if the requirements for gf->nodes[i] are satisfied
-                int exe_flag = 1;
-
-                // scan all srcs
-                for (int src_ind = 0; src_ind < GGML_MAX_SRC; src_ind++) {
-                    struct ggml_tensor * src_cur = gf->nodes[i]->src[src_ind];
-                    if (src_cur) {
-                        // if is leaf nodes it's satisfied.
-                        // TODO: ggml_is_leaf()
-                        if (src_cur->op == GGML_OP_NONE && src_cur->grad == NULL) {
-                            continue;
-                        }
-
-                        // otherwise this src should be the output from previous nodes.
-                        int is_found = 0;
-
-                        // scan 2*search_depth back because we inserted barrier.
-                        //for (int j = ((level_pos - 2*search_depth) < 0 ? 0 : (level_pos - 2*search_depth)); j < level_pos; j++) {
-                        for (int j = MAX(0, level_pos - 2*search_depth); j < level_pos; j++) {
-                            if (ctx->concur_list[j] >= 0 && gf->nodes[ctx->concur_list[j]] == src_cur) {
-                                is_found = 1;
-                                break;
-                            }
-                        }
-                        if (is_found == 0) {
-                            exe_flag = 0;
-                            break;
-                        }
-                    }
-                }
-                if (exe_flag && check_mem) {
-                    // check if nodes[i]'s data will be overwritten by a node before nodes[i].
-                    // if node[5] and node[3] write to the same memory region, then we can't issue node[5] before node[3]
-                    int64_t data_start = (int64_t) gf->nodes[i]->data;
-                    int64_t length     = (int64_t) ggml_nbytes(gf->nodes[i]);
-                    for (int j = n_start; j < i; j++) {
-                        if (nodes_unused[j] && gf->nodes[j]->op != GGML_OP_RESHAPE \
-                                            && gf->nodes[j]->op != GGML_OP_VIEW \
-                                            && gf->nodes[j]->op != GGML_OP_TRANSPOSE \
-                                            && gf->nodes[j]->op != GGML_OP_PERMUTE) {
-                            if (((int64_t)gf->nodes[j]->data) >= data_start + length || \
-                                ((int64_t)gf->nodes[j]->data) + (int64_t) ggml_nbytes(gf->nodes[j]) <= data_start) {
-                                continue;
-                            }
-
-                            exe_flag = 0;
-                        }
-                    }
-                }
-                if (exe_flag) {
-                    ctx->concur_list[level_pos + concurrency] = i;
-                    nodes_unused[i] = 0;
-                    concurrency++;
-                    ctx->concur_list_len++;
-                }
-            }
-        }
-        n_left -= concurrency;
-        // adding a barrier different layer
-        ctx->concur_list[level_pos + concurrency] = -1;
-        ctx->concur_list_len++;
-        // jump all sorted nodes at nodes_bak
-        while (!nodes_unused[n_start]) {
-            n_start++;
-        }
-        level_pos += concurrency + 1;
-    }
-
-    if (ctx->concur_list_len > GGML_MAX_CONCUR) {
-        GGML_METAL_LOG_WARN("%s: too many elements for metal ctx->concur_list!\n", __func__);
-    }
 }
 
 static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const struct ggml_tensor * op) {
@@ -940,19 +709,15 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
     }
 }
 
-bool ggml_metal_graph_compute(
+static bool ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
                struct ggml_cgraph * gf) {
     @autoreleasepool {
 
-    // if there is ctx->concur_list, dispatch concurrently
-    // else fallback to serial dispatch
     MTLComputePassDescriptor * edesc = MTLComputePassDescriptor.computePassDescriptor;
 
-    const bool has_concur = ctx->concur_list_len && ctx->concur_list_len <= GGML_MAX_CONCUR;
-
-    const int n_nodes  = has_concur ? ctx->concur_list_len      : gf->n_nodes;
-    edesc.dispatchType = has_concur ? MTLDispatchTypeConcurrent : MTLDispatchTypeSerial;
+    const int n_nodes  = gf->n_nodes;
+    edesc.dispatchType = MTLDispatchTypeSerial;
 
     // create multiple command buffers and enqueue them
     // then, we encode the graph into the command buffers in parallel
@@ -983,7 +748,7 @@ bool ggml_metal_graph_compute(
             const int node_end   = MIN((cb_idx == n_cb - 1) ? n_nodes : (cb_idx + 1) * n_nodes_per_cb, n_nodes);
 
             for (int ind = node_start; ind < node_end; ++ind) {
-                const int i = has_concur ? ctx->concur_list[ind] : ind;
+                const int i = ind;
 
                 if (i == -1) {
                     [encoder memoryBarrierWithScope:MTLBarrierScopeBuffers];
@@ -2823,6 +2588,11 @@ static struct ggml_backend_i ggml_backend_metal_i = {
     /* .supports_op             = */ ggml_backend_metal_supports_op,
 };
 
+void ggml_backend_metal_log_set_callback(ggml_log_callback log_callback, void * user_data) {
+    ggml_metal_log_callback  = log_callback;
+    ggml_metal_log_user_data = user_data;
+}
+
 ggml_backend_t ggml_backend_metal_init(void) {
     struct ggml_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
 
@@ -2849,7 +2619,7 @@ void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
 
     struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
 
-    ggml_metal_set_n_cb(ctx, n_cb);
+    ctx->n_cb = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
 }
 
 bool ggml_backend_metal_supports_family(ggml_backend_t backend, int family) {

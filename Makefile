@@ -43,10 +43,6 @@ ifeq ($(UNAME_S),Darwin)
 	endif
 endif
 
-ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
-BUILD_TARGETS += metal
-endif
-
 default: $(BUILD_TARGETS)
 
 test: $(TEST_TARGETS)
@@ -670,11 +666,6 @@ lookup: examples/lookup/lookup.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 
 passkey: examples/passkey/passkey.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
-
-ifdef LLAMA_METAL
-metal: examples/metal/metal.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-endif
 
 ifeq ($(UNAME_S),Darwin)
 swift: examples/batched.swift
