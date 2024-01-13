@@ -53,6 +53,8 @@ struct DownloadButton: View {
 
                     llamaState.cacheCleared = false
 
+                    let model = Model(name: modelName, url: modelUrl, filename: filename, status: "downloaded")
+                    llamaState.downloadedModels.append(model)
                     status = "downloaded"
                 }
             } catch let err {
@@ -93,7 +95,7 @@ struct DownloadButton: View {
                         print("Error: \(err.localizedDescription)")
                     }
                 }) {
-                    Text("\(modelName) (Downloaded)")
+                    Text("Load \(modelName)")
                 }
             } else {
                 Text("Unknown status")

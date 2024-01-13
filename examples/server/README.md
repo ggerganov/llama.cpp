@@ -23,6 +23,8 @@ Command line options:
 -   `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 -   `--port`: Set the port to listen. Default: `8080`.
 -   `--path`: path from which to serve static files (default examples/server/public)
+-   `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
+-   `--api-key-file`: path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`'s.
 -   `--embedding`: Enable embedding extraction, Default: disabled.
 -   `-np N`, `--parallel N`: Set the number of slots for process requests (default: 1)
 -   `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
@@ -109,6 +111,10 @@ node index.js
 ```
 
 ## API Endpoints
+- **GET** `/health`: Returns the current state of the server:
+    - `{"status": "loading model"}` if the model is still being loaded.
+    - `{"status": "error"}` if the model failed to load.
+    - `{"status": "ok"}` if the model is successfully loaded and the server is ready for further requests mentioned below.
 
 -   **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 
@@ -148,6 +154,8 @@ node index.js
 
     `frequency_penalty`: Repeat alpha frequency penalty (default: 0.0, 0.0 = disabled);
 
+    `penalty_prompt`: This will replace the `prompt` for the purpose of the penalty evaluation. Can be either `null`, a string or an array of numbers representing tokens (default: `null` = use the original `prompt`).
+
     `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation (default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0).
 
     `mirostat_tau`: Set the Mirostat target entropy, parameter tau (default: 5.0).
@@ -164,43 +172,52 @@ node index.js
 
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
 
-    `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:` In this case, `[img-12]` will be replaced by the embeddings of the image id 12 in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
-
-    *Result JSON:*
-
-    Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
-
-    `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
-
-    `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
-
-    `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
-
-    `model`: The path to the model loaded with `-m`
-
-    `prompt`: The provided `prompt`
-
-    `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
-
-    `stopped_limit`: Indicating whether the completion stopped because `n_predict` tokens were generated before stop words or EOS was encountered
-
-    `stopped_word`: Indicating whether the completion stopped due to encountering a stopping word from `stop` JSON array provided
-
-    `stopping_word`: The stopping word encountered which stopped the generation (or "" if not stopped due to a stopping word)
-
-    `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
-
-    `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
-
-    `tokens_evaluated`: Number of tokens evaluated in total from the prompt
-
-    `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
+    `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
     `slot_id`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
 
     `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+
+### Result JSON:
+
+* Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
+
+
+- `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has the following structure:
+
+```
+{
+  "content": "<the token selected by the model>",
+  "probs": [
+    {
+      "prob": float,
+      "tok_str": "<most likely token>"
+    },
+    {
+      "prob": float,
+      "tok_str": "<second most likely tonen>"
+    },
+    ...
+  ]
+},
+```
+Notice that each `probs` is an array of length `n_probs`.
+
+- `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
+- `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
+- `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
+- `model`: The path to the model loaded with `-m`
+- `prompt`: The provided `prompt`
+- `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
+- `stopped_limit`: Indicating whether the completion stopped because `n_predict` tokens were generated before stop words or EOS was encountered
+- `stopped_word`: Indicating whether the completion stopped due to encountering a stopping word from `stop` JSON array provided
+- `stopping_word`: The stopping word encountered which stopped the generation (or "" if not stopped due to a stopping word)
+- `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
+- `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
+- `tokens_evaluated`: Number of tokens evaluated in total from the prompt
+- `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
@@ -221,6 +238,8 @@ node index.js
     *Options:*
 
     `content`: Set the text to process.
+
+    `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `content`. You can determine the place of the image in the content as in the following: `Image: [img-21].\nCaption: This is a picture of a house`. In this case, `[img-21]` will be replaced by the embeddings of the image with id `21` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 21}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
 -   **POST** `/infill`: For code infilling. Takes a prefix and a suffix and returns the predicted completion as stream.
 

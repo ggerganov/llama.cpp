@@ -218,7 +218,9 @@
 #define GGML_MAX_PARAMS         2048
 #define GGML_MAX_CONTEXTS       64
 #define GGML_MAX_SRC            10
+#ifndef GGML_MAX_NAME
 #define GGML_MAX_NAME           64
+#endif
 #define GGML_MAX_OP_PARAMS      64
 #define GGML_DEFAULT_N_THREADS  4
 #define GGML_DEFAULT_GRAPH_SIZE 2048
@@ -255,6 +257,8 @@
 #define GGML_UNREACHABLE() GGML_ASSERT(!"statement should not be reached")
 #elif defined(__GNUC__)
 #define GGML_UNREACHABLE() __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define GGML_UNREACHABLE() __assume(0)
 #else
 #define GGML_UNREACHABLE() ((void) 0)
 #endif
@@ -337,6 +341,8 @@ extern "C" {
         GGML_TYPE_Q5_K = 13,
         GGML_TYPE_Q6_K = 14,
         GGML_TYPE_Q8_K = 15,
+        GGML_TYPE_IQ2_XXS = 16,
+        GGML_TYPE_IQ2_XS  = 17,
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,
@@ -371,6 +377,8 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_K = 12, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q5_K = 13, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q6_K = 14, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_XXS = 15, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_XS  = 16, // except 1d tensors
     };
 
     // available tensor operations:
@@ -484,7 +492,8 @@ extern "C" {
     enum ggml_log_level {
         GGML_LOG_LEVEL_ERROR = 2,
         GGML_LOG_LEVEL_WARN = 3,
-        GGML_LOG_LEVEL_INFO = 4
+        GGML_LOG_LEVEL_INFO = 4,
+        GGML_LOG_LEVEL_DEBUG = 5
     };
 
     // ggml object
@@ -735,8 +744,8 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_view_tensor(struct ggml_context * ctx, struct ggml_tensor * src);
 
     // Context tensor enumeration and lookup
-    GGML_API struct ggml_tensor * ggml_get_first_tensor(struct ggml_context * ctx);
-    GGML_API struct ggml_tensor * ggml_get_next_tensor (struct ggml_context * ctx, struct ggml_tensor * tensor);
+    GGML_API struct ggml_tensor * ggml_get_first_tensor(const struct ggml_context * ctx);
+    GGML_API struct ggml_tensor * ggml_get_next_tensor (const struct ggml_context * ctx, struct ggml_tensor * tensor);
     GGML_API struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * name);
 
     GGML_API struct ggml_tensor * ggml_set_zero(struct ggml_tensor * tensor);
@@ -1094,13 +1103,13 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_scale(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            float                 s);
 
     // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_scale_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            float                 s);
 
     // b -> view(a,offset,nb1,nb2,3), return modified a
     GGML_API struct ggml_tensor * ggml_set(
@@ -1156,19 +1165,13 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
-    // a -> b, in-place, return view(b)
-    GGML_API struct ggml_tensor * ggml_cpy_inplace(
+    GGML_API struct ggml_tensor * ggml_cast(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            enum   ggml_type      type);
 
     // make contiguous
     GGML_API struct ggml_tensor * ggml_cont(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a);
-
-    // make contiguous, in-place
-    GGML_API struct ggml_tensor * ggml_cont_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
@@ -1844,8 +1847,8 @@ extern "C" {
 
     // ggml_graph_plan() has to be called before ggml_graph_compute()
     // when plan.work_size > 0, caller must allocate memory for plan.work_data
-    GGML_API struct ggml_cplan ggml_graph_plan   (struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
-    GGML_API int               ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
+    GGML_API struct ggml_cplan ggml_graph_plan   (const struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
+    GGML_API int               ggml_graph_compute(      struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
 
     // same as ggml_graph_compute() but the work data is allocated as a part of the context
     // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
@@ -2064,8 +2067,16 @@ extern "C" {
     GGML_API size_t ggml_quantize_q4_K(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q5_K(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q6_K(const float * src, void * dst, int n, int k, int64_t * hist);
+    GGML_API size_t ggml_quantize_iq2_xxs(const float * src, void * dst, int n, int k, int64_t * hist);
+    GGML_API size_t ggml_quantize_iq2_xs (const float * src, void * dst, int n, int k, int64_t * hist);
 
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start, int n, int64_t * hist);
+
+    //
+    // Importance matrix
+    //
+    typedef void(*ggml_collect_imatrix_t)(const struct ggml_tensor * src0, const struct ggml_tensor * src1);
+    GGML_API void ggml_set_imatrix_collection(ggml_collect_imatrix_t imatrix_collect);
 
     //
     // gguf
@@ -2135,10 +2146,11 @@ extern "C" {
     GGML_API const void * gguf_get_arr_data(const struct gguf_context * ctx, int key_id);
     GGML_API const char * gguf_get_arr_str (const struct gguf_context * ctx, int key_id, int i);
 
-    GGML_API int    gguf_get_n_tensors    (const struct gguf_context * ctx);
-    GGML_API int    gguf_find_tensor      (const struct gguf_context * ctx, const char * name);
-    GGML_API size_t gguf_get_tensor_offset(const struct gguf_context * ctx, int i);
-    GGML_API char * gguf_get_tensor_name  (const struct gguf_context * ctx, int i);
+    GGML_API int            gguf_get_n_tensors    (const struct gguf_context * ctx);
+    GGML_API int            gguf_find_tensor      (const struct gguf_context * ctx, const char * name);
+    GGML_API size_t         gguf_get_tensor_offset(const struct gguf_context * ctx, int i);
+    GGML_API char *         gguf_get_tensor_name  (const struct gguf_context * ctx, int i);
+    GGML_API enum ggml_type gguf_get_tensor_type  (const struct gguf_context * ctx, int i);
 
     // overrides existing values or adds a new one
     GGML_API void gguf_set_val_u8  (struct gguf_context * ctx, const char * key, uint8_t  val);
@@ -2194,6 +2206,7 @@ extern "C" {
     //
 
     GGML_API int ggml_cpu_has_avx        (void);
+    GGML_API int ggml_cpu_has_avx_vnni   (void);
     GGML_API int ggml_cpu_has_avx2       (void);
     GGML_API int ggml_cpu_has_avx512     (void);
     GGML_API int ggml_cpu_has_avx512_vbmi(void);

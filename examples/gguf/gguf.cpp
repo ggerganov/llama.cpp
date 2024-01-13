@@ -1,5 +1,4 @@
 #include "ggml.h"
-#include "llama.h"
 
 #include <cstdio>
 #include <cinttypes>

@@ -51,7 +51,7 @@ struct gpt_params {
     int32_t n_ctx                           = 512;   // context size
     int32_t n_batch                         = 512;   // batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                          = 0;     // number of tokens to keep from initial prompt
-    int32_t n_draft                         = 16;    // number of tokens to draft during speculative decoding
+    int32_t n_draft                         = 8;     // number of tokens to draft during speculative decoding
     int32_t n_chunks                        = -1;    // max number of chunks to process (-1 = unlimited)
     int32_t n_parallel                      = 1;     // number of parallel sequences to decode
     int32_t n_sequences                     = 1;     // number of sequences to decode
@@ -59,9 +59,13 @@ struct gpt_params {
     float   p_split                         = 0.1f;  // speculative decoding split probability
     int32_t n_gpu_layers                    = -1;    // number of layers to store in VRAM (-1 - use default)
     int32_t n_gpu_layers_draft              = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
+    llama_split_mode split_mode             = LLAMA_SPLIT_LAYER; // how to split the model across GPUs
     int32_t main_gpu                        = 0;     // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};   // how split tensors should be distributed across GPUs
     int32_t n_beams                         = 0;     // if non-zero then use beam search of given width.
+    int32_t grp_attn_n                      = 1;     // group-attention factor
+    int32_t grp_attn_w                      = 512;   // group-attention width
+    int32_t n_print                         = -1;    // print token count every n tokens (-1 = disabled)
     float   rope_freq_base                  = 0.0f;  // RoPE base frequency
     float   rope_freq_scale                 = 0.0f;  // RoPE frequency scaling factor
     float   yarn_ext_factor                 = -1.0f; // YaRN extrapolation mix factor
