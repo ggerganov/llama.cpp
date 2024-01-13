@@ -115,14 +115,22 @@ effectiveStdenv.mkDerivation (
     pname = "llama-cpp${pnameSuffix}";
     version = llamaVersion;
 
+    # Note: none of the files discarded here are visible in the sandbox or
+    # affect the output hash. This also means they can be modified without
+    # triggering a rebuild.
     src = lib.cleanSourceWith {
       filter =
         name: type:
-        !(builtins.any (_: _) [
+        let
+          noneOf = builtins.all (x: !x);
+          baseName = baseNameOf name;
+        in
+        noneOf [
           (lib.hasSuffix ".nix" name) # Ignore *.nix files when computing outPaths
-          (name == "README.md") # Ignore *.md changes whe computing outPaths
-          (lib.hasPrefix "." name) # Skip hidden files and directories
-        ]);
+          (lib.hasSuffix ".md" name) # Ignore *.md changes whe computing outPaths
+          (lib.hasPrefix "." baseName) # Skip hidden files and directories
+          (baseName == "flake.lock")
+        ];
       src = lib.cleanSource ../../.;
     };
 
