@@ -10,15 +10,15 @@ import sqlite3
 try:
     import git
     from tabulate import tabulate
-except ImportError:
+except ImportError as e:
     print("ERROR: the following Python libraries are required: GitPython, tabulate.")
-    sys.exit(1)
+    raise e
 
 # Properties by which to differentiate results per commit:
 KEY_PROPERTIES = [
-    "cuda", "opencl", "metal", "gpu_blas", "blas", "cpu_info", "gpu_info", "model_filename",
-    "model_type", "model_size", "model_n_params", "n_batch", "n_threads", "type_k", "type_v",
-    "n_gpu_layers", "main_gpu", "no_kv_offload", "mul_mat_q", "tensor_split", "n_prompt", "n_gen"
+    "cpu_info", "gpu_info", "n_gpu_layers", "main_gpu", "cuda", "opencl", "metal", "gpu_blas",
+    "blas", "model_filename", "model_type", "model_size", "model_n_params", "n_batch", "n_threads",
+    "type_k", "type_v", "no_kv_offload", "mul_mat_q", "tensor_split", "n_prompt", "n_gen"
 ]
 
 # Properties that are boolean and are converted to Yes/No for the table:
@@ -37,6 +37,7 @@ PRETTY_NAMES = {
 DEFAULT_SHOW = ["model_type"]  # Always show these properties by default.
 DEFAULT_HIDE = ["model_filename"]  # Always hide these properties by default.
 GPU_NAME_STRIP = ["NVIDIA GeForce ", "Tesla ", "AMD Radeon "]  # Strip prefixes for smaller tables.
+MODEL_SUFFIX_REPLACE = {" - Small": "_S", " - Medium": "_M", " - Large": "_L"}
 
 DESCRIPTION = """Creates tables from llama-bench data written to an SQLite database. Example usage (Linux):
 
@@ -308,8 +309,13 @@ else:
         if gpu_blas and "gpu_info" not in properties_different:
             show.append("gpu_info")
 
-    show += DEFAULT_SHOW
     show += properties_different
+
+    index_default = 0
+    for prop in ["cpu_info", "gpu_info", "n_gpu_layers", "main_gpu"]:
+        if prop in show:
+            index_default += 1
+    show = show[:index_default] + DEFAULT_SHOW + show[index_default:]
     for prop in DEFAULT_HIDE:
         try:
             show.remove(prop)
@@ -334,6 +340,12 @@ for bool_property in BOOL_PROPERTIES:
         for row_table in table:
             row_table[ip] = "Yes" if int(row_table[ip]) == 1 else "No"
 
+if "model_type" in show:
+    ip = show.index("model_type")
+    for (old, new) in MODEL_SUFFIX_REPLACE.items():
+        for row_table in table:
+            row_table[ip] = row_table[ip].replace(old, new)
+
 if "model_size" in show:
     ip = show.index("model_size")
     for row_table in table:
@@ -341,9 +353,15 @@ if "model_size" in show:
 
 if "gpu_info" in show:
     ip = show.index("gpu_info")
-    for gns in GPU_NAME_STRIP:
-        for row_table in table:
+    for row_table in table:
+        for gns in GPU_NAME_STRIP:
             row_table[ip] = row_table[ip].replace(gns, "")
+
+        gpu_names = row_table[ip].split("/")
+        num_gpus = len(gpu_names)
+        all_names_the_same = len(set(gpu_names)) == 1
+        if len(gpu_names) >= 2 and all_names_the_same:
+            row_table[ip] = f"{num_gpus}x {gpu_names[0]}"
 
 headers  = [PRETTY_NAMES[p] for p in show]
 headers += ["Test", f"t/s {name_baseline}", f"t/s {name_compare}", "Speedup"]
