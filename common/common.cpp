@@ -617,6 +617,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.numa = true;
         } else if (arg == "--verbose-prompt") {
             params.verbose_prompt = true;
+        } else if (arg == "--no-display-prompt") {
+            params.display_prompt = false;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -936,11 +938,12 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
     printf("                        or for intermediate results and KV (with split-mode = row) (default: %d)\n", params.main_gpu);
 #endif
+    printf("  --verbose-prompt      print a verbose prompt before generation (default: %s)\n", params.verbose_prompt ? "true" : "false");
+    printf("  --no-display-prompt   don't print prompt at generation (default: %s)\n", !params.display_prompt ? "true" : "false");
     printf("  -gan N, --grp-attn-n N\n");
     printf("                        group-attention factor (default: %d)\n", params.grp_attn_n);
     printf("  -gaw N, --grp-attn-w N\n");
     printf("                        group-attention width (default: %.1f)\n", (double)params.grp_attn_w);
-    printf("  --verbose-prompt      print prompt before generation\n");
     printf("  -dkvc, --dump-kv-cache\n");
     printf("                        verbose print of the KV cache\n");
     printf("  -nkvo, --no-kv-offload\n");
@@ -1582,6 +1585,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
     fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
+    fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
 }
 
 //
