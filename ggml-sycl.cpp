@@ -8358,7 +8358,7 @@ bool ggml_sycl_loaded(void) {
 }
 void print_devices(){
     int device_count = dpct::dev_mgr::instance().device_count();
-    fprintf(stderr, "\n%s: found %d SYCL devices:\n", __func__, device_count);
+    fprintf(stderr, "found %d SYCL devices:\n", device_count);
     for (int id = 0; id < device_count; ++id) {
         dpct::device_info prop;
         SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
@@ -8373,7 +8373,7 @@ void print_devices(){
                 prop.get_global_mem_size()
                 );
     }
-    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
 }
 
 int get_sycl_env(const char* env_name, int default_val){
@@ -8414,8 +8414,6 @@ void ggml_init_sycl() try {
 
         int user_device_id = get_sycl_env("GGML_SYCL_DEVICE", 0);
 
-        print_devices();
-
         if (CHECK_TRY_ERROR(g_all_sycl_device_count =
                                  dpct::dev_mgr::instance().device_count()) !=
             0) {
@@ -8423,7 +8421,6 @@ void ggml_init_sycl() try {
             g_sycl_loaded = false;
             return;
         }
-
         GGML_ASSERT(g_all_sycl_device_count <= GGML_SYCL_MAX_DEVICES);
         int64_t total_vram = 0;
 
@@ -8439,7 +8436,7 @@ void ggml_init_sycl() try {
 #else
         fprintf(stderr, "%s: SYCL_USE_XMX: no\n", __func__);
 #endif
-
+        print_devices();
         for (int id = 0; id < GGML_SYCL_MAX_DEVICES; ++id) {
             g_sycl_device_id2index[id].index = -1;
             g_device_caps[id].vmm = 0;
@@ -8447,7 +8444,6 @@ void ggml_init_sycl() try {
             g_device_caps[id].cc = 0;
             g_tensor_split[id] = 0;
         }
-
 
         int device_inx = -1;
         for (int id = 0; id < g_all_sycl_device_count; ++id) {
@@ -8464,10 +8460,10 @@ void ggml_init_sycl() try {
             SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
                 prop, dpct::dev_mgr::instance().get_device(id))));
 
-            fprintf(stderr,
-                    "  Device %d: %s, compute capability %d.%d, VMM: %s\n", id,
-                    prop.get_name(), prop.get_major_version(),
-                    prop.get_minor_version(), device_vmm ? "yes" : "no");
+            // fprintf(stderr,
+            //         "  Device %d: %s, compute capability %d.%d, VMM: %s\n", id,
+            //         prop.get_name(), prop.get_major_version(),
+            //         prop.get_minor_version(), device_vmm ? "yes" : "no");
 
             g_tensor_split[device_inx] = total_vram;
             total_vram += prop.get_global_mem_size();
@@ -8475,7 +8471,7 @@ void ggml_init_sycl() try {
             g_device_caps[device_inx].cc =
                 100 * prop.get_major_version() + 10 * prop.get_minor_version();
 
-            printf("g_device_caps[%d].cc=%d\n", device_inx, g_device_caps[device_inx].cc);
+            // printf("g_device_caps[%d].cc=%d\n", device_inx, g_device_caps[device_inx].cc);
         }
         device_inx = -1;
         for (int id = 0; id < g_all_sycl_device_count; ++id) {
@@ -8520,7 +8516,7 @@ void ggml_init_sycl() try {
         ggml_sycl_set_main_device(user_device_id);
         ggml_sycl_set_device(user_device_id);
         g_work_group_size = get_work_group_size(user_device_id);
-        fprintf(stderr, "Using Device %d\n", user_device_id);
+        // fprintf(stderr, "Using Device %d\n", user_device_id);
 
         // for (int id = 0; id < g_all_sycl_device_count; ++id) {
         //     GGML_SYCL_DEBUG("id=%d  g_device_caps[%d].device_id=%d g_sycl_device_id2index[%d].index=%d ", id, id,
@@ -11396,7 +11392,7 @@ void ggml_sycl_set_main_device(const int main_device) try {
         dpct::device_info prop;
         SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
             prop, dpct::dev_mgr::instance().get_device(g_main_device))));
-        fprintf(stderr, "%s: using device %d (%s) as main device\n", __func__,
+        fprintf(stderr, "Using device %d (%s) as main device\n",
                 g_main_device, prop.get_name());
     }
 }
