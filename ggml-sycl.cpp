@@ -19,9 +19,10 @@
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
-#include <dpct/dpct.hpp>
-#include <dpct/blas_utils.hpp>
-#include <dpct/lib_common_utils.hpp>
+// #include <dpct/dpct.hpp>
+// #include <dpct/blas_utils.hpp>
+// #include <dpct/lib_common_utils.hpp>
+#include "dpct.hpp"
 #include "ggml-sycl.h"
 #include "ggml.h"
 #include "ggml-backend-impl.h"
