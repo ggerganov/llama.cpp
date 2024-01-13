@@ -330,7 +330,6 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
         }
     }
 
-#if TARGET_OS_OSX
     // print MTL GPU family:
     GGML_METAL_LOG_INFO("%s: GPU name:   %s\n", __func__, [[ctx->device name] UTF8String]);
 
@@ -366,7 +365,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
     ctx->support_simdgroup_reduction |= [ctx->device supportsFamily:MTLGPUFamilyMetal3];
 
     ctx->support_simdgroup_mm = [ctx->device supportsFamily:MTLGPUFamilyApple7];
-
+#if TARGET_OS_OSX
     GGML_METAL_LOG_INFO("%s: simdgroup reduction support   = %s\n",       __func__, ctx->support_simdgroup_reduction ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: simdgroup matrix mul. support = %s\n",       __func__, ctx->support_simdgroup_mm ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
