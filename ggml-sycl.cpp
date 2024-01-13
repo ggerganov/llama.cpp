@@ -9712,7 +9712,7 @@ static void ggml_sycl_op_flatten(const ggml_tensor *src0,
             src1_ddf = (float *) src1_extra->data_device[g_main_device_index];
         } else {
             src1_ddf = src1_f.alloc(ggml_nelements(src1));
-            // SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src1_ddf, src1, 0, 0, 0, nrows1, main_stream));
+            SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src1_ddf, src1, 0, 0, 0, nrows1, main_stream));
         }
     }
     if (dst_on_device) {
