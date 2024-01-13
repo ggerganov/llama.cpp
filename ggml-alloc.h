@@ -59,6 +59,7 @@ GGML_API ggml_tallocr_t ggml_tallocr_new_measure_from_buft(struct ggml_backend_b
 GGML_API ggml_tallocr_t ggml_tallocr_new_measure_from_backend(struct ggml_backend * backend);
 
 GGML_API struct ggml_backend_buffer * ggml_tallocr_get_buffer(ggml_tallocr_t talloc);
+GGML_API void                         ggml_tallocr_set_buffer(ggml_tallocr_t talloc, struct ggml_backend_buffer * buffer);
 
 GGML_API void   ggml_tallocr_free       (ggml_tallocr_t talloc);
 GGML_API bool   ggml_tallocr_is_measure (ggml_tallocr_t talloc);

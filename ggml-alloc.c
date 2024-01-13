@@ -319,6 +319,13 @@ struct ggml_backend_buffer * ggml_tallocr_get_buffer(ggml_tallocr_t alloc) {
     return alloc->buffer;
 }
 
+void ggml_tallocr_set_buffer(ggml_tallocr_t talloc, struct ggml_backend_buffer * buffer) {
+    talloc->buffer = buffer;
+    talloc->base = ggml_backend_buffer_get_base(buffer);
+    talloc->alignment = ggml_backend_buffer_get_alignment(buffer);
+    ggml_tallocr_reset(talloc);
+}
+
 void ggml_tallocr_free(ggml_tallocr_t alloc) {
     if (alloc == NULL) {
         return;
