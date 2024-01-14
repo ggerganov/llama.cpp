@@ -6222,7 +6222,7 @@ static int llama_decode_internal(
     logits_valid.clear();
     logits_valid.resize(n_tokens_all);
 
-    logits_out.clear();
+    memset(logits_out, 0, lctx.logits_size*sizeof(float));
 #endif
 
 
@@ -6427,6 +6427,9 @@ static int llama_decode_internal(
             ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), (n_embd*(n_tokens - 1))*sizeof(float), n_embd*sizeof(float));
         }
     }
+
+    //ggml_backend_sched_synchronize(lctx.sched);
+    //lctx.buf_cpu_ub_cur = 0;
 
     // measure the performance only for the single-token evals
     if (n_tokens_all == 1) {
