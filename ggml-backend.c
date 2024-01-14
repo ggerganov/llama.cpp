@@ -802,6 +802,9 @@ struct ggml_backend_sched {
     __attribute__((aligned(GGML_MEM_ALIGN)))
     #endif
     char context_buffer[GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS*sizeof(struct ggml_tensor) + sizeof(struct ggml_cgraph)];
+
+    ggml_backend_sched_eval_callback callback_eval;
+    void * callback_eval_user_data;
 };
 
 #define hash_id(node) ggml_hash_find_or_insert(sched->hash_set, node)
@@ -1324,9 +1327,30 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
         ggml_graph_dump_dot(split->graph, NULL, split_filename);
 #endif
 
+
         uint64_t compute_start_us = ggml_time_us();
-        ggml_backend_graph_compute(split_backend, &split->graph);
-        //ggml_backend_synchronize(split_backend); // necessary to measure compute time
+        if (!sched->callback_eval) {
+            ggml_backend_graph_compute(split_backend, &split->graph);
+          //ggml_backend_synchronize(split_backend); // necessary to measure compute time
+        } else {
+            // similar to ggml_backend_compare_graph_backend
+            for (int j = 0; j < split->graph.n_nodes; j++) {
+                struct ggml_tensor * t = split->graph.nodes[j];
+
+                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j, j + 1);
+
+                ggml_backend_graph_compute(split_backend, &gv);
+
+                if (ggml_is_view_op(t->op)) {
+                    continue;
+                }
+
+                // TODO: j is node index in the split, not in the original graph
+                if (!sched->callback_eval(j, t, sched->callback_eval_user_data)) {
+                    break;
+                }
+            }
+        }
         uint64_t compute_end_us = ggml_time_us();
         compute_us[split_backend_id] += compute_end_us - compute_start_us;
     }
@@ -1351,6 +1375,10 @@ static void sched_reset(ggml_backend_sched_t sched) {
     memset(sched->hash_set.keys, 0, sizeof(sched->hash_set.keys[0]) * hash_size);
     memset(sched->node_talloc,   0, sizeof(sched->node_talloc[0])   * hash_size);
     memset(sched->node_copies,   0, sizeof(sched->node_copies[0])   * hash_size);
+
+    // TODO: should we clear the callbacks?
+    //sched->callback_eval = NULL;
+    //sched->callback_eval_user_data = NULL;
 
     sched->is_reset = true;
 }
@@ -1429,6 +1457,12 @@ void ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cg
 
 void ggml_backend_sched_reset(ggml_backend_sched_t sched) {
     sched_reset(sched);
+}
+
+
+void ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data) {
+    sched->callback_eval = callback;
+    sched->callback_eval_user_data = user_data;
 }
 
 int ggml_backend_sched_get_n_splits(ggml_backend_sched_t sched) {

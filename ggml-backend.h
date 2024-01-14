@@ -148,6 +148,9 @@ extern "C" {
     struct ggml_backend_sched;
     typedef struct ggml_backend_sched * ggml_backend_sched_t;
 
+    // TODO: propose to rename to ggml_backend_sched_callback_eval
+    typedef bool (*ggml_backend_sched_eval_callback)(int node_index, struct ggml_tensor * t, void * user_data);
+
     // Initialize a backend scheduler
     GGML_API ggml_backend_sched_t  ggml_backend_sched_new(ggml_backend_t * backends, ggml_backend_buffer_type_t * bufts, int n_backends, size_t graph_size);
     GGML_API void                  ggml_backend_sched_free(ggml_backend_sched_t sched);
@@ -168,6 +171,9 @@ extern "C" {
     // Reset all assignments and allocators - must be called before using the sched allocators to allocate inputs
     GGML_API void                  ggml_backend_sched_reset(ggml_backend_sched_t sched);
 
+    // Set a callback to be called for each resulting node during graph compute
+    GGML_API void                  ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data);
+
     //
     // Utils
     //
@@ -183,6 +189,7 @@ extern "C" {
     GGML_API struct ggml_backend_graph_copy ggml_backend_graph_copy(ggml_backend_t backend, struct ggml_cgraph * graph);
     GGML_API void                           ggml_backend_graph_copy_free(struct ggml_backend_graph_copy copy);
 
+    // TODO: propose to rename this to ggml_backend_callback_compare
     typedef bool (*ggml_backend_eval_callback)(int node_index, struct ggml_tensor * t1, struct ggml_tensor * t2, void * user_data);
 
     // Compare the output of two backends
