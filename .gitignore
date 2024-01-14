@@ -101,6 +101,7 @@ poetry.toml
 /tests/test-sampling
 /tests/test-tokenizer-0-llama
 /tests/test-tokenizer-0-falcon
+/tests/test-tokenizer-0-deepseek-coder
 /tests/test-tokenizer-1-llama
 /tests/test-tokenizer-1-bpe
 /tests/test-rope

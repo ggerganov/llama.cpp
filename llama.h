@@ -68,8 +68,10 @@ extern "C" {
     typedef int32_t llama_seq_id;
 
     enum llama_vocab_type {
-        LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
-        LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
+        LLAMA_VOCAB_TYPE_SPM           = 0, // SentencePiece
+        LLAMA_VOCAB_TYPE_BPE           = 1, // Byte Pair Encoding
+        LLAMA_VOCAB_TYPE_DEEPSEEKCODER = 2, // Deepseek Coder
+        LLAMA_VOCAB_TYPE_DEEPSEEKLLM   = 3, // Deepseek LLM
     };
 
     enum llama_token_type {

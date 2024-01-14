@@ -23,11 +23,16 @@ llama_build_and_test_executable(test-quantize-fns.cpp)
 llama_build_and_test_executable(test-quantize-perf.cpp)
 llama_build_and_test_executable(test-sampling.cpp)
 
+
 llama_build_executable(test-tokenizer-0-llama.cpp)
 llama_test_executable (test-tokenizer-0-llama test-tokenizer-0-llama.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
 
+
 llama_build_executable(test-tokenizer-0-falcon.cpp)
 llama_test_executable (test-tokenizer-0-falcon test-tokenizer-0-falcon.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
+
+llama_build_executable(test-tokenizer-0-deepseek-coder.cpp)
+llama_test_executable (test-tokenizer-0-deepseek-coder test-tokenizer-0-deepseek-coder.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-coder.gguf)
 
 llama_build_executable(test-tokenizer-1-llama.cpp)
 llama_test_executable (test-tokenizer-1-llama    test-tokenizer-1-llama.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
