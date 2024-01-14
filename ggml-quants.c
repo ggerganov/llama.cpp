@@ -497,12 +497,19 @@ void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict
         y[i].d = GGML_FP32_TO_FP16(d);
 
         for (int j = 0; j < qk/2; ++j) {
-            const float x0 = x[i*qk + 0    + j]*id;
-            const float x1 = x[i*qk + qk/2 + j]*id;
+            float x0 = x[i*qk + 0    + j]*id;
+            float x1 = x[i*qk + qk/2 + j]*id;
 
-            // Experimental change that rounds away from absolute zero instead of 
-            const uint8_t xi0 = MIN(15, (int8_t)(x0 + (x0 >= 0 ? 8.0f : 9.0f)));
-            const uint8_t xi1 = MIN(15, (int8_t)(x1 + (x1 >= 0 ? 8.0f : 9.0f)));
+            x0 += 8.0f; // Offset to center 0
+            x1 += 8.0f; // Offset to center 0
+
+            // Implement round half away from zero
+            const int8_t xi0_temp = x0 > 0 ? (int8_t)(x0 + 0.5f) : (int8_t)(x0 - 0.5f);
+            const int8_t xi1_temp = x1 > 0 ? (int8_t)(x1 + 0.5f) : (int8_t)(x1 - 0.5f);
+
+            // Clamp to [0,15]
+            const uint8_t xi0 = MIN(15, xi0_temp);
+            const uint8_t xi1 = MIN(15, xi1_temp);
 
             y[i].qs[j]  = xi0;
             y[i].qs[j] |= xi1 << 4;
