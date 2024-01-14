@@ -7099,7 +7099,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         }
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN(TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         llm_tokenizer_spm tokenizer(vocab);
                         llama_escape_whitespace(raw_text);
@@ -7120,7 +7120,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        LLAMA_LOG_WARN(TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         llm_tokenizer_bpe tokenizer(vocab);
                         tokenizer.tokenize(raw_text, output);
