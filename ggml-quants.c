@@ -1274,7 +1274,12 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
     }
     float sumlx = 0;
     float suml2 = 0;
+#ifdef HAVE_BUGGY_APPLE_LINKER
+    // use 'volatile' to prevent unroll and work around a bug in Apple ld64 1015.7
+    for (volatile int i = 0; i < n; ++i) {
+#else
     for (int i = 0; i < n; ++i) {
+#endif
         int l = nearest_int(iscale * x[i]);
         l = MAX(-nmax, MIN(nmax-1, l));
         L[i] = l + nmax;
@@ -1649,7 +1654,12 @@ static float make_qkx3_quants(int n, int nmax, const float * restrict x, const f
     float max = x[0];
     float sum_w = weights ? weights[0] : x[0]*x[0];
     float sum_x = sum_w * x[0];
+#ifdef HAVE_BUGGY_APPLE_LINKER
+    // use 'volatile' to prevent unroll and work around a bug in Apple ld64 1015.7
+    for (volatile int i = 1; i < n; ++i) {
+#else
     for (int i = 1; i < n; ++i) {
+#endif
         if (x[i] < min) min = x[i];
         if (x[i] > max) max = x[i];
         float w = weights ? weights[i] : x[i]*x[i];
@@ -1660,7 +1670,7 @@ static float make_qkx3_quants(int n, int nmax, const float * restrict x, const f
         min = 0;
     }
     if (max <= min) {
-        for (int i = 0; i < n; ++i) L[i] = 0;
+        memset(L, 0, n);
         *the_min = -min;
         return 0.f;
     }
@@ -1862,7 +1872,7 @@ static void quantize_row_q2_K_impl(const float * restrict x, block_q2_K * restri
 
 size_t quantize_q2_K(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
-    int row_size = ggml_row_size(GGML_TYPE_Q2_K, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q2_K, n_per_row);
     if (!quant_weights) {
         quantize_row_q2_K_reference(src, dst, nrow*n_per_row);
     }
@@ -2181,7 +2191,7 @@ static void quantize_row_q3_K_impl(const float * restrict x, block_q3_K * restri
 
 size_t quantize_q3_K(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
-    int row_size = ggml_row_size(GGML_TYPE_Q3_K, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q3_K, n_per_row);
     if (!quant_weights) {
         quantize_row_q3_K_reference(src, dst, nrow*n_per_row);
     }
@@ -2448,7 +2458,7 @@ static void quantize_row_q4_K_impl(const float * restrict x, block_q4_K * restri
 
 size_t quantize_q4_K(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
-    int row_size = ggml_row_size(GGML_TYPE_Q4_K, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q4_K, n_per_row);
     if (!quant_weights) {
         quantize_row_q4_K_reference(src, dst, nrow*n_per_row);
     }
@@ -2771,7 +2781,7 @@ static void quantize_row_q5_K_impl(const float * restrict x, block_q5_K * restri
 
 size_t quantize_q5_K(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
-    int row_size = ggml_row_size(GGML_TYPE_Q5_K, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q5_K, n_per_row);
     if (!quant_weights) {
         quantize_row_q5_K_reference(src, dst, nrow*n_per_row);
     }
@@ -3025,7 +3035,7 @@ static void quantize_row_q6_K_impl(const float * restrict x, block_q6_K * restri
 
 size_t quantize_q6_K(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
-    int row_size = ggml_row_size(GGML_TYPE_Q6_K, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q6_K, n_per_row);
     if (!quant_weights) {
         quantize_row_q6_K_reference(src, dst, nrow*n_per_row);
     }
@@ -3072,7 +3082,7 @@ size_t quantize_q4_0(const float * src, void * dst, int nrow, int n_per_row, int
     if (!quant_weights) {
         return ggml_quantize_q4_0(src, dst, nrow*n_per_row, n_per_row, hist);
     }
-    int row_size = ggml_row_size(GGML_TYPE_Q4_0, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q4_0, n_per_row);
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
         quantize_row_q4_0_impl(src, (block_q4_0*)qrow, n_per_row, quant_weights);
@@ -3116,7 +3126,7 @@ size_t quantize_q4_1(const float * src, void * dst, int nrow, int n_per_row, int
     if (!quant_weights) {
         return ggml_quantize_q4_1(src, dst, nrow*n_per_row, n_per_row, hist);
     }
-    int row_size = ggml_row_size(GGML_TYPE_Q4_1, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q4_1, n_per_row);
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
         quantize_row_q4_1_impl(src, (block_q4_1*)qrow, n_per_row, quant_weights);
@@ -3169,7 +3179,7 @@ size_t quantize_q5_0(const float * src, void * dst, int nrow, int n_per_row, int
     if (!quant_weights) {
         return ggml_quantize_q5_0(src, dst, nrow*n_per_row, n_per_row, hist);
     }
-    int row_size = ggml_row_size(GGML_TYPE_Q5_0, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q5_0, n_per_row);
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
         quantize_row_q5_0_impl(src, (block_q5_0*)qrow, n_per_row, quant_weights);
@@ -3221,7 +3231,7 @@ size_t quantize_q5_1(const float * src, void * dst, int nrow, int n_per_row, int
     if (!quant_weights) {
         return ggml_quantize_q5_1(src, dst, nrow*n_per_row, n_per_row, hist);
     }
-    int row_size = ggml_row_size(GGML_TYPE_Q5_1, n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_Q5_1, n_per_row);
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
         quantize_row_q5_1_impl(src, (block_q5_1*)qrow, n_per_row, quant_weights);
@@ -8565,7 +8575,7 @@ static int iq2_compare_func(const void * left, const void * right) {
     return l[0] < r[0] ? -1 : l[0] > r[0] ? 1 : l[1] < r[1] ? -1 : l[1] > r[1] ? 1 : 0;
 }
 
-static void q2xs_init_impl(int grid_size) {
+void iq2xs_init_impl(int grid_size) {
     const int gindex = iq2_data_index(grid_size);
     if (iq2_data[gindex].grid) {
         return;
@@ -8720,37 +8730,13 @@ static void q2xs_init_impl(int grid_size) {
     free(dist2);
 }
 
-void ggml_init_iq2_quantization(enum ggml_type type) {
-    if (type == GGML_TYPE_IQ2_XXS) {
-        q2xs_init_impl(256);
-    }
-    else if (type == GGML_TYPE_IQ2_XS) {
-        q2xs_init_impl(512);
-    }
-    else {
-        fprintf(stderr, "======================== Why are you calling %s with type %d?\n", __func__, (int)type);
-    }
-}
-
-static void q2xs_deinit_impl(int grid_size) {
+void iq2xs_free_impl(int grid_size) {
     GGML_ASSERT(grid_size == 256 || grid_size == 512 || grid_size == 1024);
     const int gindex = iq2_data_index(grid_size);
     if (iq2_data[gindex].grid) {
         free(iq2_data[gindex].grid);       iq2_data[gindex].grid = NULL;
         free(iq2_data[gindex].map);        iq2_data[gindex].map  = NULL;
         free(iq2_data[gindex].neighbours); iq2_data[gindex].neighbours = NULL;
-    }
-}
-
-void ggml_deinit_iq2_quantization(enum ggml_type type) {
-    if (type == GGML_TYPE_IQ2_XXS) {
-        q2xs_deinit_impl(256);
-    }
-    else if (type == GGML_TYPE_IQ2_XS) {
-        q2xs_deinit_impl(512);
-    }
-    else {
-        fprintf(stderr, "======================== Why are you calling %s with type %d?\n", __func__, (int)type);
     }
 }
 
@@ -8786,10 +8772,10 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
     const int      * kmap_q2xs       = iq2_data[gindex].map;
     const uint16_t * kneighbors_q2xs = iq2_data[gindex].neighbours;
 
-    GGML_ASSERT(quant_weights);
-    GGML_ASSERT(kgrid_q2xs);
-    GGML_ASSERT(kmap_q2xs);
-    GGML_ASSERT(kneighbors_q2xs);
+    GGML_ASSERT(quant_weights   && "missing quantization weights");
+    GGML_ASSERT(kgrid_q2xs      && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kmap_q2xs       && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kneighbors_q2xs && "forgot to call ggml_quantize_init()?");
     GGML_ASSERT(n%QK_K == 0);
 
     const int kMaxQ = 3;
@@ -9005,10 +8991,10 @@ static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict v
     const int      * kmap_q2xs       = iq2_data[gindex].map;
     const uint16_t * kneighbors_q2xs = iq2_data[gindex].neighbours;
 
-    GGML_ASSERT(quant_weights);
-    GGML_ASSERT(kmap_q2xs);
-    GGML_ASSERT(kgrid_q2xs);
-    GGML_ASSERT(kneighbors_q2xs);
+    GGML_ASSERT(quant_weights   && "missing quantization weights");
+    GGML_ASSERT(kmap_q2xs       && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kgrid_q2xs      && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kneighbors_q2xs && "forgot to call ggml_quantize_init()?");
     GGML_ASSERT(n%QK_K == 0);
 
     const int kMaxQ = 3;

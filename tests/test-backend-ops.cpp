@@ -56,7 +56,18 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
         int64_t hist[16];
-        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], hist, nullptr);
+        std::vector<float> imatrix(tensor->ne[0], 1.0f); // dummy importance matrix
+        const float * im = imatrix.data();
+        if (!ggml_quantize_requires_imatrix(tensor->type)) {
+            // when the imatrix is optional, we want to test both quantization with and without imatrix
+            std::random_device rd;
+            std::default_random_engine generator(rd());
+            std::uniform_int_distribution<int> distribution(0, 1);
+            if (distribution(generator)) {
+                im = nullptr;
+            }
+        }
+        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], hist, im);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
@@ -1472,7 +1483,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_Q8_0,
         GGML_TYPE_Q2_K, GGML_TYPE_Q3_K,
         GGML_TYPE_Q4_K, GGML_TYPE_Q5_K,
-        GGML_TYPE_Q6_K
+        GGML_TYPE_Q6_K,
+        GGML_TYPE_IQ2_XXS, GGML_TYPE_IQ2_XS,
     };
 
     // unary ops
@@ -1751,6 +1763,8 @@ int main(int argc, char ** argv) {
         printf("\033[1;31mFAIL\033[0m\n");
         return 1;
     }
+
+    ggml_quantize_free();
 
     printf("\033[1;32mOK\033[0m\n");
     return 0;
