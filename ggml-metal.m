@@ -2246,8 +2246,8 @@ static bool ggml_metal_graph_compute(
             GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, cb_idx, status);
             return false;
         }
-    }            
-    
+    }
+
     return true;
     }
 }
