@@ -8463,8 +8463,18 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         }
     } else if (name.find("ffn_down") != std::string::npos) {
         const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
-        const int i_layer = qs.i_feed_forward_w2 / n_expert;
-        const int n_layer = qs.i_feed_forward_w2 / n_expert;
+        int i_layer, n_layer;
+        if (n_expert == 1) {
+            i_layer = qs.i_feed_forward_w2;
+            n_layer = qs.n_feed_forward_w2;
+        } else {
+            // Believe it or not, "experts" in the FFN of Mixtral-8x7B are not consecutive, but iccasionally randomly
+            // sprinkled in the model. Hence, simply dividing i_feed_forward_w2 by n_expert does not work
+            // for getting the current layer as I initially thought, and we need to resort to parsing the
+            // tensor name.
+            n_layer = qs.n_feed_forward_w2 / n_expert;
+            sscanf(name.c_str(), "blk.%d.ffn_down", &i_layer);
+        }
         if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S) {
             if (i_layer < n_layer/8) new_type = GGML_TYPE_Q4_K;
