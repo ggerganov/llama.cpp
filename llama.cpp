@@ -8473,7 +8473,12 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             // for getting the current layer as I initially thought, and we need to resort to parsing the
             // tensor name.
             n_layer = qs.n_feed_forward_w2 / n_expert;
-            sscanf(name.c_str(), "blk.%d.ffn_down", &i_layer);
+            if (sscanf(name.c_str(), "blk.%d.ffn_down", &i_layer) != 1) {
+                throw std::runtime_error(format("Failed to determine layer for tensor %s", name.c_str()));
+            }
+            if (i_layer < 0 || i_layer >= n_layer) {
+                throw std::runtime_error(format("Bad layer %d for tensor %s. Must be in [0, %d)", i_layer, name.c_str(), n_layer));
+            }
         }
         if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S) {
