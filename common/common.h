@@ -58,6 +58,7 @@ struct gpt_params {
     int32_t n_beams                         = 0;     // if non-zero then use beam search of given width.
     int32_t grp_attn_n                      = 1;     // group-attention factor
     int32_t grp_attn_w                      = 512;   // group-attention width
+    int32_t n_print                         = -1;    // print token count every n tokens (-1 = disabled)
     float   rope_freq_base                  = 0.0f;  // RoPE base frequency
     float   rope_freq_scale                 = 0.0f;  // RoPE frequency scaling factor
     float   yarn_ext_factor                 = -1.0f; // YaRN extrapolation mix factor
@@ -254,4 +255,3 @@ void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size = 80);
 
 // Dump the KV cache view showing individual sequences in each cell (long output).
 void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40);
-

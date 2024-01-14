@@ -142,7 +142,7 @@ Current version: 105
 			display: flex;
 			flex-wrap: wrap;
 			background-color: #4d4d4d;
-			padding: 10px;
+			padding: 6px;
 		}
 
 		body.connected .settingsmenu,
@@ -1135,8 +1135,8 @@ Current version: 105
 
 		.settingitem {
 			width: 50%;
-			padding-left: 8px;
-			padding-right: 8px;
+			padding-left: 6px;
+			padding-right: 6px;
 			padding-bottom: 5px;
 			padding-top: 5px;
 			display: inline-block;
@@ -3378,6 +3378,7 @@ Current version: 105
 		img_autogen: false,
 		img_allownsfw: true,
 		img_cfgscale: 7,
+		img_allowhd: false,
 		img_steps: 20,
 		save_images: true,
 		prompt_for_savename: false,
@@ -7383,6 +7384,7 @@ Current version: 105
 		update_horde_sdmodels();
 
 		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
+		document.getElementById("img_allowhd").checked = localsettings.img_allowhd;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
@@ -7564,6 +7566,7 @@ Current version: 105
 		localsettings.image_styles = pendingstyle;
 		localsettings.grammar = pendinggrammar;
 		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
+		localsettings.img_allowhd = (document.getElementById("img_allowhd").checked ? true : false);
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
@@ -9439,10 +9442,11 @@ Current version: 105
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
+					let imgres = localsettings.img_allowhd?380:256;
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
-					}, true);
+					}, true, true, imgres);
 				}else{
 					image_db[imgid].queue = "Failed";
 					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
@@ -9466,10 +9470,11 @@ Current version: 105
 					{
 						//console.log(outputimg);
 						let origImg = "data:image/jpeg;base64," + outputimg;
+						let imgres = localsettings.img_allowhd?380:256;
 						compressImage(origImg, (newDataUri) => {
 							image_db[imgid].done = true;
 							image_db[imgid].result = newDataUri;
-						}, true);
+						}, true, true, imgres);
 					}else{
 						image_db[imgid].queue = "Failed";
 						msgbox("Image Generation Failed!\n\nPlease make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n");
@@ -9518,6 +9523,7 @@ Current version: 105
 	function render_image_html(data, pend_txt = "", float=true) {
 		var dim = (localsettings.opmode == 2 ? 160 : 200); //adventure mode has smaller pictures
 		let siclass = (float?"storyimgfloat":"storyimg");
+		let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
 		let alttxt = "";
 		if (!data || data == "") {
 			let waittime = "Unavailable";
@@ -9529,13 +9535,13 @@ Current version: 105
 				console.log("Cannot render " + pend_txt);
 			}
 
-			return `<div class="`+siclass+`" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" title="`+alttxt+`" alt="` + pend_txt + `"><div class=\"loader2\"></div><div class=\"imagelabel\">` + waittime + `</div></div>`;
+			return `<div class="`+siclass+reinvertcolor+`" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" title="`+alttxt+`" alt="` + pend_txt + `"><div class=\"loader2\"></div><div class=\"imagelabel\">` + waittime + `</div></div>`;
 		} else {
 			let imghash = cyrb_hash(data);
 			if (completed_imgs_meta[imghash] != null) {
 				alttxt = completed_imgs_meta[imghash].alt?escapeHtml(completed_imgs_meta[imghash].alt):"";
 			}
-			return `<div class="`+siclass+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this);"></div>`;
+			return `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this);"></div>`;
 		}
 	}
 
@@ -9775,7 +9781,8 @@ Current version: 105
 										img.queue = 0;
 										let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
 										//console.log("Original image: " + origImg);
-										compressImage(origImg, (newDataUri) => { img.result = newDataUri; }, true);
+										let imgres = localsettings.img_allowhd?380:256;
+										compressImage(origImg, (newDataUri) => { img.result = newDataUri; }, true, true, imgres);
 									}
 								})
 								.catch((error) => {
@@ -11732,7 +11739,8 @@ Current version: 105
 		}
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
-			return `<div class='${role}-portrait-image${classSuffixStr}' style='width:${as.portraitSize(role).width}px; height:${as.portraitSize(role).height}px; border-radius: ${as.portraitRadius()}'></div>`;
+			let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
+			return `<div class='${role}-portrait-image${classSuffixStr}${reinvertcolor}' style='width:${as.portraitSize(role).width}px; height:${as.portraitSize(role).height}px; border-radius: ${as.portraitRadius()}'></div>`;
 		}
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
@@ -12487,7 +12495,7 @@ Current version: 105
 								<option value="6">ChatML</option>
 								<option value="7">KoboldAI Format</option>
 							</select>
-							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
+							<table class="settingsmall text-center" style="border-spacing: 3px 2px;	border-collapse: separate;">
 								<tr>
 									<th>Start Seq.<span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></th>
 									<th>End Seq.<span class="helpicon">?<span class="helptext">The sequence to end an instruction prompt</span></span></th>
@@ -12512,7 +12520,7 @@ Current version: 105
 						<div class="settinglabel">
 
 							<div class="justifyleft settingsmall">Advanced Sampler Config <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>
-							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+							<table class="settingsmall text-center" style="border-spacing: 3px 2px;
 							border-collapse: separate;">
 								<tr>
 								  <th title="Top-K Sampling. 0 to Deactivate.">Top-K</th>
@@ -12560,7 +12568,7 @@ Current version: 105
 
 							<div class="justifyleft settingsmall">Mirostat (If supported) <span class="helpicon">?<span class="helptext">Replaces your samplers with mirostat, an alternative sampling method. May not be available depending on backend, not supported on Horde.</span></span></div>
 							<div id="mirosupporteddiv">
-								<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+								<table class="settingsmall text-center" style="border-spacing: 3px 2px;
 								border-collapse: separate;">
 									<tr>
 									<th title="Mirostat Type 0/1/2">Mode</th>
@@ -12586,7 +12594,7 @@ Current version: 105
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+							<table class="settingsmall text-center" style="border-spacing: 3px 2px;
 							border-collapse: separate;">
 								<tr>
 								  <th title="Repetition Penalty Range">RpRng.</th>
@@ -12977,7 +12985,7 @@ Current version: 105
 			</div>
 
 			<div class="zoomedimgdiv">
-				<img id="zoomedimg" src="" style="border-radius: 6%;" width="300px" height="300px">
+				<img id="zoomedimg" src="" style="border-radius: 6%;" width="320px" height="320px">
 			</div>
 
 			<div class="aidgpopuplistheader anotelabel zoomedimgdesc" id="zoomedimgdesc" style="word-wrap: break-word;">
@@ -13039,6 +13047,13 @@ Current version: 105
 				<div class="justifyleft" style="padding:4px">Cfg. Scale: </div>
 				<input type="text" inputmode="decimal" id="img_cfgscale" style="width:60px">
 			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Save Higher-Res <span class="helpicon">?
+					<span class="helptext">This option will result in larger save files which may be slower. Changing this setting only applies to NEW images.</span>
+				</span>: </div>
+				<input type="checkbox" id="img_allowhd" style="margin:0px 0 0;">
+			</div>
+
 
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirmImgStyle()">Ok</button>
