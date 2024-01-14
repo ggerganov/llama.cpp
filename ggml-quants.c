@@ -500,8 +500,9 @@ void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict
             const float x0 = x[i*qk + 0    + j]*id;
             const float x1 = x[i*qk + qk/2 + j]*id;
 
-            const uint8_t xi0 = MIN(15, (int8_t)(x0 + 8.5f));
-            const uint8_t xi1 = MIN(15, (int8_t)(x1 + 8.5f));
+            // Experimental change that rounds away from absolute zero instead of 
+            const uint8_t xi0 = MIN(15, (int8_t)(x0 + (x0 >= 0 ? 8.0f : 9.0f)));
+            const uint8_t xi1 = MIN(15, (int8_t)(x1 + (x1 >= 0 ? 8.0f : 9.0f)));
 
             y[i].qs[j]  = xi0;
             y[i].qs[j] |= xi1 << 4;
