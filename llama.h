@@ -249,6 +249,7 @@ extern "C" {
         bool quantize_output_tensor; // quantize output.weight
         bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
+        void * imatrix;              // pointer to importance matrix data
     } llama_model_quantize_params;
 
     // grammar types

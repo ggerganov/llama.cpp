@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)  # for add_link_options
+cmake_minimum_required(VERSION 3.14)  # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -74,6 +74,10 @@ option(LLAMA_FMA                             "llama: enable FMA"                
 # in MSVC F16C is implied with AVX2/AVX512
 if (NOT MSVC)
     option(LLAMA_F16C                        "llama: enable F16C"                               ${INS_ENB})
+endif()
+
+if (WIN32)
+    option(LLAMA_WIN_VER                     "llama: Windows Version"                           0x602)
 endif()
 
 # 3rd party libs
@@ -686,7 +690,7 @@ endif()
 
 if (MINGW)
     # Target Windows 8 for PrefetchVirtualMemory
-    add_compile_definitions(_WIN32_WINNT=0x602)
+    add_compile_definitions(_WIN32_WINNT=${LLAMA_WIN_VER})
 endif()
 
 #
