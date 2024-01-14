@@ -1114,7 +1114,7 @@ struct llama_mlock {
             suggest = false;
         }
 
-        fprintf(stderr, "warning: failed to mlock %zu-byte buffer (after previously locking %zu bytes): %s\n%s",
+        LLAMA_LOG_WARN("warning: failed to mlock %zu-byte buffer (after previously locking %zu bytes): %s\n%s",
                 size, this->size, errmsg, suggest ? MLOCK_SUGGESTION : "");
         return false;
     }
@@ -1123,7 +1123,7 @@ struct llama_mlock {
 
     static void raw_unlock(void * addr, size_t size) {
         if (munlock(addr, size)) {
-            fprintf(stderr, "warning: failed to munlock buffer: %s\n", std::strerror(errno));
+            LLAMA_LOG_WARN("warning: failed to munlock buffer: %s\n", std::strerror(errno));
         }
     }
 #elif defined(_WIN32)
@@ -1141,7 +1141,7 @@ struct llama_mlock {
                 return true;
             }
             if (tries == 2) {
-                fprintf(stderr, "warning: failed to VirtualLock %zu-byte buffer (after previously locking %zu bytes): %s\n",
+                LLAMA_LOG_WARN("warning: failed to VirtualLock %zu-byte buffer (after previously locking %zu bytes): %s\n",
                     len, size, llama_format_win_err(GetLastError()).c_str());
                 return false;
             }
@@ -1150,7 +1150,7 @@ struct llama_mlock {
             // set size and try again.
             SIZE_T min_ws_size, max_ws_size;
             if (!GetProcessWorkingSetSize(GetCurrentProcess(), &min_ws_size, &max_ws_size)) {
-                fprintf(stderr, "warning: GetProcessWorkingSetSize failed: %s\n",
+                LLAMA_LOG_WARN("warning: GetProcessWorkingSetSize failed: %s\n",
                         llama_format_win_err(GetLastError()).c_str());
                 return false;
             }
@@ -1163,7 +1163,7 @@ struct llama_mlock {
             min_ws_size += increment;
             max_ws_size += increment;
             if (!SetProcessWorkingSetSize(GetCurrentProcess(), min_ws_size, max_ws_size)) {
-                fprintf(stderr, "warning: SetProcessWorkingSetSize failed: %s\n",
+                LLAMA_LOG_WARN("warning: SetProcessWorkingSetSize failed: %s\n",
                         llama_format_win_err(GetLastError()).c_str());
                 return false;
             }
@@ -1172,7 +1172,7 @@ struct llama_mlock {
 
     static void raw_unlock(void * ptr, size_t len) {
         if (!VirtualUnlock(ptr, len)) {
-            fprintf(stderr, "warning: failed to VirtualUnlock buffer: %s\n",
+            LLAMA_LOG_WARN("warning: failed to VirtualUnlock buffer: %s\n",
                     llama_format_win_err(GetLastError()).c_str());
         }
     }
@@ -1184,7 +1184,7 @@ struct llama_mlock {
     }
 
     bool raw_lock(const void * addr, size_t len) const {
-        fprintf(stderr, "warning: mlock not supported on this system\n");
+        LLAMA_LOG_WARN("warning: mlock not supported on this system\n");
         return false;
     }
 
@@ -2085,13 +2085,13 @@ namespace GGUFMeta {
                     __func__, override_type_to_str(override->tag), override->key);
                 switch (override->tag) {
                     case LLAMA_KV_OVERRIDE_BOOL:  {
-                        printf("%s\n", override->bool_value ? "true" : "false");
+                        LLAMA_LOG_INFO("%s\n", override->bool_value ? "true" : "false");
                     } break;
                     case LLAMA_KV_OVERRIDE_INT:   {
-                        printf("%" PRId64 "\n", override->int_value);
+                        LLAMA_LOG_INFO("%" PRId64 "\n", override->int_value);
                     } break;
                     case LLAMA_KV_OVERRIDE_FLOAT: {
-                        printf("%.6f\n", override->float_value);
+                        LLAMA_LOG_INFO("%.6f\n", override->float_value);
                     } break;
                     default:
                         // Shouldn't be possible to end up here, but just in case...
@@ -6993,7 +6993,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     if (match + special_token.length() > raw_text_base_offset + raw_text_base_length) break;
 
 #ifdef PRETOKENIZERDEBUG
-                    fprintf(stderr, "FF: (%ld %ld %ld) '%s'\n", raw_text->length(), raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
+                    LLAMA_LOG_WARN("FF: (%ld %ld %ld) '%s'\n", raw_text->length(), raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
 #endif
                     auto source = std::distance(buffer.begin(), it);
 
@@ -7006,7 +7006,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         buffer.emplace_after(it, (*raw_text), left_reminder_offset, left_reminder_length);
 
 #ifdef PRETOKENIZERDEBUG
-                        fprintf(stderr, "FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
+                        LLAMA_LOG_WARN("FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
 #endif
                         it++;
                     }
@@ -7022,7 +7022,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         buffer.emplace_after(it, (*raw_text), right_reminder_offset, right_reminder_length);
 
 #ifdef PRETOKENIZERDEBUG
-                        fprintf(stderr, "FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
+                        LLAMA_LOG_WARN("FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
 #endif
 
                         it++;
@@ -7038,7 +7038,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         raw_text_base_length = right_reminder_length;
 
 #ifdef PRETOKENIZERDEBUG
-                        fprintf(stderr, "RR: (%ld %ld) '%s'\n", raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
+                        LLAMA_LOG_WARN("RR: (%ld %ld) '%s'\n", raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
 #endif
                     } else {
                         if (source == 0) {
@@ -7095,7 +7095,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         }
 
 #ifdef PRETOKENIZERDEBUG
-                        fprintf(stderr,"TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN(TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         llm_tokenizer_spm tokenizer(vocab);
                         llama_escape_whitespace(raw_text);
@@ -7116,7 +7116,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
-                        fprintf(stderr,"TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+                        LLAMA_LOG_WARN(TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         llm_tokenizer_bpe tokenizer(vocab);
                         tokenizer.tokenize(raw_text, output);
@@ -8641,7 +8641,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     if (params->imatrix) {
         imatrix_data = static_cast<const std::unordered_map<std::string, std::vector<float>>*>(params->imatrix);
         if (imatrix_data) {
-            printf("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
+            LLAMA_LOG_INFO("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
         }
     }
 
@@ -8764,12 +8764,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if (imatrix_data) {
                 auto it = imatrix_data->find(tensor->name);
                 if (it == imatrix_data->end()) {
-                    printf("\n====== %s: did not find weights for %s\n", __func__, tensor->name);
+                    LLAMA_LOG_INFO("\n====== %s: did not find weights for %s\n", __func__, tensor->name);
                 } else {
                     if (it->second.size() == (size_t)tensor->ne[0]) {
                         imatrix = it->second.data();
                     } else {
-                        printf("\n====== %s: imatrix size %d is different from tensor size %d for %s\n", __func__,
+                        LLAMA_LOG_INFO("\n====== %s: imatrix size %d is different from tensor size %d for %s\n", __func__,
                                 int(it->second.size()), int(tensor->ne[0]), tensor->name);
                     }
                 }
@@ -8777,10 +8777,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if ((new_type == GGML_TYPE_IQ2_XXS ||
                  new_type == GGML_TYPE_IQ2_XS  ||
                 (new_type == GGML_TYPE_Q2_K && params->ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && strcmp(tensor->name, "token_embd.weight") != 0)) && !imatrix) {
-                fprintf(stderr, "\n\n============================================================\n");
-                fprintf(stderr, "Missing importance matrix for tensor %s in a very low-bit quantization\n", tensor->name);
-                fprintf(stderr, "The result will be garbage, so bailing out\n");
-                fprintf(stderr, "============================================================\n\n");
+                LLAMA_LOG_ERROR("\n\n============================================================\n");
+                LLAMA_LOG_ERROR("Missing importance matrix for tensor %s in a very low-bit quantization\n", tensor->name);
+                LLAMA_LOG_ERROR("The result will be garbage, so bailing out\n");
+                LLAMA_LOG_ERROR("============================================================\n\n");
                 throw std::runtime_error(format("Missing importance matrix for tensor %s in a very low-bit quantization", tensor->name));
             }
 
