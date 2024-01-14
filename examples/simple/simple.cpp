@@ -8,23 +8,27 @@
 
 // a function that can be called for every computed node during graph evaluation
 // the user can choose to whether to observe the data of the node depending on the tensor parameters
-static bool observe_compute(int node_index, struct ggml_tensor * t, void * user_data) {
+static bool observe_compute(int node_index, struct ggml_tensor * t, bool ask, void * user_data) {
     GGML_UNUSED(user_data);
 
-    // check if name contains soft_max
-    if (strstr(t->name, "soft_max") != 0) {
-        printf("%s: node_index = %5d, t->name = %32s, t->op = %12s, [%5d, %5d, %5d, %5d]\n",
-                __func__, node_index, t->name, ggml_op_name(t->op), (int) t->ne[0], (int) t->ne[1], (int) t->ne[2], (int) t->ne[3]);
-
-        std::vector<float> t_data(ggml_nelements(t));
-        ggml_backend_tensor_get(t, t_data.data(), 0, ggml_nbytes(t));
-
-        // print first row
-        for (int i = 0; i < t->ne[0]; i++) {
-            printf("%8.4f ", t_data[i]);
-        }
-        printf("\n");
+    // the scheduler is asking us if we want to observe this node
+    if (ask) {
+        // check if name contains soft_max
+        return strstr(t->name, "soft_max") != 0;
     }
+
+    // print the node data
+    printf("%s: node_index = %5d, t->name = %32s, t->op = %12s, [%5d, %5d, %5d, %5d]\n",
+            __func__, node_index, t->name, ggml_op_name(t->op), (int) t->ne[0], (int) t->ne[1], (int) t->ne[2], (int) t->ne[3]);
+
+    std::vector<float> t_data(ggml_nelements(t));
+    ggml_backend_tensor_get(t, t_data.data(), 0, ggml_nbytes(t));
+
+    // print first row
+    for (int i = 0; i < t->ne[0]; i++) {
+        printf("%8.4f ", t_data[i]);
+    }
+    printf("\n");
 
     return true;
 }

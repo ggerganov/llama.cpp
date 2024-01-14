@@ -1337,18 +1337,25 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
             for (int j = 0; j < split->graph.n_nodes; j++) {
                 struct ggml_tensor * t = split->graph.nodes[j];
 
-                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j, j + 1);
+                int k = j;
+
+                // check if the user needs data from this node
+                while (!sched->callback_eval(k, t, true, sched->callback_eval_user_data) && k < split->graph.n_nodes - 1) {
+                    t = split->graph.nodes[++k];
+                }
+
+                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j, k + 1);
 
                 ggml_backend_graph_compute(split_backend, &gv);
 
-                if (ggml_is_view_op(t->op)) {
-                    continue;
-                }
-
-                // TODO: j is node index in the split, not in the original graph
-                if (!sched->callback_eval(j, t, sched->callback_eval_user_data)) {
+                // TODO: k is node index in the split, not in the original graph
+                // TODO: avoid the ask == true call here
+                if (sched->callback_eval(k, t, true,  sched->callback_eval_user_data) &&
+                   !sched->callback_eval(k, t, false, sched->callback_eval_user_data)) {
                     break;
                 }
+
+                j = k;
             }
         }
         uint64_t compute_end_us = ggml_time_us();
