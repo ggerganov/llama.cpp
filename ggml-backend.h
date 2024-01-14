@@ -168,6 +168,9 @@ extern "C" {
     // Reset all assignments and allocators - must be called before using the sched allocators to allocate inputs
     GGML_API void                  ggml_backend_sched_reset(ggml_backend_sched_t sched);
 
+    // Synchronize all backends
+    GGML_API void                  ggml_backend_sched_synchronize(ggml_backend_sched_t sched);
+
     //
     // Utils
     //

@@ -194,21 +194,21 @@ void ggml_backend_tensor_get_async(ggml_backend_t backend, const struct ggml_ten
 void ggml_backend_tensor_set(struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
     GGML_ASSERT(buf != NULL && "tensor buffer not set");
+    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
 
-    tensor->buffer->iface.set_tensor(buf, tensor, data, offset, size);
+    buf->iface.set_tensor(buf, tensor, data, offset, size);
 }
 
 void ggml_backend_tensor_get(const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
+    GGML_ASSERT(buf != NULL && "tensor buffer not set");
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-    GGML_ASSERT(tensor->buffer != NULL && "tensor buffer not set");
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
 
-    tensor->buffer->iface.get_tensor(buf, tensor, data, offset, size);
+    buf->iface.get_tensor(buf, tensor, data, offset, size);
 }
 
 void ggml_backend_synchronize(ggml_backend_t backend) {
@@ -1430,6 +1430,12 @@ void ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cg
 
 void ggml_backend_sched_reset(ggml_backend_sched_t sched) {
     sched_reset(sched);
+}
+
+void ggml_backend_sched_synchronize(ggml_backend_sched_t sched) {
+    for (int i = 0; i < sched->n_backends; i++) {
+        ggml_backend_synchronize(sched->backends[i]);
+    }
 }
 
 int ggml_backend_sched_get_n_splits(ggml_backend_sched_t sched) {

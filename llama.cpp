@@ -1619,6 +1619,8 @@ struct llama_context {
         for (ggml_backend_t backend : backends) {
             ggml_backend_free(backend);
         }
+
+        ggml_backend_buffer_free(buf_logits);
     }
 
     llama_cparams cparams;
@@ -1649,7 +1651,12 @@ struct llama_context {
     int32_t n_eval   = 0; // number of eval calls
 
     // decode output (2-dimensional array: [n_tokens][n_vocab])
-    std::vector<float> logits;
+    //std::vector<float> logits;
+
+    ggml_backend_buffer_t buf_logits = nullptr;
+    size_t logits_size = 0;
+    float * logits = nullptr;
+
 #ifndef NDEBUG
     // guard against access to unset logits
     std::vector<bool>  logits_valid;
@@ -1666,6 +1673,7 @@ struct llama_context {
     ggml_tallocr * alloc_cpu = nullptr;
 
     std::vector<ggml_backend_buffer_t> buf_cpu_ub;
+    size_t buf_cpu_ub_cur = 0;
 
     // temporary buffer for copying data to/from the backend
     std::vector<no_init<uint8_t>> buf_copy;
@@ -6197,8 +6205,9 @@ static int llama_decode_internal(
     const int64_t n_vocab = hparams.n_vocab;
 
 
-    auto & logits_out = lctx.logits;
+    auto * logits_out = lctx.logits;
 
+    /*
     if (all_batch.logits) {
         logits_out.resize(n_vocab * n_tokens_all);
     } else if (lctx.logits_all) {
@@ -6206,6 +6215,7 @@ static int llama_decode_internal(
     } else {
         logits_out.resize(n_vocab);
     }
+    */
 
 #ifndef NDEBUG
     auto & logits_valid = lctx.logits_valid;
@@ -6215,7 +6225,9 @@ static int llama_decode_internal(
     logits_out.clear();
 #endif
 
-    const uint32_t n_microbatch = 256;
+
+    const uint32_t n_microbatch = cparams.n_batch;
+    //const uint32_t n_microbatch = 256;
 
     for (uint32_t cur_token = 0; cur_token < n_tokens_all; cur_token += n_microbatch) {
         const uint32_t n_tokens = std::min(n_microbatch, n_tokens_all - cur_token);
@@ -6287,18 +6299,16 @@ static int llama_decode_internal(
 
         //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
-        int i_ub = cur_token / n_microbatch;
-        size_t n_buf = lctx.buf_cpu_ub.size();
-        if (i_ub != 0 && i_ub % n_buf == 0) {
-            // sync all backends
+        // change the CPU compute buffer to avoid overwriting inputs
+        size_t buf_cpu_ub_cur = lctx.buf_cpu_ub_cur;
+        lctx.buf_cpu_ub_cur = (lctx.buf_cpu_ub_cur + 1) % lctx.buf_cpu_ub.size();
+        if (buf_cpu_ub_cur == 0 && cur_token > 0) {
+            // sync all backends to ensure that the current buffer is not in use
             printf("not enough buffers, syncing now\n");
-            // TODO: ggml_backend_sched_synchronize()
-            for (auto * backend : lctx.backends) {
-                ggml_backend_synchronize(backend);
-            }
+            ggml_backend_sched_synchronize(lctx.sched);
         }
 
-        ggml_tallocr_set_buffer(lctx.alloc_cpu, lctx.buf_cpu_ub[i_ub % n_buf]);
+        ggml_tallocr_set_buffer(lctx.alloc_cpu, lctx.buf_cpu_ub.at(buf_cpu_ub_cur));
 
         ggml_backend_sched_reset(lctx.sched);
 
@@ -6343,8 +6353,6 @@ static int llama_decode_internal(
 
         ggml_backend_sched_graph_compute(lctx.sched, gf);
 
-        // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
-
     #ifdef GGML_USE_MPI
         ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
     #endif
@@ -6384,34 +6392,28 @@ static int llama_decode_internal(
             ggml_backend_t res_backend = ggml_backend_sched_get_node_backend(lctx.sched, res);
             GGML_ASSERT(res_backend != nullptr);
             if (batch.logits) {
-                //logits_out.resize(n_vocab * n_tokens);
                 for (uint32_t i = 0; i < n_tokens; i++) {
                     if (batch.logits[i] == 0) {
                         continue;
                     }
-                    ggml_backend_tensor_get_async(res_backend, res, logits_out.data() + n_vocab*(cur_token + i), n_vocab*i*sizeof(float), n_vocab*sizeof(float));
+                    ggml_backend_tensor_get_async(res_backend, res, logits_out + n_vocab*(cur_token + i), n_vocab*i*sizeof(float), n_vocab*sizeof(float));
     #ifndef NDEBUG
-                    logits_valid[i] = true;
+                    logits_valid[cur_token + i] = true;
     #endif
                 }
             } else if (lctx.logits_all) {
-                //logits_out.resize(n_vocab * n_tokens);
-                //ggml_backend_tensor_get_async(res_backend, res, logits_out.data(), 0, n_vocab*n_tokens*sizeof(float));
-                ggml_backend_tensor_get_async(res_backend, res, logits_out.data() + cur_token*n_vocab, 0, n_vocab*n_tokens*sizeof(float));
+                ggml_backend_tensor_get_async(res_backend, res, logits_out + n_vocab*cur_token, 0, n_vocab*n_tokens*sizeof(float));
     #ifndef NDEBUG
-                std::fill(logits_valid.begin(), logits_valid.end(), true);
+                std::fill(logits_valid.begin() + cur_token, logits_valid.begin() + cur_token + n_tokens, true);
     #endif
             } else {
                 if (cur_token + n_tokens >= n_tokens_all) {
-                    //logits_out.resize(n_vocab);
-                    ggml_backend_tensor_get_async(res_backend, res, logits_out.data(), n_vocab*(n_tokens - 1)*sizeof(float), n_vocab*sizeof(float));
-                }
-                //ggml_backend_tensor_get_async(res_backend, res, logits_out.data(), n_vocab*(n_tokens - 1)*sizeof(float), n_vocab*sizeof(float));
+                    ggml_backend_tensor_get_async(res_backend, res, logits_out, n_vocab*(n_tokens - 1)*sizeof(float), n_vocab*sizeof(float));
     #ifndef NDEBUG
-                logits_valid[0] = true;
+                    logits_valid[0] = true;
     #endif
+                }
             }
-            //ggml_backend_synchronize(res_backend);
         }
 
         // FIXME
@@ -6423,13 +6425,7 @@ static int llama_decode_internal(
             embedding_out.resize(n_embd);
             ggml_backend_t embeddings_backend = ggml_backend_sched_get_node_backend(lctx.sched, embeddings);
             ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), (n_embd*(n_tokens - 1))*sizeof(float), n_embd*sizeof(float));
-            //ggml_backend_synchronize(embeddings_backend);
         }
-    }
-
-    // TODO: ggml_backend_sched_synchronize()
-    for (auto * backend : lctx.backends) {
-        ggml_backend_synchronize(backend);
     }
 
     // measure the performance only for the single-token evals
@@ -9433,7 +9429,8 @@ struct llama_context * llama_new_context_with_model(
         }
 
         // resized during inference, reserve maximum
-        ctx->logits.reserve(hparams.n_vocab*cparams.n_batch);
+        //ctx->logits.reserve(hparams.n_vocab*cparams.n_batch);
+        ctx->logits_size = hparams.n_vocab*cparams.n_ctx;
 
         if (params.embedding){
             ctx->embedding.resize(hparams.n_embd);
@@ -9479,6 +9476,18 @@ struct llama_context * llama_new_context_with_model(
                 ggml_backend_buffer_t buf = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), buf_size);
                 ctx->buf_cpu_ub.push_back(buf);
             }
+            // allocate buffer for logits output
+            ctx->buf_logits = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), hparams.n_vocab*cparams.n_ctx*sizeof(float));
+            if (ctx->buf_logits == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to allocate logits buffer\n", __func__);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->logits = (float *) ggml_backend_buffer_get_base(ctx->buf_logits);
+            ggml_backend_buffer_clear(ctx->buf_logits, 0);
+            LLAMA_LOG_INFO("%s: logits buffer size = %8.2f MiB, type = %s\n", __func__,
+                    ggml_backend_buffer_get_size(ctx->buf_logits) / 1024.0 / 1024.0,
+                    ggml_backend_buffer_name(ctx->buf_logits));
 
             for (ggml_backend_t backend : ctx->backends) {
                 ggml_backend_buffer_t buf = ggml_backend_sched_get_buffer(ctx->sched, backend);
@@ -9792,7 +9801,7 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     const size_t s_rng             = LLAMA_MAX_RNG_STATE;
     const size_t s_logits_size     = sizeof(size_t);
     // assume worst case for logits although only currently set ones are serialized
-    const size_t s_logits          = ctx->logits.capacity() * sizeof(float);
+    const size_t s_logits          = ctx->logits_size * sizeof(float);
     const size_t s_embedding_size  = sizeof(size_t);
     const size_t s_embedding       = ctx->embedding.size() * sizeof(float);
     const size_t s_kv_size         = sizeof(size_t);
@@ -9884,12 +9893,12 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
 
     // copy logits
     {
-        const size_t logits_size = ctx->logits.size();
+        const size_t logits_size = ctx->logits_size;
 
         data_ctx->write(&logits_size, sizeof(logits_size));
 
         if (logits_size) {
-            data_ctx->write(ctx->logits.data(), logits_size * sizeof(float));
+            data_ctx->write(ctx->logits, logits_size * sizeof(float));
         }
     }
 
@@ -9991,12 +10000,12 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
         memcpy(&logits_size, inp, sizeof(logits_size)); inp += sizeof(logits_size);
 
-        GGML_ASSERT(ctx->logits.capacity() >= logits_size);
+        GGML_ASSERT(ctx->logits_size >= logits_size);
 
         if (logits_size) {
-            ctx->logits.resize(logits_size);
+            //ctx->logits.resize(logits_size);
 
-            memcpy(ctx->logits.data(), inp, logits_size * sizeof(float));
+            memcpy(ctx->logits, inp, logits_size * sizeof(float));
             inp += logits_size * sizeof(float);
         }
     }
@@ -10271,15 +10280,23 @@ int32_t llama_decode(
 }
 
 float * llama_get_logits(struct llama_context * ctx) {
-    return ctx->logits.data();
+    ggml_backend_sched_synchronize(ctx->sched);
+    ctx->buf_cpu_ub_cur = 0;
+    return ctx->logits;
 }
 
 float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
+    ggml_backend_sched_synchronize(ctx->sched);
+    ctx->buf_cpu_ub_cur = 0;
+
     assert(ctx->logits_valid.at(i));
-    return ctx->logits.data() + i*ctx->model.hparams.n_vocab;
+    return ctx->logits + i*ctx->model.hparams.n_vocab;
 }
 
 float * llama_get_embeddings(struct llama_context * ctx) {
+    ggml_backend_sched_synchronize(ctx->sched);
+    ctx->buf_cpu_ub_cur = 0;
+
     return ctx->embedding.data();
 }
 

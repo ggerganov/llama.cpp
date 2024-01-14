@@ -10724,6 +10724,10 @@ ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type() {
     return &ggml_backend_cuda_buffer_type_host;
 }
 
+static bool ggml_backend_buffer_is_cuda_host(ggml_backend_buffer_t buffer) {
+    return buffer->buft->iface.get_name == ggml_backend_cuda_host_buffer_type_name;
+}
+
 // backend
 
 static const char * ggml_backend_cuda_name(ggml_backend_t backend) {
@@ -10747,8 +10751,9 @@ static ggml_backend_buffer_type_t ggml_backend_cuda_get_default_buffer_type(ggml
 
 static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
+    ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
-    GGML_ASSERT(tensor->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
+    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
     CUDA_CHECK(cudaMemcpyAsync((char *)tensor->data + offset, data, size, cudaMemcpyHostToDevice, g_cudaStreams[cuda_ctx->device][0]));
@@ -10756,43 +10761,64 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tens
 
 static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
+    ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
-    GGML_ASSERT(tensor->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
+    GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
     CUDA_CHECK(cudaMemcpyAsync(data, (const char *)tensor->data + offset, size, cudaMemcpyDeviceToHost, g_cudaStreams[cuda_ctx->device][0]));
 }
 
 static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, const ggml_tensor * src, ggml_tensor * dst) {
-    if (!ggml_backend_is_cuda(backend_src) || !ggml_backend_is_cuda(backend_dst)) {
+    if (!ggml_backend_is_cuda(backend_src) && !ggml_backend_is_cuda(backend_dst)) {
+        printf("not cuda either %s -> %s\n", src->name, dst->name);
         return false;
     }
 
-    if (!ggml_backend_buffer_is_cuda(src->buffer) || !ggml_backend_buffer_is_cuda(dst->buffer)) {
+    // host -> device
+    if (ggml_backend_buffer_is_cuda_host(src->buffer) && ggml_backend_buffer_is_cuda(dst->buffer)) {
+        ggml_backend_cuda_context * cuda_ctx_dst = (ggml_backend_cuda_context *)backend_dst->context;
+        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyHostToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
+        return true;
+    }
+
+    // device -> host
+    if (ggml_backend_buffer_is_cuda_host(dst->buffer) && ggml_backend_buffer_is_cuda(src->buffer)) {
+        ggml_backend_cuda_context * cuda_ctx_src = (ggml_backend_cuda_context *)backend_src->context;
+        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToHost, g_cudaStreams[cuda_ctx_src->device][0]));
+        return true;
+    }
+
+    if (!ggml_backend_buffer_is_cuda(src->buffer)) {
         return false;
     }
 
+    if (!ggml_backend_buffer_is_cuda(dst->buffer)) {
+        return false;
+    }
+
+    // device -> device
     ggml_backend_cuda_context * cuda_ctx_src = (ggml_backend_cuda_context *)backend_src->context;
     ggml_backend_cuda_context * cuda_ctx_dst = (ggml_backend_cuda_context *)backend_dst->context;
 
-    if (backend_src == backend_dst) {
-        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
-    } else {
+    if (backend_src != backend_dst) {
+        //printf("async copy between devices %s, %d -> %d\n", src->name, cuda_ctx_src->device, cuda_ctx_dst->device);
+        cudaDeviceSynchronize();
+        // TODO: reuse event?
         cudaEvent_t event;
         CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
 
         // record event on src stream
         CUDA_CHECK(cudaEventRecord(event, g_cudaStreams[cuda_ctx_src->device][0]));
+
         // wait on dst stream
         CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[cuda_ctx_dst->device][0], event, 0));
-        // copy
-        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
 
         CUDA_CHECK(cudaEventDestroy(event));
-        return true;
     }
-
-    return false;
+    // copy
+    CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
+    return true;
 }
 
 static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {

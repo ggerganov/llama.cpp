@@ -1041,16 +1041,22 @@ struct sql_printer : public printer {
 };
 
 static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
+    llama_set_n_threads(ctx, n_threads, n_threads);
+
+    std::vector<llama_token> tokens(n_prompt, llama_token_bos(llama_get_model(ctx)));
+    llama_decode(ctx, llama_batch_get_one(tokens.data(), n_prompt, n_past, 0));
+
+    GGML_UNUSED(n_batch);
+
+/*
     std::vector<llama_token> tokens(n_batch, llama_token_bos(llama_get_model(ctx)));
     int n_processed = 0;
 
-    llama_set_n_threads(ctx, n_threads, n_threads);
-
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
-        llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens, n_past + n_processed, 0));
         n_processed += n_tokens;
     }
+*/
 }
 
 static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
@@ -1149,12 +1155,12 @@ int main(int argc, char ** argv) {
 
         // warmup run
         if (t.n_prompt > 0) {
-            //test_prompt(ctx, std::min(2, t.n_batch), 0, t.n_batch, t.n_threads);
-            test_prompt(ctx, std::min(t.n_prompt, 32), 0, t.n_batch, t.n_threads);
+            test_prompt(ctx, std::min(t.n_batch, std::min(t.n_prompt, 32)), 0, t.n_batch, t.n_threads);
         }
         if (t.n_gen > 0) {
             test_gen(ctx, 1, 0, t.n_threads);
         }
+        llama_get_logits(ctx); // force sync
 
         for (int i = 0; i < params.reps; i++) {
             llama_kv_cache_clear(ctx);
@@ -1166,6 +1172,8 @@ int main(int argc, char ** argv) {
             if (t.n_gen > 0) {
                 test_gen(ctx, t.n_gen, t.n_prompt, t.n_threads);
             }
+            llama_get_logits(ctx); // force sync
+
             uint64_t t_ns = get_time_ns() - t_start;
             t.samples_ns.push_back(t_ns);
         }
