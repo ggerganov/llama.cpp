@@ -2373,6 +2373,7 @@ static const char * ggml_backend_metal_buffer_type_get_name(ggml_backend_buffer_
 }
 
 static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device) {
+#if TARGET_OS_IOS || TARGET_OS_OSX
     if (@available(macOS 10.12, iOS 16.0, *)) {
         GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
                 device.currentAllocatedSize / 1024.0 / 1024.0,
@@ -2386,6 +2387,7 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device) {
     } else {
         GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
     }
+#endif
 }
 
 static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
