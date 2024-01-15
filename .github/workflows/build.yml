@@ -536,7 +536,7 @@ jobs:
       - name: Build
         run: |
           cd examples/llama.android
-          ./gradlew build --no-daemon
+          ./gradlew build --no-daemon -Ponly-arm64-v8a
 
 #  freeBSD-latest:
 #    runs-on: macos-12

@@ -20,6 +20,14 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        ndk {
+            // Workaround for https://github.com/llvm/llvm-project/issues/65820
+            // affecting armeabi-v7a. Build for arm64-v8a only when invoked
+            // with -Ponly-arm64-v8a (e.g. ./gradlew build -Ponly-arm64-v8a).
+            if (project.hasProperty("only-arm64-v8a")) {
+                abiFilters += listOf("arm64-v8a")
+            }
+        }
         externalNativeBuild {
             cmake {
                 cppFlags += listOf()
