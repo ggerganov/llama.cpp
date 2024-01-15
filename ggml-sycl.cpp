@@ -10239,12 +10239,9 @@ static void ggml_sycl_pad(const ggml_tensor * src0, const ggml_tensor * src1, gg
 static void ggml_sycl_rms_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_rms_norm);
-    log_tensor_with_cnt("log_ggml_sycl_rms_norm_src0", (struct ggml_tensor *)src0, 6);
-    log_tensor_with_cnt("log_ggml_sycl_rms_norm_src1", (struct ggml_tensor *)src1, 6);
-    log_tensor_with_cnt("log_ggml_sycl_rms_norm_dst", dst, 6);
-
-    // int *ptr = NULL;
-    // *ptr = 0;
+    // log_tensor_with_cnt("log_ggml_sycl_rms_norm_src0", (struct ggml_tensor *)src0, 6);
+    // log_tensor_with_cnt("log_ggml_sycl_rms_norm_src1", (struct ggml_tensor *)src1, 6);
+    // log_tensor_with_cnt("log_ggml_sycl_rms_norm_dst", dst, 6);
 }
 
 bool ggml_sycl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
