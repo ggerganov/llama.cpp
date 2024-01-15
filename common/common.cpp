@@ -864,7 +864,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -tb N, --threads-batch N\n");
     printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");
     printf("  -td N, --threads-draft N");
-    printf("                        number of threads to use during generation (default: %d)\n", params.n_threads_draft);
+    printf("                        number of threads to use during generation (default: same as --threads)");
     printf("  -tbd N, --threads-batch-draft N\n");
     printf("                        number of threads to use during batch and prompt processing (default: same as --threads-draft)\n");
     printf("  -p PROMPT, --prompt PROMPT\n");
