@@ -1,1 +1,0 @@
-/opt/intel/oneapi/compiler/2024.0/bin/icpx -rdynamic CMakeFiles/quantize-stats.dir/quantize-stats.o -o quantize-stats  -lllama -lbuild_info 

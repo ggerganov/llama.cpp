@@ -1,1 +1,0 @@
-/opt/intel/oneapi/compiler/2024.0/bin/icpx -rdynamic CMakeFiles/finetune.dir/finetune.o -o finetune  -lcommon -lllama 

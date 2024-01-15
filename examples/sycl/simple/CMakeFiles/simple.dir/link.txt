@@ -1,1 +1,0 @@
-/opt/intel/oneapi/compiler/2024.0/bin/icpx -rdynamic CMakeFiles/simple.dir/simple.o -o simple  -lcommon -lllama 

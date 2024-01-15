@@ -1,2 +1,0 @@
-/usr/bin/ar qc libllava_static.a CMakeFiles/llava.dir/llava.o CMakeFiles/llava.dir/clip.o
-/usr/bin/ranlib libllava_static.a

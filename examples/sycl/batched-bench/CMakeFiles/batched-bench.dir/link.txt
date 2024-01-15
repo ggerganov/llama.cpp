@@ -1,1 +1,0 @@
-/opt/intel/oneapi/compiler/2024.0/bin/icpx -rdynamic CMakeFiles/batched-bench.dir/batched-bench.o -o batched-bench  -lcommon -lllama 
