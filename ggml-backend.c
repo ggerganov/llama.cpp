@@ -1334,28 +1334,31 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
           //ggml_backend_synchronize(split_backend); // necessary to measure compute time
         } else {
             // similar to ggml_backend_compare_graph_backend
-            for (int j = 0; j < split->graph.n_nodes; j++) {
-                struct ggml_tensor * t = split->graph.nodes[j];
+            for (int j0 = 0; j0 < split->graph.n_nodes; j0++) {
+                struct ggml_tensor * t = split->graph.nodes[j0];
 
-                int k = j;
+                int j1 = j0;
 
-                // check if the user needs data from this node
-                while (!sched->callback_eval(k, t, true, sched->callback_eval_user_data) && k < split->graph.n_nodes - 1) {
-                    t = split->graph.nodes[++k];
+                // determine the range [j0, j1] of nodes that can be computed together
+                while (j1 < split->graph.n_nodes - 1) {
+                    // check if the user needs data from this node
+                    if (sched->callback_eval(t, true, sched->callback_eval_user_data)) {
+                        break;
+                    }
+
+                    t = split->graph.nodes[++j1];
                 }
 
-                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j, k + 1);
+                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j0, j1 + 1);
 
                 ggml_backend_graph_compute(split_backend, &gv);
 
-                // TODO: k is node index in the split, not in the original graph
-                // TODO: avoid the ask == true call here
-                if (sched->callback_eval(k, t, true,  sched->callback_eval_user_data) &&
-                   !sched->callback_eval(k, t, false, sched->callback_eval_user_data)) {
+                if (sched->callback_eval(t, true,  sched->callback_eval_user_data) && // ask
+                   !sched->callback_eval(t, false, sched->callback_eval_user_data)) { // eval
                     break;
                 }
 
-                j = k;
+                j0 = j1;
             }
         }
         uint64_t compute_end_us = ggml_time_us();
