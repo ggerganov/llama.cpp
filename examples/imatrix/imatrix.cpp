@@ -33,19 +33,43 @@ class IMatrixCollector {
 public:
     IMatrixCollector() = default;
     void set_parameters(StatParams&& params) { m_params = std::move(params); }
-    void collect_imatrix(const struct ggml_tensor * src0, const struct ggml_tensor * src1);
+    bool collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data);
     void save_imatrix() const;
 private:
     std::unordered_map<std::string, Stats> m_stats;
     StatParams                             m_params;
     std::mutex                             m_mutex;
     int                                    m_last_call = 0;
+    std::vector<float>                     m_src1_data;
 };
 
-void IMatrixCollector::collect_imatrix(const struct ggml_tensor * src0, const struct ggml_tensor * src1) {
-    if (src1->ne[1] < 16 || src1->type != GGML_TYPE_F32) return;
-    if (!(strncmp(src0->name, "blk.", 4) == 0 || (m_params.collect_output_weight && strcmp(src0->name, "output.weight") == 0))) return;
+bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data) {
+    GGML_UNUSED(user_data);
+
+    const struct ggml_tensor * src0 = t->src[0];
+    const struct ggml_tensor * src1 = t->src[1];
+
+    // when ask is true, the scheduler wants to know if we are interested in data from this tensor
+    // if we return true, a follow-up call will be made with ask=false in which we can do the actual collection
+    if (ask) {
+        if (t->op != GGML_OP_MUL_MAT) return false;
+        if (src1->ne[1] < 16 || src1->type != GGML_TYPE_F32) return false;
+        if (!(strncmp(src0->name, "blk.", 4) == 0 || (m_params.collect_output_weight && strcmp(src0->name, "output.weight") == 0))) return false;
+        return true;
+    }
+
     std::lock_guard<std::mutex> lock(m_mutex);
+
+    // copy the data from the GPU memory if needed
+    const bool is_host = ggml_backend_buffer_is_host(src1->buffer);
+
+    if (!is_host || !ggml_is_contiguous(src1)) {
+        m_src1_data.resize(ggml_nelements(src1));
+        ggml_backend_tensor_get(src1, m_src1_data.data(), 0, ggml_nbytes(src1));
+    }
+
+    const float * data = is_host ? (const float *) src1->data : m_src1_data.data();
+
     auto& e = m_stats[src0->name];
     if (e.values.empty()) {
         e.values.resize(src1->ne[0], 0);
@@ -59,7 +83,7 @@ void IMatrixCollector::collect_imatrix(const struct ggml_tensor * src0, const st
         printf("%s[%d]: %s, %d x %d, %d\n",__func__,m_last_call,src0->name,(int)src1->ne[0],(int)src1->ne[1],(int)src1->type);
     }
     for (int row = 0; row < (int)src1->ne[1]; ++row) {
-        const float * x = (const float *)src1->data + row * src1->ne[0];
+        const float * x = data + row * src1->ne[0];
         for (int j = 0; j < (int)src1->ne[0]; ++j) {
             e.values[j] += x[j]*x[j];
         }
@@ -70,6 +94,8 @@ void IMatrixCollector::collect_imatrix(const struct ggml_tensor * src0, const st
             save_imatrix();
         }
     }
+
+    return true;
 }
 
 void IMatrixCollector::save_imatrix() const {
@@ -93,8 +119,8 @@ void IMatrixCollector::save_imatrix() const {
 
 static IMatrixCollector g_collector;
 
-static void ik_collect_imatrix(const struct ggml_tensor * src0, const struct ggml_tensor * src1) {
-    g_collector.collect_imatrix(src0, src1);
+static bool ik_collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data) {
+    return g_collector.collect_imatrix(t, ask, user_data);
 }
 
 
@@ -320,8 +346,6 @@ int main(int argc, char ** argv) {
 
     g_collector.set_parameters(std::move(sparams));
 
-    ggml_set_imatrix_collection(ik_collect_imatrix);
-
     params.logits_all = true;
     params.n_batch = std::min(params.n_batch, params.n_ctx);
 
@@ -340,13 +364,24 @@ int main(int argc, char ** argv) {
 
     llama_backend_init(params.numa);
 
-    llama_model * model;
-    llama_context * ctx;
+    llama_model_params mparams = llama_model_params_from_gpt_params(params);
 
-    // load the model and apply lora adapter, if any
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_model * model = llama_load_model_from_file(params.model.c_str(), mparams);
     if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
+        return 1;
+    }
+
+    llama_context_params cparams = llama_context_params_from_gpt_params(params);
+
+    // pass the callback to the backend scheduler
+    // it will be executed for each node during the graph computation
+    cparams.cb_eval = ik_collect_imatrix;
+    cparams.cb_eval_user_data = NULL;
+
+    llama_context * ctx = llama_new_context_with_model(model, cparams);
+    if (ctx == NULL) {
+        fprintf(stderr, "%s: error: unable to create context\n", __func__);
         return 1;
     }
 
