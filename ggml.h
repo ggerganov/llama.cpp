@@ -433,6 +433,7 @@ extern "C" {
         GGML_OP_CLAMP,
         GGML_OP_CONV_TRANSPOSE_1D,
         GGML_OP_IM2COL,
+        GGML_OP_CONV_DEPTHWISE_2D,
         GGML_OP_CONV_TRANSPOSE_2D,
         GGML_OP_POOL_1D,
         GGML_OP_POOL_2D,
@@ -479,6 +480,8 @@ extern "C" {
         GGML_UNARY_OP_GELU,
         GGML_UNARY_OP_GELU_QUICK,
         GGML_UNARY_OP_SILU,
+        GGML_UNARY_OP_HARDSWISH,
+        GGML_UNARY_OP_HARDSIGMOID,
 
         GGML_UNARY_OP_COUNT,
     };
@@ -1022,6 +1025,16 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
+    // hardswish(x) = x * relu6(x + 3) / 6
+    GGML_API struct ggml_tensor * ggml_hardswish(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    // hardsigmoid(x) = relu6(x + 3) / 6
+    GGML_API struct ggml_tensor * ggml_hardsigmoid(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
     // normalize along rows
     GGML_API struct ggml_tensor * ggml_norm(
             struct ggml_context * ctx,
@@ -1284,6 +1297,15 @@ extern "C" {
             int                   axis2,
             int                   axis3);
 
+    // some operations don't support permuted tensor, so we need to copy it, to avoid this case
+    GGML_API struct ggml_tensor * ggml_permute_cpy(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   axis0,
+            int                   axis1,
+            int                   axis2,
+            int                   axis3);
+
     // alias for ggml_permute(ctx, a, 1, 0, 2, 3)
     GGML_API struct ggml_tensor * ggml_transpose(
             struct ggml_context * ctx,
@@ -1472,6 +1494,18 @@ extern "C" {
             int                  d0,
             int                  d1,
             bool                 is_2D);
+
+    GGML_API struct ggml_tensor * ggml_conv_depthwise_2d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            struct ggml_tensor  * c,
+            int                  s0,
+            int                  s1,
+            int                  p0,
+            int                  p1,
+            int                  d0,
+            int                  d1);
 
     GGML_API struct ggml_tensor * ggml_conv_1d(
             struct ggml_context * ctx,
