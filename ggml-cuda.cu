@@ -10778,12 +10778,18 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
     // host -> device
     if (ggml_backend_buffer_is_cuda_host(src->buffer) && ggml_backend_buffer_is_cuda(dst->buffer)) {
         ggml_backend_cuda_context * cuda_ctx_dst = (ggml_backend_cuda_context *)backend_dst->context;
+        // make sure the data is ready on the source backend
+        // the CPU backend does not support async compute, so this does nothing at the moment
+        // but conceptually, it is necessary to synchronize with the source backend
+        ggml_backend_synchronize(backend_src);
         CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyHostToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
         return true;
     }
 
     // device -> host
     if (ggml_backend_buffer_is_cuda_host(dst->buffer) && ggml_backend_buffer_is_cuda(src->buffer)) {
+        // this shoudln't happen currently because the dst backend is our own backend, which does not support host buffers
+        GGML_ASSERT(false);
         ggml_backend_cuda_context * cuda_ctx_src = (ggml_backend_cuda_context *)backend_src->context;
         CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToHost, g_cudaStreams[cuda_ctx_src->device][0]));
         return true;
