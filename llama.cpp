@@ -7898,39 +7898,59 @@ static void llama_log_softmax(float * array, size_t size) {
     }
 }
 
+void llama_sample_apply_guidance(
+          struct llama_context * ctx,
+                         float * logits,
+                         float * logits_guidance,
+                         float   scale) {
+    GGML_ASSERT(ctx);
+
+    const auto t_start_sample_us = ggml_time_us();
+    const auto n_vocab = llama_n_vocab(llama_get_model(ctx));
+
+    llama_log_softmax(logits, n_vocab);
+    llama_log_softmax(logits_guidance, n_vocab);
+
+    for (int i = 0; i < n_vocab; ++i) {
+              auto & l = logits[i];
+        const auto & g = logits_guidance[i];
+
+        l = scale * (l - g) + g;
+    }
+
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+}
+
 void llama_sample_classifier_free_guidance(
           struct llama_context * ctx,
         llama_token_data_array * candidates,
           struct llama_context * guidance_ctx,
                          float   scale) {
-    int64_t t_start_sample_us = ggml_time_us();
-
     GGML_ASSERT(ctx);
+    int64_t t_start_sample_us;
 
-    auto n_vocab = llama_n_vocab(llama_get_model(ctx));
+    t_start_sample_us = ggml_time_us();
+    const size_t n_vocab = llama_n_vocab(llama_get_model(ctx));
 
-    GGML_ASSERT(n_vocab == (int)candidates->size);
+    GGML_ASSERT(n_vocab == candidates->size);
     GGML_ASSERT(!candidates->sorted);
 
-    std::vector<float> logits_base;
-    logits_base.reserve(candidates->size);
-    for (size_t i = 0; i < candidates->size; ++i) {
-        logits_base.push_back(candidates->data[i].logit);
-    }
-    llama_log_softmax(logits_base.data(), candidates->size);
-
-    float* logits_guidance = llama_get_logits(guidance_ctx);
-    llama_log_softmax(logits_guidance, n_vocab);
-
-    for (int i = 0; i < n_vocab; ++i) {
-        float logit_guidance = logits_guidance[i];
-        float logit_base = logits_base[i];
-        candidates->data[i].logit = scale * (logit_base - logit_guidance) + logit_guidance;
+    std::vector<float> logits_base(n_vocab);
+    for (size_t i = 0; i < n_vocab; ++i) {
+        logits_base[i] = candidates->data[i].logit;
     }
 
-    if (ctx) {
-        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    float * logits_guidance = llama_get_logits(guidance_ctx);
+
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    llama_sample_apply_guidance(ctx, logits_base.data(), logits_guidance, scale);
+    t_start_sample_us = ggml_time_us();
+
+    for (size_t i = 0; i < n_vocab; ++i) {
+        candidates->data[i].logit = logits_base[i];
     }
+
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
 }
 
 llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
