@@ -1138,9 +1138,8 @@ static void save_as_llama_lora(const char * filename, struct my_llama_lora * lor
         return tn_buf.data();
     };
 
-    uint32_t LLAMA_FILE_MAGIC_LORA = 0x67676C61; // 'ggla'
     // write_magic
-    file.write_u32(LLAMA_FILE_MAGIC_LORA);   // magic
+    file.write_u32(LLAMA_FILE_MAGIC_GGLA);   // magic
     file.write_u32(1); // version
     // write_hparams
     file.write_u32(lora->hparams.lora_r);
