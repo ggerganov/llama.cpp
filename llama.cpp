@@ -6703,7 +6703,7 @@ static int llama_decode_internal(
     }
 
     const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 1;
-    if (ggml_cpu_has_cublas() && fully_offloaded) {
+    if ((ggml_cpu_has_cublas() || ggml_cpu_has_sycl()) && fully_offloaded) {
         n_threads = 1;
     }
 
