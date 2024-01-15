@@ -43,7 +43,7 @@ Example for llama model
 # For llama7b and llama2 models
 python convert.py models/llama-7b/ --awq-path awq_cache/llama-7b-w4-g128.pt --outfile models/llama_7b_fp16.gguf
 # For mistral and mpt models
-python convert-hf-to-gguf.py models/mpt-7b/ --awq-path awq_cache/llama-7b-w4-g128.pt --outfile models/mpt_7b_fp16.gguf
+python convert-hf-to-gguf.py models/mpt-7b/ --awq-path awq_cache/mpt-7b-w4-g128.pt --outfile models/mpt_7b_fp16.gguf
 ```
 
 ## Quantize
