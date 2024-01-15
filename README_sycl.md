@@ -129,11 +129,23 @@ or
 
 ### Run
 
-1. List device ID
+1. Put model file to folder **models**
+
+2. Enable oneAPI running environment
+
+```
+source /opt/intel/oneapi/setvars.sh
+```
+
+3. List device ID
 
 Run without parameter:
 
 ```
+./build/bin/ls-sycl-device
+
+or
+
 ./build/bin/main
 ```
 
@@ -156,14 +168,6 @@ found 4 SYCL devices:
 |-|-|
 |compute capability 1.3|Level-zero running time, recommended |
 |compute capability 3.0|OpenCL running time, slower than level-zero in most cases|
-
-2. Put model file to folder **models**
-
-3. Enable oneAPI running environment
-
-```
-source /opt/intel/oneapi/setvars.sh
-```
 
 4. Set device ID and execute llama.cpp
 

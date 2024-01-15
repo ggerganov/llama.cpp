@@ -1,0 +1,1 @@
+/opt/intel/oneapi/compiler/2024.0/bin/icpx  -std=c++17 -Wno-narrowing -O3 -fsycl -rdynamic CMakeFiles/ls-sycl-device.dir/ls-sycl-device.o -o ls-sycl-device  -lcommon -lllama 

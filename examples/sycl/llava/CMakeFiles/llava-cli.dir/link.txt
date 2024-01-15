@@ -1,0 +1,1 @@
+/opt/intel/oneapi/compiler/2024.0/bin/icpx -rdynamic CMakeFiles/llava-cli.dir/llava-cli.o CMakeFiles/llava.dir/llava.o CMakeFiles/llava.dir/clip.o -o llava-cli  -lcommon -lllama -lggml -lllama 

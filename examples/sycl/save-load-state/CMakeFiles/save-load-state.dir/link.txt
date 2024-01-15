@@ -1,0 +1,1 @@
+/opt/intel/oneapi/compiler/2024.0/bin/icpx -rdynamic CMakeFiles/save-load-state.dir/save-load-state.o -o save-load-state  -lcommon -lllama 

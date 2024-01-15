@@ -1,0 +1,1 @@
+/opt/intel/oneapi/compiler/2024.0/bin/icpx -rdynamic CMakeFiles/llama-bench.dir/llama-bench.o -o llama-bench  -lcommon -lllama 
