@@ -7,6 +7,8 @@ android {
     namespace = "com.example.llama"
     compileSdk = 34
 
+    ndkVersion = "26.1.10909125"
+
     defaultConfig {
         applicationId = "com.example.llama"
         minSdk = 33
