@@ -5,6 +5,10 @@
 #include <cstring>
 #include <vector>
 #include <string>
+#include <unordered_map>
+#include <fstream>
+#include <cmath>
+#include <algorithm>
 
 struct quant_option {
     std::string name;
@@ -17,6 +21,8 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q4_1",   LLAMA_FTYPE_MOSTLY_Q4_1,   " 3.90G, +0.1585 ppl @ LLaMA-v1-7B", },
     { "Q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0,   " 4.33G, +0.0683 ppl @ LLaMA-v1-7B", },
     { "Q5_1",   LLAMA_FTYPE_MOSTLY_Q5_1,   " 4.70G, +0.0349 ppl @ LLaMA-v1-7B", },
+    { "IQ2_XXS",LLAMA_FTYPE_MOSTLY_IQ2_XXS," 2.06 bpw quantization",            },
+    { "IQ2_XS", LLAMA_FTYPE_MOSTLY_IQ2_XS, " 2.31 bpw quantization",            },
     { "Q2_K",   LLAMA_FTYPE_MOSTLY_Q2_K,   " 2.63G, +0.6717 ppl @ LLaMA-v1-7B", },
     { "Q2_K_S", LLAMA_FTYPE_MOSTLY_Q2_K_S, " 2.16G, +9.0634 ppl @ LLaMA-v1-7B", },
     { "Q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M, "alias for Q3_K_M" },
@@ -72,10 +78,14 @@ static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftyp
 //
 [[noreturn]]
 static void usage(const char * executable) {
-    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
+    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] [--imatrix] [--include-weights] [--exclude-weights] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
     printf("  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     printf("  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
     printf("  --pure: Disable k-quant mixtures and quantize all tensors to the same type\n");
+    printf("  --imatrix file_name: use data in file_name as importance matrix for quant optimizations\n");
+    printf("  --include-weights tensor_name: use importance matrix for this/these tensor(s)\n");
+    printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
+    printf("Note: --include-weights and --exclude-weights cannot be used together\n");
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
         if (it.name != "COPY") {
@@ -83,9 +93,91 @@ static void usage(const char * executable) {
         } else {
             printf("          ");
         }
-        printf("%-6s : %s\n", it.name.c_str(), it.desc.c_str());
+        printf("%-7s : %s\n", it.name.c_str(), it.desc.c_str());
     }
     exit(1);
+}
+
+static void load_imatrix(const std::string& imatrix_file, std::unordered_map<std::string, std::vector<float>>& imatrix_data) {
+    std::ifstream in(imatrix_file.c_str(), std::ios::binary);
+    if (!in) {
+        printf("%s: failed to open %s\n",__func__,imatrix_file.c_str());
+        return;
+    }
+    int n_entries;
+    in.read((char*)&n_entries, sizeof(n_entries));
+    if (in.fail() || n_entries < 1) {
+        printf("%s: no data in file %s\n", __func__, imatrix_file.c_str());
+        return;
+    }
+    for (int i = 0; i < n_entries; ++i) {
+        int len; in.read((char *)&len, sizeof(len));
+        std::vector<char> name_as_vec(len+1);
+        in.read((char *)name_as_vec.data(), len);
+        if (in.fail()) {
+            printf("%s: failed reading name for entry %d from %s\n",__func__,i+1,imatrix_file.c_str());
+            return;
+        }
+        name_as_vec[len] = 0;
+        std::string name{name_as_vec.data()};
+        auto& e = imatrix_data[std::move(name)];
+        int ncall;
+        in.read((char*)&ncall, sizeof(ncall));
+        int nval;
+        in.read((char *)&nval, sizeof(nval));
+        if (in.fail() || nval < 1) {
+            printf("%s: failed reading number of values for entry %d\n",__func__,i);
+            imatrix_data = {};
+            return;
+        }
+        e.resize(nval);
+        in.read((char*)e.data(), nval*sizeof(float));
+        if (in.fail()) {
+            printf("%s: failed reading data for entry %d\n",__func__,i);
+            imatrix_data = {};
+            return;
+        }
+        if (ncall > 0) {
+            for (auto& v : e) v /= ncall;
+        }
+    }
+    printf("%s: loaded %d importance matrix entries from %s\n",__func__,int(imatrix_data.size()),imatrix_file.c_str());
+}
+
+static void prepare_imatrix(const std::string& imatrix_file,
+        const std::vector<std::string>& included_weights,
+        const std::vector<std::string>& excluded_weights,
+        std::unordered_map<std::string, std::vector<float>>& imatrix_data) {
+    if (!imatrix_file.empty()) {
+        load_imatrix(imatrix_file, imatrix_data);
+    }
+    if (imatrix_data.empty()) {
+        return;
+    }
+    if (!excluded_weights.empty()) {
+        for (auto& name : excluded_weights) {
+            for (auto it = imatrix_data.begin(); it != imatrix_data.end(); ) {
+                auto pos = it->first.find(name);
+                if (pos != std::string::npos) it = imatrix_data.erase(it);
+                else ++it;
+            }
+        }
+    }
+    if (!included_weights.empty()) {
+        std::unordered_map<std::string, std::vector<float>> tmp;
+        for (auto& name : included_weights) {
+            for (auto& e : imatrix_data) {
+                auto pos = e.first.find(name);
+                if (pos != std::string::npos) {
+                    tmp.emplace(std::move(e));
+                }
+            }
+        }
+        imatrix_data = std::move(tmp);
+    }
+    if (!imatrix_data.empty()) {
+        printf("%s: have %d importance matrix entries\n", __func__, int(imatrix_data.size()));
+    }
 }
 
 int main(int argc, char ** argv) {
@@ -96,6 +188,8 @@ int main(int argc, char ** argv) {
     llama_model_quantize_params params = llama_model_quantize_default_params();
 
     int arg_idx = 1;
+    std::string imatrix_file;
+    std::vector<std::string> included_weights, excluded_weights;
 
     for (; arg_idx < argc && strncmp(argv[arg_idx], "--", 2) == 0; arg_idx++) {
         if (strcmp(argv[arg_idx], "--leave-output-tensor") == 0) {
@@ -104,13 +198,41 @@ int main(int argc, char ** argv) {
             params.allow_requantize = true;
         } else if (strcmp(argv[arg_idx], "--pure") == 0) {
             params.pure = true;
+        } else if (strcmp(argv[arg_idx], "--imatrix") == 0) {
+            if (arg_idx < argc-1) {
+                imatrix_file = argv[++arg_idx];
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--include-weights") == 0) {
+            if (arg_idx < argc-1) {
+                included_weights.push_back(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--exclude-weights") == 0) {
+            if (arg_idx < argc-1) {
+                excluded_weights.push_back(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
         } else {
             usage(argv[0]);
         }
     }
 
     if (argc - arg_idx < 2) {
+        printf("%s: bad arguments\n", argv[0]);
         usage(argv[0]);
+    }
+    if (!included_weights.empty() && !excluded_weights.empty()) {
+        usage(argv[0]);
+    }
+
+    std::unordered_map<std::string, std::vector<float>> imatrix_data;
+    prepare_imatrix(imatrix_file, included_weights, excluded_weights, imatrix_data);
+    if (!imatrix_data.empty()) {
+        params.imatrix = &imatrix_data;
     }
 
     llama_backend_init(false);
@@ -161,6 +283,13 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: invalid nthread '%s' (%s)\n", __func__, argv[arg_idx], e.what());
             return 1;
         }
+    }
+
+    if ((params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || params.ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S) && imatrix_data.empty()) {
+        fprintf(stderr, "\n===============================================================================================\n");
+        fprintf(stderr, "Please do not use IQ2_XXS, IQ2_XS or Q2_K_S quantization without an importance matrix\n");
+        fprintf(stderr, "===============================================================================================\n\n\n");
+        return 1;
     }
 
     print_build_info();

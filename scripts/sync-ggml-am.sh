@@ -5,7 +5,7 @@
 # Usage:
 #
 #   $ cd /path/to/llama.cpp
-#   $ ./scripts/sync-ggml-am.sh
+#   $ ./scripts/sync-ggml-am.sh -skip hash0,hash1,hash2...
 #
 
 set -e
@@ -24,6 +24,11 @@ fi
 lc=$(cat $SRC_LLAMA/scripts/sync-ggml.last)
 echo "Syncing ggml changes since commit $lc"
 
+to_skip=""
+if [ "$1" == "-skip" ]; then
+    to_skip=$2
+fi
+
 cd $SRC_GGML
 
 git log --oneline $lc..HEAD
@@ -40,6 +45,13 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
 fi
 
 while read c; do
+    if [ -n "$to_skip" ]; then
+        if [[ $to_skip == *"$c"* ]]; then
+            echo "Skipping $c"
+            continue
+        fi
+    fi
+
     git format-patch -k $c~1..$c --stdout -- \
         include/ggml/ggml*.h \
         src/ggml*.h \

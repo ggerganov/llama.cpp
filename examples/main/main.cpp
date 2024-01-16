@@ -477,6 +477,7 @@ int main(int argc, char ** argv) {
 
     bool is_antiprompt        = false;
     bool input_echo           = true;
+    bool display              = true;
     bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < embd_inp.size();
 
     int n_past             = 0;
@@ -491,6 +492,7 @@ int main(int argc, char ** argv) {
 
     // the first thing we will do is to output the prompt, so set color accordingly
     console::set_display(console::prompt);
+    display = params.display_prompt;
 
     std::vector<llama_token> embd;
     std::vector<llama_token> embd_guidance;
@@ -707,7 +709,7 @@ int main(int argc, char ** argv) {
         }
 
         // display text
-        if (input_echo) {
+        if (input_echo && display) {
             for (auto id : embd) {
                 const std::string token_str = llama_token_to_piece(ctx, id);
                 printf("%s", token_str.c_str());
@@ -724,6 +726,7 @@ int main(int argc, char ** argv) {
         // reset color to default if there is no pending user input
         if (input_echo && (int) embd_inp.size() == n_consumed) {
             console::set_display(console::reset);
+            display = true;
         }
 
         // if not currently processing queued inputs;
@@ -796,6 +799,7 @@ int main(int argc, char ** argv) {
 
                 // color user input only
                 console::set_display(console::user_input);
+                display = params.display_prompt;
 
                 std::string line;
                 bool another_line = true;
@@ -806,6 +810,7 @@ int main(int argc, char ** argv) {
 
                 // done taking input, reset color
                 console::set_display(console::reset);
+                display = true;
 
                 // Add tokens to embd only if the input buffer is non-empty
                 // Entering a empty line lets the user pass control back
