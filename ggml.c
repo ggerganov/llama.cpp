@@ -18674,26 +18674,38 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
         case GGML_TYPE_Q4_0:
             {
                 GGML_ASSERT(start % QK4_0 == 0);
-                block_q4_0 * block = (block_q4_0*)dst + start / QK4_0;
-                result = ggml_quantize_q4_0(src + start, block, n, n, hist);
+                GGML_ASSERT(start % n_per_row == 0);
+                size_t start_row = start / n_per_row;
+                size_t row_size = ggml_row_size(type, n_per_row);
+                result = quantize_q4_0(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, hist, imatrix);
+                GGML_ASSERT(result == row_size * nrows);
             } break;
         case GGML_TYPE_Q4_1:
             {
                 GGML_ASSERT(start % QK4_1 == 0);
-                block_q4_1 * block = (block_q4_1*)dst + start / QK4_1;
-                result = ggml_quantize_q4_1(src + start, block, n, n, hist);
+                GGML_ASSERT(start % n_per_row == 0);
+                size_t start_row = start / n_per_row;
+                size_t row_size = ggml_row_size(type, n_per_row);
+                result = quantize_q4_1(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, hist, imatrix);
+                GGML_ASSERT(result == row_size * nrows);
             } break;
         case GGML_TYPE_Q5_0:
             {
                 GGML_ASSERT(start % QK5_0 == 0);
-                block_q5_0 * block = (block_q5_0*)dst + start / QK5_0;
-                result = ggml_quantize_q5_0(src + start, block, n, n, hist);
+                GGML_ASSERT(start % n_per_row == 0);
+                size_t start_row = start / n_per_row;
+                size_t row_size = ggml_row_size(type, n_per_row);
+                result = quantize_q5_0(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, hist, imatrix);
+                GGML_ASSERT(result == row_size * nrows);
             } break;
         case GGML_TYPE_Q5_1:
             {
                 GGML_ASSERT(start % QK5_1 == 0);
-                block_q5_1 * block = (block_q5_1*)dst + start / QK5_1;
-                result = ggml_quantize_q5_1(src + start, block, n, n, hist);
+                GGML_ASSERT(start % n_per_row == 0);
+                size_t start_row = start / n_per_row;
+                size_t row_size = ggml_row_size(type, n_per_row);
+                result = quantize_q5_1(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, hist, imatrix);
+                GGML_ASSERT(result == row_size * nrows);
             } break;
         case GGML_TYPE_Q8_0:
             {
