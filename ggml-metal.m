@@ -734,7 +734,7 @@ static bool ggml_metal_graph_compute(
     }
 
     const int n_nodes_per_cb = (n_nodes + n_cb - 1) / n_cb;
-    dispatch_apply(n_cb, ctx->d_queue, ^(size_t cb_idx) {
+    dispatch_apply(n_cb, ctx->d_queue, ^(int cb_idx) {
         size_t offs_src0 = 0;
         size_t offs_src1 = 0;
         size_t offs_dst  = 0;
