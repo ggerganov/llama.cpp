@@ -6803,7 +6803,7 @@ static int llama_decode_internal(
     ggml_vk_preallocate_buffers();
 
     for (int i = 0; i < gf->n_nodes; i++) {
-        ggml_vk_build_graph(gf->nodes[i], gf);
+        ggml_vk_build_graph(gf->nodes[i]);
     }
 
     // HACK: ggml-alloc may change the tensor backend when reusing a parent, so force output to be on the CPU here if needed
