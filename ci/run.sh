@@ -179,6 +179,8 @@ function gg_run_open_llama_3b_v2 {
 
     wiki_test_60="${path_wiki}/wiki.test-60.raw"
 
+    ./bin/test-autorelease ${model_f16}
+
     ./bin/quantize ${model_f16} ${model_q8_0} q8_0
     ./bin/quantize ${model_f16} ${model_q4_0} q4_0
     ./bin/quantize ${model_f16} ${model_q4_1} q4_1
