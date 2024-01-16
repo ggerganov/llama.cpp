@@ -26,7 +26,7 @@ static bool observe_compute(struct ggml_tensor * t, bool ask, void * user_data) 
 
     const bool is_host = ggml_backend_buffer_is_host(t->buffer);
 
-    if (!is_host || !ggml_is_contiguous(t)) {
+    if (!is_host) {
         t_data.resize(ggml_nelements(t));
         ggml_backend_tensor_get(t, t_data.data(), 0, ggml_nbytes(t));
     }
@@ -61,7 +61,7 @@ int main(int argc, char ** argv) {
     }
 
     if (argc >= 4) {
-        observe = atoi(argv[3]);
+        observe = !!atoi(argv[3]);
     }
 
     if (params.prompt.empty()) {
