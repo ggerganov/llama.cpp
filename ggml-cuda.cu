@@ -10918,6 +10918,12 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                 if (a->ne[3] != b->ne[3]) {
                     return false;
                 }
+                ggml_type a_type = a->type;
+                if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS) {
+                    if (b->ne[1] == 1 && ggml_nrows(b) > 1) {
+                        return false;
+                    }
+                }
                 return true;
             } break;
         case GGML_OP_GET_ROWS:
