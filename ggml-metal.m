@@ -2245,13 +2245,15 @@ static bool ggml_metal_graph_compute(
     });
 
     // Wait for completion and check status of each command buffer
-    for (int cb_idx = 0; cb_idx < n_cb; ++cb_idx) {
-        id<MTLCommandBuffer> command_buffer = command_buffers[cb_idx];
+    // needed to detect if the device ran out-of-memory for example (#1881)
+
+    for (int i = 0; i < n_cb; ++i) {
+        id<MTLCommandBuffer> command_buffer = command_buffers[i];
         [command_buffer waitUntilCompleted];
 
         MTLCommandBufferStatus status = [command_buffer status];
         if (status != MTLCommandBufferStatusCompleted) {
-            GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, cb_idx, status);
+            GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, i, status);
             return false;
         }
     }
