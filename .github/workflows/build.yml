@@ -536,7 +536,9 @@ jobs:
       - name: Build
         run: |
           cd examples/llama.android
-          ./gradlew build --no-daemon -Ponly-arm64-v8a
+
+          # Skip armeabi-v7a for now (https://github.com/llvm/llvm-project/issues/65820).
+          ./gradlew build --no-daemon -Pskip-armeabi-v7a
 
 #  freeBSD-latest:
 #    runs-on: macos-12

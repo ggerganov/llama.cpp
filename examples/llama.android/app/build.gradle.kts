@@ -22,10 +22,10 @@ android {
         }
         ndk {
             // Workaround for https://github.com/llvm/llvm-project/issues/65820
-            // affecting armeabi-v7a. Build for arm64-v8a only when invoked
-            // with -Ponly-arm64-v8a (e.g. ./gradlew build -Ponly-arm64-v8a).
-            if (project.hasProperty("only-arm64-v8a")) {
-                abiFilters += listOf("arm64-v8a")
+            // affecting armeabi-v7a. Skip armeabi-v7a when invoked with
+            // -Pskip-armeabi-v7a (e.g., ./gradlew build -Pskip-armeabi-v7a).
+            if (project.hasProperty("skip-armeabi-v7a")) {
+                abiFilters += listOf("arm64-v8a", "x86_64", "x86")
             }
         }
         externalNativeBuild {
