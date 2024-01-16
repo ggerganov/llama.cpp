@@ -387,6 +387,7 @@ class BpeVocab:  # GPT
         self.bpe_tokenizer = json.loads(
             open(str(fname_tokenizer), encoding="utf-8").read()
         )
+        self.vocab = self.bpe_tokenizer["model"]["vocab"]
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
             # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
@@ -405,7 +406,7 @@ class BpeVocab:  # GPT
                     if item["content"] not in self.bpe_tokenizer
                 )
 
-        vocab_size: int = len(self.bpe_tokenizer)
+        vocab_size: int = len(self.vocab)
         expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
         actual_ids = sorted(added_tokens.values())
         if expected_ids != actual_ids:
@@ -415,6 +416,7 @@ class BpeVocab:  # GPT
             )
 
         items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
+        self.added_tokens_dict = added_tokens
         self.added_tokens_list = [text for (text, idx) in items]
         self.vocab_size_base: int = vocab_size
         self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
@@ -422,10 +424,9 @@ class BpeVocab:  # GPT
         self.fname_added_tokens = fname_added_tokens
 
     def bpe_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
-        tokenizer = self.bpe_tokenizer
-        reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.items()}
+        reverse_vocab = {id: encoded_tok for encoded_tok, id in self.vocab.items()}
 
-        for i, _ in enumerate(tokenizer):
+        for i, _ in enumerate(self.vocab):
             yield reverse_vocab[i], 0.0, gguf.TokenType.NORMAL
 
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
@@ -1383,15 +1384,14 @@ class VocabFactory:
                 self.files[file] = file_path
             elif parent_file_path.exists():
                 self.files[file] = parent_file_path
+        print(f"Found vocab files: {self.files}")
 
     def _select_file(self, vocabtype: Optional[str]) -> Path:
         if vocabtype in ["spm", "bpe"]:
-            # For SentencePiece and BPE, return specific files as before
-            file_key = "tokenizer.model" if vocabtype == "spm" else "vocab.json"
-            if self.files[file_key]:
-                return self.files[file_key]
-            else:
-                raise FileNotFoundError(f"{vocabtype} {file_key} not found.")
+            for file_key in self.files.keys():
+                if self.files[file_key]:
+                    return self.files[file_key]
+            raise FileNotFoundError(f"{vocabtype} vocab not found.")
         elif vocabtype == "hfft":
             # For Hugging Face Fast Tokenizer, return the directory path instead of a specific file
             return self.path
