@@ -1799,7 +1799,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> train_tokens;
     std::vector<size_t> train_samples_begin;
     std::vector<size_t> train_samples_size;
-    printf("%s: tokenize training data\n", __func__);
+    printf("%s: tokenize training data from %s\n", __func__, params.common.fn_train_data);
     tokenize_file(lctx,
             params.common.fn_train_data,
             params.common.sample_start,
