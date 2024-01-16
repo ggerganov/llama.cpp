@@ -60,10 +60,8 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         const float * im = imatrix.data();
         if (!ggml_quantize_requires_imatrix(tensor->type)) {
             // when the imatrix is optional, we want to test both quantization with and without imatrix
-            std::random_device rd;
-            std::default_random_engine generator(rd());
-            std::uniform_int_distribution<int> distribution(0, 1);
-            if (distribution(generator)) {
+            // use one of the random numbers to decide
+            if (data[0] > 0.5f*(min + max)) {
                 im = nullptr;
             }
         }
