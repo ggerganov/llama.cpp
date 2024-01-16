@@ -428,6 +428,7 @@ static std::vector<float> hellaswag_evaluate_tokens(
     for (size_t i_chunk = 0; i_chunk < n_chunk; ++i_chunk) {
         size_t n_tokens = tokens.size() - i_chunk * n_batch;
         n_tokens = std::min(n_tokens, size_t(n_batch));
+        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
         if (llama_decode(ctx, llama_batch_get_one(tokens.data() + i_chunk * n_batch, n_tokens, n_past, 0))) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return {};
