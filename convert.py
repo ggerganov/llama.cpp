@@ -466,6 +466,7 @@ class SentencePieceVocab:  # LlaMa
             )
 
         # Token pieces that were added to the base vocabulary.
+        self.added_tokens_dict = added_tokens
         self.added_tokens_list = [new_tokens[id] for id in actual_new_ids]
         self.vocab_size_base = vocab_size
         self.vocab_size = self.vocab_size_base + len(self.added_tokens_list)
