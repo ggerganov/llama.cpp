@@ -7779,6 +7779,74 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
     }
 }
 
+void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp, float min_temp = 0, float max_temp = 2.0f) {
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    llama_sample_softmax(ctx, candidates_p);
+
+    float exponent_val = 1.0f;
+
+    // Calculate entropy of the softmax probabilities
+    float entropy = 0.0f;
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        float prob = candidates_p->data[i].p;
+        if (prob > 0.0f) { // Ensure no log(0)
+            entropy -= prob * logf(prob);
+        }
+    }
+
+    // Calculate maximum possible entropy
+    float max_entropy = -logf(1.0f / candidates_p->size);
+
+    // Guard against division by zero
+    if (max_entropy == 0.0f) {
+        max_entropy = 1.0f; // This ensures that normalized_entropy will be 0 when entropy is 0
+    }
+
+    // Normalize the entropy
+    float normalized_entropy = entropy / max_entropy;
+
+    // Map the normalized entropy to the desired temperature range using the power function
+    float dyn_temp = min_temp + (max_temp - min_temp) * powf(normalized_entropy, exponent_val);
+
+    // //todo: Ensure to hide print statements unless debugging!
+    // printf("Your text maxtemp value is: %f\n", max_temp);
+    // // Print the variables
+    // printf("Entropy: %f\n", entropy);
+    // printf("Max Possible Entropy: %f\n", max_entropy);
+    // printf("Normalized Entropy: %f\n", normalized_entropy);
+    // printf("Exponent: %f\n", exponent_val);
+    // printf("Dynamic Temperature (dyn_temp): %f\n", dyn_temp);
+
+    // Apply the dynamically calculated temperature scaling
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        candidates_p->data[i].logit /= dyn_temp;
+    }
+
+    // Re-compute softmax probabilities after scaling logits with dynamic temperature
+    double max_l_double = candidates_p->data[0].logit;
+    double cum_sum_double = 0.0;
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        double p = exp(candidates_p->data[i].logit - max_l_double);
+        candidates_p->data[i].p = p; // Store the scaled probability
+        cum_sum_double += p;
+    }
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        candidates_p->data[i].p /= cum_sum_double; // Re-normalize the probabilities
+    }
+
+    // //todo: Ensure to hide print statements unless debugging!
+    // // Print the updated top 25 probabilities after temperature scaling
+    // printf("\nUpdated Top 25 Probabilities After Dynamic Temperature Scaling (in percentages):\n");
+    // for (size_t i = 0; i < 25 && i < candidates_p->size; ++i) {
+    //     printf("Token %zu: %f%%\n", i + 1, candidates_p->data[i].p * 100.0f);
+    // }
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
+}
+
 void llama_sample_temp(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
     const int64_t t_start_sample_us = ggml_time_us();
 

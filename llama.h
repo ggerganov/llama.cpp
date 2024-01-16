@@ -770,6 +770,14 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
+    /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
+    LLAMA_API void llama_sample_entropy(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates_p,
+                           float   temp,
+                           float   min_temp,
+                           float   max_temp);
+
     LLAMA_API void llama_sample_temp(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
