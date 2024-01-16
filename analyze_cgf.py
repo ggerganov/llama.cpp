@@ -109,7 +109,6 @@ def travel_in_topology(nodes, show_path=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--log_file", required=True, type=str)
-    parser.add_argument("--start_node", type=str, default=None)
     parser.add_argument("--show_path", action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
 
