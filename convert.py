@@ -1098,6 +1098,15 @@ class OutputFile:
             scores.append(score)
             toktypes.append(toktype)
 
+        # pad with unknown tokens and print warnings
+        # ref: https://github.com/ggerganov/llama.cpp/issues/4958
+        if len(tokens) < vocab.vocab_size:
+            for i in range(len(tokens), vocab.vocab_size):
+                tokens.append(f"<unk{i}>".encode("utf-8"))
+                scores.append(-1000.0)
+                toktypes.append(gguf.TokenType.UNKNOWN)
+                print(f"Warning: token {i} not found in vocab - padding with {tokens[-1]}")
+
         return tokens, scores, toktypes
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
