@@ -1102,11 +1102,13 @@ void llama_batch_add(
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
     auto mparams = llama_model_params_from_gpt_params(params);
 
+    fprintf(stderr, "%s: start to load model from file\n", __func__);
     llama_model * model  = llama_load_model_from_file(params.model.c_str(), mparams);
     if (model == NULL) {
         fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
         return std::make_tuple(nullptr, nullptr);
     }
+    fprintf(stderr, "%s: finish loading model from file\n", __func__);
 
     auto cparams = llama_context_params_from_gpt_params(params);
 

@@ -355,10 +355,14 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                 tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
+            fprintf(stderr, "%s: number of input tokens %d\n", __func__, batch_size);
+
             if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return {tokens, -1, logit_history, prob_history};
             }
+            if (j > 10)
+             exit(-1);
 
             // restore the original token in case it was set to BOS
             tokens[batch_start] = token_org;
@@ -715,12 +719,15 @@ int main(int argc, char ** argv) {
     llama_model * model;
     llama_context * ctx;
 
+    fprintf(stderr, "%s: start to init llama\n", __func__);
+
     // load the model and apply lora adapter, if any
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
     if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
         return 1;
     }
+    fprintf(stderr, "%s: finish init llama\n", __func__);
 
     const int n_ctx_train = llama_n_ctx_train(model);
     if (params.n_ctx > n_ctx_train) {

@@ -4500,6 +4500,7 @@ struct llm_build_context {
 
         ggml_build_forward_expand(gf, cur);
 
+        LLAMA_LOG_INFO("%s: Start to print tensors in the computation graph\n", __func__);
         for (int i = 0; i < gf->n_nodes; ++ i) {
             ggml_tensor * t = gf->nodes[i];
             LLAMA_LOG_INFO("%s: Tensor name [%s]\n", __func__, t->name);
@@ -4540,6 +4541,7 @@ struct llm_build_context {
             }
             LLAMA_LOG_INFO("]\n");
         }
+        LLAMA_LOG_INFO("%s: Finish printing tensors in the computation graph\n", __func__);
         exit(-1);
 
         return gf;
