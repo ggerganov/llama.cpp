@@ -1,5 +1,6 @@
 #include "common.h"
 #include "llama.h"
+#include "json-util.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -117,6 +118,7 @@ void process_escapes(std::string& input) {
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool result = true;
+
     try {
         if (!gpt_params_parse_ex(argc, argv, params)) {
             gpt_print_usage(argc, argv, gpt_params());
@@ -128,6 +130,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         gpt_print_usage(argc, argv, gpt_params());
         exit(1);
     }
+
     return result;
 }
 
@@ -792,7 +795,16 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         // End of Parse args for logging parameters
 #endif // LOG_DISABLE_LOGS
         } else {
-            throw std::invalid_argument("error: unknown argument: " + arg);
+            args_struct args_obj(argv[i]);
+
+            if (args_obj.argc > 0) {
+                int    argc_json = args_obj.argc;
+                char** args_json = args_obj.argv;
+
+                return gpt_params_parse(argc_json, args_json, params);
+            } else {
+                throw std::invalid_argument("error: unknown argument: " + arg);
+            }
         }
     }
     if (invalid_param) {
