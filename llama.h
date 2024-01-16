@@ -232,6 +232,9 @@ extern "C" {
         float    yarn_beta_slow;   // YaRN high correction dim
         uint32_t yarn_orig_ctx;    // YaRN original context size
 
+        ggml_backend_sched_eval_callback cb_eval;
+        void * cb_eval_user_data;
+
         enum ggml_type type_k; // data type for K cache
         enum ggml_type type_v; // data type for V cache
 
@@ -240,9 +243,6 @@ extern "C" {
         bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embedding;   // embedding mode only
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-
-        ggml_backend_sched_eval_callback cb_eval;
-        void * cb_eval_user_data;
     };
 
     // model quantization parameters
