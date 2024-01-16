@@ -27,7 +27,6 @@
 
 // max memory buffers that can be mapped to the device
 #define GGML_METAL_MAX_BUFFERS 64
-#define GGML_METAL_MAX_COMMAND_BUFFERS 32
 
 struct ggml_tensor;
 struct ggml_cgraph;
