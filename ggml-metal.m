@@ -369,8 +369,12 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
     GGML_METAL_LOG_INFO("%s: simdgroup reduction support   = %s\n",       __func__, ctx->support_simdgroup_reduction ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: simdgroup matrix mul. support = %s\n",       __func__, ctx->support_simdgroup_mm ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
-#if TARGET_OS_OSX
-    GGML_METAL_LOG_INFO("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1e6);
+
+#if TARGET_OS_OSX || (TARGET_OS_IOS && __clang_major__ >= 15)
+    if (@available(macOS 10.12, iOS 16.0, *)) {
+        GGML_METAL_LOG_INFO("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1e6);
+    }
+#elif TARGET_OS_OSX
     if (ctx->device.maxTransferRate != 0) {
         GGML_METAL_LOG_INFO("%s: maxTransferRate               = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1e6);
     } else {
@@ -2369,6 +2373,25 @@ GGML_CALL static const char * ggml_backend_metal_buffer_type_get_name(ggml_backe
     UNUSED(buft);
 }
 
+static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device) {
+#if TARGET_OS_OSX || (TARGET_OS_IOS && __clang_major__ >= 15)
+    if (@available(macOS 10.12, iOS 16.0, *)) {
+        GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
+                device.currentAllocatedSize / 1024.0 / 1024.0,
+                device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+
+        if (device.currentAllocatedSize > device.recommendedMaxWorkingSetSize) {
+            GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
+        } else {
+            GGML_METAL_LOG_INFO("\n");
+        }
+    } else {
+        GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
+    }
+#endif
+    UNUSED(device);
+}
+
 GGML_CALL static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     struct ggml_backend_metal_buffer_context * ctx = malloc(sizeof(struct ggml_backend_metal_buffer_context));
 
@@ -2401,22 +2424,7 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buff
     }
 
     GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB", __func__, size_aligned / 1024.0 / 1024.0);
-
-
-#if TARGET_OS_OSX
-    GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
-            device.currentAllocatedSize / 1024.0 / 1024.0,
-            device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
-
-    if (device.currentAllocatedSize > device.recommendedMaxWorkingSetSize) {
-        GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
-    } else {
-        GGML_METAL_LOG_INFO("\n");
-    }
-#else
-    GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
-#endif
-
+    ggml_backend_metal_log_allocated_size(device);
 
     return ggml_backend_buffer_init(buft, ggml_backend_metal_buffer_i, ctx, size);
 }
@@ -2524,19 +2532,7 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, 
         }
     }
 
-#if TARGET_OS_OSX
-    GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
-            device.currentAllocatedSize / 1024.0 / 1024.0,
-            device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
-
-    if (device.currentAllocatedSize > device.recommendedMaxWorkingSetSize) {
-        GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
-    } else {
-        GGML_METAL_LOG_INFO("\n");
-    }
-#else
-    GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
-#endif
+    ggml_backend_metal_log_allocated_size(device);
 
     return ggml_backend_buffer_init(ggml_backend_metal_buffer_type(), ggml_backend_metal_buffer_i, ctx, size);
 }
