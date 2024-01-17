@@ -4128,10 +4128,10 @@ bool ggml_vk_compute_forward(ggml_compute_params * params, ggml_tensor * tensor)
         memcpy(cpy.dst, cpy.src, cpy.n);
     }
     // Trigger staging events if any exists
-    if (extra->in0_staging_event != VK_NULL_HANDLE) {
+    if (extra->in0_staging_event != (vk::Event) VK_NULL_HANDLE) {
         vk_device.device.setEvent(extra->in0_staging_event);
     }
-    if (extra->in1_staging_event != VK_NULL_HANDLE) {
+    if (extra->in1_staging_event != (vk::Event) VK_NULL_HANDLE) {
         vk_device.device.setEvent(extra->in1_staging_event);
     }
 
