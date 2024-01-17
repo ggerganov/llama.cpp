@@ -52,6 +52,8 @@ llama_build_and_test_executable(test-backend-ops.cpp)
 
 llama_build_and_test_executable(test-rope.cpp)
 
+llama_build_executable(test-flash-attention.cpp)
+
 # dummy executable - not installed
 get_filename_component(TEST_TARGET test-c.c NAME_WE)
 add_executable(${TEST_TARGET} test-c.c)
