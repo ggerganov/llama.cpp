@@ -2236,10 +2236,7 @@ static bool ggml_metal_graph_compute(
 #endif
         }
 
-        if (encoder != nil) {
-            [encoder endEncoding];
-            encoder = nil;
-        }
+        [encoder endEncoding];
 
         [command_buffer commit];
     });
