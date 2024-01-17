@@ -257,3 +257,6 @@ size_t quantize_q4_0   (const float * src, void * dst, int nrows, int n_per_row,
 size_t quantize_q4_1   (const float * src, void * dst, int nrows, int n_per_row, int64_t * hist, const float * imatrix);
 size_t quantize_q5_0   (const float * src, void * dst, int nrows, int n_per_row, int64_t * hist, const float * imatrix);
 size_t quantize_q5_1   (const float * src, void * dst, int nrows, int n_per_row, int64_t * hist, const float * imatrix);
+
+void iq2xs_init_impl(int grid_size);
+void iq2xs_free_impl(int grid_size);

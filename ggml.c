@@ -18524,6 +18524,28 @@ enum ggml_opt_result ggml_opt_resume_g(
 
 ////////////////////////////////////////////////////////////////////////////////
 
+void ggml_quantize_init(enum ggml_type type) {
+    ggml_critical_section_start();
+
+    switch (type) {
+        case GGML_TYPE_IQ2_XXS: iq2xs_init_impl(256); break;
+        case GGML_TYPE_IQ2_XS:  iq2xs_init_impl(512); break;
+        default: // nothing
+            break;
+    }
+
+    ggml_critical_section_end();
+}
+
+void ggml_quantize_free(void) {
+    ggml_critical_section_start();
+
+    iq2xs_free_impl(256);
+    iq2xs_free_impl(512);
+
+    ggml_critical_section_end();
+}
+
 size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist) {
     assert(k % QK4_0 == 0);
     const int nb = k / QK4_0;
@@ -18651,9 +18673,15 @@ size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t *
     return (n/QK8_0*sizeof(block_q8_0));
 }
 
+bool ggml_quantize_requires_imatrix(enum ggml_type type) {
+    return
+        type == GGML_TYPE_IQ2_XXS ||
+        type == GGML_TYPE_IQ2_XS;
+}
+
 size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start,
         int nrows, int n_per_row, int64_t * hist, const float * imatrix) {
-    (void)imatrix;
+    ggml_quantize_init(type); // this is noop if already initialized
     size_t result = 0;
     int n = nrows * n_per_row;
     switch (type) {
@@ -18766,13 +18794,13 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
             } break;
         case GGML_TYPE_F16:
             {
-                int elemsize = sizeof(ggml_fp16_t);
+                size_t elemsize = sizeof(ggml_fp16_t);
                 ggml_fp32_to_fp16_row(src + start, (ggml_fp16_t *)dst + start, n);
                 result = n * elemsize;
             } break;
         case GGML_TYPE_F32:
             {
-                int elemsize = sizeof(float);
+                size_t elemsize = sizeof(float);
                 result = n * elemsize;
                 memcpy((uint8_t *)dst + start * elemsize, src + start, result);
             } break;

@@ -8747,8 +8747,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     // placeholder for the meta data
     ::zeros(fout, meta_size);
 
-    std::set<ggml_type> used_iq2;
-
     for (int i = 0; i < ml.n_tensors; ++i) {
         struct ggml_tensor * tensor = ml.get_tensor_meta(i);
 
@@ -8800,11 +8798,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
         } else {
             const size_t nelements = ggml_nelements(tensor);
-
-            if ((new_type == GGML_TYPE_IQ2_XXS || new_type == GGML_TYPE_IQ2_XS) && used_iq2.find(new_type) == used_iq2.end()) {
-                ggml_init_iq2_quantization(new_type);
-                used_iq2.insert(new_type);
-            }
 
             const float * imatrix = nullptr;
             if (imatrix_data) {
@@ -8930,10 +8923,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 
     fout.close();
-
-    for (auto type : used_iq2) {
-        ggml_deinit_iq2_quantization(type);
-    }
 
     gguf_free(ctx_out);
 
@@ -9342,6 +9331,7 @@ void llama_backend_free(void) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_free();
 #endif
+    ggml_quantize_free();
 }
 
 int64_t llama_time_us(void) {

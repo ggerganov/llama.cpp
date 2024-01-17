@@ -36,6 +36,10 @@ if [ ! -z ${GG_BUILD_METAL} ]; then
     CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_METAL_SHADER_DEBUG=ON"
 fi
 
+if [ ! -z ${GG_BUILD_CUDA} ]; then
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_CUBLAS=1"
+fi
+
 ## helpers
 
 # download a file if it does not exist or if it is outdated
@@ -160,8 +164,8 @@ function gg_run_open_llama_3b_v2 {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release -DLLAMA_QKK_64=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
-    (time make -j                                              ) 2>&1 | tee -a $OUT/${ci}-make.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_QKK_64=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                                             ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     python3 ../convert.py ${path_models}
 
@@ -343,8 +347,8 @@ function gg_run_open_llama_7b_v2 {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release -DLLAMA_CUBLAS=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
-    (time make -j                                              ) 2>&1 | tee -a $OUT/${ci}-make.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUBLAS=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                                             ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     python3 ../convert.py ${path_models}
 
