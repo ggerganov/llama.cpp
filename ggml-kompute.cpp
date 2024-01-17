@@ -301,6 +301,7 @@ ggml_vk_device ggml_vk_current_device() {
 }
 
 ggml_kompute_context *ggml_vk_init() {
+    GGML_ASSERT(s_kompute_context == nullptr);
     s_kompute_context = new ggml_kompute_context;
     return s_kompute_context;
 }
@@ -1824,8 +1825,8 @@ static const char * ggml_backend_kompute_name(ggml_backend_t backend) {
 
 static void ggml_backend_kompute_free(ggml_backend_t backend) {
     struct ggml_kompute_context * ctx = (struct ggml_kompute_context *)backend->context;
-    ggml_vk_free_device();
     ggml_vk_free(ctx);
+    ggml_vk_free_device();
     delete backend;
 }
 
