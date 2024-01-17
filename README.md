@@ -342,6 +342,51 @@ Finally, you're ready to run a computation using `mpirun`:
 mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 ```
 
+### OpenSHMEM Build
+
+OpenSHMEM lets you distribute a computation over a cluster of machines using a Partitioned Global Address Space (PGAS). OpenSHMEM's cluster abstraction is the Parallel-Random-Access-Machine (PRAM). OpenSHMEM's status as a PRAM abstraction means applications are written using the Single-Program-Many-Data (SPMD) style. OpenSHMEM is a shared memory machine abstraction for a cluster. The shared-memory machine abstraction means distributed communications operate like memory copies (memcpy). The receiver does not get a "notification" that communication events have occurred. Senders and recievers can "put" and "get" to remote memory at will. OpenSHMEM is a single-sided communication model that tends to yield improved performance for certain applications. The caveat to that statement is the underlying hardware and software layers. OpenSHMEM operates best when the communication protocol is "fire and forget" (similar to UDP). OpenSHMEM operates best on systems with remote-direct-memory-access (RDMA) enabled network-interface-cards (NICs). OpenSHMEM can work over a commodity ethernet cluster. OpenSHMEM can work on a single machine using a shared memory backend. llama.cpp's OpenSHMEM backend is designed for cluster environments. LLM inference is an inherently serial process. Using OpenSHMEM will not yield any significant [strong scaling](https://hpc-wiki.info/hpc/Scaling#Strong_or_Weak_Scaling) effects. OpenSHMEM it will let you run larger models (over a cluster) than would otherwise fit into the memory (RAM) of a single machine.
+
+First you will need the OpenSHMEM libraries installed on your system. There are 3 options: [OpenMPI's OpenSHMEM](https://www.open-mpi.org), [OSSS-OpenSHMEM](https://github.com/openshmem-org/osss-ucx) and [Sandia-OpenSHMEM](https://github.com/Sandia-OpenSHMEM/SOS). OSSS-OpenSHMEM has a dependency on the [UCX](https://github.com/openucx/ucx) communication library. Sandia-OpenSHMEM can run over udp, [UCX](https://github.com/openucx/ucx), or [libfabric](https://github.com/ofiwg/libfabric). OpenMPI's OpenSHMEM can be installed with a package manager (apt, homebrew, etc). UCX, OSSS-OpenSHMEM, and Sandia-OpenSHMEM can all be installed from source.
+
+Next you will need to build the project with `LLAMA_OPENSHMEM` set to true on all machines; if you're building with `make`, you will also need to specify an OpenSHMEM-capable compiler (when building with CMake, this is configured automatically):
+
+- Using `make`:
+
+  ```bash
+  make CC=oshcc CXX=oshc++ LLAMA_OPENSHMEM=1
+  ```
+
+- Using `CMake`:
+
+  ```bash
+  cmake -S . -B build -DCMAKE_C_COMPILER=oshcc -DCMAKE_CXX_COMPILER=oshc++ -DLLAMA_OPENSHMEM=ON 
+  ```
+
+It's strongly encouraged that users exercise this backend over a cluster that is configured to operate like a parallel machine. This means users should consider installing and configuring a distributed file system (NFS). Users are also encouraged to install a bulk-synchronous scheduler (ie: (Slurm)[https://slurm.schedmd.com]). Typical parallel machine configurations usually have 2 networks, a network for slurm/NFS and a seperate network for compute. This may not be practical for most users. After compiling llama.cpp w/OpenSHMEM, users will just need to copy the programs and weights onto the distributed file system. In order to run llama.cpp w/OpenSHMEM a user will need to run the program from the distributed file system using a bulk-synchronous scheduler. The following example assumes a slurm cluster is setup and configured. The example asserts an NFS installation is setup, configured, and mounted on each machine with the following path: `/nfs_path`.
+
+```
+srun -n 2 /nfs_path/main -m /nfs_path/models/7B/ggml-model-q4_0.gguf -n 128
+```
+
+If you do not have access to a cluster with a bulk-synchronous scheduler or a distributed file system, the following instructions will help you stage an installation and run the application. Build the programs, download/convert the weights on all of the machines in your cluster. The paths to the weights and programs should be identical on all machines.
+
+Next, ensure password-less SSH access to each machine from the primary host, and create a `hostfile` with a list of the hostnames and their relative "weights" (slots). If you want to use localhost for computation, use its local subnet IP address rather than the loopback address or "localhost".
+
+Here is an example hostfile:
+
+```
+192.168.0.1:1
+malvolio.local:1
+```
+
+The above will distribute the computation across 1 processes on the first host and 1 process on the second host. Each process will use roughly an equal amount of RAM. Try to keep these numbers small, as inter-process (intra-host) communication is expensive. It is a requirement of OpenSHMEM that the distributed job be performed over a number of machines that is equal to a power of 2.
+
+Finally, you're ready to run a computation using `mpirun`:
+
+```bash
+oshrun -hostfile hostfile -n 2 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
+```
+
 ### BLAS Build
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS and CLBlast. There are currently several different BLAS implementations available for build and use:

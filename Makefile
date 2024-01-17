@@ -350,6 +350,56 @@ ifdef LLAMA_MPI
 	OBJS        += ggml-mpi.o
 endif # LLAMA_MPI
 
+ifdef LLAMA_OPENSHMEM
+	ifndef OPENSHMEM_FOUND
+		OSHMEM_PKG:=sandia-openshmem
+		OSHMEM_REQPKG:=$(shell pkg-config --exists $(OSHMEM_PKG) && echo '$(OSHMEM_PKG)')
+		ifneq ($(OSHMEM_REQPKG),)
+			OPENSHMEM_FOUND:=1
+			OPENSHMEM_CFLAGS:=$(shell pkg-config --cflags sandia-openshmem)
+			OPENSHMEM_LDFLAGS:=$(shell pkg-config --libs sandia-openshmem)
+			warn := $(warning OpenSHMEM found)
+		else
+			$(warning '$(OSHMEM_PKG)' not found)
+		endif
+	endif
+
+	ifndef OPENSHMEM_FOUND
+		OSHMEM_PKG:=osss-ucx
+		OSHMEM_REQPKG:=$(shell pkg-config --exists $(OSHMEM_PKG) && echo '$(OSHMEM_PKG)')
+		ifneq ($(OSHMEM_REQPKG),)
+			OPENSHMEM_FOUND:=1
+			OPENSHMEM_CFLAGS:=$(shell pkg-config --cflags osss-ucx)
+			OPENSHMEM_LDFLAGS:=$(shell pkg-config --libs osss-ucx)
+			warn := $(warning OpenSHMEM found)
+		else
+			$(warning '$(OSHMEM_PKG)' not found)
+		endif
+	endif
+
+	ifndef OPENSHMEM_FOUND
+		OSHMEM_PKG:=oshmem
+		OSHMEM_REQPKG:=$(shell pkg-config --exists $(OSHMEM_PKG) && echo '$(OSHMEM_PKG)')
+		ifneq ($(OSHMEM_REQPKG),)
+			OPENSHMEM_FOUND:=1
+			OPENSHMEM_CFLAGS:=$(shell oshmem_info --path libdir)
+			OPENSHMEM_LDFLAGS:=$(shell oshmem_info --path incdir)
+			warn := $(warning OpenSHMEM found)
+		else
+			$(warning '$(OSHMEM_PKG)' not found)
+		endif
+	endif
+
+	ifndef OPENSHMEM_FOUND
+		$(error OpenSHMEM not found)
+	endif
+
+	MK_CPPFLAGS += -DGGML_USE_OPENSHMEM $(OPENSHMEM_CFLAGS)
+	MK_CFLAGS   += -Wno-cast-qual $(OPENSHMEM_CFLAGS)
+	MK_LDFLAGS  += -Wno-cast-qual $(OPENSHMEM_LDFLAGS)
+	OBJS        += ggml-oshmem.o
+endif # LLAMA_OPENSHMEM
+
 ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
