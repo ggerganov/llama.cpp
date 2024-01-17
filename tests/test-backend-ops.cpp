@@ -16,39 +16,37 @@
 #include <vector>
 
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
+    // static RNG initialization (revisit if n_threads stops being constant)
+    static const size_t n_threads = std::thread::hardware_concurrency();
+    static std::vector<std::default_random_engine> generators = []() {
+        std::random_device rd;
+        std::vector<std::default_random_engine> vec;
+        vec.reserve(n_threads);
+        //for (size_t i = 0; i < n_threads; i++) { vec.emplace_back(1234 + i); } // fixed seed
+        for (size_t i = 0; i < n_threads; i++) { vec.emplace_back(rd()); }
+        return vec;
+    }();
+
     size_t size = ggml_nelements(tensor);
     std::vector<float> data(size);
 
-#if 0
-    static std::default_random_engine generator(1234);
-    std::uniform_real_distribution<float> distribution(min, max);
-
-    for (size_t i = 0; i < size; i++) {
-        data[i] = distribution(generator);
-    }
-#else
-    auto init_thread = [&](size_t start, size_t end) {
-        std::random_device rd;
-        std::default_random_engine generator(rd());
+    auto init_thread = [&](size_t ith, size_t start, size_t end) {
         std::uniform_real_distribution<float> distribution(min, max);
-
         for (size_t i = start; i < end; i++) {
-            data[i] = distribution(generator);
+            data[i] = distribution(generators[ith]);
         }
     };
 
-    size_t n_threads = std::thread::hardware_concurrency();
     std::vector<std::thread> threads;
     threads.reserve(n_threads);
     for (size_t i = 0; i < n_threads; i++) {
         size_t start =     i*size/n_threads;
         size_t end   = (i+1)*size/n_threads;
-        threads.emplace_back(init_thread, start, end);
+        threads.emplace_back(init_thread, i, start, end);
     }
     for (auto & t : threads) {
         t.join();
     }
-#endif
 
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
