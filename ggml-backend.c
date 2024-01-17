@@ -1384,10 +1384,6 @@ static void sched_reset(ggml_backend_sched_t sched) {
     memset(sched->node_talloc,   0, sizeof(sched->node_talloc[0])   * hash_size);
     memset(sched->node_copies,   0, sizeof(sched->node_copies[0])   * hash_size);
 
-    // TODO: should we clear the callbacks?
-    //sched->callback_eval = NULL;
-    //sched->callback_eval_user_data = NULL;
-
     sched->is_reset = true;
 }
 
