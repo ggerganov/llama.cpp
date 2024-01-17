@@ -561,6 +561,12 @@ if (LLAMA_LTO)
     endif()
 endif()
 
+find_program(LLAMA_CCACHE_FOUND ccache)
+if (LLAMA_CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set(ENV{CCACHE_SLOPPINESS} pch_defines,time_macros)
+endif ()
+
 # this version of Apple ld64 is buggy
 execute_process(
     COMMAND ${CMAKE_C_COMPILER} ${CMAKE_EXE_LINKER_FLAGS} -Wl,-v
