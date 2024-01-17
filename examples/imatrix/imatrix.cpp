@@ -41,6 +41,7 @@ private:
     std::mutex                             m_mutex;
     int                                    m_last_call = 0;
     std::vector<float>                     m_src1_data;
+    std::vector<int>                       m_ids; // the expert ids from ggml_mul_mat_id
 };
 
 bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data) {
@@ -52,6 +53,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
     // when ask is true, the scheduler wants to know if we are interested in data from this tensor
     // if we return true, a follow-up call will be made with ask=false in which we can do the actual collection
     if (ask) {
+        if (t->op == GGML_OP_MUL_MAT_ID) return true; // collect all indirect matrix multiplications
         if (t->op != GGML_OP_MUL_MAT) return false;
         if (src1->ne[1] < 16 || src1->type != GGML_TYPE_F32) return false;
         if (!(strncmp(src0->name, "blk.", 4) == 0 || (m_params.collect_output_weight && strcmp(src0->name, "output.weight") == 0))) return false;
@@ -63,35 +65,84 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
     // copy the data from the GPU memory if needed
     const bool is_host = ggml_backend_buffer_is_host(src1->buffer);
 
-    if (!is_host || !ggml_is_contiguous(src1)) {
+    if (!is_host) {
         m_src1_data.resize(ggml_nelements(src1));
         ggml_backend_tensor_get(src1, m_src1_data.data(), 0, ggml_nbytes(src1));
     }
 
     const float * data = is_host ? (const float *) src1->data : m_src1_data.data();
 
-    auto& e = m_stats[src0->name];
-    if (e.values.empty()) {
-        e.values.resize(src1->ne[0], 0);
-    }
-    else if (e.values.size() != (size_t)src1->ne[0]) {
-        fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", src0->name, (int)e.values.size(), (int)src1->ne[0]);
-        exit(1); //GGML_ASSERT(false);
-    }
-    ++e.ncall;
-    if (m_params.verbosity > 1) {
-        printf("%s[%d]: %s, %d x %d, %d\n",__func__,m_last_call,src0->name,(int)src1->ne[0],(int)src1->ne[1],(int)src1->type);
-    }
-    for (int row = 0; row < (int)src1->ne[1]; ++row) {
-        const float * x = data + row * src1->ne[0];
-        for (int j = 0; j < (int)src1->ne[0]; ++j) {
-            e.values[j] += x[j]*x[j];
+    if (t->op == GGML_OP_MUL_MAT_ID) {
+        const int idx  = ((int32_t *) t->op_params)[0];
+        const int n_as = ((int32_t *) t->op_params)[1];
+
+        // the top-k selected expert ids are stored in the src0 tensor
+        // for simplicity, always copy src0 to host, because it is small
+        // take into account that src0 is not contiguous!
+        GGML_ASSERT(src0->ne[1] == src1->ne[1]);
+        GGML_ASSERT(n_as*ggml_nrows(src0));
+        m_ids.resize(ggml_nbytes(src0)/sizeof(int));
+        ggml_backend_tensor_get(src0, m_ids.data(), 0, ggml_nbytes(src0));
+
+        // loop over all possible experts, regardless if they are used or not in the batch
+        // this is necessary to guarantee equal number of "ncall" for each tensor
+        for (int ex = 0; ex < n_as; ++ex) {
+            src0 = t->src[2 + ex];
+            auto& e = m_stats[src0->name];
+            if (e.values.empty()) {
+                e.values.resize(src1->ne[0], 0);
+            }
+            else if (e.values.size() != (size_t)src1->ne[0]) {
+                fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", src0->name, (int)e.values.size(), (int)src1->ne[0]);
+                exit(1); //GGML_ASSERT(false);
+            }
+            // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
+            //       using the following line, we can correct for that if needed
+            //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
+            ++e.ncall;
+            if (m_params.verbosity > 1) {
+                printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, src0->name, ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
+            }
+            for (int row = 0; row < (int)src1->ne[1]; ++row) {
+                const int excur = m_ids[row*n_as + idx];
+                GGML_ASSERT(excur >= 0 && excur < n_as); // sanity check
+                if (excur != ex) continue;
+                const float * x = data + row * src1->ne[0];
+                for (int j = 0; j < (int)src1->ne[0]; ++j) {
+                    e.values[j] += x[j]*x[j];
+                }
+            }
+            if (e.ncall > m_last_call) {
+                m_last_call = e.ncall;
+                if (m_last_call % m_params.n_output_frequency == 0) {
+                    save_imatrix();
+                }
+            }
         }
-    }
-    if (e.ncall > m_last_call) {
-        m_last_call = e.ncall;
-        if (m_last_call % m_params.n_output_frequency == 0) {
-            save_imatrix();
+    } else {
+        auto& e = m_stats[src0->name];
+        if (e.values.empty()) {
+            e.values.resize(src1->ne[0], 0);
+        }
+        else if (e.values.size() != (size_t)src1->ne[0]) {
+            fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", src0->name, (int)e.values.size(), (int)src1->ne[0]);
+            exit(1); //GGML_ASSERT(false);
+        }
+        ++e.ncall;
+        if (m_params.verbosity > 1) {
+            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, src0->name, ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
+        }
+        for (int row = 0; row < (int)src1->ne[1]; ++row) {
+            const float * x = data + row * src1->ne[0];
+            for (int j = 0; j < (int)src1->ne[0]; ++j) {
+                e.values[j] += x[j]*x[j];
+            }
+        }
+        if (e.ncall > m_last_call) {
+            m_last_call = e.ncall;
+            if (m_last_call % m_params.n_output_frequency == 0) {
+                save_imatrix();
+            }
         }
     }
 
