@@ -93,6 +93,9 @@ def travel_in_topology(nodes, show_path=False):
         if degree == 0:
             queue.append(name)
 
+    if show_path:
+        print("Graph:")
+
     while len(queue) > 0:
         cur_node = queue.pop(0)
         for next_node in nodes[cur_node].next:
@@ -102,18 +105,24 @@ def travel_in_topology(nodes, show_path=False):
                 queue.append(next_node)
                 if show_path:
                     for prev_node in nodes[next_node].prev:
-                        print(f"{prev_node} -> {next_node}")
+                        print(f"\t{prev_node} -> {next_node}")
     
-    return concur, orders
+    return orders
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--log_file", required=True, type=str)
     parser.add_argument("--show_path", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--show_detailed_orders", action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
 
     gf = read_graph(args.log_file, skip_pattens=[".weight"])
 
-    concur, orders = travel_in_topology(gf, show_path=args.show_path)
-    print(f"max concurrency: {concur}, max order {np.max(list(orders.values()))}")
+    orders = travel_in_topology(gf, show_path=args.show_path)
+    order_values = list(orders.values())
+    print(f"Max concurrency: {np.max([order_values.count(x) if x > 3 else 0 for x in np.unique(order_values)])}\nMax order {np.max(order_values)}")
+    if args.show_detailed_orders:
+        print(f"Detailed orders:")
+        for name, order in sorted(list(orders.items()), key=lambda x: x[1]):
+            print(f"\t{name}: {order}")
             
