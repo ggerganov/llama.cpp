@@ -303,22 +303,21 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
                 return NULL;
             }
 
-            // dictionary of preprocessor macros
-            NSMutableDictionary * prep = [NSMutableDictionary dictionary];
+            @autoreleasepool {
+                // dictionary of preprocessor macros
+                NSMutableDictionary * prep = [NSMutableDictionary dictionary];
 
 #ifdef GGML_QKK_64
-            prep[@"QK_K"] = @(64);
+                prep[@"QK_K"] = @(64);
 #endif
 
-            MTLCompileOptions* options = [MTLCompileOptions new];
-            options.preprocessorMacros = prep;
+                MTLCompileOptions* options = [MTLCompileOptions new];
+                options.preprocessorMacros = prep;
 
-            //[options setFastMathEnabled:false];
+                //[options setFastMathEnabled:false];
 
-            ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
-
-            [options release];
-            [prep release];
+                ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
+            }
         }
 
         if (error) {
