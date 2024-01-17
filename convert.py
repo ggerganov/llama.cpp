@@ -1008,6 +1008,7 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
         )
         for i in range(1, pad_count + 1):
             vocab.added_tokens_dict[f"<dummy{i:05}>"] = -1
+            vocab.added_tokens_list.append(f"<dummy{i:05}>")
         vocab.vocab_size = params.n_vocab
         return
 
@@ -1099,14 +1100,7 @@ class OutputFile:
             scores.append(score)
             toktypes.append(toktype)
 
-        # pad with unknown tokens and print warnings
-        # ref: https://github.com/ggerganov/llama.cpp/issues/4958
-        if len(tokens) < vocab.vocab_size:
-            for i in range(len(tokens), vocab.vocab_size):
-                tokens.append(f"<unk{i}>".encode("utf-8"))
-                scores.append(-1000.0)
-                toktypes.append(gguf.TokenType.UNKNOWN)
-                print(f"Warning: token {i} not found in vocab - padding with {tokens[-1]}")
+        assert(len(tokens) == vocab.vocab_size)
 
         return tokens, scores, toktypes
 
