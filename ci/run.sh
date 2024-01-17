@@ -295,6 +295,7 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf 'OpenLLaMA 3B-v2:\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
+    gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
     gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
     gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
@@ -307,7 +308,6 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
     gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
-    gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
     gg_printf '- save-load-state: \n```\n%s\n```\n' "$(cat $OUT/${ci}-save-load-state.log)"
     gg_printf '- shakespeare (f16):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-f16.log)"
     gg_printf '- shakespeare (f16 lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log)"
@@ -477,6 +477,7 @@ function gg_sum_open_llama_7b_v2 {
     gg_printf 'OpenLLaMA 7B-v2:\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
+    gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
     gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
     gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
@@ -489,7 +490,6 @@ function gg_sum_open_llama_7b_v2 {
     gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
     gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
-    gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
     gg_printf '- save-load-state: \n```\n%s\n```\n' "$(cat $OUT/${ci}-save-load-state.log)"
     gg_printf '- shakespeare (f16):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-f16.log)"
     gg_printf '- shakespeare (f16 lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log)"
