@@ -8378,6 +8378,8 @@ struct quantize_state_internal {
     int n_k_quantized     = 0;
     int n_fallback        = 0;
 
+    bool has_imatrix      = false;
+
     quantize_state_internal(const llama_model & model, const llama_model_quantize_params * params)
         : model(model)
         , params(params)
@@ -8479,7 +8481,12 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         }
         else if (name == "token_embd.weight") new_type = GGML_TYPE_Q2_K;
     } else if (name.find("attn_v.weight") != std::string::npos) {
-        if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+        if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) {
+            new_type = qs.model.hparams.n_gqa() >= 4 ? GGML_TYPE_Q4_K : GGML_TYPE_Q3_K;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && qs.model.hparams.n_gqa() >= 4) {
+            new_type = GGML_TYPE_Q4_K;
+        }
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
             new_type = qs.i_attention_wv < 2 ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
         }
@@ -8549,6 +8556,13 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M && use_more_bits(i_layer, n_layer)) new_type = GGML_TYPE_Q6_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && arch != LLM_ARCH_FALCON && i_layer < n_layer/8) {
             new_type = GGML_TYPE_Q5_K;
+        }
+        else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_0 || ftype == LLAMA_FTYPE_MOSTLY_Q5_0)
+                && qs.has_imatrix && i_layer < n_layer/8) {
+            // Guard against craziness in the first few ffn_down layers that can happen even with imatrix for Q4_0/Q5_0.
+            // We only do it when an imatrix is provided because a) we want to make sure that one can always get the
+            // same quantization as before imatrix stuff, and b) Q4_1/Q5_1 do go crazy on ffn_down without an imatrix.
+            new_type = ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ? GGML_TYPE_Q4_1 : GGML_TYPE_Q5_1;
         }
         ++qs.i_feed_forward_w2;
     } else if (name.find("attn_output.weight") != std::string::npos) {
@@ -8673,6 +8687,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         imatrix_data = static_cast<const std::unordered_map<std::string, std::vector<float>>*>(params->imatrix);
         if (imatrix_data) {
             LLAMA_LOG_INFO("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
+            qs.has_imatrix = true;
         }
     }
 
@@ -9265,14 +9280,14 @@ struct llama_context_params llama_context_default_params() {
         /*.yarn_beta_fast              =*/ 32.0f,
         /*.yarn_beta_slow              =*/ 1.0f,
         /*.yarn_orig_ctx               =*/ 0,
+        /*.cb_eval                     =*/ nullptr,
+        /*.cb_eval_user_data           =*/ nullptr,
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
         /*.mul_mat_q                   =*/ true,
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
-        /*.cb_eval                     =*/ nullptr,
-        /*.cb_eval_user_data           =*/ nullptr,
     };
 
     return result;
