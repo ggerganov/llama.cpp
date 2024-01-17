@@ -147,9 +147,15 @@ std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
     if (!komputeManager()->hasVulkan() || !komputeManager()->hasInstance())
         return results;
 
-    std::vector<vk::PhysicalDevice> physicalDevices = komputeManager()->listDevices();
-    uint32_t deviceCount = physicalDevices.size();
+    std::vector<vk::PhysicalDevice> physicalDevices;
+    try {
+        physicalDevices = komputeManager()->listDevices();
+    } catch (vk::SystemError & err) {
+        std::cerr << __func__ << ": ignoring Vulkan exception: " << err.what() << "\n";
+        return results;
+    }
 
+    uint32_t deviceCount = physicalDevices.size();
     if (deviceCount == 0)
         return results;
 
