@@ -490,7 +490,7 @@ ggml_vk_memory * ggml_vk_find_tensor(const struct ggml_tensor * t, uint64_t & of
 
     const intptr_t ioffs = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(buf_ctx->data);
 
-    GGML_ASSERT(ioffs >= 0 && ioffs + (int64_t)ggml_nbytes(t) <= (int64_t)t->buffer->size);
+    GGML_ASSERT(ioffs >= 0 && ioffs + (int64_t)ggml_nbytes(t) <= (int64_t)buffer->size);
 
     offset = (uint64_t)ioffs;
     return buf_ctx;
