@@ -422,9 +422,8 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     return {tokens, ppl, logit_history, prob_history};
 }
 
-static std::vector<float> hellaswag_evaluate_tokens(
-    llama_context * ctx, std::vector<int> & tokens, int n_past, int n_batch, int n_vocab
-) {
+static std::vector<float> evaluate_tokens(llama_context * ctx, std::vector<int> & tokens,
+        int n_past, int n_batch, int n_vocab) {
     std::vector<float> result;
     result.reserve(tokens.size() * n_vocab);
     size_t n_chunk = (tokens.size() + n_batch - 1)/n_batch;
@@ -576,7 +575,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         // clear the KV cache
         llama_kv_cache_clear(ctx);
 
-        auto logits = hellaswag_evaluate_tokens(ctx, query_embd, 0, params.n_batch, n_vocab);
+        auto logits = evaluate_tokens(ctx, query_embd, 0, params.n_batch, n_vocab);
         if (logits.empty()) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return;
@@ -625,7 +624,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             //}
 
             // Evaluate the query
-            logits = hellaswag_evaluate_tokens(ctx, query_embd, context_size, params.n_batch, n_vocab);
+            logits = evaluate_tokens(ctx, query_embd, context_size, params.n_batch, n_vocab);
             if (logits.empty()) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
@@ -776,14 +775,10 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         data = std::move(selected);
     }
 
-    const bool is_spm = llama_vocab_type(llama_get_model(ctx)) == LLAMA_VOCAB_TYPE_SPM;
-    fprintf(stderr, "================================= is_spm = %d\n", is_spm);
-
     // This is needed as usual for LLaMA models
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
     fprintf(stderr, "%s : calculating winogrande score over selected tasks.\n", __func__);
-    //printf("\ntask\tacc_norm\n");
 
     const int n_vocab = llama_n_vocab(llama_get_model(ctx));
     const int n_ctx = llama_n_ctx(ctx);
@@ -791,6 +786,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
     std::vector<float> tok_logits(n_vocab);
 
     int n_correct = 0;
+    int n_done    = 0;
 
     for (size_t task_idx = 0; task_idx < data.size(); task_idx++) {
         const auto& task = data[task_idx];
@@ -799,23 +795,29 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         //auto base_ctx_1st = ::llama_tokenize(ctx, task.first + task.choices[0], add_bos);
         //auto base_ctx_2nd = ::llama_tokenize(ctx, task.first + task.choices[1], add_bos);
 
-        auto query_1st = ::llama_tokenize(ctx, task.first + task.choices[0] + task.second, add_bos);
-        auto query_2nd = ::llama_tokenize(ctx, task.first + task.choices[1] + task.second, add_bos);
+        auto sentence_1st = task.first + task.choices[0] + task.second;
+        auto sentence_2nd = task.first + task.choices[1] + task.second;
+        auto query_1st = ::llama_tokenize(ctx, sentence_1st, add_bos);
+        auto query_2nd = ::llama_tokenize(ctx, sentence_2nd, add_bos);
 
         if (query_1st.size() > (size_t)n_ctx || query_2nd.size() > (size_t)n_ctx) {
             fprintf(stderr, "%s : number of tokens in queries %zu, %zu > n_ctxl\n", __func__, query_1st.size(), query_2nd.size());
             return;
         }
 
+        auto query_1st_size = query_1st.size();
+        auto query_2nd_size = query_2nd.size();
+
         // Speedup small evaluations by evaluating atleast 32 tokens
-        if (query_1st.size() < 32) query_1st.resize(32);
-        if (query_2nd.size() < 32) query_2nd.resize(32);
+        // For Winogrande this seems to slow it down rather than speed it up.
+        //if (query_1st.size() < 32) query_1st.resize(32);
+        //if (query_2nd.size() < 32) query_2nd.resize(32);
 
         llama_kv_cache_clear(ctx);
-        auto logits_1st = hellaswag_evaluate_tokens(ctx, query_1st, 0, params.n_batch, n_vocab);
+        auto logits_1st = evaluate_tokens(ctx, query_1st, 0, params.n_batch, n_vocab);
 
         llama_kv_cache_clear(ctx);
-        auto logits_2nd = hellaswag_evaluate_tokens(ctx, query_2nd, 0, params.n_batch, n_vocab);
+        auto logits_2nd = evaluate_tokens(ctx, query_2nd, 0, params.n_batch, n_vocab);
 
         if (logits_1st.empty() || logits_2nd.empty()) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
@@ -823,45 +825,66 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         }
 
         float score_1st = 0;
-        //for (size_t j = base_ctx_1st.size()-1; j < query_1st.size()-1; ++j) {
-        //    std::memcpy(tok_logits.data(), logits_1st.data() + j*n_vocab, n_vocab*sizeof(float));
-        //    const float prob = softmax(tok_logits)[query_1st[j+1]];
-        //    score_1st += std::log(prob);
-        //}
-        //score_1st /= (query_1st.size() - base_ctx_1st.size());
-        for (size_t j = base_context.size(); j < query_1st.size()-1; ++j) {
+        bool is_nan_1st = false;
+        for (size_t j = base_context.size()-1; j < query_1st_size-1; ++j) {
             std::memcpy(tok_logits.data(), logits_1st.data() + j*n_vocab, n_vocab*sizeof(float));
             const float prob = softmax(tok_logits)[query_1st[j+1]];
+            if (std::isnan(prob) || !prob) {
+                fprintf(stderr, "%s: %g probability for token %zu when evaluating <%s>. Base context has %zu tokens\n", __func__,
+                        prob, j, sentence_1st.c_str(), base_context.size());
+                is_nan_1st = true;
+                break;
+            }
             score_1st += std::log(prob);
         }
-        score_1st /= (query_1st.size() - base_context.size() - 1);
+        score_1st /= (query_1st_size - base_context.size());
 
         float score_2nd = 0;
-        //for (size_t j = base_ctx_2nd.size(); j < query_2nd.size()-1; ++j) {
-        //    std::memcpy(tok_logits.data(), logits_2nd.data() + j*n_vocab, n_vocab*sizeof(float));
-        //    const float prob = softmax(tok_logits)[query_2nd[j+1]];
-        //    score_2nd += std::log(prob);
-        //}
-        //score_2nd /= (query_2nd.size() - base_ctx_2nd.size());
-        for (size_t j = base_context.size(); j < query_2nd.size()-1; ++j) {
+        bool is_nan_2nd = false;
+        for (size_t j = base_context.size()-1; j < query_2nd_size-1; ++j) {
             std::memcpy(tok_logits.data(), logits_2nd.data() + j*n_vocab, n_vocab*sizeof(float));
             const float prob = softmax(tok_logits)[query_2nd[j+1]];
+            if (std::isnan(prob) || !prob) {
+                fprintf(stderr, "%s: %g probability for token %zu when evaluating <%s>. Base context has %zu tokens\n", __func__,
+                        prob, j, sentence_2nd.c_str(), base_context.size());
+                is_nan_2nd = true;
+                break;
+            }
             score_2nd += std::log(prob);
         }
-        score_2nd /= (query_2nd.size() - base_context.size() - 1);
+        score_2nd /= (query_2nd_size - base_context.size());
+
+        if (is_nan_1st || is_nan_2nd) {
+            continue;
+        }
+
+        if (std::isnan(score_1st) || std::isnan(score_2nd)) {
+            printf("================== NaN score %g, %g) for:\n", score_1st, score_2nd);
+            printf("Q1: <%s> - %zu tokens\n", sentence_1st.c_str(), query_1st_size);
+            printf("Q2: <%s> - %zu tokens\n", sentence_2nd.c_str(), query_2nd_size);
+            printf("B : <%s> - %zu tokens\n", task.first.c_str(), base_context.size());
+            continue;
+        }
 
         int result = score_1st > score_2nd ? 1 : 2;
 
         if (result == task.answer) {
             ++n_correct;
         }
+        ++n_done;
 
         // Print the accumulated accuracy mean x 100
-        printf("%zu\t%.8lf\t%10.6f  %10.6f  %d  %d\n",task_idx+1, 100.0 * n_correct/(task_idx+1),score_1st,score_2nd,result,task.answer);
+        printf("%zu\t%.4lf\t%10.6f  %10.6f  %d  %d\n",task_idx+1, 100.0 * n_correct/n_done,score_1st,score_2nd,result,task.answer);
         fflush(stdout);
     }
 
     printf("\n");
+
+    if (n_done < 100) return;
+
+    const float p = 1.f*n_correct/n_done;
+    const float sigma = 100.f*sqrt(p*(1-p)/(n_done-1));
+    printf("Final Winogrande score: %.4lf +/- %.4lf\n", 100*p, sigma);
 }
 
 
