@@ -460,7 +460,7 @@ if (LLAMA_SYCL)
     add_compile_definitions(GGML_USE_SYCL)
 
     add_compile_options(-I./) #include DPCT 
-    add_compile_options(-I/${ONEAPI_ROOT}/2024.0/include)
+    add_compile_options(-I/${SYCL_INCLUDE_DIR})
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-narrowing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
