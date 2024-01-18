@@ -1576,7 +1576,7 @@ static void ggml_vk_buffer_write_2d(vk_buffer* dst, size_t offset, const void * 
         ggml_vk_buffer_write_2d_async(*ctx, dst, offset, src, spitch, width, height, q, nullptr, nullptr, true);
         ggml_vk_ctx_end(*ctx);
         ggml_vk_submit(q, ctx->seqs, vk_fence);
-        VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "vk_buffer_write_2d waitForFences");
+        VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "vk_buffer_write_2d waitForFences");
         vk_device.device.resetFences({ vk_fence });
     }
 }
@@ -1676,7 +1676,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
         ggml_vk_buffer_read_async(*ctx, src, offset, dst, size, q, &staging);
         ggml_vk_ctx_end(*ctx);
         ggml_vk_submit(q, ctx->seqs, vk_fence);
-        VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "vk_buffer_read waitForFences");
+        VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "vk_buffer_read waitForFences");
         vk_device.device.resetFences({ vk_fence });
 
         for (auto& cpy : staging) {
@@ -1696,7 +1696,7 @@ static void ggml_vk_buffer_copy(vk_buffer * dst, size_t dst_offset, vk_buffer * 
     vkCmdCopyBuffer(ctx->s->buffer, src->buffer, dst->buffer, 1, &bc);
     ggml_vk_ctx_end(*ctx);
     ggml_vk_submit(q, ctx->seqs, vk_fence);
-    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "vk_buffer_copy waitForFences");
+    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "vk_buffer_copy waitForFences");
     vk_device.device.resetFences({ vk_fence });
 }
 
@@ -1713,7 +1713,7 @@ static void ggml_vk_buffer_memset(vk_buffer* dst, size_t offset, uint32_t c, siz
 
     std::vector<vk_sequence> s = { { submission } };
     ggml_vk_submit(q, s, vk_fence);
-    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "vk_memset waitForFences");
+    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "vk_memset waitForFences");
     vk_device.device.resetFences({ vk_fence });
 }
 
@@ -3425,7 +3425,7 @@ void ggml_vk_test_transfer(size_t ne, bool pinned) {
 
     ggml_vk_submit(vk_device.transfer_queue, seqs, vk_fence);
 
-    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "ggml_vk_compute_forward waitForFences");
+    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "ggml_vk_compute_forward waitForFences");
     vk_device.device.resetFences({ vk_fence });
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -3438,7 +3438,7 @@ void ggml_vk_test_transfer(size_t ne, bool pinned) {
 
     ggml_vk_submit(vk_device.transfer_queue, seqs, vk_fence);
 
-    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "ggml_vk_compute_forward waitForFences");
+    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "ggml_vk_compute_forward waitForFences");
     vk_device.device.resetFences({ vk_fence });
 
     for (auto& cpy : memcpys) {
@@ -3578,9 +3578,9 @@ static size_t ggml_vk_tensor_size(const ggml_tensor * tensor) {
     return tensor->ne[order[3]]*tensor->nb[order[3]];
 }
 
-static void ggml_vk_preallocate_buffers(ggml_tensor * tensor, size_t d_size, size_t qx_size, size_t qy_size, size_t x_size, size_t y_size, size_t split_k_size, int inplace_d, size_t staging_size) {
+static void ggml_vk_preallocate_buffers_reserve(ggml_tensor * tensor, size_t d_size, size_t qx_size, size_t qy_size, size_t x_size, size_t y_size, size_t split_k_size, int inplace_d, size_t staging_size) {
 #ifdef VK_DEBUG
-    std::cerr << "ggml_vk_preallocate_buffers(tensor=" << tensor << ", d_size=" << d_size << ", qx_size=" << qx_size << ", qy_size=" << qy_size << ", x_size=" << x_size << ", y_size=" << y_size << ", split_k_size=" << split_k_size << ", inplace_d=" << inplace_d << ", staging_size=" << staging_size << ")" << std::endl;
+    std::cerr << "ggml_vk_preallocate_buffers_reserve(tensor=" << tensor << ", d_size=" << d_size << ", qx_size=" << qx_size << ", qy_size=" << qy_size << ", x_size=" << x_size << ", y_size=" << y_size << ", split_k_size=" << split_k_size << ", inplace_d=" << inplace_d << ", staging_size=" << staging_size << ")" << std::endl;
 #endif
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
     GGML_ASSERT(extra != nullptr);
@@ -3740,17 +3740,17 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node, ggml_cgraph * graph){
 
     switch (node->op) {
     case GGML_OP_REPEAT:
-        ggml_vk_preallocate_buffers(node, d_sz, qx_sz, 0, 0, 0, 0, inplace, qx_sz);
+        ggml_vk_preallocate_buffers_reserve(node, d_sz, qx_sz, 0, 0, 0, 0, inplace, qx_sz);
         break;
     case GGML_OP_GET_ROWS:
-        ggml_vk_preallocate_buffers(node, d_sz, 0, 0, 0, 0, 0, inplace, 0);
+        ggml_vk_preallocate_buffers_reserve(node, d_sz, 0, 0, 0, 0, 0, inplace, 0);
 
         break;
     case GGML_OP_RESHAPE:
     case GGML_OP_VIEW:
     case GGML_OP_PERMUTE:
     case GGML_OP_TRANSPOSE:
-        ggml_vk_preallocate_buffers(node, 0, 0, 0, 0, 0, 0, inplace, 0);
+        ggml_vk_preallocate_buffers_reserve(node, 0, 0, 0, 0, 0, 0, inplace, 0);
         break;
     case GGML_OP_ADD:
     case GGML_OP_SCALE:
@@ -3765,21 +3765,21 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node, ggml_cgraph * graph){
     case GGML_OP_DIAG_MASK_INF:
     case GGML_OP_SOFT_MAX:
     case GGML_OP_ROPE:
-        ggml_vk_preallocate_buffers(node, d_sz, transfer_src0 ? qx_sz : 0, transfer_src1 ? qy_sz : 0, 0, 0, 0, inplace, qx_sz + qy_sz);
+        ggml_vk_preallocate_buffers_reserve(node, d_sz, transfer_src0 ? qx_sz : 0, transfer_src1 ? qy_sz : 0, 0, 0, 0, inplace, qx_sz + qy_sz);
         break;
     case GGML_OP_UNARY:
         switch (ggml_get_unary_op(node)) {
         case GGML_UNARY_OP_SILU:
         case GGML_UNARY_OP_GELU:
         case GGML_UNARY_OP_RELU:
-            ggml_vk_preallocate_buffers(node, d_sz, transfer_src0 ? qx_sz : 0, 0, 0, 0, 0, inplace, qx_sz);
+            ggml_vk_preallocate_buffers_reserve(node, d_sz, transfer_src0 ? qx_sz : 0, 0, 0, 0, 0, inplace, qx_sz);
             break;
         default:
             return;
         }
         break;
     case GGML_OP_MUL_MAT:
-        ggml_vk_preallocate_buffers(node, d_sz, transfer_src0 ? qx_sz : 0, transfer_src1 ? qy_sz : 0, qx_needs_dequant ? x_sz : 0, qy_needs_dequant ? y_sz : 0, split_k > 1 ? d_sz * 4 : 0, inplace, qx_sz + qy_sz);
+        ggml_vk_preallocate_buffers_reserve(node, d_sz, transfer_src0 ? qx_sz : 0, transfer_src1 ? qy_sz : 0, qx_needs_dequant ? x_sz : 0, qy_needs_dequant ? y_sz : 0, split_k > 1 ? d_sz * 4 : 0, inplace, qx_sz + qy_sz);
         break;
     default:
         return;
@@ -4167,7 +4167,7 @@ bool ggml_vk_compute_forward(ggml_compute_params * params, ggml_tensor * tensor)
     ggml_vk_submit(vk_device.compute_queue, ctx.seqs, vk_fence);
 
     if (tensor == ctx.exit_tensor) {
-        VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "ggml_vk_compute_forward waitForFences");
+        VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "ggml_vk_compute_forward waitForFences");
         vk_device.device.resetFences({ vk_fence });
 
         // Do staging buffer copies
@@ -4399,6 +4399,9 @@ GGML_CALL static const char * ggml_backend_vk_buffer_type_name(ggml_backend_buff
 }
 
 GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+#ifdef VK_DEBUG
+    std::cerr << "ggml_backend_vk_buffer_type_alloc_buffer(" << size << ")" << std::endl;
+#endif
     // vk_buffer dev_buffer = ggml_vk_create_buffer(size, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     ggml_backend_vk_buffer_context * ctx = new ggml_backend_vk_buffer_context();
