@@ -865,7 +865,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         }
         float scale = 1/(1.f + (float)rng.max());
         std::vector<winogrande_entry> selected;
-        selected.reserve(params.winogrande_tasks);
+        selected.resize(params.winogrande_tasks);
         for (int i = 0; i < int(params.winogrande_tasks); ++i) {
             int j = int(scale*rng()*aux.size());
             selected[i] = std::move(data[aux[j]]);
