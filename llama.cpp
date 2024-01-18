@@ -3439,7 +3439,7 @@ static bool llm_load_tensors(
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,     "weight"), {n_embd, n_vocab});
                         } else {
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}); // needs to be on GPU
-                            ml.n_tensors++; // artificial tensor
+                            ml.n_created--; // artificial tensor
                         }
                     }
 
