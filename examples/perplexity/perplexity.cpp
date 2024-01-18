@@ -423,28 +423,6 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     return {tokens, ppl, logit_history, prob_history};
 }
 
-static std::vector<float> evaluate_tokens(llama_context * ctx, std::vector<int> & tokens,
-        int n_past, int n_batch, int n_vocab) {
-    std::vector<float> result;
-    result.reserve(tokens.size() * n_vocab);
-    size_t n_chunk = (tokens.size() + n_batch - 1)/n_batch;
-    for (size_t i_chunk = 0; i_chunk < n_chunk; ++i_chunk) {
-        size_t n_tokens = tokens.size() - i_chunk * n_batch;
-        n_tokens = std::min(n_tokens, size_t(n_batch));
-        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
-        if (llama_decode(ctx, llama_batch_get_one(tokens.data() + i_chunk * n_batch, n_tokens, n_past, 0))) {
-            fprintf(stderr, "%s : failed to eval\n", __func__);
-            return {};
-        }
-
-        const auto logits = llama_get_logits(ctx);
-        result.insert(result.end(), logits, logits + n_tokens * n_vocab);
-
-        n_past += n_tokens;
-    }
-    return result;
-}
-
 static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<float> & batch_logits, int32_t n_batch, int32_t n_vocab) {
     for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch) {
         const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
