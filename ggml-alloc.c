@@ -102,8 +102,6 @@ void ggml_tallocr_alloc(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
         }
     }
 
-    AT_PRINTF("block %d\n", best_fit_block);
-
     if (best_fit_block == -1) {
         // the last block is our last resort
         struct free_block * block = &alloc->free_blocks[alloc->n_free_blocks - 1];
@@ -117,6 +115,7 @@ void ggml_tallocr_alloc(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
             return;
         }
     }
+
     struct free_block * block = &alloc->free_blocks[best_fit_block];
     void * addr = block->addr;
     block->addr = (char*)block->addr + size;
@@ -128,6 +127,8 @@ void ggml_tallocr_alloc(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
             alloc->free_blocks[j] = alloc->free_blocks[j+1];
         }
     }
+
+    AT_PRINTF("block %d, addr %p\n", best_fit_block, addr);
 
     tensor->data = addr;
     tensor->buffer = alloc->buffer;
@@ -229,6 +230,7 @@ void ggml_tallocr_reset(ggml_tallocr_t alloc) {
         alloc->free_blocks[0].size = SIZE_MAX/2; // restrict maximum size of a measure allocator to half size_t max to avoid overflows
     } else {
         alloc->free_blocks[0].size = ggml_backend_buffer_get_size(alloc->buffer) - align_offset;
+        ggml_backend_buffer_reset(alloc->buffer);
     }
 }
 
@@ -263,9 +265,9 @@ ggml_tallocr_t ggml_tallocr_new_measure(size_t alignment) {
     return alloc;
 }
 
-ggml_tallocr_t ggml_tallocr_new_measure_from_backend(struct ggml_backend * backend) {
+ggml_tallocr_t ggml_tallocr_new_measure_from_buft(struct ggml_backend_buffer_type * buft) {
     // create a backend buffer to get the correct tensor allocation sizes
-    ggml_backend_buffer_t buffer = ggml_backend_alloc_buffer(backend, 1);
+    ggml_backend_buffer_t buffer = ggml_backend_buft_alloc_buffer(buft, 1);
 
     // TODO: move alloc initialization to a common ggml_tallocr_new_impl function
     ggml_tallocr_t alloc = ggml_tallocr_new_from_buffer(buffer);
@@ -275,11 +277,20 @@ ggml_tallocr_t ggml_tallocr_new_measure_from_backend(struct ggml_backend * backe
     return alloc;
 }
 
-ggml_tallocr_t ggml_tallocr_new_from_backend(struct ggml_backend * backend, size_t size) {
-    ggml_backend_buffer_t buffer = ggml_backend_alloc_buffer(backend, size);
+ggml_tallocr_t ggml_tallocr_new_measure_from_backend(struct ggml_backend * backend) {
+    return ggml_tallocr_new_measure_from_buft(ggml_backend_get_default_buffer_type(backend));
+}
+
+ggml_tallocr_t ggml_tallocr_new_from_buft(struct ggml_backend_buffer_type * buft, size_t size) {
+    // create a backend buffer to get the correct tensor allocation sizes
+    ggml_backend_buffer_t buffer = ggml_backend_buft_alloc_buffer(buft, size);
     ggml_tallocr_t alloc = ggml_tallocr_new_from_buffer(buffer);
     alloc->buffer_owned = true;
     return alloc;
+}
+
+ggml_tallocr_t ggml_tallocr_new_from_backend(struct ggml_backend * backend, size_t size) {
+    return ggml_tallocr_new_from_buft(ggml_backend_get_default_buffer_type(backend), size);
 }
 
 ggml_tallocr_t ggml_tallocr_new_from_buffer(struct ggml_backend_buffer * buffer) {
@@ -779,10 +790,21 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
 
     if (nbytes == 0) {
         // all the tensors in the context are already allocated
+#ifndef NDEBUG
+        fprintf(stderr, "%s: all tensors in the context are already allocated\n", __func__);
+#endif
         return NULL;
     }
 
     ggml_backend_buffer_t buffer = ggml_backend_buft_alloc_buffer(buft, nbytes);
+    if (buffer == NULL) {
+        // failed to allocate buffer
+#ifndef NDEBUG
+        fprintf(stderr, "%s: failed to allocate buffer\n", __func__);
+#endif
+        return NULL;
+    }
+
     ggml_tallocr_t tallocr = ggml_tallocr_new_from_buffer(buffer);
 
     for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {

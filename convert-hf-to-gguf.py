@@ -23,6 +23,15 @@ if 'NO_LOCAL_GGUF' not in os.environ:
 import gguf
 
 
+# check for any of the given keys in the dictionary and return the value of the first key found
+def get_key_opts(d, keys):
+    for k in keys:
+        if k in d:
+            return d[k]
+    print(f"Could not find any of {keys}")
+    sys.exit()
+
+
 ###### MODEL DEFINITIONS ######
 
 class SentencePieceTokenTypes(IntEnum):
@@ -817,10 +826,17 @@ class PersimmonModel(Model):
         hidden_size = self.hparams["hidden_size"]
 
         self.gguf_writer.add_name('persimmon-8b-chat')
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hidden_size)
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
-        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
+
+        # NOTE: not sure about this change - why does the model not have a rope dimension count when it is smaller
+        #       than the head size?
+        #       ref: https://github.com/ggerganov/llama.cpp/pull/4889
+        # self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
+        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count // 2)
+
         self.gguf_writer.add_head_count(head_count)
         self.gguf_writer.add_head_count_kv(head_count_kv)
         self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
@@ -1061,17 +1077,22 @@ class GPT2Model(Model):
 
 class Phi2Model(Model):
     def set_gguf_parameters(self):
-        block_count = self.hparams["n_layer"]
+        block_count = get_key_opts(self.hparams, ["num_hidden_layers", "n_layer"])
+
+        rot_pct = get_key_opts(self.hparams, ["partial_rotary_factor"])
+        n_embd = get_key_opts(self.hparams, ["hidden_size", "n_embd"])
+        n_head = get_key_opts(self.hparams, ["num_attention_heads", "n_head"])
 
         self.gguf_writer.add_name("Phi2")
-        self.gguf_writer.add_context_length(self.hparams["n_positions"])
-        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
-        self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+        self.gguf_writer.add_context_length(get_key_opts(self.hparams, ["n_positions", "max_position_embeddings"]))
+
+        self.gguf_writer.add_embedding_length(n_embd)
+        self.gguf_writer.add_feed_forward_length(4 * n_embd)
         self.gguf_writer.add_block_count(block_count)
-        self.gguf_writer.add_head_count(self.hparams["n_head"])
-        self.gguf_writer.add_head_count_kv(self.hparams["n_head"])
-        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
-        self.gguf_writer.add_rope_dimension_count(self.hparams["rotary_dim"])
+        self.gguf_writer.add_head_count(n_head)
+        self.gguf_writer.add_head_count_kv(n_head)
+        self.gguf_writer.add_layer_norm_eps(get_key_opts(self.hparams, ["layer_norm_epsilon", "layer_norm_eps"]))
+        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_add_bos_token(False)
 

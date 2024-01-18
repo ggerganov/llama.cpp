@@ -57,6 +57,7 @@ class TensorNameMap:
             "transformer.norm_f",                      # mpt
             "ln_f",                                    # refact bloom qwen gpt2
             "language_model.encoder.final_layernorm",  # persimmon
+            "model.final_layernorm",                   # persimmon
             "lm_head.ln",                              # phi2
         ),
 
@@ -98,6 +99,7 @@ class TensorNameMap:
             "transformer.h.{bid}.self_attention.query_key_value",                  # falcon
             "h.{bid}.self_attention.query_key_value",                              # bloom
             "language_model.encoder.layers.{bid}.self_attention.query_key_value",  # persimmon
+            "model.layers.{bid}.self_attn.query_key_value",                        # persimmon
             "h.{bid}.attn.c_attn",                                                 # gpt2
             "transformer.h.{bid}.mixer.Wqkv",                                      # phi2
         ),
@@ -141,6 +143,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.attention.output.dense",                # bert
             "transformer.h.{bid}.attn.out_proj",                         # gpt-j
             "language_model.encoder.layers.{bid}.self_attention.dense",  # persimmon
+            "model.layers.{bid}.self_attn.dense",                        # persimmon
             "h.{bid}.attn.c_proj",                                       # gpt2
             "transformer.h.{bid}.mixer.out_proj",                        # phi2
             "model.layers.layers.{bid}.self_attn.o_proj",                # plamo
@@ -184,9 +187,11 @@ class TensorNameMap:
             "encoder.layer.{bid}.intermediate.dense",                 # bert
             "transformer.h.{bid}.mlp.fc_in",                          # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h",  # persimmon
+            "model.layers.{bid}.mlp.dense_h_to_4h",                   # persimmon
             "transformer.h.{bid}.mlp.w1",                             # qwen
             "h.{bid}.mlp.c_fc",                                       # gpt2
             "transformer.h.{bid}.mlp.fc1",                            # phi2
+            "model.layers.{bid}.mlp.fc1",                             # phi2
             "model.layers.layers.{bid}.mlp.up_proj",                  # plamo
         ),
 
@@ -225,8 +230,10 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.dense",                       # bert
             "transformer.h.{bid}.mlp.fc_out",                         # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h",  # persimmon
+            "model.layers.{bid}.mlp.dense_4h_to_h",                   # persimmon
             "h.{bid}.mlp.c_proj",                                     # gpt2
             "transformer.h.{bid}.mlp.fc2",                            # phi2
+            "model.layers.{bid}.mlp.fc2",                             # phi2
             "model.layers.layers.{bid}.mlp.down_proj",                # plamo
         ),
 
@@ -237,10 +244,12 @@ class TensorNameMap:
 
         MODEL_TENSOR.ATTN_Q_NORM: (
             "language_model.encoder.layers.{bid}.self_attention.q_layernorm",
+            "model.layers.{bid}.self_attn.q_layernorm",                       # persimmon
         ),
 
         MODEL_TENSOR.ATTN_K_NORM: (
             "language_model.encoder.layers.{bid}.self_attention.k_layernorm",
+            "model.layers.{bid}.self_attn.k_layernorm",                       # persimmon
         ),
 
         MODEL_TENSOR.ROPE_FREQS: (

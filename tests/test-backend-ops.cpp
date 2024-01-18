@@ -56,7 +56,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
         int64_t hist[16];
-        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size, hist);
+        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], hist, nullptr);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
@@ -376,6 +376,11 @@ struct test_case {
 
         // allocate
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend1);
+        if (buf == NULL) {
+            printf("failed to allocate tensors [%s] ", ggml_backend_name(backend1));
+            ggml_free(ctx);
+            return false;
+        }
 
         // build graph
         ggml_build_forward_expand(gf, out);
@@ -450,7 +455,7 @@ struct test_case {
 
             double err = nmse(f1.data(), f2.data(), f1.size());
             if (err > ud->max_err) {
-                printf("[%s] NMSE = %f ", ggml_op_desc(t1), err);
+                printf("[%s] NMSE = %.9f > %.9f ", ggml_op_desc(t1), err, ud->max_err);
                 //for (int i = 0; i < (int) f1.size(); i++) {
                 //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
                 //}
@@ -463,19 +468,23 @@ struct test_case {
             GGML_UNUSED(index);
         };
 
-        ggml_backend_compare_graph_backend(backend1, backend2, gf, callback, &ud);
+        const bool cmp_ok = ggml_backend_compare_graph_backend(backend1, backend2, gf, callback, &ud);
 
-        if (ud.ok) {
-            printf("\033[1;32mOK\033[0m\n");
-        } else {
-            printf("\033[1;31mFAIL\033[0m\n");
+        if (!cmp_ok) {
+            printf("compare failed ");
         }
 
         ggml_backend_buffer_free(buf);
 
         ggml_free(ctx);
 
-        return ud.ok;
+        if (ud.ok && cmp_ok) {
+            printf("\033[1;32mOK\033[0m\n");
+            return true;
+        }
+
+        printf("\033[1;31mFAIL\033[0m\n");
+        return false;
     }
 
     bool eval_perf(ggml_backend_t backend, const char * op_name) {
@@ -519,6 +528,11 @@ struct test_case {
 
         // allocate
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
+        if (buf == NULL) {
+            printf("failed to allocate tensors\n");
+            ggml_free(ctx);
+            return false;
+        }
 
         // randomize tensors
         initialize_tensors(ctx);
@@ -1449,6 +1463,7 @@ struct test_moe : public test_case {
 
 static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op_name) {
     std::vector<std::unique_ptr<test_case>> test_cases;
+    std::default_random_engine rng(0);
 
     const ggml_type all_types[] = {
         GGML_TYPE_F32, GGML_TYPE_F16,
@@ -1583,7 +1598,19 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_diag_mask_inf(GGML_TYPE_F32, {10, 10, 10,  1}, 5));
     test_cases.emplace_back(new test_diag_mask_inf(GGML_TYPE_F32, {10, 10, 10, 10}, 5));
 
-    test_cases.emplace_back(new test_soft_max());
+    std::uniform_int_distribution<> dist_ne1(1, 50);
+    int exponent = 1;
+    while (exponent < (1 << 17)) {
+        std::uniform_int_distribution<> dist_ne0(exponent, 2*exponent);
+
+        for (int n = 0; n < 10; ++n) {
+            int64_t ne0 = dist_ne0(rng);
+            int64_t ne1 = dist_ne1(rng);
+            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}));
+        }
+
+        exponent <<= 1;
+    }
 
     for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
         test_cases.emplace_back(new test_rope(type, {128,  32, 10, 1}, 128, 0, 512)); // llama 7B
