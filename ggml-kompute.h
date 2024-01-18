@@ -41,21 +41,9 @@ bool ggml_vk_has_device();
 bool ggml_vk_using_vulkan();
 ggml_vk_device ggml_vk_current_device();
 struct ggml_kompute_context * ggml_vk_init(void);
-bool ggml_vk_has_h2d_all(struct ggml_kompute_context * ctx);
 void ggml_vk_free(struct ggml_kompute_context * ctx);
-size_t ggml_vk_aligned_offset(size_t offset);
-ggml_vk_memory ggml_vk_allocate(size_t size);
 void ggml_vk_free_memory(ggml_vk_memory &memory);
 
-void ggml_vk_add_buffer(
-    struct ggml_kompute_context * ctx,
-    const char * name,
-    const ggml_vk_memory &memory);
-
-void ggml_vk_h2d_all(struct ggml_kompute_context * ctx);
-void ggml_vk_d2h_all(struct ggml_kompute_context * ctx);
-void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
-void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t);
 void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf);
 
 //
