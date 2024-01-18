@@ -452,6 +452,7 @@ extern "C" {
         GGML_OP_LEAKY_RELU,
 
         GGML_OP_FLASH_ATTN,
+        GGML_OP_FLASH_ATTN_EXT,
         GGML_OP_FLASH_FF,
         GGML_OP_FLASH_ATTN_BACK,
         GGML_OP_WIN_PART,
@@ -1618,6 +1619,14 @@ extern "C" {
             struct ggml_tensor  * k,
             struct ggml_tensor  * v,
             bool                  masked);
+
+    GGML_API struct ggml_tensor * ggml_flash_attn_ext(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * q,
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * v,
+            struct ggml_tensor  * mask,
+            float                 scale);
 
     GGML_API struct ggml_tensor * ggml_flash_attn_back(
            struct ggml_context * ctx,
