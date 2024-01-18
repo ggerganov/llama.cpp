@@ -7783,7 +7783,7 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
     }
 }
 
-void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp, float min_temp = 0, float max_temp = 2.0f) {
+void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp = 0, float max_temp = 2.0f) {
     const int64_t t_start_sample_us = ggml_time_us();
 
     llama_sample_softmax(ctx, candidates_p);

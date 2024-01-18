@@ -778,7 +778,6 @@ extern "C" {
     LLAMA_API void llama_sample_entropy(
             struct llama_context * ctx,
           llama_token_data_array * candidates_p,
-                           float   temp,
                            float   min_temp,
                            float   max_temp);
 
