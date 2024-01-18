@@ -1316,27 +1316,13 @@ static bool ggml_kompute_supports_op(const struct ggml_tensor * op) {
         case GGML_OP_VIEW:
         case GGML_OP_TRANSPOSE:
         case GGML_OP_PERMUTE:
-        case GGML_OP_CONCAT:
         case GGML_OP_ADD:
-        case GGML_OP_ACC:
         case GGML_OP_MUL:
-        case GGML_OP_DIV:
         case GGML_OP_SCALE:
-        case GGML_OP_SQR:
-        case GGML_OP_SUM_ROWS:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_RMS_NORM:
-        case GGML_OP_GROUP_NORM:
         case GGML_OP_NORM:
-        case GGML_OP_ALIBI:
         case GGML_OP_ROPE:
-        case GGML_OP_IM2COL:
-        case GGML_OP_UPSCALE:
-        case GGML_OP_PAD:
-        case GGML_OP_ARGSORT:
-        case GGML_OP_LEAKY_RELU:
-        case GGML_OP_MUL_MAT:
-        case GGML_OP_MUL_MAT_ID:
             return true;
         case GGML_OP_DUP:
         case GGML_OP_CPY:
@@ -1357,8 +1343,33 @@ static bool ggml_kompute_supports_op(const struct ggml_tensor * op) {
             }
             return true;
         case GGML_OP_DIAG_MASK_INF:
-        case GGML_OP_GET_ROWS:
             return op->ne[3] == 1;
+        case GGML_OP_GET_ROWS:
+            switch (op->src[0]->type) {
+                case GGML_TYPE_F16:
+                case GGML_TYPE_Q4_0:
+                case GGML_TYPE_Q4_1:
+                case GGML_TYPE_Q6_K:
+                    return op->ne[3] == 1;
+                default:
+                    ;
+            }
+            return false;
+        case GGML_OP_MUL_MAT:
+            if (op->src[1]->type != GGML_TYPE_F32 || ggml_is_transposed(op->src[0]) || ggml_is_transposed(op->src[1]))
+                return false;
+
+            switch (op->src[0]->type) {
+                case GGML_TYPE_F32:
+                case GGML_TYPE_F16:
+                case GGML_TYPE_Q8_0:
+                case GGML_TYPE_Q4_0:
+                case GGML_TYPE_Q4_1:
+                case GGML_TYPE_Q6_K:
+                    return true;
+                default:
+                    ;
+            }
         default:
             ;
     }
