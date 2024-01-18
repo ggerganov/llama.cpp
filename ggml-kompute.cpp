@@ -1385,6 +1385,8 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
         const int node_start = (seq_idx + 0) * n_nodes_per_seq;
         const int node_end   = std::min((seq_idx == n_seq - 1) ? gf->n_nodes : (seq_idx + 1) * n_nodes_per_seq, gf->n_nodes);
 
+        bool any_commands_recorded = false;
+
         for (int i = node_start; i < node_end; ++i) {
             struct ggml_tensor * src0 = gf->nodes[i]->src[0];
             struct ggml_tensor * src1 = gf->nodes[i]->src[1];
@@ -1401,6 +1403,8 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                 default:
                     break;
             }
+
+            any_commands_recorded = true;
 
             if (!ggml_kompute_supports_op(dst)) {
                  fprintf(stderr, "%s: error: unsupported op '%s'\n", __func__, ggml_op_desc(dst));
@@ -1647,7 +1651,9 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
         }
 
         // Evaluate sequence
-        seq.evalAsync();
+        if (any_commands_recorded) {
+            seq.evalAsync();
+        }
     }
 
     // Wait for all sequences to finish
