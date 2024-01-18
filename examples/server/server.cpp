@@ -1558,6 +1558,7 @@ struct llama_server_context
     void process_tasks()
     {
         std::unique_lock<std::mutex> lock(mutex_tasks);
+        std::vector<task_server> deferred_tasks;
         while (!queue_tasks.empty())
         {
             task_server task = queue_tasks.front();
@@ -1569,8 +1570,8 @@ struct llama_server_context
                     if (slot == nullptr)
                     {
                         LOG_TEE("slot unavailable\n");
-                        // send error result
-                        send_error(task, "slot unavailable");
+                        // if no slot is available, we defer this task for processing later
+                        deferred_tasks.push_back(task);
                         break;
                     }
 
@@ -1614,6 +1615,12 @@ struct llama_server_context
                     }
                 } break;
             }
+        }
+
+        // add all the deferred tasks back the the queue
+        for (task_server &task : deferred_tasks)
+        {
+            queue_tasks.push_back(task);
         }
 
         // remove finished multitasks from the queue of multitasks, and add the corresponding result to the result queue
