@@ -567,7 +567,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
 
     GGML_ASSERT(params.n_batch >= n_ctx && "HellaSwag currently requires n_batch >= n_ctx");
 
-    const int max_tasks_per_batch = 32;
+    const int max_tasks_per_batch = params.n_parallel;
     const int max_seq = 4*max_tasks_per_batch;
 
     llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
@@ -591,7 +591,6 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
 
             const int s0 = 4*(i1 - i0);
             if (s0 + 4 > max_seq) {
-                fprintf(stderr, "%s : too many tasks in the batch - increase batch sequence capacity\n", __func__);
                 break;
             }
 
