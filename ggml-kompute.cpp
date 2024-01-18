@@ -56,8 +56,6 @@
 
 typedef ggml_fp16_t half;
 struct ggml_kompute_context {
-    bool hasH2DAll = false;
-    std::vector<ggml_vk_memory> buffers;
     std::shared_ptr<vk::DescriptorPool> pool;
 };
 
@@ -312,10 +310,6 @@ ggml_kompute_context *ggml_vk_init() {
     return s_kompute_context;
 }
 
-bool ggml_vk_has_h2d_all(struct ggml_kompute_context * ctx) {
-    return ctx->hasH2DAll;
-}
-
 void ggml_vk_free(struct ggml_kompute_context * ctx) {
     assert(ctx == s_kompute_context);
     s_kompute_context = nullptr;
@@ -414,9 +408,8 @@ vk::DeviceMemory *ggml_vk_allocate(size_t size, vk::MemoryPropertyFlags flags, v
     return vkDeviceMemory;
 }
 
-size_t ggml_vk_aligned_offset(size_t offset) {
-
-    static size_t minStorageBufferOffsetAlignment = 0;
+static size_t ggml_vk_aligned_offset(ggml_backend_buffer_t buffer, size_t offset) {
+    size_t minStorageBufferOffsetAlignment = ggml_backend_buffer_get_alignment(buffer);
     if (minStorageBufferOffsetAlignment == 0) {
         vk::PhysicalDeviceProperties deviceProperties;
         deviceProperties = komputeManager()->physicalDevice()->getProperties();
@@ -433,17 +426,7 @@ size_t ggml_vk_aligned_offset(size_t offset) {
     return (offset / minStorageBufferOffsetAlignment) * minStorageBufferOffsetAlignment;
 }
 
-static void ggml_vk_h2d_buffer(const ggml_vk_memory &memory) {
-    if (memory.stagingBuffer)
-        komputeManager()->sequence()->eval<kp::OpBufferSyncDevice>(memory.primaryBuffer, memory.stagingBuffer, memory.size);
-}
-
-static void ggml_vk_d2h_buffer(const ggml_vk_memory &memory) {
-    if (memory.stagingBuffer)
-        komputeManager()->sequence()->eval<kp::OpBufferSyncLocal>(memory.primaryBuffer, memory.stagingBuffer, memory.size);
-}
-
-ggml_vk_memory ggml_vk_allocate(size_t size) {
+static ggml_vk_memory ggml_vk_allocate(size_t size) {
     ggml_vk_memory memory;
     bool isHostVisible = false;
     {
@@ -497,38 +480,26 @@ void ggml_vk_free_memory(ggml_vk_memory &memory)
 }
 
 static
-ggml_vk_memory * ggml_vk_find_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t, uint64_t & offset) {
+ggml_vk_memory * ggml_vk_find_tensor(const struct ggml_tensor * t, uint64_t & offset) {
     ggml_backend_buffer_t buffer = t->view_src ? t->view_src->buffer : t->buffer;
 
     // compatibility with ggml-backend
-    if (buffer && buffer->buft == ggml_backend_kompute_buffer_type()) {
-        ggml_vk_memory * buf_ctx = (ggml_vk_memory *) buffer->context;
+    GGML_ASSERT(buffer && buffer->buft == ggml_backend_kompute_buffer_type());
 
-        const intptr_t ioffs = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(buf_ctx->data);
+    ggml_vk_memory * buf_ctx = (ggml_vk_memory *) buffer->context;
 
-        GGML_ASSERT(ioffs >= 0 && ioffs + (int64_t)ggml_nbytes(t) <= (int64_t)t->buffer->size);
+    const intptr_t ioffs = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(buf_ctx->data);
 
-        offset = (uint64_t)ioffs;
-        return buf_ctx;
-     }
+    GGML_ASSERT(ioffs >= 0 && ioffs + (int64_t)ggml_nbytes(t) <= (int64_t)t->buffer->size);
 
-    for (auto it = ctx->buffers.begin(); ; it++) {
-        if (it == ctx->buffers.end()) {
-            fprintf(stderr, "%s: Failed to find tensor %p\n", __func__, t->data);
-            return nullptr;
-        }
-        if (it->data <= t->data &&
-                reinterpret_cast<intptr_t>(it->data) + it->size >= (reinterpret_cast<intptr_t>(t->data) + ggml_nbytes(t))) {
-            offset = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(it->data);
-            return &*it;
-        }
-    }
+    offset = (uint64_t)ioffs;
+    return buf_ctx;
 }
 
 static
-const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t, uint32_t *alignedOffset) {
+const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(const struct ggml_tensor * t, uint32_t * alignedOffset = nullptr) {
     uint64_t originalOffset = 0;
-    auto * res = ggml_vk_find_tensor(ctx, t, originalOffset);
+    auto * res = ggml_vk_find_tensor(t, originalOffset);
     if (!res) {
         static std::shared_ptr<kp::Tensor> nullTensor = nullptr;
         return nullTensor;
@@ -538,7 +509,7 @@ const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(struct ggml_kompute_context
     const size_t nelements = ggml_nelements(t);
     size_t nbytes = ggml_nbytes(t);
 
-    size_t vulkanOffset = ggml_vk_aligned_offset(originalOffset);
+    size_t vulkanOffset = ggml_vk_aligned_offset(t->buffer, originalOffset);
     if (alignedOffset) {
         *alignedOffset = originalOffset - vulkanOffset;
         nbytes += *alignedOffset;
@@ -551,39 +522,6 @@ const std::shared_ptr<kp::Tensor> ggml_vk_get_tensor(struct ggml_kompute_context
         res->primaryMemory, res->primaryBuffer,
         res->stagingMemory, res->stagingBuffer,
         vulkanOffset);
-}
-
-void ggml_vk_add_buffer(
-        struct ggml_kompute_context * ctx,
-        const char * /*name*/,
-        const ggml_vk_memory &memory) {
-    ctx->buffers.emplace_back(memory);
-}
-
-void ggml_vk_h2d_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
-    const auto res = ggml_vk_get_tensor(ctx, t, nullptr);
-    GGML_ASSERT(res);
-    komputeManager()->sequence()->eval<kp::OpTensorSyncDevice>({res});
-}
-
-void ggml_vk_h2d_all(struct ggml_kompute_context * ctx) {
-    for (auto& it : ctx->buffers) {
-        ggml_vk_h2d_buffer(it);
-    }
-    ctx->hasH2DAll = true;
-}
-
-void ggml_vk_d2h_all(struct ggml_kompute_context * ctx) {
-    for (auto& it : ctx->buffers) {
-        ggml_vk_d2h_buffer(it);
-    }
-}
-
-void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * t) {
-    const auto res = ggml_vk_get_tensor(ctx, t, nullptr);
-
-    GGML_ASSERT(res);
-    komputeManager()->sequence()->eval<kp::OpTensorSyncLocal>({res});
 }
 
 static std::vector<uint32_t> getSpirvShader(const unsigned char* rawData, size_t size) {
@@ -1506,10 +1444,10 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
             const static std::shared_ptr<kp::Tensor> nullTensor = nullptr;
             uint32_t off_src0 = 0;
             uint32_t off_src1 = 0;
-            uint32_t off_dst = 0;
-            const std::shared_ptr<kp::Tensor>& id_src0 = src0 ? ggml_vk_get_tensor(ctx, src0, &off_src0) : nullTensor;
-            const std::shared_ptr<kp::Tensor>& id_src1 = src1 ? ggml_vk_get_tensor(ctx, src1, &off_src1) : nullTensor;
-            const std::shared_ptr<kp::Tensor>& id_dst  = dst ? ggml_vk_get_tensor(ctx, dst, &off_dst)  : nullTensor;
+            uint32_t off_dst  = 0;
+            const std::shared_ptr<kp::Tensor>& id_src0 = src0 ? ggml_vk_get_tensor(src0, &off_src0) : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_src1 = src1 ? ggml_vk_get_tensor(src1, &off_src1) : nullTensor;
+            const std::shared_ptr<kp::Tensor>& id_dst  = dst  ? ggml_vk_get_tensor(dst,  &off_dst)  : nullTensor;
 
             switch (dst->op) {
                 case GGML_OP_ADD:
@@ -1757,19 +1695,33 @@ static void * ggml_backend_kompute_buffer_get_base(ggml_backend_buffer_t buffer)
 }
 
 static void ggml_backend_kompute_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+    GGML_UNUSED(buffer);
+
+    const auto res = ggml_vk_get_tensor(tensor);
+    GGML_ASSERT(res);
+
     memcpy((char *)tensor->data + offset, data, size);
-    ggml_vk_h2d_buffer(*(ggml_vk_memory *)buffer->context);
+
+    komputeManager()->sequence()->eval<kp::OpTensorSyncDevice>({res});
 }
 
 static void ggml_backend_kompute_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-    ggml_vk_d2h_buffer(*(ggml_vk_memory *)buffer->context);
+    GGML_UNUSED(buffer);
+
+    const auto res = ggml_vk_get_tensor(tensor);
+    GGML_ASSERT(res);
+
+    komputeManager()->sequence()->eval<kp::OpTensorSyncLocal>({res});
+
     memcpy(data, (const char *)tensor->data + offset, size);
 }
 
 static void ggml_backend_kompute_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
     auto * memory = (ggml_vk_memory *)buffer->context;
     memset(memory->data, value, buffer->size);
-    ggml_vk_h2d_buffer(*memory);
+
+    if (memory->stagingBuffer)
+        komputeManager()->sequence()->eval<kp::OpBufferSyncDevice>(memory->primaryBuffer, memory->stagingBuffer, memory->size);
 }
 
 static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
@@ -1798,7 +1750,17 @@ static ggml_backend_buffer_t ggml_backend_kompute_buffer_type_alloc_buffer(ggml_
 
 static size_t ggml_backend_kompute_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     GGML_UNUSED(buft);
-    return 32;
+
+    static size_t minStorageBufferOffsetAlignment = 0;
+    if (minStorageBufferOffsetAlignment == 0) {
+        GGML_ASSERT(ggml_vk_has_device());
+        vk::PhysicalDeviceProperties deviceProperties;
+        deviceProperties = komputeManager()->physicalDevice()->getProperties();
+        vk::PhysicalDeviceLimits deviceLimits = deviceProperties.limits;
+        minStorageBufferOffsetAlignment = deviceLimits.minStorageBufferOffsetAlignment;
+    }
+
+    return minStorageBufferOffsetAlignment;
 }
 
 static bool ggml_backend_kompute_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
