@@ -197,6 +197,22 @@ struct ggml_tensor_extra_gpu {
     uint64_t view_offset;
 
     bool prepared;
+
+    void reset() {
+        ready = false;
+        in_memcpys.clear();
+        out_memcpys.clear();
+        in0_staging_event = (vk::Event) VK_NULL_HANDLE;
+        in1_staging_event = (vk::Event) VK_NULL_HANDLE;
+        ctx_idx = 0;
+        d_idx = 0;
+        tensor_size = 0;
+        buffer_static = 0;
+        buffer_gpu = nullptr;
+        base_buffer_offset = 0;
+        view_offset = 0;
+        prepared = false;
+    }
 };
 
 struct ggml_vk_garbage_collector {
@@ -1397,19 +1413,19 @@ static void ggml_vk_buffer_write_nc_async(vk_context& ctx, vk_buffer* dst, size_
         // Memory is pinned, use as staging buffer
         std::vector<vk::BufferCopy> slices;
 
-        for (int64_t i3 = 0; i3 < ne3; i3++) {
-            for (int64_t i2 = 0; i2 < ne2; i2++) {
+        for (uint64_t i3 = 0; i3 < ne3; i3++) {
+            for (uint64_t i2 = 0; i2 < ne2; i2++) {
                 // Find longest contiguous slice
                 if (ne1*nb1 == dstnb2) {
                     slices.push_back({ buf_offset + i3*nb3 + i2*nb2, offset + i3*dstnb3 + i2*dstnb2, dstnb2 });
                 } else {
-                    for (int64_t i1 = 0; i1 < ne1; i1++) {
+                    for (uint64_t i1 = 0; i1 < ne1; i1++) {
                         if (ne0*nb0/bs == dstnb1) {
                             slices.push_back({ buf_offset + i3*nb3 + i2*nb2 + i1*nb1, offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1, dstnb1 });
                         } else {
-                            const size_t s_off = buf_offset + i3*nb3 + i2*nb2 + i1*nb1;
-                            const size_t d_off = offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1;
-                            for (size_t i0 = 0; i0 < ne0; i0++) {
+                            const uint64_t s_off = buf_offset + i3*nb3 + i2*nb2 + i1*nb1;
+                            const uint64_t d_off = offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1;
+                            for (uint64_t i0 = 0; i0 < ne0; i0++) {
                                 slices.push_back({ s_off + i1*nb0, d_off + i0*dstnb0, dstnb0 });
                             }
                         }
@@ -1445,19 +1461,19 @@ static void ggml_vk_buffer_write_nc_async(vk_context& ctx, vk_buffer* dst, size_
     ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite, true);
     vkCmdCopyBuffer(ctx.s->buffer, vk_staging.buffer, dst->buffer, 1, &buf_copy);
 
-    for (int64_t i3 = 0; i3 < ne3; i3++) {
-        for (int64_t i2 = 0; i2 < ne2; i2++) {
+    for (uint64_t i3 = 0; i3 < ne3; i3++) {
+        for (uint64_t i2 = 0; i2 < ne2; i2++) {
             // Find longest contiguous slice
             if (ne1*nb1 == dstnb2) {
                 deferred_memcpy((uint8_t *)vk_staging.ptr + vk_staging_offset + i3*dstnb3 + i2*dstnb2, (const uint8_t *) tensor->data + buf_offset + i3*nb3 + i2*nb2, dstnb2, memcpys);
             } else {
-                for (int64_t i1 = 0; i1 < ne1; i1++) {
+                for (uint64_t i1 = 0; i1 < ne1; i1++) {
                     if (ne0*nb0/bs == dstnb1) {
                         deferred_memcpy((uint8_t *)vk_staging.ptr + vk_staging_offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1, (const uint8_t *) tensor->data + buf_offset + i3*nb3 + i2*nb2 + i1*nb1, dstnb1, memcpys);
                     } else {
-                        const size_t s_off = buf_offset + i3*nb3 + i2*nb2 + i1*nb1;
-                        const size_t d_off = vk_staging_offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1;
-                        for (size_t i0 = 0; i0 < ne0; i0++) {
+                        const uint64_t s_off = buf_offset + i3*nb3 + i2*nb2 + i1*nb1;
+                        const uint64_t d_off = vk_staging_offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1;
+                        for (uint64_t i0 = 0; i0 < ne0; i0++) {
                             deferred_memcpy((uint8_t *)vk_staging.ptr + d_off + i0*dstnb0, (const uint8_t *) tensor->data + s_off + i0*nb0, dstnb0, memcpys);
                         }
                     }
@@ -1742,7 +1758,7 @@ static void ggml_vk_h2d_tensor_2d(vk_context& ctx, vk_buffer * dst, size_t offse
 
     GGML_ASSERT(i3 == 0);
     GGML_ASSERT(i2 == 0);
-    GGML_ASSERT(i1 == ggml_nrows(src));
+    GGML_ASSERT(i1 == (uint64_t) ggml_nrows(src));
 
     return ggml_vk_buffer_write_nc_async(ctx, dst, offset, src, q, memcpys, event);
 }
@@ -1757,8 +1773,8 @@ static void ggml_vk_d2h_tensor_2d(vk_context& ctx, vk_buffer * src, size_t offse
     const uint64_t ne3 = dst->ne[3];
     const uint64_t nb0 = dst->nb[0];
     const uint64_t nb1 = dst->nb[1];
-    const uint64_t nb2 = dst->nb[2];
-    const uint64_t nb3 = dst->nb[3];
+    // const uint64_t nb2 = dst->nb[2];
+    // const uint64_t nb3 = dst->nb[3];
     const enum ggml_type type = dst->type;
     const size_t ts = ggml_type_size(type);
     const size_t bs = ggml_blck_size(type);
@@ -1773,7 +1789,7 @@ static void ggml_vk_d2h_tensor_2d(vk_context& ctx, vk_buffer * src, size_t offse
     GGML_ASSERT(false);
 }
 
-static int ggml_vk_guess_split_k(int m, int n, int k, bool aligned) {
+static uint32_t ggml_vk_guess_split_k(int m, int n, int k, bool aligned) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_guess_split_k(" << m << ", " << n << ", " << k << ", " << aligned << ")";
 #endif
@@ -1958,9 +1974,6 @@ static void ggml_vk_mul_mat_q_f16(vk_context& ctx, const ggml_tensor * src0, con
     const uint64_t ne20 = dst->ne[0];
     const uint64_t ne21 = dst->ne[1];
 
-    const size_t nb2  = dst->nb[2];
-    const size_t nb3  = dst->nb[3];
-
     const uint64_t r2 = ne12 / ne02;
     const uint64_t r3 = ne13 / ne03;
 
@@ -1984,10 +1997,10 @@ static void ggml_vk_mul_mat_q_f16(vk_context& ctx, const ggml_tensor * src0, con
     const int y_ne = ne11 * ne10;
     const int d_ne = ne11 * ne01;
 
-    const int kpad = ggml_vk_align_size(ne10, ggml_vk_guess_matmul_pipeline_align(ne01, ne11));
+    const uint32_t kpad = ggml_vk_align_size(ne10, ggml_vk_guess_matmul_pipeline_align(ne01, ne11));
     const bool aligned = ne10 == kpad;
 
-    const int split_k = ggml_vk_guess_split_k(ne01, ne11, ne10, aligned);
+    const uint32_t split_k = ggml_vk_guess_split_k(ne01, ne11, ne10, aligned);
 
     vk_pipeline * pipeline = ggml_vk_guess_matmul_pipeline(true, !f16_f32_kernel, ne01, ne11, aligned);
 
@@ -1998,13 +2011,6 @@ static void ggml_vk_mul_mat_q_f16(vk_context& ctx, const ggml_tensor * src0, con
     const uint64_t split_k_d_sz = sizeof(float) * d_ne * split_k;
     const uint64_t d_sz = sizeof(float) * d_ne;
 
-    if (dst->backend == GGML_BACKEND_GPU) {
-        if (d_sz != nb2) {
-            std::cerr << "ERROR: incompatible tensor alignment d_sz=" << d_sz << " nb2=" << nb2 << std::endl;
-            GGML_ASSERT(false);
-        }
-    }
-
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
     ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
     ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
@@ -2014,9 +2020,9 @@ static void ggml_vk_mul_mat_q_f16(vk_context& ctx, const ggml_tensor * src0, con
     GGML_ASSERT(d_D != nullptr);
     GGML_ASSERT(d_D->size >= d_buf_offset + d_sz * ne02 * ne03);
     vk_buffer* d_Qx;
-    uint32_t qx_buf_offset = 0;
+    uint64_t qx_buf_offset = 0;
     vk_buffer* d_Qy;
-    uint32_t qy_buf_offset = 0;
+    uint64_t qy_buf_offset = 0;
     vk_buffer* d_X;
     uint64_t x_buf_offset = 0;
     vk_buffer* d_Y;
@@ -2134,23 +2140,23 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context& ctx, const ggml_tensor * src0,
     GGML_ASSERT(ggml_vk_dim01_contiguous(src0) || src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16);  // NOLINT
     GGML_ASSERT(ggml_vk_dim01_contiguous(src1) || src1->type == GGML_TYPE_F32 || src1->type == GGML_TYPE_F16);  // NOLINT
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
+    const uint64_t ne00 = src0->ne[0];
+    const uint64_t ne01 = src0->ne[1];
+    const uint64_t ne02 = src0->ne[2];
+    const uint64_t ne03 = src0->ne[3];
 
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2];
-    const int64_t ne13 = src1->ne[3];
+    const uint64_t ne10 = src1->ne[0];
+    const uint64_t ne11 = src1->ne[1];
+    const uint64_t ne12 = src1->ne[2];
+    const uint64_t ne13 = src1->ne[3];
 
     GGML_ASSERT(ne11 == 1);
 
-    const int nb2  = dst->nb[2];
-    const int nb3  = dst->nb[3];
+    const uint64_t nb2  = dst->nb[2];
+    const uint64_t nb3  = dst->nb[3];
 
-    const int64_t r2 = ne12 / ne02;
-    const int64_t r3 = ne13 / ne03;
+    const uint64_t r2 = ne12 / ne02;
+    const uint64_t r3 = ne13 / ne03;
 
     const bool load_x = src0->backend != GGML_BACKEND_GPU;
     const bool load_y = src1->backend != GGML_BACKEND_GPU;
@@ -2164,9 +2170,9 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context& ctx, const ggml_tensor * src0,
     const bool qx_needs_dequant = x_non_contig;
     const bool qy_needs_dequant = (src1->type != GGML_TYPE_F16 && !f16_f32_kernel) || y_non_contig;
 
-    const int x_ne = ne01 * ne00;
-    const int y_ne = ne11 * ne10;
-    const int d_ne = ne11 * ne01;
+    const uint64_t x_ne = ne01 * ne00;
+    const uint64_t y_ne = ne11 * ne10;
+    const uint64_t d_ne = ne11 * ne01;
 
     const uint64_t qx_sz = ggml_vk_align_size(ggml_type_size(src0->type) * x_ne / ggml_blck_size(src0->type), vk_device.properties.limits.minStorageBufferOffsetAlignment);
     const uint64_t qy_sz = ggml_type_size(src1->type) * y_ne / ggml_blck_size(src1->type);
@@ -2256,23 +2262,23 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context& ctx, const ggml_tensor * src0,
         ggml_vk_h2d_tensor_2d(ctx, d_Qy, 0, src1, 0, 0, ggml_nrows(src1), compq, &extra->in_memcpys, &extra->in1_staging_event);
     }
 
-    for (int64_t i13 = 0; i13 < ne13; i13++) {
-        const int64_t i03 = i13 / r3;
-        for (int64_t i12 = 0; i12 < ne12; i12++) {
-            const int64_t i02 = i12 / r2;
+    for (uint64_t i13 = 0; i13 < ne13; i13++) {
+        const uint64_t i03 = i13 / r3;
+        for (uint64_t i12 = 0; i12 < ne12; i12++) {
+            const uint64_t i02 = i12 / r2;
 
-            const uint32_t it_idx0 = (i03 * ne02 + i02);
-            const uint32_t it_idx1 = (i13 * ne12 + i12);
-            const uint32_t x_offset = x_buf_offset + x_sz * it_idx0;
-            const uint32_t qy_offset = qy_buf_offset + qy_sz * it_idx1;
-            const uint32_t y_offset = y_buf_offset + y_sz * it_idx1;
-            const uint32_t d_offset = d_buf_offset + d_sz * it_idx1;
+            const uint64_t it_idx0 = (i03 * ne02 + i02);
+            const uint64_t it_idx1 = (i13 * ne12 + i12);
+            const uint64_t x_offset = x_buf_offset + x_sz * it_idx0;
+            const uint64_t qy_offset = qy_buf_offset + qy_sz * it_idx1;
+            const uint64_t y_offset = y_buf_offset + y_sz * it_idx1;
+            const uint64_t d_offset = d_buf_offset + d_sz * it_idx1;
 
-            const uint32_t y_buffer_offset = (y_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
-            const uint32_t y_shader_offset = y_offset - y_buffer_offset;
+            const uint64_t y_buffer_offset = (y_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
+            const uint64_t y_shader_offset = y_offset - y_buffer_offset;
 
-            const uint32_t d_buffer_offset = (d_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
-            const uint32_t d_shader_offset = d_offset - d_buffer_offset;
+            const uint64_t d_buffer_offset = (d_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
+            const uint64_t d_shader_offset = d_offset - d_buffer_offset;
 
             if (!y_non_contig && qy_needs_dequant) {
                 const std::vector<int> pc = { (int)ne11, (int)ne10, (int)ne10, (int)ne10 };
@@ -2310,20 +2316,17 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context& ctx, const ggml_tensor 
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
+    const uint64_t ne00 = src0->ne[0];
+    const uint64_t ne01 = src0->ne[1];
+    const uint64_t ne02 = src0->ne[2];
+    // const uint64_t ne03 = src0->ne[3];
 
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2];
-    const int64_t ne13 = src1->ne[3];
+    const uint64_t ne10 = src1->ne[0];
+    const uint64_t ne11 = src1->ne[1];
+    const uint64_t ne12 = src1->ne[2];
+    // const uint64_t ne13 = src1->ne[3];
 
     GGML_ASSERT(ne11 == 1);
-
-    const int nb2  = dst->nb[2];
-    const int nb3  = dst->nb[3];
 
     const bool load_y = src1->backend != GGML_BACKEND_GPU;
 
@@ -2345,9 +2348,9 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context& ctx, const ggml_tensor 
     const uint64_t d_buf_offset = extra->base_buffer_offset + extra->view_offset;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer* d_Qx;
-    const uint32_t qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
+    const uint64_t qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
     vk_buffer* d_Qy;
-    uint32_t qy_buf_offset = 0;
+    uint64_t qy_buf_offset = 0;
     d_Qx = extra_src0->buffer_gpu;
     GGML_ASSERT(d_Qx != nullptr);
     if (load_y) {
@@ -2361,11 +2364,11 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context& ctx, const ggml_tensor 
     // Allocate descriptor sets
     ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline_mul_mat_vec_p021_f16_f32, 1);
 
-    const uint32_t qy_buffer_offset = (qy_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
-    const uint32_t qy_shader_offset = qy_buf_offset - qy_buffer_offset;
+    const uint64_t qy_buffer_offset = (qy_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
+    const uint64_t qy_shader_offset = qy_buf_offset - qy_buffer_offset;
 
-    const uint32_t d_buffer_offset = (d_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
-    const uint32_t d_shader_offset = d_buf_offset - d_buffer_offset;
+    const uint64_t d_buffer_offset = (d_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
+    const uint64_t d_shader_offset = d_buf_offset - d_buffer_offset;
 
     if (load_y) {
         ggml_vk_h2d_tensor_2d(ctx, d_Qy, qy_buf_offset, src1, 0, 0, ggml_nrows(src1), compq, &extra->in_memcpys, &extra->in1_staging_event);
@@ -2398,23 +2401,20 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
+    const uint64_t ne00 = src0->ne[0];
+    const uint64_t ne01 = src0->ne[1];
+    const uint64_t ne02 = src0->ne[2];
+    // const uint64_t ne03 = src0->ne[3];
 
-    const int64_t nb01 = src0->nb[1];
-    const int64_t nb02 = src0->nb[2];
+    const uint64_t nb01 = src0->nb[1];
+    const uint64_t nb02 = src0->nb[2];
 
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2];
-    const int64_t ne13 = src1->ne[3];
+    // const uint64_t ne10 = src1->ne[0];
+    const uint64_t ne11 = src1->ne[1];
+    const uint64_t ne12 = src1->ne[2];
+    // const uint64_t ne13 = src1->ne[3];
 
     GGML_ASSERT(ne11 == 1);
-
-    const int nb2  = dst->nb[2];
-    const int nb3  = dst->nb[3];
 
     const bool load_y = src1->backend != GGML_BACKEND_GPU;
 
@@ -2437,9 +2437,9 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
     const uint64_t d_buf_offset = extra->base_buffer_offset + extra->view_offset;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer* d_Qx;
-    const uint32_t qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
+    const uint64_t qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
     vk_buffer* d_Qy;
-    uint32_t qy_buf_offset = 0;
+    uint64_t qy_buf_offset = 0;
     d_Qx = extra_src0->buffer_gpu;
     GGML_ASSERT(d_Qx != nullptr);
     if (load_y) {
@@ -2453,11 +2453,11 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
     // Allocate descriptor sets
     ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline_mul_mat_vec_nc_f16_f32, 1);
 
-    const uint32_t qy_buffer_offset = (qy_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
-    const uint32_t qy_shader_offset = qy_buf_offset - qy_buffer_offset;
+    const uint64_t qy_buffer_offset = (qy_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
+    const uint64_t qy_shader_offset = qy_buf_offset - qy_buffer_offset;
 
-    const uint32_t d_buffer_offset = (d_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
-    const uint32_t d_shader_offset = d_buf_offset - d_buffer_offset;
+    const uint64_t d_buffer_offset = (d_buf_offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
+    const uint64_t d_shader_offset = d_buf_offset - d_buffer_offset;
 
     if (load_y) {
         ggml_vk_h2d_tensor_2d(ctx, d_Qy, qy_buf_offset, src1, 0, 0, ggml_nrows(src1), compq, &extra->in_memcpys, &extra->in1_staging_event);
@@ -2478,10 +2478,10 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
 }
 
 bool ggml_vk_can_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * dst) {
-    const int64_t ne10 = src1->ne[0];
+    const uint64_t ne10 = src1->ne[0];
 
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
+    const uint64_t ne0 = dst->ne[0];
+    const uint64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
     return (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
@@ -2507,30 +2507,30 @@ static void ggml_vk_mul_mat(vk_context& ctx, const struct ggml_tensor * src0, co
 
 static void ggml_vk_op_repeat(vk_context& ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     // guaranteed to be an integer due to the check in ggml_can_repeat
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
-    const int64_t ne2 = dst->ne[2];
-    const int64_t ne3 = dst->ne[3];
+    const uint64_t ne0 = dst->ne[0];
+    const uint64_t ne1 = dst->ne[1];
+    const uint64_t ne2 = dst->ne[2];
+    const uint64_t ne3 = dst->ne[3];
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
+    const uint64_t ne00 = src0->ne[0];
+    const uint64_t ne01 = src0->ne[1];
+    const uint64_t ne02 = src0->ne[2];
+    const uint64_t ne03 = src0->ne[3];
 
-    const size_t nb0 = dst->nb[0];
-    const size_t nb1 = dst->nb[1];
-    const size_t nb2 = dst->nb[2];
-    const size_t nb3 = dst->nb[3];
+    const uint64_t nb0 = dst->nb[0];
+    const uint64_t nb1 = dst->nb[1];
+    const uint64_t nb2 = dst->nb[2];
+    const uint64_t nb3 = dst->nb[3];
 
-    const size_t nb00 = src0->nb[0];
-    const size_t nb01 = src0->nb[1];
-    const size_t nb02 = src0->nb[2];
-    const size_t nb03 = src0->nb[3];
+    const uint64_t nb00 = src0->nb[0];
+    const uint64_t nb01 = src0->nb[1];
+    const uint64_t nb02 = src0->nb[2];
+    const uint64_t nb03 = src0->nb[3];
 
-    const int nr0 = (int)(ne0/ne00);
-    const int nr1 = (int)(ne1/ne01);
-    const int nr2 = (int)(ne2/ne02);
-    const int nr3 = (int)(ne3/ne03);
+    const uint64_t nr0 = ne0/ne00;
+    const uint64_t nr1 = ne1/ne01;
+    const uint64_t nr2 = ne2/ne02;
+    const uint64_t nr3 = ne3/ne03;
 
     // TODO: support for transposed / permuted tensors
     GGML_ASSERT(nb0  == sizeof(float));
@@ -2548,13 +2548,13 @@ static void ggml_vk_op_repeat(vk_context& ctx, const ggml_tensor * src0, const g
 
     std::vector<vk::BufferCopy> copies;
 
-    for                         (int i3 = 0; i3 < nr3;  i3++) {
-        for                     (int k3 = 0; k3 < ne03; k3++) {
-            for                 (int i2 = 0; i2 < nr2;  i2++) {
-                for             (int k2 = 0; k2 < ne02; k2++) {
-                    for         (int i1 = 0; i1 < nr1;  i1++) {
-                        for     (int k1 = 0; k1 < ne01; k1++) {
-                            for (int i0 = 0; i0 < nr0;  i0++) {
+    for                         (uint64_t i3 = 0; i3 < nr3;  i3++) {
+        for                     (uint64_t k3 = 0; k3 < ne03; k3++) {
+            for                 (uint64_t i2 = 0; i2 < nr2;  i2++) {
+                for             (uint64_t k2 = 0; k2 < ne02; k2++) {
+                    for         (uint64_t i1 = 0; i1 < nr1;  i1++) {
+                        for     (uint64_t k1 = 0; k1 < ne01; k1++) {
+                            for (uint64_t i0 = 0; i0 < nr0;  i0++) {
                                 copies.push_back({
                                     src_offset + (i3*ne03 + k3)*nb3  + (i2*ne02 + k2)*nb2  + (i1*ne01 + k1)*nb1  + (i0*ne00)*nb0,
                                     dst_offset + (          k3)*nb03 + (          k2)*nb02 + (          k1)*nb01,
@@ -2694,20 +2694,20 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
     GGML_ASSERT(op == GGML_OP_CPY || ggml_vk_dim01_contiguous(src0));  // NOLINT
     GGML_ASSERT(src1 == nullptr || ggml_vk_dim01_contiguous(src1));  // NOLINT
     GGML_ASSERT(dst->extra != nullptr);
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
-    const int64_t ne0 = ne00 * ne01;
+    const uint64_t ne00 = src0->ne[0];
+    const uint64_t ne01 = src0->ne[1];
+    const uint64_t ne02 = src0->ne[2];
+    const uint64_t ne03 = src0->ne[3];
+    const uint64_t ne0 = ne00 * ne01;
     const bool use_src1 = src1 != nullptr;
-    const int64_t ne10 = use_src1 ? src1->ne[0] : 0;
-    const int64_t ne11 = use_src1 ? src1->ne[1] : 0;
-    const int64_t ne12 = use_src1 ? src1->ne[2] : 0;
-    const int64_t ne13 = use_src1 ? src1->ne[3] : 0;
-    const int64_t ne1 = ne10 * ne11;
-    const int64_t nb10 = use_src1 ? src1->nb[0] : 0;
-    const int nb2  = dst->nb[2];
-    const int nb3  = dst->nb[3];
+    const uint64_t ne10 = use_src1 ? src1->ne[0] : 0;
+    const uint64_t ne11 = use_src1 ? src1->ne[1] : 0;
+    const uint64_t ne12 = use_src1 ? src1->ne[2] : 0;
+    const uint64_t ne13 = use_src1 ? src1->ne[3] : 0;
+    const uint64_t ne1 = ne10 * ne11;
+    // const uint64_t nb10 = use_src1 ? src1->nb[0] : 0;
+    const uint64_t nb2  = dst->nb[2];
+    const uint64_t nb3  = dst->nb[3];
 
     vk_pipeline * pipeline = ggml_vk_op_get_pipeline(src0, src1, dst, op);
     ggml_vk_func_t op_func;
@@ -2788,7 +2788,7 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
     }
 
     // Single call if dimension 2 is contiguous
-    if (op == GGML_OP_CPY || ggml_is_contiguous(src0) && (src1 == nullptr || ggml_is_contiguous(src1))) {
+    if (op == GGML_OP_CPY || (ggml_is_contiguous(src0) && (src1 == nullptr || ggml_is_contiguous(src1)))) {
         ggml_vk_pipeline_allocate_descriptor_sets(*pipeline, 1);
 
         switch (dst->op) {
@@ -2851,8 +2851,8 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
             break;
         }
 
-        for (int64_t i03 = 0; i03 < ne03; i03++) {
-            for (int64_t i02 = 0; i02 < ne02; i02++) {
+        for (uint64_t i03 = 0; i03 < ne03; i03++) {
+            for (uint64_t i02 = 0; i02 < ne02; i02++) {
                 const uint32_t it_idx0 = (i03 * ne02 + i02);
                 const uint32_t it_idx1 = use_src1 ? ((i03 % ne13) * ne12 + (i02 % ne12)) : 0;
                 const uint32_t x_offset = x_sz * it_idx0;
@@ -2897,7 +2897,8 @@ static void ggml_vk_mul(vk_context& ctx, const ggml_tensor * src0, const ggml_te
 }
 
 static void ggml_vk_scale(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
-    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, nullptr, dst, GGML_OP_SCALE, { (uint32_t)ggml_nelements(src0), 0, ((float *)dst->op_params)[0], 0.0f });
+    float * op_params = (float *)dst->op_params;
+    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, nullptr, dst, GGML_OP_SCALE, { (uint32_t)ggml_nelements(src0), 0, op_params[0], 0.0f });
 }
 
 static void ggml_vk_sqr(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
@@ -2905,7 +2906,8 @@ static void ggml_vk_sqr(vk_context& ctx, const ggml_tensor * src0, ggml_tensor *
 }
 
 static void ggml_vk_clamp(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
-    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, nullptr, dst, GGML_OP_CLAMP, { (uint32_t)ggml_nelements(src0), 0, ((float *)dst->op_params)[0], ((float *)dst->op_params)[1] });
+    float * op_params = (float *)dst->op_params;
+    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, nullptr, dst, GGML_OP_CLAMP, { (uint32_t)ggml_nelements(src0), 0, op_params[0], op_params[1] });
 }
 
 static void ggml_vk_cpy(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
@@ -2926,7 +2928,8 @@ static void ggml_vk_norm(vk_context& ctx, const ggml_tensor * src0, ggml_tensor 
 }
 
 static void ggml_vk_rms_norm(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
-    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, nullptr, dst, GGML_OP_RMS_NORM, { (uint32_t)src0->ne[0], (uint32_t)src0->ne[1], ((float *)dst->op_params)[0], 0.0f });
+    float * op_params = (float *)dst->op_params;
+    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, nullptr, dst, GGML_OP_RMS_NORM, { (uint32_t)src0->ne[0], (uint32_t)src0->ne[1], op_params[0], 0.0f });
 }
 
 static void ggml_vk_unary(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
@@ -2934,17 +2937,19 @@ static void ggml_vk_unary(vk_context& ctx, const ggml_tensor * src0, ggml_tensor
 }
 
 static void ggml_vk_diag_mask_inf(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
-    ggml_vk_op_f32<vk_op_diag_mask_push_constants>(ctx, src0, nullptr, dst, GGML_OP_DIAG_MASK_INF, { (uint32_t)src0->ne[0], (uint32_t)src0->ne[1], ((int32_t *)dst->op_params)[0] });
+    int32_t * op_params = (int32_t *)dst->op_params;
+    ggml_vk_op_f32<vk_op_diag_mask_push_constants>(ctx, src0, nullptr, dst, GGML_OP_DIAG_MASK_INF, { (uint32_t)src0->ne[0], (uint32_t)src0->ne[1], op_params[0] });
 }
 
 static void ggml_vk_soft_max(vk_context& ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, src1, dst, GGML_OP_SOFT_MAX, { (uint32_t)src0->ne[0], (uint32_t)(src1 != nullptr ? ggml_nrows(src1) : 0), ((float *)dst->op_params)[0], 0.0f });
+    float * op_params = (float *)dst->op_params;
+    ggml_vk_op_f32<vk_op_push_constants>(ctx, src0, src1, dst, GGML_OP_SOFT_MAX, { (uint32_t)src0->ne[0], (uint32_t)(src1 != nullptr ? ggml_nrows(src1) : 0), op_params[0], 0.0f });
 }
 
 static void ggml_vk_rope(vk_context& ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     const int n_dims        = ((int32_t *) dst->op_params)[1];
     const int mode          = ((int32_t *) dst->op_params)[2];
-    const int n_ctx         = ((int32_t *) dst->op_params)[3];
+    // const int n_ctx         = ((int32_t *) dst->op_params)[3];
     const int n_orig_ctx    = ((int32_t *) dst->op_params)[4];
     const float freq_base   = ((float *)   dst->op_params)[5];
     const float freq_scale  = ((float *)   dst->op_params)[6];
@@ -3481,7 +3486,7 @@ static void ggml_vk_transform_tensor(const void * data, ggml_tensor * tensor, bo
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
     if (extra == nullptr) {
         extra = new ggml_tensor_extra_gpu;
-        memset((void *) extra, 0, sizeof(ggml_tensor_extra_gpu));
+        extra->reset();
         tensor->extra = extra;
     }
 
@@ -3514,7 +3519,7 @@ void ggml_vk_assign_buffer(ggml_tensor * tensor) {
     GGML_ASSERT(tensor->extra == nullptr);
 
     ggml_tensor_extra_gpu * extra = new ggml_tensor_extra_gpu;
-    memset((void *) extra, 0, sizeof(ggml_tensor_extra_gpu));
+    extra->reset();
     tensor->extra = extra;
 
     extra->buffer_gpu = new vk_buffer;
@@ -3528,8 +3533,7 @@ static void ggml_vk_tensor_create_extra(ggml_tensor * tensor) {
     std::cerr << "ggml_vk_create_extra(" << tensor << " (" << tensor->name << ", " << ggml_op_name(tensor->op) << "))" << std::endl;
 #endif
     ggml_tensor_extra_gpu * extra = new ggml_tensor_extra_gpu;
-    memset((void *) extra, 0, sizeof(ggml_tensor_extra_gpu));
-    extra->d_idx = -1;
+    extra->reset();
     tensor->extra = extra;
 }
 
@@ -3689,7 +3693,7 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node, ggml_cgraph * graph){
     const bool qvec_kernel = use_src0 && use_src1 && src1->ne[1] == 1 && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type));
     const bool qx_needs_dequant = use_src0 && !qvec_kernel && !x_non_contig && (src0->type != GGML_TYPE_F16 || x_non_contig);
     const bool f16_f32_kernel = use_src1 && src1->type == GGML_TYPE_F32;
-    const bool qy_needs_dequant = use_src1 && (src1->type != GGML_TYPE_F16 && !f16_f32_kernel) || y_non_contig;
+    const bool qy_needs_dequant = (use_src1 && (src1->type != GGML_TYPE_F16 && !f16_f32_kernel)) || y_non_contig;
 
     int split_k;
     if (node->op == GGML_OP_MUL_MAT) {
@@ -3923,8 +3927,6 @@ void ggml_vk_build_graph(ggml_tensor * node, bool last_node){
     const ggml_tensor * src1 = node->src[1];
 
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
-    ggml_tensor_extra_gpu * src0_extra = src0 != nullptr ? (ggml_tensor_extra_gpu *) src0->extra : nullptr;
-    ggml_tensor_extra_gpu * src1_extra = src1 != nullptr ? (ggml_tensor_extra_gpu *) src1->extra : nullptr;
 
     // Set data to vk_buffer
     // This can't be done earlier cause the buffer may not exist yet
@@ -4280,7 +4282,7 @@ struct ggml_backend_vk_buffer_context {
         size_t alloc_index = temp_tensor_extra_index;
         temp_tensor_extra_index = (temp_tensor_extra_index + 1) % GGML_VK_MAX_NODES;
         ggml_tensor_extra_gpu * extra = &temp_tensor_extras[alloc_index];
-        memset(extra, 0, sizeof(*extra));
+        extra->reset();
 
         return extra;
     }
@@ -4331,6 +4333,8 @@ GGML_CALL static void ggml_backend_vk_buffer_init_tensor(ggml_backend_buffer_t b
     } else {
         ggml_vk_preallocate_buffers_graph(tensor, nullptr);
     }
+
+    UNUSED(buffer);
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -4344,6 +4348,10 @@ GGML_CALL static void ggml_backend_vk_buffer_set_tensor(ggml_backend_buffer_t bu
     // ggml_vk_buffer_write(&ctx->dev_buffer, offset, data, size, vk_device.transfer_queue);
 
     ggml_vk_transform_tensor_static(data, tensor);
+
+    UNUSED(buffer);
+    UNUSED(offset);
+    UNUSED(size);
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
@@ -4355,6 +4363,8 @@ GGML_CALL static void ggml_backend_vk_buffer_get_tensor(ggml_backend_buffer_t bu
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
     ggml_vk_buffer_read(extra->buffer_gpu, offset, data, size, vk_device.transfer_queue);
+
+    UNUSED(buffer);
 }
 
 GGML_CALL static bool ggml_backend_vk_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
@@ -4367,12 +4377,19 @@ GGML_CALL static bool ggml_backend_vk_buffer_cpy_tensor(ggml_backend_buffer_t bu
     //     return true;
     // }
     return false;
+
+    UNUSED(buffer);
+    UNUSED(src);
+    UNUSED(dst);
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
-    ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
+    // ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
 
     // ggml_vk_buffer_memset(&ctx->dev_buffer, 0, value, buffer->size, vk_device.transfer_queue);
+
+    UNUSED(buffer);
+    UNUSED(value);
 }
 
 static ggml_backend_buffer_i ggml_backend_vk_buffer_interface = {
@@ -4425,6 +4442,8 @@ GGML_CALL static size_t ggml_backend_vk_buffer_type_get_alloc_size(ggml_backend_
 
 GGML_CALL static bool ggml_backend_vk_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
     return ggml_backend_is_vk(backend);
+
+    UNUSED(buft);
 }
 
 static ggml_backend_buffer_type_i ggml_backend_vk_buffer_type_interface = {
@@ -4530,7 +4549,7 @@ GGML_CALL static ggml_backend_buffer_type_t ggml_backend_vk_get_default_buffer_t
 }
 
 GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
-    ggml_backend_vk_context * vk_ctx = (ggml_backend_vk_context *)backend->context;
+    // ggml_backend_vk_context * vk_ctx = (ggml_backend_vk_context *)backend->context;
 
     for (int i = 0; i < cgraph->n_leafs; i++) {
         ggml_tensor * node = cgraph->leafs[i];
@@ -4573,6 +4592,8 @@ GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml
     ggml_vk_graph_cleanup();
 
     return true;
+
+    UNUSED(backend);
 }
 
 GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
