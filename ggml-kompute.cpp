@@ -1540,7 +1540,8 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     } break;
                 case GGML_OP_SCALE:
                     {
-                        const float scale = *(const float *) src1->data;
+                        float scale; memcpy(&scale, dst->op_params, sizeof(float));
+
                         ggml_vk_scale(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst), scale);
                     } break;
                 case GGML_OP_UNARY:
