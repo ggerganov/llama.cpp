@@ -33,9 +33,9 @@ source 'lib.sh'
 # finally imports the python script to check for `ImportError`.
 #
 
-cleanup() {
-    if _isset workdir && [[ -d $workdir && -w $workdir ]]; then
-        _log_info "Removing $workdir"
+Cleanup() {
+    if _IsSet workdir && [[ -d $workdir && -w $workdir ]]; then
+        _LogInfo "Removing $workdir"
         local count=0
         rm -rfv -- "$workdir" | while read -r; do
             if (( count++ > 750 )); then
@@ -44,7 +44,7 @@ cleanup() {
             fi
         done
         printf '\n'
-        _log_info "Removed $workdir"
+        _LogInfo "Removed $workdir"
     fi
 }
 
@@ -55,7 +55,7 @@ fi
 
 if (( do_cleanup )); then
     trap exit INT TERM
-    trap cleanup EXIT
+    trap Cleanup EXIT
 fi
 
 cd .. # PWD should be llama.cpp project directory
@@ -65,33 +65,33 @@ readonly reqs_dir=requirements
 if [[ ${1+x} ]]; then
     tmp_dir=$(realpath -- "$1")
     if [[ ! ( -d $tmp_dir && -w $tmp_dir ) ]]; then
-        _log_fatal "$tmp_dir is not a writable directory"
+        _LogFatal "$tmp_dir is not a writable directory"
     fi
 else
     tmp_dir=/tmp
 fi
 
 workdir=$(mktemp -d "$tmp_dir/check-requirements.XXXX"); readonly workdir
-_log_info "Working directory: $workdir"
+_LogInfo "Working directory: $workdir"
 
-check_requirements() {
+CheckRequirements() {
     local reqs=$1
 
-    _log_info "$reqs: beginning check"
+    _LogInfo "$reqs: beginning check"
     pip --disable-pip-version-check install -qr "$reqs"
-    _log_info "$reqs: OK"
+    _LogInfo "$reqs: OK"
 }
 
-check_convert_script() {
+CheckConvertScript() {
     local py=$1             # e.g. ./convert-hf-to-gguf.py
     local pyname=${py##*/}  # e.g. convert-hf-to-gguf.py
     pyname=${pyname%.py}    # e.g. convert-hf-to-gguf
 
-    _log_info "$py: beginning check"
+    _LogInfo "$py: beginning check"
 
     local reqs="$reqs_dir/requirements-$pyname.txt"
     if [[ ! -r $reqs ]]; then
-        _log_fatal "$py missing requirements. Expected: $reqs"
+        _LogFatal "$py missing requirements. Expected: $reqs"
     fi
 
     local venv="$workdir/$pyname-venv"
@@ -101,7 +101,7 @@ check_convert_script() {
         # shellcheck source=/dev/null
         source "$venv/bin/activate"
 
-        check_requirements "$reqs"
+        CheckRequirements "$reqs"
 
         python - "$py" "$pyname" <<'EOF'
 import sys
@@ -115,7 +115,7 @@ EOF
         rm -rf -- "$venv"
     fi
 
-    _log_info "$py: imports OK"
+    _LogInfo "$py: imports OK"
 }
 
 readonly ignore_eq_eq='check_requirements: ignore "=="'
@@ -123,7 +123,7 @@ readonly ignore_eq_eq='check_requirements: ignore "=="'
 for req in "$reqs_dir"/*; do
     # Check that all sub-requirements are added to top-level requirements.txt
     if ! grep -qF "$req" requirements.txt; then
-        _log_fatal "$req needs to be added to requirements.txt"
+        _LogFatal "$req needs to be added to requirements.txt"
     fi
 
     # Make sure exact release versions aren't being pinned in the requirements
@@ -145,16 +145,16 @@ python3 -m venv "$all_venv"
 (
     # shellcheck source=/dev/null
     source "$all_venv/bin/activate"
-    check_requirements requirements.txt
+    CheckRequirements requirements.txt
 )
 
 if (( do_cleanup )); then
     rm -rf -- "$all_venv"
 fi
 
-check_convert_script convert.py
+CheckConvertScript convert.py
 for py in convert-*.py; do
-    check_convert_script "$py"
+    CheckConvertScript "$py"
 done
 
-_log_info 'Done! No issues found.'
+_LogInfo 'Done! No issues found.'

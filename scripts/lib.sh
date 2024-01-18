@@ -5,26 +5,26 @@ if [[ ${BASH_SOURCE[0]} -ef $0 ]]; then
    exit 1
 fi
 
-_log() {
+_Log() {
     local level=$1 msg=$2
     printf >&2 '%s: %s\n' "$level" "$msg"
 }
 
-_log_debug() {
-    _log DEBUG "$@"
+_LogDebug() {
+    _Log DEBUG "$@"
 }
 
-_log_info() {
-    _log INFO "$@"
+_LogInfo() {
+    _Log INFO "$@"
 }
 
-_log_fatal() {
-    _log FATAL "$@"
+_LogFatal() {
+    _Log FATAL "$@"
     exit 1
 }
 
 # Return true if the variable with name $1 is set
-_isset() {
+_IsSet() {
     (( $# != 1 )) && return false
     if [[ -n ${!1+x} ]]; then
         return 0
@@ -33,6 +33,6 @@ _isset() {
     fi
 }
 
-_isnotset() {
-    ! _isset "$@"
+_IsNotSet() {
+    ! _IsSet "$@"
 }

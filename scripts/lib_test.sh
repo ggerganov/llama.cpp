@@ -12,38 +12,38 @@ shellcheck --external-sources "$this"
 source 'lib.sh'
 #### END SETUP ####
 
-pass() {
+Pass() {
     local test_func="${FUNCNAME[1]}"
-    _log 'PASSED' "$test_func"
+    _Log 'PASSED' "$test_func"
 }
 
-fail() {
+Fail() {
     local test_func="${FUNCNAME[1]}"
-    _log 'FAILED' "$test_func: $1"
+    _Log 'FAILED' "$test_func: $1"
 }
 
-test_lib_sh_execution() {
+TestLibShExecution() {
     if bash lib.sh 2>/dev/null; then
-        fail 'lib.sh should fail execution, but did not'
-    else pass; fi
-}; test_lib_sh_execution
+        Fail 'lib.sh should fail execution, but did not'
+    else Pass; fi
+}; TestLibShExecution
 
-test_isset() {
+TestIsSet() {
     # shellcheck disable=SC2034
     local foo=1
-    if ! _isset 'foo'; then
-        fail 'foo was not detecting as set'
-    elif _isset 'bar'; then
-        fail 'bar was detected as set'
-    else pass; fi
-}; test_isset
+    if ! _IsSet 'foo'; then
+        Fail 'foo was not detecting as set'
+    elif _IsSet 'bar'; then
+        Fail 'bar was detected as set'
+    else Pass; fi
+}; TestIsSet
 
-test_isnotset() {
+TestIsNotSet() {
     # shellcheck disable=SC2034
     local foo=1
-    if _isnotset 'foo'; then
-        fail 'foo was detected as not set'
-    elif ! _isnotset 'bar'; then
-        fail 'bar was detected as set'
-    else pass; fi
-}; test_isnotset
+    if _IsNotSet 'foo'; then
+        Fail 'foo was detected as not set'
+    elif ! _IsNotSet 'bar'; then
+        Fail 'bar was detected as set'
+    else Pass; fi
+}; TestIsNotSet
