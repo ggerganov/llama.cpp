@@ -1467,7 +1467,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
             switch (dst->op) {
                 case GGML_OP_ADD:
                     {
-                        if (ggml_nelements(src1) == ne10 && ne00 % 4 == 0) {
+                        if (ggml_nelements(src1) == ne10 && ggml_is_contiguous(src1) && ne00 % 4 == 0 && ne10 % 4 == 0) {
                             // src1 is a row
                             ggml_vk_addrow(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst)/4, ne00);
                         } else {
