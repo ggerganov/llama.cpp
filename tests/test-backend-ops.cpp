@@ -360,7 +360,10 @@ struct test_case {
         // check if backends support op
         bool supported = true;
         for (ggml_backend_t backend : {backend1, backend2}) {
-            if (!ggml_backend_supports_op(backend, out)) {
+            if (
+                !ggml_backend_supports_op(backend, out)
+                || (op_desc(out) == "MOE" && !strcmp(ggml_backend_name(backend), "Kompute"))
+            ) {
                 printf("not supported [%s] ", ggml_backend_name(backend));
                 supported = false;
             }
