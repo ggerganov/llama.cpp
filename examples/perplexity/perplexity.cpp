@@ -748,6 +748,8 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string&
 
 static void winogrande_score(llama_context * ctx, const gpt_params & params) {
 
+    constexpr int k_min_trailing_ctx = 3;
+
     auto data = load_winogrande_from_csv(params.prompt);
     if (data.empty()) {
         fprintf(stderr, "%s: no tasks\n", __func__);
@@ -792,8 +794,8 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         const auto& task = data[task_idx];
 
         auto base_context = ::llama_tokenize(ctx, task.first, add_bos);
-        //auto base_ctx_1st = ::llama_tokenize(ctx, task.first + task.choices[0], add_bos);
-        //auto base_ctx_2nd = ::llama_tokenize(ctx, task.first + task.choices[1], add_bos);
+        auto base_ctx_1st = ::llama_tokenize(ctx, task.first + task.choices[0], add_bos);
+        auto base_ctx_2nd = ::llama_tokenize(ctx, task.first + task.choices[1], add_bos);
 
         auto sentence_1st = task.first + task.choices[0] + task.second;
         auto sentence_2nd = task.first + task.choices[1] + task.second;
@@ -824,9 +826,14 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             return;
         }
 
+        bool skip_choice = query_1st_size - base_ctx_1st.size() > k_min_trailing_ctx &&
+                           query_2nd_size - base_ctx_2nd.size() > k_min_trailing_ctx;
+
         float score_1st = 0;
         bool is_nan_1st = false;
-        for (size_t j = base_context.size()-1; j < query_1st_size-1; ++j) {
+        const auto& base_1 = skip_choice ? base_ctx_1st : base_context;
+        const int last_1st = query_1st_size - base_1.size() > 1 ? 1 : 0;
+        for (size_t j = base_1.size()-1; j < query_1st_size-1-last_1st; ++j) {
             std::memcpy(tok_logits.data(), logits_1st.data() + j*n_vocab, n_vocab*sizeof(float));
             const float prob = softmax(tok_logits)[query_1st[j+1]];
             if (std::isnan(prob) || !prob) {
@@ -837,11 +844,13 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             }
             score_1st += std::log(prob);
         }
-        score_1st /= (query_1st_size - base_context.size());
+        score_1st /= (query_1st_size - base_1.size() - last_1st);
 
         float score_2nd = 0;
         bool is_nan_2nd = false;
-        for (size_t j = base_context.size()-1; j < query_2nd_size-1; ++j) {
+        const auto& base_2 = skip_choice ? base_ctx_2nd : base_context;
+        const int last_2nd = query_2nd_size - base_2.size() > 1 ? 1 : 0;
+        for (size_t j = base_2.size()-1; j < query_2nd_size-1-last_2nd; ++j) {
             std::memcpy(tok_logits.data(), logits_2nd.data() + j*n_vocab, n_vocab*sizeof(float));
             const float prob = softmax(tok_logits)[query_2nd[j+1]];
             if (std::isnan(prob) || !prob) {
@@ -852,7 +861,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             }
             score_2nd += std::log(prob);
         }
-        score_2nd /= (query_2nd_size - base_context.size());
+        score_2nd /= (query_2nd_size - base_2.size() - last_2nd);
 
         if (is_nan_1st || is_nan_2nd) {
             continue;
@@ -863,6 +872,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             printf("Q1: <%s> - %zu tokens\n", sentence_1st.c_str(), query_1st_size);
             printf("Q2: <%s> - %zu tokens\n", sentence_2nd.c_str(), query_2nd_size);
             printf("B : <%s> - %zu tokens\n", task.first.c_str(), base_context.size());
+            printf("base_1 has %zu tokens, base_2 has %zu tokens, skip_choice = %d\n", base_1.size(), base_2.size(), skip_choice);
             continue;
         }
 
@@ -884,7 +894,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
 
     const float p = 1.f*n_correct/n_done;
     const float sigma = 100.f*sqrt(p*(1-p)/(n_done-1));
-    printf("Final Winogrande score: %.4lf +/- %.4lf\n", 100*p, sigma);
+    printf("Final Winogrande score(%d tasks): %.4lf +/- %.4lf\n", n_done, 100*p, sigma);
 }
 
 
