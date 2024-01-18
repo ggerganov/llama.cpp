@@ -12005,7 +12005,7 @@ static void ggml_backend_sycl_graph_plan_compute(ggml_backend_t backend, ggml_ba
     UNUSED(plan);
 }
 
-static void ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+static bool ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_context_sycl * sycl_ctx = (ggml_backend_context_sycl *)backend->context;
 
     ggml_sycl_set_main_device(sycl_ctx->device);
@@ -12062,6 +12062,7 @@ static void ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph 
     }
 
     UNUSED(backend);
+    return;
 }
 
 static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
