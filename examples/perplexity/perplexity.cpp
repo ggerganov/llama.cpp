@@ -746,6 +746,15 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string&
     return result;
 }
 
+/*
+ * Evaluates the Winogrande score.
+ * Uses a CSV containing task index, dentence, choice 1, choice 2, answer (1 or 2)
+ * You can get one such dataset from e.g. https://huggingface.co/datasets/ikawrakow/winogrande-eval-for-llama.cpp
+ * As an example, the 1st row in the above dataset is
+ *
+ *    0,Sarah was a much better surgeon than Maria so _ always got the easier cases.,Sarah,Maria,2
+ *
+ */
 static void winogrande_score(llama_context * ctx, const gpt_params & params) {
 
     constexpr int k_min_trailing_ctx = 3;
