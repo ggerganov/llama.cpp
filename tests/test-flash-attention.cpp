@@ -16,6 +16,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <cfloat>
 
 struct test_model {
     struct ggml_tensor * q;
