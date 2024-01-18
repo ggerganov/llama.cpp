@@ -1569,7 +1569,6 @@ struct llama_server_context
                     llama_client_slot *slot = get_slot(json_value(task.data, "slot_id", -1));
                     if (slot == nullptr)
                     {
-                        LOG_TEE("slot unavailable\n");
                         // if no slot is available, we defer this task for processing later
                         deferred_tasks.push_back(task);
                         break;
