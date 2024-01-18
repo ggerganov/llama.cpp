@@ -76,7 +76,7 @@ Platform #0: Intel(R) OpenCL HD Graphics
 2. Install Intel® oneAPI Base toolkit.
 
 
-a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ] (https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html).
+a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html).
 
 Recommend to install to default folder: **/opt/intel/oneapi**.
 
