@@ -35,13 +35,11 @@ GGML_API void ggml_vk_cleanup(void);
 GGML_API bool ggml_vk_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, const struct ggml_tensor * dst);
 
 // backend API
-GGML_API GGML_CALL ggml_backend_t ggml_backend_vk_init();
+GGML_API GGML_CALL ggml_backend_t ggml_backend_vk_init(void);
 
 GGML_API GGML_CALL bool ggml_backend_is_vk(ggml_backend_t backend);
 
-GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_buffer_type();
-// split tensor buffer that splits matrices by rows across multiple devices
-GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_split_buffer_type(const float * tensor_split);
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_buffer_type(void);
 // pinned host buffer for use with the CPU backend for faster copies between CPU and GPU
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type(void);
 
