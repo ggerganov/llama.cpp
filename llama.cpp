@@ -1599,7 +1599,7 @@ struct llama_model {
     std::unique_ptr<llama_mmap> mapping;
 
     // objects representing data potentially being locked in memory
-    llama_mlock mlock_buf;
+    std::vector<std::unique_ptr<llama_mlock>> mlock_bufs;
     llama_mlock mlock_mmap;
 
     // for quantize-stats only
@@ -3815,8 +3815,10 @@ static bool llm_load_tensors(
         else {
             buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
             if (buf != nullptr && use_mlock && ggml_backend_buffer_is_host(buf)) {
-                model.mlock_buf.init   (ggml_backend_buffer_get_base(buf));
-                model.mlock_buf.grow_to(ggml_backend_buffer_get_size(buf));
+                model.mlock_bufs.emplace_back(new llama_mlock);
+                auto & mlock_buf = model.mlock_bufs.back();
+                mlock_buf->init   (ggml_backend_buffer_get_base(buf));
+                mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
             }
         }
         if (buf == nullptr) {
