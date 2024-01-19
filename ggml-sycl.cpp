@@ -12062,7 +12062,7 @@ static bool ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph 
     }
 
     UNUSED(backend);
-    return;
+    return true;
 }
 
 static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
