@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import struct
 import sys
 from enum import IntEnum
@@ -9,7 +10,6 @@ from pathlib import Path
 
 import numpy as np
 
-import os
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf

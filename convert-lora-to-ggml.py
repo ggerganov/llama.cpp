@@ -5,16 +5,15 @@ import json
 import os
 import struct
 import sys
+from pathlib import Path
 from typing import Any, BinaryIO, Sequence
 
 import numpy as np
 import torch
 
-from pathlib import Path
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
-
 
 NUMPY_TYPE_TO_FTYPE: dict[str, int] = {"float32": 0, "float16": 1}
 
