@@ -130,6 +130,7 @@ static void sampler_queue(
 
     const float         temp              = params.temp;
     const float         dynatemp_range    = params.dynatemp_range;
+    const float         dynatemp_exponent = params.dynatemp_exponent;
     const int32_t       top_k             = params.top_k <= 0 ? n_vocab : params.top_k;
     const float         top_p             = params.top_p;
     const float         min_p             = params.min_p;
@@ -154,7 +155,7 @@ static void sampler_queue(
                     dynatemp_min = dynatemp_min<0?0:dynatemp_min;
                     dynatemp_max = dynatemp_max<0?0:dynatemp_max;
 
-                    llama_sample_entropy(ctx_main, &cur_p, dynatemp_min, dynatemp_max);
+                    llama_sample_entropy(ctx_main, &cur_p, dynatemp_min, dynatemp_max, dynatemp_exponent);
                 }
                 else
                 {
