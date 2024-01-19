@@ -1031,6 +1031,308 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
     printf("Final Winogrande score(%d tasks): %.4lf +/- %.4lf\n", n_done, 100*p, sigma);
 }
 
+static bool deserialize_string(std::istream& in, std::string& str) {
+    uint32_t size;
+    if (!in.read((char *)&size, sizeof(size)).fail()) {
+        str.resize(size);
+        if (!in.read((char *)str.data(), size).fail()) return true;
+    }
+    return false;
+}
+
+struct truthful_qa_answer {
+    std::vector<std::string> answers;
+    std::vector<int>         labels;
+    bool deserialize(std::istream& in) {
+        uint32_t n;
+        in.read((char *)&n, sizeof(n));
+        if (in.fail() || n > 100) return false; // 100 as max. number of answers should be good enough for any practical purpose
+        answers.resize(n);
+        labels.resize(n);
+        for (auto& a : answers) {
+            if (!deserialize_string(in, a)) return false;
+        }
+        in.read((char *)labels.data(), n*sizeof(int));
+        return !in.fail();
+    }
+};
+
+struct truthful_qa_task {
+    std::string question;
+    truthful_qa_answer mc1;
+    truthful_qa_answer mc2;
+    bool deserialize(std::istream& in) {
+        if (!deserialize_string(in, question)) return false;
+        return mc1.deserialize(in) && mc2.deserialize(in);
+    }
+
+    // For evaluation
+    size_t i_batch;         // starting index in the llama_batch
+    size_t common_prefix;   // max number of initial tokens that are the same in all sentences
+    size_t required_tokens; // needed number of tokens to evaluate all answers
+    std::vector<std::vector<llama_token>> seq_tokens;
+    std::vector<float> log_probs;
+};
+
+
+static void truthful_qa_score(llama_context * ctx, const gpt_params & params) {
+    // Calculates TruthFulQA score (multiple choice with single correct answer) from prompt
+    //
+    // Data extracted from https://huggingface.co/datasets/truthful_qa
+    //
+
+    std::istringstream strstream(params.prompt);
+    uint32_t n_task;
+    strstream.read((char *)&n_task, sizeof(n_task));
+    if (strstream.fail() || n_task == 0) {
+        printf("%s: no tasks\n", __func__);
+        return;
+    }
+    printf("%s: there are %u tasks in prompt\n", __func__, n_task);
+    std::vector<uint32_t> task_pos(n_task);
+    strstream.read((char *)task_pos.data(), task_pos.size()*sizeof(uint32_t));
+    if (strstream.fail()) {
+        printf("%s: failed to raad task positions from prompt\n", __func__);
+        return;
+    }
+
+    std::vector<truthful_qa_task> tasks;
+    if (params.thruthful_qa_tasks == 0 || params.thruthful_qa_tasks >= (size_t)n_task) {
+        // Use all tasks
+        tasks.resize(n_task);
+        printf("%s: reading tasks", __func__);
+        int n_dot = n_task/100;
+        int i = 0;
+        for (auto& task : tasks) {
+            ++i;
+            if (!task.deserialize(strstream)) {
+                printf("%s: failed to read task %d of %u\n", __func__, i, n_task);
+                return;
+            }
+            if (i%n_dot == 0) printf(".");
+        }
+        printf("done\n");
+    }
+    else {
+        printf("%s: selecting %zu random tasks from %u tasks available\n", __func__, params.thruthful_qa_tasks, n_task);
+        std::mt19937 rng(1);
+        std::vector<int> aux(n_task);
+        float scale = 1.f/(1.f + (float)std::mt19937::max());
+        tasks.resize(params.thruthful_qa_tasks);
+        for (auto& task : tasks) {
+            int j = (int)(scale * rng() * aux.size());
+            int idx = aux[j];
+            aux[j] = aux.back();
+            aux.pop_back();
+            strstream.seekg(task_pos[idx], std::ios::beg);
+            if (!task.deserialize(strstream)) {
+                printf("%s: failed to read task %d at position %u\n", __func__, idx, task_pos[idx]);
+                return;
+            }
+        }
+        n_task = params.thruthful_qa_tasks;
+    }
+
+    // This is needed as usual for LLaMA models
+    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+
+    printf("%s: preparing task data", __func__);
+    fflush(stdout);
+    int n_dot = n_task/100;
+    int i_task = 0;
+    for (auto& task : tasks) {
+        ++i_task;
+        if (task.question.empty() || task.mc1.answers.empty()) {
+            printf("%s: found bad task with empty question and/or answers\n", __func__);
+            return;
+        }
+        task.seq_tokens.reserve(task.mc1.answers.size());
+        for (auto& answer : task.mc1.answers) {
+            if (answer.empty()) {
+                printf("%s: found empty answer\n", __func__);
+                return;
+            }
+            task.seq_tokens.emplace_back(::llama_tokenize(ctx, task.question + " " + answer, add_bos));
+        }
+        auto min_len = task.seq_tokens.front().size();
+        for (auto& seq : task.seq_tokens) {
+            min_len = std::min(min_len, seq.size());
+        }
+        task.common_prefix = 0;
+        for (size_t k = 0; k < min_len; ++k) {
+            auto token = task.seq_tokens[0][k];
+            bool all_same = true;
+            for (size_t i = 1; i < task.seq_tokens.size(); ++i) {
+                if (task.seq_tokens[i][k] != token) {
+                    all_same = false;
+                    break;
+                }
+            }
+            if (!all_same) {
+                break;
+            }
+            ++task.common_prefix;
+        }
+        task.required_tokens = task.common_prefix;
+        for (auto& seq : task.seq_tokens) {
+            task.required_tokens += seq.size() - task.common_prefix;
+        }
+        if (i_task%n_dot == 0) {
+            printf(".");
+            fflush(stdout);
+        }
+    }
+    printf("done\n");
+
+    printf("%s : calculating TruthfulQA score over %zu tasks.\n", __func__, tasks.size());
+
+    printf("\ntask\tacc_norm\n");
+
+    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_ctx   = llama_n_ctx(ctx);
+    const int n_batch = params.n_batch;
+
+    const int max_tasks_per_batch = 32;
+    const int max_seq = 4*max_tasks_per_batch;
+
+    llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
+
+    std::vector<float> tok_logits(n_vocab);
+    std::vector<float> batch_logits(n_vocab*n_ctx);
+
+    std::vector<std::pair<size_t, llama_token>> eval_pairs;
+    std::vector<float> eval_results;
+    std::vector<std::thread> workers(std::thread::hardware_concurrency());
+    std::vector<int> batch_indeces;
+
+    int n_done = 0;
+    int n_correct = 0;
+
+    for (size_t i0 = 0; i0 < tasks.size(); i0++) {
+        int n_cur = 0;
+
+        size_t i1 = i0;
+        size_t i_batch = 0; // this tells us where in `llama_batch` we are currently
+
+        llama_batch_clear(batch);
+
+        // batch as much tasks as possible into the available context
+        // each task has 4 unique seuqnce ids - one for each ending
+        // the common prefix is shared among the 4 sequences to save tokens
+        // we extract logits only from the last common token and from all ending tokens of each sequence
+        int s0 = 0;
+        while (n_cur + (int) tasks[i1].required_tokens <= n_ctx) {
+            auto& cur_task = tasks[i1];
+
+            int num_answers = cur_task.seq_tokens.size();
+            if (s0 + num_answers > max_seq) {
+                break;
+            }
+
+            if (int(batch_indeces.size()) != num_answers) {
+                batch_indeces.resize(num_answers);
+            }
+            for (int s = 0; s < num_answers; ++s) batch_indeces[s] = s0 + s;
+
+            for (size_t i = 0; i < cur_task.common_prefix; ++i) {
+                //llama_batch_add(batch, cur_task.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3}, false);
+                llama_batch_add(batch, cur_task.seq_tokens[0][i], i, batch_indeces, false);
+            }
+            batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
+
+            for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
+                for (size_t i = cur_task.common_prefix; i < cur_task.seq_tokens[s].size(); ++i) {
+                    llama_batch_add(batch, cur_task.seq_tokens[s][i], i, { s0 + s }, true);
+                }
+            }
+
+            cur_task.i_batch = i_batch;
+            i_batch += cur_task.required_tokens;
+
+            n_cur += cur_task.required_tokens;
+            if (++i1 == tasks.size()) {
+                break;
+            }
+        }
+
+        if (i0 == i1) {
+            fprintf(stderr, "%s : task %zu does not fit in the context window\n", __func__, i0);
+            return;
+        }
+
+        llama_kv_cache_clear(ctx);
+
+        // decode all tasks [i0, i1)
+        if (!decode_helper(ctx, batch, batch_logits, n_batch, n_vocab)) {
+            fprintf(stderr, "%s: llama_decode() failed\n", __func__);
+            return;
+        }
+
+        // Compute log-probs in parallel
+        // First we collect all tasks
+        eval_pairs.clear();
+        for (size_t i = i0; i < i1; ++i) {
+            auto& cur_task = tasks[i];
+            size_t li = cur_task.common_prefix;
+            for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
+                for (size_t j = cur_task.common_prefix; j < cur_task.seq_tokens[s].size() - 1; j++) {
+                    eval_pairs.push_back(std::make_pair(cur_task.i_batch + li++, cur_task.seq_tokens[s][j + 1]));
+                }
+                ++li;
+            }
+        }
+        // Then we do the actual calculation
+        compute_logprobs(batch_logits.data(), n_vocab, workers, eval_pairs, eval_results);
+
+        size_t ir = 0;
+
+        // compute the logprobs for each ending of the decoded tasks
+        for (size_t i = i0; i < i1; ++i) {
+            auto & cur_task = tasks[i];
+
+            std::memcpy(tok_logits.data(), batch_logits.data() + n_vocab*(cur_task.i_batch + cur_task.common_prefix - 1), n_vocab*sizeof(float));
+
+            const auto first_probs = softmax(tok_logits);
+
+            cur_task.log_probs.resize(cur_task.seq_tokens.size());
+            for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
+                size_t count = 1;
+                float  log_prob  = std::log(first_probs[cur_task.seq_tokens[s][cur_task.common_prefix]]);
+                for (size_t j = cur_task.common_prefix; j < cur_task.seq_tokens[s].size() - 1; j++) {
+                    ++count;
+                    log_prob += eval_results[ir++];
+                }
+                cur_task.log_probs[s] = log_prob / count;
+            }
+
+            // Find the ending with maximum logprob
+            size_t logprob_max_idx = 0;
+            float  logprob_max_val = cur_task.log_probs[0];
+            for (size_t s = 1; s < cur_task.log_probs.size(); s++) {
+                if (cur_task.log_probs[s] > logprob_max_val) {
+                    logprob_max_val = cur_task.log_probs[s];
+                    logprob_max_idx = s;
+                }
+            }
+
+            if (cur_task.mc1.labels[logprob_max_idx] == 1) {
+                ++n_correct;
+            }
+            ++n_done;
+
+            // Print the accumulated accuracy mean x 100
+            printf("%zu\t%.8lf\n", i + 1, 100.*n_correct/n_done);
+            fflush(stdout);
+        }
+
+        i0 = i1 - 1;
+    }
+
+    llama_batch_free(batch);
+
+    printf("\n");
+}
+
 
 int main(int argc, char ** argv) {
     gpt_params params;
@@ -1091,6 +1393,8 @@ int main(int argc, char ** argv) {
         hellaswag_score(ctx, params);
     } else if (params.winogrande) {
         winogrande_score(ctx, params);
+    } else if (params.truthful_qa) {
+        truthful_qa_score(ctx, params);
     } else {
         results = perplexity(ctx, params);
     }

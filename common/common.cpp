@@ -203,6 +203,25 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.prompt_cache_all = true;
         } else if (arg == "--prompt-cache-ro") {
             params.prompt_cache_ro = true;
+        } else if (arg == "-bf" || arg == "--binary-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream file(argv[i], std::ios::binary);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            // store the external file name in params
+            params.prompt_file = argv[i];
+            file.seekg(0, std::ios::end);
+            size_t size = file.tellg();
+            file.seekg(0, std::ios::beg);
+            params.prompt.resize(size);
+            file.read((char *)params.prompt.data(), size);
+            fprintf(stderr, "Read %zu bytes from binary file %s\n", size, argv[i]);
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -689,6 +708,14 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.winogrande_tasks = std::stoi(argv[i]);
+        } else if (arg == "--truthful-qa") {
+            params.truthful_qa = true;
+        } else if (arg == "--truthful-qa-tasks") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.thruthful_qa_tasks = std::stoi(argv[i]);
         } else if (arg == "--ignore-eos") {
             params.ignore_eos = true;
         } else if (arg == "--no-penalize-nl") {
@@ -936,6 +963,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
     printf("  --winogrande          compute Winogrande score over random tasks from datafile supplied with -f\n");
     printf("  --winogrande-tasks N  number of tasks to use when computing the Winogrande score (default: %zu)\n", params.winogrande_tasks);
+    printf("  --truthful-qa         compute TruthFullQA multiple choice score over random tasks from datafile supplied with -f\n");
+    printf("  --truthful-qa-tasks N number of tasks to use when computing the TruthFullQA score (default: %zu)\n", params.winogrande_tasks);
     printf("  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
     printf("  --draft N             number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
     printf("  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
