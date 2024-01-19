@@ -22,9 +22,9 @@ mkdir -p "$2"
 OUT=$(realpath "$1")
 MNT=$(realpath "$2")
 
-rm -v $OUT/*.log
-rm -v $OUT/*.exit
-rm -v $OUT/*.md
+rm -f $OUT/*.log
+rm -f $OUT/*.exit
+rm -f $OUT/*.md
 
 sd=`dirname $0`
 cd $sd/../
@@ -492,14 +492,18 @@ function gg_sum_open_llama_7b_v2 {
 ## main
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
+    # Create symlink: ./llama.cpp/models-mnt -> $MNT/models/models-mnt
     rm -rf ${SRC}/models-mnt
-
     mnt_models=${MNT}/models
     mkdir -p ${mnt_models}
     ln -sfn ${mnt_models} ${SRC}/models-mnt
 
-    python3 -m pip install -r ${SRC}/requirements.txt
-    python3 -m pip install --editable gguf-py
+    # Create a fresh python3 venv and enter it
+    python3 -m venv "$MNT/venv"
+    source "$MNT/venv/bin/activate"
+
+    pip install -r ${SRC}/requirements.txt --disable-pip-version-check
+    pip install --editable gguf-py --disable-pip-version-check
 fi
 
 ret=0

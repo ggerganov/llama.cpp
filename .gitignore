@@ -27,7 +27,7 @@
 lcov-report/
 gcovr-report/
 
-build*/
+build*
 out/
 tmp/
 
