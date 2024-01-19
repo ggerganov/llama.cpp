@@ -263,7 +263,6 @@ static void init_model(struct my_llama_model * model) {
     model->data.resize(size + tensor_alignment);
     alloc = ggml_allocr_new(model->data.data(), model->data.size(), tensor_alignment);
     alloc_model(alloc, model);
-    ggml_allocr_free(alloc);
 }
 
 static void randomize_model(struct my_llama_model * model, int seed, float mean, float std, float min, float max) {
@@ -1077,6 +1076,7 @@ int main(int argc, char ** argv) {
     std::vector<uint8_t> mem_input_data;
     std::vector<uint8_t> mem_compute_data;
 
+    ggml_allocr * alloc = NULL;
 
     // context for input tensors without their data
     struct ggml_init_params ctx_input_params = {
@@ -1098,9 +1098,9 @@ int main(int argc, char ** argv) {
 
     // allocate input tensors
     mem_input_data.resize(max_input_size);
-    ggml_allocr_t alloc_inps = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
-    ggml_allocr_alloc(alloc_inps, tokens_input);
-    ggml_allocr_alloc(alloc_inps, target_probs);
+    alloc = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
+    ggml_allocr_alloc(alloc, tokens_input);
+    ggml_allocr_alloc(alloc, target_probs);
 
     // context for compute tensors without their data
     const size_t estimated_compute_size_wo_data = (
@@ -1127,7 +1127,7 @@ int main(int argc, char ** argv) {
     // find best evaluation order
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
-        ggml_allocr_t alloc = ggml_allocr_new_measure(tensor_alignment);
+        alloc = ggml_allocr_new_measure(tensor_alignment);
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
         gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1147,7 +1147,6 @@ int main(int argc, char ** argv) {
             best_compute_size = max_compute_size;
             best_order = gf->order;
         }
-        ggml_allocr_free(alloc);
         ggml_free(ctx_compute);
     }
     size_t max_compute_size = best_compute_size;
@@ -1160,7 +1159,7 @@ int main(int argc, char ** argv) {
     // allocate compute tensors
     mem_compute_data.resize(max_compute_size);
     ctx_compute = ggml_init(ctx_compute_params);
-    ggml_allocr_t alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
+    alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
     gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1175,7 +1174,6 @@ int main(int argc, char ** argv) {
         params.common.use_flash,
         params.common.use_checkpointing
     );
-    ggml_allocr_free(alloc);
 
     std::vector<llama_token> train_tokens;
     std::vector<size_t> train_samples_begin;
