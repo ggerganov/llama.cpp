@@ -1289,7 +1289,7 @@ static void ggml_vk_cpy_f16_f32(Args&&... args) {
     ggml_vk_cpy<2, 4>(spirv, std::forward<Args>(args)...);
 }
 
-static bool ggml_kompute_supports_op(const struct ggml_tensor * op) {
+static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
     switch (op->type) {
         case GGML_TYPE_F16:
         case GGML_TYPE_F32:
@@ -1417,10 +1417,10 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
 
             any_commands_recorded = true;
 
-            if (!ggml_kompute_supports_op(dst)) {
+            if (!ggml_vk_supports_op(dst)) {
                  fprintf(stderr, "%s: error: unsupported op '%s'\n", __func__, ggml_op_desc(dst));
                  GGML_ASSERT(!"unsupported op");
-             }
+            }
 
             const int32_t ne00 = src0 ? src0->ne[0] : 0;
             const int32_t ne01 = src0 ? src0->ne[1] : 0;
@@ -1828,7 +1828,7 @@ static bool ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct gg
 
 static bool ggml_backend_kompute_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
     GGML_UNUSED(backend);
-    return ggml_kompute_supports_op(op);
+    return ggml_vk_supports_op(op);
 }
 
 static struct ggml_backend_i kompute_backend_i = {
