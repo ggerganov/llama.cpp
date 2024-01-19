@@ -99,6 +99,7 @@ class MODEL_ARCH(IntEnum):
     QWEN      = auto()
     PHI2      = auto()
     PLAMO     = auto()
+    CODESHELL = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -147,6 +148,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN:           "qwen",
     MODEL_ARCH.PHI2:           "phi2",
     MODEL_ARCH.PLAMO:          "plamo",
+    MODEL_ARCH.CODESHELL:      "codeshell",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -396,6 +398,19 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.CODESHELL: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
     ]
     # TODO
 }
@@ -414,6 +429,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ROPE_FREQS,
     ],
     MODEL_ARCH.QWEN: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.CODESHELL: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
