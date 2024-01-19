@@ -1179,6 +1179,7 @@ class PlamoModel(Model):
 
             self.gguf_writer.add_tensor(new_name, data)
 
+
 class CodeShellModel(Model):
     def set_gguf_parameters(self):
         block_count = self.hparams["n_layer"]
