@@ -469,7 +469,7 @@ static void compute_logprobs(const float * batch_logits, int n_vocab, std::vecto
     size_t max_threads = std::min((eval_pairs.size() + k_token_chunk - 1)/k_token_chunk, workers.size());
 
     std::atomic<int> counter(0);
-    auto compute = [&counter, &eval_pairs, &eval_results, batch_logits, n_vocab] () {
+    auto compute = [&counter, &eval_pairs, &eval_results, batch_logits, n_vocab, k_token_chunk] () {
         float local_logprobs[k_token_chunk];
         while (true) {
             size_t first = counter.fetch_add(k_token_chunk, std::memory_order_relaxed);
