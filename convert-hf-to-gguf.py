@@ -189,6 +189,8 @@ class Model:
             return StableLMModel
         if model_architecture == "QWenLMHeadModel":
             return QwenModel
+        if model_architecture == "Qwen2ForCausalLM":
+            return Model
         if model_architecture == "MixtralForCausalLM":
             return MixtralModel
         if model_architecture == "GPT2LMHeadModel":
@@ -236,6 +238,8 @@ class Model:
             return gguf.MODEL_ARCH.STABLELM
         if arch == "QWenLMHeadModel":
             return gguf.MODEL_ARCH.QWEN
+        if arch == "Qwen2ForCausalLM":
+            return gguf.MODEL_ARCH.QWEN2
         if arch == "MixtralForCausalLM":
             return gguf.MODEL_ARCH.LLAMA
         if arch == "GPT2LMHeadModel":
