@@ -838,6 +838,29 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         return;
     }
 
+    fprintf(stderr, "%s : loaded %zu tasks from prompt.\n", __func__, data.size());
+
+    if (params.winogrande_tasks > 0 && params.winogrande_tasks < data.size()) {
+        fprintf(stderr, "%s : selecting %zu random tasks\n", __func__, params.winogrande_tasks);
+        std::mt19937 rng(1);
+        std::vector<int> aux(data.size());
+        for (int i = 0; i < int(data.size()); ++i) {
+            aux[i] = i;
+        }
+        float scale = 1/(1.f + (float)rng.max());
+        std::vector<winogrande_entry> selected;
+        selected.resize(params.winogrande_tasks);
+        for (int i = 0; i < int(params.winogrande_tasks); ++i) {
+            int j = int(scale*rng()*aux.size());
+            selected[i] = std::move(data[aux[j]]);
+            aux[j] = aux.back();
+            aux.pop_back();
+        }
+        data = std::move(selected);
+    }
+
+    fprintf(stderr, "%s : tokenizing selected tasks\n", __func__);
+
     // This is needed as usual for LLaMA models
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
@@ -859,27 +882,6 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
 
         task.n_base1 = ::llama_tokenize(ctx, task.first + task.choices[0], add_bos).size();
         task.n_base2 = ::llama_tokenize(ctx, task.first + task.choices[1], add_bos).size();
-    }
-
-    fprintf(stderr, "%s : loaded %zu tasks from prompt.\n", __func__, data.size());
-
-    if (params.winogrande_tasks > 0 && params.winogrande_tasks < data.size()) {
-        fprintf(stderr, "%s : selecting %zu random tasks\n", __func__, params.winogrande_tasks);
-        std::mt19937 rng(1);
-        std::vector<int> aux(data.size());
-        for (int i = 0; i < int(data.size()); ++i) {
-            aux[i] = i;
-        }
-        float scale = 1/(1.f + (float)rng.max());
-        std::vector<winogrande_entry> selected;
-        selected.resize(params.winogrande_tasks);
-        for (int i = 0; i < int(params.winogrande_tasks); ++i) {
-            int j = int(scale*rng()*aux.size());
-            selected[i] = std::move(data[aux[j]]);
-            aux[j] = aux.back();
-            aux.pop_back();
-        }
-        data = std::move(selected);
     }
 
     fprintf(stderr, "%s : calculating winogrande score over selected tasks.\n", __func__);
