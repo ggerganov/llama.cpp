@@ -1960,10 +1960,10 @@ kernel void kernel_leaky_relu_f32(
 }
 
 kernel void kernel_flash_attn_ext_f16(
-        device  const half * q,
-        device  const half * k,
-        device  const half * v,
-        device  const half * mask,
+        device const  half * q,
+        device const  half * k,
+        device const  half * v,
+        device const float * mask,
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,

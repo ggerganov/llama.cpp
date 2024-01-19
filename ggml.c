@@ -13307,6 +13307,13 @@ static void ggml_compute_forward_flash_attn_ext_f16(
     GGML_ASSERT(nb1 <= nb2);
     GGML_ASSERT(nb2 <= nb3);
 
+    // broadcast factors
+    const int64_t rk2 = neq2/nek2;
+    const int64_t rk3 = neq3/nek3;
+
+    const int64_t rv2 = neq2/nev2;
+    const int64_t rv3 = neq3/nev3;
+
     if (params->type == GGML_TASK_INIT) {
         return;
     }
@@ -13347,8 +13354,8 @@ static void ggml_compute_forward_flash_attn_ext_f16(
         if (GGML_VEC_DOT_UNROLL > 2 || nek1 % GGML_VEC_DOT_UNROLL != 0) {
             for (int64_t ic = 0; ic < nek1; ++ic) {
                 // k indices
-                const int ik3 = iq3;
-                const int ik2 = iq2 % nek2;
+                const int ik3 = iq3 / rk3;
+                const int ik2 = iq2 / rk2;
                 const int ik1 = ic;
 
                 // S indices
@@ -13362,8 +13369,8 @@ static void ggml_compute_forward_flash_attn_ext_f16(
         } else {
             for (int64_t ic = 0; ic < nek1; ic += GGML_VEC_DOT_UNROLL) {
                 // k indices
-                const int ik3 = iq3;
-                const int ik2 = iq2 % nek2;
+                const int ik3 = iq3 / rk3;
+                const int ik2 = iq2 / rk2;
                 const int ik1 = ic;
 
                 // S indices
@@ -13452,8 +13459,8 @@ static void ggml_compute_forward_flash_attn_ext_f16(
                 const int i3 = iq3;
 
                 // v indices
-                const int iv2 = iq2 % nev2;
-                const int iv3 = iq3;
+                const int iv2 = iq2 / rv2;
+                const int iv3 = iq3 / rv3;
 
                 ggml_vec_dot_f16(nev0,
                         (float *)       ((char *) dst->data + (ic*nb0 + i1*nb1  + i2*nb2   + i3*nb3)),
@@ -13468,8 +13475,8 @@ static void ggml_compute_forward_flash_attn_ext_f16(
                 const int i3 = iq3;
 
                 // v indices
-                const int iv2 = iq2 % nev2;
-                const int iv3 = iq3;
+                const int iv2 = iq2 / rv2;
+                const int iv3 = iq3 / rv3;
 
                 ggml_vec_dot_f16_unroll(nev0, nbv1,
                         (float *) ((char *) dst->data + (ic*nb0 + i1*nb1  + i2*nb2   + i3*nb3)),
