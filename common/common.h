@@ -105,6 +105,9 @@ struct gpt_params {
     bool   hellaswag       = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
+    bool   winogrande      = false; // compute Winogrande score over random tasks from datafile supplied in prompt
+    size_t winogrande_tasks= 0;     // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
+
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs

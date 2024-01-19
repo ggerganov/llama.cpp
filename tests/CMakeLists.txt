@@ -49,6 +49,7 @@ llama_build_and_test_executable(test-llama-grammar.cpp)
 llama_build_and_test_executable(test-grad0.cpp)
 # llama_build_and_test_executable(test-opt.cpp) # SLOW
 llama_build_and_test_executable(test-backend-ops.cpp)
+llama_build_and_test_executable(test-autorelease.cpp)
 
 llama_build_and_test_executable(test-rope.cpp)
 

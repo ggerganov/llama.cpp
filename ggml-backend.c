@@ -692,6 +692,8 @@ GGML_CALL static bool ggml_backend_cpu_graph_compute(ggml_backend_t backend, str
 
 GGML_CALL static bool ggml_backend_cpu_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
     switch (op->op) {
+        case GGML_OP_CPY:
+            return op->type != GGML_TYPE_IQ2_XXS && op->type != GGML_TYPE_IQ2_XS; // missing type_traits.from_float
         case GGML_OP_MUL_MAT:
             return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_internal_get_type_traits(op->src[0]->type).vec_dot_type;
         default:
@@ -802,6 +804,9 @@ struct ggml_backend_sched {
     __attribute__((aligned(GGML_MEM_ALIGN)))
     #endif
     char context_buffer[GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS*sizeof(struct ggml_tensor) + sizeof(struct ggml_cgraph)];
+
+    ggml_backend_sched_eval_callback callback_eval;
+    void * callback_eval_user_data;
 };
 
 #define hash_id(node) ggml_hash_find_or_insert(sched->hash_set, node)
@@ -1324,9 +1329,38 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
         ggml_graph_dump_dot(split->graph, NULL, split_filename);
 #endif
 
+
         uint64_t compute_start_us = ggml_time_us();
-        ggml_backend_graph_compute(split_backend, &split->graph);
-        //ggml_backend_synchronize(split_backend); // necessary to measure compute time
+        if (!sched->callback_eval) {
+            ggml_backend_graph_compute(split_backend, &split->graph);
+          //ggml_backend_synchronize(split_backend); // necessary to measure compute time
+        } else {
+            // similar to ggml_backend_compare_graph_backend
+            for (int j0 = 0; j0 < split->graph.n_nodes; j0++) {
+                struct ggml_tensor * t = split->graph.nodes[j0];
+
+                // check if the user needs data from this node
+                bool need = sched->callback_eval(t, true, sched->callback_eval_user_data);
+
+                int j1 = j0;
+
+                // determine the range [j0, j1] of nodes that can be computed together
+                while (!need && j1 < split->graph.n_nodes - 1) {
+                    t = split->graph.nodes[++j1];
+                    need = sched->callback_eval(t, true, sched->callback_eval_user_data);
+                }
+
+                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j0, j1 + 1);
+
+                ggml_backend_graph_compute(split_backend, &gv);
+
+                if (need && !sched->callback_eval(t, false, sched->callback_eval_user_data)) {
+                    break;
+                }
+
+                j0 = j1;
+            }
+        }
         uint64_t compute_end_us = ggml_time_us();
         compute_us[split_backend_id] += compute_end_us - compute_start_us;
     }
@@ -1429,6 +1463,12 @@ void ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cg
 
 void ggml_backend_sched_reset(ggml_backend_sched_t sched) {
     sched_reset(sched);
+}
+
+
+void ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data) {
+    sched->callback_eval = callback;
+    sched->callback_eval_user_data = user_data;
 }
 
 int ggml_backend_sched_get_n_splits(ggml_backend_sched_t sched) {

@@ -452,6 +452,7 @@ extern "C" {
         GGML_OP_LEAKY_RELU,
 
         GGML_OP_FLASH_ATTN,
+        GGML_OP_FLASH_ATTN_EXT,
         GGML_OP_FLASH_FF,
         GGML_OP_FLASH_ATTN_BACK,
         GGML_OP_WIN_PART,
@@ -1619,6 +1620,14 @@ extern "C" {
             struct ggml_tensor  * v,
             bool                  masked);
 
+    GGML_API struct ggml_tensor * ggml_flash_attn_ext(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * q,
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * v,
+            struct ggml_tensor  * mask,
+            float                 scale);
+
     GGML_API struct ggml_tensor * ggml_flash_attn_back(
            struct ggml_context * ctx,
            struct ggml_tensor  * q,
@@ -2065,6 +2074,18 @@ extern "C" {
     // quantization
     //
 
+    // - ggml_quantize_init can be called multiple times with the same type
+    //   it will only initialize the quantization tables for the first call or after ggml_quantize_free
+    //   automatically called by ggml_quantize_chunk for convenience
+    //
+    // - ggml_quantize_free will free any memory allocated by ggml_quantize_init
+    //   call this at the end of the program to avoid memory leaks
+    //
+    // note: these are thread-safe
+    //
+    GGML_API void ggml_quantize_init(enum ggml_type type);
+    GGML_API void ggml_quantize_free(void);
+
     // TODO: these would probably get removed in favor of the more general ggml_quantize_chunk
     GGML_API size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
@@ -2078,18 +2099,12 @@ extern "C" {
     GGML_API size_t ggml_quantize_q5_K(const float * src, void * dst, int n, int k, int64_t * hist);
     GGML_API size_t ggml_quantize_q6_K(const float * src, void * dst, int n, int k, int64_t * hist);
 
+    // some quantization type cannot be used without an importance matrix
+    GGML_API bool ggml_quantize_requires_imatrix(enum ggml_type type);
+
+    // calls ggml_quantize_init internally (i.e. can allocate memory)
     GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst,
             int start, int nrows, int n_per_row, int64_t * hist, const float * imatrix);
-
-    // These are needed for IQ2_XS and IQ2_XXS quantizations
-    GGML_API void ggml_init_iq2_quantization(enum ggml_type type);
-    GGML_API void ggml_deinit_iq2_quantization(enum ggml_type type);
-
-    //
-    // Importance matrix
-    //
-    typedef void(*ggml_collect_imatrix_t)(const struct ggml_tensor * src0, const struct ggml_tensor * src1);
-    GGML_API void ggml_set_imatrix_collection(ggml_collect_imatrix_t imatrix_collect);
 
     //
     // gguf

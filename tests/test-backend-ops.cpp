@@ -16,39 +16,37 @@
 #include <vector>
 
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
+    // static RNG initialization (revisit if n_threads stops being constant)
+    static const size_t n_threads = std::thread::hardware_concurrency();
+    static std::vector<std::default_random_engine> generators = []() {
+        std::random_device rd;
+        std::vector<std::default_random_engine> vec;
+        vec.reserve(n_threads);
+        //for (size_t i = 0; i < n_threads; i++) { vec.emplace_back(1234 + i); } // fixed seed
+        for (size_t i = 0; i < n_threads; i++) { vec.emplace_back(rd()); }
+        return vec;
+    }();
+
     size_t size = ggml_nelements(tensor);
     std::vector<float> data(size);
 
-#if 0
-    static std::default_random_engine generator(1234);
-    std::uniform_real_distribution<float> distribution(min, max);
-
-    for (size_t i = 0; i < size; i++) {
-        data[i] = distribution(generator);
-    }
-#else
-    auto init_thread = [&](size_t start, size_t end) {
-        std::random_device rd;
-        std::default_random_engine generator(rd());
+    auto init_thread = [&](size_t ith, size_t start, size_t end) {
         std::uniform_real_distribution<float> distribution(min, max);
-
         for (size_t i = start; i < end; i++) {
-            data[i] = distribution(generator);
+            data[i] = distribution(generators[ith]);
         }
     };
 
-    size_t n_threads = std::thread::hardware_concurrency();
     std::vector<std::thread> threads;
     threads.reserve(n_threads);
     for (size_t i = 0; i < n_threads; i++) {
         size_t start =     i*size/n_threads;
         size_t end   = (i+1)*size/n_threads;
-        threads.emplace_back(init_thread, start, end);
+        threads.emplace_back(init_thread, i, start, end);
     }
     for (auto & t : threads) {
         t.join();
     }
-#endif
 
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
@@ -56,7 +54,16 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
         int64_t hist[16];
-        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], hist, nullptr);
+        std::vector<float> imatrix(tensor->ne[0], 1.0f); // dummy importance matrix
+        const float * im = imatrix.data();
+        if (!ggml_quantize_requires_imatrix(tensor->type)) {
+            // when the imatrix is optional, we want to test both quantization with and without imatrix
+            // use one of the random numbers to decide
+            if (data[0] > 0.5f*(min + max)) {
+                im = nullptr;
+            }
+        }
+        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], hist, im);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
@@ -1377,6 +1384,32 @@ struct test_leaky_relu : public test_case {
     }
 };
 
+// GGML_OP_FLASH_ATTN_EXT
+struct test_flash_attn_ext : public test_case {
+    const ggml_type typeq;
+    const int64_t hs; // head size
+    const int64_t nh; // num heads
+    const int64_t kv; // kv size
+    const int64_t nt; // tokens
+
+    std::string vars() override {
+        return VARS_TO_STR5(typeq, hs, nh, kv, nt);
+    }
+
+    test_flash_attn_ext(ggml_type typeq = GGML_TYPE_F16,
+            int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nt = 8)
+        : typeq(typeq), hs(hs), nh(nh), kv(kv), nt(nt) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * q = ggml_new_tensor_4d(ctx, typeq, hs, nt, nh, 1);
+        ggml_tensor * k = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, hs, kv, nh, 1);
+        ggml_tensor * v = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, kv, hs, nh, 1);
+        ggml_tensor * mask = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kv, nt, 1, 1);
+        ggml_tensor * out = ggml_flash_attn_ext(ctx, q, k, v, mask, 1.0f/sqrtf(hs));
+        return out;
+    }
+};
+
 // Mixtral MOE
 struct test_moe : public test_case {
     const int n_experts;
@@ -1472,7 +1505,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_Q8_0,
         GGML_TYPE_Q2_K, GGML_TYPE_Q3_K,
         GGML_TYPE_Q4_K, GGML_TYPE_Q5_K,
-        GGML_TYPE_Q6_K
+        GGML_TYPE_Q6_K,
+        GGML_TYPE_IQ2_XXS, GGML_TYPE_IQ2_XS,
     };
 
     // unary ops
@@ -1642,6 +1676,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_leaky_relu());
 
+    test_cases.emplace_back(new test_flash_attn_ext(GGML_TYPE_F16, 128, 32, 96, 8));
+
 #if !defined(__SANITIZE_THREAD__)
     // FIXME: these tests use too much memory with thread sanitizer
     test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 8*1024));
@@ -1751,6 +1787,8 @@ int main(int argc, char ** argv) {
         printf("\033[1;31mFAIL\033[0m\n");
         return 1;
     }
+
+    ggml_quantize_free();
 
     printf("\033[1;32mOK\033[0m\n");
     return 0;

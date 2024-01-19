@@ -1393,6 +1393,9 @@ struct llama_cparams {
 
     bool mul_mat_q;
     bool offload_kqv;
+
+    ggml_backend_sched_eval_callback cb_eval;
+    void * cb_eval_user_data;
 };
 
 struct llama_layer {
@@ -4202,38 +4205,6 @@ static struct ggml_tensor * llm_build_kqv(
                 0);
     cb(k, "k", il);
 
-    struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
-    cb(kq, "kq", il);
-
-    if (model.arch == LLM_ARCH_PHI2) {
-        // for this arch, we need to perform the KQ multiplication with F32 precision, otherwise we get NaNs
-        // ref: https://github.com/ggerganov/llama.cpp/pull/4490#issuecomment-1859055847
-        ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
-    }
-
-    if (max_alibi_bias > 0.0f) {
-        // temporary branch until we figure out how to handle ggml_alibi through ggml_add
-        kq = ggml_scale(ctx, kq, kq_scale);
-        cb(kq, "kq_scaled", il);
-
-        if (max_alibi_bias > 0.0f) {
-            // TODO: n_head or n_head_kv
-            // TODO: K-shift is likely not working
-            // TODO: change to ggml_add
-            kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, max_alibi_bias);
-            cb(kq, "kq_scaled_alibi", il);
-        }
-
-        kq = ggml_add(ctx, kq, kq_mask);
-        cb(kq, "kq_masked", il);
-
-        kq = ggml_soft_max(ctx, kq);
-        cb(kq, "kq_soft_max", il);
-    } else {
-        kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale);
-        cb(kq, "kq_soft_max_ext", il);
-    }
-
     // split cached v into n_head heads
     struct ggml_tensor * v =
         ggml_view_3d(ctx, kv.v_l[il],
@@ -4243,8 +4214,53 @@ static struct ggml_tensor * llm_build_kqv(
                 0);
     cb(v, "v", il);
 
-    struct ggml_tensor * kqv = ggml_mul_mat(ctx, v, kq);
-    cb(kqv, "kqv", il);
+    // TODO: determine if we can use flash attention
+    const bool supports_flash_attn = true;
+
+    struct ggml_tensor * kqv;
+
+    if (supports_flash_attn) {
+        //printf("q: %4d %4d %4d %4d\n", q->ne[0], q->ne[1], q->ne[2], q->ne[3]);
+        //printf("k: %4d %4d %4d %4d\n", k->ne[0], k->ne[1], k->ne[2], k->ne[3]);
+        //printf("v: %4d %4d %4d %4d\n", v->ne[0], v->ne[1], v->ne[2], v->ne[3]);
+        //printf("m: %4d %4d %4d %4d\n", kq_mask->ne[0], kq_mask->ne[1], kq_mask->ne[2], kq_mask->ne[3]);
+        kqv = ggml_flash_attn_ext(ctx, ggml_cast(ctx, q, GGML_TYPE_F16), k, v, kq_mask, kq_scale);
+    } else {
+        struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
+        cb(kq, "kq", il);
+
+        if (model.arch == LLM_ARCH_PHI2) {
+            // for this arch, we need to perform the KQ multiplication with F32 precision, otherwise we get NaNs
+            // ref: https://github.com/ggerganov/llama.cpp/pull/4490#issuecomment-1859055847
+            ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
+        }
+
+        if (max_alibi_bias > 0.0f) {
+            // temporary branch until we figure out how to handle ggml_alibi through ggml_add
+            kq = ggml_scale(ctx, kq, kq_scale);
+            cb(kq, "kq_scaled", il);
+
+            if (max_alibi_bias > 0.0f) {
+                // TODO: n_head or n_head_kv
+                // TODO: K-shift is likely not working
+                // TODO: change to ggml_add
+                kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, max_alibi_bias);
+                cb(kq, "kq_scaled_alibi", il);
+            }
+
+            kq = ggml_add(ctx, kq, kq_mask);
+            cb(kq, "kq_masked", il);
+
+            kq = ggml_soft_max(ctx, kq);
+            cb(kq, "kq_soft_max", il);
+        } else {
+            kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale);
+            cb(kq, "kq_soft_max_ext", il);
+        }
+
+        kqv = ggml_mul_mat(ctx, v, kq);
+        cb(kqv, "kqv", il);
+    }
 
     struct ggml_tensor * kqv_merged = ggml_permute(ctx, kqv, 0, 2, 1, 3);
     cb(kqv_merged, "kqv_merged", il);
@@ -6254,6 +6270,7 @@ static int llama_decode_internal(
     //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
     ggml_backend_sched_reset(lctx.sched);
+    ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
 
     ggml_cgraph * gf = llama_build_graph(lctx, batch);
 
@@ -8743,8 +8760,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     // placeholder for the meta data
     ::zeros(fout, meta_size);
 
-    std::set<ggml_type> used_iq2;
-
     for (int i = 0; i < ml.n_tensors; ++i) {
         struct ggml_tensor * tensor = ml.get_tensor_meta(i);
 
@@ -8796,11 +8811,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
         } else {
             const size_t nelements = ggml_nelements(tensor);
-
-            if ((new_type == GGML_TYPE_IQ2_XXS || new_type == GGML_TYPE_IQ2_XS) && used_iq2.find(new_type) == used_iq2.end()) {
-                ggml_init_iq2_quantization(new_type);
-                used_iq2.insert(new_type);
-            }
 
             const float * imatrix = nullptr;
             if (imatrix_data) {
@@ -8926,10 +8936,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 
     fout.close();
-
-    for (auto type : used_iq2) {
-        ggml_deinit_iq2_quantization(type);
-    }
 
     gguf_free(ctx_out);
 
@@ -9276,6 +9282,8 @@ struct llama_context_params llama_context_default_params() {
         /*.yarn_beta_fast              =*/ 32.0f,
         /*.yarn_beta_slow              =*/ 1.0f,
         /*.yarn_orig_ctx               =*/ 0,
+        /*.cb_eval                     =*/ nullptr,
+        /*.cb_eval_user_data           =*/ nullptr,
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
         /*.mul_mat_q                   =*/ true,
@@ -9336,6 +9344,7 @@ void llama_backend_free(void) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_free();
 #endif
+    ggml_quantize_free();
 }
 
 int64_t llama_time_us(void) {
@@ -9416,6 +9425,9 @@ struct llama_context * llama_new_context_with_model(
                                hparams.n_yarn_orig_ctx != 0 ? hparams.n_yarn_orig_ctx :
                                                               hparams.n_ctx_train;
 
+    cparams.cb_eval           = params.cb_eval;
+    cparams.cb_eval_user_data = params.cb_eval_user_data;
+
     auto rope_scaling_type = params.rope_scaling_type;
     if (rope_scaling_type == LLAMA_ROPE_SCALING_UNSPECIFIED) {
         rope_scaling_type = hparams.rope_scaling_type_train;
@@ -9491,8 +9503,7 @@ struct llama_context * llama_new_context_with_model(
         }
         ctx->backends.push_back(ctx->backend_cpu);
 
-        if (!llama_kv_cache_init(ctx->kv_self, ctx->model, type_k, type_v,
-                cparams.n_ctx, cparams.offload_kqv)) {
+        if (!llama_kv_cache_init(ctx->kv_self, ctx->model, type_k, type_v, cparams.n_ctx, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;

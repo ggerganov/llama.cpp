@@ -1100,7 +1100,7 @@ class OutputFile:
             scores.append(score)
             toktypes.append(toktype)
 
-        assert(len(tokens) == vocab.vocab_size)
+        assert len(tokens) == vocab.vocab_size
 
         return tokens, scores, toktypes
 
