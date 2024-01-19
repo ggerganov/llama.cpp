@@ -12,6 +12,8 @@ shellcheck --external-sources "$this"
 source 'lib.sh'
 #### END SETUP ####
 
+shellcheck 'lib.sh'
+
 Pass() {
     local test_func="${FUNCNAME[1]}"
     _Log 'PASSED' "$test_func"
@@ -47,3 +49,10 @@ TestIsNotSet() {
         Fail 'bar was detected as set'
     else Pass; fi
 }; TestIsNotSet
+
+TestSnakeToPascalCase() {
+    local id; id=$(_SnakeToPascalCase this_is_an_id)
+    if [[ $id != ThisIsAnId ]]; then
+        Fail "this_is_an_id was converted to $id"
+    else Pass; fi
+}; TestSnakeToPascalCase

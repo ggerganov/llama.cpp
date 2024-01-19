@@ -9,62 +9,75 @@ source 'lib.sh'
 #### END SETUP ####
 
 # TODO: send model to ctest_model tests using env variable
-# GG_TEST_CTEST_MODEL_MODELFILE=<snip>
+# GG_CI_CTEST_MODELFILE=<snip>
 
 IsValidTestTarget() {
     case "$1" in
         cmake | ctest_main | model_3b | model_7b | test_cpu | test_cuda | test_metal | ctest_model)
-            return 0;;
+            return $_OK;;
         *)
-            return 1;;
+            return $_ERR;;
     esac
 }
 
-declare -a test_targets
+declare -a targets
 if (( $# > 0 )); then
-    test_targets=("$@")
-elif _IsSet GG_TEST_TARGETS; then
-    read -r -a test_targets <<< "$GG_TEST_TARGETS"
+    targets=("$@")
+elif _IsSet GG_CI_TARGETS; then
+    read -r -a targets <<< "$GG_CI_TARGETS"
 else
     cat >&2 <<'EOF'
-You must specify the test targets either as commandline arguments or using the
-GG_TEST_TARGETS environment variable. Test targets will be run sequentially
-in-order.
+usage:
+    ci-run.sh [targets...]
 
-Some test targets depend on other test targets, as described below.
+config variables:
+    GG_CI_TARGETS : Space delimited sequence of targets.
+                      Overridden by commandline arguments.
+    GG_CI_WORKDIR : Build files and results.
+                      Defaults to /tmp.
+    GG_CI_DATADIR : Persistent model files and datasets, unchanged between runs.
+                      Defaults to ~/.cache/llama.cpp/ci-data.
+    GG_CI_TEMPDIR : Scratch directory for quantized model files.
+                      Defaults to ~/.cache/llama.cpp/ci-temp
 
-cli usage:
-	ci-run.sh test_targets...
+examples:
+    # A run on a low-spec VM without a dedicated GPU.
+    ci-run.sh cmake ctest_main model_3b test_cpu ctest_model
 
-ci usage:
-	GG_TEST_TARGETS='test_targets...' ci-run.sh
-
-example:
-	# This is a typical run for a low-spec host without a dedicated GPU.
-	ci-run.sh cmake ctest_main model_3b test_cpu ctest_model
+    # A run on a Mac Studio with a ramdisk at ~/tmp
+    GG_CI_WORKDIR=~/tmp/ci-work \
+        GG_CI_TEMPDIR=~/tmp/ci-temp \
+        ci-run.sh cmake ctest_main model_7b test_cpu test_metal ctest_model
 
 test targets:
-	cmake		: run cmake to produce debug and release builds
-	ctest_main	: run main ctest tests for debug and release
-				(requires: cmake)
-	model_3b	: download and quantize openllama_3b_v2
-	model_7b	: download and quantize openllama_7b_v2
-	test_cpu	: test CPU inference, perplexity tests, etc.
-				(requires: model_3b or model_7b)
-	test_cuda	: test CUDA ...
-				(requires: model_3b or model_7b)
-	test_metal	: test Metal ...
-				(requires: model_3b or model_7b)
-	ctest_model	: run ctest tests that require the openllama model
-				(requires: model_3b or model_7b)
+    cmake           : Run cmake to produce debug and release builds.
+    ctest_main      : Run main ctest tests for debug and release.
+    model_3b,
+        model_7b    : Download and quantize openllama_3b_v2 and/or openllama_7b_v2.
+    test_cpu,
+        test_cuda,
+        test_metal  : Test CPU inference, perplexity tests, etc.
+    ctest_model     : Run ctest tests that require the openllama model.
 EOF
-    exit 1
+    exit $_ERR
 fi
 
-for target in "${test_targets[@]}"; do
+for target in "${targets[@]}"; do
     if IsValidTestTarget "$target"; then
         _LogInfo "Received test target: $target"
     else
         _LogFatal "Invalid test target: $target"
     fi
+done
+
+cd ..
+[[ -d .git && -x .git ]] || _LogFatal 'Could not cd to llama.cpp root direcory'
+
+TargetCmake() {
+    echo hello
+}
+
+for target in "${targets[@]}"; do
+    pascal_target="$(_SnakeToPascalCase "$target")"
+    "Target$pascal_target"
 done
