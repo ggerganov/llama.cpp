@@ -583,25 +583,24 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             mlp_1 = ggml_gelu(ctx0, mlp_1);
             struct ggml_tensor * mlp_3 = ggml_mul_mat(ctx0, model.mm_model_mlp_3_w, mlp_1);
             mlp_3 = ggml_add(ctx0, mlp_3, model.mm_model_mlp_3_b);
-            // transpose from [1, 576, 2048] --> [1, 24, 24, 2048] --> [1, 2048, 24, 24]
-            mlp_3 = ggml_reshape_4d(ctx0, mlp_3, mlp_3->ne[0], n_patch, n_patch, mlp_3->ne[3]);
-            // permute logic is src idxs 0,1,2,3 perm to dst idxs
-            mlp_3 = ggml_permute_cpy(ctx0, mlp_3, 2, 0, 1, 3);
-            // mlp_3 shape = [1, 2048, 24, 24],  ne = [24, 24, 2048, 1]
+            // mlp_3 shape = [1, 576, 2048], ne = [2048, 576, 1, 1]
 
             // block 1
             struct ggml_tensor * block_1 = nullptr;
             {
+                // transpose from [1, 576, 2048] --> [1, 2048, 576] --> [1, 2048, 24, 24]
+                mlp_3 = ggml_cont(ctx0, ggml_permute(ctx0, mlp_3, 1, 0, 2, 3));
+                mlp_3 = ggml_reshape_4d(ctx0, mlp_3, n_patch, n_patch, mlp_3->ne[1], mlp_3->ne[2]);
                 // stride = 1, padding = 1, bias is nullptr
                 block_1 = ggml_conv_depthwise_2d(ctx0, model.mm_model_block_1_block_0_0_w, mlp_3, nullptr, 1, 1, 1, 1, 1, 1);
                 
                 // layer norm
                 // // block_1 shape = [1, 2048, 24, 24], ne = [24, 24, 2048, 1]
-                block_1 = ggml_permute_cpy(ctx0, block_1, 1, 2, 0, 3);
+                block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 2, 0, 3));
                 // block_1 shape = [1, 24, 24, 2048], ne = [2048, 24, 24, 1]
                 block_1 = ggml_norm(ctx0, block_1, eps);
                 block_1 = ggml_add(ctx0, ggml_mul(ctx0, block_1, model.mm_model_block_1_block_0_1_w), model.mm_model_block_1_block_0_1_b);
-                block_1 = ggml_permute_cpy(ctx0, block_1, 2, 0, 1, 3);
+                block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 2, 0, 1, 3));
                 
                 // block_1 shape = [1, 2048, 24, 24], ne = [24, 24, 2048, 1]
                 // hardswish
@@ -621,17 +620,18 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 block_1 = ggml_reshape_4d(ctx0, block_1, 1, 1, block_1->ne[0], block_1->ne[1]);
                 block_1 = ggml_mul(ctx0, block_1_hw, block_1);
 
-                // block_1 shape = [1, 2048, 24, 24], ne = [24, 24, 2048, 1]
-                struct ggml_tensor* block_2_0_w_4d = ggml_reshape_4d(ctx0, model.mm_model_block_1_block_2_0_w, 1, 1, 
-                        model.mm_model_block_1_block_2_0_w->ne[0], model.mm_model_block_1_block_2_0_w->ne[1]);
-                block_1 = ggml_conv_2d(ctx0, block_2_0_w_4d, block_1, 1, 1, 0, 0, 1, 1);
+                int w = block_1->ne[0], h = block_1->ne[1];
+                block_1 = ggml_reshape_3d(ctx0, block_1, w*h, block_1->ne[2], block_1->ne[3]);
+                block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 0, 2, 3));
 
-                // layernorm
-                block_1 = ggml_permute_cpy(ctx0, block_1, 1, 2, 0, 3);
+                // block_1 shape = [1, 24*24, 2048], ne = [24*24, 2048, 1]
+                block_1 = ggml_mul_mat(ctx0, model.mm_model_block_1_block_2_0_w, block_1);
+                block_1 = ggml_reshape_4d(ctx0, block_1, block_1->ne[0], w, h, block_1->ne[3]);
+
                 // block_1 shape = [1, 24, 24, 2048], ne = [2048, 24, 24, 1]
                 block_1 = ggml_norm(ctx0, block_1, eps);
                 block_1 = ggml_add(ctx0, ggml_mul(ctx0, block_1, model.mm_model_block_1_block_2_1_w), model.mm_model_block_1_block_2_1_b);
-                block_1 = ggml_permute_cpy(ctx0, block_1, 2, 0, 1, 3);
+                block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 2, 0, 1, 3));
                 // block1 shape = [1, 2048, 24, 24], ne = [24, 24, 2048, 1]
                 // residual
                 block_1 = ggml_add(ctx0, mlp_3, block_1);
@@ -644,11 +644,11 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 
                 // block_1 shape = [1, 2048, 12, 12], ne = [12, 12, 2048, 1]
                 // layer norm
-                block_1 = ggml_permute_cpy(ctx0, block_1, 1, 2, 0, 3);
+                block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 2, 0, 3));
                 // block_1 shape = [1, 12, 12, 2048], ne = [2048, 12, 12, 1]
                 block_1 = ggml_norm(ctx0, block_1, eps);
                 block_1 = ggml_add(ctx0, ggml_mul(ctx0, block_1, model.mm_model_block_2_block_0_1_w), model.mm_model_block_2_block_0_1_b);
-                block_1 = ggml_permute_cpy(ctx0, block_1, 2, 0, 1, 3);
+                block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 2, 0, 1, 3));
                 // block_1 shape = [1, 2048, 12, 12], ne = [12, 12, 2048, 1]
                 // hardswish
                 struct ggml_tensor * block_1_hw = ggml_hardswish(ctx0, block_1);
@@ -664,22 +664,25 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 block_1 = ggml_mul_mat(ctx0, model.mm_model_block_2_block_1_fc2_w, block_1);
                 block_1 = ggml_add(ctx0, block_1, model.mm_model_block_2_block_1_fc2_b);
                 block_1 = ggml_hardsigmoid(ctx0, block_1);
-                
+
                 // block_1_hw shape = [1, 2048, 12, 12], ne = [12, 12, 2048, 1], block_1 shape = [1, 2048, 1, 1], ne = [1, 1, 2048, 1]
                 block_1 = ggml_reshape_4d(ctx0, block_1, 1, 1, block_1->ne[0], block_1->ne[1]);
                 block_1 = ggml_mul(ctx0, block_1_hw, block_1);
-                // block_1 shape = [1, 2048, 12, 12], ne = [12, 12, 2048, 1]
-                struct ggml_tensor* block_2_0_w_4d = ggml_reshape_4d(ctx0, model.mm_model_block_2_block_2_0_w, 1, 1, 
-                        model.mm_model_block_2_block_2_0_w->ne[0], model.mm_model_block_1_block_2_0_w->ne[1]);
-                block_1 = ggml_conv_2d(ctx0, block_2_0_w_4d, block_1, 1, 1, 0, 0, 1, 1);
-                // layernorm
-                block_1 = ggml_permute_cpy(ctx0, block_1, 1, 2, 0, 3);
+
+                int w = block_1->ne[0], h = block_1->ne[1];
+                block_1 = ggml_reshape_3d(ctx0, block_1, w*h, block_1->ne[2], block_1->ne[3]);
+                block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 0, 2, 3));
+                // block_1 shape = [1, 24*24, 2048], ne = [24*24, 2048, 1]
+                block_1 = ggml_mul_mat(ctx0, model.mm_model_block_2_block_2_0_w, block_1);
+                block_1 = ggml_reshape_4d(ctx0, block_1, block_1->ne[0], w, h, block_1->ne[3]);
+
+
                 // block_1 shape = [1, 12, 12, 2048], ne = [2048, 12, 12, 1]
                 block_1 = ggml_norm(ctx0, block_1, eps);
                 block_1 = ggml_add(ctx0, ggml_mul(ctx0, block_1, model.mm_model_block_2_block_2_1_w), model.mm_model_block_2_block_2_1_b);                
                 block_1 = ggml_reshape_3d(ctx0, block_1, block_1->ne[0], block_1->ne[1] * block_1->ne[2], block_1->ne[3]);
                 // block_1 shape = [1, 144, 2048], ne = [2048, 144, 1]
-            }
+            }            
             embeddings = block_1;
         }
         else {

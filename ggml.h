@@ -433,7 +433,6 @@ extern "C" {
         GGML_OP_CLAMP,
         GGML_OP_CONV_TRANSPOSE_1D,
         GGML_OP_IM2COL,
-        GGML_OP_CONV_DEPTHWISE_2D,
         GGML_OP_CONV_TRANSPOSE_2D,
         GGML_OP_POOL_1D,
         GGML_OP_POOL_2D,
@@ -1290,15 +1289,6 @@ extern "C" {
             size_t                offset);
 
     GGML_API struct ggml_tensor * ggml_permute(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a,
-            int                   axis0,
-            int                   axis1,
-            int                   axis2,
-            int                   axis3);
-
-    // some operations don't support permuted tensor, so we need to copy it, to avoid this case
-    GGML_API struct ggml_tensor * ggml_permute_cpy(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   axis0,
