@@ -182,7 +182,7 @@ function gg_sum_ctest_with_model_debug {
     gg_printf 'Runs ctest with model files in debug mode\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '```\n'
-    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest_with_model.log)"
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
     gg_printf '```\n'
 }
 
@@ -192,7 +192,7 @@ function gg_sum_ctest_with_model_release {
     gg_printf 'Runs ctest with model files in release mode\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '```\n'
-    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest_with_model.log)"
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
     gg_printf '```\n'
 }
 
