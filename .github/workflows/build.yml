@@ -515,6 +515,31 @@ jobs:
       - name: Build Xcode project
         run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
 
+  android-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v3
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: 17
+          distribution: zulu
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          log-accepted-android-sdk-licenses: false
+
+      - name: Build
+        run: |
+          cd examples/llama.android
+
+          # Skip armeabi-v7a for now (https://github.com/llvm/llvm-project/issues/65820).
+          ./gradlew build --no-daemon -Pskip-armeabi-v7a
+
 #  freeBSD-latest:
 #    runs-on: macos-12
 #    steps:

@@ -1180,8 +1180,9 @@ struct llama_server_context
         return slot.images.size() > 0;
     }
 
-    void send_error(task_server& task, std::string error)
+    void send_error(task_server& task, const std::string &error)
     {
+        LOG_TEE("task %i - error: %s\n", task.id, error.c_str());
         std::unique_lock<std::mutex> lock(mutex_results);
         task_result res;
         res.id = task.id;
@@ -1557,6 +1558,7 @@ struct llama_server_context
     void process_tasks()
     {
         std::unique_lock<std::mutex> lock(mutex_tasks);
+        std::vector<task_server> deferred_tasks;
         while (!queue_tasks.empty())
         {
             task_server task = queue_tasks.front();
@@ -1567,15 +1569,24 @@ struct llama_server_context
                     llama_client_slot *slot = get_slot(json_value(task.data, "slot_id", -1));
                     if (slot == nullptr)
                     {
-                        LOG_TEE("slot unavailable\n");
-                        // send error result
-                        send_error(task, "slot unavailable");
-                        return;
+                        // if no slot is available, we defer this task for processing later
+                        deferred_tasks.push_back(task);
+                        break;
                     }
 
                     if (task.data.contains("system_prompt"))
                     {
+                        if (!all_slots_are_idle) {
+                            send_error(task, "system prompt can only be updated when all slots are idle");
+                            break;
+                        }
                         process_system_prompt_data(task.data["system_prompt"]);
+
+                        // reset cache_tokens for all slots
+                        for (llama_client_slot &slot : slots)
+                        {
+                            slot.cache_tokens.clear();
+                        }
                     }
 
                     slot->reset();
@@ -1603,6 +1614,12 @@ struct llama_server_context
                     }
                 } break;
             }
+        }
+
+        // add all the deferred tasks back the the queue
+        for (task_server &task : deferred_tasks)
+        {
+            queue_tasks.push_back(task);
         }
 
         // remove finished multitasks from the queue of multitasks, and add the corresponding result to the result queue
@@ -1652,8 +1669,7 @@ struct llama_server_context
         // attend tasks
         process_tasks();
 
-        // update the system prompt wait until all slots are idle state
-        if (system_need_update && all_slots_are_idle)
+        if (system_need_update)
         {
             LOG_TEE("updating system prompt\n");
             update_system_prompt();

@@ -167,6 +167,24 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.n_threads_batch <= 0) {
                 params.n_threads_batch = std::thread::hardware_concurrency();
             }
+        } else if (arg == "-td" || arg == "--threads-draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_threads_draft = std::stoi(argv[i]);
+            if (params.n_threads_draft <= 0) {
+                params.n_threads_draft = std::thread::hardware_concurrency();
+            }
+        } else if (arg == "-tbd" || arg == "--threads-batch-draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_threads_batch_draft = std::stoi(argv[i]);
+            if (params.n_threads_batch_draft <= 0) {
+                params.n_threads_batch_draft = std::thread::hardware_concurrency();
+            }
         } else if (arg == "-p" || arg == "--prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -663,6 +681,14 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.hellaswag_tasks = std::stoi(argv[i]);
+        } else if (arg == "--winogrande") {
+            params.winogrande = true;
+        } else if (arg == "--winogrande-tasks") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.winogrande_tasks = std::stoi(argv[i]);
         } else if (arg == "--ignore-eos") {
             params.ignore_eos = true;
         } else if (arg == "--no-penalize-nl") {
@@ -845,6 +871,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads);
     printf("  -tb N, --threads-batch N\n");
     printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");
+    printf("  -td N, --threads-draft N");
+    printf("                        number of threads to use during generation (default: same as --threads)");
+    printf("  -tbd N, --threads-batch-draft N\n");
+    printf("                        number of threads to use during batch and prompt processing (default: same as --threads-draft)\n");
     printf("  -p PROMPT, --prompt PROMPT\n");
     printf("                        prompt to start generation with (default: empty)\n");
     printf("  -e, --escape          process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
@@ -904,6 +934,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --logits-all          return logits for all tokens in the batch (default: disabled)\n");
     printf("  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
     printf("  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
+    printf("  --winogrande          compute Winogrande score over random tasks from datafile supplied with -f\n");
+    printf("  --winogrande-tasks N  number of tasks to use when computing the Winogrande score (default: %zu)\n", params.winogrande_tasks);
     printf("  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
     printf("  --draft N             number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
     printf("  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);

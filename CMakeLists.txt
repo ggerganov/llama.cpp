@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)  # for add_link_options
+cmake_minimum_required(VERSION 3.14)  # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -47,6 +47,7 @@ option(BUILD_SHARED_LIBS                "build shared libraries"                
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
 option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
 option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
+option(LLAMA_CCACHE                     "llama: use ccache if available"                        ON)
 
 # debug
 option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"                   ON)
@@ -74,6 +75,10 @@ option(LLAMA_FMA                             "llama: enable FMA"                
 # in MSVC F16C is implied with AVX2/AVX512
 if (NOT MSVC)
     option(LLAMA_F16C                        "llama: enable F16C"                               ${INS_ENB})
+endif()
+
+if (WIN32)
+    option(LLAMA_WIN_VER                     "llama: Windows Version"                           0x602)
 endif()
 
 # 3rd party libs
@@ -557,6 +562,17 @@ if (LLAMA_LTO)
     endif()
 endif()
 
+if (LLAMA_CCACHE)
+    find_program(LLAMA_CCACHE_FOUND ccache)
+    if (LLAMA_CCACHE_FOUND)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        set(ENV{CCACHE_SLOPPINESS} time_macros)
+        message(STATUS "Using ccache")
+    else()
+        message(STATUS "Warning: ccache not found - consider installing it or use LLAMA_CCACHE=OFF")
+    endif ()
+endif()
+
 # this version of Apple ld64 is buggy
 execute_process(
     COMMAND ${CMAKE_C_COMPILER} ${CMAKE_EXE_LINKER_FLAGS} -Wl,-v
@@ -589,6 +605,13 @@ if (NOT MSVC)
         add_compile_options(-pg)
     endif()
 endif()
+
+function(add_compile_option_cpp ARG)
+    # Adds a compile option to C/C++ only, but not for Cuda.
+    # Use, e.g., for CPU-architecture flags.
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:${ARG}>)
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:${ARG}>)
+endfunction()
 
 if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64") OR ("${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "arm64"))
     message(STATUS "ARM detected")
@@ -624,8 +647,7 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GE
             include(cmake/FindSIMD.cmake)
         endif ()
         if (LLAMA_AVX512)
-            add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX512>)
-            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX512>)
+            add_compile_option_cpp(/arch:AVX512)
             # MSVC has no compile-time flags enabling specific
             # AVX512 extensions, neither it defines the
             # macros corresponding to the extensions.
@@ -639,37 +661,35 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GE
                 add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AVX512VNNI__>)
             endif()
         elseif (LLAMA_AVX2)
-            add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX2>)
-            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX2>)
+            add_compile_option_cpp(/arch:AVX2)
         elseif (LLAMA_AVX)
-            add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX>)
-            add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX>)
+            add_compile_option_cpp(/arch:AVX)
         endif()
     else()
         if (LLAMA_NATIVE)
-            add_compile_options(-march=native)
+            add_compile_option_cpp(-march=native)
         endif()
         if (LLAMA_F16C)
-            add_compile_options(-mf16c)
+            add_compile_option_cpp(-mf16c)
         endif()
         if (LLAMA_FMA)
-            add_compile_options(-mfma)
+            add_compile_option_cpp(-mfma)
         endif()
         if (LLAMA_AVX)
-            add_compile_options(-mavx)
+            add_compile_option_cpp(-mavx)
         endif()
         if (LLAMA_AVX2)
-            add_compile_options(-mavx2)
+            add_compile_option_cpp(-mavx2)
         endif()
         if (LLAMA_AVX512)
-            add_compile_options(-mavx512f)
-            add_compile_options(-mavx512bw)
+            add_compile_option_cpp(-mavx512f)
+            add_compile_option_cpp(-mavx512bw)
         endif()
         if (LLAMA_AVX512_VBMI)
-            add_compile_options(-mavx512vbmi)
+            add_compile_option_cpp(-mavx512vbmi)
         endif()
         if (LLAMA_AVX512_VNNI)
-            add_compile_options(-mavx512vnni)
+            add_compile_option_cpp(-mavx512vnni)
         endif()
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
@@ -686,7 +706,7 @@ endif()
 
 if (MINGW)
     # Target Windows 8 for PrefetchVirtualMemory
-    add_compile_definitions(_WIN32_WINNT=0x602)
+    add_compile_definitions(_WIN32_WINNT=${LLAMA_WIN_VER})
 endif()
 
 #
@@ -838,7 +858,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
               ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama)
 
-set(GGML_PUBLIC_HEADERS "ggml.h"
+set(GGML_PUBLIC_HEADERS "ggml.h" "ggml-alloc.h" "ggml-backend.h"
         "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
         "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
 

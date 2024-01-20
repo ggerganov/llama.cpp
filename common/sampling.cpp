@@ -190,6 +190,11 @@ static llama_token llama_sampling_sample_impl(
         logits[it->first] += it->second;
     }
 
+    if (ctx_cfg) {
+        float * logits_guidance = llama_get_logits_ith(ctx_cfg, idx);
+        llama_sample_apply_guidance(ctx_main, logits, logits_guidance, params.cfg_scale);
+    }
+
     cur.clear();
 
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
@@ -197,10 +202,6 @@ static llama_token llama_sampling_sample_impl(
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
-
-    if (ctx_cfg) {
-        llama_sample_classifier_free_guidance(ctx_main, &cur_p, ctx_cfg, params.cfg_scale);
-    }
 
     // apply penalties
     const auto& penalty_tokens = params.use_penalty_prompt_tokens ? params.penalty_prompt_tokens : prev;
