@@ -1035,13 +1035,13 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    params.n_batch = 512;
+    //params.n_batch = 512;
     if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
     params.logits_all = true;
-    params.n_batch = std::min(params.n_batch, params.n_ctx);
+    //params.n_batch = std::min(params.n_batch, params.n_ctx);
 
     if (params.ppl_stride > 0) {
         fprintf(stderr, "Will perform strided perplexity calculation -> adjusting context size from %d to %d\n",

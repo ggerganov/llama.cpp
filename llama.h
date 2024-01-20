@@ -218,7 +218,8 @@ extern "C" {
     struct llama_context_params {
         uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
-        uint32_t n_batch;           // prompt processing maximum batch size
+        uint32_t n_batch;           // prompt processing maximum batch size (ignored if n_ubatch is set)
+        uint32_t n_ubatch;          // prompt processing maximum batch size
         uint32_t n_threads;         // number of threads to use for generation
         uint32_t n_threads_batch;   // number of threads to use for batch processing
         int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`

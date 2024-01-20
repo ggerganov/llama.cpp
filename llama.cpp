@@ -1418,6 +1418,7 @@ struct llama_hparams {
 struct llama_cparams {
     uint32_t n_ctx;       // context size used during inference
     uint32_t n_batch;
+    uint32_t n_ubatch;
     uint32_t n_threads;       // number of threads to use for generation
     uint32_t n_threads_batch; // number of threads to use for batch processing
 
@@ -6629,11 +6630,11 @@ static int llama_decode_internal(
 #endif
 
 
-    const uint32_t n_microbatch = cparams.n_batch;
+    const uint32_t n_ubatch = cparams.n_ubatch;
     //const uint32_t n_microbatch = 256;
 
-    for (uint32_t cur_token = 0; cur_token < n_tokens_all; cur_token += n_microbatch) {
-        const uint32_t n_tokens = std::min(n_microbatch, n_tokens_all - cur_token);
+    for (uint32_t cur_token = 0; cur_token < n_tokens_all; cur_token += n_ubatch) {
+        const uint32_t n_tokens = std::min(n_ubatch, n_tokens_all - cur_token);
 
         llama_batch batch = {
             /* .n_tokens   = */ (int32_t) n_tokens,
@@ -6831,8 +6832,8 @@ static int llama_decode_internal(
         }
     }
 
-    //ggml_backend_sched_synchronize(lctx.sched);
-    //lctx.buf_cpu_ub_cur = 0;
+    ggml_backend_sched_synchronize(lctx.sched);
+    lctx.buf_cpu_ub_cur = 0;
 
     // measure the performance only for the single-token evals
     if (n_tokens_all == 1) {
@@ -9701,7 +9702,8 @@ struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
-        /*.n_batch                     =*/ 512,
+        /*.n_batch                     =*/ 4096,
+        /*.n_ubatch                    =*/ 256,
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_UNSPECIFIED,
@@ -9838,6 +9840,7 @@ struct llama_context * llama_new_context_with_model(
     auto       & cparams = ctx->cparams;
 
     cparams.n_batch          = params.n_batch;
+    cparams.n_ubatch         = params.n_ubatch == 0 ? params.n_batch : params.n_ubatch;
     cparams.n_threads        = params.n_threads;
     cparams.n_threads_batch  = params.n_threads_batch;
     cparams.yarn_ext_factor  = params.yarn_ext_factor;
@@ -9876,6 +9879,8 @@ struct llama_context * llama_new_context_with_model(
     }
 
     LLAMA_LOG_INFO("%s: n_ctx      = %u\n",     __func__, cparams.n_ctx);
+    LLAMA_LOG_INFO("%s: n_batch    = %u\n",     __func__, cparams.n_batch);
+    LLAMA_LOG_INFO("%s: n_ubatch   = %u\n",     __func__, cparams.n_ubatch);
     LLAMA_LOG_INFO("%s: freq_base  = %.1f\n",   __func__, cparams.rope_freq_base);
     LLAMA_LOG_INFO("%s: freq_scale = %g\n",     __func__, cparams.rope_freq_scale);
 
@@ -9985,7 +9990,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->alloc_cpu = ggml_backend_sched_get_tallocr(ctx->sched, ctx->backend_cpu);
 
             // build worst-case graph
-            int n_tokens = (int)std::min(cparams.n_ctx, cparams.n_batch);
+            int n_tokens = (int)std::min(cparams.n_ctx, cparams.n_ubatch);
             int n_past = cparams.n_ctx - n_tokens;
             llama_token token = llama_token_bos(&ctx->model); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             ggml_cgraph * gf = llama_build_graph(*ctx, llama_batch_get_one(&token, n_tokens, n_past, 0));
