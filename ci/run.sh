@@ -508,9 +508,175 @@ function gg_sum_open_llama_7b_v2 {
 # requires: GG_BUILD_CUDA
 
 function gg_run_mistral_7b_v0_1 {
+    cd ${SRC}
+
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/raw/main/config.json
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/raw/main/generation_config.json
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/resolve/main/model-00001-of-00002.safetensors
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/resolve/main/model-00002-of-00002.safetensors
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/raw/main/model.safetensors.index.json
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/resolve/main/pytorch_model-00001-of-00002.bin
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/resolve/main/pytorch_model-00002-of-00002.bin
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/raw/main/pytorch_model.bin.index.json
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/raw/main/special_tokens_map.json
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/raw/main/tokenizer.json
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/resolve/main/tokenizer.model
+    gg_wget models-mnt/mistral/7B_v0_1/ https://huggingface.co/mistralai/Mistral-7B-v0.1/raw/main/tokenizer_config.json
+
+    gg_wget models-mnt/wikitext/ https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
+    unzip -o models-mnt/wikitext/wikitext-2-raw-v1.zip -d models-mnt/wikitext/
+
+    path_models="../models-mnt/mistral/7B_v0_1"
+    path_wiki="../models-mnt/wikitext/wikitext-2-raw"
+
+    rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
+
+    set -e
+
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUBLAS=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                                             ) 2>&1 | tee -a $OUT/${ci}-make.log
+
+    python3 ../convert.py ${path_models}
+
+    model_f16="${path_models}/ggml-model-f16.gguf"
+    model_q8_0="${path_models}/ggml-model-q8_0.gguf"
+    model_q4_0="${path_models}/ggml-model-q4_0.gguf"
+    model_q4_1="${path_models}/ggml-model-q4_1.gguf"
+    model_q5_0="${path_models}/ggml-model-q5_0.gguf"
+    model_q5_1="${path_models}/ggml-model-q5_1.gguf"
+    model_q2_k="${path_models}/ggml-model-q2_k.gguf"
+    model_q3_k="${path_models}/ggml-model-q3_k.gguf"
+    model_q4_k="${path_models}/ggml-model-q4_k.gguf"
+    model_q5_k="${path_models}/ggml-model-q5_k.gguf"
+    model_q6_k="${path_models}/ggml-model-q6_k.gguf"
+
+    wiki_test="${path_wiki}/wiki.test.raw"
+
+    ./bin/quantize ${model_f16} ${model_q8_0} q8_0
+    ./bin/quantize ${model_f16} ${model_q4_0} q4_0
+    ./bin/quantize ${model_f16} ${model_q4_1} q4_1
+    ./bin/quantize ${model_f16} ${model_q5_0} q5_0
+    ./bin/quantize ${model_f16} ${model_q5_1} q5_1
+    ./bin/quantize ${model_f16} ${model_q2_k} q2_k
+    ./bin/quantize ${model_f16} ${model_q3_k} q3_k
+    ./bin/quantize ${model_f16} ${model_q4_k} q4_k
+    ./bin/quantize ${model_f16} ${model_q5_k} q5_k
+    ./bin/quantize ${model_f16} ${model_q6_k} q6_k
+
+    (time ./bin/main --model ${model_f16}  -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/main --model ${model_q8_0} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/main --model ${model_q4_0} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/main --model ${model_q4_1} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/main --model ${model_q5_0} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/main --model ${model_q5_1} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/main --model ${model_q2_k} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
+    (time ./bin/main --model ${model_q3_k} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/main --model ${model_q4_k} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/main --model ${model_q5_k} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/main --model ${model_q6_k} -t 1 -ngl 999 -s 1234 -n 256 --ignore-eos -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+
+    (time ./bin/perplexity --model ${model_f16}  -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-f16.log
+    (time ./bin/perplexity --model ${model_q8_0} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
+    (time ./bin/perplexity --model ${model_q4_0} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_0.log
+    (time ./bin/perplexity --model ${model_q4_1} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_1.log
+    (time ./bin/perplexity --model ${model_q5_0} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_0.log
+    (time ./bin/perplexity --model ${model_q5_1} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_1.log
+    (time ./bin/perplexity --model ${model_q2_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q2_k.log
+    (time ./bin/perplexity --model ${model_q3_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q3_k.log
+    (time ./bin/perplexity --model ${model_q4_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q4_k.log
+    (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
+    (time ./bin/perplexity --model ${model_q6_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
+
+    (time ./bin/imatrix --model ${model_f16} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-imatrix.log
+
+    (time ./bin/save-load-state --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
+
+    function check_ppl {
+        qnt="$1"
+        ppl=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
+
+        if [ $(echo "$ppl > 20.0" | bc) -eq 1 ]; then
+            printf '  - %s @ %s (FAIL: ppl > 20.0)\n' "$qnt" "$ppl"
+            return 20
+        fi
+
+        printf '  - %s @ %s OK\n' "$qnt" "$ppl"
+        return 0
+    }
+
+    check_ppl "f16"  "$(cat $OUT/${ci}-tg-f16.log  | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q8_0" "$(cat $OUT/${ci}-tg-q8_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_0" "$(cat $OUT/${ci}-tg-q4_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_1" "$(cat $OUT/${ci}-tg-q4_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_0" "$(cat $OUT/${ci}-tg-q5_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_1" "$(cat $OUT/${ci}-tg-q5_1.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q2_k" "$(cat $OUT/${ci}-tg-q2_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q3_k" "$(cat $OUT/${ci}-tg-q3_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+    check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+
+    cat $OUT/${ci}-imatrix.log | grep "Final" >> $OUT/${ci}-imatrix-sum.log
+
+    # lora
+    function compare_ppl {
+        qnt="$1"
+        ppl1=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
+        ppl2=$(echo "$3" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
+
+        if [ $(echo "$ppl1 < $ppl2" | bc) -eq 1 ]; then
+            printf '  - %s @ %s (FAIL: %s > %s)\n' "$qnt" "$ppl" "$ppl1" "$ppl2"
+            return 20
+        fi
+
+        printf '  - %s @ %s %s OK\n' "$qnt" "$ppl1" "$ppl2"
+        return 0
+    }
+
+    path_lora="../models-mnt/mistral/7B-v2/lora"
+    path_shakespeare="../models-mnt/shakespeare"
+
+    shakespeare="${path_shakespeare}/shakespeare.txt"
+    lora_shakespeare="${path_lora}/ggml-adapter-model.bin"
+
+# TODO - we need mistral lora
+    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/adapter_config.json
+    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/adapter_model.bin
+    gg_wget ${path_shakespeare} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/shakespeare.txt
+
+    python3 ../convert-lora-to-ggml.py ${path_lora}
+
+    # f16
+    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare}                            -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-f16.log
+    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare} --lora ${lora_shakespeare} -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-f16.log
+    compare_ppl "f16 shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-f16.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
+
+
+    set +e
 }
 
 function gg_sum_mistral_7b_v0_1 {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'MisTral 7B-v0.1:\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
+    gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
+    gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
+    gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
+    gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
+    gg_printf '- q4_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_0.log)"
+    gg_printf '- q4_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_1.log)"
+    gg_printf '- q5_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_0.log)"
+    gg_printf '- q5_1:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_1.log)"
+    gg_printf '- q2_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q2_k.log)"
+    gg_printf '- q3_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q3_k.log)"
+    gg_printf '- q4_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_k.log)"
+    gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
+    gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
+    gg_printf '- save-load-state: \n```\n%s\n```\n' "$(cat $OUT/${ci}-save-load-state.log)"
+    gg_printf '- shakespeare (f16):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-f16.log)"
+    gg_printf '- shakespeare (f16 lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log)"
 }
 
 ## main
@@ -537,6 +703,7 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
             test $ret -eq 0 && gg_run open_llama_3b_v2
         else
             test $ret -eq 0 && gg_run open_llama_7b_v2
+            test $ret -eq 0 && gg_run mistral_7b_v0_1
         fi
     fi
 fi
