@@ -1,5 +1,19 @@
 # llama.cpp for SYCL
 
+[Background](#background)
+
+[OS](#os)
+
+[Intel GPU](#intel-gpu)
+
+[Linux](#linux)
+
+[Environment Variable](#environment-variable)
+
+[Known Issue](#known-issue)
+
+[Todo](#todo)
+
 ## Background
 
 SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators—such as CPUs, GPUs, and FPGAs. It is a single-source embedded domain-specific language based on pure C++17.
@@ -7,9 +21,6 @@ SYCL is a higher-level programming model to improve programming productivity on 
 oneAPI is a specification that is open and standards-based, supporting multiple architecture types including but not limited to GPU, CPU, and FPGA. The spec has both direct programming and API-based programming paradigms.
 
 Intel uses the SYCL as direct programming language to support CPU, GPUs and FPGAs.
-
-
-## llama.cpp for SYCL
 
 To avoid to re-invent the wheel, this code refer other code paths in llama.cpp (like OpenBLAS, cuBLAS, CLBlast). We use a open-source tool [SYCLomatic](https://github.com/oneapi-src/SYCLomatic) (Commercial release [Intel® DPC++ Compatibility Tool](https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compatibility-tool.html)) migrate to SYCL.
 
@@ -190,7 +201,7 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 ```
 
 
-### Environment Variable
+## Environment Variable
 
 #### Build
 
@@ -209,3 +220,16 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 |-|-|-|
 |GGML_SYCL_DEVICE|0 (default) or 1|Set the device id used. Check the device ids by default running output|
 |GGML_SYCL_DEBUG|0 (default) or 1|Enable log function by macro: GGML_SYCL_DEBUG|
+
+## Known Issue
+
+-  Hang during startup
+
+  llama.cpp use mmap as default way to read model file and copy to GPU. In some system, memcpy will be abnormal and block.
+  Solution: add **--no-mmap**.
+
+## Todo
+
+- Support to build in Windows.
+
+- Support multiple cards.
