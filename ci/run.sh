@@ -137,18 +137,23 @@ function gg_sum_ctest_release {
     gg_printf '```\n'
 }
 
-function gg_run_ctest_with_model_debug {
-    cd ${SRC}
-    local model
-    if [[ -d $MNT/models/open-llama/3B-v2 ]]; then
-        model="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
-    elif [[ -d $MNT/models/open-llama/7B-v2 ]]; then
-        model="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
+function gg_get_model {
+    local gguf_3b="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
+    local gguf_7b="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
+    if [[ -s $gguf_3b ]]; then
+        echo -n "$gguf_3b"
+    elif [[ -s $gguf_7b ]]; then
+        echo -n "$gguf_7b"
     else
         echo >&2 "No model found. Can't run gg_run_ctest_with_model."
         exit 1
     fi
+}
 
+function gg_run_ctest_with_model_debug {
+    cd ${SRC}
+
+    local model; model=$(gg_get_model)
     cd build-ci-debug
     set -e
     (GG_RUN_CTEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
@@ -158,16 +163,8 @@ function gg_run_ctest_with_model_debug {
 
 function gg_run_ctest_with_model_release {
     cd ${SRC}
-    local model
-    if [[ -d $MNT/models/open-llama/3B-v2 ]]; then
-        model="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
-    elif [[ -d $MNT/models/open-llama/7B-v2 ]]; then
-        model="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
-    else
-        echo >&2 "No model found. Can't run gg_run_ctest_with_model."
-        exit 1
-    fi
 
+    local model; model=$(gg_get_model)
     cd build-ci-release
     set -e
     (GG_RUN_CTEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
