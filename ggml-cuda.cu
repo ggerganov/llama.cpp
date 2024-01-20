@@ -10842,8 +10842,11 @@ GGML_CALL static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend,
 GGML_CALL static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, const ggml_tensor * src, ggml_tensor * dst) {
     GGML_ASSERT(ggml_backend_is_cuda(backend_src) || ggml_backend_is_cuda(backend_dst));
 
+    ggml_backend_buffer_t buf_src = src->view_src ? src->view_src->buffer : src->buffer;
+    ggml_backend_buffer_t buf_dst = dst->view_src ? dst->view_src->buffer : dst->buffer;
+
     // host -> device
-    if (ggml_backend_buffer_is_cuda_host(src->buffer) && ggml_backend_buffer_is_cuda(dst->buffer)) {
+    if (ggml_backend_buffer_is_cuda_host(buf_src) && ggml_backend_buffer_is_cuda(buf_dst)) {
         ggml_backend_cuda_context * cuda_ctx_dst = (ggml_backend_cuda_context *)backend_dst->context;
         // make sure the data is ready on the source backend
         // the CPU backend does not support async compute, so this does nothing at the moment
@@ -10854,7 +10857,7 @@ GGML_CALL static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_
     }
 
     // device -> host
-    if (ggml_backend_buffer_is_cuda_host(dst->buffer) && ggml_backend_buffer_is_cuda(src->buffer)) {
+    if (ggml_backend_buffer_is_cuda_host(buf_dst) && ggml_backend_buffer_is_cuda(buf_src)) {
         // this shoudln't happen currently because the dst backend is our own backend, which does not support host buffers
         GGML_ASSERT(false);
         ggml_backend_cuda_context * cuda_ctx_src = (ggml_backend_cuda_context *)backend_src->context;
@@ -10875,9 +10878,14 @@ GGML_CALL static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_
     ggml_backend_cuda_context * cuda_ctx_dst = (ggml_backend_cuda_context *)backend_dst->context;
 
     if (backend_src != backend_dst) {
-        //printf("async copy between devices %s, %d -> %d\n", src->name, cuda_ctx_src->device, cuda_ctx_dst->device);
-        cudaDeviceSynchronize();
-        // TODO: reuse event?
+        ggml_backend_cuda_buffer_context * buf_ctx_src = (ggml_backend_cuda_buffer_context *)buf_src->context;
+        ggml_backend_cuda_buffer_context * buf_ctx_dst = (ggml_backend_cuda_buffer_context *)buf_dst->context;
+
+        GGML_ASSERT(cuda_ctx_src->device == buf_ctx_src->device);
+        GGML_ASSERT(cuda_ctx_dst->device == buf_ctx_dst->device);
+
+        ggml_cuda_set_device(cuda_ctx_src->device);
+
         cudaEvent_t event;
         CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
 
@@ -10885,12 +10893,16 @@ GGML_CALL static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_
         CUDA_CHECK(cudaEventRecord(event, g_cudaStreams[cuda_ctx_src->device][0]));
 
         // wait on dst stream
+        ggml_cuda_set_device(cuda_ctx_dst->device);
         CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[cuda_ctx_dst->device][0], event, 0));
 
+        CUDA_CHECK(cudaMemcpyPeerAsync(dst->data, cuda_ctx_dst->device, src->data, cuda_ctx_src->device, ggml_nbytes(dst), g_cudaStreams[cuda_ctx_dst->device][0]));
+
         CUDA_CHECK(cudaEventDestroy(event));
+    } else {
+        // copy
+        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
     }
-    // copy
-    CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, g_cudaStreams[cuda_ctx_dst->device][0]));
     return true;
 }
 

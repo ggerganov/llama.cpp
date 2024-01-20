@@ -1663,6 +1663,16 @@ struct llama_model {
 struct llama_context {
     llama_context(const llama_model & model) : model(model), t_start_us(model.t_start_us), t_load_us(model.t_load_us) {}
     ~llama_context() {
+        for (auto & it : bufs_compute) {
+            // restore the original buffer in the tallocr
+            ggml_tallocr_t allocr = ggml_backend_sched_get_tallocr(sched, it.first);
+            ggml_tallocr_set_buffer(allocr, it.second[0]);
+            // free the rest of the buffers
+            for (size_t i = 1; i < it.second.size(); ++i) {
+                ggml_backend_buffer_free(it.second[i]);
+            }
+        }
+
         ggml_backend_sched_free(sched);
 
         for (ggml_backend_t backend : backends) {
@@ -1670,6 +1680,7 @@ struct llama_context {
         }
 
         ggml_backend_buffer_free(buf_logits);
+
     }
 
     llama_cparams cparams;
@@ -1719,10 +1730,11 @@ struct llama_context {
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_t sched = nullptr;
     // allocator for the input tensors
-    ggml_tallocr * alloc_cpu = nullptr;
+    ggml_tallocr_t alloc_cpu = nullptr;
 
-    std::vector<ggml_backend_buffer_t> buf_cpu_ub;
-    size_t buf_cpu_ub_cur = 0;
+    std::map<ggml_backend_t, std::vector<ggml_backend_buffer_t>> bufs_compute;
+    size_t n_compute_bufs = 0;
+    size_t i_compute_buf = 0;
 
     // temporary buffer for copying data to/from the backend
     std::vector<no_init<uint8_t>> buf_copy;
@@ -6704,15 +6716,17 @@ static int llama_decode_internal(
         //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
         // change the CPU compute buffer to avoid overwriting inputs
-        size_t buf_cpu_ub_cur = lctx.buf_cpu_ub_cur;
-        lctx.buf_cpu_ub_cur = (lctx.buf_cpu_ub_cur + 1) % lctx.buf_cpu_ub.size();
-        if (buf_cpu_ub_cur == 0 && cur_token > 0) {
+        size_t i_compute_buf = lctx.i_compute_buf;
+        lctx.i_compute_buf = (lctx.i_compute_buf + 1) % lctx.n_compute_bufs;
+        if (i_compute_buf == 0 && cur_token > 0) {
             // sync all backends to ensure that the current buffer is not in use
             printf("not enough buffers, syncing now\n");
             ggml_backend_sched_synchronize(lctx.sched);
         }
-
-        ggml_tallocr_set_buffer(lctx.alloc_cpu, lctx.buf_cpu_ub.at(buf_cpu_ub_cur));
+        for (auto it : lctx.bufs_compute) {
+            ggml_tallocr_t alloc = ggml_backend_sched_get_tallocr(lctx.sched, it.first);
+            ggml_tallocr_set_buffer(alloc, it.second.at(i_compute_buf));
+        }
 
         ggml_backend_sched_reset(lctx.sched);
 
@@ -6833,7 +6847,7 @@ static int llama_decode_internal(
     }
 
     ggml_backend_sched_synchronize(lctx.sched);
-    lctx.buf_cpu_ub_cur = 0;
+    lctx.i_compute_buf = 0;
 
     // measure the performance only for the single-token evals
     if (n_tokens_all == 1) {
@@ -10003,14 +10017,26 @@ struct llama_context * llama_new_context_with_model(
             ctx->alloc_cpu = ggml_backend_sched_get_tallocr(ctx->sched, ctx->backend_cpu);
 
             // duplicate cpu buffers for microbatching
-            ggml_backend_buffer_t buf_cpu = ggml_tallocr_get_buffer(ctx->alloc_cpu);
-            size_t buf_size = ggml_backend_buffer_get_size(buf_cpu);
-            ctx->buf_cpu_ub.push_back(buf_cpu);
-            int n_ub = 64;
-            for (int i = 1; i < n_ub; ++i) {
-                ggml_backend_buffer_t buf = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), buf_size);
-                ctx->buf_cpu_ub.push_back(buf);
+            const int n_ub = 16;
+            ctx->n_compute_bufs = n_ub;
+
+            for (ggml_backend_t b : ctx->backends) {
+                ggml_tallocr_t alloc = ggml_backend_sched_get_tallocr(ctx->sched, b);
+                ggml_backend_buffer_t buf = ggml_tallocr_get_buffer(alloc);
+                size_t buf_size = ggml_backend_buffer_get_size(buf);
+                ctx->bufs_compute[b].push_back(buf);
+                auto * buft = ggml_backend_buffer_get_type(buf);
+                for (int i = 1; i < n_ub; ++i) {
+                    ggml_backend_buffer_t buf = ggml_backend_buft_alloc_buffer(buft, buf_size);
+                    if (buf == nullptr) {
+                        LLAMA_LOG_ERROR("%s: failed to allocate compute buffer\n", __func__);
+                        llama_free(ctx);
+                        return nullptr;
+                    }
+                    ctx->bufs_compute[b].push_back(buf);
+                }
             }
+
             // allocate buffer for logits output
             ctx->buf_logits = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), hparams.n_vocab*cparams.n_ctx*sizeof(float));
             if (ctx->buf_logits == nullptr) {
@@ -10816,13 +10842,13 @@ int32_t llama_decode(
 
 float * llama_get_logits(struct llama_context * ctx) {
     ggml_backend_sched_synchronize(ctx->sched);
-    ctx->buf_cpu_ub_cur = 0;
+    ctx->i_compute_buf = 0;
     return ctx->logits;
 }
 
 float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
     ggml_backend_sched_synchronize(ctx->sched);
-    ctx->buf_cpu_ub_cur = 0;
+    ctx->i_compute_buf = 0;
 
     assert(ctx->logits_valid.at(i));
     return ctx->logits + i*ctx->model.hparams.n_vocab;
@@ -10830,7 +10856,7 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
 
 float * llama_get_embeddings(struct llama_context * ctx) {
     ggml_backend_sched_synchronize(ctx->sched);
-    ctx->buf_cpu_ub_cur = 0;
+    ctx->i_compute_buf = 0;
 
     return ctx->embedding.data();
 }
