@@ -3,6 +3,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <vector>
+#include <string>
 #include <unordered_map>
 
 static const std::vector<std::pair<uint32_t, uint32_t>> digit_ranges = {
