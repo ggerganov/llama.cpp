@@ -504,6 +504,15 @@ function gg_sum_open_llama_7b_v2 {
     #gg_printf '- shakespeare (q8_0 / f16 base lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log)"
 }
 
+# Mistral-7B-v0.1
+# requires: GG_BUILD_CUDA
+
+function gg_run_mistral_7b_v0_1 {
+}
+
+function gg_sum_mistral_7b_v0_1 {
+}
+
 ## main
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
