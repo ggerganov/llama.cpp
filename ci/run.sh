@@ -640,11 +640,12 @@ function gg_run_mistral_7b_v0_1 {
     lora_shakespeare="${path_lora}/ggml-adapter-model.bin"
 
 # TODO - we need mistral lora
-    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/adapter_config.json
-    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/adapter_model.bin
-    gg_wget ${path_shakespeare} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/shakespeare.txt
 
-    python3 ../convert-lora-to-ggml.py ${path_lora}
+    gg_wget ${path_lora} https://huggingface.co/datasets/segmond/mistral_7b_v0_1_q8_0_shakespeare_lora/blob/main/adapter_model.bin
+    gg_wget ${path_shakespeare} https://huggingface.co/datasets/segmond/mistral_7b_v0_1_q8_0_shakespeare_lora/blob/main/shakespeare.txt
+
+    # model is in gguf format since we finetuned from gguf
+    #python3 ../convert-lora-to-ggml.py ${path_lora}
 
     # f16
     (time ./bin/perplexity --model ${model_f16} -f ${shakespeare}                            -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-f16.log
