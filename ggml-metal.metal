@@ -1981,7 +1981,8 @@ kernel void kernel_flash_attn_ext_f16(
         constant  uint64_t & nb1,
         constant  uint64_t & nb2,
         constant  uint64_t & nb3,
-        constant   float & scale,
+        constant     float & scale,
+        threadgroup  float * shared [[threadgroup(0)]],
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]]) {

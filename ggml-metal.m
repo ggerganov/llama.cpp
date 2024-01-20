@@ -2207,9 +2207,15 @@ static bool ggml_metal_graph_compute(
                         [encoder setBytes:&nb3     length:sizeof(uint64_t) atIndex:20];
                         [encoder setBytes:&scale   length:sizeof(   float) atIndex:21];
 
+                        const int nwarps = 4;
+
+                        // each warp needs n_embd_head elements
+                        GGML_ASSERT(nwarps*ne00*sizeof(float) <= ctx->device.maxThreadgroupMemoryLength);
+                        [encoder setThreadgroupMemoryLength:nwarps*ne00*sizeof(float) atIndex:0];
+
                         const int nth = MIN(1024, ne0);
 
-                        [encoder dispatchThreadgroups:MTLSizeMake(ne1, ne2, ne3) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
+                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nwarps, 1)];
                     } break;
                 case GGML_OP_DUP:
                 case GGML_OP_CPY:
