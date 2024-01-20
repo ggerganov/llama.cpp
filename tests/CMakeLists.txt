@@ -55,11 +55,11 @@ llama_build_and_test_executable(test-llama-grammar.cpp)
 llama_build_and_test_executable(test-grad0.cpp)
 # llama_build_and_test_executable(test-opt.cpp) # SLOW
 llama_build_and_test_executable(test-backend-ops.cpp)
-llama_build_and_test_executable(test-autorelease.cpp)
 
 llama_build_and_test_executable(test-rope.cpp)
 
 llama_build_and_test_executable_with_label(test-model-load-cancel.cpp "model")
+llama_build_and_test_executable_with_label(test-autorelease.cpp "model")
 
 # dummy executable - not installed
 get_filename_component(TEST_TARGET test-c.c NAME_WE)
