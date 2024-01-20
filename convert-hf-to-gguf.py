@@ -10,7 +10,7 @@ import re
 import sys
 from enum import IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast, Optional
+from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast
 
 import numpy as np
 import torch
@@ -487,7 +487,8 @@ class MPTModel(Model):
             # map tensor names
             if "scales" in name:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias", ".scales"))
-                new_name = new_name.replace("scales", "act.scales")
+                if new_name is not None:
+                    new_name = new_name.replace("scales", "act.scales")
             else:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
@@ -904,7 +905,7 @@ class QwenModel(Model):
         return ''.join([byte_encoder[ord(char)] for char in b.decode('latin-1')])
 
     @staticmethod
-    def bpe(mergeable_ranks: dict[bytes, int], token: bytes, max_rank: Optional[int] = None) -> list[bytes]:
+    def bpe(mergeable_ranks: dict[bytes, int], token: bytes, max_rank: int | None = None) -> list[bytes]:
         parts = [bytes([b]) for b in token]
         while True:
             min_idx = None
@@ -1285,7 +1286,7 @@ def main() -> None:
 
     if args.awq_path:
         sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
-        from awq.apply_awq import add_scale_weights
+        from awq.apply_awq import add_scale_weights  # type: ignore[import-not-found]
         tmp_model_path = args.model / "weighted_model"
         dir_model = tmp_model_path
         if tmp_model_path.is_dir():
