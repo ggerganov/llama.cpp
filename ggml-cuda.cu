@@ -115,6 +115,7 @@
 
 #endif // defined(GGML_USE_HIPBLAS)
 
+// ggml-cuda need half type so keep ggml headers include at last 
 #include "ggml-cuda.h"
 #include "ggml.h"
 #include "ggml-backend-impl.h"
