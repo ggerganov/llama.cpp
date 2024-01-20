@@ -2,11 +2,21 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
-int main(void) {
-    const auto * model_path = "models/7B/ggml-model-f16.gguf";
+int main(int argc, char *argv[] ) {
+    char * model_path;
+    if (argc > 1) {
+        model_path = argv[1];
+    } else {
+        model_path = getenv("GG_RUN_CTEST_MODELFILE");
+        if (!model_path || strlen(model_path) == 0) {
+            fprintf(stderr, "error: no model file provided\n");
+            exit(1);
+        }
+    }
+
     auto * file = fopen(model_path, "r");
-
     if (file == nullptr) {
         fprintf(stderr, "no model at '%s' found\n", model_path);
         return EXIT_FAILURE;
