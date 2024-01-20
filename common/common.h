@@ -46,7 +46,9 @@ struct gpt_params {
     uint32_t seed                           = -1;    // RNG seed
 
     int32_t n_threads                       = get_num_physical_cores();
+    int32_t n_threads_draft                 = -1;
     int32_t n_threads_batch                 = -1;    // number of threads to use for batch processing (-1 = use n_threads)
+    int32_t n_threads_batch_draft           = -1;
     int32_t n_predict                       = -1;    // new tokens to predict
     int32_t n_ctx                           = 512;   // context size
     int32_t n_batch                         = 512;   // batch size for prompt processing (must be >=32 to use BLAS)
@@ -102,6 +104,9 @@ struct gpt_params {
                                     //
     bool   hellaswag       = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
+
+    bool   winogrande      = false; // compute Winogrande score over random tasks from datafile supplied in prompt
+    size_t winogrande_tasks= 0;     // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
 
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool random_prompt     = false; // do not randomize prompt if none provided

@@ -6,28 +6,41 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
-  # Optional binary cache
-  nixConfig = {
-    extra-substituters = [
-      # Populated by the CI in ggerganov/llama.cpp
-      "https://llama-cpp.cachix.org"
-
-      # A development cache for nixpkgs imported with `config.cudaSupport = true`.
-      # Populated by https://hercules-ci.com/github/SomeoneSerge/nixpkgs-cuda-ci.
-      # This lets one skip building e.g. the CUDA-enabled openmpi.
-      # TODO: Replace once nix-community obtains an official one.
-      "https://cuda-maintainers.cachix.org"
-    ];
-
-    # Verify these are the same keys as published on
-    # - https://app.cachix.org/cache/llama-cpp
-    # - https://app.cachix.org/cache/cuda-maintainers
-    extra-trusted-public-keys = [
-      "llama-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc="
-      "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
-    ];
-  };
-
+  # There's an optional binary cache available. The details are below, but they're commented out.
+  #
+  # Why? The terrible experience of being prompted to accept them on every single Nix command run.
+  # Plus, there are warnings shown about not being a trusted user on a default Nix install
+  # if you *do* say yes to the prompts.
+  #
+  # This experience makes having `nixConfig` in a flake a persistent UX problem.
+  #
+  # To make use of the binary cache, please add the relevant settings to your `nix.conf`.
+  # It's located at `/etc/nix/nix.conf` on non-NixOS systems. On NixOS, adjust the `nix.settings`
+  # option in your NixOS configuration to add `extra-substituters` and `extra-trusted-public-keys`,
+  # as shown below.
+  #
+  # ```
+  # nixConfig = {
+  #   extra-substituters = [
+  #     # Populated by the CI in ggerganov/llama.cpp
+  #     "https://llama-cpp.cachix.org"
+  #
+  #     # A development cache for nixpkgs imported with `config.cudaSupport = true`.
+  #     # Populated by https://hercules-ci.com/github/SomeoneSerge/nixpkgs-cuda-ci.
+  #     # This lets one skip building e.g. the CUDA-enabled openmpi.
+  #     # TODO: Replace once nix-community obtains an official one.
+  #     "https://cuda-maintainers.cachix.org"
+  #   ];
+  #
+  #   # Verify these are the same keys as published on
+  #   # - https://app.cachix.org/cache/llama-cpp
+  #   # - https://app.cachix.org/cache/cuda-maintainers
+  #   extra-trusted-public-keys = [
+  #     "llama-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc="
+  #     "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
+  #   ];
+  # };
+  # ```
 
   # For inspection, use `nix flake show github:ggerganov/llama.cpp` or the nix repl:
   #
