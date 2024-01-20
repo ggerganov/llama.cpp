@@ -22,9 +22,9 @@ mkdir -p "$2"
 OUT=$(realpath "$1")
 MNT=$(realpath "$2")
 
-rm -f $OUT/*.log
-rm -f $OUT/*.exit
-rm -f $OUT/*.md
+rm -f "$OUT/*.log"
+rm -f "$OUT/*.exit"
+rm -f "$OUT/*.md"
 
 sd=`dirname $0`
 cd $sd/../
@@ -137,17 +137,58 @@ function gg_sum_ctest_release {
     gg_printf '```\n'
 }
 
-function gg_run_ctest_with_model {
+function gg_run_ctest_with_model_debug {
     cd ${SRC}
+    local model
+    if [[ -d $MNT/models/open-llama/3B-v2 ]]; then
+        model="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
+    elif [[ -d $MNT/models/open-llama/7B-v2 ]]; then
+        model="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
+    else
+        echo >&2 "No model found. Can't run gg_run_ctest_with_model."
+        exit 1
+    fi
+
+    cd build-ci-debug
     set -e
-    (time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest_with_model.log
+    (GG_RUN_CTEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
     set +e
+    cd ..
 }
 
-function gg_sum_ctest_with_model {
+function gg_run_ctest_with_model_release {
+    cd ${SRC}
+    local model
+    if [[ -d $MNT/models/open-llama/3B-v2 ]]; then
+        model="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
+    elif [[ -d $MNT/models/open-llama/7B-v2 ]]; then
+        model="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
+    else
+        echo >&2 "No model found. Can't run gg_run_ctest_with_model."
+        exit 1
+    fi
+
+    cd build-ci-release
+    set -e
+    (GG_RUN_CTEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    set +e
+    cd ..
+}
+
+function gg_sum_ctest_with_model_debug {
     gg_printf '### %s\n\n' "${ci}"
 
-    gg_printf 'Runs ctest with model files\n'
+    gg_printf 'Runs ctest with model files in debug mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest_with_model.log)"
+    gg_printf '```\n'
+}
+
+function gg_sum_ctest_with_model_release {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs ctest with model files in release mode\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '```\n'
     gg_printf '%s\n' "$(cat $OUT/${ci}-ctest_with_model.log)"
@@ -535,7 +576,8 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
         else
             test $ret -eq 0 && gg_run open_llama_7b_v2
         fi
-        test $ret -eq 0 && gg_run ctest_with_model
+        test $ret -eq 0 && gg_run ctest_with_model_debug
+        test $ret -eq 0 && gg_run ctest_with_model_release
     fi
 fi
 
