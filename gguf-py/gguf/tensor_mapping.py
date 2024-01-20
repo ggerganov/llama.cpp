@@ -154,6 +154,7 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.rotary_emb.inv_freq",        # llama-hf
             "layers.{bid}.attention.inner_attention.rope.freqs",       # llama-pth
             "model.layers.layers.{bid}.self_attn.rotary_emb.inv_freq", # plamo
+            "transformer.h.{bid}.attn.rotary_emb.inv_freq",            # codeshell
         ),
 
         # Feed-forward norm
