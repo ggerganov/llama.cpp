@@ -13419,8 +13419,8 @@ static void ggml_compute_forward_flash_attn_ext_f16(
         const int ik2 = iq2 / rk2;
 
         // v indices
-        const int iv2 = iq2 / rv2;
         const int iv3 = iq3 / rv3;
+        const int iv2 = iq2 / rv2;
 
         // online softmax / attention
         // loop over n_kv and n_head_kv

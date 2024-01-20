@@ -278,6 +278,10 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
             NSURL * libURL = [NSURL fileURLWithPath:libPath];
             GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [libPath UTF8String]);
             ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
+            if (error) {
+                GGML_METAL_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
+                return NULL;
+            }
         } else {
             GGML_METAL_LOG_INFO("%s: default.metallib not found, loading from source\n", __func__);
 
@@ -316,12 +320,11 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
                 //[options setFastMathEnabled:false];
 
                 ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
+                if (error) {
+                    GGML_METAL_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
+                    return NULL;
+                }
             }
-        }
-
-        if (error) {
-            GGML_METAL_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
-            return NULL;
         }
     }
 
@@ -396,6 +399,9 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
             struct ggml_metal_kernel * kernel = &ctx->kernels[e]; \
             kernel->function = [ctx->library newFunctionWithName:@"kernel_"#name]; \
             kernel->pipeline = [ctx->device newComputePipelineStateWithFunction:kernel->function error:&error]; \
+            GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
+                    (int) kernel->pipeline.maxTotalThreadsPerThreadgroup, \
+                    (int) kernel->pipeline.threadExecutionWidth); \
             if (error) { \
                 GGML_METAL_LOG_ERROR("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
                 return NULL; \
@@ -2171,11 +2177,27 @@ static bool ggml_metal_graph_compute(
                         struct ggml_tensor * src2 = gf->nodes[i]->src[2];
                         struct ggml_tensor * src3 = gf->nodes[i]->src[3];
 
+                        GGML_ASSERT(ggml_are_same_shape(src1, src2));
+
                         size_t offs_src2 = 0;
                         size_t offs_src3 = 0;
 
-                        id<MTLBuffer> id_src2 = src2 ? ggml_metal_get_buffer(ctx, src2, &offs_src2) : nil;
+                        GGML_ASSERT(src2);
+                        id<MTLBuffer> id_src2 = ggml_metal_get_buffer(ctx, src2, &offs_src2);
+
                         id<MTLBuffer> id_src3 = src3 ? ggml_metal_get_buffer(ctx, src3, &offs_src3) : nil;
+
+                        const int64_t  ne30 = src3 ? src3->ne[0] : 0; GGML_UNUSED(ne30);
+                        const int64_t  ne31 = src3 ? src3->ne[1] : 0;
+                        const int64_t  ne32 = src3 ? src3->ne[2] : 0; GGML_UNUSED(ne32);
+                        const int64_t  ne33 = src3 ? src3->ne[3] : 0; GGML_UNUSED(ne33);
+
+                        const uint64_t nb30 = src3 ? src3->nb[0] : 0; GGML_UNUSED(nb30);
+                        const uint64_t nb31 = src3 ? src3->nb[1] : 0;
+                        const uint64_t nb32 = src3 ? src3->nb[2] : 0; GGML_UNUSED(nb32);
+                        const uint64_t nb33 = src3 ? src3->nb[3] : 0; GGML_UNUSED(nb33);
+
+                        const enum ggml_type src2t = src2 ? src2->type : GGML_TYPE_COUNT; GGML_UNUSED(src2t);
 
                         float scale;
                         memcpy(&scale, dst->op_params, sizeof(float));
@@ -2197,25 +2219,28 @@ static bool ggml_metal_graph_compute(
                         [encoder setBytes:&nb01    length:sizeof(uint64_t) atIndex:10];
                         [encoder setBytes:&nb02    length:sizeof(uint64_t) atIndex:11];
                         [encoder setBytes:&nb03    length:sizeof(uint64_t) atIndex:12];
-                        [encoder setBytes:&ne0     length:sizeof( int64_t) atIndex:13];
-                        [encoder setBytes:&ne1     length:sizeof( int64_t) atIndex:14];
-                        [encoder setBytes:&ne2     length:sizeof( int64_t) atIndex:15];
-                        [encoder setBytes:&ne3     length:sizeof( int64_t) atIndex:16];
-                        [encoder setBytes:&nb0     length:sizeof(uint64_t) atIndex:17];
-                        [encoder setBytes:&nb1     length:sizeof(uint64_t) atIndex:18];
-                        [encoder setBytes:&nb2     length:sizeof(uint64_t) atIndex:19];
-                        [encoder setBytes:&nb3     length:sizeof(uint64_t) atIndex:20];
-                        [encoder setBytes:&scale   length:sizeof(   float) atIndex:21];
+                        [encoder setBytes:&ne10    length:sizeof( int64_t) atIndex:13];
+                        [encoder setBytes:&ne11    length:sizeof( int64_t) atIndex:14];
+                        [encoder setBytes:&ne12    length:sizeof( int64_t) atIndex:15];
+                        [encoder setBytes:&ne13    length:sizeof( int64_t) atIndex:16];
+                        [encoder setBytes:&nb10    length:sizeof(uint64_t) atIndex:17];
+                        [encoder setBytes:&nb11    length:sizeof(uint64_t) atIndex:18];
+                        [encoder setBytes:&nb12    length:sizeof(uint64_t) atIndex:19];
+                        [encoder setBytes:&nb13    length:sizeof(uint64_t) atIndex:20];
+                        [encoder setBytes:&ne31    length:sizeof( int64_t) atIndex:21];
+                        [encoder setBytes:&nb31    length:sizeof(uint64_t) atIndex:22];
+                        [encoder setBytes:&ne0     length:sizeof( int64_t) atIndex:23];
+                        [encoder setBytes:&ne1     length:sizeof( int64_t) atIndex:24];
+                        [encoder setBytes:&ne2     length:sizeof( int64_t) atIndex:25];
+                        [encoder setBytes:&ne3     length:sizeof( int64_t) atIndex:26];
+                        [encoder setBytes:&scale   length:sizeof(   float) atIndex:27];
 
-                        const int nwarps = 4;
+                        const int nwarps = 1;
 
-                        // each warp needs n_embd_head elements
-                        GGML_ASSERT(nwarps*ne00*sizeof(float) <= ctx->device.maxThreadgroupMemoryLength);
-                        [encoder setThreadgroupMemoryLength:nwarps*ne00*sizeof(float) atIndex:0];
+                        GGML_ASSERT(2*32*nwarps*ne00*sizeof(float) <= ctx->device.maxThreadgroupMemoryLength);
+                        [encoder setThreadgroupMemoryLength:2*32*nwarps*ne00*sizeof(float) atIndex:0];
 
-                        const int nth = MIN(1024, ne0);
-
-                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nwarps, 1)];
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 31)/32, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
                     } break;
                 case GGML_OP_DUP:
                 case GGML_OP_CPY:

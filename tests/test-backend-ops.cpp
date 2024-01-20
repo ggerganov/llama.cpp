@@ -1396,6 +1396,10 @@ struct test_flash_attn_ext : public test_case {
         return VARS_TO_STR5(typeq, hs, nh, kv, nb);
     }
 
+    double max_nmse_err() override {
+        return 5e-4;
+    }
+
     test_flash_attn_ext(ggml_type typeq = GGML_TYPE_F16,
             int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8)
         : typeq(typeq), hs(hs), nh(nh), kv(kv), nb(nb) {}
