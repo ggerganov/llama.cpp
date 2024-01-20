@@ -47,6 +47,7 @@ option(BUILD_SHARED_LIBS                "build shared libraries"                
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
 option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
 option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
+option(LLAMA_CCACHE                     "llama: use ccache if available"                        ON)
 
 # debug
 option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"                   ON)
@@ -559,6 +560,17 @@ if (LLAMA_LTO)
     else()
         message(WARNING "IPO is not supported: ${output}")
     endif()
+endif()
+
+if (LLAMA_CCACHE)
+    find_program(LLAMA_CCACHE_FOUND ccache)
+    if (LLAMA_CCACHE_FOUND)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        set(ENV{CCACHE_SLOPPINESS} time_macros)
+        message(STATUS "Using ccache")
+    else()
+        message(STATUS "Warning: ccache not found - consider installing it or use LLAMA_CCACHE=OFF")
+    endif ()
 endif()
 
 # this version of Apple ld64 is buggy
