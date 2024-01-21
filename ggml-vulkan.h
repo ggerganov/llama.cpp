@@ -11,7 +11,7 @@ extern "C" {
 
 GGML_API void ggml_vk_init(void);
 
-GGML_API void ggml_vk_preallocate_buffers_graph(struct ggml_tensor * node, struct ggml_cgraph * graph);
+GGML_API void ggml_vk_preallocate_buffers_graph(struct ggml_tensor * node);
 GGML_API void ggml_vk_preallocate_buffers(void);
 GGML_API void ggml_vk_build_graph(struct ggml_tensor * node, bool last_node);
 GGML_API bool ggml_vk_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor);
@@ -23,8 +23,6 @@ GGML_API void ggml_vk_graph_cleanup(void);
 
 GGML_API void * ggml_vk_host_malloc(size_t size);
 GGML_API void   ggml_vk_host_free(void * ptr);
-
-GGML_API void ggml_vk_free_data(const struct ggml_tensor * tensor);
 
 GGML_API void ggml_vk_transform_tensor_temporary(const void * data, struct ggml_tensor * tensor);
 GGML_API void ggml_vk_transform_tensor_static(const void * data, struct ggml_tensor * tensor);

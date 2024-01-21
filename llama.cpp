@@ -9489,7 +9489,6 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_VULKAN)
         if (model->n_gpu_layers > 0) {
-            // with split_mode LLAMA_SPLIT_NONE or LLAMA_SPLIT_ROW, only the main GPU backend is used
             ggml_backend_t backend = ggml_backend_vk_init();
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);

@@ -187,16 +187,8 @@ struct ggml_tensor_extra_gpu {
 
     size_t ctx_idx;
 
-    int d_idx;
-
-    size_t tensor_size;
-
-    bool buffer_static;
-    vk_buffer * buffer_gpu;
-    uint64_t base_buffer_offset;
-    uint64_t view_offset;
-
-    bool prepared;
+    vk_buffer buffer_gpu;
+    uint64_t offset;
 
     void reset() {
         ready = false;
@@ -205,13 +197,8 @@ struct ggml_tensor_extra_gpu {
         in0_staging_event = (vk::Event) VK_NULL_HANDLE;
         in1_staging_event = (vk::Event) VK_NULL_HANDLE;
         ctx_idx = 0;
-        d_idx = 0;
-        tensor_size = 0;
-        buffer_static = 0;
-        buffer_gpu = nullptr;
-        base_buffer_offset = 0;
-        view_offset = 0;
-        prepared = false;
+        buffer_gpu.size = 0;
+        offset = 0;
     }
 };
 
@@ -260,20 +247,20 @@ static size_t vk_semaphore_idx, vk_event_idx;
 static ggml_vk_garbage_collector vk_gc;
 static std::vector<std::tuple<void*, size_t, vk_buffer>> vk_pinned_memory;
 static size_t vk_prealloc_size_qx, vk_prealloc_size_qy, vk_prealloc_size_x, vk_prealloc_size_y, vk_prealloc_size_split_k;
-static std::vector<size_t> vk_prealloc_d_sizes;
-static std::vector<ggml_tensor *> vk_prealloc_d_blocked;
 static vk_buffer vk_prealloc_qx, vk_prealloc_qy, vk_prealloc_x, vk_prealloc_y, vk_prealloc_split_k;
-static std::vector<vk_buffer> vk_prealloc_d_buffers;
 static vk::Fence vk_fence;
 static vk_buffer vk_staging;
 static size_t vk_staging_size;
 static size_t vk_staging_offset;
+static vk_buffer vk_sync_staging;
 
 static vk_context * vk_ctx;
 
+static bool vk_disable;
+
 #ifdef GGML_VULKAN_CHECK_RESULTS
-    size_t vk_skip_checks;
-    size_t vk_output_tensor;
+size_t vk_skip_checks;
+size_t vk_output_tensor;
 #endif
 
 static vk_pipeline ggml_vk_create_pipeline(const std::string& name, size_t spv_size, const void* spv_data, const std::string& entrypoint, uint32_t parameter_count, uint32_t push_constant_size, std::array<uint32_t, 3> wg_denoms, std::vector<uint32_t>&& specialization_constants, uint32_t align) {
@@ -716,7 +703,7 @@ static vk_subbuffer ggml_vk_subbuffer(vk_buffer& buf) {
     return { buf, 0, VK_WHOLE_SIZE };
 }
 
-static void ggml_vk_sync_buffers(vk::CommandBuffer& cmd_buffer, std::vector<vk_subbuffer>&& buffers, vk_queue& q, vk::AccessFlags&& src_mask, vk::AccessFlags&& dst_mask, bool force_sync) {
+static void ggml_vk_sync_buffers(vk::CommandBuffer& cmd_buffer, std::vector<vk_subbuffer>&& buffers, vk_queue& q, bool force_sync) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_sync_buffers()" << std::endl;
 #endif
@@ -730,11 +717,11 @@ static void ggml_vk_sync_buffers(vk::CommandBuffer& cmd_buffer, std::vector<vk_s
             sfi = buf.buffer.qf_owner;
             dfi = q.queue_family_index;
             buf.buffer.qf_owner = dfi;
-            bmem_barriers.push_back({ src_mask, dst_mask, sfi, dfi, buf.buffer.buffer, buf.offset, buf.size });
+            bmem_barriers.push_back({ { vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite }, { vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite }, sfi, dfi, buf.buffer.buffer, buf.offset, buf.size });
         } else if (force_sync) {
             sfi = VK_QUEUE_FAMILY_IGNORED;
             dfi = VK_QUEUE_FAMILY_IGNORED;
-            bmem_barriers.push_back({ src_mask, dst_mask, sfi, dfi, buf.buffer.buffer, buf.offset, buf.size });
+            bmem_barriers.push_back({ { vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite }, { vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite }, sfi, dfi, buf.buffer.buffer, buf.offset, buf.size });
         }
     }
 
@@ -774,6 +761,10 @@ static void ggml_vk_destroy_buffer(vk_buffer& buf) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_destroy_buffer(" << buf.size << ")" << std::endl;
 #endif
+    if (buf.size == 0) {
+        return;
+    }
+
     buf.size = 0;
     vk_device.device.freeMemory(buf.device_memory);
     vk_device.device.destroyBuffer(buf.buffer);
@@ -1104,6 +1095,8 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
 
     vk_ctx = nullptr;
 
+    vk_disable = false;
+
 #ifdef GGML_VULKAN_CHECK_RESULTS
     const char* skip_checks = getenv("GGML_VULKAN_SKIP_CHECKS");
     vk_skip_checks = (skip_checks == NULL ? 0 : atoi(skip_checks));
@@ -1165,9 +1158,9 @@ static vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type) {
 
 static vk_buffer g_vk_buffer_pool[MAX_VK_BUFFERS];
 
-static vk_buffer ggml_vk_pool_malloc(size_t size, vk::MemoryPropertyFlags req_flags) {
+static vk_buffer ggml_vk_pool_malloc(size_t size) {
 #ifdef VK_DEBUG
-    std::cerr << "ggml_vk_pool_malloc(" << size << ", " << to_string(req_flags) << ")" << std::endl;
+    std::cerr << "ggml_vk_pool_malloc(" << size << ")" << std::endl;
 #endif
     int best_i = -1;
     size_t best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
@@ -1196,7 +1189,7 @@ static vk_buffer ggml_vk_pool_malloc(size_t size, vk::MemoryPropertyFlags req_fl
         ggml_vk_destroy_buffer(b);
     }
 
-    return ggml_vk_create_buffer(size, vk::MemoryPropertyFlagBits::eDeviceLocal | req_flags);
+    return ggml_vk_create_buffer(size, vk::MemoryPropertyFlagBits::eDeviceLocal);
 }
 
 static void ggml_vk_pool_free(vk_buffer& buffer) {
@@ -1216,17 +1209,20 @@ static void ggml_vk_pool_free(vk_buffer& buffer) {
     ggml_vk_destroy_buffer(buffer);
 }
 
-void ggml_vk_free_data(const struct ggml_tensor* tensor) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_free_data(" << tensor << ")" << std::endl;
-#endif
-    if (tensor->backend != GGML_BACKEND_GPU) {
-        return;
+// Returns an available temporary buffer that may only be used temporarily, it will be reused
+static vk_buffer ggml_vk_create_buffer_temp(size_t size) {
+    // Try to find existing temp buffer with enough capacity
+    for (auto& buffer : vk_gc.temp_buffers) {
+        if (buffer.size >= size) {
+            return buffer;
+        }
     }
 
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
-    ggml_vk_destroy_buffer(*extra->buffer_gpu);
-    free(extra->buffer_gpu);
+    // Otherwise create new buffer
+    vk_buffer buf = ggml_vk_pool_malloc(size);
+    vk_gc.temp_buffers.push_back(buf);
+
+    return buf;
 }
 
 void* ggml_vk_host_malloc(size_t size) {
@@ -1367,7 +1363,7 @@ static void deferred_memcpy(void * dst, const void * src, size_t size, std::vect
     }
 }
 
-static void ggml_vk_buffer_write_nc_async(vk_context& ctx, vk_buffer* dst, size_t offset, const ggml_tensor * tensor, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, vk::Event * event = nullptr, bool allow_staging_resize = false) {
+static void ggml_vk_buffer_write_nc_async(vk_context& ctx, vk_buffer* dst, size_t offset, const ggml_tensor * tensor, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, vk::Event * event = nullptr, bool sync_staging = false) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_buffer_write_nc_async(" << tensor << ")" << std::endl;
 #endif
@@ -1434,58 +1430,61 @@ static void ggml_vk_buffer_write_nc_async(vk_context& ctx, vk_buffer* dst, size_
             }
         }
 
-        ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite, true);
+        ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, true);
         ctx.s->buffer.copyBuffer(buf->buffer, dst->buffer, slices);
         return;
     }
 
-    // Staging buffer required, malloc because of async transfer
-    if (vk_staging.size < dst->size) {
-        if (!allow_staging_resize) {
-            std::cerr << "ERROR: Staging buffer too small. Required: " << dst->size << ", found: " << vk_staging.size << std::endl;
+    // Staging buffer required
+    vk_buffer * staging = &vk_staging;
+    size_t staging_offset = vk_staging_offset;
+    if (vk_staging.size < vk_staging_offset + dst->size) {
+        if (sync_staging) {
+            // Create temporary larger buffer
+            if (vk_sync_staging.size < dst->size) {
+                ggml_vk_destroy_buffer(vk_sync_staging);
+                vk_sync_staging = ggml_vk_create_buffer(dst->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+            }
+
+            staging = &vk_sync_staging;
+            staging_offset = 0;
+        } else {
             GGML_ASSERT(false);
         }
-        // Resize buffer
-        if (vk_staging.size > 0) {
-            ggml_vk_destroy_buffer(vk_staging);
-        }
-        vk_staging = ggml_vk_create_buffer(dst->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
     }
 
-    VkBufferCopy buf_copy{ vk_staging_offset, offset, ts*ne/bs };
+    VkBufferCopy buf_copy{ staging_offset, offset, ts*ne/bs };
 
     if (event != nullptr) {
         *event = ggml_vk_create_event();
         ggml_vk_wait_events(ctx.s->buffer, { *event }, { vk::PipelineStageFlagBits::eHost }, q.stage_flags);
     }
-    ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite, true);
-    vkCmdCopyBuffer(ctx.s->buffer, vk_staging.buffer, dst->buffer, 1, &buf_copy);
+    ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, true);
+    vkCmdCopyBuffer(ctx.s->buffer, staging->buffer, dst->buffer, 1, &buf_copy);
 
     for (uint64_t i3 = 0; i3 < ne3; i3++) {
         for (uint64_t i2 = 0; i2 < ne2; i2++) {
             // Find longest contiguous slice
             if (ne1*nb1 == dstnb2) {
-                deferred_memcpy((uint8_t *)vk_staging.ptr + vk_staging_offset + i3*dstnb3 + i2*dstnb2, (const uint8_t *) tensor->data + buf_offset + i3*nb3 + i2*nb2, dstnb2, memcpys);
+                deferred_memcpy((uint8_t *)staging->ptr + staging_offset + i3*dstnb3 + i2*dstnb2, (const uint8_t *) tensor->data + buf_offset + i3*nb3 + i2*nb2, dstnb2, memcpys);
             } else {
                 for (uint64_t i1 = 0; i1 < ne1; i1++) {
                     if (ne0*nb0/bs == dstnb1) {
-                        deferred_memcpy((uint8_t *)vk_staging.ptr + vk_staging_offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1, (const uint8_t *) tensor->data + buf_offset + i3*nb3 + i2*nb2 + i1*nb1, dstnb1, memcpys);
+                        deferred_memcpy((uint8_t *)staging->ptr + staging_offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1, (const uint8_t *) tensor->data + buf_offset + i3*nb3 + i2*nb2 + i1*nb1, dstnb1, memcpys);
                     } else {
                         const uint64_t s_off = buf_offset + i3*nb3 + i2*nb2 + i1*nb1;
-                        const uint64_t d_off = vk_staging_offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1;
+                        const uint64_t d_off = staging_offset + i3*dstnb3 + i2*dstnb2 + i1*dstnb1;
                         for (uint64_t i0 = 0; i0 < ne0; i0++) {
-                            deferred_memcpy((uint8_t *)vk_staging.ptr + d_off + i0*dstnb0, (const uint8_t *) tensor->data + s_off + i0*nb0, dstnb0, memcpys);
+                            deferred_memcpy((uint8_t *)staging->ptr + d_off + i0*dstnb0, (const uint8_t *) tensor->data + s_off + i0*nb0, dstnb0, memcpys);
                         }
                     }
                 }
             }
         }
     }
-
-    return;
 }
 
-static void ggml_vk_buffer_write_2d_async(vk_context& ctx, vk_buffer* dst, size_t offset, const void * src, size_t spitch, size_t width, size_t height, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, vk::Event * event = nullptr, bool allow_staging_resize = false) {
+static void ggml_vk_buffer_write_2d_async(vk_context& ctx, vk_buffer* dst, size_t offset, const void * src, size_t spitch, size_t width, size_t height, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, vk::Event * event = nullptr, bool sync_staging = false) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_buffer_write_2d_async(" << width << ", " << height << ")" << std::endl;
 #endif
@@ -1524,7 +1523,7 @@ static void ggml_vk_buffer_write_2d_async(vk_context& ctx, vk_buffer* dst, size_
             }
         }
 
-        ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite, true);
+        ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, true);
         ctx.s->buffer.copyBuffer(buf->buffer, dst->buffer, slices);
         return;
     }
@@ -1532,21 +1531,25 @@ static void ggml_vk_buffer_write_2d_async(vk_context& ctx, vk_buffer* dst, size_
     std::cerr << "STAGING" << std::endl;
 #endif
 
-    // Staging buffer required, malloc because of async transfer
-    if (vk_staging.size < dst->size) {
-        if (!allow_staging_resize) {
-            std::cerr << "ERROR: Staging buffer too small. Required: " << dst->size << ", found: " << vk_staging.size << std::endl;
+    // Staging buffer required
+    vk_buffer * staging = &vk_staging;
+    size_t staging_offset = vk_staging_offset;
+    if (vk_staging.size < vk_staging_offset + dst->size) {
+        if (sync_staging) {
+            if (vk_sync_staging.size < dst->size) {
+                ggml_vk_destroy_buffer(vk_sync_staging);
+                vk_sync_staging = ggml_vk_create_buffer(dst->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+            }
+
+            staging = &vk_sync_staging;
+            staging_offset = 0;
+        } else {
             GGML_ASSERT(false);
         }
-        // Resize buffer
-        if (vk_staging.size > 0) {
-            ggml_vk_destroy_buffer(vk_staging);
-        }
-        vk_staging = ggml_vk_create_buffer(dst->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
     }
 
     VkBufferCopy buf_copy = {
-        vk_staging_offset,
+        staging_offset,
         offset,
         width * height};
 
@@ -1554,25 +1557,23 @@ static void ggml_vk_buffer_write_2d_async(vk_context& ctx, vk_buffer* dst, size_
         *event = ggml_vk_create_event();
         ggml_vk_wait_events(ctx.s->buffer, { *event }, { vk::PipelineStageFlagBits::eHost }, q.stage_flags);
     }
-    ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite, true);
-    vkCmdCopyBuffer(ctx.s->buffer, vk_staging.buffer, dst->buffer, 1, &buf_copy);
+    ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*dst) }, q, true);
+    vkCmdCopyBuffer(ctx.s->buffer, staging->buffer, dst->buffer, 1, &buf_copy);
 
     if (width == spitch) {
-        deferred_memcpy((uint8_t *)vk_staging.ptr + vk_staging_offset, src, width * height, memcpys);
+        deferred_memcpy((uint8_t *)staging->ptr + staging_offset, src, width * height, memcpys);
     } else {
         for (size_t i = 0; i < height; i++) {
-            deferred_memcpy((uint8_t *)vk_staging.ptr + vk_staging_offset + i * width, (const uint8_t *) src + i * spitch, width, memcpys);
+            deferred_memcpy((uint8_t *)staging->ptr + staging_offset + i * width, (const uint8_t *) src + i * spitch, width, memcpys);
         }
     }
-
-    return;
 }
 
-static void ggml_vk_buffer_write_async(vk_context& ctx, vk_buffer* dst, size_t offset, const void * src, size_t size, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, vk::Event * event = nullptr) {
+static void ggml_vk_buffer_write_async(vk_context& ctx, vk_buffer* dst, size_t offset, const void * src, size_t size, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, vk::Event * event = nullptr, bool sync_staging = false) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_buffer_write_async(" << size << ")" << std::endl;
 #endif
-    return ggml_vk_buffer_write_2d_async(ctx, dst, offset, src, size, size, 1, q, memcpys, event);
+    return ggml_vk_buffer_write_2d_async(ctx, dst, offset, src, size, size, 1, q, memcpys, event, sync_staging);
 }
 
 static void ggml_vk_buffer_write_2d(vk_buffer* dst, size_t offset, const void * src, size_t spitch, size_t width, size_t height, vk_queue& q) {
@@ -1604,7 +1605,7 @@ static void ggml_vk_buffer_write(vk_buffer* dst, size_t offset, const void * src
     ggml_vk_buffer_write_2d(dst, offset, src, 0, size, 1, q);
 }
 
-static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t offset, void * dst, size_t spitch, size_t dpitch, size_t width, size_t height, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, bool allow_staging_resize = false) {
+static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t offset, void * dst, size_t spitch, size_t dpitch, size_t width, size_t height, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, bool sync_staging = false) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_buffer_read_2d_async(offset=" << offset << ", width=" << width << ", height=" << height << ")" << std::endl;
 #endif
@@ -1641,7 +1642,7 @@ static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t
 
     if (buf != nullptr) {
         // Memory is pinned, use as staging buffer
-        ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*src) }, q, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead, true);
+        ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*src) }, q, true);
         ctx.s->buffer.copyBuffer(src->buffer, buf->buffer, slices);
 
         return;
@@ -1651,30 +1652,33 @@ static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t
 #endif
 
     // Fall back to staging buffer
-    if (vk_staging.size < src->size) {
-        if (!allow_staging_resize) {
-            std::cerr << "ERROR: Staging buffer too small. Required: " << src->size << ", found: " << vk_staging.size << std::endl;
+    vk_buffer * staging = &vk_staging;
+    size_t staging_offset = vk_staging_offset;
+    if (vk_staging.size < vk_staging_offset + src->size) {
+        if (sync_staging) {
+            // Create temporary larger buffer
+            if (vk_sync_staging.size < src->size) {
+                ggml_vk_destroy_buffer(vk_sync_staging);
+                vk_sync_staging = ggml_vk_create_buffer(src->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+            }
+
+            staging = &vk_sync_staging;
+            staging_offset = 0;
+        } else {
             GGML_ASSERT(false);
         }
-        // Resize buffer
-        if (vk_staging.size > 0) {
-            ggml_vk_destroy_buffer(vk_staging);
-        }
-        vk_staging = ggml_vk_create_buffer(src->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
     }
 
-    ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*src) }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite, true);
-    ctx.s->buffer.copyBuffer(src->buffer, vk_staging.buffer, slices);
+    ggml_vk_sync_buffers(ctx.s->buffer, { ggml_vk_subbuffer(*src) }, q, true);
+    ctx.s->buffer.copyBuffer(src->buffer, staging->buffer, slices);
 
     GGML_ASSERT(memcpys != nullptr);
 
-    deferred_memcpy(dst, vk_staging.ptr, dpitch * height, memcpys);
-
-    return;
+    deferred_memcpy(dst, staging->ptr, dpitch * height, memcpys);
 }
 
-static void ggml_vk_buffer_read_async(vk_context& ctx, vk_buffer* src, size_t offset, void * dst, size_t size, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr) {
-    return ggml_vk_buffer_read_2d_async(ctx, src, offset, dst, size, size, size, 1, q, memcpys);
+static void ggml_vk_buffer_read_async(vk_context& ctx, vk_buffer* src, size_t offset, void * dst, size_t size, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, bool sync_staging = false) {
+    return ggml_vk_buffer_read_2d_async(ctx, src, offset, dst, size, size, size, 1, q, memcpys, sync_staging);
 }
 
 static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_t size, vk_queue& q) {
@@ -1689,7 +1693,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
         vk_context * ctx = ggml_vk_create_context();
         ggml_vk_ctx_begin(*ctx, q);
         std::vector<vk_staging_memcpy> staging;
-        ggml_vk_buffer_read_async(*ctx, src, offset, dst, size, q, &staging);
+        ggml_vk_buffer_read_async(*ctx, src, offset, dst, size, q, &staging, true);
         ggml_vk_ctx_end(*ctx);
         ggml_vk_submit(q, ctx->seqs, vk_fence);
         VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, UINT64_MAX), "vk_buffer_read waitForFences");
@@ -1723,7 +1727,7 @@ static void ggml_vk_buffer_memset(vk_buffer* dst, size_t offset, uint32_t c, siz
     vk_submission submission = ggml_vk_create_submission(q, {}, {});
 
     submission.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-    ggml_vk_sync_buffers(submission.buffer, { { *dst, (uint64_t)offset, (uint64_t)size } }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite, false);
+    ggml_vk_sync_buffers(submission.buffer, { { *dst, (uint64_t)offset, (uint64_t)size } }, q, false);
     submission.buffer.fillBuffer(dst->buffer, offset, size, c);
     submission.buffer.end();
 
@@ -1886,9 +1890,8 @@ static void ggml_vk_matmul(vk_context& ctx, vk_pipeline& pipeline, vk_subbuffer&
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_matmul(a: (" << a.buffer.buffer << ", " << a.offset << ", " << a.size << "), b: (" << b.buffer.buffer << ", " << b.offset << ", " << b.size << "), c: (" << d.buffer.buffer << ", " << d.offset << ", " << d.size << "), split_k: (" << split_k_buffer.buffer.buffer << ", " << split_k_buffer.offset << ", " << split_k_buffer.size << "), m: " << m << ", n: " << n << ", k: " << k << ", stride_a: " << stride_a << ", stride_b: " << stride_b << ", stride_d: " << stride_d << ", split_k: " << split_k << ", d_offset: " << d_offset << ", batch: " << batch << ", ne02: " << ne02 << ", ne12: " << ne12 << ", broadcast2: " << broadcast2 << ", broadcast3: " << broadcast3 << ", batch_stride_a: " << batch_stride_a << ", batch_stride_b: " << batch_stride_b << ", batch_stride_d: " << batch_stride_d << ")" << std::endl;
 #endif
-    ggml_vk_sync_buffers(ctx.s->buffer, { a, b }, q, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eShaderRead, true);
     if (split_k == 1) {
-        ggml_vk_sync_buffers(ctx.s->buffer, { d }, q, vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eShaderWrite, true);
+        ggml_vk_sync_buffers(ctx.s->buffer, { a, b, d }, q, true);
         const std::array<uint32_t, 15> pc = { m, n, k, stride_a, stride_b, stride_d, k, d_offset, ne02, ne12, broadcast2, broadcast3, batch_stride_a, batch_stride_b, batch_stride_d };
         ggml_vk_dispatch_pipeline(*ctx.s, pipeline, { a, b, d }, pc.size() * sizeof(uint32_t), pc.data(), { m, n, batch });
         return;
@@ -1896,11 +1899,11 @@ static void ggml_vk_matmul(vk_context& ctx, vk_pipeline& pipeline, vk_subbuffer&
 
     GGML_ASSERT(batch_stride_d == m * n);
 
-    ggml_vk_sync_buffers(ctx.s->buffer, { split_k_buffer }, q, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderWrite, true);
+    ggml_vk_sync_buffers(ctx.s->buffer, { a, b, split_k_buffer }, q, true);
     // Synchronize the two submissions
     const std::array<uint32_t, 15> pc1 = { m, n, k, stride_a, stride_b, stride_d, CEIL_DIV(k, split_k), 0, ne02, ne12, broadcast2, broadcast3, batch_stride_a, batch_stride_b, batch_stride_d * split_k };
     ggml_vk_dispatch_pipeline(*ctx.s, pipeline, { a, b, split_k_buffer }, pc1.size() * sizeof(uint32_t), pc1.data(), { m * split_k, n, batch });
-    ggml_vk_sync_buffers(ctx.s->buffer, { split_k_buffer, d }, q, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite, true);
+    ggml_vk_sync_buffers(ctx.s->buffer, { split_k_buffer, d }, q, true);
     const std::array<uint32_t, 3> pc2 = { (uint32_t)(m * n * batch), split_k, d_offset };
     ggml_vk_dispatch_pipeline(*ctx.s, vk_pipeline_matmul_split_k_reduce, { split_k_buffer, d }, pc2.size() * sizeof(uint32_t), pc2.data(), { m * n * batch, 1, 1 });
     return;
@@ -1948,7 +1951,7 @@ static void ggml_vk_cpy_to_contiguous(vk_context& ctx, vk_pipeline * pipeline, c
         (uint32_t)tensor->ne[0], (uint32_t)tensor->ne[1],                       1                   , (uint32_t)tensor->ne[0]                   , nb2,
         0,
     };
-    ggml_vk_sync_buffers(ctx.s->buffer, { in, out }, compq, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, true);
+    ggml_vk_sync_buffers(ctx.s->buffer, { in, out }, compq, true);
     ggml_vk_dispatch_pipeline(*ctx.s, *pipeline, { in, out }, sizeof(vk_op_cpy_push_constants), &pc, { ne, 1, 1 });
 }
 
@@ -2015,13 +2018,13 @@ static void ggml_vk_mul_mat_q_f16(vk_context& ctx, const ggml_tensor * src0, con
     ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
     ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
 
-    vk_buffer* d_D = extra->buffer_gpu;
-    const uint64_t d_buf_offset = extra->base_buffer_offset + extra->view_offset;
+    vk_buffer* d_D = &extra->buffer_gpu;
+    const uint64_t d_buf_offset = extra->offset;
     GGML_ASSERT(d_D != nullptr);
     GGML_ASSERT(d_D->size >= d_buf_offset + d_sz * ne02 * ne03);
-    vk_buffer* d_Qx;
+    vk_buffer * d_Qx;
     uint64_t qx_buf_offset = 0;
-    vk_buffer* d_Qy;
+    vk_buffer * d_Qy;
     uint64_t qy_buf_offset = 0;
     vk_buffer* d_X;
     uint64_t x_buf_offset = 0;
@@ -2029,18 +2032,16 @@ static void ggml_vk_mul_mat_q_f16(vk_context& ctx, const ggml_tensor * src0, con
     uint64_t y_buf_offset = 0;
     if (load_x) {
         d_Qx = &vk_prealloc_qx;
-        GGML_ASSERT(d_Qx->size >= qx_sz * ne02 * ne03);
     } else {
-        d_Qx = extra_src0->buffer_gpu;
-        qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
+        d_Qx = &extra_src0->buffer_gpu;
+        qx_buf_offset = extra_src0->offset;
         GGML_ASSERT(d_Qx != nullptr);
     }
     if (load_y) {
         d_Qy = &vk_prealloc_qy;
-        GGML_ASSERT(d_Qy->size >= qy_sz * ne02 * ne03);
     } else {
-        d_Qy = extra_src1->buffer_gpu;
-        qy_buf_offset = extra_src1->base_buffer_offset + extra_src1->view_offset;
+        d_Qy = &extra_src1->buffer_gpu;
+        qy_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Qy != nullptr);
     }
     if (qx_needs_dequant) {
@@ -2099,8 +2100,7 @@ static void ggml_vk_mul_mat_q_f16(vk_context& ctx, const ggml_tensor * src0, con
 
         if (qx_needs_dequant) {
             const std::vector<int> pc = { (int)ne01, (int)ne10, (int)ne10, (int)ne10 };
-            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qx, qx_buf_offset, qx_sz * ne02 * ne03 } }, compq, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
-            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, 0, x_sz * ne02 * ne03 } }, compq, vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite, true);
+            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qx, qx_buf_offset, qx_sz * ne02 * ne03 }, { *d_X, 0, x_sz * ne02 * ne03 } }, compq, true);
             ggml_vk_dispatch_pipeline(*ctx.s, *to_fp16_vk_0, { { *d_Qx, qx_buf_offset, qx_sz * ne02 * ne03 }, { *d_X, 0, x_sz * ne02 * ne03 } }, pc.size() * sizeof(int), pc.data(), { (uint32_t)(x_ne * ne02 * ne03), 1, 1});
         }
     }
@@ -2184,8 +2184,8 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context& ctx, const ggml_tensor * src0,
     ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
     ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
 
-    vk_buffer* d_D = extra->buffer_gpu;
-    const uint64_t d_buf_offset = extra->base_buffer_offset + extra->view_offset;
+    vk_buffer* d_D = &extra->buffer_gpu;
+    const uint64_t d_buf_offset = extra->offset;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer* d_Qx;
     uint32_t qx_buf_offset = 0;
@@ -2198,15 +2198,15 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context& ctx, const ggml_tensor * src0,
     if (load_x) {
         d_Qx = &vk_prealloc_qx;
     } else {
-        d_Qx = extra_src0->buffer_gpu;
-        qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
+        d_Qx = &extra_src0->buffer_gpu;
+        qx_buf_offset = extra_src0->offset;
         GGML_ASSERT(d_Qx != nullptr);
     }
     if (load_y) {
         d_Qy = &vk_prealloc_qy;
     } else {
-        d_Qy = extra_src1->buffer_gpu;
-        qy_buf_offset = extra_src1->base_buffer_offset + extra_src1->view_offset;
+        d_Qy = &extra_src1->buffer_gpu;
+        qy_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Qy != nullptr);
     }
     if (qx_needs_dequant) {
@@ -2282,21 +2282,19 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context& ctx, const ggml_tensor * src0,
 
             if (!y_non_contig && qy_needs_dequant) {
                 const std::vector<int> pc = { (int)ne11, (int)ne10, (int)ne10, (int)ne10 };
-                ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qy, qy_offset, qy_sz } }, compq, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
-                ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Y, y_offset, y_sz } }, compq, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, true);
+                ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qy, qy_offset, qy_sz }, { *d_Y, y_offset, y_sz } }, compq, true);
                 ggml_vk_dispatch_pipeline(*ctx.s, *to_fp16_vk_1, { { *d_Qy, qy_offset, qy_sz }, { *d_Y, y_offset, y_sz } }, pc.size() * sizeof(int), pc.data(), { (uint32_t)y_ne, 1, 1});
             }
 
             // compute
             const std::array<int, 3> pc = { (int)ne00, (int)(y_shader_offset / ggml_type_size(src1->type)), (int)(d_shader_offset / ggml_type_size(dst->type))};
-            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_offset, x_sz }, { *d_Y, y_buffer_offset, y_sz + y_shader_offset } }, compq, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
-            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, true);
+            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_offset, x_sz }, { *d_Y, y_buffer_offset, y_sz + y_shader_offset }, { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, true);
             ggml_vk_dispatch_pipeline(*ctx.s, *dmmv, { { *d_X, x_offset, x_sz }, { *d_Y, y_buffer_offset, y_sz + y_shader_offset }, { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, 3 * sizeof(int), &pc, { (uint32_t)ne01, 1, 1});
 
             if (dst->backend == GGML_BACKEND_CPU) {
                 // copy dst to host
                 float * d = (float *) ((char *) dst->data + i12*nb2 + i13*nb3);
-                ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eTransferRead, true);
+                ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, true);
                 ggml_vk_buffer_read_async(ctx, d_D, d_offset, d, sizeof(float) * d_ne, compq, &extra->out_memcpys);
             }
         }
@@ -2324,7 +2322,7 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context& ctx, const ggml_tensor 
     const uint64_t ne10 = src1->ne[0];
     const uint64_t ne11 = src1->ne[1];
     const uint64_t ne12 = src1->ne[2];
-    // const uint64_t ne13 = src1->ne[3];
+    const uint64_t ne13 = src1->ne[3];
 
     GGML_ASSERT(ne11 == 1);
 
@@ -2344,20 +2342,20 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context& ctx, const ggml_tensor 
     ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
     ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
 
-    vk_buffer* d_D = extra->buffer_gpu;
-    const uint64_t d_buf_offset = extra->base_buffer_offset + extra->view_offset;
+    vk_buffer* d_D = &extra->buffer_gpu;
+    const uint64_t d_buf_offset = extra->offset;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer* d_Qx;
-    const uint64_t qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
+    const uint64_t qx_buf_offset = extra_src0->offset;
     vk_buffer* d_Qy;
     uint64_t qy_buf_offset = 0;
-    d_Qx = extra_src0->buffer_gpu;
+    d_Qx = &extra_src0->buffer_gpu;
     GGML_ASSERT(d_Qx != nullptr);
     if (load_y) {
         d_Qy = &vk_prealloc_qy;
     } else {
-        d_Qy = extra_src1->buffer_gpu;
-        qy_buf_offset = extra_src1->base_buffer_offset + extra_src1->view_offset;
+        d_Qy = &extra_src1->buffer_gpu;
+        qy_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Qx != nullptr);
     }
 
@@ -2376,14 +2374,13 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context& ctx, const ggml_tensor 
 
     // compute
     const std::array<uint32_t, 6> pc = { (uint32_t)ne00, (uint32_t)ne01, (uint32_t)ne02, (uint32_t)ne12, (uint32_t)(qy_shader_offset / ggml_type_size(src1->type)), (uint32_t)(d_shader_offset / ggml_type_size(dst->type)) };
-    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qx, qx_buf_offset, qx_sz }, { *d_Qy, qy_buffer_offset, qy_sz + qy_shader_offset } }, compq, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
-    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, true);
+    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qx, qx_buf_offset, qx_sz }, { *d_Qy, qy_buffer_offset, qy_sz + qy_shader_offset }, { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, true);
     ggml_vk_dispatch_pipeline(*ctx.s, vk_pipeline_mul_mat_vec_p021_f16_f32, { { *d_Qx, qx_buf_offset, qx_sz }, { *d_Qy, qy_buffer_offset, qy_sz + qy_shader_offset }, { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, 6 * sizeof(uint32_t), &pc, { 1, (uint32_t)ne01, (uint32_t)ne12 });
 
     if (dst->backend == GGML_BACKEND_CPU) {
         // copy dst to host
         float * d = (float *) dst->data;
-        ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eTransferRead, true);
+        ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, true);
         ggml_vk_buffer_read_async(ctx, d_D, d_buf_offset, d, sizeof(float) * d_ne, compq, &extra->out_memcpys);
     }
 }
@@ -2412,7 +2409,7 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
     // const uint64_t ne10 = src1->ne[0];
     const uint64_t ne11 = src1->ne[1];
     const uint64_t ne12 = src1->ne[2];
-    // const uint64_t ne13 = src1->ne[3];
+    const uint64_t ne13 = src1->ne[3];
 
     GGML_ASSERT(ne11 == 1);
 
@@ -2433,20 +2430,20 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
     ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
     ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
 
-    vk_buffer* d_D = extra->buffer_gpu;
-    const uint64_t d_buf_offset = extra->base_buffer_offset + extra->view_offset;
+    vk_buffer* d_D = &extra->buffer_gpu;
+    const uint64_t d_buf_offset = extra->offset;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer* d_Qx;
-    const uint64_t qx_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
+    const uint64_t qx_buf_offset = extra_src0->offset;
     vk_buffer* d_Qy;
     uint64_t qy_buf_offset = 0;
-    d_Qx = extra_src0->buffer_gpu;
+    d_Qx = &extra_src0->buffer_gpu;
     GGML_ASSERT(d_Qx != nullptr);
     if (load_y) {
         d_Qy = &vk_prealloc_qy;
     } else {
-        d_Qy = extra_src1->buffer_gpu;
-        qy_buf_offset = extra_src1->base_buffer_offset + extra_src1->view_offset;
+        d_Qy = &extra_src1->buffer_gpu;
+        qy_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Qx != nullptr);
     }
 
@@ -2465,14 +2462,13 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
 
     // compute
     const std::array<uint32_t, 7> pc = { (uint32_t)ne00, (uint32_t)ne01, row_stride_x, channel_stride_x, (uint32_t)(ne12 / ne02), (uint32_t)(qy_shader_offset / ggml_type_size(src1->type)), (uint32_t)(d_shader_offset / ggml_type_size(dst->type)) };
-    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qx, qx_buf_offset, qx_sz }, { *d_Qy, qy_buffer_offset, qy_sz + qy_shader_offset } }, compq, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
-    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, true);
+    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_Qx, qx_buf_offset, qx_sz }, { *d_Qy, qy_buffer_offset, qy_sz + qy_shader_offset }, { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, true);
     ggml_vk_dispatch_pipeline(*ctx.s, vk_pipeline_mul_mat_vec_nc_f16_f32, { { *d_Qx, qx_buf_offset, qx_sz }, { *d_Qy, qy_buffer_offset, qy_sz + qy_shader_offset }, { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, 7 * sizeof(uint32_t), &pc, { 1, (uint32_t)ne01, (uint32_t)ne12 });
 
     if (dst->backend == GGML_BACKEND_CPU) {
         // copy dst to host
         float * d = (float *) dst->data;
-        ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eTransferRead, true);
+        ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buffer_offset, d_sz + d_shader_offset } }, compq, true);
         ggml_vk_buffer_read_async(ctx, d_D, d_buf_offset, d, sizeof(float) * d_ne, compq, &extra->out_memcpys);
     }
 }
@@ -2541,10 +2537,10 @@ static void ggml_vk_op_repeat(vk_context& ctx, const ggml_tensor * src0, const g
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
     ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
 
-    const vk_buffer* src_buf = extra_src0->buffer_gpu;
-    const uint64_t src_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
-    vk_buffer* dst_buf = extra->buffer_gpu;
-    const uint64_t dst_offset = extra->base_buffer_offset + extra->view_offset;
+    const vk_buffer* src_buf = &extra_src0->buffer_gpu;
+    const uint64_t src_offset = extra_src0->offset;
+    vk_buffer* dst_buf = &extra->buffer_gpu;
+    const uint64_t dst_offset = extra->offset;
 
     std::vector<vk::BufferCopy> copies;
 
@@ -2568,6 +2564,7 @@ static void ggml_vk_op_repeat(vk_context& ctx, const ggml_tensor * src0, const g
         }
     }
 
+    ggml_vk_sync_buffers(ctx.s->buffer, { { *src_buf, src_offset, ggml_nbytes(src0) }, { *dst_buf, dst_offset, ggml_nbytes(dst) } }, vk_device.compute_queue, true);
     ctx.s->buffer.copyBuffer(src_buf->buffer, dst_buf->buffer, copies);
 
     (void) src1;
@@ -2739,14 +2736,14 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
     ggml_tensor_extra_gpu * extra_src1 = use_src1 ? (ggml_tensor_extra_gpu *) src1->extra : nullptr;
 
     // Workaround for tiny tensor inputs on ROPE
-    if (use_src1 && src1->backend == GGML_BACKEND_GPU && y_sz > extra_src1->buffer_gpu->size) {
+    if (use_src1 && src1->backend == GGML_BACKEND_GPU && y_sz > extra_src1->buffer_gpu.size) {
         y_sz = VK_WHOLE_SIZE;
     }
 
-    vk_buffer* d_D = extra->buffer_gpu;
+    vk_buffer* d_D = &extra->buffer_gpu;
     GGML_ASSERT(d_D != nullptr);
-    uint64_t d_buf_offset = ((extra->base_buffer_offset + extra->view_offset) / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
-    GGML_ASSERT(d_buf_offset == (extra->base_buffer_offset + extra->view_offset) || op == GGML_OP_CPY);  // NOLINT
+    uint64_t d_buf_offset = (extra->offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
+    GGML_ASSERT(d_buf_offset == extra->offset || op == GGML_OP_CPY);  // NOLINT
     vk_buffer* d_X = nullptr;
     uint64_t x_buf_offset = 0;
     vk_buffer* d_Y = nullptr;
@@ -2754,15 +2751,15 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
     if (transfer_src0) {
         d_X = &vk_prealloc_qx;
     } else {
-        d_X = extra_src0->buffer_gpu;
-        x_buf_offset = extra_src0->base_buffer_offset + extra_src0->view_offset;
+        d_X = &extra_src0->buffer_gpu;
+        x_buf_offset = extra_src0->offset;
         GGML_ASSERT(d_X != nullptr);
     }
     if (transfer_src1) {
         d_Y = &vk_prealloc_qy;
     } else if (use_src1) {
-        d_Y = extra_src1->buffer_gpu;
-        y_buf_offset = extra_src1->base_buffer_offset + extra_src1->view_offset;
+        d_Y = &extra_src1->buffer_gpu;
+        y_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Y != nullptr);
     }
 
@@ -2771,7 +2768,7 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
         GGML_ASSERT(!transfer_src1);
         d_sz = dst->ne[1] * dst->nb[1];
 
-        if (extra->base_buffer_offset + extra->view_offset + d_sz >= d_D->size) {
+        if (extra->offset + d_sz >= d_D->size) {
             d_sz = VK_WHOLE_SIZE;
         }
     }
@@ -2814,16 +2811,15 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
             d_sz *= ne02 * ne03;
         }
 
-        ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buf_offset, d_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, true);
         if (!use_src1 && op == GGML_OP_SOFT_MAX) {
             // Empty src1 is possible on soft_max, but the shader needs a buffer
-            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
+            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz }, { *d_D, d_buf_offset, d_sz } }, vk_device.compute_queue, true);
             ggml_vk_dispatch_pipeline(*ctx.s, *pipeline, { { *d_X, x_buf_offset, x_sz }, { vk_prealloc_y, 0, vk_prealloc_y.size }, { *d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
         } else if (use_src1) {
-            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz }, { *d_Y, y_buf_offset, y_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
+            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz }, { *d_Y, y_buf_offset, y_sz }, { *d_D, d_buf_offset, d_sz } }, vk_device.compute_queue, true);
             ggml_vk_dispatch_pipeline(*ctx.s, *pipeline, { { *d_X, x_buf_offset, x_sz }, { *d_Y, y_buf_offset, y_sz }, { *d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
         } else {
-            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
+            ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz }, { *d_D, d_buf_offset, d_sz } }, vk_device.compute_queue, true);
             ggml_vk_dispatch_pipeline(*ctx.s, *pipeline, { { *d_X, x_buf_offset, x_sz }, { *d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
         }
         if (dst->backend == GGML_BACKEND_CPU && op == GGML_OP_CPY) {
@@ -2859,16 +2855,15 @@ static void ggml_vk_op_f32(vk_context& ctx, const ggml_tensor * src0, const ggml
                 const uint32_t y_offset = y_sz * it_idx1;
                 const uint32_t d_offset = d_sz * it_idx0;
 
-                ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, d_buf_offset + d_offset, d_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderWrite, true);
                 if (!use_src1 && op == GGML_OP_SOFT_MAX) {
                     // Empty src1 is possible on soft_max, but the shader needs a buffer
-                    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
+                    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset, x_sz }, { *d_D, d_buf_offset + d_offset, d_sz } }, vk_device.compute_queue, true);
                     ggml_vk_dispatch_pipeline(*ctx.s, *pipeline, { { *d_X, x_buf_offset, x_sz }, { vk_prealloc_y, 0, vk_prealloc_y.size }, { *d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
                 } else if (use_src1) {
-                    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset + x_offset, x_sz }, { *d_Y, y_buf_offset + y_offset, y_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
+                    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_buf_offset + x_offset, x_sz }, { *d_Y, y_buf_offset + y_offset, y_sz }, { *d_D, d_buf_offset + d_offset, d_sz } }, vk_device.compute_queue, true);
                     ggml_vk_dispatch_pipeline(*ctx.s, *pipeline, { { *d_X, x_buf_offset + x_offset, x_sz }, { *d_Y, y_buf_offset + y_offset, y_sz }, { *d_D, d_buf_offset + d_offset, d_sz } }, sizeof(PC), &pc, elements);
                 } else {
-                    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_offset, x_sz } }, vk_device.compute_queue, vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, true);
+                    ggml_vk_sync_buffers(ctx.s->buffer, { { *d_X, x_offset, x_sz }, { *d_D, d_buf_offset + d_offset, d_sz } }, vk_device.compute_queue, true);
                     ggml_vk_dispatch_pipeline(*ctx.s, *pipeline, { { *d_X, x_buf_offset + x_offset, x_sz }, { *d_D, d_buf_offset + d_offset, d_sz } }, sizeof(PC), &pc, elements);
                 }
                 if (dst->backend == GGML_BACKEND_CPU) {
@@ -2914,7 +2909,7 @@ static void ggml_vk_cpy(vk_context& ctx, const ggml_tensor * src0, ggml_tensor *
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
     const int src0_type_size = ggml_type_size(src0->type);
     const int dst_type_size = ggml_type_size(dst->type);
-    const uint32_t d_offset = ((extra->base_buffer_offset + extra->view_offset) % vk_device.properties.limits.minStorageBufferOffsetAlignment) / dst_type_size;
+    const uint32_t d_offset = (extra->offset % vk_device.properties.limits.minStorageBufferOffsetAlignment) / dst_type_size;
     ggml_vk_op_f32<vk_op_cpy_push_constants>(ctx, src0, nullptr, dst, GGML_OP_CPY, {
         (uint32_t)ggml_nelements(src0),
         (uint32_t)src0->ne[0], (uint32_t)src0->ne[1], (uint32_t)src0->nb[0] / src0_type_size, (uint32_t)src0->nb[1] / src0_type_size, (uint32_t)src0->nb[2] / src0_type_size,
@@ -2975,8 +2970,8 @@ static void ggml_vk_nop(vk_context& ctx, const ggml_tensor * src0, ggml_tensor *
     if (dst->backend == GGML_BACKEND_CPU) {
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
         ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
-        vk_buffer * d_D = extra_src0->buffer_gpu;
-        ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, 0, VK_WHOLE_SIZE } }, vk_device.compute_queue, vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eTransferRead, true);
+        vk_buffer * d_D = &extra_src0->buffer_gpu;
+        ggml_vk_sync_buffers(ctx.s->buffer, { { *d_D, 0, VK_WHOLE_SIZE } }, vk_device.compute_queue, true);
         ggml_vk_buffer_read_async(ctx, d_D, 0, dst->data, d_D->size, vk_device.compute_queue, &extra->out_memcpys);
     }
 }
@@ -3476,65 +3471,14 @@ void ggml_vk_test_transfer(size_t ne, bool pinned) {
 }
 #endif
 
-static void ggml_vk_transform_tensor(const void * data, ggml_tensor * tensor, bool buffer_static) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_transform_tensor(" << data << ", " << tensor << " (" << tensor->name << "))" << std::endl;
-#endif
-    GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
-    GGML_ASSERT(ggml_is_contiguous(tensor));
-
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
-    if (extra == nullptr) {
-        extra = new ggml_tensor_extra_gpu;
-        extra->reset();
-        tensor->extra = extra;
-    }
-
-    const size_t size = ggml_nbytes(tensor);
-
-    extra->buffer_gpu = new vk_buffer;
-    *extra->buffer_gpu = ggml_vk_pool_malloc(size, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    ggml_vk_buffer_write(extra->buffer_gpu, 0, data, size, vk_device.transfer_queue);
-
-    extra->buffer_static = buffer_static;
-
-    if (!buffer_static) {
-        vk_gc.temp_buffers.push_back(*extra->buffer_gpu);
-    }
-}
-
-void ggml_vk_transform_tensor_temporary(const void * data, ggml_tensor * tensor) {
-    ggml_vk_transform_tensor(data, tensor, false);
-}
-void ggml_vk_transform_tensor_static(const void * data, ggml_tensor * tensor) {
-    ggml_vk_transform_tensor(data, tensor, true);
-}
-
-void ggml_vk_assign_buffer(ggml_tensor * tensor) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_assign_buffer(" << tensor << " (" << tensor->name << "))" << std::endl;
-#endif
-    tensor->backend = GGML_BACKEND_GPU;
-
-    GGML_ASSERT(tensor->extra == nullptr);
-
-    ggml_tensor_extra_gpu * extra = new ggml_tensor_extra_gpu;
-    extra->reset();
-    tensor->extra = extra;
-
-    extra->buffer_gpu = new vk_buffer;
-    *extra->buffer_gpu = ggml_vk_create_buffer(ggml_nbytes(tensor), vk::MemoryPropertyFlagBits::eDeviceLocal);
-    ggml_vk_buffer_memset(extra->buffer_gpu, 0, 0, VK_WHOLE_SIZE, vk_device.transfer_queue);
-    extra->buffer_static = true;
-}
-
-static void ggml_vk_tensor_create_extra(ggml_tensor * tensor) {
+static ggml_tensor_extra_gpu * ggml_vk_tensor_create_extra(ggml_tensor * tensor) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_create_extra(" << tensor << " (" << tensor->name << ", " << ggml_op_name(tensor->op) << "))" << std::endl;
 #endif
     ggml_tensor_extra_gpu * extra = new ggml_tensor_extra_gpu;
     extra->reset();
     tensor->extra = extra;
+    return extra;
 }
 
 void ggml_vk_prepare_tensor(ggml_tensor * tensor) {
@@ -3582,58 +3526,6 @@ static size_t ggml_vk_tensor_size(const ggml_tensor * tensor) {
     return tensor->ne[order[3]]*tensor->nb[order[3]];
 }
 
-static void ggml_vk_preallocate_buffers_reserve(ggml_tensor * tensor, size_t d_size, size_t qx_size, size_t qy_size, size_t x_size, size_t y_size, size_t split_k_size, int inplace_d, size_t staging_size) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_preallocate_buffers_reserve(tensor=" << tensor << ", d_size=" << d_size << ", qx_size=" << qx_size << ", qy_size=" << qy_size << ", x_size=" << x_size << ", y_size=" << y_size << ", split_k_size=" << split_k_size << ", inplace_d=" << inplace_d << ", staging_size=" << staging_size << ")" << std::endl;
-#endif
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
-    GGML_ASSERT(extra != nullptr);
-
-    if (d_size > 0) {
-        if (inplace_d == -1) {
-            extra->d_idx = -1;
-            extra->tensor_size = d_size;
-
-            // Check if buffer already exists, increase size if required
-            for (size_t i = 0; i < vk_prealloc_d_sizes.size(); i++) {
-                if (!vk_prealloc_d_blocked[i]) {
-                    extra->d_idx = i;
-                    if (vk_prealloc_d_sizes[i] < d_size) {
-                        vk_prealloc_d_sizes[i] = d_size;
-                    }
-                    break;
-                }
-            }
-            if (extra->d_idx == -1) {
-                vk_prealloc_d_sizes.push_back(d_size);
-                vk_prealloc_d_blocked.push_back(nullptr);
-                vk_prealloc_d_buffers.emplace_back();
-                extra->d_idx = vk_prealloc_d_buffers.size() - 1;
-            }
-        } else if(inplace_d >= 0) {
-            extra->d_idx = inplace_d;
-        }
-        if (vk_prealloc_size_qx < qx_size) {
-            vk_prealloc_size_qx = qx_size;
-        }
-        if (vk_prealloc_size_qy < qy_size) {
-            vk_prealloc_size_qy = qy_size;
-        }
-        if (vk_prealloc_size_x < x_size) {
-            vk_prealloc_size_x = x_size;
-        }
-        if (vk_prealloc_size_y < y_size) {
-            vk_prealloc_size_y = y_size;
-        }
-        if (vk_prealloc_size_split_k < split_k_size) {
-            vk_prealloc_size_split_k = split_k_size;
-        }
-        if (vk_staging_size < staging_size) {
-            vk_staging_size = staging_size;
-        }
-    }
-}
-
 static ggml_tensor * ggml_vk_find_last_use(const ggml_tensor * node, ggml_cgraph * graph) {
     GGML_ASSERT(node != nullptr);
 
@@ -3648,7 +3540,7 @@ static ggml_tensor * ggml_vk_find_last_use(const ggml_tensor * node, ggml_cgraph
     return nullptr;
 }
 
-void ggml_vk_preallocate_buffers_graph(ggml_tensor * node, ggml_cgraph * graph){
+void ggml_vk_preallocate_buffers_graph(ggml_tensor * node){
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_preallocate_buffers_graph(" << node << ")" << std::endl;
 #endif
@@ -3656,15 +3548,15 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node, ggml_cgraph * graph){
         || (node->src[0] != nullptr && (node->src[0]->backend == GGML_BACKEND_GPU || node->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
         || (node->src[1] != nullptr && (node->src[1]->backend == GGML_BACKEND_GPU));
 
-    if (!any_on_device && node->op != GGML_OP_MUL_MAT) {
+    if (vk_disable || (!any_on_device && node->op != GGML_OP_MUL_MAT)) {
         return;
     }
 
-    if (node->extra == nullptr) {
-        ggml_vk_tensor_create_extra(node);
+    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
+    if (extra == nullptr) {
+        // Workaround for CPU backend BLAS matmul calls
+        extra = ggml_vk_tensor_create_extra(node);
     }
-
-    ((ggml_tensor_extra_gpu *) node->extra)->prepared = true;
 
     ggml_tensor * src0 = node->src[0];
     ggml_tensor * src1 = node->src[1];
@@ -3712,50 +3604,20 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node, ggml_cgraph * graph){
     const uint64_t x_sz = use_src0 ? ggml_vk_align_size(sizeof(ggml_fp16_t) * x_ne, vk_device.properties.limits.minStorageBufferOffsetAlignment) * ne02 * ne03 : 0;
     const uint64_t y_sz = use_src1 ? ggml_vk_align_size(f16_f32_kernel ? sizeof(float) * y_ne : sizeof(ggml_fp16_t) * y_ne, vk_device.properties.limits.minStorageBufferOffsetAlignment) * ne12 * ne13 : 0;
     uint64_t d_sz = ggml_vk_align_size(ggml_type_size(node->type) * d_ne, vk_device.properties.limits.minStorageBufferOffsetAlignment) * ne22 * ne23;
+    const uint64_t split_k_size = split_k > 1 ? d_sz * 4 : 0;
 
-    // These ops can create incontiguous tensors
-    if (node->op == GGML_OP_CPY || node->op == GGML_OP_CONT || node->op == GGML_OP_DUP) {
-        d_sz = ggml_vk_align_size(node->ne[1] * node->nb[1], vk_device.properties.limits.minStorageBufferOffsetAlignment) * ne22 * ne23;
-    }
-
-    // -1 means pick from preallocated buffers
-    // -2 means don't pick, it has already been assigned
-    int inplace = -1;
-    if (node->view_src != nullptr && node->view_src->backend == GGML_BACKEND_GPU) {
-        ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
-        ggml_tensor_extra_gpu * extra_src = (ggml_tensor_extra_gpu *) node->view_src->extra;
-
-        // These ops reuse the src's buffer
-        if (extra_src->buffer_static) {
-            // Inherit buffer directly
-            extra->d_idx = -1;
-            extra->buffer_static = true;
-            extra->buffer_gpu = extra_src->buffer_gpu;
-            inplace = -2;
-        } else {
-            // Use same temp buffer
-            extra->d_idx = extra_src->d_idx;
-            inplace = extra->d_idx;
-        }
-        extra->tensor_size = extra_src->tensor_size;
-        extra->base_buffer_offset = extra_src->base_buffer_offset;
-        extra->view_offset = node->view_offs;
+    if (extra->buffer_gpu.size == 0) {
+        // Workaround for CPU backend BLAS matmul calls
+        extra->buffer_gpu = ggml_vk_create_buffer_temp(d_sz);
     }
 
     switch (node->op) {
     case GGML_OP_REPEAT:
-        ggml_vk_preallocate_buffers_reserve(node, d_sz, qx_sz, 0, 0, 0, 0, inplace, qx_sz);
-        break;
     case GGML_OP_GET_ROWS:
-        ggml_vk_preallocate_buffers_reserve(node, d_sz, 0, 0, 0, 0, 0, inplace, 0);
-
-        break;
     case GGML_OP_RESHAPE:
     case GGML_OP_VIEW:
     case GGML_OP_PERMUTE:
     case GGML_OP_TRANSPOSE:
-        ggml_vk_preallocate_buffers_reserve(node, 0, 0, 0, 0, 0, 0, inplace, 0);
-        break;
     case GGML_OP_ADD:
     case GGML_OP_SCALE:
     case GGML_OP_SQR:
@@ -3769,50 +3631,49 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node, ggml_cgraph * graph){
     case GGML_OP_DIAG_MASK_INF:
     case GGML_OP_SOFT_MAX:
     case GGML_OP_ROPE:
-        ggml_vk_preallocate_buffers_reserve(node, d_sz, transfer_src0 ? qx_sz : 0, transfer_src1 ? qy_sz : 0, 0, 0, 0, inplace, qx_sz + qy_sz);
         break;
     case GGML_OP_UNARY:
         switch (ggml_get_unary_op(node)) {
         case GGML_UNARY_OP_SILU:
         case GGML_UNARY_OP_GELU:
         case GGML_UNARY_OP_RELU:
-            ggml_vk_preallocate_buffers_reserve(node, d_sz, transfer_src0 ? qx_sz : 0, 0, 0, 0, 0, inplace, qx_sz);
             break;
         default:
             return;
         }
         break;
     case GGML_OP_MUL_MAT:
-        ggml_vk_preallocate_buffers_reserve(node, d_sz, transfer_src0 ? qx_sz : 0, transfer_src1 ? qy_sz : 0, qx_needs_dequant ? x_sz : 0, qy_needs_dequant ? y_sz : 0, split_k > 1 ? d_sz * 4 : 0, inplace, qx_sz + qy_sz);
+        if (vk_prealloc_size_qx < qx_sz) {
+            vk_prealloc_size_qx = qx_sz;
+        }
+        if (vk_prealloc_size_qy < qy_sz) {
+            vk_prealloc_size_qy = qy_sz;
+        }
+        if (vk_prealloc_size_x < x_sz) {
+            vk_prealloc_size_x = x_sz;
+        }
+        if (vk_prealloc_size_y < y_sz) {
+            vk_prealloc_size_y = y_sz;
+        }
+        if (vk_prealloc_size_split_k < split_k_size) {
+            vk_prealloc_size_split_k = split_k_size;
+        }
+        if (vk_staging_size < x_sz + y_sz) {
+            vk_staging_size = x_sz + y_sz;
+        }
         break;
     default:
         return;
     }
-
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
-
-    if (node->backend == GGML_BACKEND_GPU && extra->d_idx >= 0 && graph != nullptr) {
-        // Replace with data GPU tensor
-        vk_prealloc_d_blocked[extra->d_idx] = ggml_vk_find_last_use(node, graph);
-    }
-
-    // Unblock buffers if they terminate at current node
-    for (size_t i = 0; i < vk_prealloc_d_blocked.size(); i++) {
-        if (vk_prealloc_d_blocked[i] == node) {
-            vk_prealloc_d_blocked[i] = nullptr;
-        }
-    }
 }
 
 void ggml_vk_preallocate_buffers() {
+    if (vk_disable) {
+        return;
+    }
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_preallocate_buffers()" << std::endl;
-    std::cerr << "d_sizes: ";
-    for (size_t i = 0; i < vk_prealloc_d_sizes.size(); i++) {
-        std::cerr << vk_prealloc_d_sizes[i] << " ";
-    }
-    std::cerr << std::endl;
-    std::cerr << "qx_size: " << vk_prealloc_size_qx << " qy_size: " << vk_prealloc_size_qy << " x_size: " << vk_prealloc_size_x << " y_size: " << vk_prealloc_size_y << std::endl;
+    std::cerr << "qx_size: " << vk_prealloc_size_qx << " qy_size: " << vk_prealloc_size_qy << " x_size: " << vk_prealloc_size_x << " y_size: " << vk_prealloc_size_y << " split_k_size: " << vk_prealloc_size_split_k << std::endl;
 #endif
 #if defined(VK_RUN_TESTS)
     ggml_vk_test_transfer(8192, false);
@@ -3855,51 +3716,42 @@ void ggml_vk_preallocate_buffers() {
     GGML_ASSERT(false);
 #endif
 
-    for (size_t i = 0; i < vk_prealloc_d_sizes.size(); i++) {
-        if (vk_prealloc_d_buffers[i].size < vk_prealloc_d_sizes[i]) {
-            // Resize buffer
-            if (vk_prealloc_d_buffers[i].size > 0) {
-                ggml_vk_destroy_buffer(vk_prealloc_d_buffers[i]);
-            }
-            vk_prealloc_d_buffers[i] = ggml_vk_create_buffer(vk_prealloc_d_sizes[i], vk::MemoryPropertyFlagBits::eDeviceLocal);
-        }
-    }
-    if (vk_prealloc_qx.size < vk_prealloc_size_qx) {
+    if (vk_prealloc_size_qx > 0 && vk_prealloc_qx.size < vk_prealloc_size_qx) {
         // Resize buffer
         if (vk_prealloc_qx.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_qx);
         }
         vk_prealloc_qx = ggml_vk_create_buffer(vk_prealloc_size_qx, vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
-    if (vk_prealloc_qy.size < vk_prealloc_size_qy) {
+    if (vk_prealloc_size_qy > 0 && vk_prealloc_qy.size < vk_prealloc_size_qy) {
         // Resize buffer
         if (vk_prealloc_qy.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_qy);
         }
         vk_prealloc_qy = ggml_vk_create_buffer(vk_prealloc_size_qy, vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
-    if (vk_prealloc_x.size < vk_prealloc_size_x) {
+    if (vk_prealloc_size_x > 0 && vk_prealloc_x.size < vk_prealloc_size_x) {
         // Resize buffer
         if (vk_prealloc_x.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_x);
         }
         vk_prealloc_x = ggml_vk_create_buffer(vk_prealloc_size_x, vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
-    if (vk_prealloc_y.size < vk_prealloc_size_y) {
+    if (vk_prealloc_size_y > 0 && vk_prealloc_y.size < vk_prealloc_size_y) {
         // Resize buffer
         if (vk_prealloc_y.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_y);
         }
         vk_prealloc_y = ggml_vk_create_buffer(vk_prealloc_size_y, vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
-    if (vk_prealloc_split_k.size < vk_prealloc_size_split_k) {
+    if (vk_prealloc_size_split_k > 0 && vk_prealloc_split_k.size < vk_prealloc_size_split_k) {
         // Resize buffer
         if (vk_prealloc_split_k.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_split_k);
         }
         vk_prealloc_split_k = ggml_vk_create_buffer(vk_prealloc_size_split_k, vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
-    if (vk_staging.size < vk_staging_size) {
+    if (vk_staging_size > 0 && vk_staging.size < vk_staging_size) {
         // Resize buffer
         if (vk_staging.size > 0) {
             ggml_vk_destroy_buffer(vk_staging);
@@ -3913,7 +3765,7 @@ void ggml_vk_build_graph(ggml_tensor * node, bool last_node){
         || (node->src[0] != nullptr && (node->src[0]->backend == GGML_BACKEND_GPU || node->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
         || (node->src[1] != nullptr && node->src[1]->backend == GGML_BACKEND_GPU);
 
-    if ((!any_on_device && node->op != GGML_OP_MUL_MAT) || (node->op == GGML_OP_MUL_MAT && !any_on_device && !ggml_vk_can_mul_mat(node->src[0], node->src[1], node))) {
+    if (vk_disable || (!any_on_device && node->op != GGML_OP_MUL_MAT) || (node->op == GGML_OP_MUL_MAT && !any_on_device && !ggml_vk_can_mul_mat(node->src[0], node->src[1], node))) {
         return;
     }
 
@@ -3927,13 +3779,6 @@ void ggml_vk_build_graph(ggml_tensor * node, bool last_node){
     const ggml_tensor * src1 = node->src[1];
 
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
-
-    // Set data to vk_buffer
-    // This can't be done earlier cause the buffer may not exist yet
-    if (extra->d_idx >= 0) {
-        extra->buffer_gpu = &vk_prealloc_d_buffers[extra->d_idx];
-        extra->base_buffer_offset = 0;
-    }
 
     switch (node->op) {
     case GGML_OP_UNARY:
@@ -4065,6 +3910,8 @@ void ggml_vk_build_graph(ggml_tensor * node, bool last_node){
     extra->ctx_idx = vk_ctx->idx;
 
 #ifdef GGML_VULKAN_CHECK_RESULTS
+    // Force context reset on each node so that each tensor ends up in its own context
+    // and can be run and compared to its CPU equivalent separately
     last_node = true;
 #endif
 
@@ -4080,7 +3927,7 @@ bool ggml_vk_compute_forward(ggml_compute_params * params, ggml_tensor * tensor)
         || (tensor->src[0] != nullptr && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
         || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_GPU);
 
-    if (!any_on_device && tensor->op != GGML_OP_MUL_MAT) {
+    if (vk_disable || (!any_on_device && tensor->op != GGML_OP_MUL_MAT)) {
         return false;
     }
 
@@ -4143,7 +3990,7 @@ bool ggml_vk_compute_forward(ggml_compute_params * params, ggml_tensor * tensor)
     }
 
 #ifdef VK_DEBUG
-    std::cerr << "ggml_vk_compute_forward(" << tensor << ", name=" << tensor->name << ", op=" << ggml_op_name(tensor->op) << ", type=" << tensor->type << ", backend=" << tensor->backend << ", ne0=" << tensor->ne[0] << ", ne1=" << tensor->ne[1] << ", ne2=" << tensor->ne[2] << ", ne3=" << tensor->ne[3] << ", nb0=" << tensor->nb[0] << ", nb1=" << tensor->nb[1] << ", nb2=" << tensor->nb[2] << ", nb3=" << tensor->nb[3] << ", view_src=" << tensor->view_src << ", view_offs=" << tensor->view_offs << ", buffer_gpu=" << extra->buffer_gpu << ")" << std::endl;
+    std::cerr << "ggml_vk_compute_forward(" << tensor << ", name=" << tensor->name << ", op=" << ggml_op_name(tensor->op) << ", type=" << tensor->type << ", backend=" << tensor->backend << ", ne0=" << tensor->ne[0] << ", ne1=" << tensor->ne[1] << ", ne2=" << tensor->ne[2] << ", ne3=" << tensor->ne[3] << ", nb0=" << tensor->nb[0] << ", nb1=" << tensor->nb[1] << ", nb2=" << tensor->nb[2] << ", nb3=" << tensor->nb[3] << ", view_src=" << tensor->view_src << ", view_offs=" << tensor->view_offs << ")" << std::endl;
 #endif
 
 #ifdef GGML_VULKAN_CHECK_RESULTS
@@ -4187,6 +4034,9 @@ bool ggml_vk_compute_forward(ggml_compute_params * params, ggml_tensor * tensor)
 }
 
 void ggml_vk_graph_cleanup() {
+    if (vk_disable) {
+        return;
+    }
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_graph_cleanup()" << std::endl;
 #endif
@@ -4229,23 +4079,21 @@ void ggml_vk_cleanup() {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_cleanup()" << std::endl;
 #endif
-    for (auto& buffer : vk_prealloc_d_buffers) {
-        ggml_vk_destroy_buffer(buffer);
-    }
-    vk_prealloc_d_buffers.clear();
-    vk_prealloc_d_sizes.clear();
-
-    ggml_vk_destroy_buffer(vk_prealloc_qx);
-    ggml_vk_destroy_buffer(vk_prealloc_qy);
     ggml_vk_destroy_buffer(vk_prealloc_x);
     ggml_vk_destroy_buffer(vk_prealloc_y);
+    ggml_vk_destroy_buffer(vk_prealloc_split_k);
     ggml_vk_destroy_buffer(vk_staging);
+    ggml_vk_destroy_buffer(vk_sync_staging);
 
-    vk_prealloc_size_qx = 0;
-    vk_prealloc_size_qy = 0;
     vk_prealloc_size_x = 0;
     vk_prealloc_size_y = 0;
+    vk_prealloc_size_split_k = 0;
     vk_staging_size = 0;
+
+    for (auto& event : vk_gc.events) {
+        vk_device.device.destroyEvent(event);
+    }
+    vk_gc.events.clear();
 }
 
 // backend interface
@@ -4258,19 +4106,21 @@ struct ggml_backend_vk_context {
 
 // device backend
 
-static void * const vk_ptr_base = (void *)(uintptr_t) 0x1000;
+static void * const vk_ptr_base = (void *)(uintptr_t) 0x1000;  // NOLINT
 
 struct ggml_backend_vk_buffer_context {
-    // vk_buffer dev_buffer;
+    vk_buffer dev_buffer;
     ggml_tensor_extra_gpu * temp_tensor_extras = nullptr;
     size_t temp_tensor_extra_index = 0;
     std::string name;
 
-    ggml_backend_vk_buffer_context() :
+    ggml_backend_vk_buffer_context(vk_buffer dev_buffer) :
+        dev_buffer(dev_buffer),
         name(GGML_VK_NAME) {
     }
 
     ~ggml_backend_vk_buffer_context() {
+        ggml_vk_destroy_buffer(dev_buffer);
         delete[] temp_tensor_extras;
     }
 
@@ -4299,7 +4149,6 @@ GGML_CALL static bool ggml_backend_buffer_is_vk(ggml_backend_buffer_t buffer) {
 
 GGML_CALL static void ggml_backend_vk_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
-    // ggml_vk_pool_free(ctx->dev_buffer);
     delete ctx;
 }
 
@@ -4311,30 +4160,30 @@ GGML_CALL static void * ggml_backend_vk_buffer_get_base(ggml_backend_buffer_t bu
 
 GGML_CALL static void ggml_backend_vk_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
 #ifdef VK_DEBUG
-    std::cerr << "ggml_backend_vk_buffer_init_tensor(" << buffer << ", " << tensor << ")" << std::endl;
+    std::cerr << "ggml_backend_vk_buffer_init_tensor(" << buffer << " (" << buffer->context << "), " << tensor << ")" << std::endl;
 #endif
-    // ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
+    ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
 
-    // if (tensor->view_src != NULL && tensor->view_offs == 0) {
-    //     assert(tensor->view_src->buffer->buft == buffer->buft);
-    //     tensor->backend = tensor->view_src->backend;
-    //     tensor->extra = tensor->view_src->extra;
-    //     return;
-    // }
-
-    // ggml_tensor_extra_gpu * extra = ctx->ggml_vk_alloc_temp_tensor_extra();
-    // extra->buffer_gpu = &ctx->dev_buffer;
-    // extra->base_buffer_offset = (uint8_t *) tensor->data - (uint8_t *) vk_ptr_base;
-
-    tensor->backend = GGML_BACKEND_GPU;
-    // tensor->extra = extra;
-    if (tensor->op == GGML_OP_NONE) {
-        ggml_vk_assign_buffer(tensor);
+    ggml_tensor_extra_gpu * extra = ctx->ggml_vk_alloc_temp_tensor_extra();
+    if (tensor->view_src != nullptr && tensor->view_src->extra != nullptr) {
+        ggml_tensor_extra_gpu * extra_view = (ggml_tensor_extra_gpu *) tensor->view_src->extra;
+        extra->buffer_gpu = extra_view->buffer_gpu;
+        extra->offset = extra_view->offset + tensor->view_offs;
     } else {
-        ggml_vk_preallocate_buffers_graph(tensor, nullptr);
+        extra->buffer_gpu = ctx->dev_buffer;
+        extra->offset = (uint8_t *) tensor->data - (uint8_t *) vk_ptr_base;
     }
 
-    UNUSED(buffer);
+    if (extra->offset + ggml_nbytes(tensor) > extra->buffer_gpu.size) {
+        std::cerr << "ERROR: Trying to assign tensor " << tensor << " outside of buffer size " << ctx->dev_buffer.size << " requested offset: " << extra->offset << " tensor size: " << ggml_nbytes(tensor) << std::endl;
+        if (tensor->view_src != nullptr) {
+            std::cerr << "view_src: " << tensor->view_src << " extra: " << tensor->view_src->extra << std::endl;
+        }
+        GGML_ASSERT(false);
+    }
+
+    tensor->backend = GGML_BACKEND_GPU;
+    tensor->extra = extra;
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -4343,15 +4192,11 @@ GGML_CALL static void ggml_backend_vk_buffer_set_tensor(ggml_backend_buffer_t bu
 #endif
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
-    // ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
+    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
-    // ggml_vk_buffer_write(&ctx->dev_buffer, offset, data, size, vk_device.transfer_queue);
-
-    ggml_vk_transform_tensor_static(data, tensor);
+    ggml_vk_buffer_write(&extra->buffer_gpu, extra->offset + offset, data, size, vk_device.transfer_queue);
 
     UNUSED(buffer);
-    UNUSED(offset);
-    UNUSED(size);
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
@@ -4362,34 +4207,29 @@ GGML_CALL static void ggml_backend_vk_buffer_get_tensor(ggml_backend_buffer_t bu
 
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
-    ggml_vk_buffer_read(extra->buffer_gpu, offset, data, size, vk_device.transfer_queue);
+    ggml_vk_buffer_read(&extra->buffer_gpu, extra->offset + offset, data, size, vk_device.transfer_queue);
 
     UNUSED(buffer);
 }
 
 GGML_CALL static bool ggml_backend_vk_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
-    // if (ggml_backend_buffer_is_vk(src->buffer)) {
-    //     ggml_backend_vk_buffer_context * src_ctx = (ggml_backend_vk_buffer_context *)src->buffer->context;
-    //     ggml_backend_vk_buffer_context * dst_ctx = (ggml_backend_vk_buffer_context *)buffer->context;
+    if (ggml_backend_buffer_is_vk(src->buffer)) {
+        ggml_tensor_extra_gpu * src_extra = (ggml_tensor_extra_gpu *) src->extra;
+        ggml_tensor_extra_gpu * dst_extra = (ggml_tensor_extra_gpu *) dst->extra;
 
-    //     ggml_vk_buffer_copy(&dst_ctx->dev_buffer, 0, &src_ctx->dev_buffer, 0, ggml_nbytes(src), vk_device.transfer_queue);
+        ggml_vk_buffer_copy(&src_extra->buffer_gpu, src_extra->offset, &dst_extra->buffer_gpu, dst_extra->offset, ggml_nbytes(src), vk_device.transfer_queue);
 
-    //     return true;
-    // }
+        return true;
+    }
     return false;
 
     UNUSED(buffer);
-    UNUSED(src);
-    UNUSED(dst);
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
-    // ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
+    ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
 
-    // ggml_vk_buffer_memset(&ctx->dev_buffer, 0, value, buffer->size, vk_device.transfer_queue);
-
-    UNUSED(buffer);
-    UNUSED(value);
+    ggml_vk_buffer_memset(&ctx->dev_buffer, 0, value, buffer->size, vk_device.transfer_queue);
 }
 
 static ggml_backend_buffer_i ggml_backend_vk_buffer_interface = {
@@ -4399,7 +4239,7 @@ static ggml_backend_buffer_i ggml_backend_vk_buffer_interface = {
     /* .init_tensor     = */ ggml_backend_vk_buffer_init_tensor,
     /* .set_tensor      = */ ggml_backend_vk_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_vk_buffer_get_tensor,
-    /* .cpy_tensor      = */ NULL,  // ggml_backend_vk_buffer_cpy_tensor,
+    /* .cpy_tensor      = */ ggml_backend_vk_buffer_cpy_tensor,
     /* .clear           = */ ggml_backend_vk_buffer_clear,
     /* .reset           = */ NULL,
 };
@@ -4419,9 +4259,9 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_buffer_type_alloc_buffer(
 #ifdef VK_DEBUG
     std::cerr << "ggml_backend_vk_buffer_type_alloc_buffer(" << size << ")" << std::endl;
 #endif
-    // vk_buffer dev_buffer = ggml_vk_create_buffer(size, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer dev_buffer = ggml_vk_create_buffer(size, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    ggml_backend_vk_buffer_context * ctx = new ggml_backend_vk_buffer_context();
+    ggml_backend_vk_buffer_context * ctx = new ggml_backend_vk_buffer_context(dev_buffer);
 
     return ggml_backend_buffer_init(buft, ggml_backend_vk_buffer_interface, ctx, size);
 
@@ -4551,15 +4391,8 @@ GGML_CALL static ggml_backend_buffer_type_t ggml_backend_vk_get_default_buffer_t
 GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     // ggml_backend_vk_context * vk_ctx = (ggml_backend_vk_context *)backend->context;
 
-    for (int i = 0; i < cgraph->n_leafs; i++) {
-        ggml_tensor * node = cgraph->leafs[i];
-        if (node->backend == GGML_BACKEND_GPU && node->extra == nullptr) {
-            ggml_vk_transform_tensor_temporary(node->data, node);
-        }
-    }
-
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_preallocate_buffers_graph(cgraph->nodes[i], cgraph);
+        ggml_vk_preallocate_buffers_graph(cgraph->nodes[i]);
     }
     ggml_vk_preallocate_buffers();
 
@@ -4579,6 +4412,7 @@ GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml
 
         bool ok = ggml_vk_compute_forward(&params, node);
         if (!ok) {
+            std::cerr << "Vulkan disable: " << vk_disable << std::endl;
             fprintf(stderr, "%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
         }
 #ifdef GGML_VULKAN_CHECK_RESULTS
@@ -4897,12 +4731,12 @@ void ggml_vk_check_results_0(ggml_compute_params * params, ggml_tensor * tensor)
             memcpy(src0_clone->nb, src0->nb, sizeof(size_t) * GGML_MAX_DIMS);
         } else if (src0->backend == GGML_BACKEND_GPU) {
             ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src0->extra;
-            uint64_t offset = extra->base_buffer_offset + extra->view_offset;
+            uint64_t offset = extra->offset;
             if (!ggml_is_contiguous(src0) && ggml_vk_dim01_contiguous(src0)) {
                 for (int i3 = 0; i3 < src0->ne[3]; i3++) {
                     for (int i2 = 0; i2 < src0->ne[2]; i2++) {
                         const int idx = i3*src0->ne[2] + i2;
-                        ggml_vk_buffer_read(extra->buffer_gpu, offset + idx * src0->nb[2], ((char *)src0_clone->data + idx * src0_clone->nb[2]), src0->ne[1] * src0->nb[1], vk_device.transfer_queue);
+                        ggml_vk_buffer_read(&extra->buffer_gpu, offset + idx * src0->nb[2], ((char *)src0_clone->data + idx * src0_clone->nb[2]), src0->ne[1] * src0->nb[1], vk_device.transfer_queue);
                     }
                 }
 
@@ -4912,10 +4746,10 @@ void ggml_vk_check_results_0(ggml_compute_params * params, ggml_tensor * tensor)
                     src0_clone->nb[i] = src0_clone->nb[i - 1]*src0_clone->ne[i - 1];
                 }
             } else {
-                if (offset + src0_size >= extra->buffer_gpu->size) {
-                    src0_size = extra->buffer_gpu->size - offset;
+                if (offset + src0_size >= extra->buffer_gpu.size) {
+                    src0_size = extra->buffer_gpu.size - offset;
                 }
-                ggml_vk_buffer_read(extra->buffer_gpu, offset, src0_clone->data, src0_size, vk_device.transfer_queue);
+                ggml_vk_buffer_read(&extra->buffer_gpu, offset, src0_clone->data, src0_size, vk_device.transfer_queue);
                 memcpy(src0_clone->nb, src0->nb, sizeof(size_t) * GGML_MAX_DIMS);
             }
         } else {
@@ -4940,12 +4774,12 @@ void ggml_vk_check_results_0(ggml_compute_params * params, ggml_tensor * tensor)
             memcpy(src1_clone->nb, src1->nb, sizeof(size_t) * GGML_MAX_DIMS);
         } else if (src1->backend == GGML_BACKEND_GPU) {
             ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src1->extra;
-            uint64_t offset = extra->base_buffer_offset + extra->view_offset;
+            uint64_t offset = extra->offset;
             if (!ggml_is_contiguous(src1) && ggml_vk_dim01_contiguous(src1)) {
                 for (int i3 = 0; i3 < src1->ne[3]; i3++) {
                     for (int i2 = 0; i2 < src1->ne[2]; i2++) {
                         const int idx = i3*src1->ne[2] + i2;
-                        ggml_vk_buffer_read(extra->buffer_gpu, offset + idx * src1->nb[2], ((char *)src1_clone->data + idx * src1_clone->nb[2]), src1->ne[1] * src1->nb[1], vk_device.transfer_queue);
+                        ggml_vk_buffer_read(&extra->buffer_gpu, offset + idx * src1->nb[2], ((char *)src1_clone->data + idx * src1_clone->nb[2]), src1->ne[1] * src1->nb[1], vk_device.transfer_queue);
                     }
                 }
 
@@ -4955,10 +4789,10 @@ void ggml_vk_check_results_0(ggml_compute_params * params, ggml_tensor * tensor)
                     src1_clone->nb[i] = src1_clone->nb[i - 1]*src1_clone->ne[i - 1];
                 }
             } else {
-                if (offset + src1_size >= extra->buffer_gpu->size) {
-                    src1_size = extra->buffer_gpu->size - offset;
+                if (offset + src1_size >= extra->buffer_gpu.size) {
+                    src1_size = extra->buffer_gpu.size - offset;
                 }
-                ggml_vk_buffer_read(extra->buffer_gpu, offset, src1_clone->data, src1_size, vk_device.transfer_queue);
+                ggml_vk_buffer_read(&extra->buffer_gpu, offset, src1_clone->data, src1_size, vk_device.transfer_queue);
                 memcpy(src1_clone->nb, src1->nb, sizeof(size_t) * GGML_MAX_DIMS);
             }
         } else {
@@ -5062,10 +4896,15 @@ void ggml_vk_check_results_0(ggml_compute_params * params, ggml_tensor * tensor)
         GGML_ASSERT(false);
     }
 
+    // Disable vulkan here to avoid the hooks in ggml.c
+    vk_disable = true;
+
     ggml_cgraph * cgraph = ggml_new_graph(ctx);
     ggml_build_forward_expand(cgraph, tensor_clone);
 
     ggml_graph_compute_with_ctx(ctx, cgraph, 8);
+
+    vk_disable = false;
 
     ggml_vk_check_tensor(ggml_op_name(tensor->op), tensor_clone);
     if (vk_output_tensor > 0 && vk_output_tensor == check_counter) {
@@ -5110,11 +4949,11 @@ void ggml_vk_check_results_1(ggml_compute_params * params, ggml_tensor * tensor)
 
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
-        if (extra->base_buffer_offset + extra->view_offset + tensor_size >= extra->buffer_gpu->size) {
-            tensor_size = extra->buffer_gpu->size - (extra->base_buffer_offset + extra->view_offset);
+        if (extra->offset + tensor_size >= extra->buffer_gpu.size) {
+            tensor_size = extra->buffer_gpu.size - (extra->offset);
         }
 
-        ggml_vk_buffer_read(extra->buffer_gpu, extra->base_buffer_offset + extra->view_offset, tensor_data, tensor_size, vk_device.transfer_queue);
+        ggml_vk_buffer_read(&extra->buffer_gpu, extra->offset, tensor_data, tensor_size, vk_device.transfer_queue);
     }
 
     float first_error_result = -1.0f;

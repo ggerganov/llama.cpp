@@ -16871,24 +16871,14 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     }
 
 #ifdef GGML_USE_VULKAN
-    for (int i = 0; i < cgraph->n_leafs; i++) {
-        struct ggml_tensor * node = cgraph->leafs[i];
-        if (node->backend == GGML_BACKEND_GPU && node->extra == NULL) {
-            ggml_vk_transform_tensor_temporary(node->data, node);
-        }
-    }
-
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_preallocate_buffers_graph(cgraph->nodes[i], cgraph);
+        ggml_vk_preallocate_buffers_graph(cgraph->nodes[i]);
     }
     ggml_vk_preallocate_buffers();
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_vk_build_graph(cgraph->nodes[i], i == cgraph->n_nodes - 1);
     }
-
-    // Set last tensor to CPU to force copy to CPU
-    cgraph->nodes[cgraph->n_nodes - 1]->backend = GGML_BACKEND_CPU;
 #endif
 
     const int n_threads = cplan->n_threads;
@@ -16940,6 +16930,10 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
             GGML_ASSERT(rc == 0);
         }
     }
+
+#ifdef GGML_USE_VULKAN
+    ggml_vk_graph_cleanup();
+#endif
 
     // performance stats (graph)
     {
