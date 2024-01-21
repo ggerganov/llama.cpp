@@ -159,7 +159,7 @@ effectiveStdenv.mkDerivation (
 
     cmakeFlags =
       [
-        (cmakeBool "LLAMA_NATIVE" true)
+        (cmakeBool "LLAMA_NATIVE" false)
         (cmakeBool "LLAMA_BUILD_SERVER" true)
         (cmakeBool "BUILD_SHARED_LIBS" true)
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
