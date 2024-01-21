@@ -758,12 +758,12 @@ static void ggml_vk_wait_events(vk::CommandBuffer& cmd_buffer, std::vector<vk::E
 }
 
 static void ggml_vk_destroy_buffer(vk_buffer& buf) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_destroy_buffer(" << buf.size << ")" << std::endl;
-#endif
     if (buf.size == 0) {
         return;
     }
+#ifdef VK_DEBUG
+    std::cerr << "ggml_vk_destroy_buffer(" << buf.size << ")" << std::endl;
+#endif
 
     buf.size = 0;
     vk_device.device.freeMemory(buf.device_memory);
@@ -1438,12 +1438,13 @@ static void ggml_vk_buffer_write_nc_async(vk_context& ctx, vk_buffer* dst, size_
     // Staging buffer required
     vk_buffer * staging = &vk_staging;
     size_t staging_offset = vk_staging_offset;
-    if (vk_staging.size < vk_staging_offset + dst->size) {
+    const size_t copy_size = ts*ne/bs;
+    if (vk_staging.size < vk_staging_offset + copy_size) {
         if (sync_staging) {
             // Create temporary larger buffer
-            if (vk_sync_staging.size < dst->size) {
+            if (vk_sync_staging.size < copy_size) {
                 ggml_vk_destroy_buffer(vk_sync_staging);
-                vk_sync_staging = ggml_vk_create_buffer(dst->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+                vk_sync_staging = ggml_vk_create_buffer(copy_size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
             }
 
             staging = &vk_sync_staging;
@@ -1453,7 +1454,7 @@ static void ggml_vk_buffer_write_nc_async(vk_context& ctx, vk_buffer* dst, size_
         }
     }
 
-    VkBufferCopy buf_copy{ staging_offset, offset, ts*ne/bs };
+    VkBufferCopy buf_copy{ staging_offset, offset, copy_size };
 
     if (event != nullptr) {
         *event = ggml_vk_create_event();
@@ -1534,11 +1535,12 @@ static void ggml_vk_buffer_write_2d_async(vk_context& ctx, vk_buffer* dst, size_
     // Staging buffer required
     vk_buffer * staging = &vk_staging;
     size_t staging_offset = vk_staging_offset;
-    if (vk_staging.size < vk_staging_offset + dst->size) {
+    const size_t copy_size = width*height;
+    if (vk_staging.size < vk_staging_offset + copy_size) {
         if (sync_staging) {
-            if (vk_sync_staging.size < dst->size) {
+            if (vk_sync_staging.size < copy_size) {
                 ggml_vk_destroy_buffer(vk_sync_staging);
-                vk_sync_staging = ggml_vk_create_buffer(dst->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+                vk_sync_staging = ggml_vk_create_buffer(copy_size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
             }
 
             staging = &vk_sync_staging;
@@ -1551,7 +1553,7 @@ static void ggml_vk_buffer_write_2d_async(vk_context& ctx, vk_buffer* dst, size_
     VkBufferCopy buf_copy = {
         staging_offset,
         offset,
-        width * height};
+        copy_size};
 
     if (event != nullptr) {
         *event = ggml_vk_create_event();
@@ -1654,12 +1656,13 @@ static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t
     // Fall back to staging buffer
     vk_buffer * staging = &vk_staging;
     size_t staging_offset = vk_staging_offset;
-    if (vk_staging.size < vk_staging_offset + src->size) {
+    const size_t copy_size = dpitch * height;
+    if (vk_staging.size < vk_staging_offset + copy_size) {
         if (sync_staging) {
             // Create temporary larger buffer
-            if (vk_sync_staging.size < src->size) {
+            if (vk_sync_staging.size < copy_size) {
                 ggml_vk_destroy_buffer(vk_sync_staging);
-                vk_sync_staging = ggml_vk_create_buffer(src->size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+                vk_sync_staging = ggml_vk_create_buffer(copy_size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
             }
 
             staging = &vk_sync_staging;
@@ -1674,7 +1677,7 @@ static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t
 
     GGML_ASSERT(memcpys != nullptr);
 
-    deferred_memcpy(dst, staging->ptr, dpitch * height, memcpys);
+    deferred_memcpy(dst, staging->ptr, copy_size, memcpys);
 }
 
 static void ggml_vk_buffer_read_async(vk_context& ctx, vk_buffer* src, size_t offset, void * dst, size_t size, vk_queue& q, std::vector<vk_staging_memcpy>* memcpys = nullptr, bool sync_staging = false) {
