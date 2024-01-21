@@ -633,11 +633,11 @@ function gg_run_mistral_7b_v0_1 {
         return 0
     }
 
-    path_lora="../models-mnt/mistral/7B-v2/lora"
+    path_lora="../models-mnt/mistral/7B_v0_1/lora"
     path_shakespeare="../models-mnt/shakespeare"
 
     shakespeare="${path_shakespeare}/shakespeare.txt"
-    lora_shakespeare="${path_lora}/ggml-adapter-model.bin"
+    lora_shakespeare="${path_lora}/adapter-model.bin"
 
 # TODO - we need mistral lora
 
