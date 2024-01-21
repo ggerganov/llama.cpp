@@ -1040,7 +1040,7 @@ static bool deserialize_string(std::istream& in, std::string& str) {
     return false;
 }
 
-struct truthful_qa_answer {
+struct multiple_choice_answers {
     std::vector<std::string> answers;
     std::vector<int>         labels;
     bool deserialize(std::istream& in) {
@@ -1057,10 +1057,10 @@ struct truthful_qa_answer {
     }
 };
 
-struct truthful_qa_task {
-    std::string question;
-    truthful_qa_answer mc1;
-    truthful_qa_answer mc2;
+struct multiple_choice_task {
+    std::string question;         // the question (or context that needs to be continued)
+    multiple_choice_answers mc1;  // possible answers (continuations) with a single correct answer
+    multiple_choice_answers mc2;  // possible answers (continuations) with multiple correct answers - not handled yet
     bool deserialize(std::istream& in) {
         if (!deserialize_string(in, question)) return false;
         return mc1.deserialize(in) && mc2.deserialize(in);
@@ -1074,7 +1074,7 @@ struct truthful_qa_task {
     std::vector<float> log_probs;
 };
 
-static bool truthful_qa_prepare_one_task(llama_context * ctx, bool add_bos, truthful_qa_task& task, bool log_error) {
+static bool multiple_choice_prepare_one_task(llama_context * ctx, bool add_bos, multiple_choice_task& task, bool log_error) {
     if (task.question.empty() || task.mc1.answers.empty()) {
         if (log_error) {
             printf("%s: found bad task with empty question and/or answers\n", __func__);
@@ -1117,13 +1117,23 @@ static bool truthful_qa_prepare_one_task(llama_context * ctx, bool add_bos, trut
     return true;
 }
 
-static void truthful_qa_score(llama_context * ctx, const gpt_params & params) {
-    // Calculates TruthFulQA score (multiple choice with single correct answer) from prompt
-    //
-    // Data extracted from https://huggingface.co/datasets/truthful_qa
-    // The validation dataset in the binary format that is being used can be found at
-    //     https://huggingface.co/datasets/ikawrakow/validation-datasets-for-llama.cpp
-    //
+//
+// Calculates score for multiple choice tasks with single correct answer from prompt.
+// Commonly used LLM evaluation metrics of this type are
+//   * ARC
+//   * HellaSwag
+//   * MMLU
+//   * TruthfulQA
+//
+// Validation datasets for these 4 tests can be found at
+//     https://huggingface.co/datasets/ikawrakow/validation-datasets-for-llama.cpp
+// The data for these datasets was extracted from
+//     git@hf.co:datasets/allenai/ai2_arc
+//     https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
+//     git@hf.co:datasets/Stevross/mmlu
+//     https://huggingface.co/datasets/truthful_qa
+//
+static void multiple_choice_score(llama_context * ctx, const gpt_params & params) {
 
     std::istringstream strstream(params.prompt);
     uint32_t n_task;
@@ -1140,8 +1150,8 @@ static void truthful_qa_score(llama_context * ctx, const gpt_params & params) {
         return;
     }
 
-    std::vector<truthful_qa_task> tasks;
-    if (params.thruthful_qa_tasks == 0 || params.thruthful_qa_tasks >= (size_t)n_task) {
+    std::vector<multiple_choice_task> tasks;
+    if (params.multiple_choice_tasks == 0 || params.multiple_choice_tasks >= (size_t)n_task) {
         // Use all tasks
         tasks.resize(n_task);
         printf("%s: reading tasks", __func__);
@@ -1158,12 +1168,12 @@ static void truthful_qa_score(llama_context * ctx, const gpt_params & params) {
         printf("done\n");
     }
     else {
-        printf("%s: selecting %zu random tasks from %u tasks available\n", __func__, params.thruthful_qa_tasks, n_task);
+        printf("%s: selecting %zu random tasks from %u tasks available\n", __func__, params.multiple_choice_tasks, n_task);
         std::mt19937 rng(1);
         std::vector<int> aux(n_task);
         for (uint32_t i = 0; i < n_task; ++i) aux[i] = i;
         float scale = 1.f/(1.f + (float)std::mt19937::max());
-        tasks.resize(params.thruthful_qa_tasks);
+        tasks.resize(params.multiple_choice_tasks);
         for (auto& task : tasks) {
             int j = (int)(scale * rng() * aux.size());
             int idx = aux[j];
@@ -1175,7 +1185,7 @@ static void truthful_qa_score(llama_context * ctx, const gpt_params & params) {
                 return;
             }
         }
-        n_task = params.thruthful_qa_tasks;
+        n_task = params.multiple_choice_tasks;
     }
 
     // This is needed as usual for LLaMA models
@@ -1200,7 +1210,7 @@ static void truthful_qa_score(llama_context * ctx, const gpt_params & params) {
                 }
                 int last = std::min(first + k_chunk, num_tasks);
                 for (int i = first; i < last; ++i) {
-                    if (!truthful_qa_prepare_one_task(ctx, add_bos, tasks[i], false)) ++n_bad_local;
+                    if (!multiple_choice_prepare_one_task(ctx, add_bos, tasks[i], false)) ++n_bad_local;
                 }
             }
         };
@@ -1222,7 +1232,7 @@ static void truthful_qa_score(llama_context * ctx, const gpt_params & params) {
         int i_task = 0;
         for (auto& task : tasks) {
             ++i_task;
-            if (!truthful_qa_prepare_one_task(ctx, add_bos, task, true)) {
+            if (!multiple_choice_prepare_one_task(ctx, add_bos, task, true)) {
                 return;
             }
             if (i_task%n_dot == 0) {
@@ -1465,8 +1475,8 @@ int main(int argc, char ** argv) {
         hellaswag_score(ctx, params);
     } else if (params.winogrande) {
         winogrande_score(ctx, params);
-    } else if (params.truthful_qa) {
-        truthful_qa_score(ctx, params);
+    } else if (params.multiple_choice) {
+        multiple_choice_score(ctx, params);
     } else {
         results = perplexity(ctx, params);
     }
