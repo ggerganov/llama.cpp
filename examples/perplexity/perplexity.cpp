@@ -1196,26 +1196,25 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
     if (n_task > 500) {
         printf("...");
         fflush(stdout);
-        constexpr int k_chunk = 4;
         std::atomic<int> counter(0);
         std::atomic<int> n_bad(0);
         auto prepare = [&counter, &n_bad, &tasks, ctx, add_bos] () {
             int num_tasks = tasks.size();
             int n_bad_local = 0;
             while (true) {
-                int first = counter.fetch_add(k_chunk);
+                int first = counter.fetch_add(K_TOKEN_CHUNK);
                 if (first >= num_tasks) {
                     if (n_bad_local > 0) n_bad += n_bad_local;
                     break;
                 }
-                int last = std::min(first + k_chunk, num_tasks);
+                int last = std::min(first + K_TOKEN_CHUNK, num_tasks);
                 for (int i = first; i < last; ++i) {
                     if (!multiple_choice_prepare_one_task(ctx, add_bos, tasks[i], false)) ++n_bad_local;
                 }
             }
         };
         size_t max_thread = std::thread::hardware_concurrency();
-        max_thread = std::min(max_thread, (tasks.size() + k_chunk - 1)/k_chunk);
+        max_thread = std::min(max_thread, (tasks.size() + K_TOKEN_CHUNK - 1)/K_TOKEN_CHUNK);
         std::vector<std::thread> workers(max_thread-1);
         for (auto& w : workers) w = std::thread(prepare);
         prepare();
