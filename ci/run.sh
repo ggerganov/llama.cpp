@@ -702,6 +702,7 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
     if [ -z ${GG_BUILD_VRAM_GB} ] || [ ${GG_BUILD_VRAM_GB} -ge 8 ]; then
         if [ -z ${GG_BUILD_CUDA} ]; then
             test $ret -eq 0 && gg_run open_llama_3b_v2
+            test $ret -eq 0 && gg_run mistral_7b_v0_1
         else
             test $ret -eq 0 && gg_run open_llama_7b_v2
             test $ret -eq 0 && gg_run mistral_7b_v0_1
