@@ -59,7 +59,14 @@ if __name__ == '__main__':
     input_model = os.path.join(sys.argv[1], "adapter_model.bin")
     output_path = os.path.join(sys.argv[1], "ggml-adapter-model.bin")
 
-    model = torch.load(input_model, map_location="cpu")
+    if os.path.exists(input_model):
+        model = torch.load(input_model, map_location="cpu")
+    else:
+        input_model = os.path.join(sys.argv[1], "adapter_model.safetensors")
+        # lazy import load_file only if lora is in safetensors format.
+        from safetensors.torch import load_file
+        model = load_file(input_model, device="cpu")
+
     arch_name = sys.argv[2] if len(sys.argv) == 3 else "llama"
 
     if arch_name not in gguf.MODEL_ARCH_NAMES.values():
