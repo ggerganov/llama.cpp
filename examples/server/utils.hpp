@@ -5,12 +5,15 @@
 #include <set>
 #include <mutex>
 #include <condition_variable>
+#include <unordered_map>
 
 #include "json.hpp"
 
 #include "../llava/clip.h"
 
 using json = nlohmann::json;
+
+extern bool server_verbose;
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -160,17 +163,22 @@ struct llama_server_queue {
     int id = 0;
     std::mutex mutex_tasks;
     std::vector<T> queue_tasks;
+    std::vector<T> queue_tasks_deferred;
     std::condition_variable condition_tasks;
     std::function<void(T)> callback_new_task;
     std::function<void(void)> callback_all_task_finished;
 
     int post(T task) {
-        LOG_INFO("post", {});
         std::unique_lock<std::mutex> lock(mutex_tasks);
         task.id = id++;
         queue_tasks.push_back(std::move(task));
         condition_tasks.notify_one();
         return task.id;
+    }
+
+    void defer(T task) {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        queue_tasks_deferred.push_back(std::move(task));
     }
 
     int get_next_id() {
@@ -189,7 +197,7 @@ struct llama_server_queue {
     void start_loop() {
         while (true) {
             // new task arrived
-            LOG_INFO("have new task", {});
+            LOG_VERBOSE("have new task", {});
             {
                 while (true)
                 {
@@ -201,13 +209,27 @@ struct llama_server_queue {
                     task_server task = queue_tasks.front();
                     queue_tasks.erase(queue_tasks.begin());
                     lock.unlock();
-                    LOG_INFO("callback_new_task", {});
+                    LOG_VERBOSE("callback_new_task", {});
                     callback_new_task(task);
                 }
-                LOG_INFO("callback_all_task_finished", {});
+                // move deferred tasks back to main loop
+                {
+                    std::unique_lock<std::mutex> lock(mutex_tasks);
+                    //queue_tasks.insert(
+                    //    queue_tasks.end(),
+                    //    std::make_move_iterator(queue_tasks_deferred.begin()),
+                    //    std::make_move_iterator(queue_tasks_deferred.end())
+                    //);
+                    for (auto & task : queue_tasks_deferred) {
+                        queue_tasks.push_back(task);
+                    }
+                    queue_tasks_deferred.clear();
+                    lock.unlock();
+                }
+                LOG_VERBOSE("callback_all_task_finished", {});
                 callback_all_task_finished();
             }
-            LOG_INFO("wait for new task", {});
+            LOG_VERBOSE("wait for new task", {});
             // wait for new task
             {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
@@ -216,6 +238,78 @@ struct llama_server_queue {
                         return !queue_tasks.empty();
                     });
                 }
+            }
+        }
+    }
+};
+
+struct llama_server_response_event {
+    typedef std::function<void(int, int, task_result&)> callback_multitask_t;
+    std::vector<task_result> queue_results;
+    std::mutex mutex_task_ids;
+    std::set<int> waiting_task_ids;
+    std::mutex mutex_results;
+    std::condition_variable condition_results;
+    callback_multitask_t callback_update_multitask;
+
+    void add_waiting_task_id(int task_id) {
+        std::unique_lock<std::mutex> lock(mutex_task_ids);
+        waiting_task_ids.insert(task_id);
+    }
+
+    void remove_waiting_task_id(int task_id) {
+        std::unique_lock<std::mutex> lock(mutex_task_ids);
+        waiting_task_ids.erase(task_id);
+    }
+
+    task_result recv(int task_id) {
+        while (true)
+        {
+            std::unique_lock<std::mutex> lock(mutex_results);
+            condition_results.wait(lock, [&]{
+                return !queue_results.empty();
+            });
+            LOG_VERBOSE("condition_results unblock", {});
+
+            for (int i = 0; i < (int) queue_results.size(); i++)
+            {
+                if (queue_results[i].id == task_id)
+                {
+                    assert(queue_results[i].multitask_id == -1);
+                    task_result res = queue_results[i];
+                    queue_results.erase(queue_results.begin() + i);
+                    return res;
+                }
+            }
+        }
+
+        // should never reach here
+    }
+
+    void on_multitask_update(callback_multitask_t callback) {
+        callback_update_multitask = callback;
+    }
+
+    void send(task_result result) {
+        std::unique_lock<std::mutex> lock(mutex_results);
+        std::unique_lock<std::mutex> lock1(mutex_task_ids);
+        LOG_VERBOSE("send new result", {});
+        for (auto& task_id : waiting_task_ids) {
+            LOG_TEE("waiting task id %i \n", task_id);
+            // for now, tasks that have associated parent multitasks just get erased once multitask picks up the result
+            if (result.multitask_id == task_id)
+            {
+                LOG_VERBOSE("callback_update_multitask", {});
+                callback_update_multitask(task_id, result.id, result);
+                continue;
+            }
+
+            if (result.id == task_id)
+            {
+                LOG_VERBOSE("queue_results.push_back", {});
+                queue_results.push_back(result);
+                condition_results.notify_one();
+                return;
             }
         }
     }
