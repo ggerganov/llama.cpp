@@ -155,6 +155,35 @@ static inline void server_log(const char *level, const char *function, int line,
 }
 
 //
+// server utils
+//
+
+template <typename T>
+static T json_value(const json &body, const std::string &key, const T &default_value)
+{
+    // Fallback null to default value
+    return body.contains(key) && !body.at(key).is_null()
+        ? body.value(key, default_value)
+        : default_value;
+}
+
+inline std::string format_chatml(std::vector<json> messages)
+{
+    std::ostringstream chatml_msgs;
+
+    for (auto it = messages.begin(); it != messages.end(); ++it) {
+        chatml_msgs << "<|im_start|>"
+                    << json_value(*it, "role",    std::string("user")) << '\n';
+        chatml_msgs << json_value(*it, "content", std::string(""))
+                    << "<|im_end|>\n";
+    }
+
+    chatml_msgs << "<|im_start|>assistant" << '\n';
+
+    return chatml_msgs.str();
+}
+
+//
 // work queue utils
 //
 
@@ -168,6 +197,7 @@ struct llama_server_queue {
     std::function<void(T)> callback_new_task;
     std::function<void(void)> callback_all_task_finished;
 
+    // Add a new task to the end of the queue
     int post(T task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         task.id = id++;
@@ -176,24 +206,29 @@ struct llama_server_queue {
         return task.id;
     }
 
+    // Add a new task, but defer until the next loop
     void defer(T task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         queue_tasks_deferred.push_back(std::move(task));
     }
 
+    // Get the next task id
     int get_next_id() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         return id++;
     }
 
+    // Register function to process a new task
     void on_new_task(std::function<void(T)> callback) {
         callback_new_task = callback;
     }
 
+    // Register the function to be called when the batch of tasks is finished
     void on_all_tasks_finished(std::function<void(void)> callback) {
         callback_all_task_finished = callback;
     }
 
+    // Start the main loop. This call is blocking
     void start_loop() {
         while (true) {
             // new task arrived
@@ -215,13 +250,8 @@ struct llama_server_queue {
                 // move deferred tasks back to main loop
                 {
                     std::unique_lock<std::mutex> lock(mutex_tasks);
-                    //queue_tasks.insert(
-                    //    queue_tasks.end(),
-                    //    std::make_move_iterator(queue_tasks_deferred.begin()),
-                    //    std::make_move_iterator(queue_tasks_deferred.end())
-                    //);
                     for (auto & task : queue_tasks_deferred) {
-                        queue_tasks.push_back(task);
+                        queue_tasks.push_back(std::move(task));
                     }
                     queue_tasks_deferred.clear();
                     lock.unlock();
@@ -245,12 +275,14 @@ struct llama_server_queue {
 
 struct llama_server_response_event {
     typedef std::function<void(int, int, task_result&)> callback_multitask_t;
-    std::vector<task_result> queue_results;
+    callback_multitask_t callback_update_multitask;
+    // for keeping track of all tasks waiting for the result
     std::mutex mutex_task_ids;
     std::set<int> waiting_task_ids;
+    // the main result queue
+    std::vector<task_result> queue_results;
     std::mutex mutex_results;
     std::condition_variable condition_results;
-    callback_multitask_t callback_update_multitask;
 
     void add_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_task_ids);
@@ -262,6 +294,7 @@ struct llama_server_response_event {
         waiting_task_ids.erase(task_id);
     }
 
+    // This function blocks the thread until there is a response for this task_id
     task_result recv(int task_id) {
         while (true)
         {
@@ -286,16 +319,18 @@ struct llama_server_response_event {
         // should never reach here
     }
 
+    // Register the function to update multitask
     void on_multitask_update(callback_multitask_t callback) {
         callback_update_multitask = callback;
     }
 
+    // Send a new result to a waiting task_id
     void send(task_result result) {
         std::unique_lock<std::mutex> lock(mutex_results);
         std::unique_lock<std::mutex> lock1(mutex_task_ids);
         LOG_VERBOSE("send new result", {});
         for (auto& task_id : waiting_task_ids) {
-            LOG_TEE("waiting task id %i \n", task_id);
+            // LOG_TEE("waiting task id %i \n", task_id);
             // for now, tasks that have associated parent multitasks just get erased once multitask picks up the result
             if (result.multitask_id == task_id)
             {
@@ -387,4 +422,31 @@ static inline std::vector<uint8_t> base64_decode(const std::string & encoded_str
     }
 
     return ret;
+}
+
+//
+// random string / id
+//
+
+static std::string random_string()
+{
+    static const std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+
+    std::string result(32, ' ');
+
+    for (int i = 0; i < 32; ++i) {
+        result[i] = str[generator() % str.size()];
+    }
+
+    return result;
+}
+
+static std::string gen_chatcmplid()
+{
+    std::stringstream chatcmplid;
+    chatcmplid << "chatcmpl-" << random_string();
+    return chatcmplid.str();
 }
