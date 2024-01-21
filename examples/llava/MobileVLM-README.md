@@ -59,10 +59,10 @@ Now both the LLaMA part and the image encoder is in the `MobileVLM-1.7B` directo
 
 ## Android compile and run
 ### compile
-refer to `android/build_64.sh`
+refer to `examples/llava/android/build_64.sh`
 ```sh
-mkdir android/build_64
-cd android/build_64
+mkdir examples/llava/android/build_64
+cd examples/llava/android/build_64
 ../build_64.sh
 ```
 ### run on Android
