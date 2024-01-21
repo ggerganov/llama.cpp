@@ -7811,14 +7811,14 @@ void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * c
     // Map the normalized entropy to the desired temperature range using the power function
     float dyn_temp = min_temp + (max_temp - min_temp) * powf(normalized_entropy, exponent_val);
 
-    // //todo: Ensure to hide print statements unless debugging!
-    // printf("Your text maxtemp value is: %f\n", max_temp);
-    // // Print the variables
-    // printf("Entropy: %f\n", entropy);
-    // printf("Max Possible Entropy: %f\n", max_entropy);
-    // printf("Normalized Entropy: %f\n", normalized_entropy);
-    // printf("Exponent: %f\n", exponent_val);
-    // printf("Dynamic Temperature (dyn_temp): %f\n", dyn_temp);
+#ifdef DEBUG
+    LLAMA_LOG_INFO("Your text maxtemp value is: %f\n", max_temp);
+    LLAMA_LOG_INFO("Entropy: %f\n", entropy);
+    LLAMA_LOG_INFO("Max Possible Entropy: %f\n", max_entropy);
+    LLAMA_LOG_INFO("Normalized Entropy: %f\n", normalized_entropy);
+    LLAMA_LOG_INFO("Exponent: %f\n", exponent_val);
+    LLAMA_LOG_INFO("Dynamic Temperature (dyn_temp): %f\n", dyn_temp);
+#endif
 
     // Apply the dynamically calculated temperature scaling
     for (size_t i = 0; i < candidates_p->size; ++i) {
@@ -7837,12 +7837,13 @@ void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * c
         candidates_p->data[i].p /= cum_sum_double; // Re-normalize the probabilities
     }
 
-    // //todo: Ensure to hide print statements unless debugging!
-    // // Print the updated top 25 probabilities after temperature scaling
-    // printf("\nUpdated Top 25 Probabilities After Dynamic Temperature Scaling (in percentages):\n");
-    // for (size_t i = 0; i < 25 && i < candidates_p->size; ++i) {
-    //     printf("Token %zu: %f%%\n", i + 1, candidates_p->data[i].p * 100.0f);
-    // }
+#ifdef DEBUG
+    // Print the updated top 25 probabilities after temperature scaling
+    LLAMA_LOG_INFO("\nUpdated Top 25 Probabilities After Dynamic Temperature Scaling (in percentages):\n");
+    for (size_t i = 0; i < 25 && i < candidates_p->size; ++i) {
+        LLAMA_LOG_INFO("Token %zu: %f%%\n", i + 1, candidates_p->data[i].p * 100.0f);
+    }
+#endif
 
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
