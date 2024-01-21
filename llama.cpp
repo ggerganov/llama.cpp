@@ -6601,8 +6601,6 @@ static int llama_decode_internal(
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
-    //const auto n_batch = cparams.n_batch;
-
     GGML_ASSERT((!all_batch.token && all_batch.embd) || (all_batch.token && !all_batch.embd)); // NOLINT
 
     GGML_ASSERT(n_tokens_all <= cparams.n_ctx);
@@ -6623,16 +6621,6 @@ static int llama_decode_internal(
 
     auto * logits_out = lctx.logits;
 
-    /*
-    if (all_batch.logits) {
-        logits_out.resize(n_vocab * n_tokens_all);
-    } else if (lctx.logits_all) {
-        logits_out.resize(n_vocab * n_tokens_all);
-    } else {
-        logits_out.resize(n_vocab);
-    }
-    */
-
 #ifndef NDEBUG
     auto & logits_valid = lctx.logits_valid;
     logits_valid.clear();
@@ -6643,7 +6631,8 @@ static int llama_decode_internal(
 
 
     const uint32_t n_ubatch = cparams.n_ubatch;
-    //const uint32_t n_microbatch = 256;
+
+    //printf("n_tokens_all = %u, n_ubatch = %u\n", n_tokens_all, n_ubatch);
 
     for (uint32_t cur_token = 0; cur_token < n_tokens_all; cur_token += n_ubatch) {
         const uint32_t n_tokens = std::min(n_ubatch, n_tokens_all - cur_token);
@@ -10016,9 +10005,17 @@ struct llama_context * llama_new_context_with_model(
             LLAMA_LOG_INFO("%s: graph splits (measure): %d\n", __func__, n_splits);
             ctx->alloc_cpu = ggml_backend_sched_get_tallocr(ctx->sched, ctx->backend_cpu);
 
+            for (ggml_backend_t backend : ctx->backends) {
+                ggml_backend_buffer_t buf = ggml_backend_sched_get_buffer(ctx->sched, backend);
+                LLAMA_LOG_INFO("%s: %10s compute buffer size = %8.2f MiB\n", __func__,
+                        ggml_backend_buffer_name(buf),
+                        ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
+            }
+
             // duplicate cpu buffers for microbatching
-            const int n_ub = 16;
+            const int n_ub = (cparams.n_batch + cparams.n_ubatch - 1) / cparams.n_ubatch;
             ctx->n_compute_bufs = n_ub;
+            LLAMA_LOG_INFO("%s: allocating %d compute buffers\n", __func__, n_ub);
 
             for (ggml_backend_t b : ctx->backends) {
                 ggml_tallocr_t alloc = ggml_backend_sched_get_tallocr(ctx->sched, b);
@@ -10049,13 +10046,6 @@ struct llama_context * llama_new_context_with_model(
             LLAMA_LOG_INFO("%s: logits buffer size = %8.2f MiB, type = %s\n", __func__,
                     ggml_backend_buffer_get_size(ctx->buf_logits) / 1024.0 / 1024.0,
                     ggml_backend_buffer_name(ctx->buf_logits));
-
-            for (ggml_backend_t backend : ctx->backends) {
-                ggml_backend_buffer_t buf = ggml_backend_sched_get_buffer(ctx->sched, backend);
-                LLAMA_LOG_INFO("%s: %10s compute buffer size = %8.2f MiB\n", __func__,
-                        ggml_backend_buffer_name(buf),
-                        ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
-            }
         }
     }
 

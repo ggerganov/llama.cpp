@@ -85,7 +85,7 @@ extern "C" {
         // (optional) complete all pending operations
         void (*GGML_CALL synchronize)(ggml_backend_t backend);
 
-        // compute graph with a plan
+        // compute graph with a plan (not used currently)
         ggml_backend_graph_plan_t (*GGML_CALL graph_plan_create) (ggml_backend_t backend, const struct ggml_cgraph * cgraph);
         void                      (*GGML_CALL graph_plan_free)   (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
         void                      (*GGML_CALL graph_plan_compute)(ggml_backend_t backend, ggml_backend_graph_plan_t plan);
@@ -95,12 +95,23 @@ extern "C" {
 
         // check if the backend supports an operation
         bool (*GGML_CALL supports_op)(ggml_backend_t backend, const struct ggml_tensor * op);
+
+        // (optional) event synchronization
+        ggml_backend_event_t (*GGML_CALL event_new)         (ggml_backend_t backend);
+        void                 (*GGML_CALL event_free)        (ggml_backend_event_t event);
+        void                 (*GGML_CALL event_record)      (ggml_backend_event_t event);
+        void                 (*GGML_CALL event_wait)        (ggml_backend_t backend, ggml_backend_event_t event);
+        void                 (*GGML_CALL event_synchronize) (ggml_backend_event_t event);
     };
 
     struct ggml_backend {
         struct ggml_backend_i iface;
-
         ggml_backend_context_t context;
+    };
+
+    struct ggml_backend_event {
+        ggml_backend_t backend;
+        void * context;
     };
 
     //

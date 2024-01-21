@@ -303,6 +303,28 @@ void ggml_backend_tensor_copy_async(ggml_backend_t backend_src, ggml_backend_t b
     }
 }
 
+// events
+
+ggml_backend_event_t ggml_backend_event_new(ggml_backend_t backend) {
+    return backend->iface.event_new(backend);
+}
+
+void ggml_backend_event_free(ggml_backend_event_t event) {
+    event->backend->iface.event_free(event);
+    free(event);
+}
+
+void ggml_backend_event_record(ggml_backend_event_t event) {
+    event->backend->iface.event_record(event);
+}
+
+void ggml_backend_event_synchronize(ggml_backend_event_t event) {
+    event->backend->iface.event_synchronize(event);
+}
+
+void ggml_backend_event_wait(ggml_backend_t backend, ggml_backend_event_t event) {
+    backend->iface.event_wait(backend, event);
+}
 
 // backend registry
 
@@ -716,6 +738,11 @@ static struct ggml_backend_i cpu_backend_i = {
     /* .graph_plan_compute      = */ ggml_backend_cpu_graph_plan_compute,
     /* .graph_compute           = */ ggml_backend_cpu_graph_compute,
     /* .supports_op             = */ ggml_backend_cpu_supports_op,
+    /* .event_new               = */ NULL,
+    /* .event_free              = */ NULL,
+    /* .event_record            = */ NULL,
+    /* .event_wait              = */ NULL,
+    /* .event_synchronize       = */ NULL,
 };
 
 ggml_backend_t ggml_backend_cpu_init(void) {
@@ -853,6 +880,8 @@ static ggml_tallocr_t sched_allocr_from_buffer(ggml_backend_sched_t sched, ggml_
             return sched->tallocs[i];
         }
     }
+
+    fprintf(stderr, "%s: error: no backend supports buffer type %s\n", __func__, ggml_backend_buffer_name(buffer));
     GGML_ASSERT(false && "tensor buffer type not supported by any backend");
 }
 
@@ -1335,7 +1364,6 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
         snprintf(split_filename, GGML_MAX_NAME, "split_%i_%s.dot", i, ggml_backend_name(split_backend));
         ggml_graph_dump_dot(split->graph, NULL, split_filename);
 #endif
-
 
         uint64_t compute_start_us = ggml_time_us();
         if (!sched->callback_eval) {

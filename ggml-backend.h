@@ -9,6 +9,7 @@ extern "C" {
 
     typedef struct ggml_backend_buffer_type * ggml_backend_buffer_type_t;
     typedef struct ggml_backend_buffer * ggml_backend_buffer_t;
+    typedef struct ggml_backend_event * ggml_backend_event_t;
     typedef struct ggml_backend * ggml_backend_t;
     typedef void * ggml_backend_graph_plan_t;
 
@@ -47,7 +48,6 @@ extern "C" {
     // Backend
     //
 
-
     GGML_API const char * ggml_backend_name(ggml_backend_t backend);
     GGML_API void         ggml_backend_free(ggml_backend_t backend);
 
@@ -73,6 +73,13 @@ extern "C" {
     // tensor copy between different backends
     GGML_API void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst);
     GGML_API void ggml_backend_tensor_copy_async(ggml_backend_t src_backend, ggml_backend_t dst_backend, struct ggml_tensor * src, struct ggml_tensor * dst); // automatic fallback to sync copy
+
+    // events
+    GGML_API ggml_backend_event_t   ggml_backend_event_new        (ggml_backend_t backend);
+    GGML_API void                   ggml_backend_event_free       (ggml_backend_event_t event);
+    GGML_API void                   ggml_backend_event_record     (ggml_backend_event_t event); // can only be called from the backend that created the event
+    GGML_API void                   ggml_backend_event_synchronize(ggml_backend_event_t event); // can only be called from the backend that created the event
+    GGML_API void                   ggml_backend_event_wait       (ggml_backend_t backend, ggml_backend_event_t event); // can be called from any backend
 
     //
     // CPU backend
@@ -118,17 +125,21 @@ extern "C" {
     /*
       Example usage:
 
-        sched = ggml_backend_sched_new({backend_gpu, backend_gpu2, backend_cpu}, num_backends);
+        // operations that use tensors allocated in a buffer with USAGE_WEIGHTS
+        // will be assigned preferrably to run on the buffer backend by ggml_backend_sched
+        ggml_backend_buffer_set_usage(buf_weights, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+
+        sched = ggml_backend_sched_new({backend_gpu, backend_gpu2, backend_cpu}, NULL, num_backends, GGML_DEFAULT_GRAPH_SIZE);
         // sched is initialized with measure allocators and cannot be used until allocated with a measure graph
 
         // initialize buffers from a measure graph
         measure_graph = build_graph(sched); // use the allocr to allocate inputs as needed
 
         // in build_graph:
-        build_graph(...) {
+        void build_graph(...) {
             // allocating tensors in a specific backend (optional, recommended: pre-allocate inputs in a different buffer)
-            alloc_cpu = ggml_backend_sched_get_allocr(sched, backend_cpu);
-            ggml_allocr_alloc(alloc_cpu, tensor);
+            alloc_cpu = ggml_backend_sched_get_tallocr(sched, backend_cpu);
+            ggml_tallocr_alloc(alloc_cpu, tensor);
 
             // manually assigning nodes to a backend (optional, shouldn't be needed in most cases)
             struct ggml_tensor * node = ggml_mul_mat(ctx, ...);
@@ -143,6 +154,7 @@ extern "C" {
         // compute
         graph = build_graph(sched);
         ggml_backend_sched_graph_compute(sched, graph);
+
     */
 
     struct ggml_backend_sched;

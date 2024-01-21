@@ -320,6 +320,11 @@ struct ggml_backend_buffer * ggml_tallocr_get_buffer(ggml_tallocr_t alloc) {
 }
 
 void ggml_tallocr_set_buffer(ggml_tallocr_t talloc, struct ggml_backend_buffer * buffer) {
+    GGML_ASSERT(talloc->measure == false);
+    // FIXME: buffer ownership semantics
+    // if the user is doing this, they probably want to take ownership of the buffer
+    // or they need to restore the original buffer before freeing the allocator
+    //talloc->buffer_owned = false;
     talloc->buffer = buffer;
     talloc->base = ggml_backend_buffer_get_base(buffer);
     talloc->alignment = ggml_backend_buffer_get_alignment(buffer);
