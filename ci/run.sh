@@ -637,14 +637,12 @@ function gg_run_mistral_7b_v0_1 {
     path_shakespeare="../models-mnt/shakespeare"
 
     shakespeare="${path_shakespeare}/shakespeare.txt"
-    lora_shakespeare="${path_lora}/adapter-model.bin"
-
-# TODO - we need mistral lora
+    lora_shakespeare="${path_lora}/adapter_model.bin"
 
     gg_wget ${path_lora} https://huggingface.co/datasets/segmond/mistral_7b_v0_1_q8_0_shakespeare_lora/blob/main/adapter_model.bin
     gg_wget ${path_shakespeare} https://huggingface.co/datasets/segmond/mistral_7b_v0_1_q8_0_shakespeare_lora/blob/main/shakespeare.txt
 
-    # model is in gguf format since we finetuned from gguf
+    # model is in gguf format since we finetuned from gguf, no need to convert, is this correct?
     #python3 ../convert-lora-to-ggml.py ${path_lora}
 
     # f16
