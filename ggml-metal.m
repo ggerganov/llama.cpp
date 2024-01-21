@@ -2237,8 +2237,10 @@ static bool ggml_metal_graph_compute(
 
                         const int nwarps = 1;
 
-                        GGML_ASSERT(2*32*nwarps*ne00*sizeof(float) <= ctx->device.maxThreadgroupMemoryLength);
-                        [encoder setThreadgroupMemoryLength:2*32*nwarps*ne00*sizeof(float) atIndex:0];
+                        const size_t shalf = sizeof(float)/2;
+
+                        GGML_ASSERT(2*32*nwarps*ne00*shalf <= ctx->device.maxThreadgroupMemoryLength);
+                        [encoder setThreadgroupMemoryLength:2*32*nwarps*ne00*shalf atIndex:0];
 
                         [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 31)/32, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
                     } break;

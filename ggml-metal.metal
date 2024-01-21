@@ -1988,7 +1988,7 @@ kernel void kernel_flash_attn_ext_f16(
         constant   int64_t & ne2,
         constant   int64_t & ne3,
         constant     float & scale,
-        threadgroup  float * shared [[threadgroup(0)]],
+        threadgroup   half * shared [[threadgroup(0)]],
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]],
@@ -2003,16 +2003,17 @@ kernel void kernel_flash_attn_ext_f16(
     }
 
     const int64_t D = ne00;
+    const int64_t D4 = D/4;
 
     // TODO: can we move this to the stack?
-    threadgroup half * V16 = (threadgroup half *) (shared + (2*sgitg*N_SIMDWIDTH + tiisg)*D);
+    threadgroup half4 * V16 = (threadgroup half4 *) (shared + (2*sgitg*N_SIMDWIDTH + tiisg)*D);
 
     // initialize with zeros
-    for (int64_t d = 0; d < D; ++d) {
+    for (int64_t d = 0; d < D4; ++d) {
         V16[d] = 0.0h;
     }
 
-    threadgroup half * pq = (threadgroup half *) (shared + (2*sgitg*N_SIMDWIDTH + N_SIMDWIDTH)*D + tiisg*D);
+    threadgroup half4 * pq4 = (threadgroup half4 *) (shared + (2*sgitg*N_SIMDWIDTH + N_SIMDWIDTH)*D + tiisg*D);
 
     half S = 0.0h;
     half M = -INFINITY;
@@ -2045,8 +2046,8 @@ kernel void kernel_flash_attn_ext_f16(
     const int64_t iv3 = iq3 / rv3;
 
     // load Q to shared memory
-    for (int64_t d = 0; d < D; ++d) {
-        pq[d] = ((device const half *) ((device const char *) q + (iq1*nb01 + iq2*nb02 + iq3*nb03)))[d];
+    for (int64_t d = 0; d < D4; ++d) {
+        pq4[d] = ((device const half4 *) ((device const char *) q + (iq1*nb01 + iq2*nb02 + iq3*nb03)))[d];
     }
 
     for (int64_t ic = 0; ic < ne11; ++ic) {
@@ -2055,14 +2056,15 @@ kernel void kernel_flash_attn_ext_f16(
             continue;
         }
 
-        half s = 0.0f;
+        half4 s4 = 0.0f;
 
-      //device const half * pq = (device const half *) ((device char *) q + (iq1*nb01 + iq2*nb02 + iq3*nb03));
-        device const half * pk = (device const half *) ((device char *) k + ( ic*nb11 + ik2*nb12 + ik3*nb13));
+        device const half4 * pk4 = (device const half4 *) ((device char *) k + ( ic*nb11 + ik2*nb12 + ik3*nb13));
 
-        for (int64_t d = 0; d < D; ++d) {
-            s += pk[d] * pq[d];
+        for (int64_t d = 0; d < D4; ++d) {
+            s4 += pk4[d] * pq4[d];
         }
+
+        half s = s4.x + s4.y + s4.z + s4.w;
 
         s = s*scale + mv;
 
@@ -2076,24 +2078,24 @@ kernel void kernel_flash_attn_ext_f16(
             ms = exp(Mold - M);
 
             // V = V*exp(Mold - M)
-            for (int64_t d = 0; d < D; ++d) {
+            for (int64_t d = 0; d < D4; ++d) {
                 V16[d] *= ms;
             }
         } else {
             vs = exp(s - M);
         }
 
-        device const half * pv = (device const half *) ((device char *) v + (ic*nb21 + iv2*nb22 + iv3*nb23));
+        device const half4 * pv4 = (device const half4 *) ((device char *) v + (ic*nb21 + iv2*nb22 + iv3*nb23));
 
         // V += v*exp(s - M)
-        for (int64_t d = 0; d < D; ++d) {
-            V16[d] += pv[d] * vs;
+        for (int64_t d = 0; d < D4; ++d) {
+            V16[d] += pv4[d] * vs;
         }
 
         S = S*ms + vs;
     }
 
-    for (int64_t d = 0; d < D; ++d) {
+    for (int64_t d = 0; d < D4; ++d) {
         V16[d] /= S;
     }
 
@@ -2102,8 +2104,10 @@ kernel void kernel_flash_attn_ext_f16(
     const int64_t i2 = iq2;
     const int64_t i3 = iq3;
 
-    for (int64_t d = 0; d < D; ++d) {
-        dst[(i3*ne2*ne1 + i2 + i1*ne1)*D + d] = V16[d];
+    device float4 * dst4 = (device float4 *) dst;
+
+    for (int64_t d = 0; d < D4; ++d) {
+        dst4[(i3*ne2*ne1 + i2 + i1*ne1)*D4 + d] = (float4) V16[d];
     }
 }
 
