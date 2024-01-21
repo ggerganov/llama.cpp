@@ -66,7 +66,7 @@ if __name__ == '__main__':
         # lazy import load_file only if lora is in safetensors format.
         from safetensors.torch import load_file
         model = load_file(input_model, device="cpu")
-    
+
     arch_name = sys.argv[2] if len(sys.argv) == 3 else "llama"
 
     if arch_name not in gguf.MODEL_ARCH_NAMES.values():
