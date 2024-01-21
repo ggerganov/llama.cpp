@@ -2038,7 +2038,7 @@ kernel void kernel_flash_attn_ext_f16(
     const uint nsg = ntg.x/N_SIMDWIDTH; // number of simdgroups
 
     const int64_t iq3 = tgpig[2];
-    const int64_t iq2 = tgpig[1]*(8*nsg) + 8*sgitg + tiisg/4;
+    const int64_t iq2 = tgpig[1]*(4*nsg) + 4*sgitg + tiisg/8;
     const int64_t iq1 = tgpig[0];
 
     if (iq2 >= ne02) {
@@ -2140,18 +2140,18 @@ kernel void kernel_flash_attn_ext_f16(
 
     const int64_t D4 = D/4;
 
-    threadgroup half4 * pq4 = (threadgroup half4 *) (shared + sgitg*(16*D + 128)       );
-    threadgroup half4 * ps4 = (threadgroup half4 *) (shared + sgitg*(16*D + 128) +  8*D);
-    threadgroup half4 * ss4 = (threadgroup half4 *) (shared + sgitg*(16*D + 128) + 16*D);
-    threadgroup half  * ss  = (threadgroup half  *) (shared + sgitg*(16*D + 128) + 16*D);
+    threadgroup half4 * pq4 = (threadgroup half4 *) (shared + sgitg*(2*4*D + 128)        );
+    threadgroup half4 * ps4 = (threadgroup half4 *) (shared + sgitg*(2*4*D + 128) +   4*D);
+    threadgroup half4 * ss4 = (threadgroup half4 *) (shared + sgitg*(2*4*D + 128) + 2*4*D);
+    threadgroup half  * ss  = (threadgroup half  *) (shared + sgitg*(2*4*D + 128) + 2*4*D);
 
-    const uint tiih  = tiisg%4; // thread index in head
-    const uint hiisg = tiisg/4; // head index in simdgroup
+    const uint tiih  = tiisg%8; // thread index in head
+    const uint hiisg = tiisg/8; // head index in simdgroup
 
     // load 8 heads from Q to shared memory
-    for (int64_t i = 0; i < D4/4; ++i) {
-        pq4[hiisg*D4 + 4*i + tiih] = ((device const half4 *) ((device const char *) q + (iq1*nb01 + iq2*nb02 + iq3*nb03)))[4*i + tiih];
-        ps4[hiisg*D4 + 4*i + tiih] = 0.0h;
+    for (int64_t i = 0; i < D4/8; ++i) {
+        pq4[hiisg*D4 + 8*i + tiih] = ((device const half4 *) ((device const char *) q + (iq1*nb01 + iq2*nb02 + iq3*nb03)))[8*i + tiih];
+        ps4[hiisg*D4 + 8*i + tiih] = 0.0h;
     }
 
     simdgroup_barrier(mem_flags::mem_threadgroup);
@@ -2170,16 +2170,18 @@ kernel void kernel_flash_attn_ext_f16(
 
         half4 s4 = 0.0h;
 
-        for (int64_t i = 0; i < D4/4; ++i) {
-            s4 += pk4[4*i + tiih] * pq4[hiisg*D4 + 4*i + tiih];
+#pragma unroll(D4/8)
+        for (int64_t i = 0; i < D4/8; ++i) {
+            s4 += pk4[8*i + tiih] * pq4[hiisg*D4 + 8*i + tiih];
         }
 
-        ss4[hiisg*4 + tiih] = s4;
+        ss4[hiisg*8 + tiih] = s4;
 
         simdgroup_barrier(mem_flags::mem_threadgroup);
 
         if (tiih == 0) {
-            s4 = ss4[4*hiisg + 0] + ss4[4*hiisg + 1] + ss4[4*hiisg + 2] + ss4[4*hiisg + 3];
+            s4 = ss4[8*hiisg + 0] + ss4[8*hiisg + 1] + ss4[8*hiisg + 2] + ss4[8*hiisg + 3] +
+                 ss4[8*hiisg + 4] + ss4[8*hiisg + 5] + ss4[8*hiisg + 6] + ss4[8*hiisg + 7];
 
             half s = (s4.x + s4.y + s4.z + s4.w)*scale + mv;
 
@@ -2201,8 +2203,9 @@ kernel void kernel_flash_attn_ext_f16(
         const half ms = ss[2*hiisg + 0];
         const half vs = ss[2*hiisg + 1];
 
-        for (int64_t i = 0; i < D4/4; ++i) {
-            ps4[hiisg*D4 + 4*i + tiih] = ps4[hiisg*D4 + 4*i + tiih]*ms + pv4[4*i + tiih]*vs;
+#pragma unroll(D4/8)
+        for (int64_t i = 0; i < D4/8; ++i) {
+            ps4[hiisg*D4 + 8*i + tiih] = ps4[hiisg*D4 + 8*i + tiih]*ms + pv4[8*i + tiih]*vs;
         }
     }
 
@@ -2223,8 +2226,8 @@ kernel void kernel_flash_attn_ext_f16(
 
     device float4 * dst4 = (device float4 *) dst;
 
-    for (int64_t i = 0; i < D4/4; ++i) {
-        dst4[(i3*ne2*ne1 + i2 + i1*ne1)*D4 + 4*i + tiih] = (float4) ps4[hiisg*D4 + 4*i + tiih];
+    for (int64_t i = 0; i < D4/8; ++i) {
+        dst4[(i3*ne2*ne1 + i2 + i1*ne1)*D4 + 8*i + tiih] = (float4) ps4[hiisg*D4 + 8*i + tiih];
     }
 }
 
