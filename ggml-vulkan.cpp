@@ -1635,7 +1635,6 @@ static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t
 
     // Fall back to staging buffer
     vk_buffer * staging = &vk_staging;
-    size_t staging_offset = vk_staging_offset;
     const size_t copy_size = dpitch * height;
     if (vk_staging.size < vk_staging_offset + copy_size) {
         if (sync_staging) {
@@ -1646,7 +1645,6 @@ static void ggml_vk_buffer_read_2d_async(vk_context& ctx, vk_buffer* src, size_t
             }
 
             staging = &vk_sync_staging;
-            staging_offset = 0;
         } else {
             GGML_ASSERT(false);
         }
@@ -2302,7 +2300,7 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context& ctx, const ggml_tensor 
     const uint64_t ne10 = src1->ne[0];
     const uint64_t ne11 = src1->ne[1];
     const uint64_t ne12 = src1->ne[2];
-    const uint64_t ne13 = src1->ne[3];
+    // const uint64_t ne13 = src1->ne[3];
 
     GGML_ASSERT(ne11 == 1);
 
@@ -2389,7 +2387,7 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
     // const uint64_t ne10 = src1->ne[0];
     const uint64_t ne11 = src1->ne[1];
     const uint64_t ne12 = src1->ne[2];
-    const uint64_t ne13 = src1->ne[3];
+    // const uint64_t ne13 = src1->ne[3];
 
     GGML_ASSERT(ne11 == 1);
 
@@ -3556,16 +3554,7 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node){
     const int64_t ne22 = node->ne[2];
     const int64_t ne23 = node->ne[3];
 
-    const bool transfer_src0 = use_src0 && src0->backend != GGML_BACKEND_GPU;
-    const bool transfer_src1 = use_src1 && src1->backend != GGML_BACKEND_GPU;
-
-    const bool x_non_contig = use_src0 && !ggml_vk_dim01_contiguous(src0);
-    const bool y_non_contig = use_src1 && !ggml_vk_dim01_contiguous(src1);
-
-    const bool qvec_kernel = use_src0 && use_src1 && src1->ne[1] == 1 && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type));
-    const bool qx_needs_dequant = use_src0 && !qvec_kernel && !x_non_contig && (src0->type != GGML_TYPE_F16 || x_non_contig);
     const bool f16_f32_kernel = use_src1 && src1->type == GGML_TYPE_F32;
-    const bool qy_needs_dequant = (use_src1 && (src1->type != GGML_TYPE_F16 && !f16_f32_kernel)) || y_non_contig;
 
     int split_k;
     if (node->op == GGML_OP_MUL_MAT) {
