@@ -3771,7 +3771,7 @@ void ggml_vk_build_graph(ggml_tensor * node, bool last_node){
         }
         break;
     case GGML_OP_REPEAT:
-    case GGML_OP_GET_ROWS:
+    // case GGML_OP_GET_ROWS:
     case GGML_OP_ADD:
     case GGML_OP_MUL:
     case GGML_OP_SCALE:
@@ -3790,6 +3790,7 @@ void ggml_vk_build_graph(ggml_tensor * node, bool last_node){
     case GGML_OP_SOFT_MAX:
     case GGML_OP_ROPE:
     case GGML_OP_MUL_MAT:
+    case GGML_OP_NONE:
         break;
     default:
         if (any_on_device) {
@@ -3843,6 +3844,7 @@ void ggml_vk_build_graph(ggml_tensor * node, bool last_node){
     case GGML_OP_VIEW:
     case GGML_OP_PERMUTE:
     case GGML_OP_TRANSPOSE:
+    case GGML_OP_NONE:
         ggml_vk_nop(*vk_ctx, src0, node);
 
         break;
@@ -3931,6 +3933,7 @@ bool ggml_vk_compute_forward(ggml_compute_params * params, ggml_tensor * tensor)
     case GGML_OP_VIEW:
     case GGML_OP_PERMUTE:
     case GGML_OP_TRANSPOSE:
+    case GGML_OP_NONE:
         extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
         break;
@@ -4445,21 +4448,21 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
                 }
                 return true;
             } break;
-        case GGML_OP_GET_ROWS:
-            {
-                switch (op->src[0]->type) {
-                    case GGML_TYPE_F16:
-                    case GGML_TYPE_F32:
-                    case GGML_TYPE_Q4_0:
-                    case GGML_TYPE_Q4_1:
-                    case GGML_TYPE_Q5_0:
-                    case GGML_TYPE_Q5_1:
-                    case GGML_TYPE_Q8_0:
-                        return true;
-                    default:
-                        return false;
-                }
-            } break;
+        // case GGML_OP_GET_ROWS:
+        //     {
+        //         switch (op->src[0]->type) {
+        //             case GGML_TYPE_F16:
+        //             case GGML_TYPE_F32:
+        //             case GGML_TYPE_Q4_0:
+        //             case GGML_TYPE_Q4_1:
+        //             case GGML_TYPE_Q5_0:
+        //             case GGML_TYPE_Q5_1:
+        //             case GGML_TYPE_Q8_0:
+        //                 return true;
+        //             default:
+        //                 return false;
+        //         }
+        //     } break;
         case GGML_OP_CPY:
             {
                 ggml_type src0_type = op->src[0]->type;
@@ -4475,11 +4478,22 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
                 }
                 return false;
             } break;
-        case GGML_OP_DUP:
-        case GGML_OP_REPEAT:
+        // case GGML_OP_DUP:
+        // case GGML_OP_REPEAT:
+        //     {
+        //         ggml_type src0_type = op->src[0]->type;
+        //         return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
+        //     } break;
+        case GGML_OP_ROPE:
             {
-                ggml_type src0_type = op->src[0]->type;
-                return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
+                const int mode = ((const int32_t *) op->op_params)[2];
+                const bool is_neox = mode & 2;
+                const bool is_glm  = mode & 4;
+
+                if (!is_neox && !is_glm) {
+                    return true;
+                }
+                return false;
             } break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
@@ -4496,8 +4510,6 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
         case GGML_OP_CONT:
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
-        case GGML_OP_ROPE:
-        case GGML_OP_ALIBI:
             return true;
         default:
             return false;
