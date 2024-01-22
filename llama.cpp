@@ -7955,11 +7955,14 @@ void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * c
 
     float max_l = candidates->data[0].logit;
     float cum_sum = 0.0f;
+    
+    // Calculate the exp and sum in one pass
     for (size_t i = 0; i < candidates->size; ++i) {
-        float p = expf(candidates->data[i].logit - max_l);
-        candidates->data[i].p = p;
-        cum_sum += p;
+        candidates->data[i].p = expf(candidates->data[i].logit - max_l);
+        cum_sum += candidates->data[i].p;
     }
+    
+    // Normalize the probabilities
     for (size_t i = 0; i < candidates->size; ++i) {
         candidates->data[i].p /= cum_sum;
     }
@@ -8177,6 +8180,10 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
 
 void llama_sample_temp(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
     const int64_t t_start_sample_us = ggml_time_us();
+
+    if (temp == 1.0f) {
+        return; // No adjustment needed as dividing by 1 leaves the values unchanged
+    }
 
     for (size_t i = 0; i < candidates_p->size; ++i) {
         candidates_p->data[i].logit /= temp;
