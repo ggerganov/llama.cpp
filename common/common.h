@@ -91,6 +91,7 @@ struct gpt_params {
     std::string input_suffix      = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
+    std::string logits_file       = "";  // file for saving *all* logits
 
     std::vector<llama_model_kv_override> kv_overrides;
 

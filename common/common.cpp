@@ -672,6 +672,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.logdir.back() != DIRECTORY_SEPARATOR) {
                 params.logdir += DIRECTORY_SEPARATOR;
             }
+        } else if (arg == "--save-all-logits") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.logits_file = argv[i];
         } else if (arg == "--perplexity" || arg == "--all-logits") {
             params.logits_all = true;
         } else if (arg == "--ppl-stride") {
