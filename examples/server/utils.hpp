@@ -187,18 +187,21 @@ inline std::string format_chatml(std::vector<json> messages)
 // work queue utils
 //
 
-template<typename T>
 struct llama_server_queue {
     int id = 0;
     std::mutex mutex_tasks;
-    std::vector<T> queue_tasks;
-    std::vector<T> queue_tasks_deferred;
+    // queues
+    std::vector<task_server> queue_tasks;
+    std::vector<task_server> queue_tasks_deferred;
+    std::vector<task_multi> queue_multitasks;
     std::condition_variable condition_tasks;
-    std::function<void(T)> callback_new_task;
+    // callback functions
+    std::function<void(task_server&)> callback_new_task;
+    std::function<void(task_multi&)> callback_finish_multitask;
     std::function<void(void)> callback_all_task_finished;
 
     // Add a new task to the end of the queue
-    int post(T task) {
+    int post(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         task.id = id++;
         queue_tasks.push_back(std::move(task));
@@ -207,7 +210,7 @@ struct llama_server_queue {
     }
 
     // Add a new task, but defer until the next loop
-    void defer(T task) {
+    void defer(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         queue_tasks_deferred.push_back(std::move(task));
     }
@@ -219,8 +222,13 @@ struct llama_server_queue {
     }
 
     // Register function to process a new task
-    void on_new_task(std::function<void(T)> callback) {
+    void on_new_task(std::function<void(task_server&)> callback) {
         callback_new_task = callback;
+    }
+
+    // Register function to process a multitask
+    void on_finish_multitask(std::function<void(task_multi&)> callback) {
+        callback_finish_multitask = callback;
     }
 
     // Register the function to be called when the batch of tasks is finished
@@ -257,6 +265,24 @@ struct llama_server_queue {
                     lock.unlock();
                 }
                 LOG_VERBOSE("callback_all_task_finished", {});
+                // process and update all the multitasks
+                auto queue_iterator = queue_multitasks.begin();
+                while (queue_iterator != queue_multitasks.end())
+                {
+                    if (queue_iterator->subtasks_remaining.empty())
+                    {
+                        // all subtasks done == multitask is done
+                        task_multi current_multitask = *queue_iterator;
+                        callback_finish_multitask(current_multitask);
+                        // remove this multitask
+                        queue_iterator = queue_multitasks.erase(queue_iterator);
+                    }
+                    else
+                    {
+                        ++queue_iterator;
+                    }
+                }
+                // all tasks in the current loop is finished
                 callback_all_task_finished();
             }
             LOG_VERBOSE("wait for new task", {});
@@ -271,13 +297,40 @@ struct llama_server_queue {
             }
         }
     }
+
+    //
+    // functions to manage multitasks
+    //
+
+    // add a multitask by specifying the id of all subtask (subtask is a task_server)
+    void add_multitask(int multitask_id, std::vector<int>& sub_ids)
+    {
+        std::lock_guard<std::mutex> lock(mutex_tasks);
+        task_multi multi;
+        multi.id = multitask_id;
+        std::copy(sub_ids.begin(), sub_ids.end(), std::inserter(multi.subtasks_remaining, multi.subtasks_remaining.end()));
+        queue_multitasks.push_back(multi);
+    }
+
+    // updatethe remaining subtasks, while appending results to multitask
+    void update_multitask(int multitask_id, int subtask_id, task_result& result)
+    {
+        std::lock_guard<std::mutex> lock(mutex_tasks);
+        for (auto& multitask : queue_multitasks)
+        {
+            if (multitask.id == multitask_id)
+            {
+                multitask.subtasks_remaining.erase(subtask_id);
+                multitask.results.push_back(result);
+            }
+        }
+    }
 };
 
-struct llama_server_response_event {
+struct llama_server_response {
     typedef std::function<void(int, int, task_result&)> callback_multitask_t;
     callback_multitask_t callback_update_multitask;
     // for keeping track of all tasks waiting for the result
-    std::mutex mutex_task_ids;
     std::set<int> waiting_task_ids;
     // the main result queue
     std::vector<task_result> queue_results;
@@ -285,12 +338,12 @@ struct llama_server_response_event {
     std::condition_variable condition_results;
 
     void add_waiting_task_id(int task_id) {
-        std::unique_lock<std::mutex> lock(mutex_task_ids);
+        std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
     }
 
     void remove_waiting_task_id(int task_id) {
-        std::unique_lock<std::mutex> lock(mutex_task_ids);
+        std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
     }
 
@@ -327,7 +380,6 @@ struct llama_server_response_event {
     // Send a new result to a waiting task_id
     void send(task_result result) {
         std::unique_lock<std::mutex> lock(mutex_results);
-        std::unique_lock<std::mutex> lock1(mutex_task_ids);
         LOG_VERBOSE("send new result", {});
         for (auto& task_id : waiting_task_ids) {
             // LOG_TEE("waiting task id %i \n", task_id);
