@@ -1800,6 +1800,8 @@ int main(int argc, char ** argv) {
     std::vector<size_t> train_samples_begin;
     std::vector<size_t> train_samples_size;
     printf("%s: tokenize training data from %s\n", __func__, params.common.fn_train_data);
+    printf("%s: sample-start: %s\n", __func__, params.common.sample_start.c_str());
+    printf("%s: include-sample-start: %s\n", __func__, params.common.include_sample_start ? "true" : "false");
     tokenize_file(lctx,
             params.common.fn_train_data,
             params.common.sample_start,
