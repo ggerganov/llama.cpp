@@ -4440,9 +4440,9 @@ static struct ggml_tensor * llm_build_kv(
 
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
+    ggml_build_forward_expand(graph, q_cur);
     ggml_build_forward_expand(graph, k_cur);
     ggml_build_forward_expand(graph, v_cur);
-    ggml_build_forward_expand(graph, q_cur);
 
     llm_build_kv_store(ctx, hparams, kv, graph, k_cur, v_cur, n_ctx, n_tokens, kv_head, cb, il);
 
