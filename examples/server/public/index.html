@@ -657,10 +657,10 @@
         `
       };
 
-      const IntField = ({ label, max, min, name, value }) => {
+      const IntField = ({ label, max, min, name, value, style="", title="" }) => {
         return html`
           <div>
-            <label for="${name}">${label}</label>
+            <label for="${name}" style="${style}" title="${title}">${label}</label>
             <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
             <span>${value}</span>
           </div>
@@ -692,7 +692,7 @@
       const GrammarControl = () => (
         html`
           <div>
-            <label for="template">Grammar</label>
+            <label for="template" style="cursor:help" title="Grammar must be syntactically valid or blank.">Grammar</label>
             <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
             <input type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
             <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
@@ -762,13 +762,13 @@
           ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
           <fieldset class="two">
-            ${IntField({ label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
-            ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
-            ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
+            ${IntField({ label: "Predictions", style: "cursor:help", title: "Set the maximum number of tokens to predict when generating text. Note: May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: -1, -1 = infinity).", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
+            ${FloatField({ label: "Temperature", style: "cursor:help", title: "Adjust the randomness of the generated text (default: 0.8).", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
+            ${FloatField({ label: "Penalize repeat sequence", style: "cursor:help", title: "", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
             ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
-            ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
-            ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
-            ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
+            ${IntField({ label: "Top-K sampling", style: "cursor:help", title: "Limit the next token selection to the K most probable tokens (default: 40).", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
+            ${FloatField({ label: "Top-P sampling", style: "cursor:help", title: "Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.95).", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
+            ${FloatField({ label: "Min-P sampling", style: "cursor:help", title: "The minimum probability for a token to be considered, relative to the probability of the most likely token (default: 0.05).", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
           </fieldset>
           <details>
             <summary>More options</summary>
