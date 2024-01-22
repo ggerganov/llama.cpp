@@ -7786,6 +7786,14 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
 void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp, float max_temp, float exponent_val) {
     const int64_t t_start_sample_us = ggml_time_us();
 
+    // Calculate maximum possible entropy
+    float max_entropy = -logf(1.0f / candidates_p->size);
+
+    // Guard against division by zero
+    if (max_entropy == 0.0f) {
+        return;
+    }
+    
     llama_sample_softmax(ctx, candidates_p);
 
     // Calculate entropy of the softmax probabilities
@@ -7795,14 +7803,6 @@ void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * c
         if (prob > 0.0f) { // Ensure no log(0)
             entropy -= prob * logf(prob);
         }
-    }
-
-    // Calculate maximum possible entropy
-    float max_entropy = -logf(1.0f / candidates_p->size);
-
-    // Guard against division by zero
-    if (max_entropy == 0.0f) {
-        max_entropy = 1.0f; // This ensures that normalized_entropy will be 0 when entropy is 0
     }
 
     // Normalize the entropy
