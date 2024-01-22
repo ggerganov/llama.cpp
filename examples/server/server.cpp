@@ -1089,12 +1089,6 @@ struct llama_server_context
         }
 
         queue_results.send(res);
-
-        // parent multitask, if any, needs to be updated
-        if (slot.multitask_id != -1)
-        {
-            queue_tasks.update_multitask(slot.multitask_id, slot.task_id, res);
-        }
     }
 
     void send_embedding(llama_client_slot &slot)
@@ -1319,7 +1313,7 @@ struct llama_server_context
             result_jsons.push_back(subres.result_json);
             result.error = result.error && subres.error;
         }
-        result.result_json = json{ "results", result_jsons };
+        result.result_json = json{ { "results", result_jsons } };
         queue_results.send(result);
     }
 
