@@ -221,15 +221,12 @@ effectiveStdenv.mkDerivation (
         ;
 
       shell = mkShell {
-        NIX_LD_LIBRARY_PATH = lib.makeLibraryPath [
-          effectiveStdenv.cc.cc
-        ];
         name = "shell-${finalAttrs.finalPackage.name}";
         description = "contains numpy and sentencepiece";
         buildInputs = [ llama-python ];
         inputsFrom = [ finalAttrs.finalPackage ];
         shellHook = ''
-          export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH
+          addToSearchPath "LD_LIBRARY_PATH" "${lib.getLib effectiveStdenv.cc.cc}/lib"
         '';
       };
 
