@@ -2055,7 +2055,7 @@ static ggml_backend_buffer_type_i ggml_backend_opencl_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_opencl_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_opencl_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_opencl_buffer_type_get_alignment,
-    /* .get_max_size     = */ NULL, // defaults to UINT64_MAX
+    /* .get_max_size     = */ NULL, // TODO: return from device info
     /* .get_alloc_size   = */ NULL,
     /* .supports_backend = */ ggml_backend_opencl_buffer_type_supports_backend,
     /* .is_host          = */ NULL,
@@ -2112,7 +2112,7 @@ ggml_backend_buffer_type_t ggml_backend_opencl_host_buffer_type() {
             /* .get_name         = */ ggml_backend_opencl_host_buffer_type_name,
             /* .alloc_buffer     = */ ggml_backend_opencl_host_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
-            /* .get_max_size     = */ NULL, // defaults to UINT64_MAX
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
             /* .supports_backend = */ ggml_backend_cpu_buffer_type()->iface.supports_backend,
             /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,

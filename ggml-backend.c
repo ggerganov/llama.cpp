@@ -28,11 +28,11 @@ size_t ggml_backend_buft_get_alignment(ggml_backend_buffer_type_t buft) {
 }
 
 size_t ggml_backend_buft_get_max_size(ggml_backend_buffer_type_t buft) {
-    // get_max_size is optional, defaults to UINT64_MAX
+    // get_max_size is optional, defaults to SIZE_MAX
     if (buft->iface.get_max_size) {
         return buft->iface.get_max_size(buft);
     }
-    return UINT64_MAX;
+    return SIZE_MAX;
 }
 
 GGML_CALL size_t ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor) {
@@ -564,7 +564,7 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
             /* .get_name         = */ ggml_backend_cpu_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_cpu_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
-            /* .get_max_size     = */ NULL, // defaults to UINT64_MAX
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
             /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
@@ -620,7 +620,7 @@ ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type(void) {
             /* .get_name         = */ ggml_backend_cpu_hbm_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_cpu_hbm_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
-            /* .get_max_size     = */ NULL, // defaults to UINT64_MAX
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
             /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
@@ -775,24 +775,22 @@ GGML_CALL static ggml_backend_t ggml_backend_reg_cpu_init(const char * params, v
     GGML_UNUSED(user_data);
 }
 
-
 // multi-buffer buffer
 
-GGML_CALL const char * ggml_backend_multi_buffer_get_name(ggml_backend_buffer_t buffer) {
+struct ggml_backend_multi_buffer_context {
+    ggml_backend_buffer_t * buffers;
+    size_t n_buffers;
+};
+
+typedef struct ggml_backend_multi_buffer_context * ggml_backend_multi_buffer_context_t;
+
+GGML_CALL static const char * ggml_backend_multi_buffer_get_name(ggml_backend_buffer_t buffer) {
     ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) buffer->context;
 
     return ctx->buffers[0]->iface.get_name(ctx->buffers[0]);
 }
 
-GGML_CALL ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(size_t n_buffers, ggml_backend_buffer_type_t buft, size_t nbytes) {
-    ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) malloc(sizeof(struct ggml_backend_multi_buffer_context));
-    ctx->n_buffers = n_buffers;
-    ctx->buffers = (ggml_backend_buffer_t *) malloc(n_buffers * sizeof(ggml_backend_buffer_t));
-
-    return ggml_backend_buffer_init(buft, ggml_backend_multi_buffer_context_interface(), ctx, nbytes);
-}
-
-GGML_CALL void ggml_backend_multi_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+GGML_CALL static void ggml_backend_multi_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) buffer->context;
     for (size_t i = 0; i < ctx->n_buffers; i++) {
         ggml_backend_buffer_free(ctx->buffers[i]);
@@ -802,14 +800,14 @@ GGML_CALL void ggml_backend_multi_buffer_free_buffer(ggml_backend_buffer_t buffe
     free(ctx);
 }
 
-GGML_CALL void ggml_backend_multi_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+GGML_CALL static void ggml_backend_multi_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
     ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) buffer->context;
     for (size_t i = 0; i < ctx->n_buffers; i++) {
         ggml_backend_buffer_clear(ctx->buffers[i], value);
     }
 }
 
-struct ggml_backend_buffer_i ggml_backend_multi_buffer_context_interface(void) {
+static struct ggml_backend_buffer_i ggml_backend_multi_buffer_context_interface(void) {
     static struct ggml_backend_buffer_i multi_backend_buffer_i = {
         /* .get_name        = */ ggml_backend_multi_buffer_get_name,
         /* .free_buffer     = */ ggml_backend_multi_buffer_free_buffer,
@@ -823,6 +821,20 @@ struct ggml_backend_buffer_i ggml_backend_multi_buffer_context_interface(void) {
     };
 
     return multi_backend_buffer_i;
+}
+
+GGML_CALL ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer_t * buffers, size_t n_buffers) {
+    ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) malloc(sizeof(struct ggml_backend_multi_buffer_context));
+    ctx->n_buffers = n_buffers;
+    ctx->buffers = (ggml_backend_buffer_t *) malloc(n_buffers * sizeof(ggml_backend_buffer_t));
+
+    size_t total_size = 0;
+    for (size_t i = 0; i < n_buffers; i++) {
+        ctx->buffers[i] = buffers[i];
+        total_size += ggml_backend_buffer_get_size(buffers[i]);
+    }
+
+    return ggml_backend_buffer_init(buffers[0]->buft, ggml_backend_multi_buffer_context_interface(), ctx, total_size);
 }
 
 
