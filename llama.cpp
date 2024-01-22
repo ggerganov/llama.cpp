@@ -7794,7 +7794,7 @@ void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * c
         return;
     }
     
-    llama_sample_softmax(ctx, candidates_p);
+    llama_sample_softmax(nullptr, candidates_p);
 
     // Calculate entropy of the softmax probabilities
     float entropy = 0.0f;
