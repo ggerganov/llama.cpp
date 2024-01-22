@@ -105,6 +105,7 @@ option(LLAMA_SYCL                            "llama: use SYCL"                  
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
+option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
@@ -455,8 +456,9 @@ if (LLAMA_SYCL)
     #todo: AOT
 
     find_package(IntelSYCL REQUIRED)
-
-    #add_compile_definitions(GGML_SYCL_F16)
+    if (LLAMA_SYCL_F16)
+        add_compile_definitions(GGML_SYCL_F16)
+    endif()
     add_compile_definitions(GGML_USE_SYCL)
 
     add_compile_options(-I./) #include DPCT 

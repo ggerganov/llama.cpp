@@ -9297,9 +9297,17 @@ inline void ggml_sycl_op_mul_mat_sycl(
     int ldc = dst->backend == GGML_BACKEND_GPU && device_id == g_main_device ? ne0 : row_diff;
 
     const int compute_capability = g_device_caps[id].cc;
-
-    // if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
-    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
+#ifdef GGML_SYCL_F16
+    bool use_fp16 = true;  // TODO(Yu) SYCL capability check
+#else
+    bool use_fp16 = false;
+#endif
+    // if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 ||
+    // ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff ==
+    // src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
+    if ((src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
+        use_fp16 && ggml_is_contiguous(src0) && row_diff == src0->ne[1] &&
+        dst->op_params[0] == GGML_PREC_DEFAULT) {
 
         // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
         // GGML_SYCL_DEBUG("ggml_sycl_op_mul_mat_sycl - fp16 path\n");
