@@ -2661,6 +2661,7 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q6_K:   return "Q6_K";
         case LLAMA_FTYPE_MOSTLY_IQ2_XXS:return "IQ2_XSS - 2.0625 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ2_XS: return "IQ2_XS - 2.3125 bpw";
+        case LLAMA_FTYPE_MOSTLY_Q3_K_XS:return "Q3_K - Extra small";
 
         default: return "unknown, may not work";
     }
@@ -8765,9 +8766,13 @@ struct quantize_state_internal {
     const llama_model_quantize_params * params;
 
     int n_attention_wv    = 0;
-    int n_feed_forward_w2 = 0;
+    int n_ffn_down        = 0;
+    int n_ffn_gate        = 0;
+    int n_ffn_up          = 0;
     int i_attention_wv    = 0;
-    int i_feed_forward_w2 = 0;
+    int i_ffn_down        = 0;
+    int i_ffn_gate        = 0;
+    int i_ffn_up          = 0;
 
     int n_k_quantized     = 0;
     int n_fallback        = 0;
@@ -8870,8 +8875,8 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             ++qs.i_attention_wv;
         }
         else if (name.find("ffn_down") != std::string::npos) {
-            if (qs.i_feed_forward_w2 < qs.n_feed_forward_w2/8) new_type = GGML_TYPE_Q2_K;
-            ++qs.i_feed_forward_w2;
+            if (qs.i_ffn_down < qs.n_ffn_down/8) new_type = GGML_TYPE_Q2_K;
+            ++qs.i_ffn_down;
         }
         else if (name == "token_embd.weight") new_type = GGML_TYPE_Q2_K;
     } else if (name.find("attn_v.weight") != std::string::npos) {
@@ -8908,18 +8913,21 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             // TODO: explore better strategies
             new_type = GGML_TYPE_Q8_0;
         }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {
+            new_type = GGML_TYPE_Q2_K;
+        }
     } else if (name.find("ffn_down") != std::string::npos) {
         const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
         int i_layer, n_layer;
         if (n_expert == 1) {
-            i_layer = qs.i_feed_forward_w2;
-            n_layer = qs.n_feed_forward_w2;
+            i_layer = qs.i_ffn_down;
+            n_layer = qs.n_ffn_down;
         } else {
             // Believe it or not, "experts" in the FFN of Mixtral-8x7B are not consecutive, but iccasionally randomly
-            // sprinkled in the model. Hence, simply dividing i_feed_forward_w2 by n_expert does not work
+            // sprinkled in the model. Hence, simply dividing i_ffn_down by n_expert does not work
             // for getting the current layer as I initially thought, and we need to resort to parsing the
             // tensor name.
-            n_layer = qs.n_feed_forward_w2 / n_expert;
+            n_layer = qs.n_ffn_down / n_expert;
             if (sscanf(name.c_str(), "blk.%d.ffn_down", &i_layer) != 1) {
                 throw std::runtime_error(format("Failed to determine layer for tensor %s", name.c_str()));
             }
@@ -8928,7 +8936,7 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             }
         }
         if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S) {
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {
             if (i_layer < n_layer/8) new_type = GGML_TYPE_Q4_K;
         }
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
@@ -8958,11 +8966,12 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             // same quantization as before imatrix stuff, and b) Q4_1/Q5_1 do go crazy on ffn_down without an imatrix.
             new_type = ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ? GGML_TYPE_Q4_1 : GGML_TYPE_Q5_1;
         }
-        ++qs.i_feed_forward_w2;
+        ++qs.i_ffn_down;
     } else if (name.find("attn_output.weight") != std::string::npos) {
         if (arch != LLM_ARCH_FALCON) {
             if (qs.model.hparams.n_expert == 8) {
-                if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K   || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M ||
+                if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K   || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS ||
+                    ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M ||
                     ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) {
                     new_type = GGML_TYPE_Q5_K;
                 }
@@ -8980,6 +8989,20 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) new_type = GGML_TYPE_Q5_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
     }
+    else if (name.find("ffn_gate") != std::string::npos) {
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(qs.i_ffn_gate, qs.n_ffn_gate)) {
+            new_type = GGML_TYPE_Q2_K;
+        }
+        ++qs.i_ffn_gate;
+    }
+    else if (name.find("ffn_up") != std::string::npos) {
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(qs.i_ffn_up, qs.n_ffn_up)) {
+            new_type = GGML_TYPE_Q2_K;
+        }
+        ++qs.i_ffn_up;
+    }
+    //    if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+    //}
     // IK: let's remove this, else Q2_K is almost the same as Q3_K_S
     //else if (name.find("ffn_gate") != std::string::npos || name.find("ffn_up") != std::string::npos) {
     //    if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
@@ -9034,8 +9057,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_ALL_F32:     quantized_type = GGML_TYPE_F32;  break;
 
         // K-quants
+        case LLAMA_FTYPE_MOSTLY_Q2_K_S:
         case LLAMA_FTYPE_MOSTLY_Q2_K:   quantized_type = GGML_TYPE_Q2_K; break;
-        case LLAMA_FTYPE_MOSTLY_Q2_K_S: quantized_type = GGML_TYPE_Q2_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q3_K_XS:
         case LLAMA_FTYPE_MOSTLY_Q3_K_S:
         case LLAMA_FTYPE_MOSTLY_Q3_K_M:
         case LLAMA_FTYPE_MOSTLY_Q3_K_L: quantized_type = GGML_TYPE_Q3_K; break;
@@ -9103,12 +9127,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             ++qs.n_attention_wv;
         }
         else if (name.find("ffn_down") != std::string::npos) {
-            ++qs.n_feed_forward_w2;
+            ++qs.n_ffn_down;
+        }
+        else if (name.find("ffn_gate") != std::string::npos) {
+            ++qs.n_ffn_gate;
+        }
+        else if (name.find("ffn_up") != std::string::npos) {
+            ++qs.n_ffn_up;
         }
     }
-    if (qs.n_attention_wv != qs.n_feed_forward_w2 || (uint32_t)qs.n_attention_wv != model.hparams.n_layer) {
-        LLAMA_LOG_WARN("%s ============ Strange model: n_attention_wv = %d, n_feed_forward_w2 = %d, hparams.n_layer = %d\n",
-                __func__, qs.n_attention_wv, qs.n_feed_forward_w2, model.hparams.n_layer);
+    if (qs.n_attention_wv != qs.n_ffn_down || (uint32_t)qs.n_attention_wv != model.hparams.n_layer) {
+        LLAMA_LOG_WARN("%s ============ Strange model: n_attention_wv = %d, n_ffn_down = %d, hparams.n_layer = %d\n",
+                __func__, qs.n_attention_wv, qs.n_ffn_down, model.hparams.n_layer);
     }
 
     size_t total_size_org = 0;
