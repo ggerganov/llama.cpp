@@ -509,11 +509,13 @@ class HfVocab:
 
             # Convert token text to bytes
             token_text = reverse_vocab[token_id].encode("utf-8")
+            if re.fullmatch(br"<0x[0-9A-Fa-f]{2}>", token_text):
+                toktype = gguf.TokenType.BYTE
+            else:
+                toktype = self.get_token_type(token_id, self.special_ids)
 
             # Yield token text, score, and type
-            yield token_text, self.get_token_score(token_id), self.get_token_type(
-                token_id, self.special_ids  # Reuse already stored special IDs
-            )
+            yield token_text, self.get_token_score(token_id), toktype
 
     def get_token_type(self, token_id: int, special_ids: set[int]) -> gguf.TokenType:
         # Determine token type based on whether it's a special token
