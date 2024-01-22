@@ -559,7 +559,6 @@ static void ggml_vk_add(
     int32_t ne0,
     int32_t nb0,  int32_t nb1,  int32_t nb2,  int32_t nb3
 ) {
-
     const static auto spirv = getSpirvShader(kp::shader_data::op_add_comp_spv,
         kp::shader_data::op_add_comp_spv_len);
 
@@ -625,29 +624,47 @@ static void ggml_vk_addrow(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-static void ggml_vk_mul(kp::Sequence& seq,
-                    const std::shared_ptr<kp::Tensor>& inA,
-                    const std::shared_ptr<kp::Tensor>& inB,
-                    const std::shared_ptr<kp::Tensor>& out,
-                    uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
-                    uint32_t size) {
-
+static void ggml_vk_mul(
+    kp::Sequence& seq,
+    const std::shared_ptr<kp::Tensor>& inA,
+    const std::shared_ptr<kp::Tensor>& inB,
+    const std::shared_ptr<kp::Tensor>& out,
+    uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
+    int32_t ne00, int32_t ne01, int32_t ne02, int32_t ne03,
+    int32_t nb00, int32_t nb01, int32_t nb02, int32_t nb03,
+    int32_t ne10, int32_t ne11, int32_t ne12, int32_t ne13,
+    int32_t nb10, int32_t nb11, int32_t nb12, int32_t nb13,
+    int32_t ne0,
+    int32_t nb0,  int32_t nb1,  int32_t nb2,  int32_t nb3
+) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_comp_spv,
         kp::shader_data::op_mul_comp_spv_len);
 
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff;
+        int32_t ne00;
+        int32_t nb00, nb01, nb02, nb03;
+        int32_t ne10, ne11, ne12, ne13;
+        int32_t nb10, nb11, nb12, nb13;
+        int32_t ne0;
+        int32_t nb0, nb1, nb2, nb3;
     } const pushConsts {
-        safe_divide(inAOff, 4), safe_divide(inBOff, 4), safe_divide(outOff, 4)
+        safe_divide(inAOff, 4), safe_divide(inBOff, 4), safe_divide(outOff, 4),
+        ne00,
+        nb00, nb01, nb02, nb03,
+        ne10, ne11, ne12, ne13,
+        nb10, nb11, nb12, nb13,
+        ne0,
+        nb0, nb1, nb2, nb3
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
-    else {
+    if (!komputeManager()->hasAlgorithm(__func__)) {
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
+    } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
-        s_algo->setWorkgroup({size});
+        s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
@@ -1492,7 +1509,15 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                             // src1 is a row
                             ggml_vk_mulrow(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst)/4, ne00);
                         } else {
-                            ggml_vk_mul(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst)/4);
+                            ggml_vk_mul(
+                                seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                ne00, ne01, ne02, ne03,
+                                nb00, nb01, nb02, nb03,
+                                ne10, ne11, ne12, ne13,
+                                nb10, nb11, nb12, nb13,
+                                ne0,
+                                nb0, nb1, nb2, nb3
+                            );
                         }
                     } break;
                 case GGML_OP_SCALE:
