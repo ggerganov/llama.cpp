@@ -1325,8 +1325,10 @@ static llama_state g_state;
 // available llama models
 enum e_model {
     MODEL_UNKNOWN,
+    MODEL_0_5B,
     MODEL_1B,
     MODEL_3B,
+    MODEL_4B,
     MODEL_7B,
     MODEL_8B,
     MODEL_13B,
@@ -2892,9 +2894,9 @@ static void llm_load_hparams(
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1B; break;
+                    case 24: model.type = hparams.n_embd == 1024 ? e_model::MODEL_0_5B : e_model::MODEL_1B; break;
                     case 32: model.type = e_model::MODEL_7B; break;
-                    case 40: model.type = e_model::MODEL_13B; break;
+                    case 40: model.type = hparams.n_head == 20 ? e_model::MODEL_4B : e_model::MODEL_13B; break;
                     case 80: model.type = e_model::MODEL_70B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
