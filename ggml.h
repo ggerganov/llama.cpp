@@ -1899,6 +1899,10 @@ extern "C" {
     // dump the graph into a file using the dot format
     GGML_API void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph * gf, const char * filename);
 
+    // visualize the tensor - extended adds more information - when printing sample content extended will also print src0 and src1 content
+    // example: ggml_tensor_printf(some_ggml_tensor,"function_name",0,true,true);
+    void ggml_tensor_printf(const struct ggml_tensor *tensor, char *prefix, int line,  bool extended, bool print_sample);
+
     // build gradient checkpointing backward graph gb for gf using provided checkpoints
     // gb_tmp will contain original backward graph with rewritten backward process nodes,
     // but without the second forward pass nodes.
