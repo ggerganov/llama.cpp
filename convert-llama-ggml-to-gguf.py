@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import struct
 import sys
 from enum import IntEnum
@@ -9,7 +10,6 @@ from pathlib import Path
 
 import numpy as np
 
-import os
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
@@ -371,15 +371,11 @@ def handle_metadata(cfg, hp):
         params = convert.Params.loadOriginalParamsJson(fakemodel, orig_config_path)
     else:
         raise ValueError('Unable to load metadata')
-    vocab = convert.load_vocab(
-        cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir,
-        cfg.vocabtype)
-    # FIXME: Respect cfg.vocab_dir?
-    svocab = gguf.SpecialVocab(cfg.model_metadata_dir,
-                               load_merges = cfg.vocabtype == 'bpe',
-                               n_vocab = vocab.vocab_size)
+    vocab_path = Path(cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir)
+    vocab_factory = convert.VocabFactory(vocab_path)
+    vocab, special_vocab = vocab_factory.load_vocab(cfg.vocabtype, cfg.model_metadata_dir)
     convert.check_vocab_size(params, vocab)
-    return (params, vocab, svocab)
+    return params, vocab, special_vocab
 
 
 def handle_args():

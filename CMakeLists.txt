@@ -47,6 +47,7 @@ option(BUILD_SHARED_LIBS                "build shared libraries"                
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
 option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
 option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
+option(LLAMA_CCACHE                     "llama: use ccache if available"                        ON)
 
 # debug
 option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"                   ON)
@@ -106,6 +107,13 @@ option(LLAMA_QKK_64                          "llama: use super-block size of 64 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
+
+
+# add perf arguments
+option(LLAMA_PERF                            "llama: enable perf"                               OFF)
+if (LLAMA_PERF)
+    add_definitions(-DGGML_PERF)
+endif()
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
@@ -564,6 +572,17 @@ if (LLAMA_LTO)
     else()
         message(WARNING "IPO is not supported: ${output}")
     endif()
+endif()
+
+if (LLAMA_CCACHE)
+    find_program(LLAMA_CCACHE_FOUND ccache)
+    if (LLAMA_CCACHE_FOUND)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        set(ENV{CCACHE_SLOPPINESS} time_macros)
+        message(STATUS "Using ccache")
+    else()
+        message(STATUS "Warning: ccache not found - consider installing it or use LLAMA_CCACHE=OFF")
+    endif ()
 endif()
 
 # this version of Apple ld64 is buggy
