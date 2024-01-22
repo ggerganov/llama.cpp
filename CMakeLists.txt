@@ -108,6 +108,13 @@ option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STA
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 
+
+# add perf arguments
+option(LLAMA_PERF                            "llama: enable perf"                               OFF)
+if (LLAMA_PERF)
+    add_definitions(-DGGML_PERF)
+endif()
+
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 
