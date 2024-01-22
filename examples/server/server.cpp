@@ -932,6 +932,14 @@ struct llama_server_context
             llama_sampling_free(slot->ctx_sampling);
         }
         slot->ctx_sampling = llama_sampling_init(slot->sparams);
+
+        // If we failed to parse grammar and we continue it's a SEGFAULT.
+        if (slot->ctx_sampling == nullptr)
+        {
+            LOG_TEE("unable to continue without context (is your grammar valid or blank?)\n");
+            return false;
+        }
+        
         llama_set_rng_seed(ctx, slot->params.seed);
         slot->command = LOAD_PROMPT;
 
