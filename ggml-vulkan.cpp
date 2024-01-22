@@ -975,11 +975,13 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     vk_device.physical_device = vk_instance.enumeratePhysicalDevices()[dev_num];
     vk::PhysicalDeviceProperties2 props2;
     vk::PhysicalDeviceMaintenance3Properties props3;
-    props3.pNext = nullptr;
+    vk::PhysicalDeviceMaintenance4Properties props4;
     props2.pNext = &props3;
+    props3.pNext = &props4;
+    props4.pNext = nullptr;
     vk_device.physical_device.getProperties2(&props2);
     vk_device.properties = props2.properties;
-    vk_device.max_memory_allocation_size = props3.maxMemoryAllocationSize;
+    vk_device.max_memory_allocation_size = std::min(props3.maxMemoryAllocationSize, props4.maxBufferSize);
 
     std::cerr << "ggml_vulkan: Using " << vk_device.properties.deviceName << std::endl;
 
