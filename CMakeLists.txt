@@ -520,7 +520,6 @@ if (LLAMA_KOMPUTE)
           kompute-shaders/op_add.comp
           kompute-shaders/op_addrow.comp
           kompute-shaders/op_mul.comp
-          kompute-shaders/op_mulrow.comp
           kompute-shaders/op_silu.comp
           kompute-shaders/op_relu.comp
           kompute-shaders/op_gelu.comp
@@ -553,7 +552,6 @@ if (LLAMA_KOMPUTE)
           shaderop_add.h
           shaderop_addrow.h
           shaderop_mul.h
-          shaderop_mulrow.h
           shaderop_silu.h
           shaderop_relu.h
           shaderop_gelu.h

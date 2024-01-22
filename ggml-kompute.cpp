@@ -9,7 +9,6 @@
 #include "shaderop_add.h"
 #include "shaderop_addrow.h"
 #include "shaderop_mul.h"
-#include "shaderop_mulrow.h"
 #include "shaderop_silu.h"
 #include "shaderop_relu.h"
 #include "shaderop_gelu.h"
@@ -665,37 +664,6 @@ static void ggml_vk_mul(
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
-        s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(s_kompute_context->pool.get());
-    }
-    seq.record<kp::OpAlgoDispatch>(s_algo);
-}
-
-static void ggml_vk_mulrow(kp::Sequence& seq,
-                 const std::shared_ptr<kp::Tensor>& inA,
-                 const std::shared_ptr<kp::Tensor>& inB,
-                 const std::shared_ptr<kp::Tensor>& out,
-                 uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
-                 uint32_t size, uint32_t row = 0) {
-
-    const static auto spirv = getSpirvShader(kp::shader_data::op_mulrow_comp_spv,
-        kp::shader_data::op_mulrow_comp_spv_len);
-
-    struct PushConstants {
-        uint32_t inAOff, inBOff, outOff;
-        uint32_t row;
-    } const pushConsts {
-        safe_divide(inAOff, 4), safe_divide(inBOff, 4), safe_divide(outOff, 4),
-        row
-    };
-
-    std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
-    else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
-        s_algo->setTensors({inA, inB, out});
-        s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
@@ -1516,20 +1484,15 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     } break;
                 case GGML_OP_MUL:
                     {
-                        if (ggml_nelements(src1) == ne10) {
-                            // src1 is a row
-                            ggml_vk_mulrow(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst)/4, ne00);
-                        } else {
-                            ggml_vk_mul(
-                                seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
-                                ne00, ne01, ne02, ne03,
-                                nb00, nb01, nb02, nb03,
-                                ne10, ne11, ne12, ne13,
-                                nb10, nb11, nb12, nb13,
-                                ne0,
-                                nb0, nb1, nb2, nb3
-                            );
-                        }
+                        ggml_vk_mul(
+                            seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                            ne00, ne01, ne02, ne03,
+                            nb00, nb01, nb02, nb03,
+                            ne10, ne11, ne12, ne13,
+                            nb10, nb11, nb12, nb13,
+                            ne0,
+                            nb0, nb1, nb2, nb3
+                        );
                     } break;
                 case GGML_OP_SCALE:
                     {
