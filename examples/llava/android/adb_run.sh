@@ -29,7 +29,7 @@ function android_run() {
     # copy program into device
     adb push ${program_dir}/${binName} ${deviceDir}/${binName}
     adb shell "chmod 0777 ${deviceDir}/${binName}"
-    
+
     # run
     adb shell "echo cd ${deviceDir} ${deviceDir}/${binName} \
                                                  -m ${deviceDir}/${llama_name} \

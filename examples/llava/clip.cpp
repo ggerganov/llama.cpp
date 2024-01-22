@@ -217,8 +217,8 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
 
 static void print_tensor_info(const ggml_tensor* tensor, const char* prefix = "") {
     size_t tensor_size = ggml_nbytes(tensor);
-    printf("%s: n_dims = %d, name = %s, tensor_size=%zu, shape:[%d, %d, %d, %d], type: %d\n", 
-            prefix, ggml_n_dims(tensor), tensor->name, tensor_size, 
+    printf("%s: n_dims = %d, name = %s, tensor_size=%zu, shape:[%d, %d, %d, %d], type: %d\n",
+            prefix, ggml_n_dims(tensor), tensor->name, tensor_size,
             tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3], tensor->type);
 }
 
@@ -593,7 +593,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 mlp_3 = ggml_reshape_4d(ctx0, mlp_3, n_patch, n_patch, mlp_3->ne[1], mlp_3->ne[2]);
                 // stride = 1, padding = 1, bias is nullptr
                 block_1 = ggml_conv_depthwise_2d(ctx0, model.mm_model_block_1_block_0_0_w, mlp_3, nullptr, 1, 1, 1, 1, 1, 1);
-                
+
                 // layer norm
                 // // block_1 shape = [1, 2048, 24, 24], ne = [24, 24, 2048, 1]
                 block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 2, 0, 3));
@@ -601,11 +601,11 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 block_1 = ggml_norm(ctx0, block_1, eps);
                 block_1 = ggml_add(ctx0, ggml_mul(ctx0, block_1, model.mm_model_block_1_block_0_1_w), model.mm_model_block_1_block_0_1_b);
                 block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 2, 0, 1, 3));
-                
+
                 // block_1 shape = [1, 2048, 24, 24], ne = [24, 24, 2048, 1]
                 // hardswish
                 struct ggml_tensor * block_1_hw = ggml_hardswish(ctx0, block_1);
-                
+
                 block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, block_1_hw->ne[0], block_1_hw->ne[1], block_1_hw->ne[0], block_1_hw->ne[1], 0, 0);
                 // block_1 shape = [1, 2048, 1, 1], ne = [1, 1, 2048, 1]
                 // pointwise conv
@@ -641,7 +641,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             {
                 // stride = 2
                 block_1 = ggml_conv_depthwise_2d(ctx0, model.mm_model_block_2_block_0_0_w, block_1, nullptr, 2, 2, 1, 1, 1, 1);
-                
+
                 // block_1 shape = [1, 2048, 12, 12], ne = [12, 12, 2048, 1]
                 // layer norm
                 block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 2, 0, 3));
@@ -679,10 +679,10 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
                 // block_1 shape = [1, 12, 12, 2048], ne = [2048, 12, 12, 1]
                 block_1 = ggml_norm(ctx0, block_1, eps);
-                block_1 = ggml_add(ctx0, ggml_mul(ctx0, block_1, model.mm_model_block_2_block_2_1_w), model.mm_model_block_2_block_2_1_b);                
+                block_1 = ggml_add(ctx0, ggml_mul(ctx0, block_1, model.mm_model_block_2_block_2_1_w), model.mm_model_block_2_block_2_1_b);
                 block_1 = ggml_reshape_3d(ctx0, block_1, block_1->ne[0], block_1->ne[1] * block_1->ne[2], block_1->ne[3]);
                 // block_1 shape = [1, 144, 2048], ne = [2048, 144, 1]
-            }            
+            }
             embeddings = block_1;
         }
         else {
@@ -996,7 +996,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_block_2_block_1_fc2_b = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 1, "fc2.bias"));
             vision_model.mm_model_block_2_block_2_0_w = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 2, "0.weight"));
             vision_model.mm_model_block_2_block_2_1_w = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 2, "1.weight"));
-            vision_model.mm_model_block_2_block_2_1_b = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 2, "1.bias"));    
+            vision_model.mm_model_block_2_block_2_1_b = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_BLOCK, 2, 2, "1.bias"));
         }
         else {
             std::string proj_type = PROJECTOR_TYPE_NAMES[new_clip->proj_type];
