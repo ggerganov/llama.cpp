@@ -8005,9 +8005,9 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
         return;
     }
 
-    llama_sample_softmax(ctx, candidates);
-
     const int64_t t_start_sample_us = ggml_time_us();
+
+    llama_sample_softmax(ctx, candidates);
 
     // Compute the cumulative probabilities
     float cum_sum = 0.0f;
@@ -8036,10 +8036,10 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
     if (p <= 0.0f) {
         return;
     }
+    
+    const int64_t t_start_sample_us = ggml_time_us();
 
     llama_sample_softmax(ctx, candidates);
-
-    const int64_t t_start_sample_us = ggml_time_us();
 
     float scale = candidates->data[0].p; // scale by max prob
     size_t i = 1; // first token always matches
@@ -8063,8 +8063,9 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
         return;
     }
 
-    llama_sample_softmax(nullptr, candidates);
     const int64_t t_start_sample_us = ggml_time_us();
+
+    llama_sample_softmax(nullptr, candidates);
 
     // Compute the first and second derivatives
     std::vector<float> first_derivatives(candidates->size - 1);
@@ -8124,10 +8125,10 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
         return;
     }
 
+    const int64_t t_start_sample_us = ggml_time_us();
+
     // Compute the softmax of logits and calculate entropy
     llama_sample_softmax(nullptr, candidates);
-
-    const int64_t t_start_sample_us = ggml_time_us();
 
     float entropy = 0.0f;
     for (size_t i = 0; i < candidates->size; ++i) {
