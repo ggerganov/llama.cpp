@@ -1383,6 +1383,7 @@ struct llama_server_context
                 slot.t_last_used = ggml_time_us();
 
                 LOG_TEE("slot %d released (%d tokens in cache)\n", slot.id, (int) slot.cache_tokens.size());
+                queue_tasks.notify_slot_changed();
 
                 continue;
             }

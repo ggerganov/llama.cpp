@@ -209,7 +209,7 @@ struct llama_server_queue {
         return task.id;
     }
 
-    // Add a new task, but defer until the next loop
+    // Add a new task, but defer until one slot is available
     void defer(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         queue_tasks_deferred.push_back(std::move(task));
@@ -236,6 +236,16 @@ struct llama_server_queue {
         callback_all_task_finished = callback;
     }
 
+    // Call when the state of one slot is changed
+    void notify_slot_changed() {
+        // move deferred tasks back to main loop
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        for (auto & task : queue_tasks_deferred) {
+            queue_tasks.push_back(std::move(task));
+        }
+        queue_tasks_deferred.clear();
+    }
+
     // Start the main loop. This call is blocking
     void start_loop() {
         while (true) {
@@ -254,15 +264,6 @@ struct llama_server_queue {
                     lock.unlock();
                     LOG_VERBOSE("callback_new_task", {});
                     callback_new_task(task);
-                }
-                // move deferred tasks back to main loop
-                {
-                    std::unique_lock<std::mutex> lock(mutex_tasks);
-                    for (auto & task : queue_tasks_deferred) {
-                        queue_tasks.push_back(std::move(task));
-                    }
-                    queue_tasks_deferred.clear();
-                    lock.unlock();
                 }
                 LOG_VERBOSE("callback_all_task_finished", {});
                 // process and update all the multitasks
