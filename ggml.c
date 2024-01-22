@@ -9846,7 +9846,7 @@ static void ggml_compute_forward_mul_mat(
                               float          * const wdata    = (float *) params->wdata + i13*ne12*ne_plane + i12*ne_plane;
                               ggml_to_float_t  const to_float = type_traits[type].to_float;
 
-                        for (int64_t i01 = ith; i01 < ne01; i01+=nth) {
+                        for (int64_t i01 = ith; i01 < ne01; i01 += nth) {
                             to_float((const char *) x + i01*nb01, wdata + i01*ne00, ne00);
                         }
                     }
@@ -16796,7 +16796,7 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
                     if (ggml_compute_forward_mul_mat_use_blas(node)) {
                         if (node->src[0]->type != GGML_TYPE_F32) {
-                            // here we need memory just for single 2D matrix from src0
+                            // here we need memory for fully dequantized matrix from src0
                             cur = ggml_type_size(GGML_TYPE_F32)
                                 * node->src[0]->ne[0]*node->src[0]->ne[1]
                                 * node->src[1]->ne[2]*node->src[1]->ne[3];
