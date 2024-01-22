@@ -8030,7 +8030,7 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
 }
 
 void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    if (p <= 0.0f || !candidates->size) {
+    if (p <= 0.0f) {
         return;
     }
 
