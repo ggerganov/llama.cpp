@@ -8004,8 +8004,13 @@ void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * can
         if (k == (int) candidates->size) {
             std::sort(candidates->data, candidates->data + candidates->size, comp);
         } else {
-            std::nth_element(candidates->data, candidates->data + k, candidates->data + candidates->size, comp); // separate stack to top-k
-            std::sort(candidates->data, candidates->data + k, comp); // Sort the top-k stack
+            if (k > 3000) {
+                // this needs a closer look, tests on multiple platforms. On Intel I7 13th gen with VC compilers the performance is equal at ~2500 top-k. Before that partial_sort is faster.
+                std::nth_element(candidates->data, candidates->data + k, candidates->data + candidates->size, comp); // separate stack to top-k
+                std::sort(candidates->data, candidates->data + k, comp); // Sort the top-k stack
+            } else {
+                std::partial_sort(candidates->data, candidates->data + k, candidates->data + candidates->size, comp);
+            }
         }
         candidates->sorted = true;
     }
