@@ -91,6 +91,7 @@ struct gpt_params {
     std::string input_suffix      = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
+    std::string logits_file       = "";  // file for saving *all* logits
 
     std::vector<llama_model_kv_override> kv_overrides;
 
@@ -107,6 +108,11 @@ struct gpt_params {
 
     bool   winogrande      = false; // compute Winogrande score over random tasks from datafile supplied in prompt
     size_t winogrande_tasks= 0;     // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
+
+    bool   multiple_choice = false; // compute TruthfulQA score over random tasks from datafile supplied in prompt
+    size_t multiple_choice_tasks = 0;     // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
+
+    bool   kl_divergence   = false; // compute KL-divergence
 
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool random_prompt     = false; // do not randomize prompt if none provided
