@@ -121,6 +121,7 @@ typedef std::vector<vk_submission> vk_sequence;
 struct vk_device {
     vk::PhysicalDevice physical_device;
     vk::PhysicalDeviceProperties properties;
+    uint64_t max_memory_allocation_size;
     bool fp16;
     vk::Device device;
     uint32_t vendor_id;
@@ -972,7 +973,14 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     vk_instance = vk::createInstance(instance_create_info);
 
     vk_device.physical_device = vk_instance.enumeratePhysicalDevices()[dev_num];
-    vk_device.properties = vk_device.physical_device.getProperties();
+    vk::PhysicalDeviceProperties2 props2;
+    vk::PhysicalDeviceMaintenance3Properties props3;
+    props3.pNext = nullptr;
+    props2.pNext = &props3;
+    vk_device.physical_device.getProperties2(&props2);
+    vk_device.properties = props2.properties;
+    vk_device.max_memory_allocation_size = props3.maxMemoryAllocationSize;
+
     std::cerr << "ggml_vulkan: Using " << vk_device.properties.deviceName << std::endl;
 
     vk_device.vendor_id = vk_device.properties.vendorID;
@@ -4243,6 +4251,12 @@ GGML_CALL static size_t ggml_backend_vk_buffer_type_get_alignment(ggml_backend_b
     UNUSED(buft);
 }
 
+GGML_CALL static size_t ggml_backend_vk_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
+    return vk_device.max_memory_allocation_size;
+
+    UNUSED(buft);
+}
+
 GGML_CALL static size_t ggml_backend_vk_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
     return ggml_nbytes(tensor);
 
@@ -4259,6 +4273,7 @@ static ggml_backend_buffer_type_i ggml_backend_vk_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_vk_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_vk_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_vk_buffer_type_get_alignment,
+    /* .get_max_size     = */ ggml_backend_vk_buffer_type_get_max_size,
     /* .get_alloc_size   = */ ggml_backend_vk_buffer_type_get_alloc_size,
     /* .supports_backend = */ ggml_backend_vk_buffer_type_supports_backend,
     /* .is_host          = */ NULL,
@@ -4326,6 +4341,7 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type() {
             /* .get_name         = */ ggml_backend_vk_host_buffer_type_name,
             /* .alloc_buffer     = */ ggml_backend_vk_host_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_vk_host_buffer_type_get_alignment,
+            /* .get_max_size     = */ NULL, // defaults to UINT64_MAX
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
             /* .supports_backend = */ ggml_backend_cpu_buffer_type()->iface.supports_backend,
             /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
