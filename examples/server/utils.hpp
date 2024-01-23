@@ -203,7 +203,9 @@ struct llama_server_queue {
     // Add a new task to the end of the queue
     int post(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
-        task.id = id++;
+        if (task.id == -1) {
+            task.id = id++;
+        }
         queue_tasks.push_back(std::move(task));
         condition_tasks.notify_one();
         return task.id;
@@ -215,8 +217,8 @@ struct llama_server_queue {
         queue_tasks_deferred.push_back(std::move(task));
     }
 
-    // Get the next task id
-    int get_next_id() {
+    // Get the next id for creating anew task
+    int get_new_id() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         return id++;
     }
