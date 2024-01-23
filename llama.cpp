@@ -8001,7 +8001,7 @@ void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * can
         auto comp = [](const llama_token_data & a, const llama_token_data & b) {
             return a.logit > b.logit;
         };
-        if (k == (int) candidates->size) {
+        if (k >= (int) (3*candidates->size /4)) {
             std::sort(candidates->data, candidates->data + candidates->size, comp);
         } else {
             if (k > 3000) {
