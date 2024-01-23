@@ -973,21 +973,36 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     vk_instance = vk::createInstance(instance_create_info);
 
     vk_device.physical_device = vk_instance.enumeratePhysicalDevices()[dev_num];
+    std::vector<vk::ExtensionProperties> ext_props = vk_device.physical_device.enumerateDeviceExtensionProperties();
+
+    bool maintenance4_support = false;
+
+    // Check if maintenance4 is supported
+    for (auto properties : ext_props) {
+        if (strcmp("VK_KHR_maintenance4", properties.extensionName) == 0) {
+            maintenance4_support = true;
+        }
+    }
+
     vk::PhysicalDeviceProperties2 props2;
     vk::PhysicalDeviceMaintenance3Properties props3;
     vk::PhysicalDeviceMaintenance4Properties props4;
     props2.pNext = &props3;
-    props3.pNext = &props4;
-    props4.pNext = nullptr;
+    if (maintenance4_support) {
+        props3.pNext = &props4;
+    }
     vk_device.physical_device.getProperties2(&props2);
     vk_device.properties = props2.properties;
-    vk_device.max_memory_allocation_size = std::min(props3.maxMemoryAllocationSize, props4.maxBufferSize);
+
+    if (maintenance4_support) {
+        vk_device.max_memory_allocation_size = std::min(props3.maxMemoryAllocationSize, props4.maxBufferSize);
+    } else {
+        vk_device.max_memory_allocation_size = props3.maxMemoryAllocationSize;
+    }
 
     std::cerr << "ggml_vulkan: Using " << vk_device.properties.deviceName << std::endl;
 
     vk_device.vendor_id = vk_device.properties.vendorID;
-
-    std::vector<vk::ExtensionProperties> ext_props = vk_device.physical_device.enumerateDeviceExtensionProperties();
 
     bool fp16_storage = false;
     bool fp16_compute = false;
