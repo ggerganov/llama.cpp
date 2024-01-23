@@ -478,6 +478,11 @@ function(get_flags CCID CCVER)
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
             set(CXX_FLAGS ${CXX_FLAGS} -Wextra-semi)
         endif()
+    elseif (CCID MATCHES "Intel")
+        # enable max optimization level when using Intel compiler
+        set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+        set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+        add_link_options(-fuse-ld=lld -static-intel)
     endif()
 
     set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)
