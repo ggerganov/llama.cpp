@@ -80,7 +80,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         // for simplicity, always copy src0 to host, because it is small
         // take into account that src0 is not contiguous!
         GGML_ASSERT(src0->ne[1] == src1->ne[1]);
-        GGML_ASSERT(n_as*ggml_nrows(src0));
+        GGML_ASSERT(n_as*ggml_nrows(src0)*sizeof(int) == GGML_PAD(ggml_nbytes(src0), n_as*sizeof(int)));
         m_ids.resize(ggml_nbytes(src0)/sizeof(int));
         ggml_backend_tensor_get(src0, m_ids.data(), 0, ggml_nbytes(src0));
 

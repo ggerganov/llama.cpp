@@ -1959,11 +1959,11 @@ kernel void kernel_leaky_relu_f32(
     dst[tpig] = src0[tpig] > 0.0f ? src0[tpig] : src0[tpig] * slope;
 }
 
-kernel void kernel_flash_attn_ext_f16(
-        device const  half * q,
-        device const  half * k,
-        device const  half * v,
-        device const float * mask,
+typedef void (flash_attn_ext_f16_t)(
+        device const  char * q,
+        device const  char * k,
+        device const  char * v,
+        device const  char * mask,
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
@@ -1973,20 +1973,236 @@ kernel void kernel_flash_attn_ext_f16(
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
+        constant   int64_t & ne10,
+        constant   int64_t & ne11,
+        constant   int64_t & ne12,
+        constant   int64_t & ne13,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant  uint64_t & nb12,
+        constant  uint64_t & nb13,
+        constant   int64_t & ne31,
+        constant  uint64_t & nb31,
         constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
         constant   int64_t & ne3,
-        constant  uint64_t & nb0,
-        constant  uint64_t & nb1,
-        constant  uint64_t & nb2,
-        constant  uint64_t & nb3,
-        constant   float & scale,
+        constant     float & scale,
+        threadgroup   half * shared,
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
-        uint3   ntg[[threads_per_threadgroup]]) {
-    // TODO: implement
+        uint3   ntg[[threads_per_threadgroup]],
+        uint  tiisg[[thread_index_in_simdgroup]],
+        uint  sgitg[[simdgroup_index_in_threadgroup]]);
+
+template<int64_t D, int64_t R> // head size, rows per threadgroup
+kernel void kernel_flash_attn_ext_f16(
+        device const  char * q,
+        device const  char * k,
+        device const  char * v,
+        device const  char * mask,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        constant   int64_t & ne03,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
+        constant  uint64_t & nb03,
+        constant   int64_t & ne10,
+        constant   int64_t & ne11,
+        constant   int64_t & ne12,
+        constant   int64_t & ne13,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant  uint64_t & nb12,
+        constant  uint64_t & nb13,
+        constant   int64_t & ne31,
+        constant  uint64_t & nb31,
+        constant   int64_t & ne0,
+        constant   int64_t & ne1,
+        constant   int64_t & ne2,
+        constant   int64_t & ne3,
+        constant     float & scale,
+        threadgroup   half * shared [[threadgroup(0)]],
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint3 tpitg[[thread_position_in_threadgroup]],
+        uint3   ntg[[threads_per_threadgroup]],
+        uint  tiisg[[thread_index_in_simdgroup]],
+        uint  sgitg[[simdgroup_index_in_threadgroup]]) {
+    const uint nsg = ntg.y;         // number of simdgroups
+    const uint tph = N_SIMDWIDTH/R; // threads per head
+
+    const int64_t iq3 = tgpig[2];
+    const int64_t iq2 = tgpig[1]*R + tiisg/tph;
+    const int64_t iq1 = tgpig[0];
+
+    if (iq2 >= ne02) {
+        return;
+    }
+
+    // assume K and V are same shape
+    const int64_t ne22 = ne12;
+    const int64_t ne23 = ne13;
+
+    const uint64_t nb21 = nb11;
+    const uint64_t nb22 = nb12;
+    const uint64_t nb23 = nb13;
+
+    // broadcast
+    const int64_t rk2 = ne02/ne12;
+    const int64_t rk3 = ne03/ne13;
+
+    const int64_t rv2 = ne02/ne22;
+    const int64_t rv3 = ne03/ne23;
+
+    // k indices
+    const int64_t ik2 = iq2 / rk2;
+    const int64_t ik3 = iq3 / rk3;
+
+    // v indices
+    const int64_t iv2 = iq2 / rv2;
+    const int64_t iv3 = iq3 / rv3;
+
+    const int64_t ir = iq3*ne02*ne01 + iq2*ne01 + iq1;
+
+    device const float * mp = mask ? (device const float *) (mask + (ir%ne31)*nb31) : nullptr;
+
+    const int64_t D4 = D/4;
+
+    threadgroup half4 * pq4 = (threadgroup half4 *) (shared +                    0*R*D);
+    threadgroup half4 * ps4 = (threadgroup half4 *) (shared + sgitg*(R*D + 32) + 1*R*D);
+    threadgroup half  * ss  = (threadgroup half  *) (shared + sgitg*(R*D + 32) + 2*R*D);
+
+    const uint tiih  = tiisg%tph; // thread index in head
+    const uint hiisg = tiisg/tph; // head index in simdgroup
+
+    // load R heads from Q to shared memory
+    for (int64_t i = 0; i < D4/tph; ++i) {
+        if (sgitg == 0) {
+            pq4[hiisg*D4 + tph*i + tiih] = ((device const half4 *) ((device const char *) q + (iq1*nb01 + iq2*nb02 + iq3*nb03)))[tph*i + tiih];
+        }
+
+        ps4[hiisg*D4 + tph*i + tiih] = 0.0h;
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    half S = 0.0h;
+    half M = -INFINITY;
+
+    for (int64_t ic = sgitg; ic < ne11; ic += nsg) {
+        const half mv = mp ? mp[ic] : 0.0h;
+        if (mv == -INFINITY) {
+            continue;
+        }
+
+        device const half4 * pk4 = (device const half4 *) ((device char *) k + (ic*nb11 + ik2*nb12 + ik3*nb13));
+        device const half4 * pv4 = (device const half4 *) ((device char *) v + (ic*nb21 + iv2*nb22 + iv3*nb23));
+
+        half4 s4 = 0.0h;
+
+#pragma unroll
+        for (int64_t i = 0; i < D4/tph; ++i) {
+            s4 += pq4[hiisg*D4 + tph*i + tiih] * pk4[tph*i + tiih];
+        }
+
+        ss[hiisg*tph + tiih] = (s4.x + s4.y + s4.z + s4.w);
+
+        simdgroup_barrier(mem_flags::mem_threadgroup);
+
+        if (tiih == 0) {
+            half s = 0.0h;
+
+#pragma unroll
+            for (int64_t i = 0; i < tph; ++i) {
+                s += ss[hiisg*tph + i];
+            }
+
+            s = s*scale + mv;
+
+            const half m = M;
+
+            M = max(M, s);
+
+            const half ms = exp(m - M);
+            const half vs = exp(s - M);
+
+            S = S*ms + vs;
+
+            ss[2*hiisg + 0] = ms;
+            ss[2*hiisg + 1] = vs;
+        }
+
+        simdgroup_barrier(mem_flags::mem_threadgroup);
+
+        const half ms = ss[2*hiisg + 0];
+        const half vs = ss[2*hiisg + 1];
+
+#pragma unroll
+        for (int64_t i = 0; i < D4/tph; ++i) {
+            ps4[hiisg*D4 + tph*i + tiih] = ps4[hiisg*D4 + tph*i + tiih]*ms + pv4[tph*i + tiih]*vs;
+        }
+    }
+
+    if (tiih == 0) {
+        ss[2*hiisg + 0] = S;
+        ss[2*hiisg + 1] = M;
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // reduce the warps
+    if (sgitg == 0) {
+        for (int64_t sg = 1; sg < nsg; ++sg) {
+            const half S0 = ss[                2*hiisg + 0];
+            const half S1 = ss[sg*(R*D + 32) + 2*hiisg + 0];
+
+            const half M0 = ss[                2*hiisg + 1];
+            const half M1 = ss[sg*(R*D + 32) + 2*hiisg + 1];
+
+            M = max(M0, M1);
+
+            const half ms0 = exp(M0 - M);
+            const half ms1 = exp(M1 - M);
+
+            S = S0*ms0 + S1*ms1;
+
+            if (tiih == 0) {
+                ss[2*hiisg + 0] = S;
+                ss[2*hiisg + 1] = M;
+            }
+
+            for (int64_t i = 0; i < D4/tph; ++i) {
+                ps4[hiisg*D4 + tph*i + tiih] = ps4[hiisg*D4 + tph*i + tiih]*ms0 + ps4[sg*(R*D + 32)/4 + hiisg*D4 + tph*i + tiih]*ms1;
+            }
+        }
+
+        for (int64_t i = 0; i < D4/tph; ++i) {
+            ps4[hiisg*D4 + tph*i + tiih] = ps4[hiisg*D4 + tph*i + tiih]/S;
+        }
+    }
+
+    simdgroup_barrier(mem_flags::mem_threadgroup);
+
+    // dst indices
+    const int64_t i1 = iq1;
+    const int64_t i2 = iq2;
+    const int64_t i3 = iq3;
+
+    device float4 * dst4 = (device float4 *) dst;
+
+    if (sgitg == 0) {
+        for (int64_t i = 0; i < D4/tph; ++i) {
+            dst4[(i3*ne2*ne1 + i2 + i1*ne1)*D4 + tph*i + tiih] = (float4) ps4[hiisg*D4 + tph*i + tiih];
+        }
+    }
 }
+
+template [[host_name("kernel_flash_attn_ext_f16_h64" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<64,  2>;
+template [[host_name("kernel_flash_attn_ext_f16_h80" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<80,  2>;
+template [[host_name("kernel_flash_attn_ext_f16_h128")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<128, 2>;
 
 kernel void kernel_cpy_f16_f16(
         device  const half * src0,
