@@ -216,12 +216,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             }
             // store the external file name in params
             params.prompt_file = argv[i];
-            file.seekg(0, std::ios::end);
-            size_t size = file.tellg();
-            file.seekg(0, std::ios::beg);
-            params.prompt.resize(size);
-            file.read((char *)params.prompt.data(), size);
-            fprintf(stderr, "Read %zu bytes from binary file %s\n", size, argv[i]);
+            std::ostringstream ss;
+            ss << file.rdbuf();
+            params.prompt = ss.str();
+            fprintf(stderr, "Read %zu bytes from binary file %s\n", params.prompt.size(), argv[i]);
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
