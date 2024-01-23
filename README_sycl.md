@@ -120,8 +120,9 @@ cd build
 source /opt/intel/oneapi/setvars.sh
 
 #for FP16
-cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON # faster for long-prompt inference
+#cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON # faster for long-prompt inference
 
+#for FP32
 cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 
 #build example/main only
@@ -135,8 +136,12 @@ cmake --build . --config Release -v
 or
 
 ```
-./sycl_build.sh
+./examples/sycl/build.sh
 ```
+
+Note:
+
+- By default, it will build for all binary files. It will take more time. To reduce the time, we recommend to build for **example/main** only.
 
 ### Run
 
@@ -190,8 +195,13 @@ GGML_SYCL_DEVICE=0 && ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Buildi
 or run by script:
 
 ```
-./examples/sycl_run_llama2.sh
+./examples/sycl/run_llama2.sh
 ```
+
+Note:
+
+- By default, mmap is used to read model file. In some cases, it leads to the hang issue. Recommend to use parameter **--no-mmap** to disable mmap() to skip this issue.
+
 
 5. Check the device ID in output
 
@@ -207,11 +217,10 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
 |Name|Value|Function|
 |-|-|-|
-|LLAMA_SYCL|ON (mandatory)|Enable build with SYCL code path|
+|LLAMA_SYCL|ON (mandatory)|Enable build with SYCL code path. <br>For FP32/FP16, LLAMA_SYCL=ON is mandatory.|
+|LLAMA_SYCL_F16|ON (optional)|Enable FP16 build with SYCL code path. Faster for long-prompt inference. <br>For FP32, not set it.|
 |CMAKE_C_COMPILER|icx|Use icx compiler for SYCL code path|
 |CMAKE_CXX_COMPILER|icpx|use icpx for SYCL code path|
-|GGML_SYCL_F16|OFF (default) or ON|Enable FP16 in computing|
-
 
 #### Running
 
@@ -223,9 +232,17 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
 ## Known Issue
 
--  Hang during startup
+- Error:  `error while loading shared libraries: libsycl.so.7: cannot open shared object file: No such file or directory`.
+
+  Miss to enable oneAPI running environment.
+
+  Install oneAPI base toolkit and enable it by: `source /opt/intel/oneapi/setvars.sh`.
+
+
+- Hang during startup
 
   llama.cpp use mmap as default way to read model file and copy to GPU. In some system, memcpy will be abnormal and block.
+
   Solution: add **--no-mmap**.
 
 ## Todo
