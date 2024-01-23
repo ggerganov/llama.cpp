@@ -848,10 +848,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         else {
             if (gguf_find_tensor(ctx, format(TN_LLAVA_PROJ, 3, "weight").c_str()) != -1) {
                 new_clip->proj_type = PROJECTOR_TYPE_MLP_NORM;
+            } else {
+                new_clip->proj_type = PROJECTOR_TYPE_MLP;
             }
-            else
-            new_clip->proj_type = PROJECTOR_TYPE_MLP;
-
         }
     }
 
