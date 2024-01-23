@@ -276,7 +276,7 @@ int main(int argc, char ** argv) {
     if (ctx_llava == NULL) {
         fprintf(stderr, "%s: error: failed to init llava\n", __func__);
         return 1;
-    }  
+    }
 
     auto image_embed = load_image(ctx_llava, &params);
     if (!image_embed) {
