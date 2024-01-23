@@ -1746,7 +1746,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
     }
 
     const char *sep = "+-------------------------------------------------------------------------------------------+\n";
-    
+
     const int MAX_ELEMENTS_ROW = 10;
     const int MAX_ELEMENTS_COL = 6;
     const int MAX_ELEMENTS_LAYER = 3;  // layered
