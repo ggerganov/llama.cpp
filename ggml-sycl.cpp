@@ -11621,17 +11621,23 @@ catch (sycl::exception const &exc) {
 
 #define UNUSED GGML_UNUSED
 
+struct ggml_backend_sycl_context {
+    int device;
+    std::string name;
+};
+
 // sycl buffer
 
-struct ggml_backend_buffer_context_sycl {
+struct ggml_backend_sycl_buffer_context {
     int device;
     void * dev_ptr = nullptr;
     ggml_tensor_extra_gpu * temp_tensor_extras = nullptr;
     size_t temp_tensor_extra_index = 0;
+    std::string name;
 
-    ggml_backend_buffer_context_sycl(int device, void * dev_ptr) : device(device), dev_ptr(dev_ptr) {}
+     ggml_backend_sycl_buffer_context(int device, void * dev_ptr) : device(device), dev_ptr(dev_ptr) {}
 
-    ~ggml_backend_buffer_context_sycl() {
+    ~ ggml_backend_sycl_buffer_context() {
         delete[] temp_tensor_extras;
     }
 
@@ -11649,9 +11655,18 @@ struct ggml_backend_buffer_context_sycl {
     }
 };
 
+GGML_CALL static const char * ggml_backend_sycl_buffer_get_name(ggml_backend_buffer_t buffer) {
+    ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *)buffer->context;
+    return ctx->name.c_str();
+}
+
+GGML_CALL static bool ggml_backend_buffer_is_sycl(ggml_backend_buffer_t buffer) {
+    return buffer->iface.get_name == ggml_backend_sycl_buffer_get_name;
+}
+
 static void
 ggml_backend_sycl_buffer_free_buffer(ggml_backend_buffer_t buffer) try {
-    ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
+     ggml_backend_sycl_buffer_context * ctx = ( ggml_backend_sycl_buffer_context *)buffer->context;
     ggml_sycl_set_device(ctx->device);
     int device_index = get_device_index_by_id(ctx->device);
     const dpct::queue_ptr stream = g_syclStreams[device_index][0];
@@ -11667,13 +11682,13 @@ catch (sycl::exception const &exc) {
 }
 
 static void * ggml_backend_sycl_buffer_get_base(ggml_backend_buffer_t buffer) {
-    ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
+     ggml_backend_sycl_buffer_context * ctx = ( ggml_backend_sycl_buffer_context *)buffer->context;
     return ctx->dev_ptr;
 }
 
 static void ggml_backend_sycl_buffer_init_tensor(ggml_backend_buffer_t buffer,
                                                  ggml_tensor *tensor) try {
-    ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
+     ggml_backend_sycl_buffer_context * ctx = ( ggml_backend_sycl_buffer_context *)buffer->context;
 
     if (tensor->view_src != NULL && tensor->view_offs == 0) {
         assert(tensor->view_src->buffer->buft == buffer->buft);
@@ -11719,7 +11734,7 @@ static void ggml_backend_sycl_buffer_set_tensor(ggml_backend_buffer_t buffer,
                                                 size_t size) try {
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
-    ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
+     ggml_backend_sycl_buffer_context * ctx = ( ggml_backend_sycl_buffer_context *)buffer->context;
 
     ggml_sycl_set_device(ctx->device);
     int device_index = get_device_index_by_id(ctx->device);
@@ -11744,7 +11759,7 @@ static void ggml_backend_sycl_buffer_get_tensor(ggml_backend_buffer_t buffer,
                                                 size_t size) try {
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
-    ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
+     ggml_backend_sycl_buffer_context * ctx = ( ggml_backend_sycl_buffer_context *)buffer->context;
 
     ggml_sycl_set_device(ctx->device);
     int device_index = get_device_index_by_id(ctx->device);
@@ -11766,7 +11781,7 @@ catch (sycl::exception const &exc) {
 
 static void ggml_backend_sycl_buffer_clear(ggml_backend_buffer_t buffer,
                                            uint8_t value) try {
-    ggml_backend_buffer_context_sycl * ctx = (ggml_backend_buffer_context_sycl *)buffer->context;
+     ggml_backend_sycl_buffer_context * ctx = ( ggml_backend_sycl_buffer_context *)buffer->context;
 
     ggml_sycl_set_device(ctx->device);
     int device_index = get_device_index_by_id(ctx->device);
@@ -11784,18 +11799,29 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-static struct ggml_backend_buffer_i sycl_backend_buffer_interface = {
+static struct ggml_backend_buffer_i ggml_backend_sycl_buffer_interface = {
+    /* .get_name        = */ ggml_backend_sycl_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_sycl_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_sycl_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_sycl_buffer_init_tensor,
     /* .set_tensor      = */ ggml_backend_sycl_buffer_set_tensor,
     /* .get_tensor      = */ ggml_backend_sycl_buffer_get_tensor,
-    /* .cpy_tensor_from = */ NULL,
-    /* .cpy_tensor_to   = */ NULL,
+    /* .cpy_tensor      = */ NULL,
     /* .clear           = */ ggml_backend_sycl_buffer_clear,
+    /* .reset           = */ NULL,
 };
 
 // sycl buffer type
+struct ggml_backend_sycl_buffer_type_context {
+    int device;
+    std::string name;
+};
+
+GGML_CALL static const char * ggml_backend_sycl_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    ggml_backend_sycl_buffer_type_context * ctx = (ggml_backend_sycl_buffer_type_context *)buft->context;
+
+    return ctx->name.c_str();
+}
 
 static ggml_backend_buffer_t
 ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
@@ -11811,9 +11837,9 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_device(
                                     size, *stream)));
 
-    ggml_backend_buffer_context_sycl * ctx = new ggml_backend_buffer_context_sycl(device, dev_ptr);
+     ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(device, dev_ptr);
 
-    return ggml_backend_buffer_init(buft, sycl_backend_buffer_interface, ctx, size);
+    return ggml_backend_buffer_init(buft, ggml_backend_sycl_buffer_interface, ctx, size);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -11827,7 +11853,7 @@ static size_t ggml_backend_sycl_buffer_type_get_alignment(ggml_backend_buffer_ty
     UNUSED(buft);
 }
 
-static size_t ggml_backend_sycl_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, ggml_tensor * tensor) {
+static size_t ggml_backend_sycl_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
     int64_t row_low = 0;
     int64_t row_high = ggml_nrows(tensor);
     int64_t nrows_split = row_high - row_low;
@@ -11854,6 +11880,7 @@ static bool ggml_backend_sycl_buffer_type_supports_backend(ggml_backend_buffer_t
 }
 
 static ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
+    /* .get_name         = */ ggml_backend_sycl_buffer_type_name,    
     /* .alloc_buffer     = */ ggml_backend_sycl_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_sycl_buffer_type_get_alignment,
     /* .get_alloc_size   = */ ggml_backend_sycl_buffer_type_get_alloc_size,
@@ -11881,6 +11908,18 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device) {
 
 // host buffer type
 
+GGML_CALL static const char * ggml_backend_sycl_host_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    return GGML_SYCL_NAME "_Host";
+
+    UNUSED(buft);
+}
+
+GGML_CALL static const char * ggml_backend_sycl_host_buffer_name(ggml_backend_buffer_t buffer) {
+    return GGML_SYCL_NAME "_Host";
+
+    UNUSED(buffer);
+}
+
 static void ggml_backend_sycl_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_sycl_host_free(buffer->context);
 }
@@ -11904,6 +11943,7 @@ static ggml_backend_buffer_t ggml_backend_sycl_host_buffer_type_alloc_buffer(ggm
 ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_sycl_buffer_type_host = {
         /* .iface    = */ {
+            /* .get_name         = */ ggml_backend_sycl_host_buffer_type_name,
             /* .alloc_buffer     = */ ggml_backend_sycl_host_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
@@ -11990,7 +12030,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-static ggml_backend_graph_plan_t ggml_backend_sycl_graph_plan_create(ggml_backend_t backend, ggml_cgraph * cgraph) {
+static ggml_backend_graph_plan_t ggml_backend_sycl_graph_plan_create(ggml_backend_t backend, const ggml_cgraph * cgraph) {
     GGML_ASSERT(!"not implemented");
 
     return nullptr;
@@ -12180,14 +12220,13 @@ static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_ten
     UNUSED(backend);
 }
 
-static ggml_backend_i sycl_backend_i = {
+static ggml_backend_i ggml_backend_sycl_interface = {
     /* .get_name                = */ ggml_backend_sycl_name,
     /* .free                    = */ ggml_backend_sycl_free,
     /* .get_default_buffer_type = */ ggml_backend_sycl_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_sycl_set_tensor_async,
     /* .get_tensor_async        = */ ggml_backend_sycl_get_tensor_async,
-    /* .cpy_tensor_from_async   = */ NULL,
-    /* .cpy_tensor_to_async     = */ NULL,
+    /* .cpy_tensor_async        = */ NULL,
     /* .synchronize             = */ ggml_backend_sycl_synchronize,
     /* .graph_plan_create       = */ ggml_backend_sycl_graph_plan_create,
     /* .graph_plan_free         = */ ggml_backend_sycl_graph_plan_free,
@@ -12212,7 +12251,7 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
     };
 
     ggml_backend_t sycl_backend = new ggml_backend {
-        /* .interface = */ sycl_backend_i,
+        /* .interface = */ ggml_backend_sycl_interface,
         /* .context   = */ ctx
     };
 

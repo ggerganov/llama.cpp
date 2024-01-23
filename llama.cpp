@@ -6703,7 +6703,7 @@ static int llama_decode_internal(
     }
 
     const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 1;
-    if ((ggml_cpu_has_cublas() || ggml_cpu_has_sycl()) && fully_offloaded) {
+    if (ggml_cpu_has_cublas() && fully_offloaded) {
         n_threads = 1;
     }
 
@@ -9939,13 +9939,14 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_SYCL)
         if (model->n_gpu_layers > 0) {
-            ctx->backend = ggml_backend_sycl_init(0);
-            if (ctx->backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL backend\n", __func__);
-            }
+                ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
         }
-
-
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {

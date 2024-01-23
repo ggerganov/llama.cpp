@@ -2386,7 +2386,6 @@ namespace dpct
                      const void *beta, void *c, library_data_t c_type, int ldc,
                      library_data_t scaling_type)
     {
-        bool matched = false;
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
         {
@@ -2542,7 +2541,6 @@ namespace dpct
 #ifdef DPCT_USM_LEVEL_NONE
         throw std::runtime_error("this API is unsupported when USM level is none");
 #else
-        bool matched = false;
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
         {
@@ -2712,7 +2710,6 @@ namespace dpct
                            int ldc, long long int stride_c, int batch_size,
                            library_data_t scaling_type)
     {
-        bool matched = false;
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
         {
