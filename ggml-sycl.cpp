@@ -45,10 +45,10 @@ static int g_work_group_size = 0;
 // typedef sycl::half ggml_fp16_t;
 
 #define __SYCL_ARCH__ DPCT_COMPATIBILITY_TEMP
-#define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
-#define CC_VOLTA      700
-#define CC_OFFSET_AMD 1000000
-#define CC_RDNA2      (CC_OFFSET_AMD + 1030)
+#define VER_4VEC   610          //todo for hardward optimize.
+#define VER_GEN9      700       //todo for hardward optimize.
+#define VER_GEN12 1000000       //todo for hardward optimize.
+#define VER_GEN13      (VER_GEN12 + 1030)   //todo for hardward optimize.
 
 #define GGML_SYCL_MAX_NODES 8192 //TODO: adapt to hardwares
 
@@ -3525,7 +3525,7 @@ vec_dot_q4_K_q8_1(const void *__restrict__ vbq,
 
 #else
 
-#if __SYCL_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+#if __SYCL_ARCH__ >= VER_4VEC // lowest compute capability for integer intrinsics
     const block_q4_K * bq4_K = (const block_q4_K *) vbq;
 
     float sumf_d = 0.0f;
@@ -3565,7 +3565,7 @@ vec_dot_q4_K_q8_1(const void *__restrict__ vbq,
 
 #else
     bad_arch();
-#endif // __SYCL_ARCH__ >= MIN_CC_DP4A
+#endif // __SYCL_ARCH__ >= VER_4VEC
 
 #endif
 }
@@ -3718,7 +3718,7 @@ vec_dot_q5_K_q8_1(const void *__restrict__ vbq,
 
 #else
 
-#if __SYCL_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+#if __SYCL_ARCH__ >= VER_4VEC // lowest compute capability for integer intrinsics
     const block_q5_K * bq5_K = (const block_q5_K *) vbq;
 
     const int8_t * s = bq5_K->scales;
@@ -3754,7 +3754,7 @@ vec_dot_q5_K_q8_1(const void *__restrict__ vbq,
 
 #else
     bad_arch();
-#endif // __SYCL_ARCH__ >= MIN_CC_DP4A
+#endif // __SYCL_ARCH__ >= VER_4VEC
 
 #endif
 }
@@ -6501,19 +6501,19 @@ static void ggml_mul_mat_q4_0_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q4_0_RDNA2;
         mmq_y  =  MMQ_Y_Q4_0_RDNA2;
         nwarps = NWARPS_Q4_0_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q4_0_RDNA1;
         mmq_y  =  MMQ_Y_Q4_0_RDNA1;
         nwarps = NWARPS_Q4_0_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q4_0_AMPERE;
         mmq_y  =  MMQ_Y_Q4_0_AMPERE;
         nwarps = NWARPS_Q4_0_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q4_0_PASCAL;
         mmq_y  =  MMQ_Y_Q4_0_PASCAL;
         nwarps = NWARPS_Q4_0_PASCAL;
@@ -6616,19 +6616,19 @@ static void ggml_mul_mat_q4_1_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q4_1_RDNA2;
         mmq_y  =  MMQ_Y_Q4_1_RDNA2;
         nwarps = NWARPS_Q4_1_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q4_1_RDNA1;
         mmq_y  =  MMQ_Y_Q4_1_RDNA1;
         nwarps = NWARPS_Q4_1_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q4_1_AMPERE;
         mmq_y  =  MMQ_Y_Q4_1_AMPERE;
         nwarps = NWARPS_Q4_1_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q4_1_PASCAL;
         mmq_y  =  MMQ_Y_Q4_1_PASCAL;
         nwarps = NWARPS_Q4_1_PASCAL;
@@ -6731,19 +6731,19 @@ static void ggml_mul_mat_q5_0_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q5_0_RDNA2;
         mmq_y  =  MMQ_Y_Q5_0_RDNA2;
         nwarps = NWARPS_Q5_0_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q5_0_RDNA1;
         mmq_y  =  MMQ_Y_Q5_0_RDNA1;
         nwarps = NWARPS_Q5_0_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q5_0_AMPERE;
         mmq_y  =  MMQ_Y_Q5_0_AMPERE;
         nwarps = NWARPS_Q5_0_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q5_0_PASCAL;
         mmq_y  =  MMQ_Y_Q5_0_PASCAL;
         nwarps = NWARPS_Q5_0_PASCAL;
@@ -6846,19 +6846,19 @@ static void ggml_mul_mat_q5_1_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q5_1_RDNA2;
         mmq_y  =  MMQ_Y_Q5_1_RDNA2;
         nwarps = NWARPS_Q5_1_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q5_1_RDNA1;
         mmq_y  =  MMQ_Y_Q5_1_RDNA1;
         nwarps = NWARPS_Q5_1_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q5_1_AMPERE;
         mmq_y  =  MMQ_Y_Q5_1_AMPERE;
         nwarps = NWARPS_Q5_1_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q5_1_PASCAL;
         mmq_y  =  MMQ_Y_Q5_1_PASCAL;
         nwarps = NWARPS_Q5_1_PASCAL;
@@ -6961,19 +6961,19 @@ static void ggml_mul_mat_q8_0_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q8_0_RDNA2;
         mmq_y  =  MMQ_Y_Q8_0_RDNA2;
         nwarps = NWARPS_Q8_0_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q8_0_RDNA1;
         mmq_y  =  MMQ_Y_Q8_0_RDNA1;
         nwarps = NWARPS_Q8_0_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q8_0_AMPERE;
         mmq_y  =  MMQ_Y_Q8_0_AMPERE;
         nwarps = NWARPS_Q8_0_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q8_0_PASCAL;
         mmq_y  =  MMQ_Y_Q8_0_PASCAL;
         nwarps = NWARPS_Q8_0_PASCAL;
@@ -7076,19 +7076,19 @@ static void ggml_mul_mat_q2_K_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q2_K_RDNA2;
         mmq_y  =  MMQ_Y_Q2_K_RDNA2;
         nwarps = NWARPS_Q2_K_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q2_K_RDNA1;
         mmq_y  =  MMQ_Y_Q2_K_RDNA1;
         nwarps = NWARPS_Q2_K_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q2_K_AMPERE;
         mmq_y  =  MMQ_Y_Q2_K_AMPERE;
         nwarps = NWARPS_Q2_K_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q2_K_PASCAL;
         mmq_y  =  MMQ_Y_Q2_K_PASCAL;
         nwarps = NWARPS_Q2_K_PASCAL;
@@ -7199,19 +7199,19 @@ static void ggml_mul_mat_q3_K_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q3_K_RDNA2;
         mmq_y  =  MMQ_Y_Q3_K_RDNA2;
         nwarps = NWARPS_Q3_K_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q3_K_RDNA1;
         mmq_y  =  MMQ_Y_Q3_K_RDNA1;
         nwarps = NWARPS_Q3_K_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q3_K_AMPERE;
         mmq_y  =  MMQ_Y_Q3_K_AMPERE;
         nwarps = NWARPS_Q3_K_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q3_K_PASCAL;
         mmq_y  =  MMQ_Y_Q3_K_PASCAL;
         nwarps = NWARPS_Q3_K_PASCAL;
@@ -7327,19 +7327,19 @@ static void ggml_mul_mat_q4_K_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q4_K_RDNA2;
         mmq_y  =  MMQ_Y_Q4_K_RDNA2;
         nwarps = NWARPS_Q4_K_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q4_K_RDNA1;
         mmq_y  =  MMQ_Y_Q4_K_RDNA1;
         nwarps = NWARPS_Q4_K_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q4_K_AMPERE;
         mmq_y  =  MMQ_Y_Q4_K_AMPERE;
         nwarps = NWARPS_Q4_K_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q4_K_PASCAL;
         mmq_y  =  MMQ_Y_Q4_K_PASCAL;
         nwarps = NWARPS_Q4_K_PASCAL;
@@ -7448,19 +7448,19 @@ static void ggml_mul_mat_q5_K_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q5_K_RDNA2;
         mmq_y  =  MMQ_Y_Q5_K_RDNA2;
         nwarps = NWARPS_Q5_K_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q5_K_RDNA1;
         mmq_y  =  MMQ_Y_Q5_K_RDNA1;
         nwarps = NWARPS_Q5_K_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q5_K_AMPERE;
         mmq_y  =  MMQ_Y_Q5_K_AMPERE;
         nwarps = NWARPS_Q5_K_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q5_K_PASCAL;
         mmq_y  =  MMQ_Y_Q5_K_PASCAL;
         nwarps = NWARPS_Q5_K_PASCAL;
@@ -7569,19 +7569,19 @@ static void ggml_mul_mat_q6_K_q8_1_sycl(const void *vx, const void *vy,
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
-    if (compute_capability >= CC_RDNA2) {
+    if (compute_capability >= VER_GEN13) {
         mmq_x  =  MMQ_X_Q6_K_RDNA2;
         mmq_y  =  MMQ_Y_Q6_K_RDNA2;
         nwarps = NWARPS_Q6_K_RDNA2;
-    } else if (compute_capability >= CC_OFFSET_AMD) {
+    } else if (compute_capability >= VER_GEN12) {
         mmq_x  =  MMQ_X_Q6_K_RDNA1;
         mmq_y  =  MMQ_Y_Q6_K_RDNA1;
         nwarps = NWARPS_Q6_K_RDNA1;
-    } else if (compute_capability >= CC_VOLTA) {
+    } else if (compute_capability >= VER_GEN9) {
         mmq_x  =  MMQ_X_Q6_K_AMPERE;
         mmq_y  =  MMQ_Y_Q6_K_AMPERE;
         nwarps = NWARPS_Q6_K_AMPERE;
-    } else if (compute_capability >= MIN_CC_DP4A) {
+    } else if (compute_capability >= VER_4VEC) {
         mmq_x  =  MMQ_X_Q6_K_PASCAL;
         mmq_y  =  MMQ_Y_Q6_K_PASCAL;
         nwarps = NWARPS_Q6_K_PASCAL;
@@ -9118,7 +9118,7 @@ static int64_t get_row_rounding(ggml_type type) {
     switch(type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
-            return max_compute_capability >= CC_VOLTA ? 128 : 64;
+            return max_compute_capability >= VER_GEN9 ? 128 : 64;
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
@@ -9130,7 +9130,7 @@ static int64_t get_row_rounding(ggml_type type) {
         case GGML_TYPE_Q3_K:
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
-            return max_compute_capability >= CC_VOLTA ? 128 : 64;
+            return max_compute_capability >= VER_GEN9 ? 128 : 64;
         case GGML_TYPE_Q6_K:
             return 64;
         default:
@@ -9302,7 +9302,7 @@ inline void ggml_sycl_op_mul_mat_sycl(
 #else
     bool use_fp16 = false;
 #endif
-    // if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 ||
+    // if (compute_capability >= VER_GEN9 && (src0->type == GGML_TYPE_F16 ||
     // ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff ==
     // src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
     if ((src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
@@ -10610,7 +10610,7 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 #ifdef GGML_SYCL_FORCE_DMMV
             const bool use_mul_mat_vec_q = false;
 #else
-            const bool use_mul_mat_vec_q = min_compute_capability >= MIN_CC_DP4A && ggml_is_quantized(src0->type) && ggml_nrows(src1) == 1;
+            const bool use_mul_mat_vec_q = min_compute_capability >= VER_4VEC && ggml_is_quantized(src0->type) && ggml_nrows(src1) == 1;
 #endif // GGML_SYCL_FORCE_DMMV
 
             if (use_mul_mat_vec_q) {
@@ -10622,9 +10622,9 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
                 ggml_sycl_op_mul_mat(src0, src1, dst, ggml_sycl_op_dequantize_mul_mat_vec, false);
             }
         } else {
-            bool use_mul_mat_q = min_compute_capability >= MIN_CC_DP4A && ggml_is_quantized(src0->type);
+            bool use_mul_mat_q = min_compute_capability >= VER_4VEC && ggml_is_quantized(src0->type);
 
-            if (use_xmx && min_compute_capability >= CC_VOLTA && src1->ne[1] > XMX_MAX_BATCH_SIZE) {
+            if (use_xmx && min_compute_capability >= VER_GEN9 && src1->ne[1] > XMX_MAX_BATCH_SIZE) {
                 use_mul_mat_q = false;
             }
 
@@ -11880,7 +11880,7 @@ static bool ggml_backend_sycl_buffer_type_supports_backend(ggml_backend_buffer_t
 }
 
 static ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
-    /* .get_name         = */ ggml_backend_sycl_buffer_type_name,    
+    /* .get_name         = */ ggml_backend_sycl_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_sycl_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_sycl_buffer_type_get_alignment,
     /* .get_alloc_size   = */ ggml_backend_sycl_buffer_type_get_alloc_size,
