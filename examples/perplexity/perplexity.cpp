@@ -1758,14 +1758,24 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
     auto kld_median = kld_values.size()%2 == 0 ? 0.5f*(kld_values[kld_values.size()/2] + kld_values[kld_values.size()/2-1])
                                                : kld_values[kld_values.size()/2];
     printf("Median : %10.6f\n", kld_median);
-    printf("Minimum: %10.6f\n", kld_values.front());
+
+    auto percentile = [&kld_values] (float fraction) {
+        if (fraction <= 0) return kld_values.front();
+        if (fraction >= 1) return kld_values.back();
+        float p = fraction*(kld_values.size() - 1);
+        size_t ip = size_t(p); p -= ip;
+        return (1 - p)*kld_values[ip] + p*kld_values[std::min(ip+1, kld_values.size()-1)];
+    };
+
     printf("Maximum: %10.6f\n", kld_values.back());
-    const int n_1percent = nearest_int(0.01f*kld_values.size());
-    printf("KLD_01 : %10.6f\n", kld_values[n_1percent]);
-    printf("KLD_99 : %10.6f\n", kld_values[kld_values.size()-1-n_1percent]);
-    const int n_5percent = nearest_int(0.05f*kld_values.size());
-    printf("KLD_05 : %10.6f\n", kld_values[n_5percent]);
-    printf("KLD_95 : %10.6f\n", kld_values[kld_values.size()-1-n_5percent]);
+    printf("KLD_99 : %10.6f\n", percentile(0.99f));
+    printf("KLD_95 : %10.6f\n", percentile(0.95f));
+    printf("KLD_90 : %10.6f\n", percentile(0.90f));
+
+    printf("Minimum: %10.6f\n", kld_values.front());
+    printf("KLD_01 : %10.6f\n", percentile(0.01f));
+    printf("KLD_05 : %10.6f\n", percentile(0.05f));
+    printf("KLD_10 : %10.6f\n", percentile(0.10f));
 
 }
 
