@@ -1,5 +1,5 @@
 #include "llama.h"
-#include "get_model.h"
+#include "get-model.h"
 
 #include <cstdlib>
 

@@ -5,7 +5,7 @@
 #include <thread>
 
 #include "llama.h"
-#include "get_model.h"
+#include "get-model.h"
 
 // This creates a new context inside a pthread and then tries to exit cleanly.
 int main(int argc, char ** argv) {

@@ -160,7 +160,7 @@ function gg_run_ctest_with_model_debug {
     local model; model=$(gg_get_model)
     cd build-ci-debug
     set -e
-    (GG_RUN_CTEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    (LLAMACPP_TEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
     set +e
     cd ..
 }
@@ -171,7 +171,7 @@ function gg_run_ctest_with_model_release {
     local model; model=$(gg_get_model)
     cd build-ci-release
     set -e
-    (GG_RUN_CTEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    (LLAMACPP_TEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
     set +e
     cd ..
 }

@@ -748,8 +748,8 @@ tests/test-c.o: tests/test-c.c llama.h
 tests/test-backend-ops: tests/test-backend-ops.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-tests/test-model-load-cancel: tests/test-model-load-cancel.cpp ggml.o llama.o tests/get_model.cpp $(COMMON_DEPS) $(OBJS)
+tests/test-model-load-cancel: tests/test-model-load-cancel.cpp ggml.o llama.o tests/get-model.cpp $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-tests/test-autorelease: tests/test-autorelease.cpp ggml.o llama.o tests/get_model.cpp $(COMMON_DEPS) $(OBJS)
+tests/test-autorelease: tests/test-autorelease.cpp ggml.o llama.o tests/get-model.cpp $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
