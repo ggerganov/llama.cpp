@@ -170,13 +170,13 @@ Check the ID in startup log, like:
 ```
 found 4 SYCL devices:
   Device 0: Intel(R) Arc(TM) A770 Graphics,	compute capability 1.3,
-	max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
+    max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
   Device 1: Intel(R) FPGA Emulation Device,	compute capability 1.2,
-	max compute_units 24,	max work group size 67108864,	max sub group size 64,	global mem size 67065057280
+    max compute_units 24,	max work group size 67108864,	max sub group size 64,	global mem size 67065057280
   Device 2: 13th Gen Intel(R) Core(TM) i7-13700K,	compute capability 3.0,
-	max compute_units 24,	max work group size 8192,	max sub group size 64,	global mem size 67065057280
+    max compute_units 24,	max work group size 8192,	max sub group size 64,	global mem size 67065057280
   Device 3: Intel(R) Arc(TM) A770 Graphics,	compute capability 3.0,
-	max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
+    max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
 
 ```
 
