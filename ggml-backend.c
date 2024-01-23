@@ -1746,7 +1746,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
     }
 
     const char *sep = "+-------------------------------------------------------------------------------------------+\n";
-    printf("%s| Content of %s \"%s\" (%d dim)\n", sep, prefix, tensor->name, ggml_n_dims(tensor));
+    //printf("%s| Content of %s \"%s\" (%d dim)\n", sep, prefix, tensor->name, ggml_n_dims(tensor));
 
     const int MAX_ELEMENTS_ROW = 10;
     const int MAX_ELEMENTS_COL = 6;
