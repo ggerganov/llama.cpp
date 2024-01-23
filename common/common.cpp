@@ -659,7 +659,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.mul_mat_q = false;
 #else
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS or SYCL. Disabling mul_mat_q kernels has no effect.\n");
-#endif // GGML_USE_CUBLAS
+#endif // GGML_USE_CUBLAS || GGML_USE_SYCL
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--numa") {
@@ -1021,6 +1021,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1\n");
     printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
     printf("                        or for intermediate results and KV (with split-mode = row) (default: %d)\n", params.main_gpu);
+#endif // LLAMA_SUPPORTS_GPU_OFFLOAD
 #ifdef GGML_USE_CLBLAS
     printf("  -nommq, --no-mul-mat-q\n");
     printf("                        use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.\n");
@@ -1031,7 +1032,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        use " GGML_SYCL_NAME " instead of custom mul_mat_q " GGML_SYCL_NAME " kernels.\n");
     printf("                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif // GGML_USE_SYCL
-#endif
     printf("  --verbose-prompt      print a verbose prompt before generation (default: %s)\n", params.verbose_prompt ? "true" : "false");
     printf("  --no-display-prompt   don't print prompt at generation (default: %s)\n", !params.display_prompt ? "true" : "false");
     printf("  -gan N, --grp-attn-n N\n");
