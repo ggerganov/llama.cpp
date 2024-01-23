@@ -16932,6 +16932,7 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
                     if (ggml_compute_forward_mul_mat_use_blas(node)) {
                         if (node->src[0]->type != GGML_TYPE_F32) {
                             // here we need memory for fully dequantized matrix from src0
+                            // take into account that src0 can be broadcasted into src1[2,3]
                             cur = ggml_type_size(GGML_TYPE_F32)
                                 * node->src[0]->ne[0]*node->src[0]->ne[1]
                                 * node->src[1]->ne[2]*node->src[1]->ne[3];
