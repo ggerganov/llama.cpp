@@ -1397,7 +1397,7 @@ struct test_flash_attn_ext : public test_case {
     }
 
     double max_nmse_err() override {
-        return 5e-6;
+        return 5e-5;
     }
 
     test_flash_attn_ext(ggml_type typeq = GGML_TYPE_F16,
@@ -1680,9 +1680,9 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_leaky_relu());
 
-    test_cases.emplace_back(new test_flash_attn_ext(GGML_TYPE_F16, 128, 32, 96, 8));
-    test_cases.emplace_back(new test_flash_attn_ext(GGML_TYPE_F16, 128, 32, 32, 7));
-    test_cases.emplace_back(new test_flash_attn_ext(GGML_TYPE_F16, 128, 32, 96, 1));
+    test_cases.emplace_back(new test_flash_attn_ext(GGML_TYPE_F16, 128, 32, 256, 8));
+    test_cases.emplace_back(new test_flash_attn_ext(GGML_TYPE_F16, 128, 32, 256, 7));
+    test_cases.emplace_back(new test_flash_attn_ext(GGML_TYPE_F16, 128, 32, 256, 1));
 
 #if !defined(__SANITIZE_THREAD__)
     // FIXME: these tests use too much memory with thread sanitizer

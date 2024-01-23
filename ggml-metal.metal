@@ -2070,7 +2070,7 @@ kernel void kernel_flash_attn_ext_f16(
     device const float * mp[Q];
     for (int64_t j = 0; j < Q; ++j) {
         if (iq1 + j < ne01) {
-            mp[j] = mask ? (device const float *) (mask + ((ir + j)%ne31)*nb31) : nullptr;
+            mp[j] = (device const float *) (mask + ((ir + j)%ne31)*nb31);
         } else {
             mp[j] = nullptr;
         }
@@ -2078,13 +2078,13 @@ kernel void kernel_flash_attn_ext_f16(
 
     const int64_t D4 = D/4;
 
-    const int64_t T  = (H*D + nsg*(H*D + 32)); // shared memory size per query in half
+    const int64_t T  = (H*D + nsg*(H*D + 256)); // shared memory size per query in half
     const int64_t T4 = T/4;                    // shared memory size per query in half4
 
-    threadgroup half4 * pq4 = (threadgroup half4 *) (shared +                    0*H*D);
-    threadgroup half4 * ps4 = (threadgroup half4 *) (shared + sgitg*(H*D + 32) + 1*H*D);
-    threadgroup half  * ss  = (threadgroup half  *) (shared + sgitg*(H*D + 32) + 2*H*D);
-    threadgroup half4 * ss4 = (threadgroup half4 *) (shared + sgitg*(H*D + 32) + 2*H*D);
+    threadgroup half4 * pq4 = (threadgroup half4 *) (shared +                     0*H*D);
+    threadgroup half4 * ps4 = (threadgroup half4 *) (shared + sgitg*(H*D + 256) + 1*H*D);
+    threadgroup half  * ss  = (threadgroup half  *) (shared + sgitg*(H*D + 256) + 2*H*D);
+    threadgroup half4 * ss4 = (threadgroup half4 *) (shared + sgitg*(H*D + 256) + 2*H*D);
 
     const uint tiih  = tiisg%tph; // thread index in head
     const uint hiisg = tiisg/tph; // head index in simdgroup
@@ -2115,23 +2115,24 @@ kernel void kernel_flash_attn_ext_f16(
     half S = { 0.0h };
     half M = { -INFINITY };
 
-    for (int64_t ic = sgitg; ic < ne11; ic += nsg) {
+    for (int64_t iic = 8*sgitg; iic < ne11; iic += 8*nsg) {
         half mv[Q];
 
         bool skip = true;
         for (int64_t j = 0; j < Q; ++j) {
-            mv[j] = mp[j] ? mp[j][ic] : iq1 + j < ne01 ? 0.0h : -INFINITY;
+            mv[j] = mp[j][iic];
             skip = skip && (mv[j] == -INFINITY);
         }
         if (skip) {
             continue;
         }
 
-        device const half4 * pk4 = (device const half4 *) ((device char *) k + (ic*nb11 + ik2*nb12 + ik3*nb13));
-        device const half4 * pv4 = (device const half4 *) ((device char *) v + (ic*nb21 + iv2*nb22 + iv3*nb23));
+        for (int p = 0; p < 8; ++p) {
+            const int64_t ic = iic + p;
 
-        {
-            half4 s4[Q] = { 0.0h };
+            device const half4 * pk4 = (device const half4 *) ((device char *) k + (ic*nb11 + ik2*nb12 + ik3*nb13));
+
+            half s[Q] = { 0.0h };
             half4 pk4v[D4/tph];
 
             for (int64_t i = 0; i < D4/tph; ++i) {
@@ -2140,12 +2141,12 @@ kernel void kernel_flash_attn_ext_f16(
 
             for (int64_t j = 0; j < Q; ++j) {
                 for (int64_t i = 0; i < D4/tph; ++i) {
-                    s4[j] += pq4[j*T4 + hiisg*D4 + tph*i + tiih] * pk4v[i];
+                    s[j] += dot(pq4[j*T4 + hiisg*D4 + tph*i + tiih], pk4v[i]);
                 }
             }
 
             for (int64_t j = 0; j < Q; ++j) {
-                ss[j*T + hiisg*tph + tiih] = (s4[j].x + s4[j].y + s4[j].z + s4[j].w);
+                ss[j*T + 32*p + hiisg*tph + tiih] = s[j];
             }
         }
 
@@ -2154,39 +2155,45 @@ kernel void kernel_flash_attn_ext_f16(
         if (tiih < Q) {
             const int64_t j = tiih;
 
-            half4 s4 = 0.0h;
+            for (int p = 0; p < 8; ++p) {
+                half4 s4 = 0.0h;
 
-            for (int64_t i = 0; i < tph/4; ++i) {
-                s4 += ss4[j*T4 + hiisg*tph/4 + i];
+                for (int64_t i = 0; i < tph/4; ++i) {
+                    s4 += ss4[j*T4 + 8*p + hiisg*tph/4 + i];
+                }
+
+                half s = (s4.x + s4.y + s4.z + s4.w)*scale + mp[j][iic + p];
+
+                const half m = M;
+
+                M = max(M, s);
+
+                const half ms = m == -INFINITY ? 0.0h : exp(m - M);
+                const half vs = s == -INFINITY ? 0.0h : exp(s - M);
+
+                S = S*ms + vs;
+
+                ss[j*T + 32*p + 2*hiisg + 0] = ms;
+                ss[j*T + 32*p + 2*hiisg + 1] = vs;
             }
-
-            half s = (s4.x + s4.y + s4.z + s4.w)*scale + mv[j];
-
-            const half m = M;
-
-            M = max(M, s);
-
-            const half ms = m == -INFINITY ? 0.0h : exp(m - M);
-            const half vs = s == -INFINITY ? 0.0h : exp(s - M);
-
-            S = S*ms + vs;
-
-            ss[j*T + 2*hiisg + 0] = ms;
-            ss[j*T + 2*hiisg + 1] = vs;
         }
 
         simdgroup_barrier(mem_flags::mem_none);
 
-        {
+        for (int p = 0; p < 8; ++p) {
+            const int64_t ic = iic + p;
+
+            device const half4 * pv4 = (device const half4 *) ((device char *) v + (ic*nb21 + iv2*nb22 + iv3*nb23));
+
             half ms[Q] = { 1.0h };
             half vs[Q] = { 0.0h };
 
             for (int64_t j = 0; j < Q; ++j) {
-                ms[j] = ss[j*T + 2*hiisg + 0];
-                vs[j] = ss[j*T + 2*hiisg + 1];
+                ms[j] = ss[j*T + 32*p + 2*hiisg + 0];
+                vs[j] = ss[j*T + 32*p + 2*hiisg + 1];
             }
 
-            half4 pv4v[D4/tph];
+            thread half4 pv4v[D4/tph];
             for (int64_t i = 0; i < D4/tph; ++i) {
                 pv4v[i] = pv4[tph*i + tiih];
             }
@@ -2213,11 +2220,11 @@ kernel void kernel_flash_attn_ext_f16(
         for (int64_t j = 0; j < Q; ++j) {
             for (int64_t sg = 1; sg < nsg; ++sg) {
 
-                const half S0 = ss[j*T +                 2*hiisg + 0];
-                const half S1 = ss[j*T + sg*(H*D + 32) + 2*hiisg + 0];
+                const half S0 = ss[j*T +                  2*hiisg + 0];
+                const half S1 = ss[j*T + sg*(H*D + 256) + 2*hiisg + 0];
 
-                const half M0 = ss[j*T +                 2*hiisg + 1];
-                const half M1 = ss[j*T + sg*(H*D + 32) + 2*hiisg + 1];
+                const half M0 = ss[j*T +                  2*hiisg + 1];
+                const half M1 = ss[j*T + sg*(H*D + 256) + 2*hiisg + 1];
 
                 M = max(M0, M1);
 
@@ -2232,7 +2239,7 @@ kernel void kernel_flash_attn_ext_f16(
                 }
 
                 for (int64_t i = 0; i < D4/tph; ++i) {
-                    ps4[j*T4 + hiisg*D4 + tph*i + tiih] = ps4[j*T4 + hiisg*D4 + tph*i + tiih]*ms0 + ps4[j*T4 + sg*(H*D + 32)/4 + hiisg*D4 + tph*i + tiih]*ms1;
+                    ps4[j*T4 + hiisg*D4 + tph*i + tiih] = ps4[j*T4 + hiisg*D4 + tph*i + tiih]*ms0 + ps4[j*T4 + sg*(H*D + 256)/4 + hiisg*D4 + tph*i + tiih]*ms1;
                 }
             }
 
@@ -2244,17 +2251,12 @@ kernel void kernel_flash_attn_ext_f16(
 
     simdgroup_barrier(mem_flags::mem_threadgroup);
 
-    // dst indices
-    const int64_t i1 = iq1;
-    const int64_t i2 = iq2;
-    const int64_t i3 = iq3;
-
     device float4 * dst4 = (device float4 *) dst;
 
     if (sgitg == 0) {
         for (int64_t j = 0; j < Q && iq1 + j < ne01; ++j) {
             for (int64_t i = 0; i < D4/tph; ++i) {
-                dst4[(i3*ne2*ne1 + i2 + (i1 + j)*ne1)*D4 + tph*i + tiih] = (float4) ps4[j*T4 + hiisg*D4 + tph*i + tiih];
+                dst4[(iq3*ne2*ne1 + iq2 + (iq1 + j)*ne1)*D4 + tph*i + tiih] = (float4) ps4[j*T4 + hiisg*D4 + tph*i + tiih];
             }
         }
     }
