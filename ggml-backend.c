@@ -1743,10 +1743,10 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
             return;
         }
     }
-        
+
     const char *sep = "+-------------------------------------------------------------------------------------------+\n";
     printf("%s| Content of %s \"%s\" (%d dim)\n", sep, prefix, tensor->name, ggml_n_dims(tensor));
-    
+
     const int MAX_ELEMENTS_ROW = 10;
     const int MAX_ELEMENTS_COL = 6;
     const int MAX_ELEMENTS_LAYER = 3;  // layered
@@ -1787,7 +1787,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
                 printf("[");
                 for(int k = 0; k < tensor->ne[2] && k < MAX_ELEMENTS_LAYER; k++){
                     printf("%-7.4f",  *(double *)((char *) tensor_data + i*tensor->nb[0] + j*tensor->nb[1] + k*tensor->nb[2]));
-                    if(k < tensor->ne[2] - 1 && k < MAX_ELEMENTS_LAYER - 1) 
+                    if(k < tensor->ne[2] - 1 && k < MAX_ELEMENTS_LAYER - 1)
                         printf(", ");
                 }
                 if(MAX_ELEMENTS_LAYER < tensor->ne[2]) printf(", ..");
@@ -1806,7 +1806,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
                     printf("[");
                     for(int k = 0; k < tensor->ne[3] && k < MAX_ELEMENTS_LAYER; k++){
                         printf("%-7.4f",  *(double *)((char *) tensor_data + batch*tensor->nb[0] + i*tensor->nb[1] + j*tensor->nb[2] + k*tensor->nb[3]));
-                        if(k < tensor->ne[3] - 1 && k < MAX_ELEMENTS_LAYER - 1) 
+                        if(k < tensor->ne[3] - 1 && k < MAX_ELEMENTS_LAYER - 1)
                             printf(", ");
                     }
                     if(MAX_ELEMENTS_LAYER < tensor->ne[3]) printf(", ..");
@@ -1862,7 +1862,7 @@ void ggml_tensor_printf(const struct ggml_tensor *tensor, char *prefix, int line
     }
     printf("| %-20s | %-20s | %-20s | %-20s |\n",  "Elements", "Src0", "Src1","Operation");
     printf("| %-20s |",  tmp_str);
-        
+
     if (tensor->src[0]) {
         pos = 0;
         for (int i = 0; i < ggml_n_dims(tensor->src[0]); i++) {
