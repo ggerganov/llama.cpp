@@ -1,19 +1,3 @@
-/*
- * #include "common.h"
-
-#include "console.h"
-#include <cassert>
-#include <cinttypes>
-#include <cmath>
-#include <cstdio>
-#include <cstring>
-#include <ctime>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-*/
 
 #include "ggml-sycl.h"
 
