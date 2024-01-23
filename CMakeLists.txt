@@ -453,7 +453,7 @@ endif()
 
 if (LLAMA_SYCL)
     if ( NOT DEFINED ENV{ONEAPI_ROOT})
-	message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+    message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
     endif()
     #todo: AOT
 
@@ -463,7 +463,7 @@ if (LLAMA_SYCL)
     endif()
     add_compile_definitions(GGML_USE_SYCL)
 
-    add_compile_options(-I./) #include DPCT 
+    add_compile_options(-I./) #include DPCT
     add_compile_options(-I/${SYCL_INCLUDE_DIR})
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
