@@ -1029,7 +1029,7 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     const uint32_t transfer_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics, compute_queue_family_index, 1);
 
     const float priorities[] = { 1.0f, 1.0f };
-    const bool single_queue = compute_queue_family_index != transfer_queue_family_index && queue_family_props[compute_queue_family_index].queueCount == 1;
+    const bool single_queue = compute_queue_family_index == transfer_queue_family_index && queue_family_props[compute_queue_family_index].queueCount == 1;
 
     std::vector<vk::DeviceQueueCreateInfo> device_queue_create_infos;
     if (compute_queue_family_index != transfer_queue_family_index) {
