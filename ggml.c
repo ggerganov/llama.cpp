@@ -5368,14 +5368,12 @@ struct ggml_tensor * ggml_conv_depthwise_2d(
     struct ggml_context * ctx,
     struct ggml_tensor * a,
     struct ggml_tensor * b,
-    struct ggml_tensor * c,
     int                  s0,
     int                  s1,
     int                  p0,
     int                  p1,
     int                  d0,
     int                  d1) {
-
     struct ggml_tensor * new_a = ggml_reshape_4d(ctx, a, a->ne[0], a->ne[1], 1, a->ne[2] * a->ne[3]);
     struct ggml_tensor * im2col = ggml_im2col(ctx, new_a,
                                         ggml_reshape_4d(ctx, b, b->ne[0], b->ne[1], 1, b->ne[2] * b->ne[3]),
@@ -9991,7 +9989,7 @@ static void ggml_compute_forward_mul_mat(
             return;
         }
 
-        const int64_t tgemm0 = ggml_perf_time_us();
+        //const int64_t tgemm0 = ggml_perf_time_us();
         for (int64_t i13 = 0; i13 < ne13; i13++) {
             for (int64_t i12 = 0; i12 < ne12; i12++) {
                 const int64_t i03 = i13/r3;
@@ -16934,7 +16932,10 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
                     if (ggml_compute_forward_mul_mat_use_blas(node)) {
                         if (node->src[0]->type != GGML_TYPE_F32) {
                             // here we need memory for fully dequantized matrix from src0
-                            cur = ggml_type_size(GGML_TYPE_F32)*ggml_nelements(node->src[0]);
+                            // take into account that src0 can be broadcasted into src1[2,3]
+                            cur = ggml_type_size(GGML_TYPE_F32)
+                                * node->src[0]->ne[0]*node->src[0]->ne[1]
+                                * node->src[1]->ne[2]*node->src[1]->ne[3];
                         }
                     } else
 #endif

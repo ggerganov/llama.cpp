@@ -1202,11 +1202,11 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
     printf("Final Winogrande score(%d tasks): %.4lf +/- %.4lf\n", n_done, 100*p, sigma);
 }
 
-static bool deserialize_string(std::istream& in, std::string& str) {
+static bool deserialize_string(std::istream & in, std::string & str) {
     uint32_t size;
     if (!in.read((char *)&size, sizeof(size)).fail()) {
         str.resize(size);
-        if (!in.read((char *)str.data(), size).fail()) return true;
+        if (!in.read((char *)&str[0], size).fail()) return true;
     }
     return false;
 }
