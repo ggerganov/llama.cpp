@@ -9958,7 +9958,7 @@ static void ggml_compute_forward_mul_mat(
 #endif
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
+    if (ggml_compute_forward_mul_mat_use_blas(dst)) {
         const int64_t ne_plane      = ne01*ne00;
         const int64_t desired_wsize = ne13*ne12*ne_plane*sizeof(float);
         UNUSED(desired_wsize);
@@ -16587,7 +16587,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
                 }
 #endif
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                if (ggml_compute_forward_mul_mat_use_blas(node->src[0], node->src[1], node)) {
+                if (ggml_compute_forward_mul_mat_use_blas(node)) {
                     n_tasks = 1; // TODO: this actually is doing nothing
                                  //       the threads are still spinning
                 }
