@@ -14438,6 +14438,8 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         return;
     }
 
+    const int64_t start_us = ggml_time_us();
+
 #ifdef GGML_USE_CUBLAS
     bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
     if (skip_cpu) {
@@ -14767,6 +14769,8 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
+
+    printf("\t%s: Tensor [%s], OP [%s], Time [%.3f] ms\n", __func__, ggml_op_string(tensor->op), tensor->name, (ggml_time_us() - start_us) / 1000.0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -16801,7 +16805,7 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
         }
     }
 
-    const int n_threads = cplan->n_threads;
+    const int n_threads = 1; // cplan->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
         /*.cgraph                  =*/ cgraph,

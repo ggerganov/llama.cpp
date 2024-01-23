@@ -196,10 +196,15 @@ void ggml_backend_graph_plan_compute(ggml_backend_t backend, ggml_backend_graph_
 }
 
 void ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+    printf("%s: compute graph in the backend\n{\n", __func__);
     backend->iface.graph_compute(backend, cgraph);
+    printf("}\n%s: finish computing graph in the backend\n", __func__);
 
+    // printf("%s: synchronize results\n", __func__);
+    // const int64_t start_us = ggml_time_us();
     // TODO: optional sync
     ggml_backend_synchronize(backend);
+    // printf("%s: finish synchronizing %.3f ms\n", __func__, (ggml_time_us() - start_us) / 1000);
 }
 
 bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {

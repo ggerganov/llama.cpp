@@ -361,8 +361,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return {tokens, -1, logit_history, prob_history};
             }
-            if (j > 10)
-             exit(-1);
+            exit(-1);
 
             // restore the original token in case it was set to BOS
             tokens[batch_start] = token_org;
