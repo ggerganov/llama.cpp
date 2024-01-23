@@ -128,6 +128,7 @@ struct vk_device {
     vk_queue compute_queue;
     vk_queue transfer_queue;
     uint32_t descriptor_set_mode;
+    bool is_igpu;
 };
 
 struct vk_op_push_constants {
@@ -1003,6 +1004,7 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     std::cerr << "ggml_vulkan: Using " << vk_device.properties.deviceName << std::endl;
 
     vk_device.vendor_id = vk_device.properties.vendorID;
+    vk_device.is_igpu = vk_device.properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
 
     bool fp16_storage = false;
     bool fp16_compute = false;
@@ -1026,15 +1028,17 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     const uint32_t compute_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, -1, 1);
     const uint32_t transfer_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics, compute_queue_family_index, 1);
 
-    const float compute_queue_priority = 1.0f;
-    const float transfer_queue_priority = 1.0f;
+    const float priorities[] = { 1.0f, 1.0f };
+    const bool single_queue = compute_queue_family_index != transfer_queue_family_index && queue_family_props[compute_queue_family_index].queueCount == 1;
+
     std::vector<vk::DeviceQueueCreateInfo> device_queue_create_infos;
     if (compute_queue_family_index != transfer_queue_family_index) {
-        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, &compute_queue_priority});
-        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, 1, &transfer_queue_priority});
-    } else {
-        const float priorities[] = { compute_queue_priority, transfer_queue_priority };
+        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, priorities});
+        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, 1, priorities + 1});
+    } else if(!single_queue) {
         device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 2, priorities});
+    } else {
+        device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, priorities});
     }
     vk::DeviceCreateInfo device_create_info;
     std::vector<const char *> device_extensions;
@@ -1091,10 +1095,13 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     ggml_vk_load_shaders();
 
     // Queues
-    const uint32_t transfer_queue_index = compute_queue_family_index == transfer_queue_family_index ? 1 : 0;
-
     vk_device.compute_queue = ggml_vk_create_queue(compute_queue_family_index, 0, { vk::PipelineStageFlagBits::eComputeShader | vk::PipelineStageFlagBits::eTransfer });
-    vk_device.transfer_queue = ggml_vk_create_queue(transfer_queue_family_index, transfer_queue_index, { vk::PipelineStageFlagBits::eTransfer });
+    if (!single_queue) {
+        const uint32_t transfer_queue_index = compute_queue_family_index == transfer_queue_family_index ? 1 : 0;
+        vk_device.transfer_queue = ggml_vk_create_queue(transfer_queue_family_index, transfer_queue_index, { vk::PipelineStageFlagBits::eTransfer });
+    } else {
+        vk_device.transfer_queue = vk_device.compute_queue;
+    }
 
     vk_fence = vk_device.device.createFence({});
 
