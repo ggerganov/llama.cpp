@@ -1032,7 +1032,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        use " GGML_SYCL_NAME " instead of custom mul_mat_q " GGML_SYCL_NAME " kernels.\n");
     printf("                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif // GGML_USE_SYCL
-#endif
     printf("  --verbose-prompt      print a verbose prompt before generation (default: %s)\n", params.verbose_prompt ? "true" : "false");
     printf("  --no-display-prompt   don't print prompt at generation (default: %s)\n", !params.display_prompt ? "true" : "false");
     printf("  -gan N, --grp-attn-n N\n");
