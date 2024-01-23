@@ -14696,8 +14696,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     if (skip_cpu) {
         return;
     }
-    GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_CPU);
-    GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_CPU);
 #endif // GGML_USE_SYCL
     switch (tensor->op) {
         case GGML_OP_DUP:
@@ -16570,28 +16568,6 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
 
                 //n_tasks = MIN(n_threads, MAX(1, nr0/128));
                 //printf("nr0 = %8d, nr1 = %8d, nr0*nr1 = %8d, n_tasks%d\n", nr0, nr1, nr0*nr1, n_tasks);
-
-#if defined(GGML_USE_CUBLAS)
-                if (ggml_cuda_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#elif defined(GGML_USE_CLBLAST)
-                if (ggml_cl_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#elif defined(GGML_USE_SYCL)
-                if (ggml_sycl_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1;
-                }
-#endif
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                if (ggml_compute_forward_mul_mat_use_blas(node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#endif
             } break;
         case GGML_OP_MUL_MAT_ID:
             {

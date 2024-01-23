@@ -9791,14 +9791,6 @@ struct llama_model * llama_load_model_from_file(
               struct llama_model_params   params) {
     ggml_time_init();
 
-#ifdef GGML_USE_SYCL
-    int main_device = get_main_device();
-    if(main_device>=0) params.main_gpu = main_device;
-    else {
-        LLAMA_LOG_ERROR("%s: missed to init GPU device\n", __func__);
-        std::exit(1);
-    }
-#endif
     llama_model * model = new llama_model;
 
     unsigned cur_percentage = 0;
@@ -9939,13 +9931,13 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_SYCL)
         if (model->n_gpu_layers > 0) {
-                ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
-                if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
-                    llama_free(ctx);
-                    return nullptr;
-                }
-                ctx->backends.push_back(backend);
+            ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
+            if (backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
         }
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
