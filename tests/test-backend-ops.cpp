@@ -1056,18 +1056,20 @@ struct test_diag_mask_inf : public test_case {
 struct test_soft_max : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
+    const float scale;
 
     std::string vars() override {
-        return VARS_TO_STR2(type, ne);
+        return VARS_TO_STR3(type, ne, scale);
     }
 
     test_soft_max(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 10})
-        : type(type), ne(ne) {}
+            std::array<int64_t, 4> ne = {10, 10, 10, 10},
+            float scale = 1.0f)
+        : type(type), ne(ne), scale(scale) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
-        ggml_tensor * out = ggml_soft_max(ctx, a);
+        ggml_tensor * out = ggml_soft_max_ext(ctx, a, nullptr, scale);
         return out;
     }
 };
@@ -1824,6 +1826,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 
         exponent <<= 1;
     }
+
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 16, 1, 1}, 0.1f));
 
     for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
         test_cases.emplace_back(new test_rope(type, {128,  32, 10, 1}, 128, 0, 512)); // llama 7B
