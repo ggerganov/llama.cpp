@@ -15028,6 +15028,14 @@ static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_ten
                 if (a->ne[3] != b->ne[3]) {
                     return false;
                 }
+
+                if (a->type == GGML_TYPE_IQ2_XXS) {
+                    return false;
+                }
+                if (a->type == GGML_TYPE_IQ2_XS) {
+                    return false;
+                }
+
                 return true;
             } break;
         case GGML_OP_GET_ROWS:
@@ -15069,6 +15077,15 @@ static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_ten
                 }
                 return false;
             } break;
+        case GGML_OP_CONCAT:
+            {
+                ggml_type src0_type = op->src[0]->type;
+                if (src0_type == GGML_TYPE_F32) {
+                    return true;
+                } else {
+                    return false;
+                }
+            } break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
@@ -15093,7 +15110,6 @@ static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_ten
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGSORT:
         case GGML_OP_ACC:
-        case GGML_OP_CONCAT:
         case GGML_OP_GROUP_NORM:
         case GGML_OP_UPSCALE:
         case GGML_OP_PAD:
