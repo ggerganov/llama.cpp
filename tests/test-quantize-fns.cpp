@@ -134,8 +134,9 @@ int main(int argc, char * argv[]) {
             continue;
         }
 
-        if ((ggml_type)i == GGML_TYPE_IQ2_XXS) {
-            printf("Skip %s due to missing quantization functionality\n", ggml_type_name((ggml_type) i));
+        const ggml_type ei = (ggml_type)i;
+        if (ei == GGML_TYPE_IQ2_XXS || ei == GGML_TYPE_IQ2_XS) {
+            printf("Skip %s due to missing quantization functionality\n", ggml_type_name(ei));
             continue;
         }
 
