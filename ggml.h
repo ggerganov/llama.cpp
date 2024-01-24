@@ -501,9 +501,15 @@ extern "C" {
 
     enum ggml_log_level {
         GGML_LOG_LEVEL_ERROR = 2,
-        GGML_LOG_LEVEL_WARN = 3,
-        GGML_LOG_LEVEL_INFO = 4,
+        GGML_LOG_LEVEL_WARN  = 3,
+        GGML_LOG_LEVEL_INFO  = 4,
         GGML_LOG_LEVEL_DEBUG = 5
+    };
+
+    enum ggml_tensor_flags {
+        GGML_TENSOR_INPUT  = 1,
+        GGML_TENSOR_OUTPUT = 2,
+        GGML_TENSOR_PARAM  = 4,
     };
 
     // ggml object
@@ -539,7 +545,9 @@ extern "C" {
         // op params - allocated as int32_t for alignment
         int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(int32_t)];
 
-        bool is_param;
+        int32_t flags;
+
+        bool is_param; // TODO: move to flags
 
         struct ggml_tensor * grad;
         struct ggml_tensor * src[GGML_MAX_SRC];
@@ -558,7 +566,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[8];
+        char padding[12];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
