@@ -1976,7 +1976,7 @@ struct llama_server_context
 
                         slot.ga_i += slot.ga_w / slot.ga_n;
 
-                        LOG_TEE("\nslot.n_past_old = %d, slot.n_past = %d, ga_i = %d\n\n", slot.n_past + bd, slot.n_past, slot.ga_i);
+                        LOG_TEE("\nn_past_old = %d, 2n_past = %d, ga_i = %d\n\n", slot.n_past + bd, slot.n_past, slot.ga_i);
                     }
                 }
                 slot.n_past += n_tokens;
