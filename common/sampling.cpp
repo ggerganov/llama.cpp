@@ -145,25 +145,15 @@ static void sampler_queue(
             case 'y': llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
             case 'p': llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
             case 'm': llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
-
             case 't':
-                if (dynatemp_range>0)
-                {
-                    float dynatemp_min = temp - dynatemp_range;
+                if (dynatemp_range > 0) {
+                    float dynatemp_min = std::max(0, temp - dynatemp_range);
                     float dynatemp_max = temp + dynatemp_range;
-                    //do not allow negative values
-                    dynatemp_min = dynatemp_min<0?0:dynatemp_min;
-                    dynatemp_max = dynatemp_max<0?0:dynatemp_max;
-
                     llama_sample_entropy(ctx_main, &cur_p, dynatemp_min, dynatemp_max, dynatemp_exponent);
-                }
-                else
-                {
+                } else {
                     llama_sample_temp(ctx_main, &cur_p, temp);
                 }
-
                 break;
-
             default : break;
         }
     }
