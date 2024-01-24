@@ -81,6 +81,7 @@ ap.add_argument("--vision-only", action="store_true", required=False,
 ap.add_argument("--clip_model_is_vision", action="store_true", required=False,
                 help="The clip model is a pure vision model (ShareGPT4V vision extract for example)")
 ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
+ap.add_argument("--projector-type", help="Type of projector. Possible values: mlp, ldp", choices=["mlp", "ldp"], default="mlp")
 ap.add_argument("--image-mean", nargs=3, type=float, required=False, help="Override image mean values")
 ap.add_argument("--image-std", nargs=3, type=float, required=False, help="Override image std values")
 ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Default is the original model directory", default=None)
@@ -174,6 +175,8 @@ elif args.vision_only and not has_llava_projector:
     fout.add_description("vision-only CLIP model")
 elif has_llava_projector:
     fout.add_description("image encoder for LLaVA")
+    # add projector type
+    fout.add_string("clip.projector_type", args.projector_type)
 else:
     fout.add_description("two-tower CLIP model")
 
@@ -218,7 +221,8 @@ if has_llava_projector:
     projector = torch.load(args.llava_projector)
     for name, data in projector.items():
         name = get_tensor_name(name)
-        if data.ndim == 2:
+        # pw and dw conv ndim==4
+        if data.ndim == 2 or data.ndim == 4:
             data = data.squeeze().numpy().astype(np.float16)
         else:
             data = data.squeeze().numpy().astype(np.float32)

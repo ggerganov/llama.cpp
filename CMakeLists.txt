@@ -108,6 +108,13 @@ option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STA
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 
+
+# add perf arguments
+option(LLAMA_PERF                            "llama: enable perf"                               OFF)
+if (LLAMA_PERF)
+    add_definitions(-DGGML_PERF)
+endif()
+
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 
@@ -471,6 +478,11 @@ function(get_flags CCID CCVER)
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
             set(CXX_FLAGS ${CXX_FLAGS} -Wextra-semi)
         endif()
+    elseif (CCID MATCHES "Intel")
+        # enable max optimization level when using Intel compiler
+        set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+        set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+        add_link_options(-fuse-ld=lld -static-intel)
     endif()
 
     set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)

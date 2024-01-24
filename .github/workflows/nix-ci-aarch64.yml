@@ -2,13 +2,20 @@ name: Nix aarch64 builds
 
 on:
   workflow_dispatch: # allows manual triggering
+  schedule:
+    # Rebuild daily rather than on every push because QEMU is expensive (e.g.
+    # 1.5h instead of minutes with the cold cache).
+    #
+    # randint(0, 59), randint(0, 23)
+    - cron: '26 12 * * *'
+  # But also rebuild if we touched any of the Nix expressions:
   push:
     branches:
       - master
-    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', '**/*.sh', '**/*.py', '**/*.nix']
+    paths: ['**/*.nix', 'flake.lock']
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', '**/*.sh', '**/*.py', '**/*.nix']
+    paths: ['**/*.nix', 'flake.lock']
 
 jobs:
   nix-build-aarch64:

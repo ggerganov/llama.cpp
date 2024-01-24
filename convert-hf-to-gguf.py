@@ -10,7 +10,7 @@ import re
 import sys
 from enum import IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast, Optional
+from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast
 
 import numpy as np
 import torch
@@ -289,6 +289,58 @@ class Model:
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
         special_vocab.add_to_gguf(self.gguf_writer)
 
+    def _set_vocab_qwen(self):
+        dir_model = self.dir_model
+        hparams = self.hparams
+        tokens: list[bytearray] = []
+        toktypes: list[int] = []
+
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
+        vocab_size = hparams["vocab_size"]
+        assert max(tokenizer.get_vocab().values()) < vocab_size
+
+        merges = []
+        vocab = {}
+        mergeable_ranks = tokenizer.mergeable_ranks
+        for token, rank in mergeable_ranks.items():
+            vocab[QwenModel.token_bytes_to_string(token)] = rank
+            if len(token) == 1:
+                continue
+            merged = QwenModel.bpe(mergeable_ranks, token, max_rank=rank)
+            assert len(merged) == 2
+            merges.append(' '.join(map(QwenModel.token_bytes_to_string, merged)))
+
+        # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
+        added_vocab = tokenizer.special_tokens
+        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in (vocab | added_vocab).items()}
+
+        for i in range(vocab_size):
+            if i not in reverse_vocab:
+                pad_token = f"[PAD{i}]".encode("utf-8")
+                tokens.append(bytearray(pad_token))
+                toktypes.append(gguf.TokenType.USER_DEFINED)
+            elif reverse_vocab[i] in added_vocab:
+                tokens.append(reverse_vocab[i])
+                toktypes.append(gguf.TokenType.CONTROL)
+            else:
+                tokens.append(reverse_vocab[i])
+                toktypes.append(gguf.TokenType.NORMAL)
+
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
+        special_vocab.merges = merges
+        # only add special tokens when they were not already loaded from config.json
+        if len(special_vocab.special_token_ids) == 0:
+            special_vocab._set_special_token("bos", tokenizer.special_tokens["<|endoftext|>"])
+            special_vocab._set_special_token("eos", tokenizer.special_tokens["<|endoftext|>"])
+        # this one is usually not in config.json anyway
+        special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
+        special_vocab.add_to_gguf(self.gguf_writer)
+
     def _set_vocab_sentencepiece(self):
         from sentencepiece import SentencePieceProcessor
 
@@ -487,7 +539,8 @@ class MPTModel(Model):
             # map tensor names
             if "scales" in name:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias", ".scales"))
-                new_name = new_name.replace("scales", "act.scales")
+                if new_name is not None:
+                    new_name = new_name.replace("scales", "act.scales")
             else:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
@@ -876,6 +929,13 @@ class PersimmonModel(Model):
 
 
 class StableLMModel(Model):
+    def set_vocab(self):
+        if (self.dir_model / "tokenizer.json").is_file():
+            self._set_vocab_gpt2()
+        else:
+            # StableLM 2 1.6B uses a vocab in a similar format to Qwen's vocab
+            self._set_vocab_qwen()
+
     def set_gguf_parameters(self):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
@@ -904,7 +964,7 @@ class QwenModel(Model):
         return ''.join([byte_encoder[ord(char)] for char in b.decode('latin-1')])
 
     @staticmethod
-    def bpe(mergeable_ranks: dict[bytes, int], token: bytes, max_rank: Optional[int] = None) -> list[bytes]:
+    def bpe(mergeable_ranks: dict[bytes, int], token: bytes, max_rank: int | None = None) -> list[bytes]:
         parts = [bytes([b]) for b in token]
         while True:
             min_idx = None
@@ -921,52 +981,7 @@ class QwenModel(Model):
         return parts
 
     def set_vocab(self):
-        dir_model = self.dir_model
-        hparams = self.hparams
-        tokens: list[bytearray] = []
-        toktypes: list[int] = []
-
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
-        vocab_size = hparams["vocab_size"]
-        assert max(tokenizer.get_vocab().values()) < vocab_size
-
-        merges = []
-        vocab = {}
-        mergeable_ranks = tokenizer.mergeable_ranks
-        for token, rank in mergeable_ranks.items():
-            vocab[self.token_bytes_to_string(token)] = rank
-            if len(token) == 1:
-                continue
-            merged = QwenModel.bpe(mergeable_ranks, token, max_rank=rank)
-            assert len(merged) == 2
-            merges.append(' '.join(map(self.token_bytes_to_string, merged)))
-
-        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in vocab.items()}
-        added_vocab = tokenizer.special_tokens
-
-        for i in range(vocab_size):
-            if i not in reverse_vocab:
-                pad_token = f"[PAD{i}]".encode("utf-8")
-                tokens.append(bytearray(pad_token))
-                toktypes.append(gguf.TokenType.USER_DEFINED)
-            elif reverse_vocab[i] in added_vocab:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.CONTROL)
-            else:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.NORMAL)
-
-        self.gguf_writer.add_tokenizer_model("gpt2")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
-        special_vocab.merges = merges
-        special_vocab._set_special_token("bos", tokenizer.special_tokens["<|endoftext|>"])
-        special_vocab._set_special_token("eos", tokenizer.special_tokens["<|endoftext|>"])
-        special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
-        special_vocab.add_to_gguf(self.gguf_writer)
+        self._set_vocab_qwen()
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name("Qwen")
@@ -1285,7 +1300,7 @@ def main() -> None:
 
     if args.awq_path:
         sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
-        from awq.apply_awq import add_scale_weights
+        from awq.apply_awq import add_scale_weights  # type: ignore[import-not-found]
         tmp_model_path = args.model / "weighted_model"
         dir_model = tmp_model_path
         if tmp_model_path.is_dir():
