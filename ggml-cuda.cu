@@ -4283,7 +4283,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xxs_q8_1(
         q8 += 8;
         aux32 >>= 7;
     }
-    const float d = (float)bq2->d * (0.5f + aux32) * (float)bq8_1[ib32].ds.x * 0.25f;
+    const float d = (float)bq2->d * (0.5f + aux32) * __low2float(bq8_1[ib32].ds) * 0.25f;
     return d * sumi;
 #else
     // iqs is 0...15
@@ -4294,7 +4294,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xxs_q8_1(
     const uint8_t  * grid1 = (const uint8_t *)(iq2xxs_grid + aux8[2*il+0]);
     const uint8_t  * grid2 = (const uint8_t *)(iq2xxs_grid + aux8[2*il+1]);
     const uint32_t aux32 = q2[2] | (q2[3] << 16);
-    const float d = (float)bq2->d * (0.5f + (aux32 >> 28)) * (float)bq8_1[ib32].ds.x * 0.25f;
+    const float d = (float)bq2->d * (0.5f + (aux32 >> 28)) * __low2float(bq8_1[ib32].ds) * 0.25f;
     const uint8_t signs1 = ksigns_iq2xs[(aux32 >> 14*il) & 127];
     const uint8_t signs2 = ksigns_iq2xs[(aux32 >> (14*il + 7)) & 127];
     const int8_t * q8 = bq8_1[ib32].qs + 16*il;
@@ -4339,7 +4339,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xs_q8_1(
         }
         q8 += 8;
     }
-    const float d = (float)bq2->d * (float)bq8_1[ib32].ds.x * 0.25f;
+    const float d = (float)bq2->d * __low2float(bq8_1[ib32].ds) * 0.25f;
     return d * ((0.5f + ls1) * sumi1 + (0.5f + ls2) * sumi2);
 #else
     assert(false);
