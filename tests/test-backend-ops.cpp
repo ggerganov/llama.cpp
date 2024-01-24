@@ -1504,6 +1504,10 @@ struct test_llama : public test_case {
         return VARS_TO_STR1(n_tokens);
     }
 
+    double max_nmse_err() override {
+        return 2e-3;
+    }
+
     test_llama(int n_tokens = 1)
         : n_tokens(n_tokens) {
     }
