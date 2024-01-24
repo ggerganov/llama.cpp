@@ -148,10 +148,6 @@ jobs:
 
     continue-on-error: true
 
-    strategy:
-      matrix:
-        mpi_library: [mpich, libopenmpi-dev]
-
     steps:
       - uses: actions/checkout@v2
 
