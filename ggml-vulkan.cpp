@@ -161,6 +161,19 @@ struct vk_op_rope_push_constants {
     float corr_dims[4];
 };
 
+struct vk_op_rope_neox_push_constants {
+    uint32_t ncols;
+    uint32_t ndims;
+    float freq_scale;
+    uint32_t p_delta_rows;
+    float freq_base;
+    float ext_factor;
+    float attn_factor;
+    float corr_dims[4];
+    float theta_scale;
+    float inv_ndims;
+};
+
 // Allow pre-recording command buffers
 struct vk_staging_memcpy {
     vk_staging_memcpy(void * _dst, const void * _src, size_t _n) : dst(_dst), src(_src), n(_n) {}
@@ -244,6 +257,7 @@ vk_pipeline vk_pipeline_relu_f32;
 vk_pipeline vk_pipeline_diag_mask_inf_f32;
 vk_pipeline vk_pipeline_soft_max_f32;
 vk_pipeline vk_pipeline_rope_f32, vk_pipeline_rope_f16;
+vk_pipeline vk_pipeline_rope_neox_f32, vk_pipeline_rope_neox_f16;
 
 static size_t vk_semaphore_idx, vk_event_idx;
 static ggml_vk_garbage_collector vk_gc;
@@ -931,6 +945,9 @@ static void ggml_vk_load_shaders() {
 
     vk_pipeline_rope_f32 = ggml_vk_create_pipeline("rope_f32", rope_f32_len, rope_f32_data, "main", 3, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
     vk_pipeline_rope_f16 = ggml_vk_create_pipeline("rope_f16", rope_f16_len, rope_f16_data, "main", 3, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
+
+    vk_pipeline_rope_neox_f32 = ggml_vk_create_pipeline("rope_neox_f32", rope_neox_f32_len, rope_neox_f32_data, "main", 3, sizeof(vk_op_rope_neox_push_constants), {1, 512, 1}, {}, 1);
+    vk_pipeline_rope_neox_f16 = ggml_vk_create_pipeline("rope_neox_f16", rope_neox_f16_len, rope_neox_f16_data, "main", 3, sizeof(vk_op_rope_neox_push_constants), {1, 512, 1}, {}, 1);
 }
 
 void ggml_vk_init() {
@@ -2663,13 +2680,32 @@ static vk_pipeline* ggml_vk_op_get_pipeline(const ggml_tensor * src0, const ggml
         }
         return nullptr;
     case GGML_OP_ROPE:
-        if (src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
-            return &vk_pipeline_rope_f32;
+        {
+            const int mode = ((const int32_t *) dst->op_params)[2];
+            const bool is_neox = mode & 2;
+            const bool is_glm  = mode & 4;
+
+            if (is_glm) {
+                return nullptr;
+            }
+
+            if (is_neox) {
+                if (src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
+                    return &vk_pipeline_rope_neox_f32;
+                }
+                if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
+                    return &vk_pipeline_rope_neox_f16;
+                }
+            } else {
+                if (src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
+                    return &vk_pipeline_rope_f32;
+                }
+                if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
+                    return &vk_pipeline_rope_f16;
+                }
+            }
+            return nullptr;
         }
-        if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
-            return &vk_pipeline_rope_f16;
-        }
-        return nullptr;
     default:
         return nullptr;
     }
@@ -2966,13 +3002,18 @@ static void ggml_vk_rope(vk_context& ctx, const ggml_tensor * src0, const ggml_t
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
 
-    // TODO: Implement
-    GGML_ASSERT(!is_neox && !is_glm);  // NOLINT
+    GGML_ASSERT(!is_glm);
 
     float corr_dims[2];
     ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
 
-    ggml_vk_op_f32<vk_op_rope_push_constants>(ctx, src0, src1, dst, GGML_OP_ROPE, { (uint32_t)src0->ne[0], freq_scale, (uint32_t)src0->ne[1], freq_base, ext_factor, attn_factor, corr_dims[0], corr_dims[1], 0.0f, 0.0f });
+    if (is_neox) {
+        const float theta_scale = powf(freq_base, -2.0f/n_dims);
+        const float inv_ndims = -1.0f / n_dims;
+        ggml_vk_op_f32<vk_op_rope_neox_push_constants>(ctx, src0, src1, dst, GGML_OP_ROPE, { (uint32_t)src0->ne[0], (uint32_t)n_dims, freq_scale, (uint32_t)src0->ne[1], freq_base, ext_factor, attn_factor, corr_dims[0], corr_dims[1], 0.0f, 0.0f, theta_scale, inv_ndims });
+    } else {
+        ggml_vk_op_f32<vk_op_rope_push_constants>(ctx, src0, src1, dst, GGML_OP_ROPE, { (uint32_t)src0->ne[0], freq_scale, (uint32_t)src0->ne[1], freq_base, ext_factor, attn_factor, corr_dims[0], corr_dims[1], 0.0f, 0.0f });
+    }
 }
 
 static void ggml_vk_nop(vk_context& ctx, const ggml_tensor * src0, ggml_tensor * dst) {
@@ -4509,13 +4550,9 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
         case GGML_OP_ROPE:
             {
                 const int mode = ((const int32_t *) op->op_params)[2];
-                const bool is_neox = mode & 2;
                 const bool is_glm  = mode & 4;
 
-                if (!is_neox && !is_glm) {
-                    return true;
-                }
-                return false;
+                return !is_glm;
             } break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:

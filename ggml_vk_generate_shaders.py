@@ -1981,6 +1981,90 @@ void main() {
 }
 """
 
+rope_neox_src = """
+#version 450
+
+#extension GL_EXT_shader_16bit_storage : require
+
+layout(local_size_x = 1, local_size_y = 256, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer Y {int data_b[];};
+layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
+
+layout (push_constant) uniform parameter {
+    uint ncols;
+    uint ndims;
+    float freq_scale;
+    uint p_delta_rows;
+    float freq_base;
+    float ext_factor;
+    float attn_factor;
+    float corr_dims[4];
+    float theta_scale;
+    float inv_ndims;
+} p;
+
+float rope_yarn_ramp(const float low, const float high, const uint i0) {
+    const float y = (i0 / 2 - low) / max(0.001f, high - low);
+    return 1.0f - min(1.0f, max(0.0f, y));
+}
+
+void rope_yarn(const float theta_extrap, const uint i0, out float cos_theta, out float sin_theta) {
+    float mscale = p.attn_factor;
+    // Get n-d rotational scaling corrected for extrapolation
+    float theta_interp = p.freq_scale * theta_extrap;
+    float theta = theta_interp;
+    if (p.ext_factor != 0.0f) {
+        float ramp_mix = rope_yarn_ramp(p.corr_dims[0], p.corr_dims[1], i0) * p.ext_factor;
+        theta = theta_interp * (1 - ramp_mix) + theta_extrap * ramp_mix;
+
+        // Get n-d magnitude scaling corrected for interpolation
+        mscale *= 1.0f + 0.1f * log(1.0f / p.freq_scale);
+    }
+    cos_theta = cos(theta) * mscale;
+    sin_theta = sin(theta) * mscale;
+}
+
+void main() {
+    const uint col = gl_GlobalInvocationID.y * 2;
+    const uint row = gl_GlobalInvocationID.x;
+
+    if (col >= p.ncols) {
+        return;
+    }
+
+    const uint ib = col / p.ndims;
+    const uint ic = col % p.ndims;
+
+    if (ib > 0) {
+        const uint i = row*p.ncols + ib*p.ndims + ic;
+
+        data_d[i + 0] = data_a[i + 0];
+        data_d[i + 1] = data_a[i + 1];
+
+        return;
+    }
+
+    const uint i  = row*p.ncols + ib*p.ndims + ic/2;
+    const uint i2 = row/p.p_delta_rows;
+
+    const float cur_rot = p.inv_ndims * ic - ib;
+
+    const int pos = data_b[i2];
+    const float theta_base = pos*p.freq_scale*pow(p.theta_scale, col/2.0f);
+
+    float cos_theta, sin_theta;
+    rope_yarn(theta_base, uint(cur_rot), cos_theta, sin_theta);
+
+    const float x0 = float(data_a[i + 0]);
+    const float x1 = float(data_a[i + p.ndims/2]);
+
+    data_d[i + 0]        = D_TYPE(x0*cos_theta - x1*sin_theta);
+    data_d[i + p.ndims/2] = D_TYPE(x0*sin_theta + x1*cos_theta);
+}
+"""
+
 GLSLC = "glslc"
 
 VK_NUM_TYPES = 16
@@ -2240,6 +2324,9 @@ async def main():
 
     tasks.append(string_to_spv("rope_f32", rope_src, {"A_TYPE": "float", "D_TYPE": "float"}, True))
     tasks.append(string_to_spv("rope_f16", rope_src, {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}, True))
+
+    tasks.append(string_to_spv("rope_neox_f32", rope_neox_src, {"A_TYPE": "float", "D_TYPE": "float"}, True))
+    tasks.append(string_to_spv("rope_neox_f16", rope_neox_src, {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}, True))
 
     await asyncio.gather(*tasks)
 
