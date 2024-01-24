@@ -12206,9 +12206,10 @@ inline void ggml_sycl_op_mul_mat_sycl(
             src0_as_f16.alloc(ne);
             to_fp16_sycl(src0_dd_i, src0_as_f16.get(), ne, stream);
         }
-        const sycl::half *src0_ptr = src0->type == GGML_TYPE_F16
-                                         ? (const sycl::half *)src0_dd_i
-                                         : src0_as_f16.get();
+        const sycl::half *src1_ptr =
+            src1->type == GGML_TYPE_F16
+                ? (const sycl::half *)src1->data + src1_padded_row_size
+                : src1_as_f16.get();
 
         sycl_pool_alloc<sycl::half> src1_as_f16;
         if (src1->type != GGML_TYPE_F16) {
