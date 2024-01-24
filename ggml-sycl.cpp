@@ -3269,10 +3269,6 @@ void log_ggml_var_device(const char*name, float *src, size_t total_elements, boo
         // printf("local buf %p size %d bytes\n", local_buf, total_size);
         ggml_sycl_set_device(g_main_device);
         dpct::queue_ptr main_stream = g_syclStreams[g_main_device_index][0];
-
-        // printf("zjy before memcpy local_buf=%p, src->data=%p\n", local_buf, src->data);
-        printf("zjy log dst_ddf=%p main_stream=%p g_main_device_index=%d\n", src,
-            main_stream, g_main_device_index);
         main_stream->memcpy(local_buf, src, total_size);
     }
     else {
@@ -7657,6 +7653,20 @@ static void cpy_1_f16_f16(const char * cxi, char * cdsti) {
     *dsti = *xi;
 }
 
+static void cpy_1_i16_i16(const char * cxi, char * cdsti) {
+    const int16_t *xi = (const int16_t *)cxi;
+    int16_t *dsti = (int16_t *)cdsti;
+
+    *dsti = *xi;
+}
+
+static void cpy_1_i32_i32(const char * cxi, char * cdsti) {
+    const int32_t *xi = (const int32_t *)cxi;
+    int32_t *dsti = (int32_t *)cdsti;
+
+    *dsti = *xi;
+}
+
 template <cpy_kernel_t cpy_1>
 static void cpy_f32_f16(const char * cx, char * cdst, const int ne,
                                    const int ne00, const int ne01, const int nb00, const int nb01, const int nb02,
@@ -10678,6 +10688,56 @@ static void ggml_cpy_f16_f16_sycl(const char *cx, char *cdst, const int ne,
     }
 }
 
+static void ggml_cpy_i16_i16_sycl(const char *cx, char *cdst, const int ne,
+                                  const int ne00, const int ne01,
+                                  const int nb00, const int nb01,
+                                  const int nb02, const int ne10,
+                                  const int ne11, const int nb10,
+                                  const int nb11, const int nb12,
+                                  dpct::queue_ptr stream) {
+
+    const int num_blocks = (ne + SYCL_CPY_BLOCK_SIZE - 1) / SYCL_CPY_BLOCK_SIZE;
+    {
+        // dpct::has_capability_or_fail(stream->get_device(),
+        //                              {sycl::aspect::fp16});
+
+        stream->parallel_for(
+            sycl::nd_range<3>(sycl::range<3>(1, 1, num_blocks) *
+                                  sycl::range<3>(1, 1, SYCL_CPY_BLOCK_SIZE),
+                              sycl::range<3>(1, 1, SYCL_CPY_BLOCK_SIZE)),
+            [=](sycl::nd_item<3> item_ct1) {
+                cpy_f32_f16<cpy_1_i16_i16>(cx, cdst, ne, ne00, ne01, nb00, nb01,
+                                           nb02, ne10, ne11, nb10, nb11, nb12,
+                                           item_ct1);
+            });
+    }
+}
+
+static void ggml_cpy_i32_i32_sycl(const char *cx, char *cdst, const int ne,
+                                  const int ne00, const int ne01,
+                                  const int nb00, const int nb01,
+                                  const int nb02, const int ne10,
+                                  const int ne11, const int nb10,
+                                  const int nb11, const int nb12,
+                                  dpct::queue_ptr stream) {
+
+    const int num_blocks = (ne + SYCL_CPY_BLOCK_SIZE - 1) / SYCL_CPY_BLOCK_SIZE;
+    {
+        // dpct::has_capability_or_fail(stream->get_device(),
+        //                              {sycl::aspect::fp16});
+
+        stream->parallel_for(
+            sycl::nd_range<3>(sycl::range<3>(1, 1, num_blocks) *
+                                  sycl::range<3>(1, 1, SYCL_CPY_BLOCK_SIZE),
+                              sycl::range<3>(1, 1, SYCL_CPY_BLOCK_SIZE)),
+            [=](sycl::nd_item<3> item_ct1) {
+                cpy_f32_f16<cpy_1_i32_i32>(cx, cdst, ne, ne00, ne01, nb00, nb01,
+                                           nb02, ne10, ne11, nb10, nb11, nb12,
+                                           item_ct1);
+            });
+    }
+}
+
 static void scale_f32_sycl(const float *x, float *dst, const float scale,
                            const int k, dpct::queue_ptr stream) {
     const int num_blocks = (k + SYCL_SCALE_BLOCK_SIZE - 1) / SYCL_SCALE_BLOCK_SIZE;
@@ -11550,8 +11610,6 @@ inline void ggml_sycl_op_bin_bcast(const ggml_tensor *src0,
                                    float *dst_dd,
                                    const dpct::queue_ptr &main_stream) {
 
-    GGML_ASSERT(src1->type == GGML_TYPE_F32);
-
     if (src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
         op()(src0, src1, dst, src0_dd, src1_dd, dst_dd, main_stream);
     } else if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
@@ -11559,6 +11617,12 @@ inline void ggml_sycl_op_bin_bcast(const ggml_tensor *src0,
              (sycl::half *)dst_dd, main_stream);
     } else if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F32) {
         op()(src0, src1, dst, (const sycl::half *)src0_dd, src1_dd, dst_dd,
+             main_stream);
+    } else if (src0->type == GGML_TYPE_I32 && dst->type == GGML_TYPE_I32) {
+        op()(src0, src1, dst, (const int32_t *)src0_dd, (const int32_t *)src1_dd, (int32_t *)dst_dd,
+             main_stream);
+    } else if (src0->type == GGML_TYPE_I16 && dst->type == GGML_TYPE_I16) {
+        op()(src0, src1, dst, (const int16_t *)src0_dd, (const int16_t *)src1_dd, (int16_t *)dst_dd,
              main_stream);
     } else {
         fprintf(stderr, "%s: unsupported types: dst: %s, src0: %s, src1: %s\n", __func__,
@@ -13845,6 +13909,10 @@ static void ggml_sycl_cpy(const ggml_tensor *src0, const ggml_tensor *src1,
         ggml_cpy_f32_q4_1_sycl(src0_ddc, src1_ddc, ne, ne00, ne01, nb00, nb01, nb02, ne10, ne11, nb10, nb11, nb12, main_stream);
     } else if (src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F16) {
         ggml_cpy_f16_f16_sycl (src0_ddc, src1_ddc, ne, ne00, ne01, nb00, nb01, nb02, ne10, ne11, nb10, nb11, nb12, main_stream);
+    } else if (src0->type == GGML_TYPE_I16 && src1->type == GGML_TYPE_I16) {
+        ggml_cpy_i16_i16_sycl (src0_ddc, src1_ddc, ne, ne00, ne01, nb00, nb01, nb02, ne10, ne11, nb10, nb11, nb12, main_stream);
+    } else if (src0->type == GGML_TYPE_I32 && src1->type == GGML_TYPE_I32) {
+        ggml_cpy_i32_i32_sycl (src0_ddc, src1_ddc, ne, ne00, ne01, nb00, nb01, nb02, ne10, ne11, nb10, nb11, nb12, main_stream);
     } else {
         fprintf(stderr, "%s: unsupported type combination (%s to %s)\n", __func__,
                 ggml_type_name(src0->type), ggml_type_name(src1->type));
