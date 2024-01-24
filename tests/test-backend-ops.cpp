@@ -1870,7 +1870,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     //test_cases.emplace_back(new test_moe(8, 2, 8, 4096, 14336));
 #endif
 
-    test_cases.emplace_back(new test_llama());
+    test_cases.emplace_back(new test_llama(1));
+    test_cases.emplace_back(new test_llama(2));
 
     // run tests
     if (mode == MODE_TEST) {
