@@ -464,6 +464,7 @@ if (LLAMA_KOMPUTE)
             DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source}
               ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/common.comp
               ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_getrows.comp
+              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_mul_mv_q_n_pre.comp
               ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_mul_mv_q_n.comp
               COMMAND ${glslc_executable} --target-env=vulkan1.2 -o ${spv_file} ${CMAKE_CURRENT_SOURCE_DIR}/${source}
             COMMENT "Compiling ${source} to ${spv_file}"

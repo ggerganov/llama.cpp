@@ -1003,32 +1003,40 @@ static void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-static void ggml_vk_mul_mat_q4_x(
+static void ggml_vk_mul_mat_impl(
     const std::vector<uint32_t>& spirv, const char * suffix, uint32_t block_size, kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
     const std::shared_ptr<kp::Tensor>& out,
     uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
-    int32_t ne00, int32_t ne10, int32_t ne0, int32_t ne1,
-    int32_t ne01, int32_t ne11, int32_t ne12, int32_t ne02
+    int32_t ne00, int32_t ne01, int32_t ne02,
+    int32_t ne10, int32_t ne11, int32_t ne12, int32_t ne13,
+    int32_t ne0, int32_t ne1,
+    uint32_t r2, uint32_t r3
 ) {
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff;
-        int32_t ne00, ne10, ne0, ne1, ne01, gqa;
+        int32_t ne00, ne01, ne02;
+        int32_t ne10, ne12;
+        int32_t ne0, ne1;
+        uint32_t r2, r3;
     } pushConsts {
         safe_divide(inAOff, block_size), safe_divide(inBOff, 4), safe_divide(outOff, 4),
-        ne00, ne10, ne0, ne1, ne01, ne12/ne02
+        ne00, ne01, ne02,
+        ne10, ne12,
+        ne0, ne1,
+        r2, r3
     };
 
     auto name = std::string(__func__) + "_" + suffix;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(name)) {
         const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12)}, {local_x}, {pushConsts});
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12*ne13)}, {local_x}, {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(name);
         s_algo->setTensors({inA, inB, out});
-        s_algo->setWorkgroup({unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12)});
+        s_algo->setWorkgroup({unsigned((ne01 + 7)/8), unsigned(ne11), unsigned(ne12*ne13)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
@@ -1040,7 +1048,7 @@ static void ggml_vk_mul_mat_q4_0(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_0_comp_spv,
         kp::shader_data::op_mul_mat_q4_0_comp_spv_len);
 
-    ggml_vk_mul_mat_q4_x(spirv, "q4_0", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
+    ggml_vk_mul_mat_impl(spirv, "q4_0", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
@@ -1048,16 +1056,18 @@ static void ggml_vk_mul_mat_q4_1(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_1_comp_spv,
         kp::shader_data::op_mul_mat_q4_1_comp_spv_len);
 
-    ggml_vk_mul_mat_q4_x(spirv, "q4_1", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
+    ggml_vk_mul_mat_impl(spirv, "q4_1", 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
-static void ggml_vk_mul_mat_q6_k(kp::Sequence& seq,
-                          const std::shared_ptr<kp::Tensor>& inA,
-                          const std::shared_ptr<kp::Tensor>& inB,
-                          const std::shared_ptr<kp::Tensor>& out,
-                          uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
-                          int32_t ne00, int32_t ne10, int32_t ne0, int32_t ne1,
-                          int32_t ne01, int32_t ne11, int32_t ne12, int32_t ne02) {
+static void ggml_vk_mul_mat_q6_k(
+    kp::Sequence& seq,
+    const std::shared_ptr<kp::Tensor>& inA,
+    const std::shared_ptr<kp::Tensor>& inB,
+    const std::shared_ptr<kp::Tensor>& out,
+    uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
+    int32_t ne00, int32_t ne10, int32_t ne0, int32_t ne1,
+    int32_t ne01, int32_t ne11, int32_t ne12, int32_t ne02
+) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q6_k_comp_spv,
         kp::shader_data::op_mul_mat_q6_k_comp_spv_len);
 
@@ -1550,6 +1560,15 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     } break;
                 case GGML_OP_MUL_MAT:
                     {
+                        GGML_ASSERT(ne00 == ne10);
+
+                        // TODO: assert that dim2 and dim3 are contiguous
+                        GGML_ASSERT(ne12 % ne02 == 0);
+                        GGML_ASSERT(ne13 % ne03 == 0);
+
+                        const uint32_t r2 = ne12/ne02;
+                        const uint32_t r3 = ne13/ne03;
+
                         if (src1t != GGML_TYPE_F32) {
                             fprintf(stderr, "%s: %s: Unsupported src1 type: %u/%u\n", __func__, ggml_op_name(dst->op), src0t, src1t);
                             goto not_implemented;
@@ -1563,29 +1582,40 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
 
                         switch (src0t) {
                             case GGML_TYPE_F32:
-                                ggml_vk_mul_mat_mat_f32(seq,
-                                        id_src0, id_src1, id_dst,
-                                        off_src0, off_src1, off_dst,
-                                        ne00, ne01, ne02,
-                                        nb01, nb02,
-                                        ne11, ne12,
-                                        nb11, nb12,
-                                        nb1, nb2);
+                                ggml_vk_mul_mat_mat_f32(
+                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ne00, ne01, ne02, nb01, nb02, ne11, ne12, nb11, nb12, nb1, nb2
+                                );
                                 break;
                             case GGML_TYPE_F16:
-                                ggml_vk_mul_mat_f16(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, nb01, nb02, ne11, ne12, nb11, nb12, ne0, ne1);
+                                ggml_vk_mul_mat_f16(
+                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ne00, ne01, ne02, nb01, nb02, ne11, ne12, nb11, nb12, ne0, ne1
+                                );
                                 break;
                             case GGML_TYPE_Q8_0:
-                                ggml_vk_mul_mat_q8_0(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, nb01, nb02, ne11, ne12, nb11, nb12, ne0, ne1);
+                                ggml_vk_mul_mat_q8_0(
+                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ne00, ne01, nb01, nb02, ne11, ne12, nb11, nb12, ne0, ne1
+                                );
                                 break;
                             case GGML_TYPE_Q4_0:
-                                ggml_vk_mul_mat_q4_0(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02);
+                                ggml_vk_mul_mat_q4_0(
+                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
+                                );
                                 break;
                             case GGML_TYPE_Q4_1:
-                                ggml_vk_mul_mat_q4_1(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02);
+                                ggml_vk_mul_mat_q4_1(
+                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ne00, ne01, ne02, ne10, ne11, ne12, ne13, ne0, ne1, r2, r3
+                                );
                                 break;
                             case GGML_TYPE_Q6_K:
-                                ggml_vk_mul_mat_q6_k(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02);
+                                ggml_vk_mul_mat_q6_k(
+                                    seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst,
+                                    ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02
+                                );
                                 break;
                             default: {
                                 fprintf(stderr, "%s: %s: Unsupported quantization: %u/%u\n", __func__, ggml_op_name(dst->op), src0t, src1t);

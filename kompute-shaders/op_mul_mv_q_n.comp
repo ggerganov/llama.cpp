@@ -1,13 +1,20 @@
 void main() {
+    // NB: hack to make compatible with AMD GPUs that have a subgroup size of 64
     if (gl_SubgroupInvocationID > 31)
         return;
 
     const uint nb = uint(pcs.ne00/BLOCKS_IN_QUANT);
+
     const uint r0 = gl_WorkGroupID.x;
     const uint r1 = gl_WorkGroupID.y;
     const uint im = gl_WorkGroupID.z;
+
     const uint first_row = (r0 * gl_NumSubgroups + gl_SubgroupID) * N_ROWS;
-    const uint offset0 = first_row * nb + im/pcs.gqa*(nb*pcs.ne0);
+
+    const uint i12 = im%pcs.ne12;
+    const uint i13 = im/pcs.ne12;
+
+    const uint offset0 = first_row * nb + (i12/pcs.r2)*(nb*pcs.ne01) + (i13/pcs.r3)*(nb*pcs.ne01*pcs.ne02);
 
     const uint x = offset0; // Based from inA without base offset
     const uint y = r1*uint(pcs.ne10)+im*pcs.ne00*pcs.ne1+pcs.inBOff; // Based from inB
