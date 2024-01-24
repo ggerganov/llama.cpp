@@ -15,34 +15,53 @@ layout (push_constant) uniform parameter {
     uint inBOff;
     uint outOff;
     int ne00;
+    int ne01;
+    int ne02;
+    uint nb00;
     uint nb01;
     uint nb02;
+    int ne10;
+    int ne11;
+    int ne12;
+    uint nb10;
     uint nb11;
     uint nb12;
-    uint ne02;
-    uint ne12;
     int ne0;
     int ne1;
+    uint r2;
+    uint r3;
 } pcs;
+
+#define N_F16_F32 4
 
 void main() {
     const uint r0 = gl_WorkGroupID.x;
-    const uint r1 = gl_WorkGroupID.y;
+    const uint rb = gl_WorkGroupID.y*N_F16_F32;
     const uint im = gl_WorkGroupID.z;
 
-    uint bc_ab = pcs.ne12 > pcs.ne02 ? im / (pcs.ne12 / pcs.ne02) : im;
-    uint bc_ba = pcs.ne02 > pcs.ne12 ? im / (pcs.ne02 / pcs.ne12) : im;
+    const uint i12 = im%pcs.ne12;
+    const uint i13 = im/pcs.ne12;
 
-    const uint x = (r0*pcs.nb01 + bc_ab*pcs.nb02) / 2 + pcs.inAOff; // Based from inA
-    const uint y = (r1*pcs.nb11 + bc_ba*pcs.nb12) / 4 + pcs.inBOff; // based from inB
+    const uint offset0 = r0*pcs.nb01 + (i12/pcs.r2)*pcs.nb02 + (i13/pcs.r3)*pcs.nb02*pcs.ne02;
 
-    float sumf = 0.0f;
-    for (uint i = gl_SubgroupInvocationID.x; i < pcs.ne00; i += gl_SubgroupSize) {
-        sumf += float(inA[x+i]) * float(inB[y+i]);
-    }
+    const uint x = offset0 / 2 + pcs.inAOff; // Based from inA
 
-    const float all_sum = subgroupAdd(sumf);
-    if (subgroupElect()) {
-        out_[im*pcs.ne1*pcs.ne0 + r1*pcs.ne0 + r0 + pcs.outOff] = all_sum;
+    for (uint row = 0; row < N_F16_F32; ++row) {
+        uint r1 = rb + row;
+        if (r1 >= pcs.ne11) {
+            break;
+        }
+
+        const uint y = (r1*pcs.nb11 + im*pcs.nb12) / 4 + pcs.inBOff; // Based from inB
+
+        float sumf = 0;
+        for (uint i = gl_SubgroupInvocationID.x; i < pcs.ne00; i += gl_SubgroupSize) {
+            sumf += float(inA[x+i]) * float(inB[y+i]);
+        }
+
+        const float all_sum = subgroupAdd(sumf);
+        if (subgroupElect()) {
+            out_[im*pcs.ne1*pcs.ne0 + r1*pcs.ne0 + r0 + pcs.outOff] = all_sum;
+        }
     }
 }
