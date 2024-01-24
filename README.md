@@ -112,6 +112,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [x] [Bakllava](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
 - [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
+- [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 
 
 **Bindings:**
