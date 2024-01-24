@@ -11238,7 +11238,8 @@ static bool g_sycl_loaded = false;
 bool ggml_sycl_loaded(void) {
     return g_sycl_loaded;
 }
-void print_sycl_devices(){
+
+void ggml_backend_sycl_print_sycl_devices(){
     int device_count = dpct::dev_mgr::instance().device_count();
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
     for (int id = 0; id < device_count; ++id) {
@@ -11311,7 +11312,7 @@ void ggml_init_sycl() try {
 #else
         fprintf(stderr, "%s: SYCL_USE_XMX: no\n", __func__);
 #endif
-        print_sycl_devices();
+        ggml_backend_sycl_print_sycl_devices();
         for (int id = 0; id < GGML_SYCL_MAX_DEVICES; ++id) {
             g_sycl_device_id2index[id].index = -1;
             g_device_caps[id].vmm = 0;
