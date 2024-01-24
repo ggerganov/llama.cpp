@@ -762,21 +762,24 @@ static void ggml_vk_gelu(Args&&... args) {
     ggml_vk_xxlu(spirv, "gelu", std::forward<Args>(args)...);
 }
 
-static void ggml_vk_soft_max(kp::Sequence& seq,
-                      const std::shared_ptr<kp::Tensor>& in,
-                      const std::shared_ptr<kp::Tensor>& out,
-                      uint32_t inOff, uint32_t outOff,
-                      int32_t ne00, int32_t ne01, int32_t ne02, uint32_t ne03) {
-
+static void ggml_vk_soft_max(
+    kp::Sequence& seq,
+    const std::shared_ptr<kp::Tensor>& in,
+    const std::shared_ptr<kp::Tensor>& out,
+    uint32_t inOff, uint32_t outOff,
+    int32_t ne00, int32_t ne01, int32_t ne02, uint32_t ne03,
+    float scale
+) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_softmax_comp_spv,
         kp::shader_data::op_softmax_comp_spv_len);
 
     struct PushConstants {
         uint32_t inOff, outOff;
         int32_t ne00, ne01, ne02;
+        float scale;
     } pushConsts {
         safe_divide(inOff, 4), safe_divide(outOff, 4),
-        ne00, ne01, ne02
+        ne00, ne01, ne02, scale
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
@@ -1548,7 +1551,8 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     } break;
                 case GGML_OP_SOFT_MAX:
                     {
-                        ggml_vk_soft_max(seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03);
+                        const float scale = ((float *) dst->op_params)[0];
+                        ggml_vk_soft_max(seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, scale);
                     } break;
                 case GGML_OP_DIAG_MASK_INF:
                     {

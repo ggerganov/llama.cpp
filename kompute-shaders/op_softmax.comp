@@ -15,6 +15,7 @@ layout(push_constant) uniform PushConstants {
     int ne00;
     int ne01;
     int ne02;
+    float scale;
 } pcs;
 
 void main() {
@@ -32,14 +33,14 @@ void main() {
     // parallel max
     float localMax = uintBitsToFloat(0xFF800000);
     for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += 32) {
-        localMax = max(localMax, in_[psrc0 + i00]);
+        localMax = max(localMax, in_[psrc0 + i00]*pcs.scale);
     }
     float max_ = subgroupMax(localMax);
 
     // parallel sum
     float localSum = 0.0f;
     for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += 32) {
-        const float exp_psrc0 = exp(in_[psrc0 + i00] - max_);
+        const float exp_psrc0 = exp(in_[psrc0 + i00]*pcs.scale - max_);
         localSum += exp_psrc0;
         out_[pdst + i00] = exp_psrc0;
     }
