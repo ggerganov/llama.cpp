@@ -12097,10 +12097,14 @@ inline void ggml_sycl_op_dequantize_mul_mat_vec(
         src0->type == GGML_TYPE_Q8_0 || src0->type == GGML_TYPE_F16;
 
     if (src1_convert_f16) {
-        src1_dfloat = src1_dfloat_a.alloc(ne00);
-        ggml_cpy_f32_f16_sycl((const char *)src1_ddf_i, (char *)src1_dfloat,
-                              ne00, ne00, 1, sizeof(float), 0, 0, ne00, 1,
-                              sizeof(sycl::half), 0, 0, stream);
+        if (src1->type == GGML_TYPE_F16) {
+            src1_dfloat = (sycl::half *)src1->data + row_low * src1_ncols;
+        } else {
+            src1_dfloat = src1_dfloat_a.alloc(ne00);
+            ggml_cpy_f32_f16_sycl((const char *)src1_ddf_i, (char *)src1_dfloat,
+                                  ne00, ne00, 1, sizeof(float), 0, 0, ne00, 1,
+                                  sizeof(sycl::half), 0, 0, stream);
+        }
     }
 #else
     const dfloat * src1_dfloat = (const dfloat *) src1_ddf_i; // dfloat == float, no conversion
