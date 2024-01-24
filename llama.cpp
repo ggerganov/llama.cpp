@@ -8829,6 +8829,23 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
     auto use_more_bits = [](int i_layer, int num_layers) -> bool {
         return i_layer < num_layers/8 || i_layer >= 7*num_layers/8 || (i_layer - num_layers/8)%3 == 2;
     };
+    const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
+    auto layer_info = [n_expert] (int i_layer, int n_layer, const char * name) {
+        if (n_expert > 1) {
+            // Believe it or not, "experts" in the FFN of Mixtral-8x7B are not consecutive, but iccasionally randomly
+            // sprinkled in the model. Hence, simply dividing i_ffn_down by n_expert does not work
+            // for getting the current layer as I initially thought, and we need to resort to parsing the
+            // tensor name.
+            n_layer /= n_expert;
+            if (sscanf(name, "blk.%d.", &i_layer) != 1) {
+                throw std::runtime_error(format("Failed to determine layer for tensor %s", name));
+            }
+            if (i_layer < 0 || i_layer >= n_layer) {
+                throw std::runtime_error(format("Bad layer %d for tensor %s. Must be in [0, %d)", i_layer, name, n_layer));
+            }
+        }
+        return std::make_pair(i_layer, n_layer);
+    };
 
     if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
         int nx = tensor->ne[0];
@@ -8890,24 +8907,8 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             new_type = GGML_TYPE_Q2_K;
         }
     } else if (name.find("ffn_down") != std::string::npos) {
-        const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
-        int i_layer, n_layer;
-        if (n_expert == 1) {
-            i_layer = qs.i_ffn_down;
-            n_layer = qs.n_ffn_down;
-        } else {
-            // Believe it or not, "experts" in the FFN of Mixtral-8x7B are not consecutive, but iccasionally randomly
-            // sprinkled in the model. Hence, simply dividing i_ffn_down by n_expert does not work
-            // for getting the current layer as I initially thought, and we need to resort to parsing the
-            // tensor name.
-            n_layer = qs.n_ffn_down / n_expert;
-            if (sscanf(name.c_str(), "blk.%d.ffn_down", &i_layer) != 1) {
-                throw std::runtime_error(format("Failed to determine layer for tensor %s", name.c_str()));
-            }
-            if (i_layer < 0 || i_layer >= n_layer) {
-                throw std::runtime_error(format("Bad layer %d for tensor %s. Must be in [0, %d)", i_layer, name.c_str(), n_layer));
-            }
-        }
+        auto info = layer_info(qs.i_ffn_down, qs.n_ffn_down, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
         if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {
             if (i_layer < n_layer/8) new_type = GGML_TYPE_Q4_K;
@@ -8963,13 +8964,17 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
     }
     else if (name.find("ffn_gate") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(qs.i_ffn_gate, qs.n_ffn_gate)) {
+        auto info = layer_info(qs.i_ffn_gate, qs.n_ffn_gate, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(i_layer, n_layer)) {
             new_type = GGML_TYPE_Q2_K;
         }
         ++qs.i_ffn_gate;
     }
     else if (name.find("ffn_up") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(qs.i_ffn_up, qs.n_ffn_up)) {
+        auto info = layer_info(qs.i_ffn_up, qs.n_ffn_up, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(i_layer, n_layer)) {
             new_type = GGML_TYPE_Q2_K;
         }
         ++qs.i_ffn_up;
