@@ -512,6 +512,8 @@ static_assert(sizeof(block_iq2_xs) == sizeof(ggml_fp16_t) + QK_K/8*sizeof(uint16
 #define CUDA_SILU_BLOCK_SIZE 256
 #define CUDA_TANH_BLOCK_SIZE 256
 #define CUDA_RELU_BLOCK_SIZE 256
+#define CUDA_HARDSIGMOID_BLOCK_SIZE 256
+#define CUDA_HARDSWISH_BLOCK_SIZE 256
 #define CUDA_SQR_BLOCK_SIZE 256
 #define CUDA_CPY_BLOCK_SIZE 32
 #define CUDA_SCALE_BLOCK_SIZE 256
@@ -809,6 +811,24 @@ static __global__ void relu_f32(const float * x, float * dst, const int k) {
         return;
     }
     dst[i] = fmaxf(x[i], 0);
+}
+
+static __global__ void hardsigmoid_f32(const float * x, float * dst, const int k) {
+    const int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+    if (i >= k) {
+        return;
+    }
+    dst[i] = fminf(1.0f, fmaxf(0.0f, (x[i] + 3.0f) / 6.0f));
+}
+
+static __global__ void hardswish_f32(const float * x, float * dst, const int k) {
+    const int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+    if (i >= k) {
+        return;
+    }
+    dst[i] = x[i] * fminf(1.0f, fmaxf(0.0f, (x[i] + 3.0f) / 6.0f));
 }
 
 static __global__ void leaky_relu_f32(const float * x, float * dst, const int k, const float negative_slope) {
@@ -5656,12 +5676,14 @@ static __global__ void alibi_f32(const float * x, float * dst, const int ncols, 
 }
 
 static __global__ void k_sum_rows_f32(const float * x, float * dst, const int ncols) {
-    const int row = blockIdx.y;
+    const int row = blockIdx.x;
     const int col = threadIdx.x;
 
     float sum = 0.0f;
-    for (int i = col; i < ncols; i += blockDim.x) {
+    int i = col;
+    while(i < ncols) {
         sum += x[row * ncols + i];
+        i += blockDim.x;
     }
 
     sum = warp_reduce_sum(sum);
@@ -5978,9 +6000,9 @@ static __global__ void clamp_f32(const float * x, float * dst, const float min, 
     dst[i] = x[i] < min ? min : (x[i] > max ? max : x[i]);
 }
 
-static  __global__ void im2col_f32_f16(
-        const float * x, half * dst,
-        int offset_delta, int IW, int IH, int OW, int KW, int KH, int pelements, int CHW,
+static  __global__ void im2col_f32_f32(
+        const float * x, float * dst, int batch_offset,
+        int offset_delta, int IC, int IW, int IH, int OH, int OW, int KW, int KH, int pelements, int CHW,
         int s0, int s1, int p0, int p1, int d0, int d1) {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i >= pelements) {
@@ -5993,17 +6015,55 @@ static  __global__ void im2col_f32_f16(
     const int ky = (i - kd) / OW;
     const int ix = i % OW;
 
+    const int oh = blockIdx.y;
+    const int batch = blockIdx.z / IC;
+    const int ic = blockIdx.z % IC;
+
     const int64_t iiw = ix * s0 + kx * d0 - p0;
-    const int64_t iih = blockIdx.y * s1 + ky * d1 - p1;
+    const int64_t iih = oh * s1 + ky * d1 - p1;
 
     const int64_t offset_dst =
-        (blockIdx.y * OW + ix) * CHW +
-        (blockIdx.z * (KW * KH) + ky * KW + kx);
+        ((batch * OH + oh) * OW + ix) * CHW +
+        (ic * (KW * KH) + ky * KW + kx);
+
+    if (iih < 0 || iih >= IH || iiw < 0 || iiw >= IW) {
+        dst[offset_dst] = (0.0f);
+    } else {
+        const int64_t offset_src = ic * offset_delta + batch * batch_offset;
+        dst[offset_dst] = (x[offset_src + iih * IW + iiw]);
+    }
+}
+
+static  __global__ void im2col_f32_f16(
+        const float * x, half * dst, int batch_offset,
+        int offset_delta, int IC, int IW, int IH, int OH, int OW, int KW, int KH, int pelements, int CHW,
+        int s0, int s1, int p0, int p1, int d0, int d1) {
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i >= pelements) {
+        return;
+    }
+
+    const int ksize = OW * (KH > 1 ? KW : 1);
+    const int kx = i / ksize;
+    const int kd = kx * ksize;
+    const int ky = (i - kd) / OW;
+    const int ix = i % OW;
+
+    const int oh = blockIdx.y;
+    const int batch = blockIdx.z / IC;
+    const int ic = blockIdx.z % IC;
+
+    const int64_t iiw = ix * s0 + kx * d0 - p0;
+    const int64_t iih = oh * s1 + ky * d1 - p1;
+
+    const int64_t offset_dst =
+        ((batch * OH + oh) * OW + ix) * CHW +
+        (ic * (KW * KH) + ky * KW + kx);
 
     if (iih < 0 || iih >= IH || iiw < 0 || iiw >= IW) {
         dst[offset_dst] = __float2half(0.0f);
     } else {
-        const int64_t offset_src = blockIdx.z * offset_delta;
+        const int64_t offset_src = ic * offset_delta + batch * batch_offset;
         dst[offset_dst] = __float2half(x[offset_src + iih * IW + iiw]);
     }
 }
@@ -6219,6 +6279,16 @@ static void tanh_f32_cuda(const float * x, float * dst, const int k, cudaStream_
 static void relu_f32_cuda(const float * x, float * dst, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_RELU_BLOCK_SIZE - 1) / CUDA_RELU_BLOCK_SIZE;
     relu_f32<<<num_blocks, CUDA_RELU_BLOCK_SIZE, 0, stream>>>(x, dst, k);
+}
+
+static void hardsigmoid_f32_cuda(const float * x, float * dst, const int k, cudaStream_t stream) {
+    const int num_blocks = (k + CUDA_HARDSIGMOID_BLOCK_SIZE - 1) / CUDA_HARDSIGMOID_BLOCK_SIZE;
+    hardsigmoid_f32<<<num_blocks, CUDA_HARDSIGMOID_BLOCK_SIZE, 0, stream>>>(x, dst, k);
+}
+
+static void hardswish_f32_cuda(const float * x, float * dst, const int k, cudaStream_t stream) {
+    const int num_blocks = (k + CUDA_HARDSWISH_BLOCK_SIZE - 1) / CUDA_HARDSWISH_BLOCK_SIZE;
+    hardswish_f32<<<num_blocks, CUDA_HARDSWISH_BLOCK_SIZE, 0, stream>>>(x, dst, k);
 }
 
 static void leaky_relu_f32_cuda(const float * x, float * dst, const int k, const float negative_slope, cudaStream_t stream) {
@@ -7276,7 +7346,7 @@ static void alibi_f32_cuda(const float * x, float * dst, const int ncols, const 
 
 static void sum_rows_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
     const dim3 block_dims(WARP_SIZE, 1, 1);
-    const dim3 block_nums(1, nrows, 1);
+    const dim3 block_nums(nrows, 1, 1);
     k_sum_rows_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols);
 }
 
@@ -7388,14 +7458,24 @@ static void soft_max_f32_cuda(const float * x, const float * y, float * dst, con
     }
 }
 
-static void im2col_f32_f16_cuda(const float* x, half* dst,
+static void im2col_f32_f32_cuda(const float* x, float* dst,
     int IW, int IH, int OW, int OH, int KW, int KH, int IC,
-    int offset_delta,
+    int batch, int batch_offset, int offset_delta,
     int s0,int s1,int p0,int p1,int d0,int d1, cudaStream_t stream) {
     const int parallel_elements = OW * KW * KH;
     const int num_blocks = (parallel_elements + CUDA_IM2COL_BLOCK_SIZE - 1) / CUDA_IM2COL_BLOCK_SIZE;
-    dim3 block_nums(num_blocks, OH, IC);
-    im2col_f32_f16<<<block_nums, CUDA_IM2COL_BLOCK_SIZE, 0, stream>>>(x, dst, offset_delta, IW, IH, OW, KW, KH, parallel_elements, (IC * KH * KW), s0, s1, p0, p1, d0, d1);
+    dim3 block_nums(num_blocks, OH, batch * IC);
+    im2col_f32_f32<<<block_nums, CUDA_IM2COL_BLOCK_SIZE, 0, stream>>>(x, dst, batch_offset, offset_delta, IC, IW, IH, OH, OW, KW, KH, parallel_elements, (IC * KH * KW), s0, s1, p0, p1, d0, d1);
+}
+
+static void im2col_f32_f16_cuda(const float* x, half* dst,
+    int IW, int IH, int OW, int OH, int KW, int KH, int IC,
+    int batch, int batch_offset, int offset_delta,
+    int s0,int s1,int p0,int p1,int d0,int d1, cudaStream_t stream) {
+    const int parallel_elements = OW * KW * KH;
+    const int num_blocks = (parallel_elements + CUDA_IM2COL_BLOCK_SIZE - 1) / CUDA_IM2COL_BLOCK_SIZE;
+    dim3 block_nums(num_blocks, OH, batch * IC);
+    im2col_f32_f16<<<block_nums, CUDA_IM2COL_BLOCK_SIZE, 0, stream>>>(x, dst, batch_offset, offset_delta, IC, IW, IH, OH, OW, KW, KH, parallel_elements, (IC * KH * KW), s0, s1, p0, p1, d0, d1);
 }
 
 // buffer pool for cuda
@@ -7974,6 +8054,34 @@ static void ggml_cuda_op_relu(
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
     relu_f32_cuda(src0_dd, dst_dd, ggml_nelements(src0), main_stream);
+
+    (void) src1;
+    (void) dst;
+    (void) src1_dd;
+}
+
+static void ggml_cuda_op_hardsigmoid(
+    const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
+    const float * src0_dd, const float * src1_dd, float * dst_dd, cudaStream_t main_stream) {
+
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+
+    hardsigmoid_f32_cuda(src0_dd, dst_dd, ggml_nelements(src0), main_stream);
+
+    (void) src1;
+    (void) dst;
+    (void) src1_dd;
+}
+
+static void ggml_cuda_op_hardswish(
+    const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
+    const float * src0_dd, const float * src1_dd, float * dst_dd, cudaStream_t main_stream) {
+
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+
+    hardswish_f32_cuda(src0_dd, dst_dd, ggml_nelements(src0), main_stream);
 
     (void) src1;
     (void) dst;
@@ -8612,7 +8720,7 @@ static void ggml_cuda_op_im2col(
 
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
-    GGML_ASSERT( dst->type == GGML_TYPE_F16);
+    GGML_ASSERT( dst->type == GGML_TYPE_F16 || dst->type == GGML_TYPE_F32);
 
     const int32_t s0 = ((const int32_t*)(dst->op_params))[0];
     const int32_t s1 = ((const int32_t*)(dst->op_params))[1];
@@ -8634,8 +8742,13 @@ static void ggml_cuda_op_im2col(
     const int64_t OW =         dst->ne[1];
 
     const size_t delta_offset = src1->nb[is_2D ? 2 : 1] / 4; // nb is byte offset, src is type float32
+    const int64_t batch = src1->ne[3];
+    const size_t batch_offset = src1->nb[3] / 4; // nb is byte offset, src is type float32
 
-    im2col_f32_f16_cuda(src1_dd, (half*) dst_dd, IW, IH, OW, OH, KW, KH, IC, delta_offset, s0, s1, p0, p1, d0, d1, main_stream);
+    if(dst->type == GGML_TYPE_F16)
+        im2col_f32_f16_cuda(src1_dd, (half*) dst_dd, IW, IH, OW, OH, KW, KH, IC, batch, batch_offset, delta_offset, s0, s1, p0, p1, d0, d1, main_stream);
+    else
+        im2col_f32_f32_cuda(src1_dd, (float*) dst_dd, IW, IH, OW, OH, KW, KH, IC, batch, batch_offset, delta_offset, s0, s1, p0, p1, d0, d1, main_stream);
 
     (void) src0;
     (void) src0_dd;
@@ -9231,6 +9344,13 @@ static void ggml_cuda_relu(const ggml_tensor * src0, const ggml_tensor * src1, g
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_relu);
 }
 
+static void ggml_cuda_hardsigmoid(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_hardsigmoid);
+}
+
+static void ggml_cuda_hardswish(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_hardswish);
+}
 static void ggml_cuda_leaky_relu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_leaky_relu);
 }
@@ -10109,6 +10229,12 @@ GGML_CALL bool ggml_cuda_compute_forward(struct ggml_compute_params * params, st
                 case GGML_UNARY_OP_RELU:
                     func = ggml_cuda_relu;
                     break;
+                case GGML_UNARY_OP_HARDSIGMOID:
+                    func = ggml_cuda_hardsigmoid;
+                    break;
+                case GGML_UNARY_OP_HARDSWISH:
+                    func = ggml_cuda_hardswish;
+                    break;
                 default:
                     return false;
             }
@@ -10917,6 +11043,8 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                 case GGML_UNARY_OP_GELU:
                 case GGML_UNARY_OP_SILU:
                 case GGML_UNARY_OP_RELU:
+                case GGML_UNARY_OP_HARDSIGMOID:
+                case GGML_UNARY_OP_HARDSWISH:
                 case GGML_UNARY_OP_GELU_QUICK:
                 case GGML_UNARY_OP_TANH:
                     return true;
