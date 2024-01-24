@@ -1499,7 +1499,6 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
-            struct ggml_tensor  * c,
             int                  s0,
             int                  s1,
             int                  p0,
