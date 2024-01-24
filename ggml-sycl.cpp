@@ -98,6 +98,30 @@ typedef float dfloat; // dequantize float
 typedef sycl::float2 dfloat2;
 #endif //GGML_SYCL_F16
 
+bool   ggml_sycl_loaded(void);
+void * ggml_sycl_host_malloc(size_t size);
+void   ggml_sycl_host_free(void * ptr);
+bool   ggml_sycl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst);
+void   ggml_sycl_set_tensor_split(const float * tensor_split);
+void   ggml_sycl_transform_tensor(void * data, struct ggml_tensor * tensor);
+void   ggml_sycl_free_data(struct ggml_tensor * tensor);
+void   ggml_sycl_assign_buffers(struct ggml_tensor * tensor);
+void   ggml_sycl_assign_buffers_no_scratch(struct ggml_tensor * tensor);
+void   ggml_sycl_assign_buffers_force_inplace(struct ggml_tensor * tensor);
+void   ggml_sycl_assign_buffers_no_alloc(struct ggml_tensor * tensor);
+void   ggml_sycl_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset);
+void   ggml_sycl_copy_to_device(struct ggml_tensor * tensor);
+void   ggml_sycl_set_main_device(int main_device);
+void   ggml_sycl_set_mul_mat_q(bool mul_mat_q);
+void   ggml_sycl_set_scratch_size(size_t scratch_size);
+void   ggml_sycl_free_scratch(void);
+int    ggml_sycl_get_device_count(void);
+void   ggml_sycl_get_device_description(int device, char * description, size_t description_size);
+bool   ggml_backend_is_sycl(ggml_backend_t backend);
+int    ggml_backend_sycl_get_device(ggml_backend_t backend);
+int    get_main_device();
+void   print_ggml_tensor(const char*name, struct ggml_tensor *src);
+void   log_tensor_with_cnt(const char* name, struct ggml_tensor * src, int stop_cnt);
 
 static __dpct_inline__ int get_int_from_int8(const int8_t *x8, const int &i32) {
     const uint16_t * x16 = (const uint16_t *) (x8 + sizeof(int) * i32); // assume at least 2 byte alignment
