@@ -764,9 +764,10 @@ static void ggml_vk_gelu(Args&&... args) {
 
 static void ggml_vk_soft_max(
     kp::Sequence& seq,
-    const std::shared_ptr<kp::Tensor>& in,
+    const std::shared_ptr<kp::Tensor>& inA,
+    const std::shared_ptr<kp::Tensor>& inB,
     const std::shared_ptr<kp::Tensor>& out,
-    uint32_t inOff, uint32_t outOff,
+    uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
     int32_t ne00, int32_t ne01, int32_t ne02, uint32_t ne03,
     float scale
 ) {
@@ -774,22 +775,27 @@ static void ggml_vk_soft_max(
         kp::shader_data::op_softmax_comp_spv_len);
 
     struct PushConstants {
-        uint32_t inOff, outOff;
+        uint32_t inAOff, inBOff, outOff;
         int32_t ne00, ne01, ne02;
         float scale;
+        int32_t mask;
     } pushConsts {
-        safe_divide(inOff, 4), safe_divide(outOff, 4),
-        ne00, ne01, ne02, scale
+        safe_divide(inAOff, 4), safe_divide(inBOff, 4), safe_divide(outOff, 4),
+        ne00, ne01, ne02,
+        scale,
+        bool(inB)
     };
+
+    auto & inB_ = inB ? inB : inA;
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__)) {
         // FIXME: The softmax kernel needs to be fixed to use the subgroupsize which can vary by device
         const uint32_t local_x = 32;
-        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {local_x}, {pushConsts});
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB_, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {local_x}, {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
-        s_algo->setTensors({in, out});
+        s_algo->setTensors({inA, inB_, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
@@ -1552,7 +1558,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                 case GGML_OP_SOFT_MAX:
                     {
                         const float scale = ((float *) dst->op_params)[0];
-                        ggml_vk_soft_max(seq, id_src0, id_dst, off_src0, off_dst, ne00, ne01, ne02, ne03, scale);
+                        ggml_vk_soft_max(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale);
                     } break;
                 case GGML_OP_DIAG_MASK_INF:
                     {
