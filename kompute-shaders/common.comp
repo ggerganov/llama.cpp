@@ -73,9 +73,6 @@ struct block_q6_k {
 };
 mat4 dequantize_q6_k(const block_q6_k xb, uint il) {
     const float16_t d_all = xb.d;
-    uint8_t ql[QK_K/2];
-    uint8_t qh[QK_K/4];
-    int8_t  scales[QK_K/16];
 
     const uint qlIndex = 64*(il/8) + 32*((il/2)&1) + 16*(il&1);
     const uint qhIndex = 32*(il/8) + 16*(il&1);
@@ -89,8 +86,8 @@ mat4 dequantize_q6_k(const block_q6_k xb, uint il) {
     const float16_t dl = float16_t(d_all * sc * coef);
     mat4 reg;
     for (int i = 0; i < 16; ++i) {
-        const float16_t q = (il&1) != 0 ? ((ql[qlIndex + i] & kmask2) | ((qh[qhIndex + i] & kmask1) << 2))
-                                        : ((ql[qlIndex + i] & kmask2) | ((qh[qhIndex + i] & kmask1) << 4));
+        const float16_t q = (il&1) != 0 ? ((xb.ql[qlIndex + i] & kmask2) | ((xb.qh[qhIndex + i] & kmask1) << 2))
+                                        : ((xb.ql[qlIndex + i] & kmask2) | ((xb.qh[qhIndex + i] & kmask1) << 4));
         reg[i/4][i%4] = dl * q - ml;
     }
     return reg;
