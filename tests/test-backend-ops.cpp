@@ -616,6 +616,13 @@ struct test_unary : public test_case {
         ggml_tensor * out = ggml_unary(ctx, in, op);
         return out;
     }
+
+    void initialize_tensors(ggml_context * ctx) override {
+        for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+            // test extended range of values to check for NaNs in GELU
+            init_tensor_uniform(t, -150.f, 150.f);
+        }
+    }
 };
 
 // GGML_OP_GET_ROWS
