@@ -1527,7 +1527,8 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     } break;
                 case GGML_OP_SOFT_MAX:
                     {
-                        const float scale = ((float *) dst->op_params)[0];
+                        float scale;
+                        memcpy(&scale, dst->op_params, sizeof(float));
                         ggml_vk_soft_max(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale);
                     } break;
                 case GGML_OP_DIAG_MASK_INF:
