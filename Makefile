@@ -449,14 +449,12 @@ ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
 endif # LLAMA_CLBLAST
 
 ifdef LLAMA_VULKAN
-	CFLAGS  += -DGGML_USE_VULKAN
-	CXXFLAGS  += -DGGML_USE_VULKAN
-	LDFLAGS += -lvulkan
+	MK_CPPFLAGS  += -DGGML_USE_VULKAN
+	MK_LDFLAGS += -lvulkan
 	OBJS    += ggml-vulkan.o
 
 ifdef LLAMA_VULKAN_CHECK_RESULTS
-	CFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
-	CXXFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
+	MK_CPPFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
 endif
 
 ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h

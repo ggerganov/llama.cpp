@@ -1,8 +1,6 @@
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
-#include <iostream>
-
 #include "unicode.h"
 
 #include "ggml.h"

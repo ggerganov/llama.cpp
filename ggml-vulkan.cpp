@@ -1254,7 +1254,7 @@ static vk_buffer ggml_vk_create_buffer_temp(size_t size) {
     return buf;
 }
 
-void* ggml_vk_host_malloc(size_t size) {
+static void * ggml_vk_host_malloc(size_t size) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_host_malloc(" << size << ")" << std::endl;
 #endif
@@ -1278,7 +1278,7 @@ void* ggml_vk_host_malloc(size_t size) {
     return buf.ptr;
 }
 
-void ggml_vk_host_free(void* ptr) {
+static void ggml_vk_host_free(void* ptr) {
     if (ptr == nullptr) {
         return;
     }
@@ -2500,7 +2500,7 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context& ctx, const ggml_tensor * 
     }
 }
 
-bool ggml_vk_can_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * dst) {
+static bool ggml_vk_can_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * dst) {
     const uint64_t ne10 = src1->ne[0];
 
     const uint64_t ne0 = dst->ne[0];
@@ -3532,24 +3532,6 @@ static ggml_tensor_extra_gpu * ggml_vk_tensor_create_extra(ggml_tensor * tensor)
     return extra;
 }
 
-void ggml_vk_prepare_tensor(ggml_tensor * tensor) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_prepare_tensor(" << tensor << " (" << tensor->name << ", " << ggml_op_name(tensor->op) << "))" << std::endl;
-#endif
-    tensor->backend = GGML_BACKEND_GPU;
-
-    // recursively prepare buffers until a compute tensor is found
-    if (tensor->src[0] != nullptr && tensor->src[0]->backend == GGML_BACKEND_CPU) {
-        const ggml_op src0_op = tensor->src[0]->op;
-        if (src0_op == GGML_OP_RESHAPE || src0_op == GGML_OP_TRANSPOSE || src0_op == GGML_OP_VIEW || src0_op == GGML_OP_PERMUTE) {
-            ggml_vk_prepare_tensor(tensor->src[0]);
-        }
-    }
-    if (tensor->op == GGML_OP_CPY && tensor->src[1]->backend == GGML_BACKEND_CPU) {
-        ggml_vk_prepare_tensor(tensor->src[1]);
-    }
-}
-
 // TODO: Still needed?
 static void ggml_vk_tensor_stride_order(const ggml_tensor * tensor, std::array<int, 4>& order) {
     order = {-1, -1, -1, -1};
@@ -4120,7 +4102,7 @@ void ggml_vk_graph_cleanup() {
     vk_gc.contexts.clear();
 }
 
-void ggml_vk_cleanup() {
+static void ggml_vk_cleanup() {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_cleanup()" << std::endl;
 #endif

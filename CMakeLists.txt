@@ -408,7 +408,7 @@ if (LLAMA_VULKAN)
         message(STATUS "Vulkan found")
 
         add_library(ggml-vulkan STATIC ggml-vulkan.cpp ggml-vulkan.h)
-        target_link_libraries(ggml-vulkan PUBLIC Vulkan::Vulkan)
+        target_link_libraries(ggml-vulkan PRIVATE Vulkan::Vulkan)
 
         add_compile_definitions(GGML_USE_VULKAN)
 
