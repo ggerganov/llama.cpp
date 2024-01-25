@@ -17,6 +17,6 @@ void main() {
     for (uint x = 0; x < 8; x++) {
         const uint i = baseIndex + x;
         const float y = in_[i + pcs.inOff];
-        out_[i + pcs.outOff] = 0.5*y*(1.0 + tanh(SQRT_2_OVER_PI*y*(1.0 + GELU_COEF_A*y*y)));
+        out_[i + pcs.outOff] = 0.5*y*(1.0 + tanh(clamp(SQRT_2_OVER_PI*y*(1.0 + GELU_COEF_A*y*y), -15.0, 15.0)));
     }
 }
