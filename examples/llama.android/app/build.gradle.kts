@@ -30,6 +30,7 @@ android {
         }
         externalNativeBuild {
             cmake {
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
                 cppFlags += listOf()
                 arguments += listOf()
             }
