@@ -27,5 +27,5 @@ void main() {
     const uint i = gl_WorkGroupID.x;
     const int r = inB[i + pcs.inBOff];
 
-    dequantize_row_f16(r*pcs.nb01/2/*bytes for float16*/ + pcs.inAOff, i*pcs.nb1 + pcs.outOff, pcs.ne00);
+    dequantize_row_f16(r*pcs.nb01/2/*bytes for float16*/ + pcs.inAOff, i*pcs.nb1/4 + pcs.outOff, pcs.ne00);
 }
