@@ -1633,6 +1633,10 @@ extern "C" {
             struct ggml_tensor  * mask,
             float                 scale);
 
+    GGML_API void ggml_flash_attn_ext_set_prec(
+            struct ggml_tensor * a,
+            enum ggml_prec       prec);
+
     GGML_API struct ggml_tensor * ggml_flash_attn_back(
            struct ggml_context * ctx,
            struct ggml_tensor  * q,

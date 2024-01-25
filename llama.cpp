@@ -4368,7 +4368,8 @@ static struct ggml_tensor * llm_build_kqv(
                 0);
     cb(v, "v", il);
 
-    cur = ggml_flash_attn_ext(ctx, ggml_cast(ctx, q, GGML_TYPE_F16), k, v, kq_mask, kq_scale);
+    cur = ggml_flash_attn_ext(ctx, q, k, v, kq_mask, kq_scale);
+    ggml_flash_attn_ext_set_prec(cur, GGML_PREC_DEFAULT);
     //printf("q: %4d %4d %4d %4d\n", q->ne[0], q->ne[1], q->ne[2], q->ne[3]);
     //printf("k: %4d %4d %4d %4d\n", k->ne[0], k->ne[1], k->ne[2], k->ne[3]);
     //printf("v: %4d %4d %4d %4d\n", v->ne[0], v->ne[1], v->ne[2], v->ne[3]);
