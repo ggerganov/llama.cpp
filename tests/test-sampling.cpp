@@ -8,9 +8,7 @@
 #include <cmath>
 #include <numeric>
 
-#ifndef GGML_USE_SYCL
 #include <cassert>
-#endif
 
 #include <vector>
 #include <algorithm>
