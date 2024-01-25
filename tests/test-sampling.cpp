@@ -7,9 +7,7 @@
 
 #include <cmath>
 #include <numeric>
-
 #include <cassert>
-
 #include <vector>
 #include <algorithm>
 
