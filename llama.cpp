@@ -6707,10 +6707,6 @@ static int llama_decode_internal(
         n_threads = 1;
     }
 
-#ifdef GGML_USE_SYCL
-    n_threads = 1;
-#endif
-
 #ifdef GGML_USE_MPI
     const int64_t n_layer = hparams.n_layer;
     ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
