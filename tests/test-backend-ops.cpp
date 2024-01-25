@@ -1765,13 +1765,13 @@ struct test_falcon : public test_llm {
 
     test_falcon(int n_tokens = 1)
         : test_llm({
-            /*n_vocab        =*/ 65024,
-            /*n_embd         =*/ 4544,
-            /*n_head         =*/ 71,
+            /*n_vocab        =*/ 32000,
+            /*n_embd         =*/ 3200,
+            /*n_head         =*/ 50,
             /*n_head_kv      =*/ 1,
             /*n_rot          =*/ 64,
             /*n_embd_head    =*/ 64,
-            /*n_ff           =*/ 18176,
+            /*n_ff           =*/ 8640,
             /*f_norm_eps     =*/ 1e-5f,
             /*f_norm_rms_eps =*/ 0.f,
             /*n_tokens       =*/ n_tokens,
