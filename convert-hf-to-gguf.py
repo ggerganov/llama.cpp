@@ -575,6 +575,7 @@ class MPTModel(Model):
             if new_name == "token_embd.weight":
                 self.gguf_writer.add_tensor("output.weight", data)
 
+
 class OrionModel(Model):
     def set_vocab(self):
         self._set_vocab_sentencepiece()
@@ -612,9 +613,7 @@ class OrionModel(Model):
         # Collect tensors from generator object
         model_kv = dict(self.get_tensors())
         block_count = self.hparams["num_hidden_layers"]
-        head_count = self.hparams["num_attention_heads"]
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        head_count_kv = self.hparams.get("num_key_value_heads", head_count)
 
         for name, data_torch in model_kv.items():
             # we don't need these
@@ -652,6 +651,7 @@ class OrionModel(Model):
 
             print(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
+
 
 class BaichuanModel(Model):
     def set_vocab(self):
