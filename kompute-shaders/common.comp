@@ -95,3 +95,11 @@ mat4 dequantize_q6_k(const block_q6_k xb, uint il) {
     }
     return reg;
 }
+
+
+#define QK8_0 32
+// struct block_q8_0 {
+//     float16_t d;         // delta
+//     int8_t    qs[QK8_0]; // quants
+// };
+#define sizeof_block_q8_0 34
