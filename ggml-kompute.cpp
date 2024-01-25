@@ -1350,7 +1350,7 @@ static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
                 case GGML_TYPE_Q4_0:
                 case GGML_TYPE_Q4_1:
                 case GGML_TYPE_Q6_K:
-                    return op->ne[3] == 1;
+                    return op->ne[2] == 1 && op->ne[3] == 1;
                 default:
                     ;
             }
@@ -1361,11 +1361,12 @@ static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
 
             switch (op->src[0]->type) {
                 case GGML_TYPE_F32:
+                case GGML_TYPE_Q6_K:
+                    return op->ne[3] == 1;
                 case GGML_TYPE_F16:
                 case GGML_TYPE_Q8_0:
                 case GGML_TYPE_Q4_0:
                 case GGML_TYPE_Q4_1:
-                case GGML_TYPE_Q6_K:
                     return true;
                 default:
                     ;
