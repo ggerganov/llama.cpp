@@ -1,14 +1,14 @@
 # Function calling example using pydantic models.
 import datetime
+import importlib
 import json
 from enum import Enum
-from typing import Union, Optional
+from typing import Optional, Union
 
 import requests
 from pydantic import BaseModel, Field
-
-import importlib
-from pydantic_models_to_grammar import generate_gbnf_grammar_and_documentation, convert_dictionary_to_pydantic_model, add_run_method_to_dynamic_model, create_dynamic_model_from_function
+from pydantic_models_to_grammar import (add_run_method_to_dynamic_model, convert_dictionary_to_pydantic_model,
+                                        create_dynamic_model_from_function, generate_gbnf_grammar_and_documentation)
 
 
 # Function to get completion on the llama.cpp server with grammar.
@@ -35,7 +35,7 @@ class SendMessageToUser(BaseModel):
         print(self.message)
 
 
-# Enum for the calculator function.
+# Enum for the calculator tool.
 class MathOperation(Enum):
     ADD = "add"
     SUBTRACT = "subtract"
@@ -43,7 +43,7 @@ class MathOperation(Enum):
     DIVIDE = "divide"
 
 
-# Very simple calculator tool for the agent.
+# Simple pydantic calculator tool for the agent that can add, subtract, multiply, and divide. Docstring and description of fields will be used in system prompt.
 class Calculator(BaseModel):
     """
     Perform a math operation on two numbers.
@@ -146,37 +146,6 @@ def get_current_datetime(output_format: Optional[str] = None):
     if output_format is None:
         output_format = '%Y-%m-%d %H:%M:%S'
     return datetime.datetime.now().strftime(output_format)
-
-
-# Enum for the calculator tool.
-class MathOperation(Enum):
-    ADD = "add"
-    SUBTRACT = "subtract"
-    MULTIPLY = "multiply"
-    DIVIDE = "divide"
-
-
-
-# Simple pydantic calculator tool for the agent that can add, subtract, multiply, and divide. Docstring and description of fields will be used in system prompt.
-class Calculator(BaseModel):
-    """
-    Perform a math operation on two numbers.
-    """
-    number_one: Union[int, float] = Field(..., description="First number.")
-    operation: MathOperation = Field(..., description="Math operation to perform.")
-    number_two: Union[int, float] = Field(..., description="Second number.")
-
-    def run(self):
-        if self.operation == MathOperation.ADD:
-            return self.number_one + self.number_two
-        elif self.operation == MathOperation.SUBTRACT:
-            return self.number_one - self.number_two
-        elif self.operation == MathOperation.MULTIPLY:
-            return self.number_one * self.number_two
-        elif self.operation == MathOperation.DIVIDE:
-            return self.number_one / self.number_two
-        else:
-            raise ValueError("Unknown operation.")
 
 
 # Example function to get the weather
