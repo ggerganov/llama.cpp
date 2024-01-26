@@ -4,9 +4,9 @@ INPUT2="Building a website can be done in 10 simple steps:\nStep 1:"
 source /opt/intel/oneapi/setvars.sh
 
 if [ $# -gt 0 ]; then
-  export GGML_SYCL_DEVICE=$1
+    export GGML_SYCL_DEVICE=$1
 else
-  export GGML_SYCL_DEVICE=0
+    export GGML_SYCL_DEVICE=0
 fi
 echo GGML_SYCL_DEVICE=$GGML_SYCL_DEVICE
 #export GGML_SYCL_DEBUG=1
