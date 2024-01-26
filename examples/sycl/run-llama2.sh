@@ -1,3 +1,4 @@
+#!/bin/bash
 
 INPUT2="Building a website can be done in 10 simple steps:\nStep 1:"
 source /opt/intel/oneapi/setvars.sh
