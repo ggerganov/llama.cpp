@@ -82,7 +82,6 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
 
     ggml_type_traits_t tt = ggml_internal_get_type_traits(t->type);
     size_t bs = ggml_blck_size(t->type);
-    std::vector<float> vq(ggml_blck_size(t->type));
     bool quantized = ggml_is_quantized(t->type);
 
     // access elements by index to avoid gaps in views

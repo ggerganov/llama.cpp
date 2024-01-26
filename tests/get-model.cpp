@@ -11,7 +11,7 @@ char * get_model_or_exit(int argc, char *argv[]) {
 
     } else {
         model_path = getenv("LLAMACPP_TEST_MODELFILE");
-        if (!model_path || strlen(model_path) == 0) {
+        if (!model_path || model_path[0] == '\0') {
             fprintf(stderr, "\033[33mWARNING: No model file provided. Skipping this test. Set LLAMACPP_TEST_MODELFILE=<gguf_model_path> to silence this warning and run this test.\n\033[0m");
             exit(EXIT_SUCCESS);
         }

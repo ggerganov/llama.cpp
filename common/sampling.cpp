@@ -13,6 +13,7 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
         // will be empty (default) if there are parse errors
         if (result->parsed_grammar.rules.empty()) {
             fprintf(stderr, "%s: failed to parse grammar\n", __func__);
+            delete result;
             return nullptr;
         }
 
