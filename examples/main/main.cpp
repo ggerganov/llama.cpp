@@ -31,10 +31,6 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-#if defined(GGML_USE_KOMPUTE)
-#include "ggml-kompute.h"
-#endif
-
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
 static gpt_params               * g_params;
