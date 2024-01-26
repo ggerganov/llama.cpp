@@ -1611,7 +1611,7 @@ struct llama_server_context
         std::vector<int32_t> slot_npasts;
         for (auto & slot : slots)
         {
-            slot_npasts.emplace_back(slot.n_past);
+            slot_npasts.emplace_back(0);
         }
 
         for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch)
