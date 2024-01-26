@@ -1494,7 +1494,7 @@ extern "C" {
             int                  d0,
             int                  d1,
             bool                 is_2D,
-	    enum ggml_type       dst_type);
+            enum ggml_type       dst_type);
 
     GGML_API struct ggml_tensor * ggml_conv_depthwise_2d(
             struct ggml_context * ctx,
