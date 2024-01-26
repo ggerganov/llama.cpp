@@ -516,10 +516,10 @@ function(get_flags CCID CCVER)
         endif()
     elseif (CCID MATCHES "Intel")
         if (NOT LLAMA_SYCL)
-          # enable max optimization level when using Intel compiler
-          set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
-          set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
-          add_link_options(-fuse-ld=lld -static-intel)
+            # enable max optimization level when using Intel compiler
+            set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+            set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+            add_link_options(-fuse-ld=lld -static-intel)
         endif()
     endif()
 
