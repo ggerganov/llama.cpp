@@ -16597,7 +16597,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             } break;
         case GGML_OP_SOFT_MAX:
             {
-                n_tasks = MIN(MIN(4, n_threads), ggml_nrows(node->src[0]));
+                n_tasks = MIN(n_threads, ggml_nrows(node->src[0]));
             } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
