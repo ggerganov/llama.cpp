@@ -2312,9 +2312,6 @@ struct llama_model_loader {
             use_mmap = false;
         }
 
-#ifdef GGML_USE_KOMPUTE
-        use_mmap = false;
-#endif
         this->use_mmap = use_mmap;
     }
 
