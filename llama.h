@@ -898,6 +898,8 @@ extern "C" {
 
     LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
 
+    LLAMA_API char * gguf_kv_to_c_str(const struct gguf_context * ctx_gguf, int i, const char* parent_name);
+
 #ifdef __cplusplus
 }
 #endif

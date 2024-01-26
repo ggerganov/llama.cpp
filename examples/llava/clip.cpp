@@ -6,6 +6,7 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
+#include "llama.h"
 
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
@@ -148,24 +149,6 @@ static std::string get_ftype(int ftype) {
     return ggml_type_name(static_cast<ggml_type>(ftype));
 }
 
-static std::string gguf_data_to_str(enum gguf_type type, const void * data, int i) {
-    switch (type) {
-        case GGUF_TYPE_UINT8:   return std::to_string(((const uint8_t  *)data)[i]);
-        case GGUF_TYPE_INT8:    return std::to_string(((const int8_t   *)data)[i]);
-        case GGUF_TYPE_UINT16:  return std::to_string(((const uint16_t *)data)[i]);
-        case GGUF_TYPE_INT16:   return std::to_string(((const int16_t  *)data)[i]);
-        case GGUF_TYPE_UINT32:  return std::to_string(((const uint32_t *)data)[i]);
-        case GGUF_TYPE_INT32:   return std::to_string(((const int32_t  *)data)[i]);
-        case GGUF_TYPE_UINT64:  return std::to_string(((const uint64_t *)data)[i]);
-        case GGUF_TYPE_INT64:   return std::to_string(((const int64_t  *)data)[i]);
-        case GGUF_TYPE_FLOAT32: return std::to_string(((const float    *)data)[i]);
-        case GGUF_TYPE_FLOAT64: return std::to_string(((const double   *)data)[i]);
-        case GGUF_TYPE_BOOL:    return ((const bool *)data)[i] ? "true" : "false";
-        default:                return format("unknown type %d", type);
-    }
-}
-
-
 static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
     std::string result;
     for (size_t pos = 0; ; pos += search.length()) {
@@ -178,43 +161,6 @@ static void replace_all(std::string & s, const std::string & search, const std::
         pos = new_pos;
     }
     s = std::move(result);
-}
-
-static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
-    const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
-
-    switch (type) {
-        case GGUF_TYPE_STRING:
-            return gguf_get_val_str(ctx_gguf, i);
-        case GGUF_TYPE_ARRAY:
-            {
-                const enum gguf_type arr_type = gguf_get_arr_type(ctx_gguf, i);
-                int arr_n = gguf_get_arr_n(ctx_gguf, i);
-                const void * data = gguf_get_arr_data(ctx_gguf, i);
-                std::stringstream ss;
-                ss << "[";
-                for (int j = 0; j < arr_n; j++) {
-                    if (arr_type == GGUF_TYPE_STRING) {
-                        std::string val = gguf_get_arr_str(ctx_gguf, i, j);
-                        // escape quotes
-                        replace_all(val, "\\", "\\\\");
-                        replace_all(val, "\"", "\\\"");
-                        ss << '"' << val << '"';
-                    } else if (arr_type == GGUF_TYPE_ARRAY) {
-                        ss << "???";
-                    } else {
-                        ss << gguf_data_to_str(arr_type, data, j);
-                    }
-                    if (j < arr_n - 1) {
-                        ss << ", ";
-                    }
-                }
-                ss << "]";
-                return ss.str();
-            }
-        default:
-            return gguf_data_to_str(type, gguf_get_val_data(ctx_gguf, i), 0);
-    }
 }
 
 static void print_tensor_info(const ggml_tensor* tensor, const char* prefix = "") {
@@ -784,11 +730,12 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             const char * name           = gguf_get_key(ctx, i);
             const enum gguf_type type   = gguf_get_kv_type(ctx, i);
             const std::string type_name =
-                type == GGUF_TYPE_ARRAY
+                type == GGUF_TYPE_ARRAY || type == GGUF_TYPE_OBJ
                 ? format("%s[%s,%d]", gguf_type_name(type), gguf_type_name(gguf_get_arr_type(ctx, i)), gguf_get_arr_n(ctx, i))
                 : gguf_type_name(type);
 
-            std::string value          = gguf_kv_to_str(ctx, i);
+            char * v                   = gguf_kv_to_c_str(ctx, i, name);
+            std::string value          = v;
             const size_t MAX_VALUE_LEN = 40;
             if (value.size() > MAX_VALUE_LEN) {
                 value = format("%s...", value.substr(0, MAX_VALUE_LEN - 3).c_str());

@@ -780,28 +780,87 @@ static std::string gguf_data_to_str(enum gguf_type type, const void * data, int 
     }
 }
 
-static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
+template< class CharT >
+static std::string quoted_str(const CharT* s, const std::string delim="\"", const std::string escape="\\") {
+    std::string val = s;
+    replace_all(val, escape, escape + escape);
+    replace_all(val, delim,  escape + delim);
+    val = delim + val + delim;
+    return val;
+}
+
+static void gguf_kv_to_stream(const struct gguf_context * ctx_gguf, int i, std::ostringstream &ss, const std::string parent_name = "") {
     const enum gguf_type type = gguf_get_kv_type(ctx_gguf, i);
 
     switch (type) {
         case GGUF_TYPE_STRING:
-            return gguf_get_val_str(ctx_gguf, i);
+            {
+                ss << quoted_str(gguf_get_val_str(ctx_gguf, i));
+            } break;
+        case GGUF_TYPE_OBJ:
+            {
+                ss << "{";
+                int arr_n = gguf_get_arr_n(ctx_gguf, i);
+                for (int j = 0; j < arr_n; j++) {
+                    std::string subkey_name = gguf_get_arr_str(ctx_gguf, i, j);
+                    std::string key;
+                    if (!subkey_name.empty() && subkey_name.at(0) == '/') {
+                        std::size_t ix = subkey_name.find(':');
+                        if (ix != std::string::npos) {
+                            key = subkey_name;
+                            subkey_name = subkey_name.substr(ix+1);
+                            key = key.substr(1, ix-1);
+                        } else {
+                            subkey_name = subkey_name.substr(1);
+                            key = subkey_name;
+                            ix = subkey_name.rfind('.');
+                            if (ix != std::string::npos) {
+                                subkey_name = subkey_name.substr(ix+1);
+                            }
+                        }
+                    } else {
+                        if (parent_name.empty()) {
+                            key = subkey_name;
+                        } else {
+                            key = parent_name;
+                            key.append(".");
+                            key.append(subkey_name);
+                        }
+                        if (key.at(0) != '.') {key = "." + key;}
+                    }
+                    ss << quoted_str(subkey_name.c_str()) << ":";
+                    int k_id = gguf_find_key(ctx_gguf, key.c_str());
+                    if (k_id != -1) {
+                        gguf_kv_to_stream(ctx_gguf, k_id, ss, key);
+                    } else {
+                        ss << "undefined";
+                    }
+                    if (j < arr_n - 1) {
+                        ss << ", ";
+                    }
+                }
+                ss << "}";
+            } break;
         case GGUF_TYPE_ARRAY:
             {
                 const enum gguf_type arr_type = gguf_get_arr_type(ctx_gguf, i);
                 int arr_n = gguf_get_arr_n(ctx_gguf, i);
                 const void * data = gguf_get_arr_data(ctx_gguf, i);
-                std::stringstream ss;
                 ss << "[";
                 for (int j = 0; j < arr_n; j++) {
                     if (arr_type == GGUF_TYPE_STRING) {
-                        std::string val = gguf_get_arr_str(ctx_gguf, i, j);
-                        // escape quotes
-                        replace_all(val, "\\", "\\\\");
-                        replace_all(val, "\"", "\\\"");
+                        std::string val = quoted_str(gguf_get_arr_str(ctx_gguf, i, j));
                         ss << '"' << val << '"';
-                    } else if (arr_type == GGUF_TYPE_ARRAY) {
-                        ss << "???";
+                    } else if (arr_type == GGUF_TYPE_OBJ || arr_type == GGUF_TYPE_ARRAY) {
+                        std::string s = "[" + std::to_string(j) + "]";
+                        std::string key = parent_name.empty() ? s : parent_name + s;
+                        if (key.at(0) != '.') {key = "." + key;}
+                        int k_id = gguf_find_key(ctx_gguf, key.c_str());
+                        if (k_id != -1) {
+                            gguf_kv_to_stream(ctx_gguf, k_id, ss, key);
+                        } else {
+                            ss << "undefined";
+                        }
                     } else {
                         ss << gguf_data_to_str(arr_type, data, j);
                     }
@@ -810,11 +869,21 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
                     }
                 }
                 ss << "]";
-                return ss.str();
-            }
+            } break;
         default:
-            return gguf_data_to_str(type, gguf_get_val_data(ctx_gguf, i), 0);
+            ss << gguf_data_to_str(type, gguf_get_val_data(ctx_gguf, i), 0);
     }
+}
+
+static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i, const char* parent_name = nullptr) {
+    std::ostringstream ss;
+    gguf_kv_to_stream(ctx_gguf, i, ss, parent_name == NULL ? gguf_get_key(ctx_gguf, i) : parent_name);
+    return ss.str();
+}
+
+char * gguf_kv_to_c_str(const struct gguf_context * ctx_gguf, int i, const char* parent_name = nullptr) {
+    std::string result = gguf_kv_to_str(ctx_gguf, i, parent_name);
+    return strdup(result.c_str());
 }
 
 //
@@ -2184,7 +2253,7 @@ namespace GGUFMeta {
         static T get_kv(const gguf_context * ctx, const int k) {
             const enum gguf_type kt = gguf_get_kv_type(ctx, k);
 
-            if (kt != GKV::gt) {
+            if (kt != GKV::gt && kt != GGUF_TYPE_OBJ && GKV::gt != GGUF_TYPE_ARRAY) {
                 throw std::runtime_error(format("key %s has wrong type %s but expected type %s",
                     gguf_get_key(ctx, k), gguf_type_name(kt), gguf_type_name(GKV::gt)));
             }
@@ -2411,13 +2480,16 @@ struct llama_model_loader {
             LLAMA_LOG_INFO("%s: Dumping metadata keys/values. Note: KV overrides do not apply in this output.\n", __func__);
             for (int i = 0; i < n_kv; i++) {
                 const char * name           = gguf_get_key(ctx_gguf, i);
+                // skip the subkeys.
+                if (name[0] == '.') { continue; }
+
                 const enum gguf_type type   = gguf_get_kv_type(ctx_gguf, i);
                 const std::string type_name =
-                    type == GGUF_TYPE_ARRAY
+                    type == GGUF_TYPE_ARRAY || type == GGUF_TYPE_OBJ
                     ? format("%s[%s,%d]", gguf_type_name(type), gguf_type_name(gguf_get_arr_type(ctx_gguf, i)), gguf_get_arr_n(ctx_gguf, i))
                     : gguf_type_name(type);
 
-                std::string value          = gguf_kv_to_str(ctx_gguf, i);
+                std::string value          = gguf_kv_to_str(ctx_gguf, i, name);
                 const size_t MAX_VALUE_LEN = 40;
                 if (value.size() > MAX_VALUE_LEN) {
                     value = format("%s...", value.substr(0, MAX_VALUE_LEN - 3).c_str());
@@ -2426,6 +2498,7 @@ struct llama_model_loader {
 
                 LLAMA_LOG_INFO("%s: - kv %3d: %42s %-16s = %s\n", __func__, i, name, type_name.c_str(), value.c_str());
             }
+            LLAMA_LOG_INFO("%s: Dumping metadata keys/values Done.\n", __func__);
 
             // print type counts
             for (auto & kv : n_type) {
@@ -2796,7 +2869,7 @@ static void llm_load_hparams(
             continue;
         }
         const char * name = gguf_get_key(ctx, i);
-        const std::string value = gguf_kv_to_str(ctx, i);
+        const std::string value = gguf_kv_to_str(ctx, i, name);
         model.gguf_kv.emplace(name, value);
     }
 

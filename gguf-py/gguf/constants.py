@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from enum import Enum, IntEnum, auto
 from typing import Any
+import numpy as np
 
 #
 # constants
@@ -550,6 +551,64 @@ class GGUFValueType(IntEnum):
     UINT64  = 10
     INT64   = 11
     FLOAT64 = 12
+    OBJ     = 13
+
+    @staticmethod
+    def get_type_ex(val: Any) -> GGUFValueType:
+        if isinstance(val, (str, bytes, bytearray)):
+            return GGUFValueType.STRING
+        elif isinstance(val, list):
+            return GGUFValueType.ARRAY
+        elif isinstance(val, np.float32):
+            return GGUFValueType.FLOAT32
+        elif isinstance(val, np.float64):
+            return GGUFValueType.FLOAT64
+        elif isinstance(val, float):
+            return GGUFValueType.FLOAT32
+        elif isinstance(val, bool):
+            return GGUFValueType.BOOL
+        elif isinstance(val, np.uint8):
+            return GGUFValueType.UINT8
+        elif isinstance(val, np.uint16):
+            return GGUFValueType.UINT16
+        elif isinstance(val, np.uint32):
+            return GGUFValueType.UINT32
+        elif isinstance(val, np.uint64):
+            return GGUFValueType.UINT64
+        elif isinstance(val, np.int8):
+            return GGUFValueType.INT8
+        elif isinstance(val, np.int16):
+            return GGUFValueType.INT16
+        elif isinstance(val, np.int32):
+            return GGUFValueType.INT32
+        elif isinstance(val, np.int64):
+            return GGUFValueType.INT64
+        elif isinstance(val, int):
+            if val >=0 and val <= np.iinfo(np.uint8).max:
+                return GGUFValueType.UINT8
+            elif val >=0 and val <= np.iinfo(np.uint16).max:
+                return GGUFValueType.UINT16
+            elif val >=0 and val <= np.iinfo(np.uint32).max:
+                return GGUFValueType.UINT32
+            elif val >=0 and val <= np.iinfo(np.uint64).max:
+                return GGUFValueType.UINT64
+            elif val >=np.iinfo(np.int8).min and val <= np.iinfo(np.int8).max:
+                return GGUFValueType.INT8
+            elif val >=np.iinfo(np.int16).min and val <= np.iinfo(np.int16).max:
+                return GGUFValueType.INT16
+            elif val >=np.iinfo(np.int32).min and val <= np.iinfo(np.int32).max:
+                return GGUFValueType.INT32
+            elif val >=np.iinfo(np.int64).min and val <= np.iinfo(np.int64).max:
+                return GGUFValueType.INT64
+            else:
+                print("The integer exceed limit:", val)
+                sys.exit()
+        elif isinstance(val, dict):
+            return GGUFValueType.OBJ
+        # TODO: need help with 64-bit types in Python
+        else:
+            print("Unknown type:", type(val))
+            sys.exit()
 
     @staticmethod
     def get_type(val: Any) -> GGUFValueType:

@@ -158,6 +158,75 @@ class GGUFWriter:
         self.add_key(key)
         self.add_val(val, GGUFValueType.ARRAY)
 
+    def add_array_ex(self, key: str, val: Sequence[Any]) -> None:
+        if not isinstance(val, Sequence):
+            raise ValueError("Value must be a sequence for array type")
+
+        self.add_key(key)
+        ltype = GGUFValueType.get_type_ex(val[0])
+        if not all(GGUFValueType.get_type_ex(i) is ltype for i in val[1:]):
+            ltype = GGUFValueType.OBJ
+        if ltype == GGUFValueType.OBJ or ltype == GGUFValueType.ARRAY:
+            self.kv_data += self._pack("I", GGUFValueType.ARRAY)
+            self.kv_data_count += 1
+            self.kv_data += self._pack("I", ltype)
+            self.kv_data += self._pack("Q", len(val))
+            for i, item in enumerate(val):
+                if key[0] != '.':
+                    key = "." + key
+                self.add_kv(key + "[" + str(i) + "]", item)
+        else:
+            self.add_val(val, GGUFValueType.ARRAY)
+
+    def add_kv(self, key: str, val: Any) -> None:
+        vtype=GGUFValueType.get_type_ex(val)
+        if vtype == GGUFValueType.OBJ:
+            self.add_dict(key, val)
+        elif vtype == GGUFValueType.ARRAY:
+            self.add_array_ex(key, val)
+        elif vtype == GGUFValueType.STRING:
+            self.add_string(key, val)
+        elif vtype == GGUFValueType.BOOL:
+            self.add_bool(key, val)
+        elif vtype == GGUFValueType.INT8:
+            self.add_int8(key, val)
+        elif vtype == GGUFValueType.INT16:
+            self.add_int16(key, val)
+        elif vtype == GGUFValueType.INT32:
+            self.add_int32(key, val)
+        elif vtype == GGUFValueType.INT64:
+            self.add_int64(key, val)
+        elif vtype == GGUFValueType.UINT8:
+            self.add_uint8(key, val)
+        elif vtype == GGUFValueType.UINT16:
+            self.add_uint16(key, val)
+        elif vtype == GGUFValueType.UINT32:
+            self.add_uint32(key, val)
+        elif vtype == GGUFValueType.UINT64:
+            self.add_uint64(key, val)
+        elif vtype == GGUFValueType.FLOAT32:
+            self.add_float32(key, val)
+        elif vtype == GGUFValueType.FLOAT64:
+            self.add_float64(key, val)
+        else:
+            raise ValueError(f"Unsupported type: {type(val)}")
+
+    def add_dict(self, key: str, val: dict, excludes: Sequence[str] = []) -> None:
+        if not isinstance(val, dict):
+            raise ValueError("Value must be a dict type")
+
+        self.add_key(key)
+        self.add_val(val, GGUFValueType.OBJ)
+        for k, v in val.items():
+            if k in excludes:
+                continue
+            real_key = key + "." + k
+            # "/" means referencing an existing key
+            if k[0] != "/":
+                if real_key[0] != '.':
+                    real_key = "." + real_key
+                self.add_kv(real_key, v)
+
     def add_val(self, val: Any, vtype: GGUFValueType | None = None, add_vtype: bool = True) -> None:
         if vtype is None:
             vtype = GGUFValueType.get_type(val)
@@ -181,6 +250,8 @@ class GGUFWriter:
             self.kv_data += self._pack("Q", len(val))
             for item in val:
                 self.add_val(item, add_vtype=False)
+        elif vtype == GGUFValueType.OBJ and isinstance(val, dict) and val:
+            self.add_val(list(val.keys()), GGUFValueType.ARRAY, False)
         else:
             raise ValueError("Invalid GGUF metadata value type or value")
 
