@@ -225,6 +225,9 @@ effectiveStdenv.mkDerivation (
         description = "contains numpy and sentencepiece";
         buildInputs = [ llama-python ];
         inputsFrom = [ finalAttrs.finalPackage ];
+        shellHook = ''
+          addToSearchPath "LD_LIBRARY_PATH" "${lib.getLib effectiveStdenv.cc.cc}/lib"
+        '';
       };
 
       shell-extra = mkShell {

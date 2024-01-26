@@ -4283,7 +4283,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xxs_q8_1(
         q8 += 8;
         aux32 >>= 7;
     }
-    const float d = (float)bq2->d * (0.5f + aux32) * (float)bq8_1[ib32].ds.x * 0.25f;
+    const float d = (float)bq2->d * (0.5f + aux32) * __low2float(bq8_1[ib32].ds) * 0.25f;
     return d * sumi;
 #else
     // iqs is 0...15
@@ -4294,7 +4294,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xxs_q8_1(
     const uint8_t  * grid1 = (const uint8_t *)(iq2xxs_grid + aux8[2*il+0]);
     const uint8_t  * grid2 = (const uint8_t *)(iq2xxs_grid + aux8[2*il+1]);
     const uint32_t aux32 = q2[2] | (q2[3] << 16);
-    const float d = (float)bq2->d * (0.5f + (aux32 >> 28)) * (float)bq8_1[ib32].ds.x * 0.25f;
+    const float d = (float)bq2->d * (0.5f + (aux32 >> 28)) * __low2float(bq8_1[ib32].ds) * 0.25f;
     const uint8_t signs1 = ksigns_iq2xs[(aux32 >> 14*il) & 127];
     const uint8_t signs2 = ksigns_iq2xs[(aux32 >> (14*il + 7)) & 127];
     const int8_t * q8 = bq8_1[ib32].qs + 16*il;
@@ -4339,7 +4339,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xs_q8_1(
         }
         q8 += 8;
     }
-    const float d = (float)bq2->d * (float)bq8_1[ib32].ds.x * 0.25f;
+    const float d = (float)bq2->d * __low2float(bq8_1[ib32].ds) * 0.25f;
     return d * ((0.5f + ls1) * sumi1 + (0.5f + ls2) * sumi2);
 #else
     assert(false);
@@ -9790,8 +9790,8 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
     // TODO: mmq/mmv support
 #endif
 
-    const int64_t nb11 = src1->nb[1];
-    const int64_t nb1  =  dst->nb[1];
+    const size_t nb11 = src1->nb[1];
+    const size_t nb1  =  dst->nb[1];
 
     const struct ggml_tensor * ids = src0;
     const int32_t id = ((int32_t *) dst->op_params)[0];
@@ -10304,15 +10304,11 @@ GGML_CALL static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t
 
     if (ggml_is_quantized(tensor->type)) {
         // initialize padding to 0 to avoid possible NaN values
-        int64_t row_low = 0;
-        int64_t row_high = ggml_nrows(tensor);
-        int64_t nrows_split = row_high - row_low;
-
-        size_t original_size = ggml_nbytes_split(tensor, nrows_split);
+        size_t original_size = ggml_nbytes(tensor);
         size_t padded_size = ggml_backend_buft_get_alloc_size(buffer->buft, tensor);
 
         if (padded_size > original_size && tensor->view_src == nullptr) {
-            CUDA_CHECK(cudaMemsetAsync((char *)tensor->data + original_size, 0, padded_size - original_size, g_cudaStreams[ctx->device][0]));
+            CUDA_CHECK(cudaMemset((char *)tensor->data + original_size, 0, padded_size - original_size));
         }
     }
 }
@@ -10415,12 +10411,7 @@ GGML_CALL static size_t ggml_backend_cuda_buffer_type_get_alignment(ggml_backend
 }
 
 GGML_CALL static size_t ggml_backend_cuda_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
-    int64_t row_low = 0;
-    int64_t row_high = ggml_nrows(tensor);
-    int64_t nrows_split = row_high - row_low;
-
-    size_t size = ggml_nbytes_split(tensor, nrows_split);
-
+    size_t size = ggml_nbytes(tensor);
     int64_t ne0 = tensor->ne[0];
 
     if (ggml_is_quantized(tensor->type)) {
