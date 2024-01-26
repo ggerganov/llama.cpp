@@ -3,37 +3,34 @@
 #include "ggml.h"
 #include "ggml-backend.h"
 
-#include <cstddef>
-#include <string>
-#include <vector>
-
-struct ggml_vk_device {
-    int index = 0;
-    int type = 0;           // same as VkPhysicalDeviceType
-    size_t heapSize = 0;
-    std::string name;
-    std::string vendor;
-    int subgroupSize = 0;
-};
-
-std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired);
-bool ggml_vk_init_device(size_t memoryRequired, const std::string &device);
-bool ggml_vk_init_device(const ggml_vk_device &device);
-bool ggml_vk_init_device(int device);
-bool ggml_vk_free_device();
-bool ggml_vk_has_vulkan();
-bool ggml_vk_has_device();
-bool ggml_vk_using_vulkan();
-ggml_vk_device ggml_vk_current_device();
-
-//
-// backend API
-// user-code should use only these functions
-//
+#include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct ggml_vk_device {
+    int index;
+    int type; // same as VkPhysicalDeviceType
+    size_t heapSize;
+    const char * name;
+    const char * vendor;
+    int subgroupSize;
+};
+
+struct ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count);
+bool ggml_vk_init_device(size_t memoryRequired, const char * device);
+bool ggml_vk_init_device_idx(int device);
+bool ggml_vk_free_device(void);
+bool ggml_vk_has_vulkan(void);
+bool ggml_vk_has_device(void);
+bool ggml_vk_using_vulkan(void);
+struct ggml_vk_device ggml_vk_current_device(void);
+
+//
+// backend API
+//
 
 // forward declaration
 typedef struct ggml_backend * ggml_backend_t;

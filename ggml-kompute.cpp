@@ -36,6 +36,8 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -139,7 +141,7 @@ static bool ggml_vk_checkPhysicalDeviceFeatures(vk::PhysicalDevice physicalDevic
     return true;
 }
 
-static std::string ggml_vk_getVendorName(uint32_t vendorID) {
+static const char * ggml_vk_getVendorName(uint32_t vendorID) {
     switch (vendorID) {
         case 0x10DE:
             return "nvidia";
@@ -152,7 +154,7 @@ static std::string ggml_vk_getVendorName(uint32_t vendorID) {
     }
 }
 
-std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
+static std::vector<ggml_vk_device> ggml_vk_available_devices_internal(size_t memoryRequired) {
     std::vector<ggml_vk_device> results;
     if (!komputeManager()->hasVulkan() || !komputeManager()->hasInstance())
         return results;
@@ -206,13 +208,16 @@ std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
         d.index = i;
         d.type = properties.deviceType;
         d.heapSize = heapSize;
-        d.name = properties.deviceName;
+        d.vendor = strdup(ggml_vk_getVendorName(properties.vendorID));
         d.subgroupSize = subgroupProperties.subgroupSize;
-        size_t n_idx = ++count_by_name[d.name];
+
+        std::string name(properties.deviceName);
+        size_t n_idx = ++count_by_name[name];
         if (n_idx > 1) {
-            d.name += " (" + std::to_string(n_idx) + ")";
+            name += " (" + std::to_string(n_idx) + ")";
         }
-        d.vendor = ggml_vk_getVendorName(properties.vendorID);
+        d.name = strdup(name.c_str());
+
         results.push_back(d);
     }
 
@@ -230,6 +235,20 @@ std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
     );
 
     return results;
+}
+
+// public API returns a C-style array
+ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count) {
+    auto devices = ggml_vk_available_devices_internal(memoryRequired);
+    *count = devices.size();
+    if (devices.empty()) {
+        return nullptr;
+    }
+
+    size_t nbytes = sizeof (ggml_vk_device) * (devices.size());
+    auto * arr = static_cast<ggml_vk_device *>(malloc(nbytes));
+    memcpy(&arr, devices.data(), nbytes);
+    return arr;
 }
 
 static void ggml_vk_filterByVendor(std::vector<ggml_vk_device>& devices, const std::string& targetVendor) {
@@ -252,32 +271,25 @@ static void ggml_vk_filterByName(std::vector<ggml_vk_device>& devices, const std
     );
 }
 
-bool ggml_vk_init_device(size_t memoryRequired, const std::string &device) {
+static bool ggml_vk_init_device(size_t memoryRequired, const std::string & device) {
     if (device.empty())
         return false;
 
-    std::vector<ggml_vk_device> devices = ggml_vk_available_devices(memoryRequired);
-    if (device == "gpu") {
-        if (devices.size() != 0)
-            return ggml_vk_init_device(devices.front());
-    } else if (device == "amd" || device == "nvidia" || device == "intel") {
+    auto devices = ggml_vk_available_devices_internal(memoryRequired);
+    if (device == "amd" || device == "nvidia" || device == "intel") {
         ggml_vk_filterByVendor(devices, device);
-        if (devices.size() != 0)
-            return ggml_vk_init_device(devices.front());
-    } else {
+    } else if (device != "gpu") {
         ggml_vk_filterByName(devices, device);
-        if (devices.size() != 0)
-            return ggml_vk_init_device(devices.front());
     }
 
-    return ggml_vk_has_device();
+    return !devices.empty() && ggml_vk_init_device_idx(devices[0].index);
 }
 
-bool ggml_vk_init_device(const ggml_vk_device &device) {
-    return ggml_vk_init_device(device.index);
+bool ggml_vk_init_device(size_t memoryRequired, const char * device) {
+    return ggml_vk_init_device(memoryRequired, std::string(device));
 }
 
-bool ggml_vk_init_device(int device) {
+bool ggml_vk_init_device_idx(int device) {
     komputeManager()->initializeDevice(device, {},
                          {"VK_KHR_shader_float16_int8", "VK_KHR_8bit_storage",
                           "VK_KHR_16bit_storage", "VK_KHR_shader_non_semantic_info"});
@@ -311,7 +323,7 @@ ggml_vk_device ggml_vk_current_device() {
     if (!komputeManager()->hasDevice())
         return ggml_vk_device();
 
-    std::vector<ggml_vk_device> devices = ggml_vk_available_devices(0);
+    auto devices = ggml_vk_available_devices_internal(0);
     ggml_vk_filterByName(devices, komputeManager()->physicalDevice()->getProperties().deviceName);
     return devices.front();
 }
