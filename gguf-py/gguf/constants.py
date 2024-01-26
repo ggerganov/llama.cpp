@@ -113,6 +113,7 @@ class MODEL_ARCH(IntEnum):
     MINICPM    = auto()
     GEMMA      = auto()
     STARCODER2 = auto()
+    MAMBA      = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -144,6 +145,13 @@ class MODEL_TENSOR(IntEnum):
     ATTN_Q_NORM     = auto()
     ATTN_K_NORM     = auto()
     LAYER_OUT_NORM  = auto()
+    SSM_IN          = auto()
+    SSM_CONV1D      = auto()
+    SSM_X           = auto()
+    SSM_DT          = auto()
+    SSM_A           = auto()
+    SSM_D           = auto()
+    SSM_OUT         = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -171,6 +179,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.MINICPM:        "minicpm",
     MODEL_ARCH.GEMMA:          "gemma",
     MODEL_ARCH.STARCODER2:     "starcoder2",
+    MODEL_ARCH.MAMBA:          "mamba",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -202,6 +211,14 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down.{xid}",
     MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up.{xid}",
     MODEL_TENSOR.LAYER_OUT_NORM:  "blk.{bid}.layer_output_norm",
+    # FIXME: NAMES FOR MAMBA ARE NOT FINAL
+    MODEL_TENSOR.SSM_IN:          "blk.{bid}.ssm_in",
+    MODEL_TENSOR.SSM_CONV1D:      "blk.{bid}.ssm_conv1d",
+    MODEL_TENSOR.SSM_X:           "blk.{bid}.ssm_x",
+    MODEL_TENSOR.SSM_DT:          "blk.{bid}.ssm_dt",
+    MODEL_TENSOR.SSM_A:           "blk.{bid}.ssm_a",
+    MODEL_TENSOR.SSM_D:           "blk.{bid}.ssm_d",
+    MODEL_TENSOR.SSM_OUT:         "blk.{bid}.ssm_out",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -542,6 +559,19 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.MAMBA: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.SSM_IN,
+        MODEL_TENSOR.SSM_CONV1D,
+        MODEL_TENSOR.SSM_X,
+        MODEL_TENSOR.SSM_DT,
+        MODEL_TENSOR.SSM_A,
+        MODEL_TENSOR.SSM_D,
+        MODEL_TENSOR.SSM_OUT,
     ],
     # TODO
 }

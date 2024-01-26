@@ -1844,6 +1844,17 @@ class StarCoder2Model(Model):
     model_arch = gguf.MODEL_ARCH.STARCODER2
 
 
+@Model.register("MambaForCausalLM")
+class MambaModel(Model):
+    model_arch = gguf.MODEL_ARCH.MAMBA
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_embedding_length(self.hparams["d_model"])
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+
 ###### CONVERSION LOGIC ######
 
 

@@ -213,6 +213,7 @@ enum llm_arch {
     LLM_ARCH_MINICPM,
     LLM_ARCH_GEMMA,
     LLM_ARCH_STARCODER2,
+    LLM_ARCH_MAMBA,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -241,6 +242,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_MINICPM,         "minicpm"    },
     { LLM_ARCH_GEMMA,           "gemma"      },
     { LLM_ARCH_STARCODER2,      "starcoder2" },
+    { LLM_ARCH_MAMBA,           "mamba"      },
     { LLM_ARCH_UNKNOWN,         "(unknown)"  },
 };
 
@@ -399,6 +401,15 @@ enum llm_tensor {
     LLM_TENSOR_ATTN_Q_NORM,
     LLM_TENSOR_ATTN_K_NORM,
     LLM_TENSOR_LAYER_OUT_NORM,
+    // TODO: maybe use longer names?
+    // TODO: can the in_proj and/or the out_proj instead re-use some of the above types?
+    LLM_TENSOR_SSM_IN,
+    LLM_TENSOR_SSM_CONV1D,
+    LLM_TENSOR_SSM_X,
+    LLM_TENSOR_SSM_DT,
+    LLM_TENSOR_SSM_A,
+    LLM_TENSOR_SSM_D,
+    LLM_TENSOR_SSM_OUT,
 };
 
 static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
@@ -799,6 +810,22 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+        },
+    },
+    {
+        LLM_ARCH_MAMBA,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
+            { LLM_TENSOR_OUTPUT,          "output" },
+            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm"},
+            { LLM_TENSOR_SSM_IN,          "blk.%d.ssm_in"},
+            { LLM_TENSOR_SSM_CONV1D,      "blk.%d.ssm_conv1d"},
+            { LLM_TENSOR_SSM_X,           "blk.%d.ssm_x"},
+            { LLM_TENSOR_SSM_DT,          "blk.%d.ssm_dt"},
+            { LLM_TENSOR_SSM_A,           "blk.%d.ssm_a"},
+            { LLM_TENSOR_SSM_D,           "blk.%d.ssm_d"},
+            { LLM_TENSOR_SSM_OUT,         "blk.%d.ssm_out"},
         },
     },
     {
@@ -1737,6 +1764,22 @@ struct llama_layer {
     struct ggml_tensor * ffn_down_b; // b2
     struct ggml_tensor * ffn_up_b;   // b3
     struct ggml_tensor * ffn_act;
+
+    
+    // mamba proj
+    struct ggml_tensor * ssm_in;
+    struct ggml_tensor * ssm_x;
+    struct ggml_tensor * ssm_dt;
+    struct ggml_tensor * ssm_out;
+
+    // mamba
+    struct ggml_tensor * ssm_conv1d;
+    struct ggml_tensor * ssm_a;
+    struct ggml_tensor * ssm_d;
+
+    // mamba bias
+    struct ggml_tensor * ssm_conv1d_b;
+    struct ggml_tensor * ssm_dt_b;
 };
 
 struct llama_kv_cell {
@@ -3376,6 +3419,29 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_MAMBA:
+            {
+                switch (hparams.n_layer) {
+                    case 24:
+                        switch (hparams.n_embd) {
+                            case 768: model.type = e_model::MODEL_SMALL; break;
+                            default: model.type = e_model::MODEL_UNKNOWN;
+                        } break;
+                    case 48:
+                        switch (hparams.n_embd) {
+                            case 1024: model.type = e_model::MODEL_MEDIUM; break;
+                            case 1536: model.type = e_model::MODEL_LARGE; break;
+                            case 2048: model.type = e_model::MODEL_XL; break;
+                            default: model.type = e_model::MODEL_UNKNOWN;
+                        } break;
+                    case 64:
+                        switch (hparams.n_embd) {
+                            case 2560: model.type = e_model::MODEL_3B; break;
+                            default: model.type = e_model::MODEL_UNKNOWN;
+                        } break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
+            }
         default: (void)0;
     }
 
@@ -4596,6 +4662,36 @@ static bool llm_load_tensors(
                         layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP ,  "bias", i), {  n_ff});
                     }
                 } break;
+            case LLM_ARCH_MAMBA:
+                {
+                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                    
+                    // output
+                    {
+                        model.output_norm   = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab});
+                    }
+                    // TODO: MAMBA
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        ggml_context * ctx_layer = ctx_for_layer(i);
+                        ggml_context * ctx_split = ctx_for_layer_split(i);
+
+                        auto & layer = model.layers[i];
+
+                        // norm
+                        layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
+
+                        // TODO: D, in_proj, conv1d, x_proj, dt_proj, A_log, out_proj
+                        // TODO: what's the difference between ctx_layer and ctx_split?
+                        //       A: It seems that ctx_split is for matrices (2d???) while ctx_layer is for other things (like 1D bias and norms, probably.)
+
+                        // out_proj
+                        layer.ssm_out = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_OUT, "weight", i), {2*n_embd, n_embd});
+
+                      
+                    }
+                }
             default:
                 throw std::runtime_error("unknown architecture");
         }
@@ -7769,6 +7865,92 @@ struct llm_build_context {
         cur = llm_build_norm(ctx0, cur, hparams,
                 model.output_norm, model.output_norm_b,
                 LLM_NORM, cb, -1);
+        cb(cur, "result_norm", -1);
+
+        // lm_head
+        cur = ggml_mul_mat(ctx0, model.output, cur);
+        cb(cur, "result_output", -1);
+
+        ggml_build_forward_expand(gf, cur);
+
+        return gf;
+    }
+
+    struct ggml_cgraph * build_mamba() {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
+
+        // d_model
+        const int64_t n_embd = hparams.n_embd;
+        const int64_t d_state = 16;
+        const int64_t d_conv = 4;
+        // expand = 2
+        // d_inner = expand * d_model
+        const int64_t d_inner = 2 * n_embd; // FIXME: this is wrong
+
+        struct ggml_tensor * cur;
+        struct ggml_tensor * inpL;
+
+        // TODO: give it the right size
+        struct ggml_tensor * state;
+
+        inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, cb);
+        cb(inpL, "inp_embd", -1);
+
+        for (int il = 0; il < n_layer; ++il) {
+            // FIXME: init attn_norm
+            // norm
+            cur = llm_build_norm(ctx0, inpL, hparams,
+                    model.layers[il].attn_norm, NULL,
+                    LLM_NORM_RMS, cb, il);
+            // TODO: that's probably the wrong name.
+            cb(cur, "attn_norm", il);
+
+            // conv
+            {
+                // [] * [] = [2*n_embd]
+                struct ggml_tensor * xz = ggml_mul_mat(ctx0, cur, model.layers[il].ssm_in);
+                // split the above in two
+                struct ggml_tensor * x = ggml_view_1d(ctx0, xz, d_inner, 0);
+                struct ggml_tensor * z = ggml_view_1d(ctx0, xz, d_inner, d_inner);
+
+                
+                // FIXME: this is wrong
+                cur = ggml_conv_1d(ctx0, cur, model.layers[il].ssm_conv1d, 1, d_conv - 1, 1);
+
+                cur = ggml_add(ctx0, cur, model.layers[il].ssm_conv1d_b);
+
+                // TODO: there's some SiLU in there (but no ffn? or is the conv an ffn?)
+                cur = ggml_silu(ctx0, cur);
+            }
+
+            // ssm
+            {
+                
+                // TODO: use ggml_soft_plus here
+                
+            }
+
+            // TODO: there's some SiLU again towards the end. Can the `llm_build_ffn` helper be used?
+            //       Maybe the best way is to implement it, _then_ check if that helper would do the same thing.
+            // discretize
+            {
+            }
+
+            // residual
+            cur = ggml_add(ctx0, cur, inpL);
+            cb(cur, "l_out", il);
+
+            // input for next layer
+            inpL = cur;
+        }
+
+        // the last step of each layer already makes these equivalent
+        // cur = inpL;
+
+        // final rmsnorm
+        cur = llm_build_norm(ctx0, cur, hparams,
+                model.output_norm, NULL,
+                LLM_NORM_RMS, cb, -1);
         cb(cur, "result_norm", -1);
 
         // lm_head
@@ -12321,6 +12503,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_MPT:
         case LLM_ARCH_REFACT:
         case LLM_ARCH_BLOOM:
+        case LLM_ARCH_MAMBA:
             return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values

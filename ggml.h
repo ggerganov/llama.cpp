@@ -410,6 +410,7 @@ extern "C" {
         GGML_OP_DIV,
         GGML_OP_SQR,
         GGML_OP_SQRT,
+        GGML_OP_EXP,
         GGML_OP_LOG,
         GGML_OP_SUM,
         GGML_OP_SUM_ROWS,
@@ -443,6 +444,7 @@ extern "C" {
         GGML_OP_DIAG_MASK_ZERO,
         GGML_OP_SOFT_MAX,
         GGML_OP_SOFT_MAX_BACK,
+        GGML_OP_SOFT_PLUS,
         GGML_OP_ROPE,
         GGML_OP_ROPE_BACK,
         GGML_OP_ALIBI,
@@ -929,6 +931,14 @@ extern "C" {
             struct ggml_tensor  * a);
 
     GGML_API struct ggml_tensor * ggml_sqrt_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_exp(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    GGML_API struct ggml_tensor * ggml_exp_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
@@ -1419,6 +1429,15 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    GGML_API struct ggml_tensor * ggml_soft_plus(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    // in-place, returns view(a)
+    GGML_API struct ggml_tensor * ggml_soft_plus_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
 
     // rotary position embedding
     // if mode & 1 == 1, skip n_past elements (DEPRECATED)
