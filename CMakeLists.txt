@@ -549,7 +549,7 @@ if (LLAMA_CUBLAS)
         message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
 
         get_flags(${CUDA_CCID} ${CUDA_CCVER})
-        set(CUDA_CXX_FLAGS ${GF_CXX_FLAGS})  # This is passed to -Xcompiler later
+        list(APPEND CUDA_CXX_FLAGS ${GF_CXX_FLAGS})  # This is passed to -Xcompiler later
     endif()
 endif()
 
@@ -712,12 +712,10 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
 
 if (LLAMA_CUBLAS)
-    if (NOT MSVC)
-        list(APPEND CUDA_CXX_FLAGS ${ARCH_FLAGS})
-        list(JOIN CUDA_CXX_FLAGS " " CUDA_CXX_FLAGS_JOINED)  # pass host compiler flags as a single argument
-        if (NOT CUDA_CXX_FLAGS_JOINED STREQUAL "")
-            list(APPEND CUDA_FLAGS -Xcompiler ${CUDA_CXX_FLAGS_JOINED})
-        endif()
+    list(APPEND CUDA_CXX_FLAGS ${ARCH_FLAGS})
+    list(JOIN CUDA_CXX_FLAGS " " CUDA_CXX_FLAGS_JOINED)  # pass host compiler flags as a single argument
+    if (NOT CUDA_CXX_FLAGS_JOINED STREQUAL "")
+        list(APPEND CUDA_FLAGS -Xcompiler ${CUDA_CXX_FLAGS_JOINED})
     endif()
     add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 endif()
