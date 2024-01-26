@@ -35,6 +35,7 @@ jobs:
           - { tag: "full-cuda", dockerfile: ".devops/full-cuda.Dockerfile", platforms: "linux/amd64" }
           - { tag: "light-rocm", dockerfile: ".devops/main-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
           - { tag: "full-rocm", dockerfile: ".devops/full-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "light-intel", dockerfile: ".devops/main-intel.Dockerfile", platforms: "linux/amd64" }
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3

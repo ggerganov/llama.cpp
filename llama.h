@@ -2,6 +2,7 @@
 #define LLAMA_H
 
 #include "ggml.h"
+#include "ggml-backend.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
 #define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
@@ -43,7 +44,7 @@
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 3
+#define LLAMA_SESSION_VERSION 4
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_KOMPUTE)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
@@ -106,6 +107,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ2_XXS       = 19, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ2_XS        = 20, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q2_K_S        = 21, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_XS       = 22, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -231,6 +233,9 @@ extern "C" {
         float    yarn_beta_slow;   // YaRN high correction dim
         uint32_t yarn_orig_ctx;    // YaRN original context size
 
+        ggml_backend_sched_eval_callback cb_eval;
+        void * cb_eval_user_data;
+
         enum ggml_type type_k; // data type for K cache
         enum ggml_type type_v; // data type for V cache
 
@@ -249,6 +254,7 @@ extern "C" {
         bool quantize_output_tensor; // quantize output.weight
         bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
+        void * imatrix;              // pointer to importance matrix data
     } llama_model_quantize_params;
 
     // grammar types
@@ -713,14 +719,21 @@ extern "C" {
                            float   penalty_present);
 
     /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
-    /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
-    /// @params guidance_ctx A separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
-    /// @params scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
-    LLAMA_API void llama_sample_classifier_free_guidance(
+    /// @param logits Logits extracted from the original generation context.
+    /// @param logits_guidance Logits extracted from a separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
+    /// @param scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
+    LLAMA_API void llama_sample_apply_guidance(
+              struct llama_context * ctx,
+                             float * logits,
+                             float * logits_guidance,
+                             float   scale);
+
+    LLAMA_API DEPRECATED(void llama_sample_classifier_free_guidance(
               struct llama_context * ctx,
             llama_token_data_array * candidates,
               struct llama_context * guidance_ctx,
-                             float   scale);
+                             float   scale),
+              "use llama_sample_apply_guidance() instead");
 
     /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
     LLAMA_API void llama_sample_softmax(
@@ -761,6 +774,14 @@ extern "C" {
           llama_token_data_array * candidates,
                            float   p,
                           size_t   min_keep);
+
+    /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
+    LLAMA_API void llama_sample_entropy(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates_p,
+                           float   min_temp,
+                           float   max_temp,
+                           float   exponent_val);
 
     LLAMA_API void llama_sample_temp(
             struct llama_context * ctx,

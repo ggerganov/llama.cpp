@@ -65,6 +65,10 @@ int main(int argc, char ** argv) {
     // load the draft model
     params.model = params.model_draft;
     params.n_gpu_layers = params.n_gpu_layers_draft;
+    if (params.n_threads_draft > 0) {
+        params.n_threads = params.n_threads_draft;
+    }
+    params.n_threads_batch = params.n_threads_batch_draft;
     std::tie(model_dft, ctx_dft) = llama_init_from_gpt_params(params);
 
     {

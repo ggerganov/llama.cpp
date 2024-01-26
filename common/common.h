@@ -46,7 +46,9 @@ struct gpt_params {
     uint32_t seed                           = -1;    // RNG seed
 
     int32_t n_threads                       = get_num_physical_cores();
+    int32_t n_threads_draft                 = -1;
     int32_t n_threads_batch                 = -1;    // number of threads to use for batch processing (-1 = use n_threads)
+    int32_t n_threads_batch_draft           = -1;
     int32_t n_predict                       = -1;    // new tokens to predict
     int32_t n_ctx                           = 512;   // context size
     int32_t n_batch                         = 512;   // batch size for prompt processing (must be >=32 to use BLAS)
@@ -89,6 +91,7 @@ struct gpt_params {
     std::string input_suffix      = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
+    std::string logits_file       = "";  // file for saving *all* logits
 
     std::vector<llama_model_kv_override> kv_overrides;
 
@@ -102,6 +105,14 @@ struct gpt_params {
                                     //
     bool   hellaswag       = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
+
+    bool   winogrande      = false; // compute Winogrande score over random tasks from datafile supplied in prompt
+    size_t winogrande_tasks= 0;     // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
+
+    bool   multiple_choice = false; // compute TruthfulQA score over random tasks from datafile supplied in prompt
+    size_t multiple_choice_tasks = 0;     // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
+
+    bool   kl_divergence   = false; // compute KL-divergence
 
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool random_prompt     = false; // do not randomize prompt if none provided
@@ -126,6 +137,7 @@ struct gpt_params {
     bool use_mlock         = false; // use mlock to keep model in memory
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool display_prompt    = true;  // print prompt before generation
     bool infill            = false; // use infill mode
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
     bool no_kv_offload     = false; // disable KV offloading

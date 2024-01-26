@@ -109,8 +109,8 @@ void ggml_tallocr_alloc(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
         if (block->size >= size) {
             best_fit_block = alloc->n_free_blocks - 1;
         } else {
-            fprintf(stderr, "%s: not enough space in the buffer (needed %zu, largest block available %zu)\n",
-                    __func__, size, max_avail);
+            fprintf(stderr, "%s: not enough space in the buffer to allocate %s (needed %zu, largest block available %zu)\n",
+                    __func__, tensor->name, size, max_avail);
             GGML_ASSERT(!"not enough space in the buffer");
             return;
         }
@@ -335,7 +335,9 @@ bool ggml_tallocr_is_measure(ggml_tallocr_t alloc) {
 }
 
 size_t ggml_tallocr_max_size(ggml_tallocr_t alloc) {
-    return alloc->max_size;
+    // FIXME: changes in the tensor sizes compared to the measure graph may cause allocations to fail
+    // to avoid this, we add a 10% margin to the buffer size
+    return alloc->max_size + alloc->max_size/10;
 }
 
 // graph allocator

@@ -72,7 +72,7 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest --verbose --timeout 900
+          ctest -L main --verbose --timeout 900
 
   ubuntu-latest-cmake-sanitizer:
     runs-on: ubuntu-latest
@@ -107,7 +107,7 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest --verbose --timeout 900
+          ctest -L main --verbose --timeout 900
 
   ubuntu-latest-cmake-mpi:
     runs-on: ubuntu-latest
@@ -141,7 +141,7 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest --verbose
+          ctest -L main --verbose
 
   # TODO: build with LLAMA_NO_METAL because test-backend-ops fail on "Apple Paravirtual device" and I don't know
   #       how to debug it.
@@ -202,7 +202,7 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest --verbose --timeout 900
+          ctest -L main --verbose --timeout 900
 
   macOS-latest-cmake-ios:
     runs-on: macos-latest
@@ -295,7 +295,7 @@ jobs:
       OPENBLAS_VERSION: 0.3.23
       OPENCL_VERSION: 2023.04.17
       CLBLAST_VERSION: 1.6.0
-      SDE_VERSION: 9.21.1-2023-04-24
+      SDE_VERSION: 9.33.0-2024-01-07
 
     strategy:
       matrix:
@@ -394,19 +394,19 @@ jobs:
         if: ${{ matrix.build != 'clblast' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # not all machines have native AVX-512
         run: |
           cd build
-          ctest -C Release --verbose --timeout 900
+          ctest -L main -C Release --verbose --timeout 900
 
       - name: Test (Intel SDE)
         id: cmake_test_sde
         if: ${{ matrix.build == 'avx512' && env.HAS_AVX512F == '0' }} # use Intel SDE for AVX-512 emulation
         run: |
-          curl.exe -o $env:RUNNER_TEMP/sde.tar.xz -L "https://downloadmirror.intel.com/777395/sde-external-${env:SDE_VERSION}-win.tar.xz"
+          curl.exe -o $env:RUNNER_TEMP/sde.tar.xz -L "https://downloadmirror.intel.com/813591/sde-external-${env:SDE_VERSION}-win.tar.xz"
           # for some weird reason windows tar doesn't like sde tar.xz
           7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/sde.tar.xz
           7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/sde.tar
           $sde = $(join-path $env:RUNNER_TEMP sde-external-${env:SDE_VERSION}-win/sde.exe)
           cd build
-          & $sde -future -- ctest -C Release --verbose --timeout 900
+          & $sde -future -- ctest -L main -C Release --verbose --timeout 900
 
       - name: Determine tag name
         id: tag
@@ -514,6 +514,31 @@ jobs:
 
       - name: Build Xcode project
         run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
+
+  android-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v3
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: 17
+          distribution: zulu
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          log-accepted-android-sdk-licenses: false
+
+      - name: Build
+        run: |
+          cd examples/llama.android
+
+          # Skip armeabi-v7a for now (https://github.com/llvm/llvm-project/issues/65820).
+          ./gradlew build --no-daemon -Pskip-armeabi-v7a
 
 #  freeBSD-latest:
 #    runs-on: macos-12
