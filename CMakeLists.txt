@@ -464,7 +464,7 @@ endif()
 
 if (LLAMA_SYCL)
     if ( NOT DEFINED ENV{ONEAPI_ROOT})
-    message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+        message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
     endif()
     #todo: AOT
 
