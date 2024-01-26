@@ -485,10 +485,7 @@ if (LLAMA_SYCL)
     set(GGML_SOURCES_SYCL ggml-sycl.cpp)
 
     set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
-
 endif()
-
-
 
 function(get_flags CCID CCVER)
     set(C_FLAGS "")
