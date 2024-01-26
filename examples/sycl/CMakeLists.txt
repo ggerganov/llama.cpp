@@ -1,3 +1,7 @@
+#  MIT license
+#  Copyright (C) 2024 Intel Corporation
+#  SPDX-License-Identifier: MIT
+
 set(TARGET ls-sycl-device)
 add_executable(${TARGET} ls-sycl-device.cpp)
 install(TARGETS ${TARGET} RUNTIME)

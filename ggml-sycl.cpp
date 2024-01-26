@@ -1,3 +1,8 @@
+/*MIT license
+  Copyright (C) 2024 Intel Corporation
+  SPDX-License-Identifier: MIT
+*/
+
 #include <algorithm>
 #include <assert.h>
 #include <atomic>

@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#  MIT license
+#  Copyright (C) 2024 Intel Corporation
+#  SPDX-License-Identifier: MIT
+
 INPUT2="Building a website can be done in 10 simple steps:\nStep 1:"
 source /opt/intel/oneapi/setvars.sh
 
