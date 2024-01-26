@@ -33,19 +33,24 @@
 #include "shaderop_cpy_f32_f16.h"
 #include "shaderop_cpy_f32_f32.h"
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <memory>
-#include <vector>
-#include <utility>
-#include <fstream>
-#include <exception>
-#include <thread>
-#include <mutex>
-#include <atomic>
+#include <algorithm>
+#include <array>
+#include <cassert>
 #include <cstring>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include <kompute/Kompute.hpp>
+#include <vulkan/vulkan.hpp>
+
+#ifdef __linux__
+#include <cstdlib> // for setenv
+#endif
 
 #define QK4_0 32
 #define QR4_0 2

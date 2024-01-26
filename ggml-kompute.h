@@ -1,10 +1,11 @@
 #pragma once
 
+#include "ggml.h"
 #include "ggml-backend.h"
 
 #include <cstddef>
-#include <vector>
 #include <string>
+#include <vector>
 
 struct ggml_vk_device {
     int index = 0;
