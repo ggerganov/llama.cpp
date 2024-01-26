@@ -85,6 +85,15 @@ public:
 
 static kompute_manager komputeManager;
 
+struct ggml_vk_memory {
+    void *data = nullptr;
+    size_t size = 0;
+    vk::DeviceMemory *primaryMemory = nullptr;
+    vk::Buffer *primaryBuffer = nullptr;
+    vk::DeviceMemory *stagingMemory = nullptr;
+    vk::Buffer *stagingBuffer = nullptr;
+};
+
 #ifdef __linux__
 __attribute__((constructor))
 static void enable_sam() {
@@ -302,13 +311,13 @@ ggml_vk_device ggml_vk_current_device() {
     return devices.front();
 }
 
-ggml_kompute_context *ggml_vk_init() {
+static ggml_kompute_context * ggml_vk_init() {
     GGML_ASSERT(s_kompute_context == nullptr);
     s_kompute_context = new ggml_kompute_context;
     return s_kompute_context;
 }
 
-void ggml_vk_free(struct ggml_kompute_context * ctx) {
+static void ggml_vk_free(struct ggml_kompute_context * ctx) {
     assert(ctx == s_kompute_context);
     s_kompute_context = nullptr;
     if (ctx != nullptr) {
@@ -457,7 +466,7 @@ static ggml_vk_memory ggml_vk_allocate(size_t size) {
     return memory;
 }
 
-void ggml_vk_free_memory(ggml_vk_memory &memory)
+static void ggml_vk_free_memory(ggml_vk_memory &memory)
 {
     komputeManager()->device()->destroy(
       *memory.primaryBuffer,
@@ -1376,7 +1385,7 @@ static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
     return false;
 }
 
-void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf) {
+static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf) {
     const int n_seq = 8;
 
     // FIXME: Figure out if we can somehow optimize the size of the pool... right now we're setting
