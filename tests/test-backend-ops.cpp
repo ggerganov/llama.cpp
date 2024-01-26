@@ -364,15 +364,15 @@ struct test_case {
         printf("  %s(%s): ", op_desc(out).c_str(), vars().c_str());
         fflush(stdout);
 
-        // check if backends support op
+        // check if the backends support the ops
         bool supported = true;
         for (ggml_backend_t backend : {backend1, backend2}) {
-            if (
-                !ggml_backend_supports_op(backend, out)
-                || (op_desc(out) == "MOE" && !strcmp(ggml_backend_name(backend), "Kompute"))
-            ) {
-                printf("not supported [%s] ", ggml_backend_name(backend));
-                supported = false;
+            for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+                if (!ggml_backend_supports_op(backend, t)) {
+                    printf("not supported [%s] ", ggml_backend_name(backend));
+                    supported = false;
+                    break;
+                }
             }
         }
         if (!supported) {
