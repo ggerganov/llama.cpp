@@ -45,8 +45,8 @@ fi
 
 if [ ! -z ${GG_BUILD_SYCL} ]; then
     if [ -z ${ONEAPI_ROOT} ]; then
-      echo "Not detected ONEAPI_ROOT, please install oneAPI base toolkit and enable it by:\n source /opt/intel/oneapi/setvars.sh"
-      exit 1
+        echo "Not detected ONEAPI_ROOT, please install oneAPI base toolkit and enable it by:\n source /opt/intel/oneapi/setvars.sh"
+        exit 1
     fi
 
     CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_SYCL=1 DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON"
