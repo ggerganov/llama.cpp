@@ -186,10 +186,6 @@ int main(int argc, char ** argv) {
     g_model = &model;
     g_ctx = &ctx;
 
-#if defined(GGML_USE_KOMPUTE)
-    ggml_vk_init_device(0, "gpu");
-#endif
-
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
     std::tie(model, ctx) = llama_init_from_gpt_params(params);

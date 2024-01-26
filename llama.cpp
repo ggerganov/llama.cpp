@@ -10162,9 +10162,6 @@ struct llama_context * llama_new_context_with_model(
 
 void llama_free(struct llama_context * ctx) {
     delete ctx;
-#ifdef GGML_USE_KOMPUTE
-    ggml_vk_free_device();
-#endif
 }
 
 const llama_model * llama_get_model(const struct llama_context * ctx) {
