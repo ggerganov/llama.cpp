@@ -4338,8 +4338,7 @@ struct llm_build_context {
         n_orig_ctx       (cparams.n_yarn_orig_ctx),
         do_rope_shift    (worst_case || kv_self.has_shift),
         cb               (cb),
-        buf_compute_meta (lctx.buf_compute_meta)
-        {
+        buf_compute_meta (lctx.buf_compute_meta) {
             // all initializations should be done in init()
         }
 
