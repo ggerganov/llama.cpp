@@ -714,16 +714,6 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
         dst[row] = tmp[0];
     }
 }
-
-__kernel void add_f32(__global float * x, const int x_offset, __global float * y, const int y_offset, __global float * dst, const int dst_offset, const int ky) {
-    const int i = get_group_id(0)*get_local_size(0) + get_local_id(0);
-
-    if (i >= get_global_size(0)) {
-        return;
-    }
-
-    dst[dst_offset + i] = x[x_offset + i] + y[y_offset + i%ky];
-}
 );
 
 
@@ -793,6 +783,7 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float
         dst[row] = tmp[0];
     }
 }
+
 );
 
 
@@ -805,6 +796,18 @@ __kernel void KERNEL_NAME(__global TYPE* x, const int x_offset, __global TYPE* y
     }
 
     dst[dst_offset + i] = x[x_offset + i] * y[y_offset + i%ky];
+}
+);
+
+std::string add_template = MULTILINE_QUOTE(
+__kernel void add_f32(__global float * x, const int x_offset, __global float * y, const int y_offset, __global float * dst, const int dst_offset, const int ky) {
+    const int i = get_group_id(0)*get_local_size(0) + get_local_id(0);
+
+    if (i >= get_global_size(0)) {
+        return;
+    }
+
+    dst[dst_offset + i] = x[x_offset + i] + y[y_offset + i%ky];
 }
 );
 
@@ -887,6 +890,7 @@ static std::string generate_kernels() {
         }
         src << mul_kernel << '\n';
     }
+    src << add_template << '\n';
 
     return src.str();
 }
@@ -1110,9 +1114,10 @@ void ggml_cl_init(void) {
     char *ext_buffer = (char *)alloca(ext_str_size + 1);
     clGetDeviceInfo(device, CL_DEVICE_EXTENSIONS, ext_str_size, ext_buffer, NULL);
     ext_buffer[ext_str_size] = '\0'; // ensure it is null terminated
+    // Disabled due to faulty outputs
     // Check if ext_buffer contains cl_khr_fp16
-    fp16_support = strstr(ext_buffer, "cl_khr_fp16") != NULL;
-    fprintf(stderr, "ggml_opencl: device FP16 support: %s\n", fp16_support ? "true" : "false");
+    fp16_support = false;  // strstr(ext_buffer, "cl_khr_fp16") != NULL;
+    // fprintf(stderr, "ggml_opencl: device FP16 support: %s\n", fp16_support ? "true" : "false");
 
     cl_context_properties properties[] = {
         (intptr_t)CL_CONTEXT_PLATFORM, (intptr_t)platform, 0
