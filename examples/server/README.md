@@ -30,7 +30,9 @@ Command line options:
 -   `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
 -   `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load "a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 -   `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
-
+-   `--grp-attn-n`: Extend context size through self extend. Extend context size n-times (default: 1), used together with `--grp-attn-w`
+-   `--grp-attn-w`: Width of the self extend context size extension.  (default: 512) shouldn't be greater than original context size
+- 
 ## Build
 
 server is build alongside everything else from the root of the project

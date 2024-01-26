@@ -1810,6 +1810,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                        advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                        types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
+    printf("  --grp-attn-n N    Extend context size through self extend. Extend context size n-times (default: 1), used together with `--grp-attn-w`");
+    printf("  --grp-attn-w N    Width of the self extend context size extension. (default: 512) shouldn't be greater than original context size");
     printf("\n");
 }
 
