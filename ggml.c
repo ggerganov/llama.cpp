@@ -7207,6 +7207,17 @@ static void ggml_compute_forward_add_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
+#ifdef GGML_USE_CLBLAST
+    if (src1->backend == GGML_BACKEND_GPU) {
+        // TODO: OpenCL kernel support full broadcast
+        GGML_ASSERT(ggml_can_repeat_rows(src1, src0));
+        if (ith == 0) {
+            ggml_cl_add(src0, src1, dst);
+        }
+        return;
+    }
+#endif
+
     const int nr  = ggml_nrows(src0);
 
     GGML_TENSOR_BINARY_OP_LOCALS
@@ -16597,7 +16608,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             } break;
         case GGML_OP_SOFT_MAX:
             {
-                n_tasks = MIN(MIN(4, n_threads), ggml_nrows(node->src[0]));
+                n_tasks = MIN(n_threads, ggml_nrows(node->src[0]));
             } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {

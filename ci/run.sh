@@ -22,9 +22,9 @@ mkdir -p "$2"
 OUT=$(realpath "$1")
 MNT=$(realpath "$2")
 
-rm -v $OUT/*.log
-rm -v $OUT/*.exit
-rm -v $OUT/*.md
+rm -f "$OUT/*.log"
+rm -f "$OUT/*.exit"
+rm -f "$OUT/*.md"
 
 sd=`dirname $0`
 cd $sd/../
@@ -94,7 +94,7 @@ function gg_run_ctest_debug {
     (time cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                          ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    (time ctest --output-on-failure -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    (time ctest --output-on-failure -L main -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
 
     set +e
 }
@@ -123,9 +123,9 @@ function gg_run_ctest_release {
     (time make -j                                            ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     if [ -z ${GG_BUILD_LOW_PERF} ]; then
-        (time ctest --output-on-failure ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+        (time ctest --output-on-failure -L main ) 2>&1 | tee -a $OUT/${ci}-ctest.log
     else
-        (time ctest --output-on-failure -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+        (time ctest --output-on-failure -L main -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
     fi
 
     set +e
@@ -135,6 +135,61 @@ function gg_sum_ctest_release {
     gg_printf '### %s\n\n' "${ci}"
 
     gg_printf 'Runs ctest in release mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
+    gg_printf '```\n'
+}
+
+function gg_get_model {
+    local gguf_3b="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
+    local gguf_7b="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
+    if [[ -s $gguf_3b ]]; then
+        echo -n "$gguf_3b"
+    elif [[ -s $gguf_7b ]]; then
+        echo -n "$gguf_7b"
+    else
+        echo >&2 "No model found. Can't run gg_run_ctest_with_model."
+        exit 1
+    fi
+}
+
+function gg_run_ctest_with_model_debug {
+    cd ${SRC}
+
+    local model; model=$(gg_get_model)
+    cd build-ci-debug
+    set -e
+    (LLAMACPP_TEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    set +e
+    cd ..
+}
+
+function gg_run_ctest_with_model_release {
+    cd ${SRC}
+
+    local model; model=$(gg_get_model)
+    cd build-ci-release
+    set -e
+    (LLAMACPP_TEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    set +e
+    cd ..
+}
+
+function gg_sum_ctest_with_model_debug {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs ctest with model files in debug mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
+    gg_printf '```\n'
+}
+
+function gg_sum_ctest_with_model_release {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs ctest with model files in release mode\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '```\n'
     gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
@@ -182,8 +237,6 @@ function gg_run_open_llama_3b_v2 {
     model_q6_k="${path_models}/ggml-model-q6_k.gguf"
 
     wiki_test_60="${path_wiki}/wiki.test-60.raw"
-
-    ./bin/test-autorelease ${model_f16}
 
     ./bin/quantize ${model_f16} ${model_q8_0} q8_0
     ./bin/quantize ${model_f16} ${model_q4_0} q4_0
@@ -507,14 +560,18 @@ function gg_sum_open_llama_7b_v2 {
 ## main
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
+    # Create symlink: ./llama.cpp/models-mnt -> $MNT/models/models-mnt
     rm -rf ${SRC}/models-mnt
-
     mnt_models=${MNT}/models
     mkdir -p ${mnt_models}
     ln -sfn ${mnt_models} ${SRC}/models-mnt
 
-    python3 -m pip install -r ${SRC}/requirements.txt
-    python3 -m pip install --editable gguf-py
+    # Create a fresh python3 venv and enter it
+    python3 -m venv "$MNT/venv"
+    source "$MNT/venv/bin/activate"
+
+    pip install -r ${SRC}/requirements.txt --disable-pip-version-check
+    pip install --editable gguf-py --disable-pip-version-check
 fi
 
 ret=0
@@ -529,6 +586,8 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
         else
             test $ret -eq 0 && gg_run open_llama_7b_v2
         fi
+        test $ret -eq 0 && gg_run ctest_with_model_debug
+        test $ret -eq 0 && gg_run ctest_with_model_release
     fi
 fi
 

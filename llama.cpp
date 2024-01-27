@@ -8146,10 +8146,57 @@ void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * can
         auto comp = [](const llama_token_data & a, const llama_token_data & b) {
             return a.logit > b.logit;
         };
-        if (k == (int) candidates->size) {
-            std::sort(candidates->data, candidates->data + candidates->size, comp);
-        } else {
+        if (k <= 128) {
             std::partial_sort(candidates->data, candidates->data + k, candidates->data + candidates->size, comp);
+        } else {
+            constexpr int   nbuckets     = 128;
+            constexpr float bucket_low   = -10.0f;
+            constexpr float bucket_high  =  10.0f;
+            constexpr float bucket_scale = nbuckets/(bucket_high - bucket_low);
+            constexpr float bucker_inter = -bucket_low * bucket_scale;
+
+            std::vector<int> bucket_idx(candidates->size);
+            std::vector<int> histo(nbuckets, 0);
+
+            for (int i = 0; i < (int)candidates->size; ++i) {
+                const float val = candidates->data[i].logit;
+                int ib = int(bucket_scale * val + bucker_inter); //nbuckets * (val - bucket_low) / (bucket_high - bucket_low);
+                ib = std::max(0, std::min(nbuckets-1, ib));
+                bucket_idx[i] = ib;
+                ++histo[ib];
+            }
+            int nhave = 0;
+            int ib = nbuckets - 1;
+            for ( ; ib >= 0; --ib) {
+                nhave += histo[ib];
+                if (nhave >= k) break;
+            }
+            std::vector<llama_token_data> tmp_tokens(nhave);
+            auto ptr = tmp_tokens.data();
+            std::vector<llama_token_data*> bucket_ptrs;
+            bucket_ptrs.reserve(nbuckets - ib);
+            for (int j = nbuckets - 1; j >= ib; --j) {
+                bucket_ptrs.push_back(ptr);
+                ptr += histo[j];
+            }
+            for (int i = 0; i < (int)candidates->size; ++i) {
+                int j = bucket_idx[i];
+                if (j >= ib) {
+                    *bucket_ptrs[nbuckets-1-j]++ = candidates->data[i];
+                }
+            }
+
+            ptr = tmp_tokens.data();
+            int ndone = 0;
+            for (int j = nbuckets-1; j > ib; --j) {
+                std::sort(ptr, ptr + histo[j], comp);
+                ptr += histo[j];
+                ndone += histo[j];
+            }
+            std::partial_sort(ptr, ptr + k - ndone, ptr + histo[ib], comp);
+
+            std::memcpy(candidates->data, tmp_tokens.data(), k*sizeof(llama_token_data));
+
         }
         candidates->sorted = true;
     }
@@ -8335,6 +8382,73 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
     std::copy(new_candidates.begin(), new_candidates.end(), candidates->data);
     candidates->size = new_candidates.size();
     candidates->sorted = false;
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
+}
+
+void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp, float max_temp, float exponent_val) {
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    // no need to do anything if there is only one (or zero) candidates
+    if(candidates_p->size <= 1) {
+        return;
+    }
+
+    // Calculate maximum possible entropy
+    float max_entropy = -logf(1.0f / candidates_p->size);
+
+    llama_sample_softmax(nullptr, candidates_p);
+
+    // Calculate entropy of the softmax probabilities
+    float entropy = 0.0f;
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        float prob = candidates_p->data[i].p;
+        if (prob > 0.0f) { // Ensure no log(0)
+            entropy -= prob * logf(prob);
+        }
+    }
+
+    // Normalize the entropy (max_entropy cannot be 0 here because we checked candidates_p->size != 1 above)
+    float normalized_entropy = entropy / max_entropy;
+
+    // Map the normalized entropy to the desired temperature range using the power function
+    float dyn_temp = min_temp + (max_temp - min_temp) * powf(normalized_entropy, exponent_val);
+
+#ifdef DEBUG
+    LLAMA_LOG_INFO("Your text maxtemp value is: %f\n", max_temp);
+    LLAMA_LOG_INFO("Entropy: %f\n", entropy);
+    LLAMA_LOG_INFO("Max Possible Entropy: %f\n", max_entropy);
+    LLAMA_LOG_INFO("Normalized Entropy: %f\n", normalized_entropy);
+    LLAMA_LOG_INFO("Exponent: %f\n", exponent_val);
+    LLAMA_LOG_INFO("Dynamic Temperature (dyn_temp): %f\n", dyn_temp);
+#endif
+
+    // Apply the dynamically calculated temperature scaling
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        candidates_p->data[i].logit /= dyn_temp;
+    }
+
+    // Re-compute softmax probabilities after scaling logits with dynamic temperature
+    double max_l_double = candidates_p->data[0].logit;
+    double cum_sum_double = 0.0;
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        double p = exp(candidates_p->data[i].logit - max_l_double);
+        candidates_p->data[i].p = p; // Store the scaled probability
+        cum_sum_double += p;
+    }
+    for (size_t i = 0; i < candidates_p->size; ++i) {
+        candidates_p->data[i].p /= cum_sum_double; // Re-normalize the probabilities
+    }
+
+#ifdef DEBUG
+    // Print the updated top 25 probabilities after temperature scaling
+    LLAMA_LOG_INFO("\nUpdated Top 25 Probabilities After Dynamic Temperature Scaling (in percentages):\n");
+    for (size_t i = 0; i < 25 && i < candidates_p->size; ++i) {
+        LLAMA_LOG_INFO("Token %zu: %f%%\n", i + 1, candidates_p->data[i].p * 100.0f);
+    }
+#endif
 
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
@@ -9019,6 +9133,23 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
     auto use_more_bits = [](int i_layer, int num_layers) -> bool {
         return i_layer < num_layers/8 || i_layer >= 7*num_layers/8 || (i_layer - num_layers/8)%3 == 2;
     };
+    const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
+    auto layer_info = [n_expert] (int i_layer, int n_layer, const char * name) {
+        if (n_expert > 1) {
+            // Believe it or not, "experts" in the FFN of Mixtral-8x7B are not consecutive, but iccasionally randomly
+            // sprinkled in the model. Hence, simply dividing i_ffn_down by n_expert does not work
+            // for getting the current layer as I initially thought, and we need to resort to parsing the
+            // tensor name.
+            n_layer /= n_expert;
+            if (sscanf(name, "blk.%d.", &i_layer) != 1) {
+                throw std::runtime_error(format("Failed to determine layer for tensor %s", name));
+            }
+            if (i_layer < 0 || i_layer >= n_layer) {
+                throw std::runtime_error(format("Bad layer %d for tensor %s. Must be in [0, %d)", i_layer, name, n_layer));
+            }
+        }
+        return std::make_pair(i_layer, n_layer);
+    };
 
     if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
         int nx = tensor->ne[0];
@@ -9080,24 +9211,8 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             new_type = GGML_TYPE_Q2_K;
         }
     } else if (name.find("ffn_down") != std::string::npos) {
-        const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
-        int i_layer, n_layer;
-        if (n_expert == 1) {
-            i_layer = qs.i_ffn_down;
-            n_layer = qs.n_ffn_down;
-        } else {
-            // Believe it or not, "experts" in the FFN of Mixtral-8x7B are not consecutive, but iccasionally randomly
-            // sprinkled in the model. Hence, simply dividing i_ffn_down by n_expert does not work
-            // for getting the current layer as I initially thought, and we need to resort to parsing the
-            // tensor name.
-            n_layer = qs.n_ffn_down / n_expert;
-            if (sscanf(name.c_str(), "blk.%d.ffn_down", &i_layer) != 1) {
-                throw std::runtime_error(format("Failed to determine layer for tensor %s", name.c_str()));
-            }
-            if (i_layer < 0 || i_layer >= n_layer) {
-                throw std::runtime_error(format("Bad layer %d for tensor %s. Must be in [0, %d)", i_layer, name.c_str(), n_layer));
-            }
-        }
+        auto info = layer_info(qs.i_ffn_down, qs.n_ffn_down, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
         if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {
             if (i_layer < n_layer/8) new_type = GGML_TYPE_Q4_K;
@@ -9153,13 +9268,17 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
     }
     else if (name.find("ffn_gate") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(qs.i_ffn_gate, qs.n_ffn_gate)) {
+        auto info = layer_info(qs.i_ffn_gate, qs.n_ffn_gate, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(i_layer, n_layer)) {
             new_type = GGML_TYPE_Q2_K;
         }
         ++qs.i_ffn_gate;
     }
     else if (name.find("ffn_up") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(qs.i_ffn_up, qs.n_ffn_up)) {
+        auto info = layer_info(qs.i_ffn_up, qs.n_ffn_up, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && !use_more_bits(i_layer, n_layer)) {
             new_type = GGML_TYPE_Q2_K;
         }
         ++qs.i_ffn_up;
