@@ -4178,6 +4178,8 @@ struct ggml_tensor * ggml_mul_mat(
 void ggml_mul_mat_set_prec(
         struct ggml_tensor * a,
         enum ggml_prec       prec) {
+    GGML_ASSERT(a->op == GGML_OP_MUL_MAT);
+
     const int32_t prec_i32 = (int32_t) prec;
 
     ggml_set_op_params_i32(a, 0, prec_i32);
@@ -5779,6 +5781,16 @@ struct ggml_tensor * ggml_flash_attn_ext(
     result->src[3] = mask;
 
     return result;
+}
+
+void ggml_flash_attn_ext_set_prec(
+        struct ggml_tensor * a,
+        enum ggml_prec       prec) {
+    GGML_ASSERT(a->op == GGML_OP_FLASH_ATTN_EXT);
+
+    const int32_t prec_i32 = (int32_t) prec;
+
+    ggml_set_op_params_i32(a, 1, prec_i32); // scale is on first pos
 }
 
 // ggml_flash_ff
@@ -13347,7 +13359,7 @@ static void ggml_compute_forward_flash_attn_ext_f16(
     GGML_ASSERT(ne2 == N);
     GGML_ASSERT(P >= 0);
 
-    GGML_ASSERT(nbq0 == sizeof(ggml_fp16_t));
+    GGML_ASSERT(nbq0 == sizeof(float));
     GGML_ASSERT(nbk0 == sizeof(ggml_fp16_t));
     GGML_ASSERT(nbv0 == sizeof(ggml_fp16_t));
 
@@ -13408,6 +13420,7 @@ static void ggml_compute_forward_flash_attn_ext_f16(
         float M = -INFINITY;
 
         float       * V32 = (float       *) params->wdata + ith*(2*D + CACHE_LINE_SIZE_F32);
+        ggml_fp16_t * Q16 = (ggml_fp16_t *) (V32); // reuse memory
         ggml_fp16_t * V16 = (ggml_fp16_t *) (V32 + D);
 
         memset(V16, 0, D*sizeof(ggml_fp16_t));
@@ -13433,10 +13446,19 @@ static void ggml_compute_forward_flash_attn_ext_f16(
 
             float s;
 
+            // convert Q to F16 in V32
+            {
+                const float * pq = (const float *) ((char *) q->data + (iq1*nbq1 + iq2*nbq2 + iq3*nbq3));
+
+                for (int64_t d = 0; d < D; ++d) {
+                    Q16[d] = GGML_FP32_TO_FP16(pq[d]);
+                }
+            }
+
             ggml_vec_dot_f16(D,
                     &s,
                     (ggml_fp16_t *) ((char *) k->data + ( ic*nbk1 + ik2*nbk2 + ik3*nbk3)),
-                    (ggml_fp16_t *) ((char *) q->data + (iq1*nbq1 + iq2*nbq2 + iq3*nbq3)));
+                    Q16);
 
             s = s*scale + mv;
 
@@ -13488,13 +13510,14 @@ static void ggml_compute_forward_flash_attn_ext(
         const struct ggml_tensor * v,
         const struct ggml_tensor * mask,
         struct ggml_tensor * dst) {
-    switch (q->type) {
-        case GGML_TYPE_F16:
+    switch (dst->op_params[1]) {
+        case GGML_PREC_DEFAULT:
             {
                 ggml_compute_forward_flash_attn_ext_f16(params, q, k, v, mask, dst);
             } break;
         default:
             {
+                // TODO: implement F32 precision
                 GGML_ASSERT(false);
             } break;
     }
