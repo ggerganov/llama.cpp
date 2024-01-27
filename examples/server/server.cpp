@@ -1542,6 +1542,26 @@ struct llama_server_context
                         slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
                         slot.num_prompt_tokens_processed = slot.num_prompt_tokens - slot.n_past;
 
+                        if(slot.ga_n != 1)
+                        {
+                            int ga_i = 0;
+                            int32_t ga_n = slot.ga_n;
+                            int32_t ga_w = slot.ga_w;
+                            int32_t slot_npast = 0;
+                            for (int k = 0; k < slot.n_past; ++k)
+                            {
+                                while (slot_npast >= ga_i + ga_w) {
+                                    const int bd = (ga_w/ga_n)*(ga_n - 1);
+                                    slot_npast -= bd;
+                                    ga_i += ga_w/ga_n;
+                                }
+                                slot_npast++;
+                            }
+                            slot.n_past_self_extension = slot_npast;
+                            slot.ga_i = ga_i;
+
+                        }
+
                         LOG_TEE("slot %d : in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
                     }
 
@@ -1556,6 +1576,10 @@ struct llama_server_context
                         // we have to evaluate at least 1 token to generate logits.
                         LOG_TEE("slot %d : we have to evaluate at least 1 token to generate logits\n", slot.id);
                         slot.n_past--;
+                        if(slot.ga_i > 0)
+                        {
+                            slot.n_past_self_extension--;
+                        }
                     }
 
                     LOG_VERBOSE("prompt ingested", {
