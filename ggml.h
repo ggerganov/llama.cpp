@@ -353,6 +353,7 @@ extern "C" {
         GGML_TYPE_Q8_K = 15,
         GGML_TYPE_IQ2_XXS = 16,
         GGML_TYPE_IQ2_XS  = 17,
+        GGML_TYPE_IQ3_XXS = 18,
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,
@@ -389,6 +390,7 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q6_K = 14, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ2_XXS = 15, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ2_XS  = 16, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ3_XXS = 17, // except 1d tensors
     };
 
     // available tensor operations:
