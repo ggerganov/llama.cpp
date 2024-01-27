@@ -269,7 +269,7 @@ int main(int argc, char * argv[]) {
     struct ggml_context * ctx = ggml_init(ggml_params);
 
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
-        ggml_type type = (ggml_type) i;
+        auto type = (ggml_type) i;
         ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
         if (!params.include_types.empty() && ggml_type_name(type) && std::find(params.include_types.begin(), params.include_types.end(), ggml_type_name(type)) == params.include_types.end()) {
             continue;

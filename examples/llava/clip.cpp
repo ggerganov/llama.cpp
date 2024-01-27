@@ -800,7 +800,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
     buffer_size += n_tensors * 128 /* CLIP PADDING */;
 
-    clip_ctx * new_clip = new clip_ctx;
+    auto* new_clip = new clip_ctx;
 
     // update projector type
     {
@@ -1416,13 +1416,13 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         printf("%s: quantized size = %8.2f MB\n", __func__, total_size_new / 1024.0 / 1024.0);
 
         int64_t sum_all = 0;
-        for (size_t i = 0; i < hist_all.size(); ++i) {
-            sum_all += hist_all[i];
+        for (auto i : hist_all) {
+            sum_all += i;
         }
 
         printf("%s: hist: ", __func__);
-        for (size_t i = 0; i < hist_all.size(); ++i) {
-            printf("%5.3f ", hist_all[i] / (float)sum_all);
+        for (auto i : hist_all) {
+            printf("%5.3f ", i / (float)sum_all);
         }
         printf("\n");
     }

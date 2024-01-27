@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 #include <set>
 #include <mutex>
@@ -171,10 +172,10 @@ inline std::string format_chatml(std::vector<json> messages)
 {
     std::ostringstream chatml_msgs;
 
-    for (auto it = messages.begin(); it != messages.end(); ++it) {
+    for (auto& message : messages) {
         chatml_msgs << "<|im_start|>"
-                    << json_value(*it, "role",    std::string("user")) << '\n';
-        chatml_msgs << json_value(*it, "content", std::string(""))
+                    << json_value(message, "role",    std::string("user")) << '\n';
+        chatml_msgs << json_value(message, "content", std::string(""))
                     << "<|im_end|>\n";
     }
 
@@ -225,17 +226,17 @@ struct llama_server_queue {
 
     // Register function to process a new task
     void on_new_task(std::function<void(task_server&)> callback) {
-        callback_new_task = callback;
+        callback_new_task = std::move(callback);
     }
 
     // Register function to process a multitask
     void on_finish_multitask(std::function<void(task_multi&)> callback) {
-        callback_finish_multitask = callback;
+        callback_finish_multitask = std::move(callback);
     }
 
     // Register the function to be called when the batch of tasks is finished
     void on_all_tasks_finished(std::function<void(void)> callback) {
-        callback_all_task_finished = callback;
+        callback_all_task_finished = std::move(callback);
     }
 
     // Call when the state of one slot is changed
@@ -378,7 +379,7 @@ struct llama_server_response {
 
     // Register the function to update multitask
     void on_multitask_update(callback_multitask_t callback) {
-        callback_update_multitask = callback;
+        callback_update_multitask = std::move(callback);
     }
 
     // Send a new result to a waiting task_id

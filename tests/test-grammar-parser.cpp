@@ -29,10 +29,9 @@ term  ::= [0-9]+)""";
     };
 
     uint32_t index = 0;
-    for (auto it = parsed_grammar.symbol_ids.begin(); it != parsed_grammar.symbol_ids.end(); ++it)
-    {
-        std::string key = it->first;
-        uint32_t value = it->second;
+    for (auto& symbol_id : parsed_grammar.symbol_ids) {
+        std::string key = symbol_id.first;
+        uint32_t value = symbol_id.second;
         std::pair<std::string, uint32_t> expected_pair = expected[index];
 
         // pretty print error message before asserting
@@ -88,9 +87,7 @@ term  ::= [0-9]+)""";
     for (auto rule : parsed_grammar.rules)
     {
         // compare rule to expected rule
-        for (uint32_t i = 0; i < rule.size(); i++)
-        {
-            llama_grammar_element element = rule[i];
+        for (auto element : rule) {
             llama_grammar_element expected_element = expected_rules[index];
 
             // pretty print error message before asserting
@@ -135,10 +132,9 @@ term  ::= [0-9]+)""";
     };
 
     index = 0;
-    for (auto it = parsed_grammar.symbol_ids.begin(); it != parsed_grammar.symbol_ids.end(); ++it)
-    {
-        std::string key = it->first;
-        uint32_t value = it->second;
+    for (auto& symbol_id : parsed_grammar.symbol_ids) {
+        std::string key = symbol_id.first;
+        uint32_t value = symbol_id.second;
         std::pair<std::string, uint32_t> expected_pair = expected[index];
 
         // pretty print error message before asserting
@@ -227,9 +223,7 @@ term  ::= [0-9]+)""";
     for (auto rule : parsed_grammar.rules)
     {
         // compare rule to expected rule
-        for (uint32_t i = 0; i < rule.size(); i++)
-        {
-            llama_grammar_element element = rule[i];
+        for (auto element : rule) {
             llama_grammar_element expected_element = expected_rules[index];
 
             // pretty print error message before asserting

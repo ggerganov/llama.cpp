@@ -216,8 +216,8 @@ static std::vector<float> softmax(const std::vector<float>& logits) {
         sum_exp += exp_logit;
         probs[i] = exp_logit;
     }
-    for (size_t i = 0; i < probs.size(); i++) {
-        probs[i] /= sum_exp;
+    for (float& prob : probs) {
+        prob /= static_cast<float>(sum_exp);
     }
     return probs;
 }

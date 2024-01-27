@@ -256,7 +256,7 @@ enum test_mode {
 };
 
 struct test_case {
-    virtual ~test_case() {}
+    virtual ~test_case() = default;
 
     virtual std::string op_desc(ggml_tensor * t) {
         return ggml_op_desc(t);
@@ -281,9 +281,9 @@ struct test_case {
     virtual size_t op_size(ggml_tensor * t) {
         size_t size = ggml_nbytes(t);
         // add source tensors
-        for (int i = 0; i < GGML_MAX_SRC; i++) {
-            if (t->src[i] != NULL) {
-                size += ggml_nbytes(t->src[i]);
+        for (auto& el : t->src) {
+            if (el) {
+                size += ggml_nbytes(el);
             }
         }
         return size;
@@ -416,7 +416,7 @@ struct test_case {
         };
 
         auto callback = [](int index, ggml_tensor * t1, ggml_tensor * t2, void * user_data) -> bool {
-            callback_userdata * ud = (callback_userdata *) user_data;
+            auto ud = (callback_userdata *) user_data;
             const char * bn1 = ggml_backend_name(ud->backend1);
             const char * bn2 = ggml_backend_name(ud->backend2);
 

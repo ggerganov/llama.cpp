@@ -32,11 +32,11 @@ int main(int argc, char ** argv) {
 
     tokens = ::llama_tokenize(model, prompt, add_bos, true);
 
-    for (int i = 0; i < (int) tokens.size(); i++) {
+    for (int token : tokens) {
         if (printing_ids) {
-            printf("%d\n", tokens[i]);
+            printf("%d\n", token);
         } else {
-            printf("%6d -> '%s'\n", tokens[i], llama_token_to_piece(ctx, tokens[i]).c_str());
+            printf("%6d -> '%s'\n", token, llama_token_to_piece(ctx, token).c_str());
         }
     }
 

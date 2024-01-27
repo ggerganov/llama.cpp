@@ -583,7 +583,7 @@ int main(int argc, const char ** argv) {
         }
 
         // mean, not yet fully implemented
-        if(0)
+        if(false)
         {
             srand(seed);
             const int nargs = 1;
@@ -601,7 +601,7 @@ int main(int argc, const char ** argv) {
         }
 
         // argmax
-        if (0)
+        if (false)
         {
             srand(seed);
             const int nargs = 1;
@@ -732,7 +732,7 @@ int main(int argc, const char ** argv) {
         }
 
         // tanh, not yet fully implemented
-        if(0)
+        if(false)
         {
             srand(seed);
             const int nargs = 1;
@@ -787,7 +787,7 @@ int main(int argc, const char ** argv) {
         }
 
         // elu, not yet fully implemented
-        if(0)
+        if(false)
         {
             srand(seed);
             const int nargs = 1;
@@ -822,7 +822,7 @@ int main(int argc, const char ** argv) {
         }
 
         // gelu, not yet fully implemented
-        if(0)
+        if(false)
         {
             srand(seed);
             const int nargs = 1;
@@ -1559,7 +1559,7 @@ int main(int argc, const char ** argv) {
         }
 
         // flash_attn f16, not yet fully implemented
-        if(0)
+        if(false)
         {
             srand(seed);
             const int nargs = 3;

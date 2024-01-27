@@ -296,9 +296,9 @@ namespace grammar_parser {
 
     static bool is_char_element(llama_grammar_element elem) {
         switch (elem.type) {
-            case LLAMA_GRETYPE_CHAR:           return true;
-            case LLAMA_GRETYPE_CHAR_NOT:       return true;
-            case LLAMA_GRETYPE_CHAR_ALT:       return true;
+            case LLAMA_GRETYPE_CHAR:
+            case LLAMA_GRETYPE_CHAR_NOT:
+            case LLAMA_GRETYPE_CHAR_ALT:
             case LLAMA_GRETYPE_CHAR_RNG_UPPER: return true;
             default:                           return false;
         }

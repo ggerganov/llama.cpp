@@ -511,7 +511,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back(std::make_tuple(argv[i], 1.0f));
+            params.lora_adapter.emplace_back(argv[i], 1.0f);
             params.use_mmap = false;
         } else if (arg == "--lora-scaled") {
             if (++i >= argc) {
@@ -523,7 +523,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back(std::make_tuple(lora_adapter, std::stof(argv[i])));
+            params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
             params.use_mmap = false;
         } else if (arg == "--lora-base") {
             if (++i >= argc) {
@@ -875,7 +875,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
     }
 
     if (!params.kv_overrides.empty()) {
-        params.kv_overrides.emplace_back(llama_model_kv_override());
+        params.kv_overrides.emplace_back();
         params.kv_overrides.back().key[0] = 0;
     }
 
@@ -1335,8 +1335,8 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
     std::string piece;
     std::string result;
 
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        piece = llama_token_to_piece(ctx, tokens[i]);
+    for (int token : tokens) {
+        piece = llama_token_to_piece(ctx, token);
 
         result += piece;
     }

@@ -1092,7 +1092,7 @@ struct llama_mlock {
 
     bool failed_already = false;
 
-    llama_mlock() {}
+    llama_mlock() = default;
     llama_mlock(const llama_mlock &) = delete;
 
     ~llama_mlock() {
@@ -2958,7 +2958,7 @@ static void llm_load_hparams(
 }
 
 // TODO: This should probably be in llama.h
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos, bool special = false);
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string& raw_text, bool bos, bool special = false);
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch);
 
 static void llm_load_vocab(
@@ -7111,8 +7111,8 @@ struct llm_tokenizer_bpe {
                 const auto token = vocab.token_to_id.find(str);
 
                 if (token == vocab.token_to_id.end()) {
-                    for (auto j = str.begin(); j != str.end(); ++j) {
-                        std::string byte_str(1, *j);
+                    for (char j : str) {
+                        std::string byte_str(1, j);
                         auto token_multibyte = vocab.token_to_id.find(byte_str);
                         if (token_multibyte == vocab.token_to_id.end()) {
                             throw std::runtime_error("ERROR: byte not found in vocab");
@@ -7172,8 +7172,8 @@ private:
         bpe_encoded_words.reserve(text.size());
 
         auto cps = codepoints_from_utf8(text);
-        for (size_t i = 0; i < cps.size(); ++i)
-            text_utf.emplace_back(codepoint_to_utf8(cps[i]));
+        for (unsigned int cp : cps)
+            text_utf.emplace_back(codepoint_to_utf8(cp));
 
         for (int i = 0; i < (int)text_utf.size(); i++) {
             const std::string & utf_char = text_utf[i];
@@ -7344,7 +7344,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
         const auto & special_id    = st.second;
 
         // for each text fragment
-        std::forward_list<fragment_buffer_variant>::iterator it = buffer.begin();
+        auto it = buffer.begin();
         while (it != buffer.end()) {
             auto & fragment = (*it);
 
@@ -7431,7 +7431,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
     }
 }
 
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos, bool special) {
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string& raw_text, bool bos, bool special) {
     std::vector<llama_vocab::id> output;
 
     // OG tokenizer behavior:
@@ -7887,7 +7887,7 @@ void llama_grammar_free(struct llama_grammar * grammar) {
 }
 
 struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar) {
-    llama_grammar * result = new llama_grammar{ grammar->rules, grammar->stacks, grammar->partial_utf8 };
+    auto result = new llama_grammar{ grammar->rules, grammar->stacks, grammar->partial_utf8 };
 
     // redirect elements in stacks to point to new rules
     for (size_t is = 0; is < result->stacks.size(); is++) {
@@ -8095,8 +8095,8 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
     }
 
     // Calculate absolute value of second derivatives
-    for (size_t i = 0; i < second_derivatives.size(); ++i) {
-        second_derivatives[i] = std::abs(second_derivatives[i]);
+    for (float& second_derivative : second_derivatives) {
+        second_derivative = std::abs(second_derivative);
     }
 
     // Normalize the second derivatives
@@ -9412,8 +9412,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             if (tot_count > 0) {
                 LLAMA_LOG_INFO(" | hist: ");
-                for (size_t i = 0; i < hist_cur.size(); i++) {
-                    LLAMA_LOG_INFO("%5.3f ", hist_cur[i] / float(nelements));
+                for (long long i : hist_cur) {
+                    LLAMA_LOG_INFO("%5.3f ", i / float(nelements));
                 }
             }
             LLAMA_LOG_INFO("\n");
@@ -9448,14 +9448,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     // print histogram for all tensors
     {
         int64_t sum_all = 0;
-        for (size_t i = 0; i < hist_all.size(); i++) {
-            sum_all += hist_all[i];
+        for (auto i : hist_all) {
+            sum_all += i;
         }
 
         if (sum_all > 0) {
             LLAMA_LOG_INFO("%s: hist: ", __func__);
-            for (size_t i = 0; i < hist_all.size(); i++) {
-                LLAMA_LOG_INFO("%5.3f ", hist_all[i] / float(sum_all));
+            for (auto i : hist_all) {
+                LLAMA_LOG_INFO("%5.3f ", i / float(sum_all));
             }
             LLAMA_LOG_INFO("\n");
         }
@@ -9859,7 +9859,7 @@ struct llama_model * llama_load_model_from_file(
               struct llama_model_params   params) {
     ggml_time_init();
 
-    llama_model * model = new llama_model;
+    auto model = new llama_model;
 
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
@@ -9905,7 +9905,7 @@ struct llama_context * llama_new_context_with_model(
         return nullptr;
     }
 
-    llama_context * ctx = new llama_context(*model);
+    auto ctx = new llama_context(*model);
 
     const auto & hparams = model->hparams;
     auto       & cparams = ctx->cparams;

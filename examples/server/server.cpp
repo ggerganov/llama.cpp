@@ -1202,9 +1202,8 @@ struct llama_server_context
                 (json)(slot.images[image_idx].prefix_prompt);
 
             std::vector<llama_token> append_tokens = tokenize(json_prompt, false); // has next image
-            for (int i = 0; i < (int) append_tokens.size(); ++i)
-            {
-                llama_batch_add(batch, append_tokens[i], slot.n_past, { slot.id }, true);
+            for (int append_token : append_tokens) {
+                llama_batch_add(batch, append_token, slot.n_past, { slot.id }, true);
                 slot.n_past += 1;
             }
         }
@@ -2034,7 +2033,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back(std::make_tuple(argv[i], 1.0f));
+            params.lora_adapter.emplace_back(argv[i], 1.0f);
             params.use_mmap = false;
         }
         else if (arg == "--lora-scaled")
@@ -2050,7 +2049,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back(std::make_tuple(lora_adapter, std::stof(argv[i])));
+            params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
             params.use_mmap = false;
         }
         else if (arg == "--lora-base")
@@ -2192,7 +2191,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
     }
     if (!params.kv_overrides.empty()) {
-        params.kv_overrides.emplace_back(llama_model_kv_override());
+        params.kv_overrides.emplace_back();
         params.kv_overrides.back().key[0] = 0;
     }
 
@@ -2626,12 +2625,11 @@ int main(int argc, char **argv)
                             if (!llama_result.error) {
                                 std::vector<json> result_array = format_partial_response_oaicompat( llama_result);
 
-                                for (auto it = result_array.begin(); it != result_array.end(); ++it)
-                                {
-                                    if (!it->empty()) {
+                                for (auto& it : result_array) {
+                                    if (!it.empty()) {
                                         const std::string str =
                                             "data: " +
-                                            it->dump(-1, ' ', false, json::error_handler_t::replace) +
+                                            it.dump(-1, ' ', false, json::error_handler_t::replace) +
                                             "\n\n";
                                         LOG_VERBOSE("data stream", {{"to_send", str}});
                                         if (!sink.write(str.c_str(), str.size())) {
@@ -2824,19 +2822,17 @@ int main(int argc, char **argv)
     }*/
     //);
 
-    llama.queue_tasks.on_new_task(std::bind(
-        &llama_server_context::process_single_task, &llama, std::placeholders::_1));
-    llama.queue_tasks.on_finish_multitask(std::bind(
-        &llama_server_context::on_finish_multitask, &llama, std::placeholders::_1));
-    llama.queue_tasks.on_all_tasks_finished(std::bind(
-        &llama_server_context::run_on_all_tasks_finished, &llama));
-    llama.queue_results.on_multitask_update(std::bind(
-        &llama_server_queue::update_multitask,
-        &llama.queue_tasks,
-        std::placeholders::_1,
-        std::placeholders::_2,
-        std::placeholders::_3
-    ));
+    llama.queue_tasks.on_new_task([ObjectPtr = &llama](auto&& PH1) {
+        ObjectPtr->process_single_task(std::forward<decltype(PH1)>(PH1));
+    });
+    llama.queue_tasks.on_finish_multitask([ObjectPtr = &llama](auto&& PH1) {
+        ObjectPtr->on_finish_multitask(std::forward<decltype(PH1)>(PH1));
+    });
+    llama.queue_tasks.on_all_tasks_finished([ObjectPtr = &llama] { ObjectPtr->run_on_all_tasks_finished(); });
+    llama.queue_results.on_multitask_update([ObjectPtr = &llama.queue_tasks](auto&& PH1, auto&& PH2, auto&& PH3) {
+        ObjectPtr->update_multitask(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2),
+                                    std::forward<decltype(PH3)>(PH3));
+    });
     llama.queue_tasks.start_loop();
 
     t.join();

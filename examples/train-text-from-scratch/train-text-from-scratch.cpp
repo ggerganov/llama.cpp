@@ -151,8 +151,7 @@ static void alloc_model(struct ggml_allocr * alloc, struct my_llama_model * mode
     ggml_allocr_alloc(alloc, model->tok_embeddings);
     ggml_allocr_alloc(alloc, model->norm);
     ggml_allocr_alloc(alloc, model->output);
-    for (uint32_t i = 0; i < model->layers.size(); ++i) {
-        auto & layer = model->layers[i];
+    for (auto& layer : model->layers) {
         ggml_allocr_alloc(alloc, layer.attention_norm);
         ggml_allocr_alloc(alloc, layer.wq);
         ggml_allocr_alloc(alloc, layer.wk);
@@ -166,8 +165,7 @@ static void alloc_model(struct ggml_allocr * alloc, struct my_llama_model * mode
     ggml_allocr_alloc(alloc, model->tok_embeddings->grad);
     ggml_allocr_alloc(alloc, model->norm->grad);
     ggml_allocr_alloc(alloc, model->output->grad);
-    for (uint32_t i = 0; i < model->layers.size(); ++i) {
-        auto & layer = model->layers[i];
+    for (auto& layer : model->layers) {
         ggml_allocr_alloc(alloc, layer.attention_norm->grad);
         ggml_allocr_alloc(alloc, layer.wq->grad);
         ggml_allocr_alloc(alloc, layer.wk->grad);
@@ -453,9 +451,9 @@ static struct ggml_tensor * llama_build_train_graphs(
 
         // allocating checkpoints in one block to reduce memory fragmentation
         // note: they will be freed in reverse order
-        for (int i = 0; i < (int) checkpoints.size(); ++i) {
-            if (checkpoints[i]->data == NULL && checkpoints[i]->view_src == NULL) {
-                ggml_allocr_alloc(alloc, checkpoints[i]);
+        for (auto& checkpoint : checkpoints) {
+            if (checkpoint->data == NULL && checkpoint->view_src == NULL) {
+                ggml_allocr_alloc(alloc, checkpoint);
             }
         }
 
@@ -925,7 +923,7 @@ struct save_train_files_data {
 };
 
 static void save_train_files(void * vdata, struct train_state * train) {
-    struct save_train_files_data * data   = (struct save_train_files_data *) vdata;
+    auto data   = (struct save_train_files_data *) vdata;
     int64_t iter = train->opt->iter;
 
     if (strlen(data->fn_checkpoint_out) > 0) {
@@ -945,8 +943,7 @@ static int64_t get_parameter_count(struct my_llama_model* model) {
     nx += ggml_nelements(model->norm);
     nx += ggml_nelements(model->output);
 
-    for (uint32_t i = 0; i < model->layers.size(); ++i) {
-        auto & layer = model->layers[i];
+    for (auto& layer : model->layers) {
         nx += ggml_nelements(layer.attention_norm);
         nx += ggml_nelements(layer.wq);
         nx += ggml_nelements(layer.wk);

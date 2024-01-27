@@ -126,7 +126,7 @@ int main(int argc, char * argv[]) {
     bool failed = false;
 
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
-        ggml_type type = (ggml_type) i;
+        auto type = (ggml_type) i;
         ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
 
         // deprecated - skip

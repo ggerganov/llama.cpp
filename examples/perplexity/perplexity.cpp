@@ -94,8 +94,8 @@ static std::vector<float> softmax(const std::vector<float>& logits) {
         sum_exp += exp_logit;
         probs[i] = exp_logit;
     }
-    for (size_t i = 0; i < probs.size(); i++) {
-        probs[i] /= sum_exp;
+    for (float& prob : probs) {
+        prob /= static_cast<float>(sum_exp);
     }
     return probs;
 }
@@ -881,7 +881,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             size_t li = hs_cur.common_prefix;
             for (int s = 0; s < 4; ++s) {
                 for (size_t j = hs_cur.common_prefix; j < hs_cur.seq_tokens[s].size() - 1; j++) {
-                    eval_pairs.push_back(std::make_pair(hs_cur.i_batch + li++, hs_cur.seq_tokens[s][j + 1]));
+                    eval_pairs.emplace_back(hs_cur.i_batch + li++, hs_cur.seq_tokens[s][j + 1]);
                 }
                 ++li;
             }
@@ -997,7 +997,7 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string&
             printf("%s: no _ in <%s>\n", __func__, sentence.c_str());
             continue;
         }
-        std::istringstream stream(answer.c_str());
+        std::istringstream stream(answer);
         int i_answer; stream >> i_answer;
         if (stream.fail() || i_answer < 1 || i_answer > 2) {
             printf("%s: failed to parse answer <%s>\n", __func__, answer.c_str());
@@ -1158,13 +1158,13 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             const int last_1st = task.seq_tokens[0].size() - n_base1 > 1 ? 1 : 0;
             size_t li = n_base1 - 1;
             for (size_t j = n_base1-1; j < task.seq_tokens[0].size()-1-last_1st; ++j) {
-                eval_pairs.push_back(std::make_pair(task.i_batch + li++, task.seq_tokens[0][j+1]));
+                eval_pairs.emplace_back(task.i_batch + li++, task.seq_tokens[0][j+1]);
             }
             const auto& n_base2 = skip_choice ? task.n_base2 : task.common_prefix;
             const int last_2nd = task.seq_tokens[1].size() - n_base2 > 1 ? 1 : 0;
             li = task.seq_tokens[0].size() - task.common_prefix + n_base2 - 1;
             for (size_t j = n_base2-1; j < task.seq_tokens[1].size()-1-last_2nd; ++j) {
-                eval_pairs.push_back(std::make_pair(task.i_batch + li++, task.seq_tokens[1][j+1]));
+                eval_pairs.emplace_back(task.i_batch + li++, task.seq_tokens[1][j+1]);
             }
         }
         compute_logprobs(batch_logits.data(), n_vocab, workers, eval_pairs, eval_results);
@@ -1221,7 +1221,7 @@ static bool deserialize_string(std::istream & in, std::string & str) {
     uint32_t size;
     if (!in.read((char *)&size, sizeof(size)).fail()) {
         str.resize(size);
-        if (!in.read((char *)&str[0], size).fail()) return true;
+        if (!in.read((char *)str.data(), size).fail()) return true;
     }
     return false;
 }
@@ -1523,7 +1523,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
             size_t li = cur_task.common_prefix;
             for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
                 for (size_t j = cur_task.common_prefix; j < cur_task.seq_tokens[s].size() - 1; j++) {
-                    eval_pairs.push_back(std::make_pair(cur_task.i_batch + li++, cur_task.seq_tokens[s][j + 1]));
+                    eval_pairs.emplace_back(cur_task.i_batch + li++, cur_task.seq_tokens[s][j + 1]);
                 }
                 ++li;
             }

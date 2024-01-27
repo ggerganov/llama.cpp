@@ -132,7 +132,7 @@ int main(int argc, char ** argv) {
 
         for (int i = 0; i < W; i++) {
             // there are different ways to init these tokens
-            if (0) {
+            if (false) {
                 // initialize randomly from the prompt tokens
                 tokens_j[j][i] = all[1 + rand() % (all.size() - 1)];
             } else {
@@ -268,10 +268,10 @@ int main(int argc, char ** argv) {
 
             // if no active ngrams are left, it means the sampled token does not pass the verification
             if (v > 0) {
-                for (int g = 0; g < (int) ngrams_cur.size(); g++) {
-                    if (ngrams_cur[g].active) {
-                        i_batch = ngrams_cur[g].i_batch[v];
-                        seq_id_best = ngrams_cur[g].seq_id;
+                for (auto& g : ngrams_cur) {
+                    if (g.active) {
+                        i_batch = g.i_batch[v];
+                        seq_id_best = g.seq_id;
 
                         ++n_accept;
                         break;
@@ -316,20 +316,20 @@ int main(int argc, char ** argv) {
             }
 
             // verify across active n-grams
-            for (int g = 0; g < (int) ngrams_cur.size(); g++) {
-                if (ngrams_cur[g].active) {
+            for (auto& g : ngrams_cur) {
+                if (g.active) {
                     if (v == N - 1) {
-                        ngrams_cur[g].active = false;
+                        g.active = false;
                     } else {
-                        if (id != ngrams_cur[g].tokens[v + 1]) {
-                            ngrams_cur[g].active = false;
+                        if (id != g.tokens[v + 1]) {
+                            g.active = false;
                         }
                     }
                 }
             }
 
             // print known n-grams starting with token id (debug)
-            if (0 && v == 0) {
+            if (false && v == 0) {
                 if (ngrams_observed.cnt[id] > 0) {
                     printf("\n - %d n-grams starting with '%s'\n", ngrams_observed.cnt[id], llama_token_to_piece(ctx, id).c_str());
                 }
@@ -367,7 +367,7 @@ int main(int argc, char ** argv) {
                 } else {
                     for (int i = 0; i < W; i++) {
                         // there are different ways to init these tokens
-                        if (0) {
+                        if (false) {
                             // random init
                             tokens_j[N - 2][i] = all[1 + rand() % (all.size() - 1)];
                         } else {

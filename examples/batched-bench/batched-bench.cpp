@@ -164,13 +164,9 @@ int main(int argc, char ** argv) {
     LOG_TEE("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP",     "TG",     "B",    "N_KV",     "T_PP s",   "S_PP t/s", "T_TG s",   "S_TG t/s", "T s",      "S t/s");
     LOG_TEE("|%6s-|-%6s-|-%4s-|-%6s-|-%8s-|-%8s-|-%8s-|-%8s-|-%8s-|-%8s-|\n", "------", "------", "----", "------", "--------", "--------", "--------", "--------", "--------", "--------");
 
-    for (        int i_pp = 0; i_pp < (int) n_pp.size(); ++i_pp) {
-        for (    int i_tg = 0; i_tg < (int) n_tg.size(); ++i_tg) {
-            for (int i_pl = 0; i_pl < (int) n_pl.size(); ++i_pl) {
-                const int pp = n_pp[i_pp];
-                const int tg = n_tg[i_tg];
-                const int pl = n_pl[i_pl];
-
+    for (int pp : n_pp) {
+        for (int tg : n_tg) {
+            for (int pl : n_pl) {
                 const int n_ctx_req = is_pp_shared ? pp + pl*tg : pl*(pp + tg);
 
                 if (n_ctx_req > n_kv_max) {

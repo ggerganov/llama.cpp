@@ -18,7 +18,7 @@ struct random_uniform_distribution {
 };
 
 struct train_state  * init_train_state() {
-    struct train_state * state = new struct train_state;
+    auto state = new struct train_state;
     state->train_its     = 0;
     state->train_samples = 0;
     state->train_tokens  = 0;
@@ -1379,7 +1379,7 @@ void finish_processing_train_args(struct train_params_common * params) {
 }
 
 void train_opt_callback(void * vdata, int accum_step, float * sched, bool * cancel) {
-    struct train_opt_callback_data * data   = (struct train_opt_callback_data *) vdata;
+    auto data   = (struct train_opt_callback_data *) vdata;
     struct train_params_common     * params = data->params;
     struct train_state             * train  = data->train;
     struct ggml_opt_context        * opt    = train->opt;

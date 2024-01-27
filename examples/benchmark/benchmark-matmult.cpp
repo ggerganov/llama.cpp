@@ -143,7 +143,7 @@ int main(int argc, char ** argv)  {
     struct ggml_init_params params = {
         /*.mem_size   =*/ ctx_size,
         /*.mem_buffer =*/ NULL,
-        /* no_alloc   =*/ 0
+        /* no_alloc   =*/ false
     };
 
     ctx = ggml_init(params);
