@@ -6708,8 +6708,6 @@ static struct ggml_cgraph * llama_build_graph(
             {
                 result = llm.build_orion();
             } break;
-
-
         default:
             GGML_ASSERT(false);
     }
