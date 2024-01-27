@@ -2983,10 +2983,6 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
-
-
-
-
         default: (void)0;
     }
 
