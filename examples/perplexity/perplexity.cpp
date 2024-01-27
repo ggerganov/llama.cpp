@@ -1221,7 +1221,7 @@ static bool deserialize_string(std::istream & in, std::string & str) {
     uint32_t size;
     if (!in.read((char *)&size, sizeof(size)).fail()) {
         str.resize(size);
-        if (!in.read((char *)str.data(), size).fail()) return true;
+        if (!in.read((char *)&str[0], size).fail()) return true;
     }
     return false;
 }

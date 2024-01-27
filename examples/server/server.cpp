@@ -2822,17 +2822,19 @@ int main(int argc, char **argv)
     }*/
     //);
 
-    llama.queue_tasks.on_new_task([ObjectPtr = &llama](auto&& PH1) {
-        ObjectPtr->process_single_task(std::forward<decltype(PH1)>(PH1));
-    });
-    llama.queue_tasks.on_finish_multitask([ObjectPtr = &llama](auto&& PH1) {
-        ObjectPtr->on_finish_multitask(std::forward<decltype(PH1)>(PH1));
-    });
-    llama.queue_tasks.on_all_tasks_finished([ObjectPtr = &llama] { ObjectPtr->run_on_all_tasks_finished(); });
-    llama.queue_results.on_multitask_update([ObjectPtr = &llama.queue_tasks](auto&& PH1, auto&& PH2, auto&& PH3) {
-        ObjectPtr->update_multitask(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2),
-                                    std::forward<decltype(PH3)>(PH3));
-    });
+    llama.queue_tasks.on_new_task(std::bind(
+        &llama_server_context::process_single_task, &llama, std::placeholders::_1));
+    llama.queue_tasks.on_finish_multitask(std::bind(
+        &llama_server_context::on_finish_multitask, &llama, std::placeholders::_1));
+    llama.queue_tasks.on_all_tasks_finished(std::bind(
+        &llama_server_context::run_on_all_tasks_finished, &llama));
+    llama.queue_results.on_multitask_update(std::bind(
+        &llama_server_queue::update_multitask,
+        &llama.queue_tasks,
+        std::placeholders::_1,
+        std::placeholders::_2,
+        std::placeholders::_3
+    ));
     llama.queue_tasks.start_loop();
 
     t.join();
