@@ -73,7 +73,7 @@ llama_token llama_sampling_last(llama_sampling_context * ctx) {
 }
 
 std::string llama_sampling_prev_str(llama_sampling_context * ctx_sampling, llama_context * ctx_main, int n) {
-    const int size = ctx_sampling->prev.size();
+    const int size = static_cast<int>(ctx_sampling->prev.size());
 
     n = std::min(n, size);
 

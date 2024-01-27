@@ -131,7 +131,7 @@ int main(int argc, char ** argv) {
 
     fflush(stderr);
 
-    const int n_input = inp.size();
+    const int n_input = static_cast<int>(inp.size());
 
     const auto t_enc_start = ggml_time_us();
 
@@ -152,8 +152,8 @@ int main(int argc, char ** argv) {
     int n_drafted = 0;
     int n_accept  = 0;
 
-    int n_past_tgt = inp.size();
-    int n_past_dft = inp.size();
+    int n_past_tgt = static_cast<int>(inp.size());
+    int n_past_dft = static_cast<int>(inp.size());
 
     // used to determine end of generation
     bool has_eos = false;

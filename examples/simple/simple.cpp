@@ -67,8 +67,8 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> tokens_list;
     tokens_list = ::llama_tokenize(ctx, params.prompt, true);
 
-    const int n_ctx    = llama_n_ctx(ctx);
-    const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size());
+    const int n_ctx    = static_cast<int>(llama_n_ctx(ctx));
+    const int n_kv_req = static_cast<int>(tokens_list.size() + (n_len - tokens_list.size()));
 
     LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, n_kv_req);
 
@@ -96,7 +96,7 @@ int main(int argc, char ** argv) {
 
     // evaluate the initial prompt
     for (size_t i = 0; i < tokens_list.size(); i++) {
-        llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
+        llama_batch_add(batch, tokens_list[i], static_cast<llama_pos>(i), { 0 }, false);
     }
 
     // llama_decode will output logits only for the last token of the prompt

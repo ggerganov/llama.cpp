@@ -1090,7 +1090,6 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
 
     llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
 
-    std::vector<float> tok_logits(n_vocab);
     std::vector<float> batch_logits(n_vocab*n_ctx);
 
     std::vector<std::pair<size_t, llama_token>> eval_pairs;

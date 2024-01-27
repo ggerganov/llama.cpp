@@ -46,18 +46,12 @@ void free_train_state(struct train_state  * state) {
 struct random_normal_distribution * init_random_normal_distribution(
     int seed, float mean, float std, float min, float max
 ) {
-    struct random_normal_distribution * rnd = (struct random_normal_distribution *) malloc(sizeof(struct random_normal_distribution));
-    rnd->gen = std::mt19937(seed);
-    rnd->rd = std::normal_distribution<float>{mean, std};
-    rnd->min = min;
-    rnd->max = max;
+    auto rnd = new random_normal_distribution{ std::mt19937(seed), std::normal_distribution<float>{mean, std}, min, max};
     return rnd;
 }
 
 struct random_uniform_distribution * init_random_uniform_distribution(int seed, float min, float max) {
-    struct random_uniform_distribution * rnd = (struct random_uniform_distribution *) malloc(sizeof(struct random_uniform_distribution));
-    rnd->gen = std::mt19937(seed);
-    rnd->rd = std::uniform_real_distribution<float>{min, max};
+    auto rnd = new random_uniform_distribution{ std::mt19937(seed), std::uniform_real_distribution<float>{min, max} };
     return rnd;
 }
 

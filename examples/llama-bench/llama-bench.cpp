@@ -76,7 +76,7 @@ static T stdev(const std::vector<T> & v) {
     }
     T mean = avg(v);
     T sq_sum = std::inner_product(v.begin(), v.end(), v.begin(), T(0));
-    T stdev = std::sqrt(sq_sum / (T)(v.size() - 1) - mean * mean * (T)v.size() / (T)(v.size() - 1));
+    T stdev = static_cast<T>(std::sqrt(sq_sum / (T)(v.size() - 1) - mean * mean * (T)v.size() / (T)(v.size() - 1)));
     return stdev;
 }
 

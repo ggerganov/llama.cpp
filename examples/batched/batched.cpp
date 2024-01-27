@@ -70,7 +70,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> tokens_list;
     tokens_list = ::llama_tokenize(model, params.prompt, true);
 
-    const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size())*n_parallel;
+    const int n_kv_req = static_cast<int>(tokens_list.size() + (n_len - tokens_list.size())*n_parallel);
 
     // initialize the context
 
@@ -112,11 +112,11 @@ int main(int argc, char ** argv) {
 
     // create a llama_batch
     // we use this object to submit token data for decoding
-    llama_batch batch = llama_batch_init(std::max(tokens_list.size(), (size_t)n_parallel), 0, 1);
+    llama_batch batch = llama_batch_init(std::max(static_cast<int32_t>(tokens_list.size()), n_parallel), 0, 1);
 
     // evaluate the initial prompt
     for (size_t i = 0; i < tokens_list.size(); ++i) {
-        llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
+        llama_batch_add(batch, tokens_list[i], static_cast<llama_pos>(i), { 0 }, false);
     }
     GGML_ASSERT(batch.n_tokens == (int) tokens_list.size());
 

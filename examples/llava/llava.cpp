@@ -29,7 +29,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     }
 
     const int64_t t_img_enc_end_us = ggml_time_us();
-    float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
+    float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0f;
 
     printf("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / *n_img_pos);
 
@@ -51,7 +51,6 @@ static bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_thre
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
     if (!image_embd) {
         fprintf(stderr, "Unable to allocate memory for image embeddings\n");
-        free(image_embd);
         return false;
     }
 
@@ -104,6 +103,10 @@ LLAVA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct cl
 
     clip_image_u8_free(img);
     auto result = (llava_image_embed*)malloc(sizeof(llava_image_embed));
+    if (!result) {
+        fprintf(stderr, "%s: unable to allocate memory\n", __func__);
+        return NULL;
+    }
     result->embed = image_embed;
     result->n_image_pos = n_image_pos;
     return result;

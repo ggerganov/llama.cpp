@@ -160,12 +160,12 @@ int main(int argc, char ** argv)
 
     int n_past = 0;
 
-    if (llama_decode(ctx, llama_batch_get_one(tokens_list.data(), tokens_list.size(), n_past, 0)))
+    if (llama_decode(ctx, llama_batch_get_one(tokens_list.data(), static_cast<int32_t>(tokens_list.size()), n_past, 0)))
     {
         fprintf(stderr, "%s : failed to eval prompt.\n" , __func__ );
         return 1;
     }
-    n_past += tokens_list.size();
+    n_past += static_cast<int>(tokens_list.size());
 
     beam_search_callback_data callback_data{ctx, {}};
     size_t const beam_width = static_cast<size_t>(params.n_beams);

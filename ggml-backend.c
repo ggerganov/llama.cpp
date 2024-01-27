@@ -58,6 +58,7 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_buffer_init(
     ggml_backend_buffer_t buffer = malloc(sizeof(struct ggml_backend_buffer));
 
     GGML_ASSERT(iface.get_base != NULL);
+    GGML_ASSERT(buffer != NULL);
 
     (*buffer) = (struct ggml_backend_buffer) {
         /* .interface = */ iface,
@@ -647,6 +648,7 @@ GGML_CALL static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(gg
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
     struct ggml_backend_plan_cpu * cpu_plan = malloc(sizeof(struct ggml_backend_plan_cpu));
+    GGML_ASSERT(cpu_plan != NULL);
 
     cpu_plan->cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
     cpu_plan->cgraph = *cgraph; // FIXME: deep copy
@@ -722,13 +724,15 @@ static struct ggml_backend_i cpu_backend_i = {
 
 ggml_backend_t ggml_backend_cpu_init(void) {
     struct ggml_backend_cpu_context * ctx = malloc(sizeof(struct ggml_backend_cpu_context));
-
+    
+    GGML_ASSERT(ctx != NULL);
     ctx->n_threads = GGML_DEFAULT_N_THREADS;
     ctx->work_data = NULL;
     ctx->work_size = 0;
 
     ggml_backend_t cpu_backend = malloc(sizeof(struct ggml_backend));
 
+    GGML_ASSERT(cpu_backend != NULL);
     *cpu_backend = (struct ggml_backend) {
         /* .interface = */ cpu_backend_i,
         /* .context   = */ ctx
@@ -1403,6 +1407,7 @@ ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, ggml_back
 
     struct ggml_backend_sched * sched = calloc(sizeof(struct ggml_backend_sched), 1);
 
+    GGML_ASSERT(sched != NULL);
     // initialize hash table
     sched->hash_set    = ggml_hash_set_new(graph_size + GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS);
     sched->node_talloc = calloc(sizeof(sched->node_talloc[0]) * sched->hash_set.size, 1);
@@ -1602,6 +1607,7 @@ struct ggml_backend_graph_copy ggml_backend_graph_copy(ggml_backend_t backend, s
         /* .keys = */ calloc(sizeof(hash_set.keys[0]) * graph->visited_hash_table.size, 1)
     };
     struct ggml_tensor ** node_copies = calloc(sizeof(node_copies[0]) * hash_set.size, 1);
+    GGML_ASSERT(node_copies != NULL);
     bool * node_init = calloc(sizeof(node_init[0]) * hash_set.size, 1);
 
     struct ggml_init_params params = {

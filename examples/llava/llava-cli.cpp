@@ -85,7 +85,7 @@ static llava_image_embed * llava_image_embed_make_with_prompt_base64(struct clip
     auto img_bytes = std::vector<unsigned char>(required_bytes);
     base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
 
-    auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), img_bytes.size());
+    auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), static_cast<int>(img_bytes.size()));
     if (!embed) {
         fprintf(stderr, "%s: could not load image from base64 string.\n", __func__);
         return NULL;

@@ -20,7 +20,7 @@ int main(int argc, char ** argv) {
         params.n_predict = 16;
     }
 
-    auto n_past = 0;
+    llama_pos n_past = 0;
 
     std::string result0;
     std::string result1;
@@ -39,8 +39,8 @@ int main(int argc, char ** argv) {
     auto tokens = llama_tokenize(ctx, params.prompt, true);
 
     // evaluate prompt
-    llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size(), n_past, 0));
-    n_past += tokens.size();
+    llama_decode(ctx, llama_batch_get_one(tokens.data(), static_cast<llama_pos>(tokens.size()), n_past, 0));
+    n_past += static_cast<int>(tokens.size());
 
     // save state (rng, logits, embedding and kv_cache) to file
     {

@@ -674,7 +674,7 @@ void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * restrict
         for (int j = 0; j < QK8_0; ++j) {
             const float x0 = x[i*QK8_0 + j]*id;
 
-            y[i].qs[j] = roundf(x0);
+            y[i].qs[j] = (int8_t)roundf(x0);
         }
     }
 }
@@ -892,8 +892,8 @@ void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict
             const float v0 = x[i*QK8_1           + j]*id;
             const float v1 = x[i*QK8_1 + QK8_1/2 + j]*id;
 
-            y[i].qs[          j] = roundf(v0);
-            y[i].qs[QK8_1/2 + j] = roundf(v1);
+            y[i].qs[          j] = (int8_t)roundf(v0);
+            y[i].qs[QK8_1/2 + j] = (int8_t)roundf(v1);
 
             sum += y[i].qs[          j];
             sum += y[i].qs[QK8_1/2 + j];
@@ -8641,6 +8641,7 @@ void iq2xs_init_impl(int grid_size) {
 
     printf("================================================================= %s(grid_size = %d)\n", __func__, grid_size);
     uint64_t * the_grid = (uint64_t *)malloc(grid_size*sizeof(uint64_t));
+    assert(the_grid);
     for (int k = 0; k < grid_size; ++k) {
         int8_t * pos = (int8_t *)(the_grid + k);
         for (int i = 0; i < 8; ++i) {
@@ -8864,7 +8865,7 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
                 float sumqx = 0, sumq2 = 0;
                 for (int i = 0; i < 32; ++i) {
                     float w = weight[i];
-                    float q = 2*Laux[i] + 1;
+                    float q = 2*Laux[i] + 1.f;
                     sumqx += w*xval[i]*q;
                     sumq2 += w*q*q;
                 }
@@ -8897,7 +8898,7 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
                 float sumqx = 0, sumq2 = 0;
                 for (int i = 0; i < 32; ++i) {
                     float w = weight[i];
-                    float q = 2*L[i] + 1;
+                    float q = 2*L[i] + 1.f;
                     sumqx += w*xval[i]*q;
                     sumq2 += w*q*q;
                 }
@@ -9085,7 +9086,7 @@ static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict v
                 float sumqx = 0, sumq2 = 0;
                 for (int i = 0; i < 16; ++i) {
                     float w = weight[i];
-                    float q = 2*Laux[i] + 1;
+                    float q = 2*Laux[i] + 1.f;
                     sumqx += w*xval[i]*q;
                     sumq2 += w*q*q;
                 }
@@ -9117,7 +9118,7 @@ static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict v
                 float sumqx = 0, sumq2 = 0;
                 for (int i = 0; i < 16; ++i) {
                     float w = weight[i];
-                    float q = 2*L[i] + 1;
+                    float q = 2*L[i] + 1.f;
                     sumqx += w*xval[i]*q;
                     sumq2 += w*q*q;
                 }

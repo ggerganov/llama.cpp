@@ -98,7 +98,6 @@ static std::string format(const char * fmt, ...) {
 
 enum projector_type {
     PROJECTOR_TYPE_MLP,
-    PROJECTOR_TYPE_MLP_NORM,
     PROJECTOR_TYPE_LDP,
     PROJECTOR_TYPE_UNKNOWN,
 };
@@ -305,18 +304,10 @@ struct clip_vision_model {
     struct ggml_tensor * projection;
 
     // LLaVA projection
-    struct ggml_tensor * mm_0_w = NULL;
-    struct ggml_tensor * mm_0_b = NULL;
-    struct ggml_tensor * mm_2_w = NULL;
-    struct ggml_tensor * mm_2_b = NULL;
-
-    // Yi type models with mlp+normalization projection
-    struct ggml_tensor * mm_1_w = NULL; // Yi type models have 0, 1, 3, 4
-    struct ggml_tensor * mm_1_b = NULL;
-    struct ggml_tensor * mm_3_w = NULL;
-    struct ggml_tensor * mm_3_b = NULL;
-    struct ggml_tensor * mm_4_w = NULL;
-    struct ggml_tensor * mm_4_b = NULL;
+    struct ggml_tensor * mm_0_w;
+    struct ggml_tensor * mm_0_b;
+    struct ggml_tensor * mm_2_w;
+    struct ggml_tensor * mm_2_b;
 
     // MobileVLM projection
     struct ggml_tensor * mm_model_mlp_1_w;
@@ -390,7 +381,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     //const int n_intermediate = hparams.n_intermediate;
     //const int projection_dim = hparams.projection_dim;
     const float eps = hparams.eps;
-    int batch_size = imgs->size;
+    int batch_size = static_cast<int>(imgs->size);
     if (ctx->has_llava_projector) {
         GGML_ASSERT(batch_size == 1);
     }
@@ -469,7 +460,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     // pre-layernorm
     {
         embeddings = ggml_norm(ctx0, embeddings, eps);
-        ggml_set_name(embeddings, "pre_ln");
 
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_ln_w), model.pre_ln_b);
     }
@@ -585,27 +575,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
             embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
-
-        } else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
-            embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
-            embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
-            // ggml_tensor_printf(embeddings, "mm_0_w",0,true,false);
-            // First LayerNorm
-            embeddings = ggml_norm(ctx0, embeddings, eps);
-            embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.mm_1_w),
-                                model.mm_1_b);
-
-            // GELU activation
-            embeddings = ggml_gelu(ctx0, embeddings);
-
-            // Second linear layer
-            embeddings = ggml_mul_mat(ctx0, model.mm_3_w, embeddings);
-            embeddings = ggml_add(ctx0, embeddings, model.mm_3_b);
-
-            // Second LayerNorm
-            embeddings = ggml_norm(ctx0, embeddings, eps);
-            embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.mm_4_w),
-                                model.mm_4_b);
         }
         else if (ctx->proj_type == PROJECTOR_TYPE_LDP) {
             // MobileVLM projector
@@ -638,7 +607,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 // hardswish
                 struct ggml_tensor * block_1_hw = ggml_hardswish(ctx0, block_1);
 
-                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, block_1_hw->ne[0], block_1_hw->ne[1], block_1_hw->ne[0], block_1_hw->ne[1], 0, 0);
+                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]),
+                    static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]), 0, 0);
                 // block_1 shape = [1, 2048, 1, 1], ne = [1, 1, 2048, 1]
                 // pointwise conv
                 block_1 = ggml_reshape_2d(ctx0, block_1, block_1->ne[0]*block_1->ne[1]*block_1->ne[2], block_1->ne[3]);
@@ -652,7 +622,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 block_1 = ggml_reshape_4d(ctx0, block_1, 1, 1, block_1->ne[0], block_1->ne[1]);
                 block_1 = ggml_mul(ctx0, block_1_hw, block_1);
 
-                int w = block_1->ne[0], h = block_1->ne[1];
+                int w = static_cast<int>(block_1->ne[0]);
+                int h = static_cast<int>(block_1->ne[1]);
                 block_1 = ggml_reshape_3d(ctx0, block_1, w*h, block_1->ne[2], block_1->ne[3]);
                 block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 0, 2, 3));
 
@@ -686,7 +657,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 struct ggml_tensor * block_1_hw = ggml_hardswish(ctx0, block_1);
 
                 // not sure the parameters is right for globalAvgPooling
-                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, block_1_hw->ne[0], block_1_hw->ne[1], block_1_hw->ne[0], block_1_hw->ne[1], 0, 0);
+                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]),
+                    static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]), 0, 0);
                 // block_1 shape = [1, 2048, 1, 1], ne = [1, 1, 2048, 1]
                 // pointwise conv
                 block_1 = ggml_reshape_2d(ctx0, block_1, block_1->ne[0]*block_1->ne[1]*block_1->ne[2], block_1->ne[3]);
@@ -701,7 +673,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 block_1 = ggml_reshape_4d(ctx0, block_1, 1, 1, block_1->ne[0], block_1->ne[1]);
                 block_1 = ggml_mul(ctx0, block_1_hw, block_1);
 
-                int w = block_1->ne[0], h = block_1->ne[1];
+                int w = static_cast<int>(block_1->ne[0]);
+                int h = static_cast<int>(block_1->ne[1]);
                 block_1 = ggml_reshape_3d(ctx0, block_1, w*h, block_1->ne[2], block_1->ne[3]);
                 block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 0, 2, 3));
                 // block_1 shape = [1, 24*24, 2048], ne = [24*24, 2048, 1]
@@ -839,11 +812,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         else {
             new_clip->proj_type = PROJECTOR_TYPE_MLP;
         }
-        if (new_clip->proj_type == PROJECTOR_TYPE_MLP) {
-            if (gguf_find_tensor(ctx, format(TN_LLAVA_PROJ, 3, "weight").c_str()) != -1) {
-                new_clip->proj_type = PROJECTOR_TYPE_MLP_NORM;
-            }
-        }
     }
 
 #ifdef GGML_USE_CUBLAS
@@ -938,7 +906,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 clip_free(new_clip);
                 return nullptr;
             }
-            int num_bytes = ggml_nbytes(cur);
+            int num_bytes = static_cast<int>(ggml_nbytes(cur));
             if (ggml_backend_buffer_is_host(new_clip->params_buffer)) {
                 // for the CPU and Metal backend, we can read directly into the tensor
                 fin.read(reinterpret_cast<char *>(cur->data), num_bytes);
@@ -992,29 +960,11 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         vision_model.pre_ln_b            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "bias"));
 
         // LLaVA projection
-        if (new_clip->proj_type == PROJECTOR_TYPE_MLP || new_clip->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+        if (new_clip->proj_type == PROJECTOR_TYPE_MLP) {
             vision_model.mm_0_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "weight"));
             vision_model.mm_0_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "bias"));
-            try {
-                // Yi-type llava
-                vision_model.mm_1_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 1, "weight"));
-                vision_model.mm_1_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 1, "bias"));
-            } catch (std::runtime_error & e) {  }
-            try {
-                // missing in Yi-type llava
-                vision_model.mm_2_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "weight"));
-                vision_model.mm_2_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "bias"));
-            } catch (std::runtime_error & e) {  }
-            try {
-                // Yi-type llava
-                vision_model.mm_3_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 3, "weight"));
-                vision_model.mm_3_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 3, "bias"));
-            } catch (std::runtime_error & e) {  }
-            try {
-                // Yi-type llava
-                vision_model.mm_4_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "weight"));
-                vision_model.mm_4_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "bias"));
-            } catch (std::runtime_error & e) {  }
+            vision_model.mm_2_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "weight"));
+            vision_model.mm_2_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "bias"));
         }
         else if (new_clip->proj_type == PROJECTOR_TYPE_LDP) {
             // MobileVLM projection
@@ -1124,7 +1074,7 @@ bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
 
 bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img) {
     int nx, ny, nc;
-    auto * data = stbi_load_from_memory(bytes, bytes_length, &nx, &ny, &nc, 3);
+    auto * data = stbi_load_from_memory(bytes, static_cast<int>(bytes_length), &nx, &ny, &nc, 3);
     if (!data) {
         fprintf(stderr, "%s: failed to decode image bytes\n", __func__);
         return false;
@@ -1224,7 +1174,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
 
                 const float v = v0 * (1.0f - dy) + v1 * dy;
 
-                const uint8_t v2 = std::min(std::max(std::round(v), 0.0f), 255.0f);
+                const uint8_t v2 = static_cast<std::uint8_t>(std::min(std::max(std::round(v), 0.0f), 255.0f));
 
                 const int i = 3 * (y * nx3 + x) + c;
 
@@ -1262,7 +1212,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         return false;
     }
 
-    int batch_size = imgs->size;
+    int batch_size = static_cast<int>(imgs->size);
     if(ctx->has_llava_projector) {
         GGML_ASSERT(batch_size == 1); // TODO: support multiple images
     }
@@ -1392,34 +1342,34 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 
             switch (new_type) {
                 case GGML_TYPE_Q4_0: {
-                    new_size = ggml_quantize_q4_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q4_0(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q4_1: {
-                    new_size = ggml_quantize_q4_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q4_1(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q5_0: {
-                    new_size = ggml_quantize_q5_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q5_0(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q5_1: {
-                    new_size = ggml_quantize_q5_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q5_1(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q8_0: {
-                    new_size = ggml_quantize_q8_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q8_0(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q2_K: {
-                    new_size = ggml_quantize_q2_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q2_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q3_K: {
-                    new_size = ggml_quantize_q3_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q3_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q4_K: {
-                    new_size = ggml_quantize_q4_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q4_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q5_K: {
-                    new_size = ggml_quantize_q5_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q5_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q6_K: {
-                    new_size = ggml_quantize_q6_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                    new_size = ggml_quantize_q6_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
                 } break;
                 default: {
                     fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, new_type);
@@ -1482,12 +1432,10 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 
 int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     if (ctx->proj_type == PROJECTOR_TYPE_LDP) {
-        return ctx->vision_model.mm_model_block_1_block_2_1_b->ne[0];
+        return static_cast<int>(ctx->vision_model.mm_model_block_1_block_2_1_b->ne[0]);
     }
     else if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
-        return ctx->vision_model.mm_2_b->ne[0];
-    } else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
-        return ctx->vision_model.mm_3_b->ne[0];
+        return static_cast<int>(ctx->vision_model.mm_2_b->ne[0]);
     }
     else {
         std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];

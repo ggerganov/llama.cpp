@@ -156,13 +156,13 @@ int main(int argc, char ** argv) {
     std::vector<client> clients(n_clients);
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
-        client.id = i;
+        client.id = static_cast<int32_t>(i);
         client.ctx_sampling = llama_sampling_init(params.sparams);
     }
 
     std::vector<llama_token> tokens_system;
     tokens_system = ::llama_tokenize(ctx, k_system, true);
-    const int32_t n_tokens_system = tokens_system.size();
+    const int32_t n_tokens_system = static_cast<int32_t>(tokens_system.size());
 
     llama_seq_id g_seq_id = 0;
 
@@ -254,7 +254,7 @@ int main(int argc, char ** argv) {
                     tokens_prompt = ::llama_tokenize(ctx, client.prompt, false);
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
-                        llama_batch_add(batch, tokens_prompt[i], i + n_tokens_system, { client.id }, false);
+                        llama_batch_add(batch, tokens_prompt[i], static_cast<llama_pos>(i + n_tokens_system), { client.id }, false);
                     }
 
                     // extract the logits only for the last token
@@ -262,7 +262,7 @@ int main(int argc, char ** argv) {
                         batch.logits[batch.n_tokens - 1] = true;
                     }
 
-                    client.n_prompt  = tokens_prompt.size();
+                    client.n_prompt  = static_cast<int32_t>(tokens_prompt.size());
                     client.n_decoded = 0;
                     client.i_batch   = batch.n_tokens - 1;
 

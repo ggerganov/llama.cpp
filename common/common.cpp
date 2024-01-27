@@ -1056,7 +1056,7 @@ std::string get_system_info(const gpt_params & params) {
 }
 
 std::string gpt_random_prompt(std::mt19937 & rng) {
-    const int r = rng() % 10;
+    const int r = static_cast<int>(rng() % 10);
     switch (r) {
         case 0: return "So";
         case 1: return "Once upon a time";
@@ -1700,7 +1700,8 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
             if (cs_curr[j] < 0) { continue; }
             if (seqs.find(cs_curr[j]) == seqs.end()) {
                 if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
-                seqs[cs_curr[j]] = seqs.size();
+                auto current_size = seqs.size();
+                seqs[cs_curr[j]] = current_size;
             }
         }
         if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }

@@ -88,7 +88,7 @@ int main(int argc, char ** argv) {
 
     fflush(stderr);
 
-    const int n_input = inp.size();
+    const int n_input = static_cast<int>(inp.size());
 
     const auto t_enc_start = ggml_time_us();
 
@@ -105,7 +105,7 @@ int main(int argc, char ** argv) {
     int n_predict = 0;
     int n_accept  = 0;
 
-    int n_past = inp.size();
+    int n_past = static_cast<int>(inp.size());
 
     llama_token id = 0;
 
@@ -362,7 +362,7 @@ int main(int argc, char ** argv) {
                 if (v == 0) {
                     // sample from the last level
                     for (int i = 0; i < W; i++) {
-                        tokens_j[N - 2][i] = llama_sampling_sample(ctx_sampling, ctx, NULL, ngrams_cur.size()*(N-1) + W*(N - 2) + i);
+                        tokens_j[N - 2][i] = llama_sampling_sample(ctx_sampling, ctx, NULL, static_cast<int>(ngrams_cur.size()*(N-1) + W*(N - 2) + i));
                     }
                 } else {
                     for (int i = 0; i < W; i++) {
