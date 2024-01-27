@@ -681,7 +681,7 @@ struct llama_server_context
                     while ((pos = prompt.find(pattern, pos)) != std::string::npos) {
                         size_t end_prefix = pos;
                         pos += pattern.length();
-                        size_t end_pos = prompt.find("]", pos);
+                        size_t end_pos = prompt.find(']', pos);
                         if (end_pos != std::string::npos)
                         {
                             std::string image_id = prompt.substr(pos, end_pos - pos);

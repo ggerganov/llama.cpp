@@ -1277,7 +1277,6 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         ".*weight",
     };
 
-    std::vector<uint8_t> read_data(512);
     std::vector<uint8_t> work(512);
     std::vector<float> conv_buf(512);
     std::vector<int64_t> hist_all(1 << 4, 0);
