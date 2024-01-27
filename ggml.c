@@ -7498,7 +7498,12 @@ static void ggml_compute_forward_add(
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_add_f32(params, src0, src1, dst);
+                if (src1->type == GGML_TYPE_F32) {
+                    ggml_compute_forward_add_f32(params, src0, src1, dst);
+                }
+                else {
+                    GGML_ASSERT(false);
+                }
             } break;
         case GGML_TYPE_F16:
             {

@@ -241,7 +241,7 @@ int main(int argc, char ** argv) {
     LOG("add_bos: %d\n", add_bos);
 
     bool suff_rm_leading_spc = params.escape;
-    if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+    if (suff_rm_leading_spc && params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
         params.input_suffix.erase(0, 1);
         suff_rm_leading_spc = false;
     }
