@@ -1555,10 +1555,6 @@ struct llama_server_context
                         // we have to evaluate at least 1 token to generate logits.
                         LOG_TEE("slot %d : we have to evaluate at least 1 token to generate logits\n", slot.id);
                         slot.n_past--;
-                        if(slot.n_past_self_extension > 0)
-                        {
-                            slot.n_past_self_extension--;
-                        }
                     }
 
                     LOG_VERBOSE("prompt ingested", {
@@ -1611,12 +1607,6 @@ struct llama_server_context
         {
             all_slots_are_idle = true;
             return true;
-        }
-
-        std::vector<int32_t> slot_npasts;
-        for (auto & slot : slots)
-        {
-            slot_npasts.emplace_back(0);
         }
 
         for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch)
