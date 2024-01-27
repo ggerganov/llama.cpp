@@ -9029,9 +9029,12 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         auto info = layer_info(qs.i_ffn_down, qs.n_ffn_down, name.c_str());
         int i_layer = info.first, n_layer = info.second;
         if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
-        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {// || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {
             if (i_layer < n_layer/8) new_type = GGML_TYPE_Q4_K;
         }
+        //else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
+        //    if (i_layer < n_layer/8) new_type = GGML_TYPE_Q5_K;
+        //}
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
             new_type = i_layer < n_layer/16 ? GGML_TYPE_Q5_K
                      : arch != LLM_ARCH_FALCON || use_more_bits(i_layer, n_layer) ? GGML_TYPE_Q4_K
