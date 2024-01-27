@@ -184,8 +184,8 @@ struct llama_client_slot
     struct llama_sampling_params sparams;
     llama_sampling_context *ctx_sampling = nullptr;
 
-	int32_t ga_i = 0;   // group-attention state
-    int32_t ga_n = 1;   // group-attention factor
+    int32_t ga_i = 0;   // group-attention state
+    int32_t ga_n = 1;// group-attention factor
     int32_t ga_w = 512; // group-attention width
 
     int32_t n_past_se = 0; // self-extend
