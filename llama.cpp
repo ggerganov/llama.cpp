@@ -9860,6 +9860,13 @@ void llama_backend_init(bool numa) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_init();
 #endif
+
+#ifdef GGML_USE_KOMPUTE
+    if (!ggml_vk_has_device()) {
+        ggml_vk_init_device(0, "gpu");
+    }
+#endif
+
 }
 
 void llama_backend_free(void) {
@@ -9867,6 +9874,10 @@ void llama_backend_free(void) {
     ggml_mpi_backend_free();
 #endif
     ggml_quantize_free();
+
+#ifdef GGML_USE_KOMPUTE
+    ggml_vk_free_device();
+#endif
 }
 
 int64_t llama_time_us(void) {

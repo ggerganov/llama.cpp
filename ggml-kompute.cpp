@@ -1863,9 +1863,6 @@ static const char * ggml_backend_kompute_name(ggml_backend_t backend) {
 static void ggml_backend_kompute_free(ggml_backend_t backend) {
     struct ggml_kompute_context * ctx = (struct ggml_kompute_context *)backend->context;
     ggml_vk_free(ctx);
-    // TODO(cebtenzzre): This should only be done if the device was initialized by us, but
-    //                   that would require a change to GPT4All.
-    ggml_vk_free_device();
     delete backend;
 }
 
@@ -1901,12 +1898,6 @@ static struct ggml_backend_i kompute_backend_i = {
 };
 
 ggml_backend_t ggml_backend_kompute_init() {
-#if defined(GGML_USE_KOMPUTE)
-    if (!ggml_vk_has_device()) {
-        ggml_vk_init_device(0, "gpu");
-    }
-#endif
-
     if (!ggml_vk_has_device()) {
         fprintf(stderr, "%s: error: device was not initialized\n", __func__);
         return nullptr;
