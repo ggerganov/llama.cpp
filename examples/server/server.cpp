@@ -189,7 +189,7 @@ struct llama_client_slot
     int32_t ga_n = 1;   // group-attention factor
     int32_t ga_w = 512; // group-attention width
 
-    int32_t n_past_self_extension = 0;
+    int32_t n_past_se = 0; // self-extend
 
     // multimodal
     std::vector<slot_image> images;
