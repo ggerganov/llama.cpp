@@ -249,6 +249,7 @@ struct llama_server_queue {
     }
 
     // Start the main loop. This call is blocking
+    [[noreturn]]
     void start_loop() {
         while (true) {
             // new task arrived
