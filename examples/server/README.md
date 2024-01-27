@@ -32,7 +32,6 @@ Command line options:
 -   `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
 -   `--grp-attn-n`: Extend context size through self extend. Extend context size n-times (default: 1), used together with `--grp-attn-w`
 -   `--grp-attn-w`: Width of the self extend context size extension.  (default: 512) shouldn't be greater than original context size
-- 
 ## Build
 
 server is build alongside everything else from the root of the project
