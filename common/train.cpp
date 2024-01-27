@@ -850,7 +850,7 @@ size_t tokenize_file(
     utf8_nunits.resize(buf.size());
     mark_utf8_units(buf.data(), utf8_units.data(), utf8_nunits.data(), buf.size());
 
-    if (sample_start.size() == 0) {
+    if (sample_start.empty()) {
         // tokenize all data at once
         out_tokens.resize(buf.size() + n_max_tokens_overhead);
 
@@ -898,7 +898,7 @@ size_t tokenize_file(
             const size_t search_start = sample_begin + sample_start.size();
             sample_begin = data_str.find(sample_start, search_start);
         }
-        if (out_samples_begin.size() == 0) {
+        if (out_samples_begin.empty()) {
             printf("%s: warning: sample start pattern '%s' not found. inserting single sample at data begin\n",
                 __func__, sample_start.c_str());
             out_samples_begin.push_back(0);

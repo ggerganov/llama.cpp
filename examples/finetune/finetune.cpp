@@ -1835,7 +1835,7 @@ int main(int argc, char ** argv) {
     if (params.common.force_reshuffle) {
         printf("%s: forced reshuffling of data. restarting with newly shuffled epoch.\n", __func__);
     }
-    if ((train->shuffle_rng_state_current == "") || changed_train_data || params.common.force_reshuffle) {
+    if ((train->shuffle_rng_state_current.empty()) || changed_train_data || params.common.force_reshuffle) {
         train->shuffle_rng_state_current = mt19937_seed_to_state(params.common.seed);
         train->shuffle_sample_count = train_samples_size.size();
         train->shuffle_next_sample = 0;

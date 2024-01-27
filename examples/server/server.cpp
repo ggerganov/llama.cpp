@@ -649,7 +649,7 @@ struct llama_server_context
                 }
                 // process prompt
                 // example: system prompt [img-102] user [img-103] describe [img-134] -> [{id: 102, prefix: 'system prompt '}, {id: 103, prefix: ' user '}, {id: 134, prefix: ' describe '}]}
-                if (slot->images.size() > 0 && !slot->prompt.is_array())
+                if (!slot->images.empty() && !slot->prompt.is_array())
                 {
                     std::string prompt = slot->prompt.get<std::string>();
                     size_t pos = 0, begin_prefix = 0;
@@ -758,7 +758,7 @@ struct llama_server_context
         name_user      = sys_props.value("anti_prompt", "");
         name_assistant = sys_props.value("assistant_name", "");
 
-        if (slots.size() > 0)
+        if (!slots.empty())
         {
             notify_system_prompt_changed();
         }
@@ -944,7 +944,7 @@ struct llama_server_context
             img.request_encode_image = false;
         }
 
-        return slot.images.size() > 0;
+        return !slot.images.empty();
     }
 
     void send_error(task_server& task, const std::string &error)
@@ -1794,7 +1794,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             std::string key;
             while (std::getline(key_file, key)) {
-               if (key.size() > 0) {
+               if (!key.empty()) {
                    sparams.api_keys.push_back(key);
                }
             }

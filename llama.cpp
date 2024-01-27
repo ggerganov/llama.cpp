@@ -3015,7 +3015,7 @@ static void llm_load_vocab(
 
             for (int i = 0; i < n_merges; i++) {
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
-                GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+                GGML_ASSERT(!codepoints_from_utf8(word).empty());
 
                 std::string first;
                 std::string second;
@@ -3050,7 +3050,7 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+        GGML_ASSERT(!codepoints_from_utf8(word).empty());
 
         vocab.token_to_id[word] = i;
 
@@ -7190,7 +7190,7 @@ private:
                     split_condition = true;
                 }
                 if (split_condition) {
-                    if (token.size()) {
+                    if (!token.empty()) {
                         bpe_words.emplace_back(token); // push previous content as token
                     }
                     token = utf_char + utf_char_next;
@@ -7211,7 +7211,7 @@ private:
                 }
                 if (split_condition) {
                     // current token + next token can be defined
-                    if (token.size()) {
+                    if (!token.empty()) {
                         bpe_words.emplace_back(token); // push previous content as token
                     }
                     token = utf_char + utf_char_next + utf_char_next_next;
@@ -7223,17 +7223,17 @@ private:
             }
 
             if (!split_condition && !collecting) {
-                if (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
+                if (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || (token.empty() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
                     collecting_letter = true;
                     collecting = true;
                 }
-                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || (!token.size() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || (token.empty() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
                     collecting_numeric = true;
                     collecting = true;
                 }
                 else if (
                     ((codepoint_type(utf_char) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (codepoint_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
-                    (!token.size() && utf_char == " " && codepoint_type(utf_char_next) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
+                    (token.empty() && utf_char == " " && codepoint_type(utf_char_next) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
                     ) {
                     collecting_special = true;
                     collecting = true;
@@ -7261,13 +7261,13 @@ private:
                 }
             }
 
-            if (utf_char_next == "") {
+            if (utf_char_next.empty()) {
                 split_condition = true; // final
                 token += utf_char;
             }
 
             if (split_condition) {
-                if (token.size()) {
+                if (!token.empty()) {
                     bpe_words.emplace_back(token);
                 }
                 token = utf_char;

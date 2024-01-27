@@ -376,7 +376,7 @@ static void export_lora(struct export_lora_params * params) {
             loras.push_back(lora);
         }
     }
-    if (loras.size() == 0) {
+    if (loras.empty()) {
         fprintf(stderr, "warning: no lora adapters will be applied.\n");
     }
 
