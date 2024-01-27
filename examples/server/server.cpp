@@ -1528,6 +1528,7 @@ struct llama_server_context
 
                         slot.n_past = 0;
                         slot.n_past_self_extension = 0;
+                        slot.ga_i = 0;
                         slot.num_prompt_tokens_processed = slot.num_prompt_tokens;
                     }
                     else
