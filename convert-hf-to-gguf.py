@@ -1849,9 +1849,13 @@ class MambaModel(Model):
     model_arch = gguf.MODEL_ARCH.MAMBA
 
     def set_gguf_parameters(self):
+        d_model = self.hparams["d_model"]
         self.gguf_writer.add_name(self.dir_model.name)
-        self.gguf_writer.add_embedding_length(self.hparams["d_model"])
+        self.gguf_writer.add_embedding_length(d_model)
         self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_head_count(2 * d_model) # d_inner
+        self.gguf_writer.add_key_length(4) # d_conv
+        self.gguf_writer.add_value_length(16) # d_state
         self.gguf_writer.add_file_type(self.ftype)
 
 
