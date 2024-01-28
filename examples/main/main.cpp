@@ -361,16 +361,16 @@ int main(int argc, char ** argv) {
         LOG_TEE("\n");
         LOG_TEE("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         LOG_TEE("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
-        for (int i : embd_inp) {
-            LOG_TEE("%6d -> '%s'\n", i, llama_token_to_piece(ctx, i).c_str());
+        for (int embd : embd_inp) {
+            LOG_TEE("%6d -> '%s'\n", embd, llama_token_to_piece(ctx, embd).c_str());
         }
 
         if (ctx_guidance) {
             LOG_TEE("\n");
             LOG_TEE("%s: negative prompt: '%s'\n", __func__, sparams.cfg_negative_prompt.c_str());
             LOG_TEE("%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
-            for (int i : guidance_inp) {
-                LOG_TEE("%6d -> '%s'\n", i, llama_token_to_piece(ctx, i).c_str());
+            for (int inp : guidance_inp) {
+                LOG_TEE("%6d -> '%s'\n", inp, llama_token_to_piece(ctx, inp).c_str());
             }
         }
 

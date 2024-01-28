@@ -381,7 +381,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     //const int n_intermediate = hparams.n_intermediate;
     //const int projection_dim = hparams.projection_dim;
     const float eps = hparams.eps;
-    int batch_size = static_cast<int>(imgs->size);
+    int batch_size = int(imgs->size);
     if (ctx->has_llava_projector) {
         GGML_ASSERT(batch_size == 1);
     }
@@ -607,8 +607,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 // hardswish
                 struct ggml_tensor * block_1_hw = ggml_hardswish(ctx0, block_1);
 
-                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]),
-                    static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]), 0, 0);
+                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, int(block_1_hw->ne[0]), int(block_1_hw->ne[1]),
+                    int(block_1_hw->ne[0]), int(block_1_hw->ne[1]), 0, 0);
                 // block_1 shape = [1, 2048, 1, 1], ne = [1, 1, 2048, 1]
                 // pointwise conv
                 block_1 = ggml_reshape_2d(ctx0, block_1, block_1->ne[0]*block_1->ne[1]*block_1->ne[2], block_1->ne[3]);
@@ -622,8 +622,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 block_1 = ggml_reshape_4d(ctx0, block_1, 1, 1, block_1->ne[0], block_1->ne[1]);
                 block_1 = ggml_mul(ctx0, block_1_hw, block_1);
 
-                int w = static_cast<int>(block_1->ne[0]);
-                int h = static_cast<int>(block_1->ne[1]);
+                int w = int(block_1->ne[0]);
+                int h = int(block_1->ne[1]);
                 block_1 = ggml_reshape_3d(ctx0, block_1, w*h, block_1->ne[2], block_1->ne[3]);
                 block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 0, 2, 3));
 
@@ -657,8 +657,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 struct ggml_tensor * block_1_hw = ggml_hardswish(ctx0, block_1);
 
                 // not sure the parameters is right for globalAvgPooling
-                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]),
-                    static_cast<int>(block_1_hw->ne[0]), static_cast<int>(block_1_hw->ne[1]), 0, 0);
+                block_1 = ggml_pool_2d(ctx0, block_1_hw, GGML_OP_POOL_AVG, int(block_1_hw->ne[0]), int(block_1_hw->ne[1]),
+                    int(block_1_hw->ne[0]), int(block_1_hw->ne[1]), 0, 0);
                 // block_1 shape = [1, 2048, 1, 1], ne = [1, 1, 2048, 1]
                 // pointwise conv
                 block_1 = ggml_reshape_2d(ctx0, block_1, block_1->ne[0]*block_1->ne[1]*block_1->ne[2], block_1->ne[3]);
@@ -673,8 +673,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 block_1 = ggml_reshape_4d(ctx0, block_1, 1, 1, block_1->ne[0], block_1->ne[1]);
                 block_1 = ggml_mul(ctx0, block_1_hw, block_1);
 
-                int w = static_cast<int>(block_1->ne[0]);
-                int h = static_cast<int>(block_1->ne[1]);
+                int w = int(block_1->ne[0]);
+                int h = int(block_1->ne[1]);
                 block_1 = ggml_reshape_3d(ctx0, block_1, w*h, block_1->ne[2], block_1->ne[3]);
                 block_1 = ggml_cont(ctx0, ggml_permute(ctx0, block_1, 1, 0, 2, 3));
                 // block_1 shape = [1, 24*24, 2048], ne = [24*24, 2048, 1]
@@ -906,7 +906,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 clip_free(new_clip);
                 return nullptr;
             }
-            int num_bytes = static_cast<int>(ggml_nbytes(cur));
+            int num_bytes = int(ggml_nbytes(cur));
             if (ggml_backend_buffer_is_host(new_clip->params_buffer)) {
                 // for the CPU and Metal backend, we can read directly into the tensor
                 fin.read(reinterpret_cast<char *>(cur->data), num_bytes);
@@ -1074,7 +1074,7 @@ bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
 
 bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img) {
     int nx, ny, nc;
-    auto * data = stbi_load_from_memory(bytes, static_cast<int>(bytes_length), &nx, &ny, &nc, 3);
+    auto * data = stbi_load_from_memory(bytes, int(bytes_length), &nx, &ny, &nc, 3);
     if (!data) {
         fprintf(stderr, "%s: failed to decode image bytes\n", __func__);
         return false;
@@ -1174,7 +1174,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
 
                 const float v = v0 * (1.0f - dy) + v1 * dy;
 
-                const uint8_t v2 = static_cast<std::uint8_t>(std::min(std::max(std::round(v), 0.0f), 255.0f));
+                const uint8_t v2 = std::uint8_t(std::min(std::max(std::round(v), 0.0f), 255.0f));
 
                 const int i = 3 * (y * nx3 + x) + c;
 
@@ -1212,7 +1212,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         return false;
     }
 
-    int batch_size = static_cast<int>(imgs->size);
+    int batch_size = int(imgs->size);
     if(ctx->has_llava_projector) {
         GGML_ASSERT(batch_size == 1); // TODO: support multiple images
     }
@@ -1342,34 +1342,34 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 
             switch (new_type) {
                 case GGML_TYPE_Q4_0: {
-                    new_size = ggml_quantize_q4_0(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q4_0(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q4_1: {
-                    new_size = ggml_quantize_q4_1(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q4_1(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q5_0: {
-                    new_size = ggml_quantize_q5_0(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q5_0(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q5_1: {
-                    new_size = ggml_quantize_q5_1(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q5_1(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q8_0: {
-                    new_size = ggml_quantize_q8_0(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q8_0(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q2_K: {
-                    new_size = ggml_quantize_q2_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q2_K(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q3_K: {
-                    new_size = ggml_quantize_q3_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q3_K(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q4_K: {
-                    new_size = ggml_quantize_q4_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q4_K(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q5_K: {
-                    new_size = ggml_quantize_q5_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q5_K(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 case GGML_TYPE_Q6_K: {
-                    new_size = ggml_quantize_q6_K(f32_data, new_data, static_cast<int>(n_elms), static_cast<int>(cur->ne[0]), hist_cur.data());
+                    new_size = ggml_quantize_q6_K(f32_data, new_data, int(n_elms), int(cur->ne[0]), hist_cur.data());
                 } break;
                 default: {
                     fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, new_type);
@@ -1432,10 +1432,10 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 
 int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     if (ctx->proj_type == PROJECTOR_TYPE_LDP) {
-        return static_cast<int>(ctx->vision_model.mm_model_block_1_block_2_1_b->ne[0]);
+        return int(ctx->vision_model.mm_model_block_1_block_2_1_b->ne[0]);
     }
     else if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
-        return static_cast<int>(ctx->vision_model.mm_2_b->ne[0]);
+        return int(ctx->vision_model.mm_2_b->ne[0]);
     }
     else {
         std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];

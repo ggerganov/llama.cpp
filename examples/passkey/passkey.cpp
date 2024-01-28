@@ -42,7 +42,7 @@ int main(int argc, char ** argv) {
     }
 
     if (seed == -1) {
-        seed = static_cast<int>(time(NULL));
+        seed = int(time(NULL));
     }
 
     srand(seed);
@@ -110,9 +110,9 @@ int main(int argc, char ** argv) {
     tokens_list = ::llama_tokenize(ctx, params.prompt, true);
 
     // tokenize the prefix and use it as a sink
-    const int n_tokens_prefix = static_cast<int>(::llama_tokenize(ctx, prompt_prefix, true).size());
+    const int n_tokens_prefix = int(::llama_tokenize(ctx, prompt_prefix, true).size());
 
-    const int n_tokens_all = static_cast<int>(tokens_list.size());
+    const int n_tokens_all = int(tokens_list.size());
 
     // we leave a margin of 16 tokens for the generated text - it should contain just the passkey
     const int n_predict = 16;

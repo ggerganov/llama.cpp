@@ -441,7 +441,7 @@ static inline std::vector<uint8_t> base64_decode(const std::string & encoded_str
         {
             for (i = 0; i <4; i++)
             {
-                char_array_4[i] = static_cast<uint8_t>(base64_chars.find(char_array_4[i]));
+                char_array_4[i] = uint8_t(base64_chars.find(char_array_4[i]));
             }
 
             char_array_3[0] = ((char_array_4[0]      ) << 2) + ((char_array_4[1] & 0x30) >> 4);
@@ -465,7 +465,7 @@ static inline std::vector<uint8_t> base64_decode(const std::string & encoded_str
 
         for (j = 0; j <4; j++)
         {
-            char_array_4[j] = static_cast<uint8_t>(base64_chars.find(char_array_4[j]));
+            char_array_4[j] = uint8_t(base64_chars.find(char_array_4[j]));
         }
 
         char_array_3[0] = ((char_array_4[0]      ) << 2) + ((char_array_4[1] & 0x30) >> 4);

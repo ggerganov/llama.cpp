@@ -1056,7 +1056,7 @@ std::string get_system_info(const gpt_params & params) {
 }
 
 std::string gpt_random_prompt(std::mt19937 & rng) {
-    const int r = static_cast<int>(rng() % 10);
+    const int r = int(rng() % 10);
     switch (r) {
         case 0: return "So";
         case 1: return "Once upon a time";

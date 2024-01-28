@@ -63,7 +63,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
                 im = nullptr;
             }
         }
-        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, static_cast<int>(size/tensor->ne[0]),
+        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, int(size/tensor->ne[0]),
             static_cast<int>(tensor->ne[0]), hist, im);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
@@ -553,7 +553,7 @@ struct test_case {
 
         // duplicate the op
         size_t target_size = ggml_backend_is_cpu(backend) ? 1ULL << 33 : 1ULL << 35; // 8 GB CPU, 32 GB GPU
-        int n_runs = static_cast<int>(std::min((size_t)gf->size - gf->n_nodes, target_size / op_size(out)) + 1);
+        int n_runs = int(std::min((size_t)gf->size - gf->n_nodes, target_size / op_size(out)) + 1);
         for (int i = 1; i < n_runs; i++) {
             gf->nodes[gf->n_nodes++] = out;
         }
@@ -584,7 +584,7 @@ struct test_case {
         ggml_backend_graph_compute(backend, gf);
         ggml_backend_synchronize(backend);
         int64_t end_time = ggml_time_us();
-        double time_us = static_cast<double>(end_time - start_time);
+        double time_us = double(end_time - start_time);
 
         printf("    %5d runs - %8.2f us/run - %8zu kB/run - \033[1;34m%7.2f GB/s\033[0m\n",
             n_runs,
@@ -714,8 +714,7 @@ struct test_dup : public test_case {
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * src = ggml_new_tensor(ctx, type, 4, ne.data());
         if (_use_permute) {
-            src = ggml_permute(ctx, src, static_cast<int>(permute[0]), static_cast<int>(permute[1]),
-                static_cast<int>(permute[2]), static_cast<int>(permute[3]));
+            src = ggml_permute(ctx, src, int(permute[0]), int(permute[1]), int(permute[2]), int(permute[3]));
         }
         ggml_tensor * out = ggml_dup(ctx, src);
         return out;
@@ -1241,7 +1240,7 @@ struct test_argsort : public test_case {
                 for (int64_t r = 0; r < ggml_nrows(t); r++) {
                     std::vector<float> data(t->ne[0]);
                     for (int i = 0; i < t->ne[0]; i++) {
-                        data[i] = static_cast<float>(i);
+                        data[i] = float(i);
                     }
                     std::shuffle(data.begin(), data.end(), rng);
                     ggml_backend_tensor_set(t, data.data(), r * t->nb[1], t->ne[0] * sizeof(float));
@@ -1423,7 +1422,7 @@ struct test_moe : public test_case {
         ggml_tensor * cur = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_tokens);
 
         ggml_tensor * logits = ggml_mul_mat(ctx, ffn_gate_inp, cur);
-        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, 1.0f/sqrtf(static_cast<float>(n_embd)));
+        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, 1.0f/sqrtf(float(n_embd)));
 
         // select experts
         ggml_tensor * selected_experts = ggml_top_k(ctx, probs, n_experts_per_tok);

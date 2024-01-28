@@ -60,7 +60,7 @@ int main(int argc, char ** argv){
 
     fflush(stderr);
 
-    const int n_input = static_cast<int>(inp.size());
+    const int n_input = int(inp.size());
 
     const auto t_enc_start = ggml_time_us();
 
@@ -73,7 +73,7 @@ int main(int argc, char ** argv){
     int n_drafted = 0;
     int n_accept  = 0;
 
-    int n_past = static_cast<int>(inp.size());
+    int n_past = int(inp.size());
 
     bool has_eos = false;
 
@@ -160,7 +160,7 @@ int main(int argc, char ** argv){
 
         // generate n_pred tokens through prompt lookup
         auto prompt_lookup = [&]() -> void {
-            int inp_size = static_cast<int>(inp.size());
+            int inp_size = int(inp.size());
             for (int ngram_size = ngram_max ; ngram_size > ngram_min; --ngram_size){
                 const llama_token * ngram = &inp[inp_size - ngram_size];
 

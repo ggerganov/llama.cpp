@@ -10992,15 +10992,15 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             if (llama_is_normal_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 llama_unescape_whitespace(result);
-                if (length < static_cast<int32_t>(result.length())) {
-                    return -static_cast<int32_t>(result.length());
+                if (length < int32_t(result.length())) {
+                    return -int32_t(result.length());
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
             } else if (llama_is_user_defined_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
-                if (length < static_cast<int32_t>(result.length())) {
-                    return -static_cast<int32_t>(result.length());
+                if (length < int32_t(result.length())) {
+                    return -int32_t(result.length());
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
@@ -11027,15 +11027,15 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             if (llama_is_normal_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 result = llama_decode_text(result);
-                if (length < static_cast<int32_t>(result.length())) {
-                    return -static_cast<int32_t>(result.length());
+                if (length < int32_t(result.length())) {
+                    return -int32_t(result.length());
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
             } else if (llama_is_user_defined_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
-                if (length < static_cast<int32_t>(result.length())) {
-                    return -static_cast<int32_t>(result.length());
+                if (length < int32_t(result.length())) {
+                    return -int32_t(result.length());
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();

@@ -636,7 +636,7 @@ struct llama_server_context
                     const std::vector<uint8_t> image_buffer = base64_decode(img["data"].get<std::string>());
 
                     slot_image img_sl;
-                    img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : static_cast<int>(slot->images.size());
+                    img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : int(slot->images.size());
                     img_sl.img_data = clip_image_u8_init();
                     if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
                     {
@@ -736,7 +736,7 @@ struct llama_server_context
         // assign the system KV cache to all parallel sequences
         for (int32_t i = 1; i < params.n_parallel; ++i)
         {
-            llama_kv_cache_seq_cp(ctx, 0, i, 0, static_cast<llama_pos>(system_tokens.size()));
+            llama_kv_cache_seq_cp(ctx, 0, i, 0, llama_pos(system_tokens.size()));
         }
 
         LOG_TEE("system prompt updated\n");
@@ -1401,7 +1401,7 @@ struct llama_server_context
 
             slot.i_batch = batch.n_tokens;
 
-            llama_batch_add(batch, slot.sampled, static_cast<llama_pos>(system_tokens.size() + slot.n_past), { slot.id }, true);
+            llama_batch_add(batch, slot.sampled, llama_pos(system_tokens.size() + slot.n_past), { slot.id }, true);
 
             slot.n_past += 1;
         }
@@ -1463,7 +1463,7 @@ struct llama_server_context
                         prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);  // add BOS if there isn't system prompt
                     }
 
-                    slot.num_prompt_tokens = static_cast<int32_t>(prompt_tokens.size());
+                    slot.num_prompt_tokens = int32_t(prompt_tokens.size());
 
                     if (slot.params.n_keep < 0)
                     {
@@ -1490,7 +1490,7 @@ struct llama_server_context
                         slot.truncated = true;
                         prompt_tokens = new_tokens;
 
-                        slot.num_prompt_tokens = static_cast<int32_t>(prompt_tokens.size());
+                        slot.num_prompt_tokens = int32_t(prompt_tokens.size());
                         GGML_ASSERT(slot.num_prompt_tokens < slot.n_ctx);
                     }
 
@@ -1509,7 +1509,7 @@ struct llama_server_context
                             llama_sampling_accept(slot.ctx_sampling, ctx, token, false);
                         }
 
-                        slot.n_past = static_cast<int32_t>(common_part(slot.cache_tokens, prompt_tokens));
+                        slot.n_past = int32_t(common_part(slot.cache_tokens, prompt_tokens));
                         slot.num_prompt_tokens_processed = slot.num_prompt_tokens - slot.n_past;
 
                         LOG_TEE("slot %d : in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
@@ -1517,7 +1517,7 @@ struct llama_server_context
 
                     LOG_TEE("slot %d : kv cache rm - [%d, end)\n", slot.id, (int) system_tokens.size() + slot.n_past);
 
-                    llama_kv_cache_seq_rm(ctx, slot.id, static_cast<llama_pos>(system_tokens.size() + slot.n_past), -1);
+                    llama_kv_cache_seq_rm(ctx, slot.id, llama_pos(system_tokens.size() + slot.n_past), -1);
 
                     slot.cache_tokens = prompt_tokens;
 
@@ -1540,7 +1540,7 @@ struct llama_server_context
                     std::vector<llama_token> prefix_tokens = has_images ? tokenize(slot.images[0].prefix_prompt, add_bos_token) : prompt_tokens;
                     for (; slot.n_past < (int) prefix_tokens.size(); ++slot.n_past)
                     {
-                       llama_batch_add(batch, prefix_tokens[slot.n_past], static_cast<llama_pos>(system_tokens.size() + slot.n_past), { slot.id }, false);
+                       llama_batch_add(batch, prefix_tokens[slot.n_past], llama_pos(system_tokens.size() + slot.n_past), { slot.id }, false);
                     }
 
                     if (has_images && !ingest_images(slot, n_batch))
