@@ -154,14 +154,14 @@ static void test_sampler_queue(
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
-        const float logit = logf(token_id);
+        const float logit = logf(float(token_id));
         candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
           llama_token min_token_id = 0;
-    const llama_token max_token_id = n_vocab-1;
+    const llama_token max_token_id = llama_token(n_vocab-1);
 
     for (auto s : samplers_sequence) {
         switch (s){
@@ -176,7 +176,7 @@ static void test_sampler_queue(
 
         llama_sample_softmax(nullptr, &candidates_p); // make sure tokens are sorted for tests
 
-        const int size = candidates_p.size;
+        const int size = int(candidates_p.size);
 
         if (s == 'k') {
             const int expected_size = std::min(size, top_k);
@@ -186,10 +186,10 @@ static void test_sampler_queue(
             GGML_ASSERT(candidates_p.data[0].id == max_token_id);
             GGML_ASSERT(candidates_p.data[expected_size-1].id == min_token_id);
         } else if (s == 'p') {
-            const int softmax_divisor = n_vocab * (n_vocab-1) / 2 - min_token_id * (min_token_id-1) / 2;
-            const int softmax_numerator_target = ceilf(top_p * softmax_divisor);
+            const int softmax_divisor = int(n_vocab * (n_vocab-1) / 2 - min_token_id * (min_token_id-1) / 2);
+            const int softmax_numerator_target = int(ceilf(top_p * softmax_divisor));
 
-                min_token_id  = n_vocab;
+                min_token_id  = llama_token(n_vocab);
             int expected_size = 0;
             int cumsum        = 0;
             do { // do-while because always at least one token is sampled
@@ -209,11 +209,11 @@ static void test_sampler_queue(
             GGML_ASSERT(candidates_p.data[0].id == max_token_id);
             GGML_ASSERT(candidates_p.data[expected_size-1].id == min_token_id);
         } else if (s == 'm') {
-            int expected_size = ceilf((1.0f-min_p) * n_vocab);
+            int expected_size = int(ceilf((1.0f-min_p) * n_vocab));
             expected_size = std::max(expected_size, 1);
             expected_size = std::min(expected_size, size);
 
-            min_token_id = floorf(min_p * n_vocab);
+            min_token_id = llama_token(floorf(min_p * n_vocab));
             min_token_id = std::max(min_token_id, 1);
             min_token_id = std::max(min_token_id, (llama_token)(n_vocab - size));
             min_token_id = std::min(min_token_id, (llama_token)(n_vocab - 1));
@@ -270,7 +270,7 @@ int main(void) {
     test_sampler_queue(10000, "p", 10000, 1.0f, 1.0f);
     test_sampler_queue(10000, "p", 10000, 0.0f, 1.0f);
     test_sampler_queue(10000, "m", 10000, 1.0f, 1.0f);
-    test_sampler_queue(10000, "m", 10000, 1.0f, 1e-12);
+    test_sampler_queue(10000, "m", 10000, 1.0f, 1e-12f);
 
     test_sampler_queue(10000, "k",   100, 1.0000f, 1.0f);
     test_sampler_queue(10000, "p", 10000, 0.0002f, 1.0f);
