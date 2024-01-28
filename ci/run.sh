@@ -10,6 +10,9 @@
 # # with CUDA support
 # GG_BUILD_CUDA=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
 #
+# # with SYCL support
+# GG_BUILD_SYCL=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
+#
 
 if [ -z "$2" ]; then
     echo "usage: $0 <output-dir> <mnt-dir>"
@@ -22,9 +25,9 @@ mkdir -p "$2"
 OUT=$(realpath "$1")
 MNT=$(realpath "$2")
 
-rm -v $OUT/*.log
-rm -v $OUT/*.exit
-rm -v $OUT/*.md
+rm -f "$OUT/*.log"
+rm -f "$OUT/*.exit"
+rm -f "$OUT/*.md"
 
 sd=`dirname $0`
 cd $sd/../
@@ -36,6 +39,18 @@ if [ ! -z ${GG_BUILD_METAL} ]; then
     CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_METAL_SHADER_DEBUG=ON"
 fi
 
+if [ ! -z ${GG_BUILD_CUDA} ]; then
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_CUBLAS=1"
+fi
+
+if [ ! -z ${GG_BUILD_SYCL} ]; then
+    if [ -z ${ONEAPI_ROOT} ]; then
+        echo "Not detected ONEAPI_ROOT, please install oneAPI base toolkit and enable it by:\n source /opt/intel/oneapi/setvars.sh"
+        exit 1
+    fi
+
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_SYCL=1 DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON"
+fi
 ## helpers
 
 # download a file if it does not exist or if it is outdated
@@ -90,7 +105,7 @@ function gg_run_ctest_debug {
     (time cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                          ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    (time ctest --output-on-failure -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    (time ctest --output-on-failure -L main -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
 
     set +e
 }
@@ -119,9 +134,9 @@ function gg_run_ctest_release {
     (time make -j                                            ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     if [ -z ${GG_BUILD_LOW_PERF} ]; then
-        (time ctest --output-on-failure ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+        (time ctest --output-on-failure -L main ) 2>&1 | tee -a $OUT/${ci}-ctest.log
     else
-        (time ctest --output-on-failure -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
+        (time ctest --output-on-failure -L main -E test-opt ) 2>&1 | tee -a $OUT/${ci}-ctest.log
     fi
 
     set +e
@@ -131,6 +146,61 @@ function gg_sum_ctest_release {
     gg_printf '### %s\n\n' "${ci}"
 
     gg_printf 'Runs ctest in release mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
+    gg_printf '```\n'
+}
+
+function gg_get_model {
+    local gguf_3b="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
+    local gguf_7b="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
+    if [[ -s $gguf_3b ]]; then
+        echo -n "$gguf_3b"
+    elif [[ -s $gguf_7b ]]; then
+        echo -n "$gguf_7b"
+    else
+        echo >&2 "No model found. Can't run gg_run_ctest_with_model."
+        exit 1
+    fi
+}
+
+function gg_run_ctest_with_model_debug {
+    cd ${SRC}
+
+    local model; model=$(gg_get_model)
+    cd build-ci-debug
+    set -e
+    (LLAMACPP_TEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    set +e
+    cd ..
+}
+
+function gg_run_ctest_with_model_release {
+    cd ${SRC}
+
+    local model; model=$(gg_get_model)
+    cd build-ci-release
+    set -e
+    (LLAMACPP_TEST_MODELFILE="$model" time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest.log
+    set +e
+    cd ..
+}
+
+function gg_sum_ctest_with_model_debug {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs ctest with model files in debug mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
+    gg_printf '```\n'
+}
+
+function gg_sum_ctest_with_model_release {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs ctest with model files in release mode\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '```\n'
     gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
@@ -160,8 +230,8 @@ function gg_run_open_llama_3b_v2 {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release -DLLAMA_QKK_64=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
-    (time make -j                                              ) 2>&1 | tee -a $OUT/${ci}-make.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_QKK_64=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                                             ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     python3 ../convert.py ${path_models}
 
@@ -214,6 +284,8 @@ function gg_run_open_llama_3b_v2 {
     (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
     (time ./bin/perplexity --model ${model_q6_k} -f ${wiki_test_60} -c 128 -b 128 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
 
+    (time ./bin/imatrix --model ${model_f16} -f ${wiki_test_60} -c 128 -b 128 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-imatrix.log
+
     (time ./bin/save-load-state --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
 
     function check_ppl {
@@ -240,6 +312,8 @@ function gg_run_open_llama_3b_v2 {
     check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+
+    cat $OUT/${ci}-imatrix.log | grep "Final" >> $OUT/${ci}-imatrix-sum.log
 
     # lora
     function compare_ppl {
@@ -282,7 +356,6 @@ function gg_run_open_llama_3b_v2 {
     (time ./bin/perplexity --model ${model_q8_0} -f ${shakespeare} --lora ${lora_shakespeare} --lora-base ${model_f16} -c 128 -b 128 --chunks 2 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log
     compare_ppl "q8_0 / f16 base shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-q8_0.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
 
-
     set +e
 }
 
@@ -292,6 +365,7 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf 'OpenLLaMA 3B-v2:\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
+    gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
     gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
     gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
@@ -337,8 +411,8 @@ function gg_run_open_llama_7b_v2 {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release -DLLAMA_CUBLAS=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
-    (time make -j                                              ) 2>&1 | tee -a $OUT/${ci}-make.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUBLAS=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                                             ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     python3 ../convert.py ${path_models}
 
@@ -391,6 +465,8 @@ function gg_run_open_llama_7b_v2 {
     (time ./bin/perplexity --model ${model_q5_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q5_k.log
     (time ./bin/perplexity --model ${model_q6_k} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-tg-q6_k.log
 
+    (time ./bin/imatrix --model ${model_f16} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-imatrix.log
+
     (time ./bin/save-load-state --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
 
     function check_ppl {
@@ -417,6 +493,8 @@ function gg_run_open_llama_7b_v2 {
     check_ppl "q4_k" "$(cat $OUT/${ci}-tg-q4_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q5_k" "$(cat $OUT/${ci}-tg-q5_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
     check_ppl "q6_k" "$(cat $OUT/${ci}-tg-q6_k.log | grep "^\[1\]")" | tee -a $OUT/${ci}-ppl.log
+
+    cat $OUT/${ci}-imatrix.log | grep "Final" >> $OUT/${ci}-imatrix-sum.log
 
     # lora
     function compare_ppl {
@@ -469,6 +547,7 @@ function gg_sum_open_llama_7b_v2 {
     gg_printf 'OpenLLaMA 7B-v2:\n'
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
+    gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
     gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
     gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
@@ -492,14 +571,18 @@ function gg_sum_open_llama_7b_v2 {
 ## main
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
+    # Create symlink: ./llama.cpp/models-mnt -> $MNT/models/models-mnt
     rm -rf ${SRC}/models-mnt
-
     mnt_models=${MNT}/models
     mkdir -p ${mnt_models}
     ln -sfn ${mnt_models} ${SRC}/models-mnt
 
-    python3 -m pip install -r ${SRC}/requirements.txt
-    python3 -m pip install --editable gguf-py
+    # Create a fresh python3 venv and enter it
+    python3 -m venv "$MNT/venv"
+    source "$MNT/venv/bin/activate"
+
+    pip install -r ${SRC}/requirements.txt --disable-pip-version-check
+    pip install --editable gguf-py --disable-pip-version-check
 fi
 
 ret=0
@@ -514,6 +597,8 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
         else
             test $ret -eq 0 && gg_run open_llama_7b_v2
         fi
+        test $ret -eq 0 && gg_run ctest_with_model_debug
+        test $ret -eq 0 && gg_run ctest_with_model_release
     fi
 fi
 

@@ -6,7 +6,7 @@
 " Similarly, you could add an insert mode keybind with
 " inoremap <C-B> <Cmd>call llama#doLlamaGen()<CR>
 "
-" g:llama_api_url and g:llama_overrides can be configured in your .vimrc
+" g:llama_api_url, g:llama_api_key and g:llama_overrides can be configured in your .vimrc
 " let g:llama_api_url = "192.168.1.10:8080"
 " llama_overrides can also be set through buffer/window scopes. For instance
 " autocmd filetype python let b:llama_overrides = {"temp": 0.2}
@@ -82,6 +82,9 @@ func llama#doLlamaGen()
    endif
    let l:querydata.prompt = join(l:buflines, "\n")
    let l:curlcommand = copy(s:curlcommand)
+   if exists("g:llama_api_key")
+       call extend(l:curlcommand, ['--header', 'Authorization: Bearer ' .. g:llama_api_key])
+   endif
    let l:curlcommand[2] = json_encode(l:querydata)
    let b:job = job_start(l:curlcommand, {"callback": function("s:callbackHandler", [l:cbuffer])})
 endfunction

@@ -10,7 +10,7 @@ import re
 import sys
 from enum import IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast, Optional
+from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast
 
 import numpy as np
 import torch
@@ -189,6 +189,8 @@ class Model:
             return StableLMModel
         if model_architecture == "QWenLMHeadModel":
             return QwenModel
+        if model_architecture == "Qwen2ForCausalLM":
+            return Model
         if model_architecture == "MixtralForCausalLM":
             return MixtralModel
         if model_architecture == "GPT2LMHeadModel":
@@ -197,6 +199,10 @@ class Model:
             return Phi2Model
         if model_architecture == "PlamoForCausalLM":
             return PlamoModel
+        if model_architecture == "CodeShellForCausalLM":
+            return CodeShellModel
+        if model_architecture == "OrionForCausalLM":
+            return OrionModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -234,6 +240,8 @@ class Model:
             return gguf.MODEL_ARCH.STABLELM
         if arch == "QWenLMHeadModel":
             return gguf.MODEL_ARCH.QWEN
+        if arch == "Qwen2ForCausalLM":
+            return gguf.MODEL_ARCH.QWEN2
         if arch == "MixtralForCausalLM":
             return gguf.MODEL_ARCH.LLAMA
         if arch == "GPT2LMHeadModel":
@@ -242,6 +250,10 @@ class Model:
             return gguf.MODEL_ARCH.PHI2
         if arch == "PlamoForCausalLM":
             return gguf.MODEL_ARCH.PLAMO
+        if arch == "CodeShellForCausalLM":
+            return gguf.MODEL_ARCH.CODESHELL
+        if arch == "OrionForCausalLM":
+            return gguf.MODEL_ARCH.ORION
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -279,6 +291,58 @@ class Model:
         self.gguf_writer.add_token_types(toktypes)
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _set_vocab_qwen(self):
+        dir_model = self.dir_model
+        hparams = self.hparams
+        tokens: list[bytearray] = []
+        toktypes: list[int] = []
+
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
+        vocab_size = hparams["vocab_size"]
+        assert max(tokenizer.get_vocab().values()) < vocab_size
+
+        merges = []
+        vocab = {}
+        mergeable_ranks = tokenizer.mergeable_ranks
+        for token, rank in mergeable_ranks.items():
+            vocab[QwenModel.token_bytes_to_string(token)] = rank
+            if len(token) == 1:
+                continue
+            merged = QwenModel.bpe(mergeable_ranks, token, max_rank=rank)
+            assert len(merged) == 2
+            merges.append(' '.join(map(QwenModel.token_bytes_to_string, merged)))
+
+        # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
+        added_vocab = tokenizer.special_tokens
+        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in (vocab | added_vocab).items()}
+
+        for i in range(vocab_size):
+            if i not in reverse_vocab:
+                pad_token = f"[PAD{i}]".encode("utf-8")
+                tokens.append(bytearray(pad_token))
+                toktypes.append(gguf.TokenType.USER_DEFINED)
+            elif reverse_vocab[i] in added_vocab:
+                tokens.append(reverse_vocab[i])
+                toktypes.append(gguf.TokenType.CONTROL)
+            else:
+                tokens.append(reverse_vocab[i])
+                toktypes.append(gguf.TokenType.NORMAL)
+
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
+        special_vocab.merges = merges
+        # only add special tokens when they were not already loaded from config.json
+        if len(special_vocab.special_token_ids) == 0:
+            special_vocab._set_special_token("bos", tokenizer.special_tokens["<|endoftext|>"])
+            special_vocab._set_special_token("eos", tokenizer.special_tokens["<|endoftext|>"])
+        # this one is usually not in config.json anyway
+        special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _set_vocab_sentencepiece(self):
@@ -479,7 +543,8 @@ class MPTModel(Model):
             # map tensor names
             if "scales" in name:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias", ".scales"))
-                new_name = new_name.replace("scales", "act.scales")
+                if new_name is not None:
+                    new_name = new_name.replace("scales", "act.scales")
             else:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
@@ -509,6 +574,83 @@ class MPTModel(Model):
             # for easier implementation in llama.cpp it's duplicated in GGUF, though :/
             if new_name == "token_embd.weight":
                 self.gguf_writer.add_tensor("output.weight", data)
+
+
+class OrionModel(Model):
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        head_count = self.hparams["num_attention_heads"]
+        head_count_kv = self.hparams.get("num_key_value_heads", head_count)
+        hf_repo = self.hparams.get("_name_or_path", "")
+
+        ctx_length = 0
+        if "max_sequence_length" in self.hparams:
+            ctx_length = self.hparams["max_sequence_length"]
+        elif "max_position_embeddings" in self.hparams:
+            ctx_length = self.hparams["max_position_embeddings"]
+        elif "model_max_length" in self.hparams:
+            ctx_length = self.hparams["model_max_length"]
+        else:
+            print("gguf: can not find ctx length parameter.")
+            sys.exit()
+
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_source_hf_repo(hf_repo)
+        self.gguf_writer.add_tensor_data_layout("Meta AI original pth")
+        self.gguf_writer.add_context_length(ctx_length)
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_head_count(head_count)
+        self.gguf_writer.add_head_count_kv(head_count_kv)
+        self.gguf_writer.add_layer_norm_eps(self.hparams["rms_norm_eps"])
+
+    def write_tensors(self):
+        # Collect tensors from generator object
+        model_kv = dict(self.get_tensors())
+        block_count = self.hparams["num_hidden_layers"]
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+
+        for name, data_torch in model_kv.items():
+            # we don't need these
+            if name.endswith(".rotary_emb.inv_freq"):
+                continue
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            self.gguf_writer.add_tensor(new_name, data)
 
 
 class BaichuanModel(Model):
@@ -868,6 +1010,13 @@ class PersimmonModel(Model):
 
 
 class StableLMModel(Model):
+    def set_vocab(self):
+        if (self.dir_model / "tokenizer.json").is_file():
+            self._set_vocab_gpt2()
+        else:
+            # StableLM 2 1.6B uses a vocab in a similar format to Qwen's vocab
+            self._set_vocab_qwen()
+
     def set_gguf_parameters(self):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
@@ -896,7 +1045,7 @@ class QwenModel(Model):
         return ''.join([byte_encoder[ord(char)] for char in b.decode('latin-1')])
 
     @staticmethod
-    def bpe(mergeable_ranks: dict[bytes, int], token: bytes, max_rank: Optional[int] = None) -> list[bytes]:
+    def bpe(mergeable_ranks: dict[bytes, int], token: bytes, max_rank: int | None = None) -> list[bytes]:
         parts = [bytes([b]) for b in token]
         while True:
             min_idx = None
@@ -913,52 +1062,7 @@ class QwenModel(Model):
         return parts
 
     def set_vocab(self):
-        dir_model = self.dir_model
-        hparams = self.hparams
-        tokens: list[bytearray] = []
-        toktypes: list[int] = []
-
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
-        vocab_size = hparams["vocab_size"]
-        assert max(tokenizer.get_vocab().values()) < vocab_size
-
-        merges = []
-        vocab = {}
-        mergeable_ranks = tokenizer.mergeable_ranks
-        for token, rank in mergeable_ranks.items():
-            vocab[self.token_bytes_to_string(token)] = rank
-            if len(token) == 1:
-                continue
-            merged = QwenModel.bpe(mergeable_ranks, token, max_rank=rank)
-            assert len(merged) == 2
-            merges.append(' '.join(map(self.token_bytes_to_string, merged)))
-
-        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in vocab.items()}
-        added_vocab = tokenizer.special_tokens
-
-        for i in range(vocab_size):
-            if i not in reverse_vocab:
-                pad_token = f"[PAD{i}]".encode("utf-8")
-                tokens.append(bytearray(pad_token))
-                toktypes.append(gguf.TokenType.USER_DEFINED)
-            elif reverse_vocab[i] in added_vocab:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.CONTROL)
-            else:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.NORMAL)
-
-        self.gguf_writer.add_tokenizer_model("gpt2")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
-        special_vocab.merges = merges
-        special_vocab._set_special_token("bos", tokenizer.special_tokens["<|endoftext|>"])
-        special_vocab._set_special_token("eos", tokenizer.special_tokens["<|endoftext|>"])
-        special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
-        special_vocab.add_to_gguf(self.gguf_writer)
+        self._set_vocab_qwen()
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name("Qwen")
@@ -1176,6 +1280,70 @@ class PlamoModel(Model):
             self.gguf_writer.add_tensor(new_name, data)
 
 
+class CodeShellModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["n_layer"]
+
+        self.gguf_writer.add_name("CodeShell")
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_query_groups"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_rope_freq_base(10000.0)
+        self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+        self.gguf_writer.add_rope_scaling_factor(1.0)
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        tensors = dict(self.get_tensors())
+        has_lm_head = "lm_head.weight" in tensors.keys() or "output.weight" in tensors.keys()
+        for name, data_torch in tensors.items():
+            # we don't need these
+            if name.endswith((".attn.rotary_emb.inv_freq")):
+                continue
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+            if not has_lm_head and name == "transformer.wte.weight":
+                self.gguf_writer.add_tensor("output.weight", data)
+                print(name, f"=> output.weight, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+
 ###### CONVERSION LOGIC ######
 
 
@@ -1213,7 +1381,7 @@ def main() -> None:
 
     if args.awq_path:
         sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
-        from awq.apply_awq import add_scale_weights
+        from awq.apply_awq import add_scale_weights  # type: ignore[import-not-found]
         tmp_model_path = args.model / "weighted_model"
         dir_model = tmp_model_path
         if tmp_model_path.is_dir():

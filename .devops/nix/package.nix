@@ -73,6 +73,7 @@ let
     ps: [
       ps.numpy
       ps.sentencepiece
+      ps.tiktoken
       ps.torchWithoutCuda
       ps.transformers
     ]
@@ -114,14 +115,22 @@ effectiveStdenv.mkDerivation (
     pname = "llama-cpp${pnameSuffix}";
     version = llamaVersion;
 
+    # Note: none of the files discarded here are visible in the sandbox or
+    # affect the output hash. This also means they can be modified without
+    # triggering a rebuild.
     src = lib.cleanSourceWith {
       filter =
         name: type:
-        !(builtins.any (_: _) [
+        let
+          noneOf = builtins.all (x: !x);
+          baseName = baseNameOf name;
+        in
+        noneOf [
           (lib.hasSuffix ".nix" name) # Ignore *.nix files when computing outPaths
-          (name == "README.md") # Ignore *.md changes whe computing outPaths
-          (lib.hasPrefix "." name) # Skip hidden files and directories
-        ]);
+          (lib.hasSuffix ".md" name) # Ignore *.md changes whe computing outPaths
+          (lib.hasPrefix "." baseName) # Skip hidden files and directories
+          (baseName == "flake.lock")
+        ];
       src = lib.cleanSource ../../.;
     };
 
@@ -159,7 +168,7 @@ effectiveStdenv.mkDerivation (
 
     cmakeFlags =
       [
-        (cmakeBool "LLAMA_NATIVE" true)
+        (cmakeBool "LLAMA_NATIVE" false)
         (cmakeBool "LLAMA_BUILD_SERVER" true)
         (cmakeBool "BUILD_SHARED_LIBS" true)
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
@@ -216,6 +225,9 @@ effectiveStdenv.mkDerivation (
         description = "contains numpy and sentencepiece";
         buildInputs = [ llama-python ];
         inputsFrom = [ finalAttrs.finalPackage ];
+        shellHook = ''
+          addToSearchPath "LD_LIBRARY_PATH" "${lib.getLib effectiveStdenv.cc.cc}/lib"
+        '';
       };
 
       shell-extra = mkShell {
