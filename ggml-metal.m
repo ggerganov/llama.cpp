@@ -242,7 +242,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
     ctx->queue  = [ctx->device newCommandQueue];
     ctx->d_queue = dispatch_queue_create("ggml-metal", DISPATCH_QUEUE_CONCURRENT);
 
-    id<MTLLibrary>      metal_library;
+    id<MTLLibrary> metal_library;
 
     // load library
     {
