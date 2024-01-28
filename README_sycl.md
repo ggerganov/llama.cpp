@@ -190,7 +190,7 @@ found 4 SYCL devices:
 Set device ID = 0 by **GGML_SYCL_DEVICE=0**
 
 ```
-GGML_SYCL_DEVICE=0 && ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
+GGML_SYCL_DEVICE=0 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
 ```
 or run by script:
 
