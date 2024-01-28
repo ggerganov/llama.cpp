@@ -1344,12 +1344,12 @@ inline static void ggml_vec_mad_f16(const int n, ggml_fp16_t * restrict y, const
 
     // leftovers
     for (int i = np; i < n; ++i) {
-        y[i] += GGML_FP32_TO_FP16(GGML_FP16_TO_FP32(x[i])*v);
+        y[i] = GGML_FP32_TO_FP16(GGML_FP16_TO_FP32(y[i]) + GGML_FP16_TO_FP32(x[i])*v);
     }
 #else
     // scalar
     for (int i = 0; i < n; ++i) {
-        y[i] += GGML_FP32_TO_FP16(GGML_FP16_TO_FP32(x[i])*v);
+        y[i] = GGML_FP32_TO_FP16(GGML_FP16_TO_FP32(y[i]) + GGML_FP16_TO_FP32(x[i])*v);
     }
 #endif
 }
