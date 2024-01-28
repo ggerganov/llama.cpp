@@ -1,3 +1,17 @@
+# The flake interface to llama.cpp's Nix expressions. The flake is used as a
+# more discoverable entry-point, as well as a way to pin the dependencies and
+# expose default outputs, including the outputs built by the CI.
+
+# For more serious applications involving some kind of customization  you may
+# want to consider consuming the overlay, or instantiating `llamaPackages`
+# directly:
+#
+# ```nix
+# pkgs.callPackage ${llama-cpp-root}/.devops/nix/scope.nix { }`
+# ```
+
+# Cf. https://jade.fyi/blog/flakes-arent-real/ for a more detailed exposition
+# of the relation between Nix and the Nix Flakes.
 {
   description = "Port of Facebook's LLaMA model in C/C++";
 

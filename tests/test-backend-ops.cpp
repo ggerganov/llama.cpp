@@ -102,7 +102,6 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                     } else if (t->type == GGML_TYPE_I8) {
                         tv.push_back((float)*(int8_t *) &buf[i]);
                     } else if (quantized) {
-                        std::vector<float> vq(ggml_blck_size(t->type));
                         tt.to_float(&buf[i], vq.data(), ggml_blck_size(t->type));
                         tv.insert(tv.end(), vq.begin(), vq.end());
                     } else {
