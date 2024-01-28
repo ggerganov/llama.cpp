@@ -7944,7 +7944,6 @@ struct llm_build_context {
             cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
-            // TODO: that's probably the wrong name.
             cb(cur, "attn_norm", il);
 
             // {n_embd, batch} * {n_embd, 2*d_inner} = {batch, 2*d_inner}

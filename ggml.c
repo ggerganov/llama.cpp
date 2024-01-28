@@ -5336,8 +5336,6 @@ static struct ggml_tensor * ggml_soft_plus_impl(
         struct ggml_tensor  * a,
         bool                  inplace) {
 
-    // TODO: does `a` need to be contiguous?
-
     bool is_node = false;
 
     if (a->grad) {
@@ -12190,7 +12188,7 @@ static void ggml_compute_forward_soft_plus_f32(
         float * x = (float *) ((char *) dst->data  + i*( dst->nb[1]));
         float * y = (float *) ((char *) src0->data + i*(src0->nb[1]));
         for (int j = 0; j < nc; ++j) {
-            x[j] = logf(1.0f + expf(y[i]));
+            x[j] = logf(1.0f + expf(y[j]));
         }
     }
 }
