@@ -1338,6 +1338,8 @@ void ggml_cl_free_data(const struct ggml_tensor* tensor) {
     clReleaseMemObject(mem);
 }
 
+
+//将数据从host端（主机端，即CPU和其内存）复制到device端（设备端，通常是GPU和其内存）上的一个OpenCL缓冲区
 static cl_int ggml_cl_h2d_tensor_2d(cl_command_queue queue, cl_mem dst, size_t offset, const struct ggml_tensor * src, uint64_t i3, uint64_t i2, cl_event* ev) {
     cl_int err;
     const uint64_t ne0 = src->ne[0];
@@ -1866,6 +1868,254 @@ size_t ggml_cl_mul_mat_get_wsize(const struct ggml_tensor * src0, const struct g
     }
     return 0;
 }
+
+
+
+
+// xr 
+static viod ggml_compute_cl_dup_same_cont(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst){
+
+}
+
+static viod ggml_compute_cl_dup_f16(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst){
+
+}
+
+static viod ggml_compute_cl_dup_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst){
+
+}
+
+
+
+// xr
+static void ggml_cl_softmax(const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+              struct ggml_tensor * dst){
+
+}
+
+// wh
+static void ggml_compute_cl_abs_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_sgn_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_neg_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_step_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_tanh_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_elu_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_relu_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_gelu_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_gelu_quick_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr
+static void ggml_compute_cl_silu_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst) {
+
+}
+
+// xr NOP
+static void ggml_cl_permute(){
+
+}
+
+// xr NOP
+static void ggml_cl_transpose(){
+
+}
+
+// xr NOP
+static void ggml_cl_view(const struct ggml_compute_params * params, const struc ggml_tensor * src0, struct ggml_tensor * dst){
+
+}
+
+// xr NOP
+static void ggml_cl_reshape(const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst){
+
+}
+
+
+
+// wsy
+static void ggml_cl_rope_f32(const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst,
+        const bool forward){
+
+}
+
+// wsy
+static void ggml_cl_rope_f16(const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst,
+        const bool forward){
+
+}
+
+// wsy
+static void ggml_cl_rms_norm_f32(const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        struct ggml_tensor * dst){
+
+}
+
+
+  
+
+// zjl ggml_cl_add
+static void ggml_compute_cl_add_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst){
+
+}
+
+// zjl
+static void ggml_compute_cl_add_f32(
+    const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst){
+    
+}
+
+// zjl
+static void ggml_compute_cl_add_f16_f16(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst){
+    
+}
+
+// zjl
+static void ggml_compute_cl_add_f16_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst){
+    
+}
+
+// zjl
+static void ggml_compute_cl_add_q_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        struct ggml_tensor * dst){
+    
+}
+
+
+
+
+// wh  ggml_comput_cl_get_rows
+
+static void ggml_compute_cl_get_rows_q(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+              struct ggml_tensor * dst){
+
+}
+
+// wh
+static void ggml_compute_cl_get_rows_f16(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+              struct ggml_tensor * dst){
+    
+}
+
+// wh
+static void ggml_compute_cl_get_rows_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+              struct ggml_tensor * dst){
+
+}
+
+
+
+
+
 
 void ggml_cl_transform_tensor(void * data, ggml_tensor * tensor) {
     const int64_t ne0 = tensor->ne[0];
