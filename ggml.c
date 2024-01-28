@@ -248,6 +248,8 @@ inline static void * ggml_aligned_malloc(size_t size) {
 #include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
+#elif defined(GGML_USE_VULKAN)
+#include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
 #include "ggml-sycl.h"
 #endif
@@ -2295,6 +2297,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         ggml_init_cublas();
 #elif defined(GGML_USE_CLBLAST)
         ggml_cl_init();
+#elif defined(GGML_USE_VULKAN)
+        ggml_vk_init();
 #elif defined(GGML_USE_SYCL)
         ggml_init_sycl();
 #endif
@@ -8019,7 +8023,7 @@ static void ggml_compute_forward_mul_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-#ifdef GGML_USE_CLBLAST
+#if defined(GGML_USE_CLBLAST)
     if (src1->backend == GGML_BACKEND_GPU) {
         // TODO: OpenCL kernel support full broadcast
         GGML_ASSERT(ggml_can_repeat_rows(src1, src0));
@@ -14703,6 +14707,18 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     }
     GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_CPU);
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_CPU);
+#elif defined(GGML_USE_VULKAN)
+    const bool skip_cpu = ggml_vk_compute_forward(params, tensor);
+#ifdef GGML_VULKAN_CHECK_RESULTS
+    if (skip_cpu) {
+        ggml_vk_check_results_1(params, tensor);
+    }
+#endif
+    if (skip_cpu) {
+        return;
+    }
+    GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_CPU);
+    GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_CPU);
 #endif // GGML_USE_CUBLAS
 
 #ifdef GGML_USE_SYCL
@@ -17105,6 +17121,17 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
         }
     }
 
+#ifdef GGML_USE_VULKAN
+    for (int i = 0; i < cgraph->n_nodes; i++) {
+        ggml_vk_preallocate_buffers_graph(cgraph->nodes[i]);
+    }
+    ggml_vk_preallocate_buffers();
+
+    for (int i = 0; i < cgraph->n_nodes; i++) {
+        ggml_vk_build_graph(cgraph->nodes[i], i == cgraph->n_nodes - 1);
+    }
+#endif
+
     const int n_threads = cplan->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
@@ -17155,6 +17182,10 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
             GGML_ASSERT(rc == 0);
         }
     }
+
+#ifdef GGML_USE_VULKAN
+    ggml_vk_graph_cleanup();
+#endif
 
     // performance stats (graph)
     {
@@ -20290,7 +20321,7 @@ int ggml_cpu_has_wasm_simd(void) {
 }
 
 int ggml_cpu_has_blas(void) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_SYCL)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_VULKAN) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_SYCL)
     return 1;
 #else
     return 0;
@@ -20313,6 +20344,14 @@ int ggml_cpu_has_clblast(void) {
 #endif
 }
 
+int ggml_cpu_has_vulkan(void) {
+#if defined(GGML_USE_VULKAN)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 int ggml_cpu_has_sycl(void) {
 #if defined(GGML_USE_SYCL)
     return 1;
@@ -20322,7 +20361,7 @@ int ggml_cpu_has_sycl(void) {
 }
 
 int ggml_cpu_has_gpublas(void) {
-    return ggml_cpu_has_cublas() || ggml_cpu_has_clblast() || ggml_cpu_has_sycl();
+    return ggml_cpu_has_cublas() || ggml_cpu_has_clblast() || ggml_cpu_has_vulkan() || ggml_cpu_has_sycl();
 }
 
 int ggml_cpu_has_sse3(void) {

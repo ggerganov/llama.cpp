@@ -99,6 +99,7 @@ set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
+option(LLAMA_VULKAN                          "llama: use Vulkan"                                OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
@@ -413,6 +414,22 @@ if (LLAMA_CLBLAST)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} clblast)
     else()
         message(WARNING "CLBlast not found")
+    endif()
+endif()
+
+if (LLAMA_VULKAN)
+    find_package(Vulkan)
+    if (Vulkan_FOUND)
+        message(STATUS "Vulkan found")
+
+        add_library(ggml-vulkan STATIC ggml-vulkan.cpp ggml-vulkan.h)
+        target_link_libraries(ggml-vulkan PRIVATE Vulkan::Vulkan)
+
+        add_compile_definitions(GGML_USE_VULKAN)
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-vulkan)
+    else()
+        message(WARNING "Vulkan not found")
     endif()
 endif()
 

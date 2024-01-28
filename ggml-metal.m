@@ -2400,6 +2400,7 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
             /* .get_name         = */ ggml_backend_metal_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_metal_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_metal_buffer_type_get_alignment,
+            /* .get_max_size     = */ NULL, // TODO: return device.maxBufferLength
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_metal_buffer_type_supports_backend,
             /* .is_host          = */ ggml_backend_metal_buffer_type_is_host,
