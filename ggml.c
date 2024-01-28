@@ -5331,7 +5331,7 @@ struct ggml_tensor * ggml_soft_max_back_inplace(
 
 // ggml_soft_plus
 
-struct ggml_tensor * ggml_soft_plus_impl(
+static struct ggml_tensor * ggml_soft_plus_impl(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         bool                  inplace) {
@@ -15737,7 +15737,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         case GGML_OP_SOFT_PLUS:
             {
                 ggml_compute_forward_soft_plus(params, tensor->src[0], tensor);
-            }
+            } break;
         case GGML_OP_ROPE:
             {
                 ggml_compute_forward_rope(params, tensor);

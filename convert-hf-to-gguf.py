@@ -1851,12 +1851,56 @@ class MambaModel(Model):
     def set_gguf_parameters(self):
         d_model = self.hparams["d_model"]
         self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_context_length(128) # arbitrary value; it shouldn't be important for Mamba
         self.gguf_writer.add_embedding_length(d_model)
-        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_feed_forward_length(0) # unused, but seemingly required when loading
         self.gguf_writer.add_head_count(2 * d_model) # d_inner
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_layer_norm_rms_eps(1e-5)
         self.gguf_writer.add_key_length(4) # d_conv
         self.gguf_writer.add_value_length(16) # d_state
         self.gguf_writer.add_file_type(self.ftype)
+
+    def write_tensors(self):
+        block_count = self.hparams["n_layer"]
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        for name, data_torch in self.get_tensors():
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            if name.endswith(".A_log"):
+                print("A_log --> A ==> " + new_name)
+                data_torch = -torch.exp(data_torch)
+
+            data = data_torch.squeeze().numpy()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert big float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and new_name.removesuffix(".weight").endswith((".ssm_in", ".ssm_out", "token_embd", "output")) and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
 
 
 ###### CONVERSION LOGIC ######
