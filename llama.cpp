@@ -10248,7 +10248,7 @@ struct llama_context * llama_new_context_with_model(
                 return nullptr;
             }
             ctx->backends.push_back(backend);
-        }              
+        }
 #elif defined(GGML_USE_SYCL)
         if (model->n_gpu_layers > 0) {
             ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
