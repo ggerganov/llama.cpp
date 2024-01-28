@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.14)  # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
+include(CheckIncludeFileCXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -103,6 +104,8 @@ option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"   
 option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
+option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
+option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
@@ -121,8 +124,12 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 #
 # Compile flags
 #
+if (LLAMA_SYCL)
+    set(CMAKE_CXX_STANDARD 17)
+else()
+    set(CMAKE_CXX_STANDARD 11)
+endif()
 
-set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
@@ -454,6 +461,32 @@ if (LLAMA_HIPBLAS)
     endif()
 endif()
 
+
+if (LLAMA_SYCL)
+    if ( NOT DEFINED ENV{ONEAPI_ROOT})
+        message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+    endif()
+    #todo: AOT
+
+    find_package(IntelSYCL REQUIRED)
+    if (LLAMA_SYCL_F16)
+        add_compile_definitions(GGML_SYCL_F16)
+    endif()
+    add_compile_definitions(GGML_USE_SYCL)
+
+    add_compile_options(-I./) #include DPCT
+    add_compile_options(-I/${SYCL_INCLUDE_DIR})
+
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
+
+    set(GGML_HEADERS_SYCL ggml.h ggml-sycl.h)
+    set(GGML_SOURCES_SYCL ggml-sycl.cpp)
+
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
+endif()
+
 function(get_flags CCID CCVER)
     set(C_FLAGS "")
     set(CXX_FLAGS "")
@@ -479,10 +512,12 @@ function(get_flags CCID CCVER)
             list(APPEND CXX_FLAGS -Wextra-semi)
         endif()
     elseif (CCID MATCHES "Intel")
-        # enable max optimization level when using Intel compiler
-        set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
-        set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
-        add_link_options(-fuse-ld=lld -static-intel)
+        if (NOT LLAMA_SYCL)
+            # enable max optimization level when using Intel compiler
+            set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+            set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+            add_link_options(-fuse-ld=lld -static-intel)
+        endif()
     endif()
 
     set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)
@@ -799,6 +834,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_METAL}  ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_MPI}    ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_EXTRA}  ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_SYCL}   ${GGML_HEADERS_SYCL}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
