@@ -13,18 +13,22 @@
   cudaPackages,
   darwin,
   rocmPackages,
+  vulkan-headers,
+  vulkan-loader,
   clblast,
   useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
     useOpenCL
     useRocm
+    useVulkan
   ],
   useCuda ? config.cudaSupport,
   useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
   useMpi ? false, # Increases the runtime closure size by ~700M
   useOpenCL ? false,
   useRocm ? config.rocmSupport,
+  useVulkan ? false,
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
 }@inputs:
 
@@ -48,7 +52,8 @@ let
     ++ lib.optionals useMetalKit [ "MetalKit" ]
     ++ lib.optionals useMpi [ "MPI" ]
     ++ lib.optionals useOpenCL [ "OpenCL" ]
-    ++ lib.optionals useRocm [ "ROCm" ];
+    ++ lib.optionals useRocm [ "ROCm" ]
+    ++ lib.optionals useVulkan [ "Vulkan" ];
 
   pnameSuffix =
     strings.optionalString (suffices != [ ])
@@ -108,6 +113,11 @@ let
     hipblas
     rocblas
   ];
+
+  vulkanBuildInputs = [
+    vulkan-headers
+    vulkan-loader
+  ];
 in
 
 effectiveStdenv.mkDerivation (
@@ -164,7 +174,8 @@ effectiveStdenv.mkDerivation (
       ++ optionals useCuda cudaBuildInputs
       ++ optionals useMpi [ mpi ]
       ++ optionals useOpenCL [ clblast ]
-      ++ optionals useRocm rocmBuildInputs;
+      ++ optionals useRocm rocmBuildInputs
+      ++ optionals useVulkan vulkanBuildInputs;
 
     cmakeFlags =
       [
@@ -178,6 +189,7 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_HIPBLAS" useRocm)
         (cmakeBool "LLAMA_METAL" useMetalKit)
         (cmakeBool "LLAMA_MPI" useMpi)
+        (cmakeBool "LLAMA_VULKAN" useVulkan)
       ]
       ++ optionals useCuda [
         (
@@ -218,6 +230,7 @@ effectiveStdenv.mkDerivation (
         useMpi
         useOpenCL
         useRocm
+        useVulkan
         ;
 
       shell = mkShell {
@@ -242,11 +255,11 @@ effectiveStdenv.mkDerivation (
       # Configurations we don't want even the CI to evaluate. Results in the
       # "unsupported platform" messages. This is mostly a no-op, because
       # cudaPackages would've refused to evaluate anyway.
-      badPlatforms = optionals (useCuda || useOpenCL) lib.platforms.darwin;
+      badPlatforms = optionals (useCuda || useOpenCL || useVulkan) lib.platforms.darwin;
 
       # Configurations that are known to result in build failures. Can be
       # overridden by importing Nixpkgs with `allowBroken = true`.
-      broken = (useMetalKit && !effectiveStdenv.isDarwin);
+      broken = (useMetalKit && !effectiveStdenv.isDarwin) || (useVulkan && effectiveStdenv.isDarwin);
 
       description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
       homepage = "https://github.com/ggerganov/llama.cpp/";
