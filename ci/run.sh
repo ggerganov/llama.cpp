@@ -10,6 +10,9 @@
 # # with CUDA support
 # GG_BUILD_CUDA=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
 #
+# # with SYCL support
+# GG_BUILD_SYCL=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
+#
 
 if [ -z "$2" ]; then
     echo "usage: $0 <output-dir> <mnt-dir>"
@@ -40,6 +43,14 @@ if [ ! -z ${GG_BUILD_CUDA} ]; then
     CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_CUBLAS=1"
 fi
 
+if [ ! -z ${GG_BUILD_SYCL} ]; then
+    if [ -z ${ONEAPI_ROOT} ]; then
+        echo "Not detected ONEAPI_ROOT, please install oneAPI base toolkit and enable it by:\n source /opt/intel/oneapi/setvars.sh"
+        exit 1
+    fi
+
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_SYCL=1 DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON"
+fi
 ## helpers
 
 # download a file if it does not exist or if it is outdated

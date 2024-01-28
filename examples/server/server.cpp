@@ -2099,7 +2099,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)
             std::string arg_next = argv[i];
 
             // split string by , and /
@@ -2125,7 +2125,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
         else if (arg == "--no-mul-mat-q" || arg == "-nommq")
         {
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)
             params.mul_mat_q = false;
 #else
             LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. Disabling mul_mat_q kernels has no effect.\n", {});
@@ -2138,7 +2138,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)
             params.main_gpu = std::stoi(argv[i]);
 #else
             LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.", {});

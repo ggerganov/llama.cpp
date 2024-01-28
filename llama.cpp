@@ -11,6 +11,10 @@
 #  include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #  include "ggml-opencl.h"
+#elif defined(GGML_USE_VULKAN)
+#  include "ggml-vulkan.h"
+#elif defined(GGML_USE_SYCL)
+#  include "ggml-sycl.h"
 #endif
 
 #ifdef GGML_USE_METAL
@@ -52,6 +56,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cfloat>
 #include <cinttypes>
 #include <climits>
 #include <cmath>
@@ -1279,8 +1284,14 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer
     if (host_buffer) {
         buft = ggml_backend_cuda_host_buffer_type();
     }
+#elif defined(GGML_USE_SYCL)
+    buft = ggml_backend_sycl_host_buffer_type();
 #elif defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
+#elif defined(GGML_USE_VULKAN)
+    if (host_buffer) {
+        buft = ggml_backend_vk_host_buffer_type();
+    }
 #endif
 
     if (buft == nullptr) {
@@ -1298,6 +1309,10 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
     buft = ggml_backend_metal_buffer_type();
 #elif defined(GGML_USE_CUBLAS)
     buft = ggml_backend_cuda_buffer_type(gpu);
+#elif defined(GGML_USE_VULKAN)
+    buft = ggml_backend_vk_buffer_type();
+#elif defined(GGML_USE_SYCL)
+    buft = ggml_backend_sycl_buffer_type(gpu);
 #elif defined(GGML_USE_CLBLAST)
     buft = ggml_backend_opencl_buffer_type();
 #endif
@@ -6875,7 +6890,7 @@ static int llama_decode_internal(
     }
 
     const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 1;
-    if (ggml_cpu_has_cublas() && fully_offloaded) {
+    if ((ggml_cpu_has_cublas() || ggml_cpu_has_vulkan()) && fully_offloaded) {
         n_threads = 1;
     }
 
@@ -8282,21 +8297,56 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
         return;
     }
 
-    llama_sample_softmax(ctx, candidates);
-
     const int64_t t_start_sample_us = ggml_time_us();
 
-    float scale = candidates->data[0].p; // scale by max prob
-    size_t i = 1; // first token always matches
+    bool min_p_applied = false;
 
-    for (; i < candidates->size; ++i) {
-        if (candidates->data[i].p < p * scale && i >= min_keep) {
-            break; // prob too small
+    // if the candidates aren't sorted, try the unsorted implementation first
+    if (!candidates->sorted) {
+        std::vector<llama_token_data> filtered_tokens;
+
+        float max_logit = -FLT_MAX;
+        for (size_t i = 0; i < candidates->size; ++i) {
+            max_logit = std::max(max_logit, candidates->data[i].logit);
+        }
+        const float min_logit = max_logit + logf(p); // min logit for p_i >= p * p_max
+
+        for (size_t i = 0; i < candidates->size; ++i) {
+            if (candidates->data[i].logit >= min_logit) {
+                filtered_tokens.push_back(candidates->data[i]);
+            }
+        }
+
+        // if we have enough values the operation was a success
+        if (filtered_tokens.size() >= min_keep) {
+            memcpy(candidates->data, filtered_tokens.data(), filtered_tokens.size()*sizeof(llama_token_data));
+            candidates->size = filtered_tokens.size();
+            min_p_applied = true;
         }
     }
 
-    // Resize the output vector to keep only the matching tokens
-    candidates->size = i;
+    // if the candidates are sorted or the unsorted implementation failed, use this implementation
+    if (!min_p_applied) {
+        // Sort the logits in descending order
+        if (!candidates->sorted) {
+            std::sort(candidates->data, candidates->data + candidates->size, [](const llama_token_data & a, const llama_token_data & b) {
+                return a.logit > b.logit;
+            });
+            candidates->sorted = true;
+        }
+
+        const float min_logit = candidates->data[0].logit + logf(p); // min logit for p_i >= p * p_max
+        size_t i = 1; // first token always matches
+
+        for (; i < candidates->size; ++i) {
+            if (candidates->data[i].logit < min_logit && i >= min_keep) {
+                break; // prob too small
+            }
+        }
+
+        // Resize the output vector to keep only the matching tokens
+        candidates->size = i;
+    }
 
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
@@ -10224,6 +10274,26 @@ struct llama_context * llama_new_context_with_model(
                     ctx->backends.push_back(backend);
                 }
             }
+        }
+#elif defined(GGML_USE_VULKAN)
+        if (model->n_gpu_layers > 0) {
+            ggml_backend_t backend = ggml_backend_vk_init();
+            if (backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
+        }
+#elif defined(GGML_USE_SYCL)
+        if (model->n_gpu_layers > 0) {
+            ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
+            if (backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
         }
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();

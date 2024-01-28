@@ -63,7 +63,7 @@ The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quant
 - AVX, AVX2 and AVX512 support for x86 architectures
 - Mixed F16 / F32 precision
 - 2-bit, 3-bit, 4-bit, 5-bit, 6-bit and 8-bit integer quantization support
-- CUDA, Metal and OpenCL GPU backend support
+- CUDA, Metal, OpenCL, SYCL GPU backend support
 
 The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
 Since then, the project has improved significantly thanks to many contributions. This project is mainly for educational purposes and serves
@@ -598,6 +598,15 @@ Building the program with BLAS support may lead to some performance improvements
   Using the variables it is possible to select a CPU-based driver as well, if so desired.
 
   You can get a list of platforms and devices from the `clinfo -l` command, etc.
+
+- #### SYCL
+
+  SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
+
+  llama.cpp based on SYCL is used to support Intel GPU (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
+
+  For detailed info, please refer to [llama.cpp for SYCL](README_sycl.md).
+
 
 ### Prepare Data & Run
 
