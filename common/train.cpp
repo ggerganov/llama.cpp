@@ -46,21 +46,21 @@ void free_train_state(struct train_state  * state) {
 struct random_normal_distribution * init_random_normal_distribution(
     int seed, float mean, float std, float min, float max
 ) {
-    auto rnd = new random_normal_distribution{ std::mt19937(seed), std::normal_distribution<float>{mean, std}, min, max};
+    auto rnd = new random_normal_distribution{std::mt19937(seed), std::normal_distribution<float>{mean, std}, min, max};
     return rnd;
 }
 
 struct random_uniform_distribution * init_random_uniform_distribution(int seed, float min, float max) {
-    auto rnd = new random_uniform_distribution{ std::mt19937(seed), std::uniform_real_distribution<float>{min, max} };
+    auto rnd = new random_uniform_distribution{std::mt19937(seed), std::uniform_real_distribution<float>{min, max}};
     return rnd;
 }
 
 void free_random_normal_distribution (struct random_normal_distribution  * rnd) {
-    free(rnd);
+    delete rnd;
 }
 
 void free_random_uniform_distribution(struct random_uniform_distribution * rnd) {
-    free(rnd);
+    delete rnd;
 }
 
 struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {

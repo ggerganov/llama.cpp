@@ -197,7 +197,7 @@ static llama_token llama_sampling_sample_impl(
     }
 
     // apply params.logit_bias map
-    for (auto logit_bia : params.logit_bias) {
+    for (const auto & logit_bia : params.logit_bias) {
         logits[logit_bia.first] += logit_bia.second;
     }
 
