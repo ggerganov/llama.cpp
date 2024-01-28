@@ -66,6 +66,14 @@ server.exe -m models\7B\ggml-model.gguf -c 2048
 The above command will start a server that by default listens on `127.0.0.1:8080`.
 You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
 
+### Docker:
+```bash
+docker run -p 8080:8080 -v /path/to/models:/models ggerganov/llama.cpp:server -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080
+
+# or, with CUDA:
+docker run -p 8080:8080 -v /path/to/models:/models --gpus all ggerganov/llama.cpp:server-cuda -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080 --n-gpu-layers 99
+```
+
 ## Testing with CURL
 
 Using [curl](https://curl.se/). On Windows `curl.exe` should be available in the base OS.
