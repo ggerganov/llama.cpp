@@ -562,6 +562,7 @@ struct test {
     static const int build_number;
     static const bool cuda;
     static const bool opencl;
+    static const bool vulkan;
     static const bool metal;
     static const bool gpu_blas;
     static const bool blas;
@@ -643,6 +644,9 @@ struct test {
         if (opencl) {
             return "OpenCL";
         }
+        if (vulkan) {
+            return "Vulkan";
+        }
         if (metal) {
             return "Metal";
         }
@@ -658,7 +662,7 @@ struct test {
     static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {
             "build_commit", "build_number",
-            "cuda", "opencl", "metal", "gpu_blas", "blas",
+            "cuda", "opencl", "vulkan", "metal", "gpu_blas", "blas",
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_threads", "type_k", "type_v",
@@ -682,7 +686,7 @@ struct test {
             field == "avg_ns" || field == "stddev_ns") {
             return INT;
         }
-        if (field == "cuda" || field == "opencl" || field == "metal" || field == "gpu_blas" || field == "blas" ||
+        if (field == "cuda" || field == "opencl"  || field == "vulkan"|| field == "metal" || field == "gpu_blas" || field == "blas" ||
             field == "f16_kv" || field == "no_kv_offload" || field == "mul_mat_q") {
             return BOOL;
         }
@@ -710,7 +714,7 @@ struct test {
         }
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
-            std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
+            std::to_string(cuda), std::to_string(opencl), std::to_string(vulkan), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_threads), ggml_type_name(type_k), ggml_type_name(type_v),
@@ -738,6 +742,7 @@ const std::string test::build_commit = LLAMA_COMMIT;
 const int         test::build_number = LLAMA_BUILD_NUMBER;
 const bool        test::cuda         = !!ggml_cpu_has_cublas();
 const bool        test::opencl       = !!ggml_cpu_has_clblast();
+const bool        test::vulkan       = !!ggml_cpu_has_vulkan();
 const bool        test::metal        = !!ggml_cpu_has_metal();
 const bool        test::gpu_blas     = !!ggml_cpu_has_gpublas();
 const bool        test::blas         = !!ggml_cpu_has_blas();
