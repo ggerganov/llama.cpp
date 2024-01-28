@@ -2213,12 +2213,12 @@ static bool ggml_metal_graph_compute(
                         [encoder setBytes:&ne3     length:sizeof( int64_t) atIndex:26];
                         [encoder setBytes:&scale   length:sizeof(   float) atIndex:27];
 
-                        const int64_t nqptg = 8;  // queries per threadgroup !! sync with kernel template arguments !!
-                        const int64_t ncpsg = 32; // cache values per simdgroup
+                        const int64_t nqptg = 8;  // queries per threadgroup    !! sync with kernel template arguments !! (multiple of 8)
+                        const int64_t ncpsg = 32; // cache values per simdgroup !! sync with kernel template arguments !! (multiple of 32)
 
                         // simdgroups per threadgroup (a.k.a. warps)
                         // for small batches use more simdgroups (needs more tests, to confirm if it's worth it)
-                        const int64_t nsg = ne01 <= nqptg ? MAX(4, MIN(ne11/32, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32)) : 4;
+                        const int64_t nsg = ne01 <= nqptg ? MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32)) : 4;
 
                         const size_t smem = nqptg*(ne00 + nsg*(ncpsg + nqptg))*(sizeof(float)/2);
 
