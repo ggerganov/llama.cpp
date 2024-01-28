@@ -9978,7 +9978,7 @@ static void ggml_compute_forward_mul_mat(
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(dst)) {
         const int64_t ne_plane      = ne01*ne00;
-        const int64_t desired_wsize = ne13*ne12*ne_plane*sizeof(float);
+        const size_t  desired_wsize = ne13*ne12*ne_plane*sizeof(float);
         UNUSED(desired_wsize);
 
         if (params->type == GGML_TASK_INIT) {
