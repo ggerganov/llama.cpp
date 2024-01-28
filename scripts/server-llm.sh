@@ -141,6 +141,28 @@ for wt in "${wtypes[@]}"; do
     wfiles+=("")
 done
 
+# map wtype input to index
+if [[ ! -z "$wtype" ]]; then
+    iw=-1
+    is=0
+    for wt in "${wtypes[@]}"; do
+        # uppercase
+        uwt=$(echo "$wt" | tr '[:lower:]' '[:upper:]')
+        if [[ "$uwt" == "$wtype" ]]; then
+            iw=$is
+            break
+        fi
+        is=$((is+1))
+    done
+
+    if [[ $iw -eq -1 ]]; then
+        printf "[-] Invalid weight type: %s\n" "$wtype"
+        exit 1
+    fi
+
+    wtype="$iw"
+fi
+
 # sample repos
 repos=(
     "https://huggingface.co/TheBloke/Llama-2-7B-GGUF"
