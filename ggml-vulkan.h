@@ -27,6 +27,7 @@ GGML_API GGML_CALL bool ggml_backend_is_vk(ggml_backend_t backend);
 
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_buffer_type(void);
 // pinned host buffer for use with the CPU backend for faster copies between CPU and GPU
+// also provides unified memory buffer type for APUs
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type(void);
 
 #ifdef  __cplusplus
