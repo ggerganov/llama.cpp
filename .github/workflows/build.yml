@@ -42,7 +42,9 @@ jobs:
           fetch-depth: 0
 
       - name: install
-        run: scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_COMPONENTS $WINDOWS_MKL_COMPONENTS
+        run: |
+          scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_COMPONENTS
+          scripts/install_windows.bat $WINDOWS_BASEKIT_URL $$WINDOWS_MKL_COMPONENTS
       
         
       - name: Build
@@ -51,7 +53,7 @@ jobs:
           "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64
           mkdir build
           cd build
-          cmake -G "MinGW Makefiles" .  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
+          cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
           make
 
 
