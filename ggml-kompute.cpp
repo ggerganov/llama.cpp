@@ -282,7 +282,7 @@ ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count
 
     size_t nbytes = sizeof (ggml_vk_device) * (devices.size());
     auto * arr = static_cast<ggml_vk_device *>(malloc(nbytes));
-    memcpy(&arr, devices.data(), nbytes);
+    memcpy(arr, devices.data(), nbytes);
     return arr;
 }
 
