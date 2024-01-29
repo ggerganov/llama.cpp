@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,15 +18,13 @@ struct ggml_vk_device {
     const char * name;
     const char * vendor;
     int subgroupSize;
+    uint64_t bufferAlignment;
 };
 
 struct ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count);
-bool ggml_vk_init_device(size_t memoryRequired, const char * device);
-bool ggml_vk_init_device_idx(int device);
-bool ggml_vk_free_device(void);
+bool ggml_vk_get_device(struct ggml_vk_device * device, size_t memoryRequired, const char * name);
 bool ggml_vk_has_vulkan(void);
 bool ggml_vk_has_device(void);
-bool ggml_vk_using_vulkan(void);
 struct ggml_vk_device ggml_vk_current_device(void);
 
 //
@@ -35,11 +34,11 @@ struct ggml_vk_device ggml_vk_current_device(void);
 // forward declaration
 typedef struct ggml_backend * ggml_backend_t;
 
-GGML_API ggml_backend_t ggml_backend_kompute_init(void);
+GGML_API ggml_backend_t ggml_backend_kompute_init(int device);
 
 GGML_API bool ggml_backend_is_kompute(ggml_backend_t backend);
 
-GGML_API ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(void);
+GGML_API ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(int device);
 
 #ifdef __cplusplus
 }

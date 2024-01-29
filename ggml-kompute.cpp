@@ -60,8 +60,18 @@
 #define QK_NL 16
 
 typedef ggml_fp16_t half;
+
+static std::string ggml_kompute_format_name(int device) {
+    return "Kompute" + std::to_string(device);
+}
+
 struct ggml_kompute_context {
+    int device;
+    std::string name;
     std::shared_ptr<vk::DescriptorPool> pool;
+
+    ggml_kompute_context(int device)
+        : device(device), name(ggml_kompute_format_name(device)) {}
 };
 
 // FIXME: It would be good to consolidate the kompute manager and the kompute context into one object
@@ -210,6 +220,7 @@ static std::vector<ggml_vk_device> ggml_vk_available_devices_internal(size_t mem
         d.heapSize = heapSize;
         d.vendor = strdup(ggml_vk_getVendorName(properties.vendorID));
         d.subgroupSize = subgroupProperties.subgroupSize;
+        d.bufferAlignment = properties.limits.minStorageBufferOffsetAlignment;
 
         std::string name(properties.deviceName);
         size_t n_idx = ++count_by_name[name];
@@ -271,40 +282,26 @@ static void ggml_vk_filterByName(std::vector<ggml_vk_device>& devices, const std
     );
 }
 
-static bool ggml_vk_init_device(size_t memoryRequired, const std::string & device) {
-    if (device.empty())
+static bool ggml_vk_get_device(ggml_vk_device * device, size_t memoryRequired, const std::string & name) {
+    if (name.empty())
         return false;
 
     auto devices = ggml_vk_available_devices_internal(memoryRequired);
-    if (device == "amd" || device == "nvidia" || device == "intel") {
-        ggml_vk_filterByVendor(devices, device);
-    } else if (device != "gpu") {
-        ggml_vk_filterByName(devices, device);
+    if (name == "amd" || name == "nvidia" || name == "intel") {
+        ggml_vk_filterByVendor(devices, name);
+    } else if (name != "gpu") {
+        ggml_vk_filterByName(devices, name);
     }
 
-    return !devices.empty() && ggml_vk_init_device_idx(devices[0].index);
-}
-
-bool ggml_vk_init_device(size_t memoryRequired, const char * device) {
-    return ggml_vk_init_device(memoryRequired, std::string(device));
-}
-
-bool ggml_vk_init_device_idx(int device) {
-    komputeManager()->initializeDevice(device, {},
-                         {"VK_KHR_shader_float16_int8", "VK_KHR_8bit_storage",
-                          "VK_KHR_16bit_storage", "VK_KHR_shader_non_semantic_info"});
-    return ggml_vk_has_device();
-}
-
-bool ggml_vk_free_device() {
-    if (!ggml_vk_has_device())
+    if (devices.empty())
         return false;
-    komputeManager.destroy();
-    // FIXME: The lifetime of these two needs to be tied together as we're relying upon the fact
-    // the llama_free(ctx) destroys this memory and we just set the singleton to nullptr here which
-    // is very brittle
-    s_kompute_context = nullptr;
+
+    *device = devices.front();
     return true;
+}
+
+bool ggml_vk_get_device(ggml_vk_device * device, size_t memoryRequired, const char * name) {
+    return ggml_vk_get_device(device, memoryRequired, std::string(name));
 }
 
 bool ggml_vk_has_vulkan() {
@@ -315,10 +312,6 @@ bool ggml_vk_has_device() {
     return komputeManager()->hasDevice();
 }
 
-bool ggml_vk_using_vulkan() {
-    return s_kompute_context != nullptr;
-}
-
 ggml_vk_device ggml_vk_current_device() {
     if (!komputeManager()->hasDevice())
         return ggml_vk_device();
@@ -326,20 +319,6 @@ ggml_vk_device ggml_vk_current_device() {
     auto devices = ggml_vk_available_devices_internal(0);
     ggml_vk_filterByName(devices, komputeManager()->physicalDevice()->getProperties().deviceName);
     return devices.front();
-}
-
-static ggml_kompute_context * ggml_vk_init() {
-    GGML_ASSERT(s_kompute_context == nullptr);
-    s_kompute_context = new ggml_kompute_context;
-    return s_kompute_context;
-}
-
-static void ggml_vk_free(struct ggml_kompute_context * ctx) {
-    assert(ctx == s_kompute_context);
-    s_kompute_context = nullptr;
-    if (ctx != nullptr) {
-        delete ctx;
-    }
 }
 
 static
@@ -503,20 +482,22 @@ static void ggml_vk_free_memory(ggml_vk_memory &memory)
     }
 }
 
+static const char * ggml_backend_kompute_buffer_type_get_name(ggml_backend_buffer_type_t buft);
+
 static
 ggml_vk_memory * ggml_vk_find_tensor(const struct ggml_tensor * t, uint64_t & offset) {
     ggml_backend_buffer_t buffer = t->view_src ? t->view_src->buffer : t->buffer;
 
     // compatibility with ggml-backend
-    GGML_ASSERT(buffer && buffer->buft == ggml_backend_kompute_buffer_type());
+    GGML_ASSERT(buffer && buffer->buft->iface.get_name == ggml_backend_kompute_buffer_type_get_name);
 
-    ggml_vk_memory * buf_ctx = (ggml_vk_memory *) buffer->context;
+    ggml_vk_memory * buf_ctx = static_cast<ggml_vk_memory *>(buffer->context);
 
-    const intptr_t ioffs = reinterpret_cast<intptr_t>(t->data) - reinterpret_cast<intptr_t>(buf_ctx->data);
+    const intptr_t ioffs = intptr_t(t->data) - intptr_t(buf_ctx->data);
 
-    GGML_ASSERT(ioffs >= 0 && ioffs + (int64_t)ggml_nbytes(t) <= (int64_t)buffer->size);
+    GGML_ASSERT(ioffs >= 0 && ioffs + int64_t(ggml_nbytes(t)) <= int64_t(buffer->size));
 
-    offset = (uint64_t)ioffs;
+    offset = uint64_t(ioffs);
     return buf_ctx;
 }
 
@@ -1746,9 +1727,47 @@ kp::TensorT<uint8_t>::dataType()
 
 // backend interface
 
+struct ggml_backend_kompute_buffer_type_context {
+    int         device;
+    int         device_ref = 0;
+    uint64_t    buffer_alignment;
+    std::string name;
+
+    ggml_backend_kompute_buffer_type_context(int device, uint64_t buffer_alignment)
+        : device(device), buffer_alignment(buffer_alignment), name(ggml_kompute_format_name(device)) {}
+};
+
+static void ggml_backend_kompute_device_ref(ggml_backend_buffer_type_t buft) {
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
+
+    if (!ctx->device_ref) {
+        komputeManager()->initializeDevice(
+            ctx->device, {}, {
+                "VK_KHR_shader_float16_int8", "VK_KHR_8bit_storage",
+                "VK_KHR_16bit_storage", "VK_KHR_shader_non_semantic_info"
+            }
+        );
+    }
+
+    assert(ggml_vk_has_device());
+    ctx->device_ref++;
+}
+
+static void ggml_backend_kompute_device_unref(ggml_backend_buffer_type_t buft) {
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
+
+    assert(ctx->device_ref > 0);
+
+    ctx->device_ref--;
+
+    if (!ctx->device_ref) {
+        komputeManager.destroy();
+    }
+}
+
 static const char * ggml_backend_kompute_buffer_get_name(ggml_backend_buffer_t buffer) {
-    GGML_UNUSED(buffer);
-    return "Kompute";
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buffer->buft->context);
+    return ctx->name.c_str();
 }
 
 static void ggml_backend_kompute_buffer_free_buffer(ggml_backend_buffer_t buffer) {
@@ -1808,28 +1827,19 @@ static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
 // default buffer type
 
 static const char * ggml_backend_kompute_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
-    GGML_UNUSED(buft);
-    return "Kompute";
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
+    return ctx->name.c_str();
 }
 
 static ggml_backend_buffer_t ggml_backend_kompute_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    ggml_backend_kompute_device_ref(buft);
     auto * ctx = new ggml_vk_memory(ggml_vk_allocate(size));
     return ggml_backend_buffer_init(buft, ggml_backend_kompute_buffer_i, ctx, size);
 }
 
 static size_t ggml_backend_kompute_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
-    GGML_UNUSED(buft);
-
-    static size_t minStorageBufferOffsetAlignment = 0;
-    if (minStorageBufferOffsetAlignment == 0) {
-        GGML_ASSERT(ggml_vk_has_device());
-        vk::PhysicalDeviceProperties deviceProperties;
-        deviceProperties = komputeManager()->physicalDevice()->getProperties();
-        vk::PhysicalDeviceLimits deviceLimits = deviceProperties.limits;
-        minStorageBufferOffsetAlignment = deviceLimits.minStorageBufferOffsetAlignment;
-    }
-
-    return minStorageBufferOffsetAlignment;
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
+    return ctx->buffer_alignment;
 }
 
 static bool ggml_backend_kompute_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
@@ -1837,42 +1847,62 @@ static bool ggml_backend_kompute_buffer_type_supports_backend(ggml_backend_buffe
     return ggml_backend_is_kompute(backend);
 }
 
-ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type() {
-    static struct ggml_backend_buffer_type ggml_backend_buffer_type_kompute = {
-        /* .iface = */ {
-            /* .get_name         = */ ggml_backend_kompute_buffer_type_get_name,
-            /* .alloc_buffer     = */ ggml_backend_kompute_buffer_type_alloc_buffer,
-            /* .get_alignment    = */ ggml_backend_kompute_buffer_type_get_alignment,
-            /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
-            /* .supports_backend = */ ggml_backend_kompute_buffer_type_supports_backend,
-            /* .is_host          = */ NULL,
-        },
-        /* .context = */ NULL,
-    };
+static ggml_backend_buffer_type_i ggml_backend_kompute_buffer_type_interface = {
+    /* .get_name         = */ ggml_backend_kompute_buffer_type_get_name,
+    /* .alloc_buffer     = */ ggml_backend_kompute_buffer_type_alloc_buffer,
+    /* .get_alignment    = */ ggml_backend_kompute_buffer_type_get_alignment,
+    /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
+    /* .supports_backend = */ ggml_backend_kompute_buffer_type_supports_backend,
+    /* .is_host          = */ NULL,
+};
 
-    return &ggml_backend_buffer_type_kompute;
+ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(int device) {
+    static std::vector<ggml_backend_buffer_type> bufts = []() {
+        std::vector<ggml_backend_buffer_type> vec;
+        auto devices = ggml_vk_available_devices_internal(0);
+        vec.reserve(devices.size());
+
+        for (const auto & dev : devices) {
+            vec.push_back({
+                /* .iface   = */ ggml_backend_kompute_buffer_type_interface,
+                /* .context = */ new ggml_backend_kompute_buffer_type_context(dev.index, dev.bufferAlignment)
+            });
+        }
+        return vec;
+    }();
+
+    auto it = std::find_if(bufts.begin(), bufts.end(), [device](const ggml_backend_buffer_type & t) { 
+        return device == static_cast<ggml_backend_kompute_buffer_type_context *>(t.context)->device;
+    });
+    return it < bufts.end() ? &*it : nullptr;
 }
 
 // backend
 
 static const char * ggml_backend_kompute_name(ggml_backend_t backend) {
-    GGML_UNUSED(backend);
-    return "Kompute";
+    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    return ctx->name.c_str();
 }
 
 static void ggml_backend_kompute_free(ggml_backend_t backend) {
-    struct ggml_kompute_context * ctx = (struct ggml_kompute_context *)backend->context;
-    ggml_vk_free(ctx);
+    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+
+    assert(ctx == s_kompute_context);
+    s_kompute_context = nullptr;
+    if (ctx != nullptr) {
+        delete ctx;
+    }
+
     delete backend;
 }
 
 static ggml_backend_buffer_type_t ggml_backend_kompute_get_default_buffer_type(ggml_backend_t backend) {
-    GGML_UNUSED(backend);
-    return ggml_backend_kompute_buffer_type();
+    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    return ggml_backend_kompute_buffer_type(ctx->device);
 }
 
 static bool ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    auto * ctx = (ggml_kompute_context *)backend->context;
+    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
     ggml_vk_graph_compute(ctx, cgraph);
     return true;
 }
@@ -1897,17 +1927,13 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .supports_op             = */ ggml_backend_kompute_supports_op,
 };
 
-ggml_backend_t ggml_backend_kompute_init() {
-    if (!ggml_vk_has_device()) {
-        fprintf(stderr, "%s: error: device was not initialized\n", __func__);
-        return nullptr;
-    }
-
-    struct ggml_kompute_context * ctx = ggml_vk_init();
+ggml_backend_t ggml_backend_kompute_init(int device) {
+    GGML_ASSERT(s_kompute_context == nullptr);
+    s_kompute_context = new ggml_kompute_context(device);
 
     ggml_backend_t kompute_backend = new ggml_backend {
         /* .interface = */ kompute_backend_i,
-        /* .context   = */ ctx,
+        /* .context   = */ s_kompute_context,
     };
 
     return kompute_backend;
@@ -1917,10 +1943,22 @@ bool ggml_backend_is_kompute(ggml_backend_t backend) {
     return backend && backend->iface.get_name == ggml_backend_kompute_name;
 }
 
-extern "C" ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data);
-
-ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data) {
+static ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data) {
     GGML_UNUSED(params);
-    GGML_UNUSED(user_data);
-    return ggml_backend_kompute_init();
+    return ggml_backend_kompute_init(intptr_t(user_data));
+}
+
+extern "C" int ggml_backend_kompute_reg_devices();
+
+int ggml_backend_kompute_reg_devices() {
+    auto devices = ggml_vk_available_devices_internal(0);
+    for (const auto & device : devices) {
+        ggml_backend_register(
+            ggml_kompute_format_name(device.index).c_str(),
+            ggml_backend_reg_kompute_init,
+            ggml_backend_kompute_buffer_type(device.index),
+            reinterpret_cast<void *>(intptr_t(device.index))
+        );
+    }
+    return devices.size();
 }

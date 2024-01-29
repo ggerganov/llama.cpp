@@ -1280,7 +1280,10 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
 #elif defined(GGML_USE_CLBLAST)
     buft = ggml_backend_opencl_buffer_type();
 #elif defined(GGML_USE_KOMPUTE)
-    buft = ggml_backend_kompute_buffer_type();
+    buft = ggml_backend_kompute_buffer_type(gpu);
+    if (buft == nullptr) {
+        LLAMA_LOG_WARN("%s: cannot use GPU %d, check `vulkaninfo --summary`\n", __func__, gpu);
+    }
 #endif
 
     if (buft == nullptr) {
@@ -9860,13 +9863,6 @@ void llama_backend_init(bool numa) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_init();
 #endif
-
-#ifdef GGML_USE_KOMPUTE
-    if (!ggml_vk_has_device()) {
-        ggml_vk_init_device(0, "gpu");
-    }
-#endif
-
 }
 
 void llama_backend_free(void) {
@@ -9874,10 +9870,6 @@ void llama_backend_free(void) {
     ggml_mpi_backend_free();
 #endif
     ggml_quantize_free();
-
-#ifdef GGML_USE_KOMPUTE
-    ggml_vk_free_device();
-#endif
 }
 
 int64_t llama_time_us(void) {
@@ -10034,8 +10026,8 @@ struct llama_context * llama_new_context_with_model(
             }
         }
 #elif defined(GGML_USE_KOMPUTE)
-        if (ggml_vk_has_device() && model->n_gpu_layers > 0) {
-            auto * backend = ggml_backend_kompute_init();
+        if (model->n_gpu_layers > 0) {
+            auto * backend = ggml_backend_kompute_init(model->main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
                 llama_free(ctx);

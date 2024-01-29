@@ -346,9 +346,8 @@ GGML_CALL static void ggml_backend_registry_init(void) {
 #endif
 
 #ifdef GGML_USE_KOMPUTE
-    extern ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data);
-    extern ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(void);
-    ggml_backend_register("Kompute", ggml_backend_reg_kompute_init, ggml_backend_kompute_buffer_type(), NULL);
+    extern GGML_CALL void ggml_backend_kompute_reg_devices(void);
+    ggml_backend_kompute_reg_devices();
 #endif
 }
 
