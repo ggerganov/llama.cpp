@@ -30,8 +30,7 @@ jobs:
         shell: bash
     env:
       WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/62641e01-1e8d-4ace-91d6-ae03f7f8a71f/w_BaseKit_p_2024.0.0.49563_offline.exe
-      WINDOWS_DPCPP_COMPONENTS: intel.oneapi.win.cpp-dpcpp-common
-      WINDOWS_MKL_COMPONENTS: intel.oneapi.win.mkl.devel
+      WINDOWS_DPCPP_MKL: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel
 
         
     steps:
@@ -42,8 +41,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        run: |
-          scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_COMPONENTS;$WINDOWS_MKL_COMPONENTS
+        run:  scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_MKL
 
       - name: Build
         id: cmake_build
