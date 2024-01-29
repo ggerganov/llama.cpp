@@ -5580,21 +5580,6 @@ struct ggml_tensor * ggml_pool_2d(
     }
 
     struct ggml_tensor * result;
-#if defined(GGML_USE_CUBLAS)
-    if(!(op == GGML_OP_POOL_AVG)) {
-        GGML_ASSERT(false);
-    }
-
-    const int64_t ne[4] = {k0, k1, 1, a->ne[2]};
-    struct ggml_tensor * b = ggml_new_tensor(ctx, GGML_TYPE_F16, 4, ne);
-    struct ggml_tensor * new_a = ggml_reshape_4d(ctx, a, a->ne[0], a->ne[1], 1, a->ne[2] * a->ne[3]);
-    struct ggml_tensor * im2col = ggml_im2col(ctx, b, new_a,
-                                        s0, s1, p0, p1, 1, 1, true, GGML_TYPE_F32); // [N * IC, OH, OW, KH * KW]
-
-    result = ggml_sum_rows(ctx, im2col);
-    result = ggml_scale(ctx, result, 1. / (k0 * k1));
-    result = ggml_reshape_4d(ctx, result, im2col->ne[1], im2col->ne[2], a->ne[2], a->ne[3]);
-#else
     const int64_t ne[3] = {
         ggml_calc_pool_output_size(a->ne[0], k0, s0, p0),
         ggml_calc_pool_output_size(a->ne[1], k1, s1, p1),
@@ -5608,7 +5593,6 @@ struct ggml_tensor * ggml_pool_2d(
     result->op = GGML_OP_POOL_2D;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
-#endif
     return result;
 }
 
