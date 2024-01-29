@@ -1897,7 +1897,7 @@ ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(int device) {
         return vec;
     }();
 
-    auto it = std::find_if(bufts.begin(), bufts.end(), [device](const ggml_backend_buffer_type & t) { 
+    auto it = std::find_if(bufts.begin(), bufts.end(), [device](const ggml_backend_buffer_type & t) {
         return device == static_cast<ggml_backend_kompute_buffer_type_context *>(t.context)->device;
     });
     return it < bufts.end() ? &*it : nullptr;
