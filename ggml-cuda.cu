@@ -11178,6 +11178,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
         case GGML_OP_ROPE:
         case GGML_OP_ALIBI:
         case GGML_OP_IM2COL:
+        case GGML_OP_POOL_2D:
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGSORT:
         case GGML_OP_ACC:
