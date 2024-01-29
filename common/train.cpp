@@ -18,7 +18,7 @@ struct random_uniform_distribution {
 };
 
 struct train_state  * init_train_state() {
-    auto state = new struct train_state;
+    auto * state = new struct train_state;
     state->train_its     = 0;
     state->train_samples = 0;
     state->train_tokens  = 0;
@@ -46,12 +46,12 @@ void free_train_state(struct train_state  * state) {
 struct random_normal_distribution * init_random_normal_distribution(
     int seed, float mean, float std, float min, float max
 ) {
-    auto rnd = new random_normal_distribution{std::mt19937(seed), std::normal_distribution<float>{mean, std}, min, max};
+    auto * rnd = new random_normal_distribution{std::mt19937(seed), std::normal_distribution<float>{mean, std}, min, max};
     return rnd;
 }
 
 struct random_uniform_distribution * init_random_uniform_distribution(int seed, float min, float max) {
-    auto rnd = new random_uniform_distribution{std::mt19937(seed), std::uniform_real_distribution<float>{min, max}};
+    auto * rnd = new random_uniform_distribution{std::mt19937(seed), std::uniform_real_distribution<float>{min, max}};
     return rnd;
 }
 
@@ -1379,7 +1379,7 @@ void finish_processing_train_args(struct train_params_common * params) {
 }
 
 void train_opt_callback(void * vdata, int accum_step, float * sched, bool * cancel) {
-    auto data   = (struct train_opt_callback_data *) vdata;
+    auto * data = (struct train_opt_callback_data *) vdata;
     struct train_params_common     * params = data->params;
     struct train_state             * train  = data->train;
     struct ggml_opt_context        * opt    = train->opt;

@@ -1,7 +1,7 @@
 #include "sampling.h"
 
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
-    auto result = new llama_sampling_context();
+    auto * result = new llama_sampling_context();
 
     result->params  = params;
     result->grammar = nullptr;
@@ -197,8 +197,8 @@ static llama_token llama_sampling_sample_impl(
     }
 
     // apply params.logit_bias map
-    for (const auto & logit_bia : params.logit_bias) {
-        logits[logit_bia.first] += logit_bia.second;
+    for (const auto & logit_bias : params.logit_bias) {
+        logits[logit_bias.first] += logit_bias.second;
     }
 
     if (ctx_cfg) {

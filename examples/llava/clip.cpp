@@ -1011,21 +1011,21 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 vision_model.mm_2_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "weight"));
                 vision_model.mm_2_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "bias"));
             } catch (std::runtime_error & e) {
-                static_cast<void>(e);
+                GGML_UNUSED(e);
             }
             try {
                 // Yi-type llava
                 vision_model.mm_3_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 3, "weight"));
                 vision_model.mm_3_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 3, "bias"));
             } catch (std::runtime_error & e) {
-                static_cast<void>(e);
+                GGML_UNUSED(e);
             }
             try {
                 // Yi-type llava
                 vision_model.mm_4_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "weight"));
                 vision_model.mm_4_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "bias"));
             } catch (std::runtime_error & e) {
-                static_cast<void>(e);
+                GGML_UNUSED(e);
             }
         }
         else if (new_clip->proj_type == PROJECTOR_TYPE_LDP) {

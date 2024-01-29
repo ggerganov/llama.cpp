@@ -268,7 +268,7 @@ int main(int argc, char ** argv) {
 
             // if no active ngrams are left, it means the sampled token does not pass the verification
             if (v > 0) {
-                for (auto& g : ngrams_cur) {
+                for (auto & g : ngrams_cur) {
                     if (g.active) {
                         i_batch = g.i_batch[v];
                         seq_id_best = g.seq_id;
@@ -316,7 +316,7 @@ int main(int argc, char ** argv) {
             }
 
             // verify across active n-grams
-            for (auto& g : ngrams_cur) {
+            for (auto & g : ngrams_cur) {
                 if (g.active) {
                     if (v == N - 1) {
                         g.active = false;

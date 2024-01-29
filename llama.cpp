@@ -3004,7 +3004,7 @@ static void llm_load_hparams(
 }
 
 // TODO: This should probably be in llama.h
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string& raw_text, bool bos, bool special = false);
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool special = false);
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch);
 
 static void llm_load_vocab(
@@ -7374,7 +7374,7 @@ private:
         bpe_encoded_words.reserve(text.size());
 
         auto cps = codepoints_from_utf8(text);
-        for (unsigned int cp : cps)
+        for (uint32_t cp : cps)
             text_utf.emplace_back(codepoint_to_utf8(cp));
 
         for (int i = 0; i < (int)text_utf.size(); i++) {
@@ -7633,7 +7633,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
     }
 }
 
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string& raw_text, bool bos, bool special) {
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool special) {
     std::vector<llama_vocab::id> output;
 
     // OG tokenizer behavior:
@@ -8089,7 +8089,7 @@ void llama_grammar_free(struct llama_grammar * grammar) {
 }
 
 struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar) {
-    auto result = new llama_grammar{ grammar->rules, grammar->stacks, grammar->partial_utf8 };
+    auto * result = new llama_grammar{ grammar->rules, grammar->stacks, grammar->partial_utf8 };
 
     // redirect elements in stacks to point to new rules
     for (size_t is = 0; is < result->stacks.size(); is++) {
@@ -8337,7 +8337,7 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
     }
 
     // Calculate absolute value of second derivatives
-    for (float& second_derivative : second_derivatives) {
+    for (float & second_derivative : second_derivatives) {
         second_derivative = std::abs(second_derivative);
     }
 
@@ -9654,7 +9654,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             if (tot_count > 0) {
                 LLAMA_LOG_INFO(" | hist: ");
-                for (long long i : hist_cur) {
+                for (int64_t i : hist_cur) {
                     LLAMA_LOG_INFO("%5.3f ", i / float(nelements));
                 }
             }
@@ -10101,7 +10101,7 @@ struct llama_model * llama_load_model_from_file(
               struct llama_model_params   params) {
     ggml_time_init();
 
-    auto model = new llama_model;
+    auto * model = new llama_model;
 
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
@@ -10147,7 +10147,7 @@ struct llama_context * llama_new_context_with_model(
         return nullptr;
     }
 
-    auto ctx = new llama_context(*model);
+    auto * ctx = new llama_context(*model);
 
     const auto & hparams = model->hparams;
     auto       & cparams = ctx->cparams;

@@ -379,7 +379,7 @@ static void alloc_lora(struct ggml_allocr * alloc, struct my_llama_lora * lora) 
     ggml_allocr_alloc(alloc, lora->norm_b);
     ggml_allocr_alloc(alloc, lora->output_a);
     ggml_allocr_alloc(alloc, lora->output_b);
-    for (auto& layer : lora->layers) {
+    for (auto & layer : lora->layers) {
         ggml_allocr_alloc(alloc, layer.attention_norm_a);
         ggml_allocr_alloc(alloc, layer.attention_norm_b);
         ggml_allocr_alloc(alloc, layer.wq_a);
@@ -405,7 +405,7 @@ static void alloc_lora(struct ggml_allocr * alloc, struct my_llama_lora * lora) 
     ggml_allocr_alloc(alloc, lora->norm_b->grad);
     ggml_allocr_alloc(alloc, lora->output_a->grad);
     ggml_allocr_alloc(alloc, lora->output_b->grad);
-    for (auto& layer : lora->layers) {
+    for (auto & layer : lora->layers) {
         ggml_allocr_alloc(alloc, layer.attention_norm_a->grad);
         ggml_allocr_alloc(alloc, layer.attention_norm_b->grad);
         ggml_allocr_alloc(alloc, layer.wq_a->grad);
@@ -801,7 +801,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
 
     // allocating checkpoints in one block to reduce memory fragmentation
     // note: they will be freed in reverse order
-    for (auto& checkpoint : checkpoints) {
+    for (auto * checkpoint : checkpoints) {
         if (checkpoint->data == NULL && checkpoint->view_src == NULL) {
             ggml_allocr_alloc(alloc, checkpoint);
         }
@@ -870,7 +870,7 @@ static void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context
     copy_tensor_by_name(lora->output_a,         f_ggml_ctx, ggml_get_name(lora->output_a));
     copy_tensor_by_name(lora->output_b,         f_ggml_ctx, ggml_get_name(lora->output_b));
 
-    for (auto& layer : lora->layers) {
+    for (auto & layer : lora->layers) {
         copy_tensor_by_name(layer.attention_norm_a, f_ggml_ctx, ggml_get_name(layer.attention_norm_a));
         copy_tensor_by_name(layer.attention_norm_b, f_ggml_ctx, ggml_get_name(layer.attention_norm_b));
         copy_tensor_by_name(layer.wq_a,             f_ggml_ctx, ggml_get_name(layer.wq_a));
@@ -937,7 +937,7 @@ static void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_mod
     gguf_add_tensor(fctx, lora->output_a);
     gguf_add_tensor(fctx, lora->output_b);
 
-    for (auto& layer : lora->layers) {
+    for (auto & layer : lora->layers) {
         gguf_add_tensor(fctx, layer.attention_norm_a);
         gguf_add_tensor(fctx, layer.attention_norm_b);
         gguf_add_tensor(fctx, layer.wq_a);
@@ -1471,7 +1471,7 @@ struct save_train_files_data {
 };
 
 static void save_train_files(void * vdata, struct train_state * train) {
-    auto data   = (struct save_train_files_data *) vdata;
+    auto * data   = (struct save_train_files_data *) vdata;
 
     int64_t iter = train->opt->iter;
 
@@ -1494,7 +1494,7 @@ static int64_t get_parameter_count(struct my_llama_lora* lora) {
     nx += ggml_nelements(lora->output_a);
     nx += ggml_nelements(lora->output_b);
 
-    for (auto& layer : lora->layers) {
+    for (auto & layer : lora->layers) {
         nx += ggml_nelements(layer.attention_norm_a);
         nx += ggml_nelements(layer.attention_norm_b);
         nx += ggml_nelements(layer.wq_a);
@@ -1815,7 +1815,7 @@ int main(int argc, char ** argv) {
         ++token_noccurs[train_token];
     }
     int n_unique_tokens = 0;
-    for (unsigned long long token_noccur : token_noccurs) {
+    for (size_t token_noccur : token_noccurs) {
         if (token_noccur == 0) continue;
         ++n_unique_tokens;
     }

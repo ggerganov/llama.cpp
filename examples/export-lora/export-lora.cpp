@@ -225,7 +225,7 @@ static void free_lora(struct lora_data * lora) {
 }
 
 static struct lora_data * load_lora(struct lora_info * info) {
-    auto result = new struct lora_data;
+    auto * result = new struct lora_data;
     result->info = *info;
     result->ctx = NULL;
     result->lora_r     = 1;
@@ -370,8 +370,8 @@ static bool apply_lora(struct ggml_tensor * tensor, struct lora_data * lora, int
 static void export_lora(struct export_lora_params * params) {
     // load all loras
     std::vector<struct lora_data *> loras;
-    for (auto& i : params->lora) {
-        auto lora = load_lora(&i);
+    for (auto & i : params->lora) {
+        auto * lora = load_lora(&i);
         if (lora) {
             loras.push_back(lora);
         }
@@ -431,7 +431,7 @@ static void export_lora(struct export_lora_params * params) {
         fin.read_raw(data.data(), data.size());
 
         // apply all loras
-        for (auto& lora : loras) {
+        for (auto & lora : loras) {
             apply_lora(tensor, lora, params->n_threads);
         }
 
@@ -455,7 +455,7 @@ static void export_lora(struct export_lora_params * params) {
     gguf_free(gguf_in);
 
     // free loras
-    for (auto& lora : loras) {
+    for (auto * lora : loras) {
         free_lora(lora);
     }
 }

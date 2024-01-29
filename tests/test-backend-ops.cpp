@@ -64,7 +64,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
             }
         }
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, int(size/tensor->ne[0]),
-            static_cast<int>(tensor->ne[0]), hist, im);
+            int(tensor->ne[0]), hist, im);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
@@ -288,9 +288,9 @@ struct test_case {
     virtual size_t op_size(ggml_tensor * t) {
         size_t size = ggml_nbytes(t);
         // add source tensors
-        for (auto& el : t->src) {
-            if (el) {
-                size += ggml_nbytes(el);
+        for (auto * src : t->src) {
+            if (src) {
+                size += ggml_nbytes(src);
             }
         }
         return size;
@@ -423,7 +423,7 @@ struct test_case {
         };
 
         auto callback = [](int index, ggml_tensor * t1, ggml_tensor * t2, void * user_data) -> bool {
-            auto ud = (callback_userdata *) user_data;
+            auto * ud = (callback_userdata *) user_data;
             const char * bn1 = ggml_backend_name(ud->backend1);
             const char * bn2 = ggml_backend_name(ud->backend2);
 

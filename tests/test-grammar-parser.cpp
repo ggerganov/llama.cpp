@@ -29,7 +29,7 @@ term  ::= [0-9]+)""";
     };
 
     uint32_t index = 0;
-    for (auto& symbol_id : parsed_grammar.symbol_ids) {
+    for (auto & symbol_id : parsed_grammar.symbol_ids) {
         std::string key = symbol_id.first;
         uint32_t value = symbol_id.second;
         std::pair<std::string, uint32_t> expected_pair = expected[index];
@@ -132,7 +132,7 @@ term  ::= [0-9]+)""";
     };
 
     index = 0;
-    for (auto& symbol_id : parsed_grammar.symbol_ids) {
+    for (auto & symbol_id : parsed_grammar.symbol_ids) {
         std::string key = symbol_id.first;
         uint32_t value = symbol_id.second;
         std::pair<std::string, uint32_t> expected_pair = expected[index];
