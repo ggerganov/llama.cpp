@@ -41,14 +41,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install-dpcpp
+      - name: Install
         run: |
-          scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_COMPONENTS
-      
-      - name: Install-mkl
-        run: |
-          scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_MKL_COMPONENTS
-          
+          scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_COMPONENTS;$WINDOWS_MKL_COMPONENTS
+
       - name: Build
         id: cmake_build
         run: |
