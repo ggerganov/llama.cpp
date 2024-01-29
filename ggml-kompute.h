@@ -19,6 +19,7 @@ struct ggml_vk_device {
     const char * vendor;
     int subgroupSize;
     uint64_t bufferAlignment;
+    uint64_t maxAlloc;
 };
 
 struct ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count);
