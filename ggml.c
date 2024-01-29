@@ -8678,16 +8678,19 @@ static void ggml_compute_forward_exp_f32(
         return;
     }
 
-    const int n  = ggml_nrows(src0);
-    const int nc = src0->ne[0];
-
     GGML_ASSERT( dst->nb[0] == sizeof(float));
     GGML_ASSERT(src0->nb[0] == sizeof(float));
 
-    for (int i = 0; i < n; i++) {
-        ggml_vec_exp_f32(nc,
-                (float *) ((char *) dst->data  + i*( dst->nb[1])),
-                (float *) ((char *) src0->data + i*(src0->nb[1])));
+    GGML_TENSOR_UNARY_OP_LOCALS
+
+    for (int64_t i3 = 0; i3 < ne03; i3++) {
+        for (int64_t i2 = 0; i2 < ne02; i2++) {
+            for (int64_t i1 = 0; i1 < ne01; i1++) {
+                float * src_row = (float *) ((char *) src0->data + i1*nb01 + i2*nb02 + i3*nb03);
+                float * dst_row = (float *) ((char *) dst->data  + i1*nb1  + i2*nb2  + i3*nb3);
+                ggml_vec_exp_f32(ne00, dst_row, src_row);
+            }
+        }
     }
 }
 
