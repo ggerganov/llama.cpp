@@ -10,9 +10,6 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
-#if __cplusplus >= 201703L
-#include <filesystem>
-#endif
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -43,23 +40,15 @@ static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
 
 static bool file_exists(const std::string &path) {
-#if __cplusplus >= 201703L
-    return std::filesystem::exists(path);
-#else
     std::ifstream f(path.c_str());
     return f.good();
-#endif
 }
 
-static uint64_t file_size(const std::string &path) {
-#if __cplusplus >= 201703L
-    return std::filesystem::file_size(path);
-#else
+static bool file_is_empty(const std::string &path) {
     std::ifstream f;
     f.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     f.open(path.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
-    return static_cast<uint64_t>(f.tellg());
-#endif
+    return f.tellg() == 0;
 }
 
 static void write_logfile(
@@ -239,7 +228,7 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
         if (!file_exists(path_session)) {
             LOG_TEE("%s: session file does not exist, will create.\n", __func__);
-        } else if (file_size(path_session) == 0) {
+        } else if (file_is_empty(path_session)) {
             LOG_TEE("%s: The session file is empty. A new session will be initialized.\n", __func__);
         } else {
             // The file exists and is not empty
