@@ -2125,6 +2125,15 @@ static size_t ggml_backend_opencl_buffer_type_get_alignment(ggml_backend_buffer_
     GGML_UNUSED(buffer_type);
 }
 
+static size_t ggml_backend_opencl_buffer_type_get_max_size(ggml_backend_buffer_type_t buffer_type) {
+    static size_t max_size = -1;
+    if (max_size == (size_t)-1) {
+        ggml_cl_init();
+        clGetDeviceInfo(device, CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(size_t), &max_size, NULL);
+    }
+    return max_size;
+}
+
 static bool ggml_backend_opencl_buffer_type_supports_backend(ggml_backend_buffer_type_t buffer_type, ggml_backend_t backend) {
     //return ggml_backend_is_opencl(backend); // opencl must be used through the cpu backend
     return ggml_backend_is_cpu(backend);
@@ -2136,7 +2145,7 @@ static ggml_backend_buffer_type_i ggml_backend_opencl_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_opencl_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_opencl_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_opencl_buffer_type_get_alignment,
-    /* .get_max_size     = */ NULL, // TODO: return from device info
+    /* .get_max_size     = */ ggml_backend_opencl_buffer_type_get_max_size,
     /* .get_alloc_size   = */ NULL,
     /* .supports_backend = */ ggml_backend_opencl_buffer_type_supports_backend,
     /* .is_host          = */ NULL,
