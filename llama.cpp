@@ -4146,6 +4146,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
             )
         )) {
             // disable Vulkan due to unsupported model architecture or quantization type
+            // TODO(cebtenzzre): propagate this error outside of llama_load_model_from_file
             params.n_gpu_layers = 0;
         }
 #endif
@@ -10118,11 +10119,9 @@ int64_t llama_time_us(void) {
     return ggml_time_us();
 }
 
-static struct llama_model * llama_load_model_from_file_internal(
-    const char * path_model, struct llama_model_params * params_p
-) {
-    auto & params = *params_p;
-
+struct llama_model * llama_load_model_from_file(
+                             const char * path_model,
+              struct llama_model_params   params) {
     ggml_time_init();
 
     llama_model * model = new llama_model;
@@ -10157,10 +10156,6 @@ static struct llama_model * llama_load_model_from_file_internal(
     }
 
     return model;
-}
-
-struct llama_model * llama_load_model_from_file(const char * path_model, struct llama_model_params params) {
-    return llama_load_model_from_file_internal(path_model, &params);
 }
 
 void llama_free_model(struct llama_model * model) {
