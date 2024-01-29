@@ -4136,7 +4136,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
         }
 
 #ifdef GGML_USE_KOMPUTE
-        if (ggml_vk_has_device() && params.n_gpu_layers > 0 && (
+        if (params.n_gpu_layers > 0 && (
             !(model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_FALCON)
             || !(
                 model.ftype == LLAMA_FTYPE_ALL_F32 ||
@@ -4145,8 +4145,8 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
                 model.ftype == LLAMA_FTYPE_MOSTLY_Q4_1
             )
         )) {
-            // disable Vulkan due to unsupported model architecture or quantization type
             // TODO(cebtenzzre): propagate this error outside of llama_load_model_from_file
+            LLAMA_LOG_WARN("%s: disabling Kompute due to unsupported model arch or quantization\n", __func__);
             params.n_gpu_layers = 0;
         }
 #endif
