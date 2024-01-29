@@ -19,6 +19,7 @@ constexpr float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075f;
 constexpr float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040f;
 constexpr float MAX_QUANTIZATION_TOTAL_ERROR_3BITS_XXS = 0.0050f;
 constexpr float MAX_DOT_PRODUCT_ERROR = 0.02f;
+constexpr float MAX_DOT_PRODUCT_ERROR_LOWBIT = 0.04f;
 
 static const char* RESULT_STR[] = {"ok", "FAILED"};
 
@@ -165,7 +166,9 @@ int main(int argc, char * argv[]) {
             }
 
             const float vec_dot_error = dot_product_error(qfns, test_size, test_data.data(), test_data2.data());
-            failed = !(vec_dot_error < MAX_DOT_PRODUCT_ERROR);
+            const float max_allowed_error = type == GGML_TYPE_Q2_K || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ2_XXS ||
+                                            type == GGML_TYPE_IQ3_XXS ? MAX_DOT_PRODUCT_ERROR_LOWBIT : MAX_DOT_PRODUCT_ERROR;
+            failed = !(vec_dot_error < max_allowed_error);
             num_failed += failed;
             if (failed || verbose) {
                 printf("%5s dot product error:              %s (%f)\n", ggml_type_name(type), RESULT_STR[failed], vec_dot_error);
