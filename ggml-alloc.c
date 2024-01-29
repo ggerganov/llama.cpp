@@ -846,7 +846,7 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
             for (size_t i = 0; i < n_buffers; i++) {
                 ggml_backend_buffer_free(buffers[i]);
             }
-            free(*buffers);
+            free(buffers);
             return NULL;
         }
 
@@ -883,7 +883,7 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
     } else {
         buffer = ggml_backend_multi_buffer_alloc_buffer(buffers, n_buffers);
     }
-    free(*buffers);
+    free(buffers);
     return buffer;
 }
 
