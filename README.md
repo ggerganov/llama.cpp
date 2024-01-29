@@ -344,7 +344,14 @@ Finally, you're ready to run a computation using `mpirun`:
 ```bash
 mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 ```
+### Vulkan Build
 
+**Vulkan** is a new library aimed at replacing **OpenGL**. Starting from version `b1996`, `llama.cpp` now supports **Vulkan** as a backend. It can be faster (almost 2x on NVIDIA GeForce RTX™ 3060 Laptop GPU) than **CUDA** on a consumer-grade NVIDIA graphics card.
+
+To build with **Vulkan**:
+
+- Ensure that your operating system and graphics card support **Vulkan**.
+- Build `llama.cpp` with the following arguments: `LLAMA_VULKAN=1`.
 ### BLAS Build
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS and CLBlast. There are currently several different BLAS implementations available for build and use:
