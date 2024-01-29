@@ -6,6 +6,9 @@
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
 #define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
+#elif defined(GGML_USE_SYCL)
+#include "ggml-sycl.h"
+#define LLAMA_MAX_DEVICES GGML_SYCL_MAX_DEVICES
 #else
 #define LLAMA_MAX_DEVICES 1
 #endif // GGML_USE_CUBLAS
@@ -46,7 +49,7 @@
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION 4
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_VULKAN) || defined(GGML_USE_SYCL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
@@ -107,6 +110,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ2_XXS       = 19, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ2_XS        = 20, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q2_K_S        = 21, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q3_K_XS       = 22, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -773,6 +777,14 @@ extern "C" {
           llama_token_data_array * candidates,
                            float   p,
                           size_t   min_keep);
+
+    /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
+    LLAMA_API void llama_sample_entropy(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates_p,
+                           float   min_temp,
+                           float   max_temp,
+                           float   exponent_val);
 
     LLAMA_API void llama_sample_temp(
             struct llama_context * ctx,

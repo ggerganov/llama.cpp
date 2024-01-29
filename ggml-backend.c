@@ -27,10 +27,20 @@ size_t ggml_backend_buft_get_alignment(ggml_backend_buffer_type_t buft) {
     return buft->iface.get_alignment(buft);
 }
 
+size_t ggml_backend_buft_get_max_size(ggml_backend_buffer_type_t buft) {
+    // get_max_size is optional, defaults to SIZE_MAX
+    if (buft->iface.get_max_size) {
+        return buft->iface.get_max_size(buft);
+    }
+    return SIZE_MAX;
+}
+
 GGML_CALL size_t ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor) {
     // get_alloc_size is optional, defaults to ggml_nbytes
     if (buft->iface.get_alloc_size) {
-        return buft->iface.get_alloc_size(buft, tensor);
+        size_t size = buft->iface.get_alloc_size(buft, tensor);
+        assert(size >= ggml_nbytes(tensor));
+        return size;
     }
     return ggml_nbytes(tensor);
 }
@@ -54,8 +64,6 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_buffer_init(
                ggml_backend_buffer_context_t   context,
                size_t                          size) {
     ggml_backend_buffer_t buffer = malloc(sizeof(struct ggml_backend_buffer));
-
-    GGML_ASSERT(iface.get_base != NULL);
 
     (*buffer) = (struct ggml_backend_buffer) {
         /* .interface = */ iface,
@@ -106,6 +114,10 @@ size_t ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer) {
     return ggml_backend_buft_get_alignment(ggml_backend_buffer_get_type(buffer));
 }
 
+size_t ggml_backend_buffer_get_max_size(ggml_backend_buffer_t buffer) {
+    return ggml_backend_buft_get_max_size(ggml_backend_buffer_get_type(buffer));
+}
+
 size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
     return ggml_backend_buft_get_alloc_size(ggml_backend_buffer_get_type(buffer), tensor);
 }
@@ -120,6 +132,11 @@ bool ggml_backend_buffer_is_host(ggml_backend_buffer_t buffer) {
 
 void ggml_backend_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage) {
     buffer->usage = usage;
+
+    // FIXME: add a generic callback to the buffer interface
+    if (ggml_backend_buffer_is_multi_buffer(buffer)) {
+        ggml_backend_multi_buffer_set_usage(buffer, usage);
+    }
 }
 
 ggml_backend_buffer_type_t ggml_backend_buffer_get_type(ggml_backend_buffer_t buffer) {
@@ -167,6 +184,10 @@ ggml_backend_buffer_t ggml_backend_alloc_buffer(ggml_backend_t backend, size_t s
 
 size_t ggml_backend_get_alignment(ggml_backend_t backend) {
     return ggml_backend_buft_get_alignment(ggml_backend_get_default_buffer_type(backend));
+}
+
+size_t ggml_backend_get_max_size(ggml_backend_t backend) {
+    return ggml_backend_buft_get_max_size(ggml_backend_get_default_buffer_type(backend));
 }
 
 void ggml_backend_tensor_set_async(ggml_backend_t backend, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -337,10 +358,20 @@ GGML_CALL static void ggml_backend_registry_init(void) {
     ggml_backend_cuda_reg_devices();
 #endif
 
+#ifdef GGML_USE_SYCL
+    extern void ggml_backend_sycl_reg_devices(void);
+    ggml_backend_sycl_reg_devices();
+#endif
+
 #ifdef GGML_USE_METAL
     extern GGML_CALL ggml_backend_t ggml_backend_reg_metal_init(const char * params, void * user_data);
     extern GGML_CALL ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void);
     ggml_backend_register("Metal", ggml_backend_reg_metal_init, ggml_backend_metal_buffer_type(), NULL);
+#endif
+
+#ifdef GGML_USE_VULKAN
+    extern GGML_CALL int ggml_backend_vk_reg_devices(void);
+    ggml_backend_vk_reg_devices();
 #endif
 }
 
@@ -545,6 +576,7 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
             /* .get_name         = */ ggml_backend_cpu_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_cpu_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
             /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
@@ -600,6 +632,7 @@ ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type(void) {
             /* .get_name         = */ ggml_backend_cpu_hbm_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_cpu_hbm_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
             /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
@@ -754,6 +787,80 @@ GGML_CALL static ggml_backend_t ggml_backend_reg_cpu_init(const char * params, v
 
     GGML_UNUSED(params);
     GGML_UNUSED(user_data);
+}
+
+// multi-buffer buffer
+
+struct ggml_backend_multi_buffer_context {
+    ggml_backend_buffer_t * buffers;
+    size_t n_buffers;
+};
+
+typedef struct ggml_backend_multi_buffer_context * ggml_backend_multi_buffer_context_t;
+
+GGML_CALL static const char * ggml_backend_multi_buffer_get_name(ggml_backend_buffer_t buffer) {
+    ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) buffer->context;
+
+    return ctx->buffers[0]->iface.get_name(ctx->buffers[0]);
+}
+
+GGML_CALL static void ggml_backend_multi_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+    ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) buffer->context;
+    for (size_t i = 0; i < ctx->n_buffers; i++) {
+        ggml_backend_buffer_free(ctx->buffers[i]);
+    }
+
+    free(ctx->buffers);
+    free(ctx);
+}
+
+GGML_CALL static void ggml_backend_multi_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) buffer->context;
+    for (size_t i = 0; i < ctx->n_buffers; i++) {
+        ggml_backend_buffer_clear(ctx->buffers[i], value);
+    }
+}
+
+static struct ggml_backend_buffer_i ggml_backend_multi_buffer_context_interface(void) {
+    static struct ggml_backend_buffer_i multi_backend_buffer_i = {
+        /* .get_name        = */ ggml_backend_multi_buffer_get_name,
+        /* .free_buffer     = */ ggml_backend_multi_buffer_free_buffer,
+        /* .get_base        = */ NULL,
+        /* .init_tensor     = */ NULL,
+        /* .set_tensor      = */ NULL,
+        /* .get_tensor      = */ NULL,
+        /* .cpy_tensor      = */ NULL,
+        /* .clear           = */ ggml_backend_multi_buffer_clear,
+        /* .reset           = */ NULL,
+    };
+
+    return multi_backend_buffer_i;
+}
+
+GGML_CALL ggml_backend_buffer_t ggml_backend_multi_buffer_alloc_buffer(ggml_backend_buffer_t * buffers, size_t n_buffers) {
+    ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) malloc(sizeof(struct ggml_backend_multi_buffer_context));
+    ctx->n_buffers = n_buffers;
+    ctx->buffers = (ggml_backend_buffer_t *) malloc(n_buffers * sizeof(ggml_backend_buffer_t));
+
+    size_t total_size = 0;
+    for (size_t i = 0; i < n_buffers; i++) {
+        ctx->buffers[i] = buffers[i];
+        total_size += ggml_backend_buffer_get_size(buffers[i]);
+    }
+
+    return ggml_backend_buffer_init(buffers[0]->buft, ggml_backend_multi_buffer_context_interface(), ctx, total_size);
+}
+
+GGML_CALL bool ggml_backend_buffer_is_multi_buffer(ggml_backend_buffer_t buffer) {
+    return buffer->iface.get_name == ggml_backend_multi_buffer_get_name;
+}
+
+GGML_CALL void ggml_backend_multi_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage) {
+    GGML_ASSERT(ggml_backend_buffer_is_multi_buffer(buffer));
+    ggml_backend_multi_buffer_context_t ctx = (ggml_backend_multi_buffer_context_t) buffer->context;
+    for (size_t i = 0; i < ctx->n_buffers; i++) {
+        ggml_backend_buffer_set_usage(ctx->buffers[i], usage);
+    }
 }
 
 
@@ -1191,6 +1298,24 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
                 ggml_tallocr_t src_allocr = node_allocr(src);
                 GGML_ASSERT(src_allocr != NULL); // all inputs should be assigned by now
                 if (src_allocr != node_allocr) {
+                    // create a copy of the input in the split's backend
+                    size_t id = hash_id(src);
+                    if (sched->node_copies[id][cur_backend_id] == NULL) {
+                        ggml_backend_t backend = get_allocr_backend(sched, cur_allocr);
+                        struct ggml_tensor * tensor_copy = ggml_dup_tensor_layout(sched->ctx, src);
+                        ggml_format_name(tensor_copy, "%s#%s", ggml_backend_name(backend), src->name);
+
+                        sched->node_copies[id][cur_backend_id] = tensor_copy;
+                        node_allocr(tensor_copy) = cur_allocr;
+                        SET_CAUSE(tensor_copy, "4.cpy");
+
+                        int n_inputs = sched->splits[cur_split].n_inputs++;
+                        GGML_ASSERT(n_inputs < GGML_MAX_SPLIT_INPUTS);
+                        sched->splits[cur_split].inputs[n_inputs] = src;
+                    }
+                    node->src[j] = sched->node_copies[id][cur_backend_id];
+
+#if 0
                     // check if the input is already in the split
                     bool found = false;
                     for (int k = 0; k < sched->splits[cur_split].n_inputs; k++) {
@@ -1206,19 +1331,7 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
                         GGML_ASSERT(n_inputs < GGML_MAX_SPLIT_INPUTS);
                         sched->splits[cur_split].inputs[n_inputs] = src;
                     }
-
-                    // create a copy of the input in the split's backend
-                    size_t id = hash_id(src);
-                    if (sched->node_copies[id][cur_backend_id] == NULL) {
-                        ggml_backend_t backend = get_allocr_backend(sched, cur_allocr);
-                        struct ggml_tensor * tensor_copy = ggml_dup_tensor_layout(sched->ctx, src);
-                        ggml_format_name(tensor_copy, "%s#%s", ggml_backend_name(backend), src->name);
-
-                        sched->node_copies[id][cur_backend_id] = tensor_copy;
-                        node_allocr(tensor_copy) = cur_allocr;
-                        SET_CAUSE(tensor_copy, "4.cpy");
-                    }
-                    node->src[j] = sched->node_copies[id][cur_backend_id];
+#endif
                 }
             }
         }
@@ -1333,7 +1446,7 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
         uint64_t compute_start_us = ggml_time_us();
         if (!sched->callback_eval) {
             ggml_backend_graph_compute(split_backend, &split->graph);
-          //ggml_backend_synchronize(split_backend); // necessary to measure compute time
+            //ggml_backend_synchronize(split_backend); // necessary to measure compute time
         } else {
             // similar to ggml_backend_compare_graph_backend
             for (int j0 = 0; j0 < split->graph.n_nodes; j0++) {

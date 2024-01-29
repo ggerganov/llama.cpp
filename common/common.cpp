@@ -42,6 +42,10 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#if (defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL))
+#define GGML_USE_CUBLAS_SYCL
+#endif
+
 int32_t get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
@@ -203,6 +207,23 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.prompt_cache_all = true;
         } else if (arg == "--prompt-cache-ro") {
             params.prompt_cache_ro = true;
+        } else if (arg == "-bf" || arg == "--binary-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::ifstream file(argv[i], std::ios::binary);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            // store the external file name in params
+            params.prompt_file = argv[i];
+            std::ostringstream ss;
+            ss << file.rdbuf();
+            params.prompt = ss.str();
+            fprintf(stderr, "Read %zu bytes from binary file %s\n", params.prompt.size(), argv[i]);
         } else if (arg == "-f" || arg == "--file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -582,9 +603,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.main_gpu = std::stoi(argv[i]);
-#ifndef GGML_USE_CUBLAS
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Setting the main GPU has no effect.\n");
-#endif // GGML_USE_CUBLAS
+#ifndef GGML_USE_CUBLAS_SYCL
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the main GPU has no effect.\n");
+#endif // GGML_USE_CUBLAS_SYCL
         } else if (arg == "--split-mode" || arg == "-sm") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -601,9 +622,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-#ifndef GGML_USE_CUBLAS
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUBLAS
+#ifndef GGML_USE_CUBLAS_SYCL
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the split mode has no effect.\n");
+#endif // GGML_USE_CUBLAS_SYCL
+
         } else if (arg == "--tensor-split" || arg == "-ts") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -626,9 +648,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                     params.tensor_split[i] = 0.0f;
                 }
             }
-#ifndef GGML_USE_CUBLAS
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Setting a tensor split has no effect.\n");
-#endif // GGML_USE_CUBLAS
+#ifndef GGML_USE_CUBLAS_SYCL
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting a tensor split has no effect.\n");
+#endif // GGML_USE_CUBLAS_SYCL
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--numa") {
@@ -653,6 +675,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.logdir.back() != DIRECTORY_SEPARATOR) {
                 params.logdir += DIRECTORY_SEPARATOR;
             }
+        } else if (arg == "--save-all-logits" || arg == "--kl-divergence-base") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.logits_file = argv[i];
         } else if (arg == "--perplexity" || arg == "--all-logits") {
             params.logits_all = true;
         } else if (arg == "--ppl-stride") {
@@ -689,6 +717,16 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.winogrande_tasks = std::stoi(argv[i]);
+        } else if (arg == "--multiple-choice") {
+            params.multiple_choice = true;
+        } else if (arg == "--multiple-choice-tasks") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.multiple_choice_tasks = std::stoi(argv[i]);
+        } else if (arg == "--kl-divergence") {
+            params.kl_divergence = true;
         } else if (arg == "--ignore-eos") {
             params.ignore_eos = true;
         } else if (arg == "--no-penalize-nl") {
@@ -888,6 +926,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
     printf("  -f FNAME, --file FNAME\n");
     printf("                        prompt file to start generation.\n");
+    printf("  -bf FNAME, --binary-file FNAME\n");
+    printf("                        binary file containing multiple choice tasks.\n");
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
@@ -936,6 +976,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
     printf("  --winogrande          compute Winogrande score over random tasks from datafile supplied with -f\n");
     printf("  --winogrande-tasks N  number of tasks to use when computing the Winogrande score (default: %zu)\n", params.winogrande_tasks);
+    printf("  --multiple-choice     compute multiple choice score over random tasks from datafile supplied with -f\n");
+    printf("  --multiple-choice-tasks N number of tasks to use when computing the multiple choice score (default: %zu)\n", params.winogrande_tasks);
+    printf("  --kl-divergence       computes KL-divergence to logits provided via --kl-divergence-base");
     printf("  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
     printf("  --draft N             number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
     printf("  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
@@ -969,7 +1012,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1\n");
     printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
     printf("                        or for intermediate results and KV (with split-mode = row) (default: %d)\n", params.main_gpu);
-#endif
+#endif // LLAMA_SUPPORTS_GPU_OFFLOAD
     printf("  --verbose-prompt      print a verbose prompt before generation (default: %s)\n", params.verbose_prompt ? "true" : "false");
     printf("  --no-display-prompt   don't print prompt at generation (default: %s)\n", !params.display_prompt ? "true" : "false");
     printf("  -gan N, --grp-attn-n N\n");
@@ -1476,7 +1519,6 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "cpu_has_avx512: %s\n",      ggml_cpu_has_avx512()      ? "true" : "false");
     fprintf(stream, "cpu_has_avx512_vbmi: %s\n", ggml_cpu_has_avx512_vbmi() ? "true" : "false");
     fprintf(stream, "cpu_has_avx512_vnni: %s\n", ggml_cpu_has_avx512_vnni() ? "true" : "false");
-    fprintf(stream, "cpu_has_blas: %s\n",        ggml_cpu_has_blas()        ? "true" : "false");
     fprintf(stream, "cpu_has_cublas: %s\n",      ggml_cpu_has_cublas()      ? "true" : "false");
     fprintf(stream, "cpu_has_clblast: %s\n",     ggml_cpu_has_clblast()     ? "true" : "false");
     fprintf(stream, "cpu_has_fma: %s\n",         ggml_cpu_has_fma()         ? "true" : "false");

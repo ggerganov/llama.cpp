@@ -112,6 +112,43 @@ static results_log_softmax log_softmax(int n_vocab, const float * logits, int to
     return {logits[tok] - max_logit - log(sum_exp), logits[tok], expf(logits[tok] - max_logit) / (float) sum_exp};
 }
 
+static inline int nearest_int(float fval) {
+    //assert(fval <= 4194303.f);
+    float val = fval + 12582912.f;
+    int i; memcpy(&i, &val, sizeof(int));
+    return (i & 0x007fffff) - 0x00400000;
+}
+
+static double log_softmax(int n_vocab, const float * logits, uint16_t * log_prob, int tok) {
+    float max_logit = logits[0];
+    float min_logit = logits[0];
+    for (int i = 1; i < n_vocab; ++i) {
+        max_logit = std::max(max_logit, logits[i]);
+        min_logit = std::min(min_logit, logits[i]);
+    }
+    min_logit = std::max(min_logit, max_logit - 16);
+    double sum_exp = 0.0;
+    for (int i = 0; i < n_vocab; ++i) {
+        sum_exp += expf(logits[i] - max_logit);
+    }
+    const float log_sum_exp = log(sum_exp);
+    const float min_log_prob = min_logit - max_logit - log_sum_exp;
+    const float scale = (max_logit - min_logit)/65535.f;
+    float * d = (float *)log_prob;
+    d[0] = scale;
+    d[1] = min_log_prob;
+    log_prob += 4;
+    if (scale) {
+        const float inv_scale = 1/scale;
+        for (int i = 0; i < n_vocab; ++i) {
+            log_prob[i] = logits[i] > min_logit ? nearest_int(inv_scale*(logits[i] - min_logit)) : 0;
+        }
+    } else {
+        std::memset(log_prob, 0, n_vocab*sizeof(uint16_t));
+    }
+    return max_logit + log_sum_exp - logits[tok];
+}
+
 static void process_logits(
     int n_vocab, const float * logits, const int * tokens, int n_token, std::vector<std::thread> & workers,
     double & nll, double & nll2, float * logit_history, float * prob_history
@@ -136,6 +173,130 @@ static void process_logits(
 
             logit_history[i] = results.logit;
             prob_history[i]  = results.prob;
+        }
+    };
+    for (auto & w : workers) {
+        w = std::thread(compute);
+    }
+    compute();
+    for (auto & w : workers) {
+        w.join();
+    }
+}
+
+static void process_logits(std::ostream& out, int n_vocab, const float * logits, const int * tokens, int n_token,
+        std::vector<std::thread> & workers, std::vector<uint16_t> & log_probs, double & nll, double & nll2) {
+    std::mutex mutex;
+    const int nv = 2*((n_vocab + 1)/2) + 4;
+    int counter = 0;
+    auto compute = [&mutex, &counter, &log_probs, &nll, &nll2, n_vocab, logits, tokens, n_token, nv] () {
+        double local_nll  = 0;
+        double local_nll2 = 0;
+        while (true) {
+            std::unique_lock<std::mutex> lock(mutex);
+            int i = counter++;
+            if (i >= n_token) {
+                nll += local_nll; nll2 += local_nll2;
+                break;
+            }
+            lock.unlock();
+            const double v = log_softmax(n_vocab, logits + i*n_vocab, log_probs.data() + i*nv, tokens[i+1]);
+            local_nll += v;
+            local_nll2 += v*v;
+        }
+    };
+    for (auto & w : workers) {
+        w = std::thread(compute);
+    }
+    compute();
+    for (auto & w : workers) {
+        w.join();
+    }
+    out.write((const char *)log_probs.data(), n_token*nv*sizeof(uint16_t));
+}
+
+struct kl_divergence_result {
+    double sum_nll  = 0;
+    double sum_nll2 = 0;
+    double sum_kld  = 0;
+    double sum_kld2 = 0;
+    double sum_nll_diff  = 0;
+    double sum_nll_diff2 = 0;
+    size_t n_same_top = 0;
+    size_t count = 0;
+};
+
+static double log_softmax(int n_vocab, const float * logits, const uint16_t * base_log_prob, int tok, kl_divergence_result & kld) {
+    float max_logit = logits[0];
+    int imax = 0;
+    for (int i = 1; i < n_vocab; ++i) {
+        if (logits[i] > max_logit) {
+            max_logit = logits[i];
+            imax = i;
+        }
+    }
+    double sum_exp = 0.0;
+    for (int i = 0; i < n_vocab; ++i) {
+        sum_exp += expf(logits[i] - max_logit);
+    }
+    const float log_sum_exp = log(sum_exp);
+    const float * d = (const float *)base_log_prob;
+    const float scale = d[0];
+    const float min_log_prob = d[1];
+    base_log_prob += 4;
+    float nll = max_logit + log_sum_exp - logits[tok];
+    kld.sum_nll  += nll;
+    kld.sum_nll2 += nll*nll;
+    nll += (scale*base_log_prob[tok] + min_log_prob);
+    kld.sum_nll_diff  += nll;
+    kld.sum_nll_diff2 += nll*nll;
+    max_logit += log_sum_exp;
+    double sum = 0;
+    int imax_base = -1;
+    float p_log_base_max = 0;
+    for (int i = 0; i < n_vocab; ++i) {
+        const float p_log_base = scale*base_log_prob[i] + min_log_prob;
+        if (i == 0 || p_log_base > p_log_base_max) {
+            p_log_base_max = p_log_base;
+            imax_base = i;
+        }
+        if (p_log_base > -16.f) {
+            const float p_base = expf(p_log_base);
+            sum += p_base * (p_log_base - logits[i] + max_logit);
+        }
+    }
+    kld.sum_kld  += sum;
+    kld.sum_kld2 += sum*sum;
+    ++kld.count;
+    if (imax == imax_base) ++kld.n_same_top;
+    return sum;
+}
+
+static void process_logits(int n_vocab, const float * logits, const int * tokens, int n_token,
+        std::vector<std::thread> & workers, const std::vector<uint16_t> & base_log_probs, kl_divergence_result & kld,
+        float * kld_values) {
+    std::mutex mutex;
+    const int nv = 2*((n_vocab + 1)/2) + 4;
+    int counter = 0;
+    auto compute = [&mutex, &counter, &base_log_probs, &kld, n_vocab, logits, tokens, n_token, nv, kld_values] () {
+        kl_divergence_result local_kld;
+        while (true) {
+            std::unique_lock<std::mutex> lock(mutex);
+            int i = counter++;
+            if (i >= n_token) {
+                kld.sum_nll  += local_kld.sum_nll;
+                kld.sum_nll2 += local_kld.sum_nll2;
+                kld.sum_kld  += local_kld.sum_kld;
+                kld.sum_kld2 += local_kld.sum_kld2;
+                kld.sum_nll_diff  += local_kld.sum_nll_diff;
+                kld.sum_nll_diff2 += local_kld.sum_nll_diff2;
+                kld.n_same_top += local_kld.n_same_top;
+                kld.count += local_kld.count;
+                break;
+            }
+            lock.unlock();
+            double v = log_softmax(n_vocab, logits + i*n_vocab, base_log_probs.data() + i*nv, tokens[i+1], local_kld);
+            kld_values[i] = (float)v;
         }
     };
     for (auto & w : workers) {
@@ -294,6 +455,18 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
     const int n_ctx = llama_n_ctx(ctx);
 
+    std::ofstream logits_stream;
+    if (!params.logits_file.empty()) {
+        logits_stream.open(params.logits_file.c_str());
+        if (!logits_stream.is_open()) {
+            fprintf(stderr, "%s: failed to open %s for writing\n", __func__, params.logits_file.c_str());
+            return {};
+        }
+        fprintf(stderr, "%s: saving all logits to %s\n", __func__, params.logits_file.c_str());
+        logits_stream.write("_logits_", 8);
+        logits_stream.write((const char *)&n_ctx, sizeof(n_ctx));
+    }
+
     auto tim1 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
@@ -335,6 +508,15 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     fprintf(stderr, "%s: calculating perplexity over %d chunks, batch_size=%d\n", __func__, n_chunk, n_batch);
 
     std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
+
+    std::vector<uint16_t> log_probs;
+    if (!params.logits_file.empty()) {
+        logits_stream.write((const char *)&n_vocab, sizeof(n_vocab));
+        logits_stream.write((const char *)&n_chunk, sizeof(n_chunk));
+        logits_stream.write((const char *)tokens.data(), n_chunk*n_ctx*sizeof(tokens[0]));
+        const int nv = 2*((n_vocab + 1)/2) + 4;
+        log_probs.resize(n_ctx * nv);
+    }
 
     for (int i = 0; i < n_chunk; ++i) {
         const int start =     i * n_ctx;
@@ -398,8 +580,13 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
         // process the entire prompt.
         const int first = n_ctx/2;
         const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
-        process_logits(n_vocab, all_logits + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
-                       workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
+        if (!params.logits_file.empty()) {
+            process_logits(logits_stream, n_vocab, all_logits + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
+                    workers, log_probs, nll, nll2);
+        } else {
+            process_logits(n_vocab, all_logits + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
+                    workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
+        }
         count += n_ctx - first - 1;
 
         // perplexity is e^(average negative log-likelihood)
@@ -458,23 +645,24 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
     return true;
 }
 
+#define K_TOKEN_CHUNK 4
+
 static void compute_logprobs(const float * batch_logits, int n_vocab, std::vector<std::thread>& workers,
         const std::vector<std::pair<size_t, llama_token>>& eval_pairs, std::vector<float>& eval_results) {
-    constexpr int k_token_chunk = 4;
     if (eval_results.size() != eval_pairs.size()) {
         eval_results.resize(eval_pairs.size());
     }
     if (eval_pairs.empty()) return;
 
-    size_t max_threads = std::min((eval_pairs.size() + k_token_chunk - 1)/k_token_chunk, workers.size());
+    size_t max_threads = std::min((eval_pairs.size() + K_TOKEN_CHUNK - 1)/K_TOKEN_CHUNK, workers.size());
 
     std::atomic<int> counter(0);
     auto compute = [&counter, &eval_pairs, &eval_results, batch_logits, n_vocab] () {
-        float local_logprobs[k_token_chunk];
+        float local_logprobs[K_TOKEN_CHUNK];
         while (true) {
-            size_t first = counter.fetch_add(k_token_chunk, std::memory_order_relaxed);
+            size_t first = counter.fetch_add(K_TOKEN_CHUNK, std::memory_order_relaxed);
             if (first >= eval_results.size()) break;
-            size_t last = std::min(first + k_token_chunk, eval_results.size());
+            size_t last = std::min(first + K_TOKEN_CHUNK, eval_results.size());
             for (size_t i = first; i < last; ++i) {
                 auto logits = batch_logits + eval_pairs[i].first * n_vocab;
                 float max_logit = logits[0];
@@ -497,7 +685,6 @@ static void compute_logprobs(const float * batch_logits, int n_vocab, std::vecto
     for (size_t it = 0; it < max_threads; ++it) {
         workers[it].join();
     }
-
 }
 
 static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
@@ -540,13 +727,13 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     // This is needed as usual for LLaMA models
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
+    // The tasks should be randomized so the score stabilizes quickly.
+    bool randomize_tasks = true;
+
     // Number of tasks to use when computing the score
     if (params.hellaswag_tasks < hs_task_count) {
         hs_task_count = params.hellaswag_tasks;
     }
-
-    // The tasks should be randomized so the score stabilizes quickly.
-    bool randomize_tasks = true;
 
     // The random seed should not impact the final result if the computation is done over enough tasks, so kept hardcoded for now
     std::mt19937 rng(1);
@@ -1031,6 +1218,566 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
     printf("Final Winogrande score(%d tasks): %.4lf +/- %.4lf\n", n_done, 100*p, sigma);
 }
 
+static bool deserialize_string(std::istream & in, std::string & str) {
+    uint32_t size;
+    if (!in.read((char *)&size, sizeof(size)).fail()) {
+        str.resize(size);
+        if (!in.read((char *)&str[0], size).fail()) return true;
+    }
+    return false;
+}
+
+struct multiple_choice_answers {
+    std::vector<std::string> answers;
+    std::vector<int>         labels;
+    bool deserialize(std::istream& in) {
+        uint32_t n;
+        in.read((char *)&n, sizeof(n));
+        if (in.fail() || n > 100) return false; // 100 as max. number of answers should be good enough for any practical purpose
+        answers.resize(n);
+        labels.resize(n);
+        for (auto& a : answers) {
+            if (!deserialize_string(in, a)) return false;
+        }
+        in.read((char *)labels.data(), n*sizeof(int));
+        return !in.fail();
+    }
+};
+
+struct multiple_choice_task {
+    std::string question;         // the question (or context that needs to be continued)
+    multiple_choice_answers mc1;  // possible answers (continuations) with a single correct answer
+    multiple_choice_answers mc2;  // possible answers (continuations) with multiple correct answers - not handled yet
+    bool deserialize(std::istream& in) {
+        if (!deserialize_string(in, question)) return false;
+        return mc1.deserialize(in) && mc2.deserialize(in);
+    }
+
+    // For evaluation
+    size_t i_batch;         // starting index in the llama_batch
+    size_t common_prefix;   // max number of initial tokens that are the same in all sentences
+    size_t required_tokens; // needed number of tokens to evaluate all answers
+    std::vector<std::vector<llama_token>> seq_tokens;
+    std::vector<float> log_probs;
+};
+
+static bool multiple_choice_prepare_one_task(llama_context * ctx, bool add_bos, multiple_choice_task& task, bool log_error) {
+    if (task.question.empty() || task.mc1.answers.empty()) {
+        if (log_error) {
+            printf("%s: found bad task with empty question and/or answers\n", __func__);
+        }
+        return false;
+    }
+    task.seq_tokens.reserve(task.mc1.answers.size());
+    for (auto& answer : task.mc1.answers) {
+        if (answer.empty()) {
+            if (log_error) {
+                printf("%s: found empty answer\n", __func__);
+            }
+            return false;
+        }
+        task.seq_tokens.emplace_back(::llama_tokenize(ctx, task.question + " " + answer, add_bos));
+    }
+    auto min_len = task.seq_tokens.front().size();
+    for (auto& seq : task.seq_tokens) {
+        min_len = std::min(min_len, seq.size());
+    }
+    task.common_prefix = 0;
+    for (size_t k = 0; k < min_len; ++k) {
+        auto token = task.seq_tokens[0][k];
+        bool all_same = true;
+        for (size_t i = 1; i < task.seq_tokens.size(); ++i) {
+            if (task.seq_tokens[i][k] != token) {
+                all_same = false;
+                break;
+            }
+        }
+        if (!all_same) {
+            break;
+        }
+        ++task.common_prefix;
+    }
+    task.required_tokens = task.common_prefix;
+    for (auto& seq : task.seq_tokens) {
+        task.required_tokens += seq.size() - task.common_prefix;
+    }
+    return true;
+}
+
+//
+// Calculates score for multiple choice tasks with single correct answer from prompt.
+// Commonly used LLM evaluation metrics of this type are
+//   * ARC
+//   * HellaSwag
+//   * MMLU
+//   * TruthfulQA
+//
+// Validation datasets for these 4 tests can be found at
+//     https://huggingface.co/datasets/ikawrakow/validation-datasets-for-llama.cpp
+// The data for these datasets was extracted from
+//     git@hf.co:datasets/allenai/ai2_arc
+//     https://github.com/rowanz/hellaswag/blob/master/data/hellaswag_val.jsonl
+//     git@hf.co:datasets/Stevross/mmlu
+//     https://huggingface.co/datasets/truthful_qa
+//
+static void multiple_choice_score(llama_context * ctx, const gpt_params & params) {
+
+    std::istringstream strstream(params.prompt);
+    uint32_t n_task;
+    strstream.read((char *)&n_task, sizeof(n_task));
+    if (strstream.fail() || n_task == 0) {
+        printf("%s: no tasks\n", __func__);
+        return;
+    }
+    printf("%s: there are %u tasks in prompt\n", __func__, n_task);
+    std::vector<uint32_t> task_pos(n_task);
+    strstream.read((char *)task_pos.data(), task_pos.size()*sizeof(uint32_t));
+    if (strstream.fail()) {
+        printf("%s: failed to raad task positions from prompt\n", __func__);
+        return;
+    }
+
+    std::vector<multiple_choice_task> tasks;
+    if (params.multiple_choice_tasks == 0 || params.multiple_choice_tasks >= (size_t)n_task) {
+        // Use all tasks
+        tasks.resize(n_task);
+        printf("%s: reading tasks", __func__);
+        int n_dot = n_task/100;
+        int i = 0;
+        for (auto& task : tasks) {
+            ++i;
+            if (!task.deserialize(strstream)) {
+                printf("%s: failed to read task %d of %u\n", __func__, i, n_task);
+                return;
+            }
+            if (i%n_dot == 0) printf(".");
+        }
+        printf("done\n");
+    }
+    else {
+        printf("%s: selecting %zu random tasks from %u tasks available\n", __func__, params.multiple_choice_tasks, n_task);
+        std::mt19937 rng(1);
+        std::vector<int> aux(n_task);
+        for (uint32_t i = 0; i < n_task; ++i) aux[i] = i;
+        float scale = 1.f/(1.f + (float)std::mt19937::max());
+        tasks.resize(params.multiple_choice_tasks);
+        for (auto& task : tasks) {
+            int j = (int)(scale * rng() * aux.size());
+            int idx = aux[j];
+            aux[j] = aux.back();
+            aux.pop_back();
+            strstream.seekg(task_pos[idx], std::ios::beg);
+            if (!task.deserialize(strstream)) {
+                printf("%s: failed to read task %d at position %u\n", __func__, idx, task_pos[idx]);
+                return;
+            }
+        }
+        n_task = params.multiple_choice_tasks;
+    }
+
+    // This is needed as usual for LLaMA models
+    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+
+    printf("%s: preparing task data", __func__);
+    fflush(stdout);
+    if (n_task > 500) {
+        printf("...");
+        fflush(stdout);
+        std::atomic<int> counter(0);
+        std::atomic<int> n_bad(0);
+        auto prepare = [&counter, &n_bad, &tasks, ctx, add_bos] () {
+            int num_tasks = tasks.size();
+            int n_bad_local = 0;
+            while (true) {
+                int first = counter.fetch_add(K_TOKEN_CHUNK);
+                if (first >= num_tasks) {
+                    if (n_bad_local > 0) n_bad += n_bad_local;
+                    break;
+                }
+                int last = std::min(first + K_TOKEN_CHUNK, num_tasks);
+                for (int i = first; i < last; ++i) {
+                    if (!multiple_choice_prepare_one_task(ctx, add_bos, tasks[i], false)) ++n_bad_local;
+                }
+            }
+        };
+        size_t max_thread = std::thread::hardware_concurrency();
+        max_thread = std::min(max_thread, (tasks.size() + K_TOKEN_CHUNK - 1)/K_TOKEN_CHUNK);
+        std::vector<std::thread> workers(max_thread-1);
+        for (auto& w : workers) w = std::thread(prepare);
+        prepare();
+        for (auto& w : workers) w.join();
+        printf("done\n");
+        fflush(stdout);
+        int nbad = n_bad;
+        if (nbad > 0) {
+            printf("%s: found %d malformed tasks\n", __func__, nbad);
+            return;
+        }
+    } else {
+        int n_dot = n_task/100;
+        int i_task = 0;
+        for (auto& task : tasks) {
+            ++i_task;
+            if (!multiple_choice_prepare_one_task(ctx, add_bos, task, true)) {
+                return;
+            }
+            if (i_task%n_dot == 0) {
+                printf(".");
+                fflush(stdout);
+            }
+        }
+        printf("done\n");
+    }
+
+    printf("%s : calculating TruthfulQA score over %zu tasks.\n", __func__, tasks.size());
+
+    printf("\ntask\tacc_norm\n");
+
+    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+    const int n_ctx   = llama_n_ctx(ctx);
+    const int n_batch = params.n_batch;
+
+    const int max_tasks_per_batch = 32;
+    const int max_seq = 4*max_tasks_per_batch;
+
+    llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
+
+    std::vector<float> tok_logits(n_vocab);
+    std::vector<float> batch_logits(n_vocab*n_ctx);
+
+    std::vector<std::pair<size_t, llama_token>> eval_pairs;
+    std::vector<float> eval_results;
+    std::vector<std::thread> workers(std::thread::hardware_concurrency());
+    std::vector<int> batch_indeces;
+
+    int n_done = 0;
+    int n_correct = 0;
+    int n_tot_answers = 0;
+
+    for (size_t i0 = 0; i0 < tasks.size(); i0++) {
+        int n_cur = 0;
+
+        size_t i1 = i0;
+        size_t i_batch = 0; // this tells us where in `llama_batch` we are currently
+
+        llama_batch_clear(batch);
+
+        // batch as much tasks as possible into the available context
+        // each task has 4 unique seuqnce ids - one for each ending
+        // the common prefix is shared among the 4 sequences to save tokens
+        // we extract logits only from the last common token and from all ending tokens of each sequence
+        int s0 = 0;
+        while (n_cur + (int) tasks[i1].required_tokens <= n_ctx) {
+            auto& cur_task = tasks[i1];
+
+            int num_answers = cur_task.seq_tokens.size();
+            if (s0 + num_answers > max_seq) {
+                break;
+            }
+
+            if (int(batch_indeces.size()) != num_answers) {
+                batch_indeces.resize(num_answers);
+            }
+            for (int s = 0; s < num_answers; ++s) batch_indeces[s] = s0 + s;
+
+            for (size_t i = 0; i < cur_task.common_prefix; ++i) {
+                //llama_batch_add(batch, cur_task.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3}, false);
+                llama_batch_add(batch, cur_task.seq_tokens[0][i], i, batch_indeces, false);
+            }
+            batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
+
+            for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
+                for (size_t i = cur_task.common_prefix; i < cur_task.seq_tokens[s].size(); ++i) {
+                    llama_batch_add(batch, cur_task.seq_tokens[s][i], i, { s0 + s }, true);
+                }
+            }
+
+            s0 += num_answers;
+
+            cur_task.i_batch = i_batch;
+            i_batch += cur_task.required_tokens;
+
+            n_cur += cur_task.required_tokens;
+            if (++i1 == tasks.size()) {
+                break;
+            }
+        }
+
+        if (i0 == i1) {
+            fprintf(stderr, "%s : task %zu does not fit in the context window\n", __func__, i0);
+            return;
+        }
+
+        llama_kv_cache_clear(ctx);
+
+        // decode all tasks [i0, i1)
+        if (!decode_helper(ctx, batch, batch_logits, n_batch, n_vocab)) {
+            fprintf(stderr, "%s: llama_decode() failed\n", __func__);
+            return;
+        }
+
+        // Compute log-probs in parallel
+        // First we collect all tasks
+        eval_pairs.clear();
+        for (size_t i = i0; i < i1; ++i) {
+            auto& cur_task = tasks[i];
+            size_t li = cur_task.common_prefix;
+            for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
+                for (size_t j = cur_task.common_prefix; j < cur_task.seq_tokens[s].size() - 1; j++) {
+                    eval_pairs.push_back(std::make_pair(cur_task.i_batch + li++, cur_task.seq_tokens[s][j + 1]));
+                }
+                ++li;
+            }
+        }
+        // Then we do the actual calculation
+        compute_logprobs(batch_logits.data(), n_vocab, workers, eval_pairs, eval_results);
+
+        size_t ir = 0;
+
+        // compute the logprobs for each ending of the decoded tasks
+        for (size_t i = i0; i < i1; ++i) {
+            auto & cur_task = tasks[i];
+            //printf("==== Evaluating <%s> with correct answer ", cur_task.question.c_str());
+            //for (int j = 0; j < int(cur_task.mc1.labels.size()); ++j) {
+            //    if (cur_task.mc1.labels[j] == 1) {
+            //        printf("%d", j+1);
+            //    }
+            //}
+            //printf("\n    common_prefix: %zu\n", cur_task.common_prefix);
+
+            std::memcpy(tok_logits.data(), batch_logits.data() + n_vocab*(cur_task.i_batch + cur_task.common_prefix - 1), n_vocab*sizeof(float));
+
+            const auto first_probs = softmax(tok_logits);
+
+            cur_task.log_probs.resize(cur_task.seq_tokens.size());
+            for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
+                size_t count = 1;
+                float  log_prob  = std::log(first_probs[cur_task.seq_tokens[s][cur_task.common_prefix]]);
+                for (size_t j = cur_task.common_prefix; j < cur_task.seq_tokens[s].size() - 1; j++) {
+                    //printf("        %zu  %g\n", ir, eval_results[ir]);
+                    ++count;
+                    log_prob += eval_results[ir++];
+                }
+                cur_task.log_probs[s] = log_prob / count;
+                //printf("        Final: %g\n", log_prob / count);
+                //printf("    <%s> : %g\n", cur_task.mc1.answers[s].c_str(), log_prob/count);
+            }
+
+            // Find the ending with maximum logprob
+            size_t logprob_max_idx = 0;
+            float  logprob_max_val = cur_task.log_probs[0];
+            for (size_t s = 1; s < cur_task.log_probs.size(); s++) {
+                if (cur_task.log_probs[s] > logprob_max_val) {
+                    logprob_max_val = cur_task.log_probs[s];
+                    logprob_max_idx = s;
+                }
+            }
+
+            n_tot_answers += cur_task.log_probs.size();
+            if (cur_task.mc1.labels[logprob_max_idx] == 1) {
+                ++n_correct;
+            }
+            ++n_done;
+
+            // Print the accumulated accuracy mean x 100
+            printf("%d\t%.8lf\n", n_done, 100.*n_correct/n_done);
+            fflush(stdout);
+        }
+
+        i0 = i1 - 1;
+    }
+
+    llama_batch_free(batch);
+
+    if (n_done < 100) return;
+
+    float p = 1.f*n_correct/n_done;
+    float sigma = sqrt(p*(1-p)/(n_done-1));
+    printf("\n Final result: %.4f +/- %.4f\n", 100.f*p, 100.f*sigma);
+    p = 1.f*n_done/n_tot_answers;
+    sigma = sqrt(p*(1-p)/(n_done-1));
+    printf("Random chance: %.4f +/- %.4f\n", 100.f*p, 100.f*sigma);
+
+    printf("\n");
+}
+
+static void kl_divergence(llama_context * ctx, const gpt_params & params) {
+    if (params.logits_file.empty()) {
+        fprintf(stderr, "%s: you must provide a name of a file containing the log probabilities of the base model\n", __func__);
+        return;
+    }
+    std::ifstream in(params.logits_file.c_str(), std::ios::binary);
+    if (!in) {
+        fprintf(stderr, "%s: failed to open %s\n", __func__, params.logits_file.c_str());
+        return;
+    }
+    {
+        char check[9]; check[8] = 0;
+        in.read(check, 8);
+        if (in.fail() || strncmp("_logits_", check, 8) != 0) {
+            fprintf(stderr, "%s: %s does not look like a file containing log-probabilities\n", __func__, params.logits_file.c_str());
+            return;
+        }
+    }
+
+    uint32_t n_ctx;
+    in.read((char *)&n_ctx, sizeof(n_ctx));
+    if (n_ctx > llama_n_ctx(ctx)) {
+        fprintf(stderr, "%s: %s has been computed with %d, while the current context is %d. Increase it with -c and retry\n",
+                __func__, params.logits_file.c_str(), n_ctx, params.n_ctx);
+    }
+
+    int n_vocab, n_chunk;
+    in.read((char *)&n_vocab, sizeof(n_vocab));
+    in.read((char *)&n_chunk, sizeof(n_chunk));
+    if (in.fail()) {
+        fprintf(stderr, "%s: failed reading n_vocab, n_chunk from %s\n", __func__, params.logits_file.c_str());
+        return;
+    }
+    if (n_vocab != llama_n_vocab(llama_get_model(ctx))) {
+        fprintf(stderr, "%s: inconsistent vocabulary (%d vs %d)\n", __func__, n_vocab, llama_n_vocab(llama_get_model(ctx)));
+    }
+
+    std::vector<llama_token> tokens(n_ctx * n_chunk);
+    if (in.read((char *)tokens.data(), tokens.size()*sizeof(tokens[0])).fail()) {
+        fprintf(stderr, "%s: failed reading evaluation tokens from %s\n", __func__, params.logits_file.c_str());
+        return;
+    }
+
+    const int n_batch = params.n_batch;
+    const int num_batches = (n_ctx + n_batch - 1)/n_batch;
+    const int nv = 2*((n_vocab + 1)/2) + 4;
+    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+
+    std::vector<uint16_t> log_probs_uint16(size_t(n_ctx - 1 - n_ctx/2) * nv);
+    std::vector<float> kld_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
+    std::vector<float> logits;
+    if (num_batches > 1) {
+        logits.reserve(n_ctx * n_vocab);
+    }
+
+    std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
+
+    auto mean_and_uncertainty = [] (double sum, double sum2, size_t count) {
+        if (count < 1) {
+            return std::make_pair(0., 0.);
+        }
+        double f = sum/count;
+        double df = sum2/count - f*f;
+        df = df > 0 && count > 10 ? sqrt(df/(count-1)) : 0.;
+        return std::make_pair(f, df);
+    };
+
+    kl_divergence_result kld;
+    auto kld_ptr = kld_values.data();
+
+    for (int i = 0; i < n_chunk; ++i) {
+        const int start =     i * n_ctx;
+        const int end   = start + n_ctx;
+
+        const auto t_start = std::chrono::high_resolution_clock::now();
+
+        if (in.read((char *)log_probs_uint16.data(), log_probs_uint16.size()*sizeof(uint16_t)).fail()) {
+            fprintf(stderr, "%s: failed reading log-probs for chunk %d\n", __func__, i);
+            return;
+        }
+
+        // clear the KV cache
+        llama_kv_cache_clear(ctx);
+
+        for (int j = 0; j < num_batches; ++j) {
+            const int batch_start = start + j * n_batch;
+            const int batch_size  = std::min(end - batch_start, n_batch);
+
+            // save original token and restore it after eval
+            const auto token_org = tokens[batch_start];
+
+            // add BOS token for the first batch of each chunk
+            if (add_bos && j == 0) {
+                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
+            }
+
+            if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
+                fprintf(stderr, "%s : failed to eval\n", __func__);
+                return;
+            }
+
+            // restore the original token in case it was set to BOS
+            tokens[batch_start] = token_org;
+
+            if (num_batches > 1) {
+                const auto * batch_logits = llama_get_logits(ctx);
+                logits.insert(logits.end(), batch_logits, batch_logits + batch_size * n_vocab);
+            }
+        }
+
+        const auto t_end = std::chrono::high_resolution_clock::now();
+
+        if (i == 0) {
+            const float t_total = std::chrono::duration<float>(t_end - t_start).count();
+            fprintf(stderr, "%s: %.2f seconds per pass - ETA ", __func__, t_total);
+            int total_seconds = (int)(t_total * n_chunk);
+            if (total_seconds >= 60*60) {
+                fprintf(stderr, "%d hours ", total_seconds / (60*60));
+                total_seconds = total_seconds % (60*60);
+            }
+            fprintf(stderr, "%.2f minutes\n", total_seconds / 60.0);
+
+            printf("\nchunk        PPL          ln(PPL(Q)/PPL(base))          KL-Divergence           Same top\n");
+        }
+
+        const int first = n_ctx/2;
+        const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
+        process_logits(n_vocab, all_logits + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
+                workers, log_probs_uint16, kld, kld_ptr);
+        kld_ptr += n_ctx - 1 - first;
+
+        auto ppl           = mean_and_uncertainty(kld.sum_nll, kld.sum_nll2, kld.count);
+        auto log_ppl_ratio = mean_and_uncertainty(kld.sum_nll_diff, kld.sum_nll_diff2, kld.count);
+        auto kl_div        = mean_and_uncertainty(kld.sum_kld, kld.sum_kld2, kld.count);
+        auto p_top = 1.*kld.n_same_top/kld.count;
+        auto d_p_top = sqrt(p_top*(1 - p_top)/(kld.count - 1));
+
+        printf("%4d    %10.4lf    %10.5lf ± %10.5f    %10.5f ± %10.5lf    %.5f ± %.5f\n", i+1, exp(ppl.first),
+                log_ppl_ratio.first, log_ppl_ratio.second, kl_div.first, kl_div.second,
+                p_top, d_p_top);
+
+        fflush(stdout);
+
+        logits.clear();
+    }
+    printf("\n");
+
+    if (kld.count < 100) return; // we do not wish to do statistics on so few values
+
+    std::sort(kld_values.begin(), kld_values.end());
+
+    printf("===== KL-divergence statistics\n");
+    auto kl_div = mean_and_uncertainty(kld.sum_kld, kld.sum_kld2, kld.count);
+    printf("Average: %10.6f ±%10.6lf\n", kl_div.first, kl_div.second);
+    auto kld_median = kld_values.size()%2 == 0 ? 0.5f*(kld_values[kld_values.size()/2] + kld_values[kld_values.size()/2-1])
+                                               : kld_values[kld_values.size()/2];
+    printf("Median : %10.6f\n", kld_median);
+
+    auto percentile = [&kld_values] (float fraction) {
+        if (fraction <= 0) return kld_values.front();
+        if (fraction >= 1) return kld_values.back();
+        float p = fraction*(kld_values.size() - 1);
+        size_t ip = size_t(p); p -= ip;
+        return (1 - p)*kld_values[ip] + p*kld_values[std::min(ip+1, kld_values.size()-1)];
+    };
+
+    printf("Maximum: %10.6f\n", kld_values.back());
+    printf("KLD_99 : %10.6f\n", percentile(0.99f));
+    printf("KLD_95 : %10.6f\n", percentile(0.95f));
+    printf("KLD_90 : %10.6f\n", percentile(0.90f));
+
+    printf("Minimum: %10.6f\n", kld_values.front());
+    printf("KLD_01 : %10.6f\n", percentile(0.01f));
+    printf("KLD_05 : %10.6f\n", percentile(0.05f));
+    printf("KLD_10 : %10.6f\n", percentile(0.10f));
+
+}
 
 int main(int argc, char ** argv) {
     gpt_params params;
@@ -1091,6 +1838,10 @@ int main(int argc, char ** argv) {
         hellaswag_score(ctx, params);
     } else if (params.winogrande) {
         winogrande_score(ctx, params);
+    } else if (params.multiple_choice) {
+        multiple_choice_score(ctx, params);
+    } else if (params.kl_divergence) {
+        kl_divergence(ctx, params);
     } else {
         results = perplexity(ctx, params);
     }

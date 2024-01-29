@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.14)  # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
+include(CheckIncludeFileCXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -47,6 +48,7 @@ option(BUILD_SHARED_LIBS                "build shared libraries"                
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
 option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
 option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
+option(LLAMA_CCACHE                     "llama: use ccache if available"                        ON)
 
 # debug
 option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"                   ON)
@@ -97,15 +99,25 @@ set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
+option(LLAMA_VULKAN                          "llama: use Vulkan"                                OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
+option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
+option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
+
+
+# add perf arguments
+option(LLAMA_PERF                            "llama: enable perf"                               OFF)
+if (LLAMA_PERF)
+    add_definitions(-DGGML_PERF)
+endif()
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
@@ -113,8 +125,12 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 #
 # Compile flags
 #
+if (LLAMA_SYCL)
+    set(CMAKE_CXX_STANDARD 17)
+else()
+    set(CMAKE_CXX_STANDARD 11)
+endif()
 
-set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
@@ -401,6 +417,22 @@ if (LLAMA_CLBLAST)
     endif()
 endif()
 
+if (LLAMA_VULKAN)
+    find_package(Vulkan)
+    if (Vulkan_FOUND)
+        message(STATUS "Vulkan found")
+
+        add_library(ggml-vulkan STATIC ggml-vulkan.cpp ggml-vulkan.h)
+        target_link_libraries(ggml-vulkan PRIVATE Vulkan::Vulkan)
+
+        add_compile_definitions(GGML_USE_VULKAN)
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-vulkan)
+    else()
+        message(WARNING "Vulkan not found")
+    endif()
+endif()
+
 if (LLAMA_HIPBLAS)
     list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
 
@@ -446,6 +478,32 @@ if (LLAMA_HIPBLAS)
     endif()
 endif()
 
+
+if (LLAMA_SYCL)
+    if ( NOT DEFINED ENV{ONEAPI_ROOT})
+        message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+    endif()
+    #todo: AOT
+
+    find_package(IntelSYCL REQUIRED)
+    if (LLAMA_SYCL_F16)
+        add_compile_definitions(GGML_SYCL_F16)
+    endif()
+    add_compile_definitions(GGML_USE_SYCL)
+
+    add_compile_options(-I./) #include DPCT
+    add_compile_options(-I/${SYCL_INCLUDE_DIR})
+
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
+
+    set(GGML_HEADERS_SYCL ggml.h ggml-sycl.h)
+    set(GGML_SOURCES_SYCL ggml-sycl.cpp)
+
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
+endif()
+
 function(get_flags CCID CCVER)
     set(C_FLAGS "")
     set(CXX_FLAGS "")
@@ -458,17 +516,24 @@ function(get_flags CCID CCVER)
             (CCID STREQUAL "Clang"      AND CCVER VERSION_GREATER_EQUAL 3.8.0) OR
             (CCID STREQUAL "AppleClang" AND CCVER VERSION_GREATER_EQUAL 7.3.0)
         )
-            set(C_FLAGS ${C_FLAGS} -Wdouble-promotion)
+            list(APPEND C_FLAGS -Wdouble-promotion)
         endif()
     elseif (CCID STREQUAL "GNU")
         set(C_FLAGS   -Wdouble-promotion)
         set(CXX_FLAGS -Wno-array-bounds)
 
         if (CCVER VERSION_GREATER_EQUAL 7.1.0)
-            set(CXX_FLAGS ${CXX_FLAGS} -Wno-format-truncation)
+            list(APPEND CXX_FLAGS -Wno-format-truncation)
         endif()
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
-            set(CXX_FLAGS ${CXX_FLAGS} -Wextra-semi)
+            list(APPEND CXX_FLAGS -Wextra-semi)
+        endif()
+    elseif (CCID MATCHES "Intel")
+        if (NOT LLAMA_SYCL)
+            # enable max optimization level when using Intel compiler
+            set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+            set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
+            add_link_options(-fuse-ld=lld -static-intel)
         endif()
     endif()
 
@@ -497,16 +562,18 @@ if (LLAMA_ALL_WARNINGS)
     endif()
 endif()
 
+set(CUDA_CXX_FLAGS "")
+
 if (LLAMA_CUBLAS)
     set(CUDA_FLAGS ${CXX_FLAGS} -use_fast_math)
     if (NOT MSVC)
-        set(CUDA_FLAGS ${CUDA_FLAGS} -Wno-pedantic)
+        list(APPEND CUDA_FLAGS -Wno-pedantic)
     endif()
 
     if (LLAMA_ALL_WARNINGS AND NOT MSVC)
         set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
         if (NOT CMAKE_CUDA_HOST_COMPILER STREQUAL "")
-            set(NVCC_CMD ${NVCC_CMD} -ccbin ${CMAKE_CUDA_HOST_COMPILER})
+            list(APPEND NVCC_CMD -ccbin ${CMAKE_CUDA_HOST_COMPILER})
         endif()
 
         execute_process(
@@ -534,13 +601,8 @@ if (LLAMA_CUBLAS)
         message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
 
         get_flags(${CUDA_CCID} ${CUDA_CCVER})
-        list(JOIN GF_CXX_FLAGS " " CUDA_CXX_FLAGS)  # pass host compiler flags as a single argument
-        if (NOT CUDA_CXX_FLAGS STREQUAL "")
-            set(CUDA_FLAGS ${CUDA_FLAGS} -Xcompiler ${CUDA_CXX_FLAGS})
-        endif()
+        list(APPEND CUDA_CXX_FLAGS ${GF_CXX_FLAGS})  # This is passed to -Xcompiler later
     endif()
-
-    add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 endif()
 
 if (WIN32)
@@ -559,6 +621,17 @@ if (LLAMA_LTO)
     else()
         message(WARNING "IPO is not supported: ${output}")
     endif()
+endif()
+
+if (LLAMA_CCACHE)
+    find_program(LLAMA_CCACHE_FOUND ccache)
+    if (LLAMA_CCACHE_FOUND)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        set(ENV{CCACHE_SLOPPINESS} time_macros)
+        message(STATUS "Using ccache")
+    else()
+        message(STATUS "Warning: ccache not found - consider installing it or use LLAMA_CCACHE=OFF")
+    endif ()
 endif()
 
 # this version of Apple ld64 is buggy
@@ -594,12 +667,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-function(add_compile_option_cpp ARG)
-    # Adds a compile option to C/C++ only, but not for Cuda.
-    # Use, e.g., for CPU-architecture flags.
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:${ARG}>)
-    add_compile_options($<$<COMPILE_LANGUAGE:C>:${ARG}>)
-endfunction()
+set(ARCH_FLAGS "")
 
 if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64") OR ("${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "arm64"))
     message(STATUS "ARM detected")
@@ -612,19 +680,19 @@ if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATC
     else()
         check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
         if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
-            add_compile_options(-mfp16-format=ieee)
+            list(APPEND ARCH_FLAGS -mfp16-format=ieee)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv6")
             # Raspberry Pi 1, Zero
-            add_compile_options(-mfpu=neon-fp-armv8 -mno-unaligned-access)
+            list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv7")
             # Raspberry Pi 2
-            add_compile_options(-mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
+            list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8")
             # Raspberry Pi 3, 4, Zero 2 (32-bit)
-            add_compile_options(-mno-unaligned-access)
+            list(APPEND ARCH_FLAGS -mno-unaligned-access)
         endif()
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "^(x86_64|i686|amd64|x64)$" )
@@ -635,7 +703,7 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GE
             include(cmake/FindSIMD.cmake)
         endif ()
         if (LLAMA_AVX512)
-            add_compile_option_cpp(/arch:AVX512)
+            list(APPEND ARCH_FLAGS /arch:AVX512)
             # MSVC has no compile-time flags enabling specific
             # AVX512 extensions, neither it defines the
             # macros corresponding to the extensions.
@@ -649,47 +717,59 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GE
                 add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AVX512VNNI__>)
             endif()
         elseif (LLAMA_AVX2)
-            add_compile_option_cpp(/arch:AVX2)
+            list(APPEND ARCH_FLAGS /arch:AVX2)
         elseif (LLAMA_AVX)
-            add_compile_option_cpp(/arch:AVX)
+            list(APPEND ARCH_FLAGS /arch:AVX)
         endif()
     else()
         if (LLAMA_NATIVE)
-            add_compile_option_cpp(-march=native)
+            list(APPEND ARCH_FLAGS -march=native)
         endif()
         if (LLAMA_F16C)
-            add_compile_option_cpp(-mf16c)
+            list(APPEND ARCH_FLAGS -mf16c)
         endif()
         if (LLAMA_FMA)
-            add_compile_option_cpp(-mfma)
+            list(APPEND ARCH_FLAGS -mfma)
         endif()
         if (LLAMA_AVX)
-            add_compile_option_cpp(-mavx)
+            list(APPEND ARCH_FLAGS -mavx)
         endif()
         if (LLAMA_AVX2)
-            add_compile_option_cpp(-mavx2)
+            list(APPEND ARCH_FLAGS -mavx2)
         endif()
         if (LLAMA_AVX512)
-            add_compile_option_cpp(-mavx512f)
-            add_compile_option_cpp(-mavx512bw)
+            list(APPEND ARCH_FLAGS -mavx512f)
+            list(APPEND ARCH_FLAGS -mavx512bw)
         endif()
         if (LLAMA_AVX512_VBMI)
-            add_compile_option_cpp(-mavx512vbmi)
+            list(APPEND ARCH_FLAGS -mavx512vbmi)
         endif()
         if (LLAMA_AVX512_VNNI)
-            add_compile_option_cpp(-mavx512vnni)
+            list(APPEND ARCH_FLAGS -mavx512vnni)
         endif()
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
     message(STATUS "PowerPC detected")
     if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64le")
-        add_compile_options(-mcpu=powerpc64le)
+        list(APPEND ARCH_FLAGS -mcpu=powerpc64le)
     else()
-        add_compile_options(-mcpu=native -mtune=native)
+        list(APPEND ARCH_FLAGS -mcpu=native -mtune=native)
         #TODO: Add  targets for Power8/Power9 (Altivec/VSX) and Power10(MMA) and query for big endian systems (ppc64/le/be)
     endif()
 else()
     message(STATUS "Unknown architecture")
+endif()
+
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
+add_compile_options("$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
+
+if (LLAMA_CUBLAS)
+    list(APPEND CUDA_CXX_FLAGS ${ARCH_FLAGS})
+    list(JOIN CUDA_CXX_FLAGS " " CUDA_CXX_FLAGS_JOINED)  # pass host compiler flags as a single argument
+    if (NOT CUDA_CXX_FLAGS_JOINED STREQUAL "")
+        list(APPEND CUDA_FLAGS -Xcompiler ${CUDA_CXX_FLAGS_JOINED})
+    endif()
+    add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 endif()
 
 if (MINGW)
@@ -771,6 +851,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_METAL}  ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_MPI}    ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_EXTRA}  ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_SYCL}   ${GGML_HEADERS_SYCL}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})

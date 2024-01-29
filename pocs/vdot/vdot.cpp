@@ -243,7 +243,6 @@ int main(int argc, char** argv) {
     if (useQ4_1) q41.resize(n4);
     else q40.resize(n4);
     std::vector<block_q8_0> q8(n8);
-    std::vector<int64_t> H(16, 0);
     double sumt = 0, sumt2 = 0, maxt = 0;
     double sumqt = 0, sumqt2 = 0, maxqt = 0;
     double sum = 0, sumq = 0, exactSum = 0;

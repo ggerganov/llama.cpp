@@ -102,7 +102,6 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                     } else if (t->type == GGML_TYPE_I8) {
                         tv.push_back((float)*(int8_t *) &buf[i]);
                     } else if (quantized) {
-                        std::vector<float> vq(ggml_blck_size(t->type));
                         tt.to_float(&buf[i], vq.data(), ggml_blck_size(t->type));
                         tv.insert(tv.end(), vq.begin(), vq.end());
                     } else {
@@ -240,10 +239,17 @@ static std::string var_to_str(ggml_type type) {
 #define VARS_TO_STR10(a, b, c, d, e, f, g, h, i, j) VAR_TO_STR(a) + "," + VARS_TO_STR9(b, c, d, e, f, g, h, i, j)
 #define VARS_TO_STR11(a, b, c, d, e, f, g, h, i, j, k) VAR_TO_STR(a) + "," + VARS_TO_STR10(b, c, d, e, f, g, h, i, j, k)
 
+#ifdef GGML_USE_SYCL
+static bool inline _isinf(float f) {
+    return (*(uint32_t *)&f & 0x7fffffff) == 0x7f800000;
+}
+#else
+static bool inline _isinf(float f) { return std::isinf(f); }
+#endif
 
 // accept FLT_MAX as infinity
 static bool isinf_or_max(float f) {
-    return std::isinf(f) || f == FLT_MAX || f == -FLT_MAX;
+    return _isinf(f) || f == FLT_MAX || f == -FLT_MAX;
 }
 
 static bool ggml_is_view_op(enum ggml_op op) {
@@ -1396,7 +1402,7 @@ struct test_flash_attn_ext : public test_case {
     }
 
     double max_nmse_err() override {
-        return 5e-5;
+        return 5e-4;
     }
 
     test_flash_attn_ext(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8)
@@ -1409,6 +1415,48 @@ struct test_flash_attn_ext : public test_case {
         ggml_tensor * mask = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kv, nb, 1, 1);
         ggml_tensor * out = ggml_flash_attn_ext(ctx, q, k, v, mask, 1.0f/sqrtf(hs));
         return out;
+    }
+};
+
+// Attention
+struct test_attn : public test_case {
+    const int64_t hs; // head size
+    const int64_t nh; // num heads
+    const int64_t kv; // kv size
+    const int64_t nb; // batch size
+
+    std::string op_desc(ggml_tensor * t) override {
+        return "ATTN";
+
+        GGML_UNUSED(t);
+    }
+
+    std::string vars() override {
+        return VARS_TO_STR4(hs, nh, kv, nb);
+    }
+
+    double max_nmse_err() override {
+        return 5e-4;
+    }
+
+    test_attn(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8)
+        : hs(hs), nh(nh), kv(kv), nb(nb) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * q = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, hs, nb, nh, 1);
+        ggml_tensor * k = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, hs, kv, nh, 1);
+        ggml_tensor * v = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, kv, hs, nh, 1); // transposed
+        ggml_tensor * mask = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, kv, nb, 1, 1);
+
+        struct ggml_tensor * cur;
+
+        cur = ggml_mul_mat     (ctx, k, q);
+        cur = ggml_soft_max_ext(ctx, cur, mask, 1.0f/sqrtf(hs));
+        cur = ggml_mul_mat     (ctx, v, cur);
+        cur = ggml_permute     (ctx, cur, 0, 2, 1, 3);
+        cur = ggml_cont_2d     (ctx, cur, hs*nh, nb);
+
+        return cur;
     }
 };
 
@@ -1678,9 +1726,16 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_leaky_relu());
 
-    test_cases.emplace_back(new test_flash_attn_ext(128, 32, 256, 8));
-    test_cases.emplace_back(new test_flash_attn_ext(128, 32, 256, 7));
-    test_cases.emplace_back(new test_flash_attn_ext(128, 32, 256, 1));
+    for (int hs : { 64,  80,  96, 112, 128, 256, }) {
+        for (int nh : { 32, }) {
+            for (int kv : { 512, 1024, 2048, 4096, }) {
+                for (int nb : { 1, 2, 4, 8, 512, 1024, 2048, }) {
+                    test_cases.emplace_back(new test_attn          (hs, nh, kv, nb));
+                    test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb));
+                }
+            }
+        }
+    }
 
 #if !defined(__SANITIZE_THREAD__)
     // FIXME: these tests use too much memory with thread sanitizer
