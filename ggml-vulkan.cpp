@@ -2195,8 +2195,27 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context * ctx, const ggml_tensor * src0
     const uint64_t r2 = ne12 / ne02;
     const uint64_t r3 = ne13 / ne03;
 
-    const bool load_x = src0->backend != GGML_BACKEND_GPU;
-    const bool load_y = src1->backend != GGML_BACKEND_GPU;
+    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
+    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
+    ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
+
+    vk_buffer * d_Qx = nullptr;
+    size_t qx_buf_offset = 0;
+    vk_buffer * d_Qy = nullptr;
+    size_t qy_buf_offset = 0;
+
+    bool src0_uma = false;
+    bool src1_uma = false;
+
+    if (vk_device.uma) {
+        ggml_vk_host_get(src0->data, d_Qx, qx_buf_offset);
+        ggml_vk_host_get(src1->data, d_Qy, qy_buf_offset);
+        src0_uma = d_Qx != nullptr;
+        src1_uma = d_Qy != nullptr;
+    }
+
+    const bool load_x = src0->backend != GGML_BACKEND_GPU && !src0_uma;
+    const bool load_y = src1->backend != GGML_BACKEND_GPU && !src1_uma;
 
     const bool x_non_contig = !load_x && !ggml_vk_dim01_contiguous(src0);
     const bool y_non_contig = !load_y && !ggml_vk_dim01_contiguous(src1);
@@ -2216,31 +2235,23 @@ static void ggml_vk_mul_mat_vec_q_f16(vk_context * ctx, const ggml_tensor * src0
     const uint64_t y_sz = f16_f32_kernel ? sizeof(float) * y_ne : sizeof(ggml_fp16_t) * y_ne;
     const uint64_t d_sz = sizeof(float) * d_ne;
 
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
-    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
-    ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
-
     vk_buffer* d_D = &extra->buffer_gpu;
     const uint64_t d_buf_offset = extra->offset;
     GGML_ASSERT(d_D != nullptr);
-    vk_buffer* d_Qx;
-    uint32_t qx_buf_offset = 0;
-    vk_buffer* d_Qy;
-    uint32_t qy_buf_offset = 0;
     vk_buffer* d_X;
     uint64_t x_buf_offset = 0;
     vk_buffer* d_Y;
     uint64_t y_buf_offset = 0;
     if (load_x) {
         d_Qx = &vk_prealloc_qx;
-    } else {
+    } else if(!src1_uma) {
         d_Qx = &extra_src0->buffer_gpu;
         qx_buf_offset = extra_src0->offset;
         GGML_ASSERT(d_Qx != nullptr);
     }
     if (load_y) {
         d_Qy = &vk_prealloc_qy;
-    } else {
+    } else if(!src1_uma) {
         d_Qy = &extra_src1->buffer_gpu;
         qy_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Qy != nullptr);
@@ -2362,7 +2373,21 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context * ctx, const ggml_tensor
 
     GGML_ASSERT(ne11 == 1);
 
-    const bool load_y = src1->backend != GGML_BACKEND_GPU;
+    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
+    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
+    ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
+
+    vk_buffer * d_Qy = nullptr;
+    size_t qy_buf_offset = 0;
+
+    bool src1_uma = false;
+
+    if (vk_device.uma) {
+        ggml_vk_host_get(src1->data, d_Qy, qy_buf_offset);
+        src1_uma = d_Qy != nullptr;
+    }
+
+    const bool load_y = src1->backend != GGML_BACKEND_GPU && !src1_uma;
 
     const uint64_t x_ne = ne00 * ne01 * ne02;
     const uint64_t y_ne = ne10 * ne11 * ne12;
@@ -2372,22 +2397,15 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(vk_context * ctx, const ggml_tensor
     const uint64_t qy_sz = ggml_type_size(src1->type) * y_ne / ggml_blck_size(src1->type);
     const uint64_t d_sz = sizeof(float) * d_ne;
 
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
-    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
-    ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
-
     vk_buffer* d_D = &extra->buffer_gpu;
     const uint64_t d_buf_offset = extra->offset;
     GGML_ASSERT(d_D != nullptr);
-    vk_buffer* d_Qx;
+    vk_buffer* d_Qx = &extra_src0->buffer_gpu;
     const uint64_t qx_buf_offset = extra_src0->offset;
-    vk_buffer* d_Qy;
-    uint64_t qy_buf_offset = 0;
-    d_Qx = &extra_src0->buffer_gpu;
     GGML_ASSERT(d_Qx != nullptr);
     if (load_y) {
         d_Qy = &vk_prealloc_qy;
-    } else {
+    } else if (!src1_uma) {
         d_Qy = &extra_src1->buffer_gpu;
         qy_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Qx != nullptr);
@@ -2447,7 +2465,21 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context * ctx, const ggml_tensor *
 
     GGML_ASSERT(ne11 == 1);
 
-    const bool load_y = src1->backend != GGML_BACKEND_GPU;
+    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
+    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
+    ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
+
+    vk_buffer * d_Qy = nullptr;
+    size_t qy_buf_offset = 0;
+
+    bool src1_uma = false;
+
+    if (vk_device.uma) {
+        ggml_vk_host_get(src1->data, d_Qy, qy_buf_offset);
+        src1_uma = d_Qy != nullptr;
+    }
+
+    const bool load_y = src1->backend != GGML_BACKEND_GPU && !src1_uma;
 
     const uint64_t d_ne = ne01 * ne11 * ne12;
 
@@ -2458,18 +2490,11 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(vk_context * ctx, const ggml_tensor *
     const uint64_t qy_sz = ggml_nbytes(src1);
     const uint64_t d_sz = sizeof(float) * d_ne;
 
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
-    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
-    ggml_tensor_extra_gpu * extra_src1 = (ggml_tensor_extra_gpu *) src1->extra;
-
     vk_buffer* d_D = &extra->buffer_gpu;
     const uint64_t d_buf_offset = extra->offset;
     GGML_ASSERT(d_D != nullptr);
-    vk_buffer* d_Qx;
+    vk_buffer* d_Qx = &extra_src0->buffer_gpu;
     const uint64_t qx_buf_offset = extra_src0->offset;
-    vk_buffer* d_Qy;
-    uint64_t qy_buf_offset = 0;
-    d_Qx = &extra_src0->buffer_gpu;
     GGML_ASSERT(d_Qx != nullptr);
     if (load_y) {
         d_Qy = &vk_prealloc_qy;
@@ -2776,16 +2801,33 @@ static void ggml_vk_op_f32(vk_context * ctx, const ggml_tensor * src0, const ggm
         return;
     }
 
-    const bool transfer_src0 = src0->backend != GGML_BACKEND_GPU;
-    const bool transfer_src1 = use_src1 && src1->backend != GGML_BACKEND_GPU;
+    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
+    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
+    ggml_tensor_extra_gpu * extra_src1 = use_src1 ? (ggml_tensor_extra_gpu *) src1->extra : nullptr;
+
+    vk_buffer * d_X = nullptr;
+    size_t x_buf_offset = 0;
+    vk_buffer * d_Y = nullptr;
+    size_t y_buf_offset = 0;
+
+    bool src0_uma = false;
+    bool src1_uma = false;
+
+    if (vk_device.uma) {
+        ggml_vk_host_get(src0->data, d_X, x_buf_offset);
+        src0_uma = d_X != nullptr;
+        if (use_src1) {
+            ggml_vk_host_get(src1->data, d_Y, y_buf_offset);
+            src1_uma = d_Y != nullptr;
+        }
+    }
+
+    const bool transfer_src0 = src0->backend != GGML_BACKEND_GPU && !src0_uma;
+    const bool transfer_src1 = use_src1 && src1->backend != GGML_BACKEND_GPU && !src1_uma;
 
     uint64_t x_sz = ggml_vk_align_size(ggml_type_size(src0->type) * ne0, vk_device.properties.limits.minStorageBufferOffsetAlignment);
     uint64_t y_sz = use_src1 ? ggml_vk_align_size(ggml_type_size(src1->type) * ne1, vk_device.properties.limits.minStorageBufferOffsetAlignment) : 0;
     uint64_t d_sz = ggml_type_size(dst->type) * ne0;
-
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
-    ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
-    ggml_tensor_extra_gpu * extra_src1 = use_src1 ? (ggml_tensor_extra_gpu *) src1->extra : nullptr;
 
     // Workaround for tiny tensor inputs on ROPE
     if (use_src1 && src1->backend == GGML_BACKEND_GPU && y_sz > extra_src1->buffer_gpu.size) {
@@ -2796,20 +2838,16 @@ static void ggml_vk_op_f32(vk_context * ctx, const ggml_tensor * src0, const ggm
     GGML_ASSERT(d_D != nullptr);
     uint64_t d_buf_offset = (extra->offset / vk_device.properties.limits.minStorageBufferOffsetAlignment) * vk_device.properties.limits.minStorageBufferOffsetAlignment;
     GGML_ASSERT(d_buf_offset == extra->offset || op == GGML_OP_CPY);  // NOLINT
-    vk_buffer* d_X = nullptr;
-    uint64_t x_buf_offset = 0;
-    vk_buffer* d_Y = nullptr;
-    uint64_t y_buf_offset = 0;
     if (transfer_src0) {
         d_X = &vk_prealloc_qx;
-    } else {
+    } else if(!src0_uma) {
         d_X = &extra_src0->buffer_gpu;
         x_buf_offset = extra_src0->offset;
         GGML_ASSERT(d_X != nullptr);
     }
     if (transfer_src1) {
         d_Y = &vk_prealloc_qy;
-    } else if (use_src1) {
+    } else if (use_src1 && !src1_uma) {
         d_Y = &extra_src1->buffer_gpu;
         y_buf_offset = extra_src1->offset;
         GGML_ASSERT(d_Y != nullptr);
@@ -4377,16 +4415,6 @@ GGML_CALL static size_t ggml_backend_vk_host_buffer_type_get_alignment(ggml_back
     UNUSED(buft);
 }
 
-GGML_CALL static bool ggml_backend_vk_host_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
-    if (vk_device.uma) {
-        return ggml_backend_is_vk(backend) || ggml_backend_is_cpu(backend);
-    }
-
-    return ggml_backend_is_cpu(backend);
-
-    UNUSED(buft);
-}
-
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_vk_buffer_type_host = {
         /* .iface    = */ {
@@ -4395,7 +4423,7 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type() {
             /* .get_alignment    = */ ggml_backend_vk_host_buffer_type_get_alignment,
             /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
-            /* .supports_backend = */ ggml_backend_vk_host_buffer_type_supports_backend,
+            /* .supports_backend = */ ggml_backend_cpu_buffer_type()->iface.supports_backend,
             /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
         },
         /* .context  = */ nullptr,
@@ -4420,9 +4448,6 @@ GGML_CALL static void ggml_backend_vk_free(ggml_backend_t backend) {
 }
 
 GGML_CALL static ggml_backend_buffer_type_t ggml_backend_vk_get_default_buffer_type(ggml_backend_t backend) {
-    if (vk_device.uma) {
-        return ggml_backend_vk_host_buffer_type();
-    }
     return ggml_backend_vk_buffer_type();
 
     UNUSED(backend);
@@ -4542,7 +4567,6 @@ GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml
 
         bool ok = ggml_vk_compute_forward(&params, node);
         if (!ok) {
-            std::cerr << "Vulkan disable: " << vk_disable << std::endl;
             fprintf(stderr, "%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
         }
 #ifdef GGML_VULKAN_CHECK_RESULTS
