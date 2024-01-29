@@ -98,7 +98,7 @@ int main()
         },
     };
 
-    for (const auto& pair : expected)
+    for (const auto & pair : expected)
     {
         parsed_grammar.symbol_ids[pair.first] = pair.second;
     }
