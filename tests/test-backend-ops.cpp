@@ -1927,8 +1927,10 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {0, 2, 1, 3}));
     test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {1, 2, 0, 3}));
 
-    for (ggml_type type : all_types) {
-       test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {256, 10, 10, 1}));
+    for (ggml_type type_src : {GGML_TYPE_F16, GGML_TYPE_F32}) {
+        for (ggml_type type_dst : all_types) {
+           test_cases.emplace_back(new test_cpy(type_src, type_dst, {256, 4, 4, 4}));
+        }
     }
 
     test_cases.emplace_back(new test_cont());
