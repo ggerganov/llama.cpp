@@ -218,6 +218,7 @@ inline static void * ggml_aligned_malloc(size_t size) {
                 break;
         }
         GGML_PRINT("%s: %s (attempted to allocate %6.2f MB)\n", __func__, error_desc, size/(1024.0*1024.0));
+        GGML_ASSERT(false);
         return NULL;
     }
     return aligned_memory;
@@ -229,6 +230,38 @@ inline static void * ggml_aligned_malloc(size_t size) {
 #define GGML_ALIGNED_FREE(ptr)    free(ptr)
 #endif
 #endif
+
+inline static void * ggml_malloc(size_t size) {
+    if (size == 0) {
+        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_malloc!\n");
+        return NULL;
+    }
+    void * result = malloc(size);
+    if (result == NULL) {
+        GGML_PRINT("%s: failed to allocate %6.2f MB\n", __func__, size/(1024.0*1024.0));
+        GGML_ASSERT(false);
+    }
+    return result;
+}
+
+// calloc
+inline static void * ggml_calloc(size_t num, size_t size) {
+    if (num == 0 || size == 0) {
+        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_calloc!\n");
+        return NULL;
+    }
+    void * result = calloc(num, size);
+    if (result == NULL) {
+        GGML_PRINT("%s: failed to allocate %6.2f MB\n", __func__, size/(1024.0*1024.0));
+        GGML_ASSERT(false);
+    }
+    return result;
+}
+
+#define GGML_MALLOC(size)      ggml_malloc(size)
+#define GGML_CALLOC(num, size) ggml_calloc(num, size)
+
+#define GGML_FREE(ptr) free(ptr)
 
 #define UNUSED GGML_UNUSED
 #define SWAP(x, y, T) do { T SWAP = x; x = y; y = SWAP; } while (0)
@@ -15149,13 +15182,13 @@ struct ggml_hash_set ggml_hash_set_new(size_t size) {
     size = ggml_hash_size(size);
     struct ggml_hash_set result;
     result.size = size;
-    result.keys = malloc(sizeof(struct ggml_tensor *) * size);
+    result.keys = GGML_MALLOC(sizeof(struct ggml_tensor *) * size);
     memset(result.keys, 0, sizeof(struct ggml_tensor *) * size);
     return result;
 }
 
 static void ggml_hash_set_free(struct ggml_hash_set hash_set) {
-    free(hash_set.keys);
+    GGML_FREE(hash_set.keys);
 }
 
 struct hash_map {
@@ -15164,17 +15197,17 @@ struct hash_map {
 };
 
 static struct hash_map * ggml_new_hash_map(size_t size) {
-    struct hash_map * result = malloc(sizeof(struct hash_map));
+    struct hash_map * result = GGML_MALLOC(sizeof(struct hash_map));
     result->set = ggml_hash_set_new(size);
-    result->vals = malloc(sizeof(struct ggml_tensor *) * result->set.size);
+    result->vals = GGML_MALLOC(sizeof(struct ggml_tensor *) * result->set.size);
     memset(result->vals, 0, sizeof(struct ggml_tensor *) * result->set.size);
     return result;
 }
 
 static void ggml_hash_map_free(struct hash_map * map) {
     ggml_hash_set_free(map->set);
-    free(map->vals);
-    free(map);
+    GGML_FREE(map->vals);
+    GGML_FREE(map);
 }
 
 // gradient checkpointing
@@ -19245,6 +19278,25 @@ struct gguf_context {
     void * data;
 };
 
+static size_t gguf_type_size(enum gguf_type type) {
+    GGML_ASSERT(0 <= type && type < GGUF_TYPE_COUNT);
+    return GGUF_TYPE_SIZE[type];
+}
+
+static void gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {
+    GGML_ASSERT(info->n_dims <= GGML_MAX_DIMS);
+    GGML_ASSERT(0 <= info->type && info->type < GGML_TYPE_COUNT);
+
+    for (uint32_t i = 0; i < info->n_dims; ++i) {
+        GGML_ASSERT(info->ne[i] > 0);
+    }
+
+    // prevent overflow for total number of elements
+    GGML_ASSERT(INT64_MAX/info->ne[1] > info->ne[0]);
+    GGML_ASSERT(INT64_MAX/info->ne[2] > info->ne[0]*info->ne[1]);
+    GGML_ASSERT(INT64_MAX/info->ne[3] > info->ne[0]*info->ne[1]*info->ne[2]);
+}
+
 static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset) {
     const size_t n = fread(dst, 1, size, file);
     *offset += n;
@@ -19257,8 +19309,17 @@ static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
 
     bool ok = true;
 
-    ok = ok && gguf_fread_el(file, &p->n,    sizeof(p->n), offset); p->data = calloc(p->n + 1, 1);
-    ok = ok && gguf_fread_el(file,  p->data, p->n,         offset);
+    ok = ok && gguf_fread_el(file, &p->n, sizeof(p->n), offset);
+
+    // early exit if string length is invalid, prevents from integer overflow
+    if (p->n == SIZE_MAX) {
+        fprintf(stderr, "%s: invalid string length (%" PRIu64 ")\n", __func__, p->n);
+        return false;
+    }
+
+    p->data = GGML_CALLOC(p->n + 1, 1);
+
+    ok = ok && gguf_fread_el(file,  p->data, p->n, offset);
 
     return ok;
 }
@@ -19330,6 +19391,12 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             return NULL;
         }
 
+        // sanity-checks to prevent from integer/buffer overflows
+
+        ok = ok && (ctx->header.n_tensors < (SIZE_MAX/2)/sizeof(struct gguf_tensor_info));
+        ok = ok && (ctx->header.n_tensors < (SIZE_MAX/2)/ggml_tensor_overhead());
+        ok = ok && (ctx->header.n_kv      < (SIZE_MAX/2)/sizeof(struct gguf_kv));
+
         if (!ok) {
             fprintf(stderr, "%s: failed to read header\n", __func__);
             fclose(file);
@@ -19340,7 +19407,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the kv pairs
     {
-        ctx->kv = malloc(ctx->header.n_kv * sizeof(struct gguf_kv));
+        ctx->kv = GGML_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
 
         for (uint64_t i = 0; i < ctx->header.n_kv; ++i) {
             struct gguf_kv * kv = &ctx->kv[i];
@@ -19368,7 +19435,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 case GGUF_TYPE_ARRAY:
                     {
                         ok = ok && gguf_fread_el(file, &kv->value.arr.type, sizeof(kv->value.arr.type), &offset);
-                        ok = ok && gguf_fread_el(file, &kv->value.arr.n,    sizeof(kv->value.arr.n), &offset);
+                        ok = ok && gguf_fread_el(file, &kv->value.arr.n,    sizeof(kv->value.arr.n),    &offset);
 
                         switch (kv->value.arr.type) {
                             case GGUF_TYPE_UINT8:
@@ -19383,21 +19450,39 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                             case GGUF_TYPE_FLOAT64:
                             case GGUF_TYPE_BOOL:
                                 {
-                                    kv->value.arr.data = malloc(kv->value.arr.n * GGUF_TYPE_SIZE[kv->value.arr.type]);
-                                    ok = ok && gguf_fread_el(file, kv->value.arr.data, kv->value.arr.n * GGUF_TYPE_SIZE[kv->value.arr.type], &offset);
+                                    // prevent from integer overflow in the malloc below
+                                    if (kv->value.arr.n < SIZE_MAX/gguf_type_size(kv->value.arr.type)) {
+                                        fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
+                                        fclose(file);
+                                        gguf_free(ctx);
+                                        return NULL;
+                                    }
+
+                                    kv->value.arr.data = GGML_MALLOC(kv->value.arr.n * gguf_type_size(kv->value.arr.type));
+
+                                    ok = ok && gguf_fread_el(file, kv->value.arr.data, kv->value.arr.n * gguf_type_size(kv->value.arr.type), &offset);
                                 } break;
                             case GGUF_TYPE_STRING:
                                 {
-                                    kv->value.arr.data = malloc(kv->value.arr.n * sizeof(struct gguf_str));
+                                    // prevent from integer overflow in the malloc below
+                                    if (kv->value.arr.n < SIZE_MAX/sizeof(struct gguf_str)) {
+                                        fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
+                                        fclose(file);
+                                        gguf_free(ctx);
+                                        return NULL;
+                                    }
+
+                                    kv->value.arr.data = GGML_MALLOC(kv->value.arr.n * sizeof(struct gguf_str));
+
                                     for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
                                         ok = ok && gguf_fread_str(file, &((struct gguf_str *) kv->value.arr.data)[j], &offset);
                                     }
                                 } break;
                             case GGUF_TYPE_ARRAY:
-                            case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type"); break;
+                            default: GGML_ASSERT(false && "invalid type"); break;
                         }
                     } break;
-                case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type");
+                default: GGML_ASSERT(false && "invalid type");
             }
 
             if (!ok) {
@@ -19415,7 +19500,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the tensor infos
     {
-        ctx->infos = malloc(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
+        ctx->infos = GGML_MALLOC(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
 
         for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
@@ -19426,11 +19511,17 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             ok = ok && gguf_fread_str(file, &info->name,                          &offset);
             ok = ok && gguf_fread_el (file, &info->n_dims, sizeof(info->n_dims),  &offset);
+
+            ok = ok && (info->n_dims <= GGML_MAX_DIMS);
+
             for (uint32_t j = 0; j < info->n_dims; ++j) {
                 ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
             }
+
             ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);
             ok = ok && gguf_fread_el (file, &info->offset, sizeof(info->offset),  &offset);
+
+            gguf_tensor_info_sanitize(info);
 
             if (!ok) {
                 fprintf(stderr, "%s: failed to read tensor info\n", __func__);
@@ -19585,12 +19676,12 @@ void gguf_free(struct gguf_context * ctx) {
             struct gguf_kv * kv = &ctx->kv[i];
 
             if (kv->key.data) {
-                free(kv->key.data);
+                GGML_FREE(kv->key.data);
             }
 
             if (kv->type == GGUF_TYPE_STRING) {
                 if (kv->value.str.data) {
-                    free(kv->value.str.data);
+                    GGML_FREE(kv->value.str.data);
                 }
             }
 
@@ -19600,16 +19691,16 @@ void gguf_free(struct gguf_context * ctx) {
                         for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
                             struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[j];
                             if (str->data) {
-                                free(str->data);
+                                GGML_FREE(str->data);
                             }
                         }
                     }
-                    free(kv->value.arr.data);
+                    GGML_FREE(kv->value.arr.data);
                 }
             }
         }
 
-        free(ctx->kv);
+        GGML_FREE(ctx->kv);
     }
 
     if (ctx->infos) {
@@ -19617,11 +19708,11 @@ void gguf_free(struct gguf_context * ctx) {
             struct gguf_tensor_info * info = &ctx->infos[i];
 
             if (info->name.data) {
-                free(info->name.data);
+                GGML_FREE(info->name.data);
             }
         }
 
-        free(ctx->infos);
+        GGML_FREE(ctx->infos);
     }
 
     GGML_ALIGNED_FREE(ctx);
@@ -19922,8 +20013,8 @@ void gguf_set_arr_data(struct gguf_context * ctx, const char * key, enum gguf_ty
     ctx->kv[idx].type           = GGUF_TYPE_ARRAY;
     ctx->kv[idx].value.arr.type = type;
     ctx->kv[idx].value.arr.n    = n;
-    ctx->kv[idx].value.arr.data = malloc(n*GGUF_TYPE_SIZE[type]);
-    memcpy(ctx->kv[idx].value.arr.data, data, n*GGUF_TYPE_SIZE[type]);
+    ctx->kv[idx].value.arr.data = GGML_MALLOC(n*gguf_type_size(type));
+    memcpy(ctx->kv[idx].value.arr.data, data, n*gguf_type_size(type));
 }
 
 void gguf_set_arr_str(struct gguf_context * ctx, const char * key, const char ** data, int n) {
@@ -19932,7 +20023,7 @@ void gguf_set_arr_str(struct gguf_context * ctx, const char * key, const char **
     ctx->kv[idx].type           = GGUF_TYPE_ARRAY;
     ctx->kv[idx].value.arr.type = GGUF_TYPE_STRING;
     ctx->kv[idx].value.arr.n    = n;
-    ctx->kv[idx].value.arr.data = malloc(n*sizeof(struct gguf_str));
+    ctx->kv[idx].value.arr.data = GGML_MALLOC(n*sizeof(struct gguf_str));
     for (int i = 0; i < n; i++) {
         struct gguf_str * str = &((struct gguf_str *)ctx->kv[idx].value.arr.data)[i];
         str->n    = strlen(data[i]);
@@ -19959,19 +20050,19 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
             case GGUF_TYPE_ARRAY:
                 {
                     if (src->kv[i].value.arr.type == GGUF_TYPE_STRING) {
-                        const char ** data = malloc(src->kv[i].value.arr.n*sizeof(char *));
+                        const char ** data = GGML_MALLOC(src->kv[i].value.arr.n*sizeof(char *));
                         for (uint32_t j = 0; j < src->kv[i].value.arr.n; j++) {
                             data[j] = ((struct gguf_str *)src->kv[i].value.arr.data)[j].data;
                         }
                         gguf_set_arr_str(ctx, src->kv[i].key.data, data, src->kv[i].value.arr.n);
-                        free((void *)data);
+                        GGML_FREE((void *)data);
                     } else if (src->kv[i].value.arr.type == GGUF_TYPE_ARRAY) {
                         GGML_ASSERT(false && "nested arrays not supported");
                     } else {
                         gguf_set_arr_data(ctx, src->kv[i].key.data, src->kv[i].value.arr.type, src->kv[i].value.arr.data, src->kv[i].value.arr.n);
                     }
                 } break;
-            case GGUF_TYPE_COUNT:  GGML_ASSERT(false && "invalid type"); break;
+            default: GGML_ASSERT(false && "invalid type"); break;
         }
     }
 }
@@ -20047,7 +20138,7 @@ struct gguf_buf {
 
 static struct gguf_buf gguf_buf_init(size_t size) {
     struct gguf_buf buf = {
-        /*buf.data   =*/ size == 0 ? NULL : malloc(size),
+        /*buf.data   =*/ size == 0 ? NULL : GGML_MALLOC(size),
         /*buf.size   =*/ size,
         /*buf.offset =*/ 0,
     };
@@ -20057,7 +20148,7 @@ static struct gguf_buf gguf_buf_init(size_t size) {
 
 static void gguf_buf_free(struct gguf_buf buf) {
     if (buf.data) {
-        free(buf.data);
+        GGML_FREE(buf.data);
     }
 }
 
@@ -20138,7 +20229,7 @@ static void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf *
                         case GGUF_TYPE_FLOAT64:
                         case GGUF_TYPE_BOOL:
                             {
-                                gguf_bwrite_el(buf, kv->value.arr.data, kv->value.arr.n * GGUF_TYPE_SIZE[kv->value.arr.type]);
+                                gguf_bwrite_el(buf, kv->value.arr.data, kv->value.arr.n * gguf_type_size(kv->value.arr.type));
                             } break;
                         case GGUF_TYPE_STRING:
                             {
@@ -20147,10 +20238,10 @@ static void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf *
                                 }
                             } break;
                         case GGUF_TYPE_ARRAY:
-                        case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type"); break;
+                        default: GGML_ASSERT(false && "invalid type"); break;
                     }
                 } break;
-            case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type");
+            default: GGML_ASSERT(false && "invalid type");
         }
     }
 
