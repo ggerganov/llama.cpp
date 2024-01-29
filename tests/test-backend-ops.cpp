@@ -1726,25 +1726,16 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_leaky_relu());
 
-    test_cases.emplace_back(new test_attn(64,  32, 512, 8));
-    test_cases.emplace_back(new test_attn(64,  32, 512, 7));
-    test_cases.emplace_back(new test_attn(64,  32, 512, 1));
-    test_cases.emplace_back(new test_attn(80,  32, 512, 8));
-    test_cases.emplace_back(new test_attn(80,  32, 512, 7));
-    test_cases.emplace_back(new test_attn(80,  32, 512, 1));
-    test_cases.emplace_back(new test_attn(128, 32, 512, 8));
-    test_cases.emplace_back(new test_attn(128, 32, 512, 7));
-    test_cases.emplace_back(new test_attn(128, 32, 512, 1));
-
-    test_cases.emplace_back(new test_flash_attn_ext(64,  32, 512, 8));
-    test_cases.emplace_back(new test_flash_attn_ext(64,  32, 512, 7));
-    test_cases.emplace_back(new test_flash_attn_ext(64,  32, 512, 1));
-    test_cases.emplace_back(new test_flash_attn_ext(80,  32, 512, 8));
-    test_cases.emplace_back(new test_flash_attn_ext(80,  32, 512, 7));
-    test_cases.emplace_back(new test_flash_attn_ext(80,  32, 512, 1));
-    test_cases.emplace_back(new test_flash_attn_ext(128, 32, 512, 8));
-    test_cases.emplace_back(new test_flash_attn_ext(128, 32, 512, 7));
-    test_cases.emplace_back(new test_flash_attn_ext(128, 32, 512, 1));
+    for (int hs : { 64,  80,  96, 112, 128, 256, }) {
+        for (int nh : { 32, }) {
+            for (int kv : { 512, 1024, 2048, 4096, }) {
+                for (int nb : { 1, 2, 4, 8, 512, 1024, 2048, }) {
+                    test_cases.emplace_back(new test_attn          (hs, nh, kv, nb));
+                    test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb));
+                }
+            }
+        }
+    }
 
 #if !defined(__SANITIZE_THREAD__)
     // FIXME: these tests use too much memory with thread sanitizer
