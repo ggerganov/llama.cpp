@@ -191,6 +191,10 @@ static __device__ __forceinline__ int __vsubss4(const int a, const int b) {
 #endif // __has_builtin(__builtin_elementwise_sub_sat)
 }
 
+static __device__ __forceinline__ int __vsub4(const int a, const int b) {
+    return __vsubss4(a, b);
+}
+
 static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
 #if defined(__gfx906__) || defined(__gfx908__) || defined(__gfx90a__) || defined(__gfx1030__)
     c = __builtin_amdgcn_sdot4(a, b, c, false);
