@@ -788,12 +788,10 @@ static bool alloc_tensor_range(struct ggml_context * ctx,
 #ifndef NDEBUG
         fprintf(stderr, "%s: failed to allocate %s buffer of size %zu\n", __func__, ggml_backend_buft_name(buft), size);
 #endif
-        if (buffers && *buffers) {
-            for (size_t i = 0; i < *n_buffers; i++) {
-                ggml_backend_buffer_free(*buffers[i]);
-            }
-            free(buffers);
+        for (size_t i = 0; i < *n_buffers; i++) {
+            ggml_backend_buffer_free(*buffers[i]);
         }
+        free(*buffers);
         return false;
     }
 
@@ -845,12 +843,10 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
                     __func__, t->name,
                     ggml_backend_buft_name(buft),
                     this_size, max_size);
-            if(buffers && *buffers) {
-                for (size_t i = 0; i < n_buffers; i++) {
-                    ggml_backend_buffer_free(buffers[i]);
-                }
-                free(buffers);
+            for (size_t i = 0; i < n_buffers; i++) {
+                ggml_backend_buffer_free(buffers[i]);
             }
+            free(*buffers);
             return NULL;
         }
 
@@ -887,7 +883,7 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
     } else {
         buffer = ggml_backend_multi_buffer_alloc_buffer(buffers, n_buffers);
     }
-    free(buffers);
+    free(*buffers);
     return buffer;
 }
 
