@@ -686,7 +686,6 @@ static vk_buffer ggml_vk_create_buffer(size_t size, vk::MemoryPropertyFlags req_
     }
 
     if (memory_type_index >= mem_props.memoryTypeCount) {
-        std::cerr << "ggml_vulkan: No memory type found for requirements " << vk::to_string(req_flags) << std::endl;
         throw vk::OutOfDeviceMemoryError("No suitable memory type found");
     }
 
