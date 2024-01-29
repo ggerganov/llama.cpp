@@ -722,6 +722,24 @@ static vk_buffer ggml_vk_create_buffer_check(size_t size, vk::MemoryPropertyFlag
     }
 }
 
+static vk_buffer ggml_vk_create_buffer_device(size_t size) {
+    vk_buffer buf;
+    try {
+        buf = ggml_vk_create_buffer(size, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    } catch (const vk::SystemError& e) {
+        if (vk_device.uma) {
+            // Fall back to host memory type
+            buf = ggml_vk_create_buffer_check(size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+        } else {
+            std::cerr << "ggml_vulkan: Device memory allocation of size " << size << " failed." << std::endl;
+            std::cerr << "ggml_vulkan: " << e.what() << std::endl;
+            throw e;
+        }
+    }
+
+    return buf;
+}
+
 static void ggml_vk_destroy_buffer(vk_buffer& buf) {
     if (buf.size == 0) {
         return;
@@ -3772,35 +3790,35 @@ void ggml_vk_preallocate_buffers() {
         if (vk_prealloc_qx.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_qx);
         }
-        vk_prealloc_qx = ggml_vk_create_buffer_check(vk_prealloc_size_qx, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        vk_prealloc_qx = ggml_vk_create_buffer_device(vk_prealloc_size_qx);
     }
     if (vk_prealloc_size_qy > 0 && vk_prealloc_qy.size < vk_prealloc_size_qy) {
         // Resize buffer
         if (vk_prealloc_qy.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_qy);
         }
-        vk_prealloc_qy = ggml_vk_create_buffer_check(vk_prealloc_size_qy, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        vk_prealloc_qy = ggml_vk_create_buffer_device(vk_prealloc_size_qy);
     }
     if (vk_prealloc_size_x > 0 && vk_prealloc_x.size < vk_prealloc_size_x) {
         // Resize buffer
         if (vk_prealloc_x.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_x);
         }
-        vk_prealloc_x = ggml_vk_create_buffer_check(vk_prealloc_size_x, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        vk_prealloc_x = ggml_vk_create_buffer_device(vk_prealloc_size_x);
     }
     if (vk_prealloc_size_y > 0 && vk_prealloc_y.size < vk_prealloc_size_y) {
         // Resize buffer
         if (vk_prealloc_y.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_y);
         }
-        vk_prealloc_y = ggml_vk_create_buffer_check(vk_prealloc_size_y, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        vk_prealloc_y = ggml_vk_create_buffer_device(vk_prealloc_size_y);
     }
     if (vk_prealloc_size_split_k > 0 && vk_prealloc_split_k.size < vk_prealloc_size_split_k) {
         // Resize buffer
         if (vk_prealloc_split_k.size > 0) {
             ggml_vk_destroy_buffer(vk_prealloc_split_k);
         }
-        vk_prealloc_split_k = ggml_vk_create_buffer_check(vk_prealloc_size_split_k, vk::MemoryPropertyFlagBits::eDeviceLocal);
+        vk_prealloc_split_k = ggml_vk_create_buffer_device(vk_prealloc_size_split_k);
     }
     if (vk_staging_size > 0 && vk_staging.size < vk_staging_size) {
         // Resize buffer
@@ -4301,19 +4319,7 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_buffer_type_alloc_buffer(
 #ifdef VK_DEBUG
     std::cerr << "ggml_backend_vk_buffer_type_alloc_buffer(" << size << ")" << std::endl;
 #endif
-    vk_buffer dev_buffer;
-    try {
-        dev_buffer = ggml_vk_create_buffer(size, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    } catch (const vk::SystemError& e) {
-        if (vk_device.uma) {
-            // Fall back to host memory type
-            dev_buffer = ggml_vk_create_buffer_check(size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-        } else {
-            std::cerr << "ggml_vulkan: Device memory allocation of size " << size << " failed." << std::endl;
-            std::cerr << "ggml_vulkan: " << e.what() << std::endl;
-            throw e;
-        }
-    }
+    vk_buffer dev_buffer = ggml_vk_create_buffer_device(size);
 
     ggml_backend_vk_buffer_context * ctx = new ggml_backend_vk_buffer_context(dev_buffer);
 
