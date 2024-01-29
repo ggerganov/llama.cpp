@@ -19451,7 +19451,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                             case GGUF_TYPE_BOOL:
                                 {
                                     // prevent from integer overflow in the malloc below
-                                    if (kv->value.arr.n < SIZE_MAX/gguf_type_size(kv->value.arr.type)) {
+                                    if (kv->value.arr.n >= SIZE_MAX/gguf_type_size(kv->value.arr.type)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
                                         fclose(file);
                                         gguf_free(ctx);
@@ -19465,7 +19465,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                             case GGUF_TYPE_STRING:
                                 {
                                     // prevent from integer overflow in the malloc below
-                                    if (kv->value.arr.n < SIZE_MAX/sizeof(struct gguf_str)) {
+                                    if (kv->value.arr.n >= SIZE_MAX/sizeof(struct gguf_str)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
                                         fclose(file);
                                         gguf_free(ctx);
