@@ -275,28 +275,30 @@ b. Download & install make for windows provided by mingw-w64: https://www.mingw-
 In oneAPI command line window:
 
 ```
-mkdir build
+mkdir -p build
 cd build
+@call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 --force
 
-#for FP16
-#cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
+::  for FP16
+::  faster for long-prompt inference
+::  cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
 
-#for FP32
+::  for FP32
 cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
 
-#build example/main only
-#make main
 
-#build all binary
+::  build example/main only
+::  make main
+
+::  build all binary
 make
-
 cd ..
 ```
 
 or
 
 ```
-.\examples\sycl\win-build.bat
+.\examples\sycl\win-build-sycl.bat
 ```
 
 Note:
@@ -358,7 +360,7 @@ Set device ID = 0 by **set GGML_SYCL_DEVICE=0**
 
 ```
 set GGML_SYCL_DEVICE=0
-build\bin\main.exe -m models\llama-2-7b.Q4_0.gguf -p "${INPUT2}" -n 400 -e -ngl 33 -s 0
+build\bin\main.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0
 ```
 or run by script:
 

@@ -1,6 +1,7 @@
-REM SPDX-FileCopyrightText: 2022 Intel Corporation
-REM
-REM SPDX-License-Identifier: MIT
+::  MIT license
+::  Copyright (C) 2024 Intel Corporation
+::  SPDX-License-Identifier: MIT
+
 
 set URL=%1
 set COMPONENTS=%2

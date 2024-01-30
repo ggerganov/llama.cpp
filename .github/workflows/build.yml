@@ -42,7 +42,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        run:  scripts/install_windows.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_MKL
+        run:  scripts/install_oneapi.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_MKL
 
       - name: Build
         id: cmake_build
