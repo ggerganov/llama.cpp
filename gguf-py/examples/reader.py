@@ -20,7 +20,7 @@ def read_gguf_file(gguf_file_path):
     print("Key-Value Pairs:")
     max_key_length = max(len(key) for key in reader.fields.keys())
     for key, field in reader.fields.items():
-        value = field.parts[field.data[0]] 
+        value = field.parts[field.data[0]]
         print(f"{key:{max_key_length}} : {value}")
     print("----")
 
