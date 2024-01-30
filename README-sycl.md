@@ -291,7 +291,7 @@ cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CX
 ::  make main
 
 ::  build all binary
-make
+make -j
 cd ..
 ```
 
