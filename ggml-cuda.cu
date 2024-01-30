@@ -8723,6 +8723,9 @@ static void ggml_cuda_op_pool2d(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, cudaStream_t main_stream) {
 
+    GGML_ASSERT(src0->type == GGML_TYPE_F32);
+    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+
     const int32_t * opts = (const int32_t *)dst->op_params;
     enum ggml_op_pool op = static_cast<ggml_op_pool>(opts[0]);
     const int k0 = opts[1];
