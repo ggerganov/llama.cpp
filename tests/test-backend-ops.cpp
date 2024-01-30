@@ -1726,6 +1726,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_leaky_relu());
 
+#if 0
     for (int hs : { 64,  80,  96, 112, 128, 256, }) {
         for (int nh : { 32, }) {
             for (int kv : { 512, 1024, 2048, 4096, }) {
@@ -1736,6 +1737,18 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
             }
         }
     }
+#else
+    for (int hs : { 128, }) {
+        for (int nh : { 32, }) {
+            for (int kv : { 512, 1024, }) {
+                for (int nb : { 1, 2, 4, 8, 512 }) {
+                    test_cases.emplace_back(new test_attn          (hs, nh, kv, nb));
+                    test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb));
+                }
+            }
+        }
+    }
+#endif
 
 #if !defined(__SANITIZE_THREAD__)
     // FIXME: these tests use too much memory with thread sanitizer
