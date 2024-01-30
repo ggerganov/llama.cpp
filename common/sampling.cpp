@@ -323,3 +323,13 @@ void llama_sampling_accept(
         llama_grammar_accept_token(ctx_main, ctx_sampling->grammar, id);
     }
 }
+
+void llama_sampling_rollback(
+        struct llama_sampling_context * ctx_sampling,
+        int rollback_num) {
+    if(rollback_num > ctx_sampling->prev.size()) {
+        rollback_num = ctx_sampling->prev.size();
+    }
+
+    ctx_sampling->prev.erase(ctx_sampling->prev.end() - rollback_num, ctx_sampling->prev.end());
+}
