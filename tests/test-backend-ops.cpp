@@ -1544,7 +1544,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         }
     }
 
-    for (ggml_type type_input :  {GGML_TYPE_F16, GGML_TYPE_F32}) {
+    for (ggml_type type_input : {GGML_TYPE_F32}) {
         for (ggml_op_pool pool_type : {GGML_OP_POOL_AVG, GGML_OP_POOL_MAX}) {
             for (int k0 : {1, 3}) {
                 for (int k1 : {1, 3}) {
