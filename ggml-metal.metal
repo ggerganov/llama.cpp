@@ -2084,8 +2084,8 @@ kernel void kernel_flash_attn_ext_f16(
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     {
-        half S[Q] = { 0.0h };
-        half M[Q] = { -INFINITY };
+        half S[Q] = { [0 ... Q-1] = 0.0h };
+        half M[Q] = { [0 ... Q-1] = -INFINITY };
 
         // assume K and V are same shape
         const int64_t ne22 = ne12;
