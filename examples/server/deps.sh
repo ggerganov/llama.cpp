@@ -15,7 +15,7 @@ cd $PUBLIC
 for FILE in $FILES; do
   echo "generate $FILE.hpp"
 
-  # use simple flag for old version of xxd
+  # Use C++11 string literals instead of ugly xxd.
   f=$(echo $FILE | sed 's/\./_/g' -e 's/-/_/g')
   echo "const char $f[] = R\"LITERAL(" > $DIR/$FILE.hpp
   cat $FILE >> $DIR/$FILE.hpp
