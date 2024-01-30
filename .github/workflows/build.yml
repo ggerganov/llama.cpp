@@ -337,6 +337,7 @@ jobs:
       OPENCL_VERSION: 2023.04.17
       CLBLAST_VERSION: 1.6.0
       SDE_VERSION: 9.33.0-2024-01-07
+      VULKAN_VERSION: 1.3.261.1
 
     strategy:
       matrix:
@@ -353,6 +354,8 @@ jobs:
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
           - build: 'openblas'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+          - build: 'kompute'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON -DBUILD_SHARED_LIBS=ON'
 
     steps:
       - name: Clone
@@ -360,6 +363,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Clone Kompute submodule
+        id: clone_kompute
+        if: ${{ matrix.build == 'kompute' }}
+        run: |
+          git submodule update --init kompute
 
       - name: Download OpenCL SDK
         id: get_opencl
@@ -394,6 +403,15 @@ jobs:
           $msvc = $(join-path $vcdir $('VC\Tools\MSVC\'+$(gc -raw $(join-path $vcdir 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt')).Trim()))
           $lib =  $(join-path $msvc 'bin\Hostx64\x64\lib.exe')
           & $lib /machine:x64 "/def:${env:RUNNER_TEMP}/openblas/lib/libopenblas.def" "/out:${env:RUNNER_TEMP}/openblas/lib/openblas.lib" /name:openblas.dll
+
+      - name: Install Vulkan SDK
+        id: get_vulkan
+        if: ${{ matrix.build == 'kompute' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/VulkanSDK-${env:VULKAN_VERSION}-Installer.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
 
       - name: Build
         id: cmake_build
@@ -432,7 +450,8 @@ jobs:
 
       - name: Test
         id: cmake_test
-        if: ${{ matrix.build != 'clblast' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # not all machines have native AVX-512
+        # not all machines have native AVX-512
+        if: ${{ matrix.build != 'clblast' && matrix.build != 'kompute' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }}
         run: |
           cd build
           ctest -L main -C Release --verbose --timeout 900

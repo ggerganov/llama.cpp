@@ -2375,6 +2375,16 @@ GGML_CALL static size_t ggml_backend_metal_buffer_type_get_alignment(ggml_backen
     UNUSED(buft);
 }
 
+GGML_CALL static size_t ggml_backend_metal_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
+    id<MTLDevice> device = ggml_backend_metal_get_device();
+    size_t max_size = device.maxBufferLength;
+    ggml_backend_metal_free_device();
+
+    return max_size;
+
+    UNUSED(buft);
+}
+
 GGML_CALL static bool ggml_backend_metal_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
     return ggml_backend_is_metal(backend) || ggml_backend_is_cpu(backend);
 
@@ -2393,7 +2403,7 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
             /* .get_name         = */ ggml_backend_metal_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_metal_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_metal_buffer_type_get_alignment,
-            /* .get_max_size     = */ NULL, // TODO: return device.maxBufferLength
+            /* .get_max_size     = */ ggml_backend_metal_buffer_type_get_max_size,
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_metal_buffer_type_supports_backend,
             /* .is_host          = */ ggml_backend_metal_buffer_type_is_host,

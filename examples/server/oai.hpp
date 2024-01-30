@@ -206,3 +206,18 @@ inline static std::vector<json> format_partial_response_oaicompat(const task_res
 
     return std::vector<json>({ret});
 }
+
+inline static json format_embeddings_response_oaicompat(const json &request, const json &embeddings)
+{
+    json res =
+        json{
+            {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
+            {"object", "list"},
+            {"usage",
+                json{{"prompt_tokens", 0},
+                     {"total_tokens", 0}}},
+            {"data", embeddings}
+        };
+    return res;
+}
+
