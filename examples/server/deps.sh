@@ -16,7 +16,7 @@ for FILE in $FILES; do
   echo "generate $FILE.hpp"
 
   # use simple flag for old version of xxd
-  f=$(echo $FILE | sed 's/\./_/g')
+  f=$(echo $FILE | sed 's/\./_/g' -e 's/-/_/g')
   echo "const char $f[] = R\"LITERAL(" > $DIR/$FILE.hpp
   cat $FILE >> $DIR/$FILE.hpp
   echo ")LITERAL\";" >> $DIR/$FILE.hpp
