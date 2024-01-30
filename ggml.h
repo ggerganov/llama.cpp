@@ -1600,8 +1600,8 @@ extern "C" {
             int                   k1,
             int                   s0,
             int                   s1,
-            float                 p0,
-            float                 p1);
+            int                   p0,
+            int                   p1);
 
     // nearest interpolate
     // used in stable-diffusion

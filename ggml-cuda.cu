@@ -6056,7 +6056,7 @@ static  __global__ void pool2d_nchw_kernel(
         const int start_w = cur_ow * sw - pw;
         const int bw = max(0, start_w);
         const int ew = min(iw, start_w + kw);
-        const To scale = 1. / ((eh - bh) * (ew - bw));
+        const To scale = 1. / (kh * kw);
         To res = 0;
         switch(op){
             case GGML_OP_POOL_AVG: res = 0; break;
