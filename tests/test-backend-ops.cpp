@@ -228,6 +228,14 @@ static std::string var_to_str(ggml_type type) {
     return ggml_type_name(type);
 }
 
+static std::string var_to_str(ggml_op_pool pool) {
+    switch (pool) {
+        case GGML_OP_POOL_AVG:  return "avg";
+        case GGML_OP_POOL_MAX:  return "max";
+        default:                return std::to_string(pool);
+    }
+}
+
 #define VARS_TO_STR1(a) VAR_TO_STR(a)
 #define VARS_TO_STR2(a, b) VAR_TO_STR(a) + "," + VAR_TO_STR(b)
 #define VARS_TO_STR3(a, b, c) VAR_TO_STR(a) + "," + VARS_TO_STR2(b, c)
@@ -1159,7 +1167,7 @@ struct test_pool2d : public test_case {
         return VARS_TO_STR9(pool_type, type_input, ne_input, k0, k1, s0, s1, p0, p1);
     }
 
-    test_pool2d(enum ggml_op_pool pool_type = GGML_OP_POOL_AVG,
+    test_pool2d(ggml_op_pool pool_type = GGML_OP_POOL_AVG,
             ggml_type type_input = GGML_TYPE_F32,
             std::array<int64_t, 4> ne_input = {10, 10, 3, 1}, // [input_width, input_height, input_channels, 1]
             int k0 = 3, int k1 = 3,
@@ -1536,8 +1544,24 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         }
     }
 
-    test_cases.emplace_back(new test_pool2d(GGML_OP_POOL_AVG));
-    test_cases.emplace_back(new test_pool2d(GGML_OP_POOL_MAX));
+    for (ggml_type type_input :  {GGML_TYPE_F16, GGML_TYPE_F32}) {
+        for (ggml_op_pool pool_type : {GGML_OP_POOL_AVG, GGML_OP_POOL_MAX}) {
+            for (int k0 : {1, 3}) {
+                for (int k1 : {1, 3}) {
+                    for (int s0 : {1, 2}) {
+                        for (int s1 : {1, 2}) {
+                            for (int p0 : {0, 1}) {
+                                for (int p1 : {0, 1}) {
+                                    test_cases.emplace_back(new test_pool2d(pool_type, type_input, {10, 10, 3, 1}, k0, k1, s0, s1, p0, p1));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 1, 1, 1}));
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {2, 1, 1, 1}));
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 2, 1, 1}));
