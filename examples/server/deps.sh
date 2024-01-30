@@ -15,6 +15,13 @@ cd $PUBLIC
 for FILE in $FILES; do
   echo "generate $FILE.hpp"
 
-  # use simple flag for old version of xxd
-  xxd -i $FILE > $DIR/$FILE.hpp
+  # Use C++11 string literals instead of ugly xxd.
+  f=$(echo $FILE | sed 's/\./_/g' -e 's/-/_/g')
+  echo "const char $f[] = R\"LITERAL(" > $DIR/$FILE.hpp
+  cat $FILE >> $DIR/$FILE.hpp
+  echo ")LITERAL\";" >> $DIR/$FILE.hpp
+  echo "unsigned int ${f}_len = sizeof($f);" >> $DIR/$FILE.hpp
+
+  #Deprecated old xxd
+  #xxd -i $FILE > $DIR/$FILE.hpp
 done
