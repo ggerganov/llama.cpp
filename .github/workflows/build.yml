@@ -46,14 +46,7 @@ jobs:
 
       - name: Build
         id: cmake_build
-        run: |
-          "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64
-          icx --version
-          mkdir build
-          cd build
-          cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
-          make
-
+        run:  examples/sycl/win-build-sycl.bat
 
 #  ubuntu-latest-gcc:
 #    runs-on: ubuntu-latest
