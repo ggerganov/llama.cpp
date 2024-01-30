@@ -4556,8 +4556,15 @@ GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml
     }
     ggml_vk_preallocate_buffers();
 
+    int last_node = cgraph->n_nodes - 1;
+
+    // If the last op in the cgraph isn't backend GPU, the command buffer doesn't get closed properly
+    while (last_node > 0 && cgraph->nodes[last_node]->backend != GGML_BACKEND_GPU) {
+        last_node -= 1;
+    }
+
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_build_graph(cgraph->nodes[i], i == cgraph->n_nodes - 1);
+        ggml_vk_build_graph(cgraph->nodes[i], i == last_node);
     }
 
     ggml_compute_params params = {};
