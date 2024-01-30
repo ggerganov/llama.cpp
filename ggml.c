@@ -12790,8 +12790,8 @@ static void ggml_compute_forward_pool_2d(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src,
         struct ggml_tensor * dst) {
-    assert(src->type == GGML_TYPE_F32);
-    assert(params->ith == 0);
+    GGML_ASSERT(src->type == GGML_TYPE_F32);
+    GGML_ASSERT(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
