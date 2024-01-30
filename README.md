@@ -612,7 +612,7 @@ Building the program with BLAS support may lead to some performance improvements
   ```
 
   **Without docker**:
-  
+
   For example, on Ubuntu 22.04 (jammy), use the command below:
 
   ```bash
@@ -633,7 +633,7 @@ Building the program with BLAS support may lead to some performance improvements
   cmake --build . --config Release
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
   ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
-  
+
   # You should see in the output, ggml_vulkan detected your GPU. For example:
   # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
   ```
