@@ -69,6 +69,9 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 
 void llama_sampling_free(struct llama_sampling_context * ctx);
 
+// Reset the sampler grammar without resetting the context
+void llama_sampling_reset_grammar(struct llama_sampling_context * ctx);
+
 // Reset the sampler context
 // - clear prev tokens
 // - reset grammar
