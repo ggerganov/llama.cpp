@@ -2,8 +2,6 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#define GGML_USE_CUBLAS
-
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
 #endif
@@ -22,6 +20,7 @@ struct test_model {
     struct ggml_tensor * q;
     struct ggml_tensor * k;
     struct ggml_tensor * v;
+    struct ggml_tensor * msk;
     ggml_backend_t backend = NULL;
     ggml_backend_buffer_t buffer = NULL;
     struct ggml_context * ctx = NULL;
@@ -102,59 +101,38 @@ float ggml_tensor_get_f32(const ggml_tensor* tensor, int l, int k = 0, int j = 0
     return *(float*)((char*)(tensor->data) + i * tensor->nb[3] + j * tensor->nb[2] + k * tensor->nb[1] + l * tensor->nb[0]);
 }
 
-void load_model(test_model & model, bool use_gpu = false) {
-    float Query[30] = { // [3, 4, 2]
-        // z0
-        2, 4, 2,
-        4, 2, 1,
-        4, 1, 3,
-        4, 2, 2,
+void load_model(test_model & model, int head_dim, int batch_size, int kv_size, int num_heads) {
+    float* query = new float[head_dim * batch_size * num_heads];
+    float* key = new float[head_dim * kv_size * num_heads];
+    float* value = new float[head_dim * kv_size * num_heads];
+    float* mask = new float[kv_size * batch_size];
 
-        // z1
-        2, 1, 1,
-        4, 2, 1,
-        1, 1, 3,
-        4, 2, 1
-    };
+    for(int i = 0; i < head_dim*batch_size*num_heads;i ++) {
+        query[i] = i % 3 ? 2.0f : 1.5f;
+    }
 
-    float Key[24] = { // [3, 4, 2]
-        // z0
-        2, 4, 2,
-        4, 2, 1,
-        4, 2, 3,
-        1, 2, 1,
+    for(int i = 0; i < head_dim*kv_size*num_heads;i ++) {
+        key[i] = i % 3 ? 2.3f : 2.8f;
+        value[i] = i % 3 ? 3.5f : 1.5f;
+    }
 
-        // z1
-        3, 1, 3,
-        4, 2, 1,
-        1, 1, 2,
-        4, 3, 1
-    };
-
-    float Value[24] = { // [4, 3, 2]
-        // z0
-        2, 4, 2, 1,
-        2, 1, 4, 2,
-        1, 4, 2, 3,
-
-        // z1
-        1, 4, 2, 1,
-        2, 1, 1, 2,
-        1, 4, 3, 3,
-    };
+    for(int i = 0; i < batch_size*kv_size;i ++) {
+        mask[i] = i % 3 ? 1.0f : 0.0f;
+    }
 
     size_t buffer_size = 0;
     {
-        buffer_size += 30 * ggml_type_sizef(GGML_TYPE_F32); // tensor q
-        buffer_size += 24 * ggml_type_sizef(GGML_TYPE_F32); // tensor k
-        buffer_size += 24 * ggml_type_sizef(GGML_TYPE_F32); // tensor v
+        buffer_size += head_dim * batch_size * num_heads * ggml_type_sizef(GGML_TYPE_F32); // tensor q
+        buffer_size += head_dim * kv_size * num_heads * ggml_type_sizef(GGML_TYPE_F16); // tensor k
+        buffer_size += head_dim * kv_size * num_heads * ggml_type_sizef(GGML_TYPE_F16); // tensor v
+        buffer_size += batch_size * kv_size * ggml_type_sizef(GGML_TYPE_F32); // tensor mask
         buffer_size += 1024;
     }
 
     printf("%s: ggml tensor size    = %d bytes\n", __func__, (int) sizeof(ggml_tensor));
     printf("%s: backend buffer size = %0.2f MB\n", __func__, (buffer_size/ 1024.f/ 1024.f));
 
-    int num_tensors = 3;
+    int num_tensors = 4;
     struct ggml_init_params params {
             /*.mem_size   =*/ ggml_tensor_overhead() * num_tensors,
             /*.mem_buffer =*/ NULL,
@@ -163,12 +141,10 @@ void load_model(test_model & model, bool use_gpu = false) {
 
     // initialize the backend
 #ifdef GGML_USE_CUBLAS
-    if (use_gpu) {
-        fprintf(stderr, "%s: using CUDA backend\n", __func__);
-        model.backend = ggml_backend_cuda_init(0);
-        if (!model.backend) {
-            fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
-        }
+    fprintf(stderr, "%s: using CUDA backend\n", __func__);
+    model.backend = ggml_backend_cuda_init(0);
+    if (!model.backend) {
+        fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
     }
 #endif
 
@@ -183,9 +159,10 @@ void load_model(test_model & model, bool use_gpu = false) {
     model.ctx = ggml_init(params);
 
     // create tensors
-    model.q = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, 3, 4, 2);
-    model.k = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, 3, 4, 2);
-    model.v = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, 4, 3, 2);
+    model.q = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, head_dim, batch_size, num_heads);
+    model.k = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F16, head_dim, kv_size, num_heads);
+    model.v = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F16, head_dim, kv_size, num_heads);
+    model.msk = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, kv_size, batch_size);
 
     // create a allocator
     ggml_allocr * alloc = ggml_allocr_new_from_buffer(model.buffer);
@@ -194,12 +171,18 @@ void load_model(test_model & model, bool use_gpu = false) {
     ggml_allocr_alloc(alloc, model.q);
     ggml_allocr_alloc(alloc, model.k);
     ggml_allocr_alloc(alloc, model.v);
+    ggml_allocr_alloc(alloc, model.msk);
 
-    ggml_backend_tensor_set(model.q, Query, 0, ggml_nbytes(model.q));
-    ggml_backend_tensor_set(model.k, Key, 0, ggml_nbytes(model.k));
-    ggml_backend_tensor_set(model.v, Value, 0, ggml_nbytes(model.v));
+    ggml_fp16_t* k_f16 = new ggml_fp16_t[head_dim * kv_size * num_heads];
+    ggml_fp16_t* v_f16 = new ggml_fp16_t[head_dim * kv_size * num_heads];
 
-    ggml_allocr_free(alloc);
+    ggml_fp32_to_fp16_row(key, k_f16, head_dim * kv_size * num_heads);
+    ggml_fp32_to_fp16_row(value, v_f16, head_dim * kv_size * num_heads);
+
+    ggml_backend_tensor_set(model.q, query, 0, ggml_nbytes(model.q));
+    ggml_backend_tensor_set(model.k, k_f16, 0, ggml_nbytes(model.k));
+    ggml_backend_tensor_set(model.v, v_f16, 0, ggml_nbytes(model.v));
+    ggml_backend_tensor_set(model.msk, mask, 0, ggml_nbytes(model.msk));
 }
 
 struct ggml_cgraph * build_graph(const test_model& model, struct ggml_allocr * allocr) {
@@ -218,7 +201,7 @@ struct ggml_cgraph * build_graph(const test_model& model, struct ggml_allocr * a
     struct ggml_cgraph  * gf = ggml_new_graph(ctx0);
 
     if(!model.naive_attn) {
-        struct ggml_tensor* result = ggml_flash_attn(ctx0, model.q, model.k, model.v, false);
+        struct ggml_tensor* result = ggml_flash_attn_ext(ctx0, model.q, model.k, model.v, model.msk, 1.0f / sqrtf(model.q->ne[0]));
         ggml_build_forward_expand(gf, result);
     } else {
         struct ggml_tensor* kq = ggml_mul_mat(ctx0, model.k, model.q);
@@ -350,8 +333,7 @@ int main(int argc, char ** argv)
 
     ggml_time_init();
 
-
-    load_model(model, true);
+    load_model(model, 16, 32, 128, 2);
 
     ggml_backend_buffer_t buf_compute; // for compute
     struct ggml_allocr * allocr = NULL;
@@ -385,7 +367,10 @@ int main(int argc, char ** argv)
             if(i > 0 && (i % result->ne[0] == 0)) {
                 printf("\n");
             }
-            printf("%2.6f ", data[i]);
+            if(i > 0 && (i % (result->ne[0] * result->ne[2]) == 0)) {
+                printf("\n\n");
+            }
+            printf("%2.4f ", data[i]);
         }
     }
 
