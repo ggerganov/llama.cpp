@@ -10,7 +10,6 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- ⚠️ Incoming backends: https://github.com/ggerganov/llama.cpp/discussions/5138
 - New SOTA quantized models, including pure 2-bits: https://huggingface.co/ikawrakow
 - Collecting Apple Silicon performance stats:
   - M-series: https://github.com/ggerganov/llama.cpp/discussions/4167
