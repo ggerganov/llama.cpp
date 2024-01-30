@@ -290,7 +290,7 @@ In order to build llama.cpp you have three different options.
         sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
             opencl clblast openblas
 
-            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
+        gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
         ```
 
     **Notes:** With this packages you can build llama.cpp with OPENBLAS and
@@ -613,9 +613,9 @@ Building the program with BLAS support may lead to some performance improvements
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
-  # [Optional] for models using BPE tokenizers
-  ls ./models
-  65B 30B 13B 7B vocab.json
+# [Optional] for models using BPE tokenizers
+ls ./models
+65B 30B 13B 7B vocab.json
 
 # install Python dependencies
 python3 -m pip install -r requirements.txt
@@ -623,8 +623,8 @@ python3 -m pip install -r requirements.txt
 # convert the 7B model to ggml FP16 format
 python3 convert.py models/7B/
 
-  # [Optional] for models using BPE tokenizers
-  python convert.py models/7B/ --vocabtype bpe
+# [Optional] for models using BPE tokenizers
+python convert.py models/7B/ --vocabtype bpe
 
 # quantize the model to 4-bits (using q4_0 method)
 ./quantize ./models/7B/ggml-model-f16.gguf ./models/7B/ggml-model-q4_0.gguf q4_0
