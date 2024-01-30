@@ -229,7 +229,7 @@ a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ](https:/
 
 Recommend to install to default folder: **/opt/intel/oneapi**.
 
-Following guide use the default folder as example. If you use other folder, please modify the following guide info with your folder.
+Following guide uses the default folder as example. If you use other folder, please modify the following guide info with your folder.
 
 b. Enable oneAPI running environment:
 
