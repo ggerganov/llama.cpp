@@ -17,4 +17,3 @@ if "%COMPONENTS%"=="" (
 set installer_exit_code=%ERRORLEVEL%
 rd /s/q "webimage_extracted"
 exit /b %installer_exit_code%
-
