@@ -8726,7 +8726,6 @@ static void ggml_cuda_op_pool2d(
     const int p0 = opts[5];
     const int p1 = opts[6];
 
-    const int64_t IC = src0->ne[2];
     const int64_t IH = src0->ne[1];
     const int64_t IW = src0->ne[0];
 
