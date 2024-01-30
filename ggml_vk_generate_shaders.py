@@ -19,8 +19,8 @@ shader_int8_ext = """
 
 # Type-specific defines
 shader_f16_defines = """
-#define QUANT_K 32
-#define QUANT_R 2
+#define QUANT_K 1
+#define QUANT_R 1
 
 #define A_TYPE float16_t
 """
