@@ -1890,6 +1890,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_Q4_K, GGML_TYPE_Q5_K,
         GGML_TYPE_Q6_K,
         GGML_TYPE_IQ2_XXS, GGML_TYPE_IQ2_XS,
+        GGML_TYPE_IQ3_XXS,
     };
 
     // unary ops
