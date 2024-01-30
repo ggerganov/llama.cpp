@@ -12,15 +12,17 @@ RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key 
     apt-get install -y vulkan-sdk
 
 # Build it
+WORKDIR /app
 COPY . .
 RUN mkdir build && \
     cd build && \
     cmake .. -DLLAMA_VULKAN=1 && \
     cmake --build . --config Release --target server
 
-FROM ubuntu:$UBUNTU_VERSION as runtime
-
-COPY --from=build /app/build/bin/server /server
+# Clean up
+WORKDIR /
+RUN cp /app/build/bin/server /server && \
+    rm -rf /app
 
 ENV LC_ALL=C.utf8
 
