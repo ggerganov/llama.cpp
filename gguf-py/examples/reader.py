@@ -4,18 +4,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from gguf.gguf_reader import GGUFReader 
+from gguf.gguf_reader import GGUFReader
 
 def read_gguf_file(gguf_file_path):
     """
     Reads and prints key-value pairs and tensor information from a GGUF file in an improved format.
-    
+
     Parameters:
     - gguf_file_path: Path to the GGUF file.
     """
-    
+
     reader = GGUFReader(gguf_file_path)
-    
+
     # List all key-value pairs in a columnized format
     print("Key-Value Pairs:")
     max_key_length = max(len(key) for key in reader.fields.keys())
@@ -23,7 +23,7 @@ def read_gguf_file(gguf_file_path):
         value = field.parts[field.data[0]] 
         print(f"{key:{max_key_length}} : {value}")
     print("----")
-    
+
     # List all tensors
     print("Tensors:")
     tensor_info_format = "{:<30} | Shape: {:<15} | Size: {:<12} | Quantization: {}"
