@@ -278,6 +278,8 @@ int main(int argc, char * argv[]) {
         if (qfns.from_float && qfns.to_float) {
             printf("%s\n", ggml_type_name(type));
 
+            ggml_quantize_init(type);
+
             if (params.op_quantize_row_q_reference) {
                 printf("  quantize_row_q_reference\n");
                 for (size_t size : params.test_sizes) {

@@ -378,6 +378,8 @@ int main(int argc, char ** argv) {
                 printf("testing %s ...\n",  ggml_type_name(type));
             }
 
+            ggml_quantize_init(type);
+
             error_stats global_stats {};
 
             for (const auto& kv_tensor : tensors) {
