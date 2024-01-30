@@ -2873,7 +2873,8 @@ static void ggml_vk_op_f32(vk_context * ctx, const ggml_tensor * src0, const ggm
     if (op == GGML_OP_CPY) {
         GGML_ASSERT(!transfer_src0);
         GGML_ASSERT(!transfer_src1);
-        d_sz = dst->ne[1] * dst->nb[1];
+        x_sz = ggml_nbytes(src0);
+        d_sz = ggml_nbytes(dst);
 
         if (extra->offset + d_sz >= d_D->size) {
             d_sz = VK_WHOLE_SIZE;
