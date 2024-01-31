@@ -1187,6 +1187,8 @@ static bool ggml_metal_graph_compute(
                     } break;
                 case GGML_OP_SOFT_MAX:
                     {
+                        GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F16);
+
                         int nth = 32; // SIMD width
 
                         id<MTLComputePipelineState> pipeline = nil;
@@ -2212,6 +2214,10 @@ static bool ggml_metal_graph_compute(
                         id<MTLBuffer> id_src2 = ggml_metal_get_buffer(src2, &offs_src2);
 
                         id<MTLBuffer> id_src3 = src3 ? ggml_metal_get_buffer(src3, &offs_src3) : nil;
+
+                        GGML_ASSERT(!src3 || src3->type == GGML_TYPE_F16);
+                        GGML_ASSERT(!src3 || src3->ne[1] >= GGML_PAD(src0->ne[1], 8) &&
+                                "the Flash-Attention Metal kernel requires the mask to be padded to 8 and at least n_queries big");
 
                         const int64_t  ne30 = src3 ? src3->ne[0] : 0; GGML_UNUSED(ne30);
                         const int64_t  ne31 = src3 ? src3->ne[1] : 0;

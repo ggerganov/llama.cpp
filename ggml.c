@@ -5085,6 +5085,7 @@ static struct ggml_tensor * ggml_soft_max_impl(
         bool                  inplace) {
     GGML_ASSERT(ggml_is_contiguous(a));
     if (mask) {
+        GGML_ASSERT(mask->type == GGML_TYPE_F16);
         GGML_ASSERT(ggml_is_contiguous(mask));
         GGML_ASSERT(mask->ne[2] == 1);
         GGML_ASSERT(mask->ne[3] == 1);
@@ -5854,6 +5855,8 @@ struct ggml_tensor * ggml_flash_attn_ext(
         GGML_ASSERT(ggml_is_contiguous(mask));
         GGML_ASSERT(mask->ne[2] == 1);
         GGML_ASSERT(mask->ne[3] == 1);
+        GGML_ASSERT(mask->ne[1] >= GGML_PAD(q->ne[1], GGML_KQ_MASK_PAD) &&
+                "the Flash-Attention kernel requires the mask to be padded to GGML_KQ_MASK_PAD and at least n_queries big");
         //GGML_ASSERT(ggml_can_repeat_rows(mask, qk));
     }
 
@@ -11552,12 +11555,14 @@ static void ggml_compute_forward_soft_max_f32(
         float * dp = (float *)((char *)  dst->data +  i1*dst->nb[1]);
 
         // broadcast the mask across rows
-        float * mp = src1 ? (float *)((char *) src1->data + (i1%ne11)*src1->nb[1]) : NULL;
+        ggml_fp16_t * mp = src1 ? (ggml_fp16_t *)((char *) src1->data + (i1%ne11)*src1->nb[1]) : NULL;
 
         ggml_vec_cpy_f32  (nc, wp, sp);
         ggml_vec_scale_f32(nc, wp, scale);
         if (mp) {
-            ggml_vec_acc_f32(nc, wp, mp);
+            for (int i = 0; i < nc; ++i) {
+                wp[i] += GGML_FP16_TO_FP32(mp[i]);
+            }
         }
 
 #ifndef NDEBUG
@@ -13760,7 +13765,7 @@ static void ggml_compute_forward_flash_attn_ext_f16(
 
         memset(V16, 0, D*sizeof(ggml_fp16_t));
 
-        const float * mp = mask ? (float *)((char *) mask->data + (ir%mask->ne[1])*mask->nb[1]) : NULL;
+        const ggml_fp16_t * mp = mask ? (ggml_fp16_t *)((char *) mask->data + iq1*mask->nb[1]) : NULL;
 
         // k indices
         const int ik3 = iq3 / rk3;
@@ -13774,7 +13779,7 @@ static void ggml_compute_forward_flash_attn_ext_f16(
         // loop over n_kv and n_head_kv
         // ref: https://arxiv.org/pdf/2112.05682.pdf
         for (int64_t ic = 0; ic < nek1; ++ic) {
-            const float mv = mp ? mp[ic] : 0.0f;
+            const float mv = mp ? GGML_FP16_TO_FP32(mp[ic]) : 0.0f;
             if (mv == -INFINITY) {
                 continue;
             }
