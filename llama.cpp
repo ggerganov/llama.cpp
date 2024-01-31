@@ -6878,11 +6878,6 @@ static int llama_decode_internal(
         n_threads = std::min(4, n_threads);
     }
 
-    const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 1;
-    if ((ggml_cpu_has_cublas() || ggml_cpu_has_vulkan()) && fully_offloaded) {
-        n_threads = 1;
-    }
-
 #ifdef GGML_USE_MPI
     const int64_t n_layer = hparams.n_layer;
     ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);

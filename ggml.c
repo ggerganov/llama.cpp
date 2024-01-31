@@ -20473,6 +20473,14 @@ int ggml_cpu_has_vulkan(void) {
 #endif
 }
 
+int ggml_cpu_has_kompute(void) {
+#if defined(GGML_USE_KOMPUTE)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 int ggml_cpu_has_sycl(void) {
 #if defined(GGML_USE_SYCL)
     return 1;
@@ -20482,7 +20490,8 @@ int ggml_cpu_has_sycl(void) {
 }
 
 int ggml_cpu_has_gpublas(void) {
-    return ggml_cpu_has_cublas() || ggml_cpu_has_clblast() || ggml_cpu_has_vulkan() || ggml_cpu_has_sycl();
+    return ggml_cpu_has_cublas() || ggml_cpu_has_clblast() || ggml_cpu_has_vulkan() || ggml_cpu_has_kompute() ||
+           ggml_cpu_has_sycl();
 }
 
 int ggml_cpu_has_sse3(void) {
