@@ -335,5 +335,9 @@ void llama_sampling_rollback(
         rollback_num = ctx_sampling->prev.size();
     }
 
+    // remove rollback_num elements from the end
     ctx_sampling->prev.erase(ctx_sampling->prev.end() - rollback_num, ctx_sampling->prev.end());
+
+    // Insert rollback_num zeros at the beginning to preserve the size of prev
+    ctx_sampling->prev.insert(ctx_sampling->prev.begin(), rollback_num, 0);
 }
