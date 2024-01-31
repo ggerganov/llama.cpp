@@ -102,6 +102,7 @@ class MODEL_ARCH(IntEnum):
     PLAMO     = auto()
     CODESHELL = auto()
     ORION     = auto()
+    INTERNLM2  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -132,6 +133,21 @@ class MODEL_TENSOR(IntEnum):
     ATTN_Q_NORM     = auto()
     ATTN_K_NORM     = auto()
 
+    ATTN_QKV_LORA_A = auto()
+    ATTN_QKV_LORA_B = auto()
+    ATTN_OUT_LORA_A = auto()
+    ATTN_OUT_LORA_B = auto()
+    FFN_UP_LORA_A   = auto()
+    FFN_UP_LORA_B   = auto()
+    FFN_GATE_LORA_A = auto()
+    FFN_GATE_LORA_B = auto()
+    FFN_DOWN_LORA_A = auto()
+    FFN_DOWN_LORA_B = auto()
+
+
+
+
+
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.LLAMA:          "llama",
@@ -153,6 +169,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.PLAMO:          "plamo",
     MODEL_ARCH.CODESHELL:      "codeshell",
     MODEL_ARCH.ORION:          "orion",
+    MODEL_ARCH.INTERNLM2:      "internlm2",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -182,6 +199,18 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_GATE_EXP:    "blk.{bid}.ffn_gate.{xid}",
     MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down.{xid}",
     MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up.{xid}",
+
+    MODEL_TENSOR.ATTN_QKV_LORA_A : "blk.{bid}.attn_qkv_lora_a",
+    MODEL_TENSOR.ATTN_QKV_LORA_B : "blk.{bid}.attn_qkv_lora_b",
+    MODEL_TENSOR.ATTN_OUT_LORA_A : "blk.{bid}.attn_out_lora_a",
+    MODEL_TENSOR.ATTN_OUT_LORA_B : "blk.{bid}.attn_out_lora_b",
+    MODEL_TENSOR.FFN_UP_LORA_A   : "blk.{bid}.ffn_up_lora_a",
+    MODEL_TENSOR.FFN_UP_LORA_B   : "blk.{bid}.ffn_up_lora_b",
+    MODEL_TENSOR.FFN_GATE_LORA_A : "blk.{bid}.ffn_gate_lora_a",
+    MODEL_TENSOR.FFN_GATE_LORA_B : "blk.{bid}.ffn_gate_lora_b",
+    MODEL_TENSOR.FFN_DOWN_LORA_A : "blk.{bid}.ffn_down_lora_a",
+    MODEL_TENSOR.FFN_DOWN_LORA_B : "blk.{bid}.ffn_down_lora_b",
+
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -445,6 +474,32 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.INTERNLM2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+
+        MODEL_TENSOR.ATTN_QKV_LORA_A,
+        MODEL_TENSOR.ATTN_QKV_LORA_B,
+        MODEL_TENSOR.ATTN_OUT_LORA_A,
+        MODEL_TENSOR.ATTN_OUT_LORA_B,
+        MODEL_TENSOR.FFN_UP_LORA_A,
+        MODEL_TENSOR.FFN_UP_LORA_B,
+        MODEL_TENSOR.FFN_GATE_LORA_A,
+        MODEL_TENSOR.FFN_GATE_LORA_B,
+        MODEL_TENSOR.FFN_DOWN_LORA_A,
+        MODEL_TENSOR.FFN_DOWN_LORA_B,
     ],
     # TODO
 }
