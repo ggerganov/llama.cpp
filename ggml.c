@@ -17151,7 +17151,7 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
             case GGML_OP_SOFT_MAX:
             case GGML_OP_ROPE:
                 {
-                    cur = ggml_type_size(GGML_TYPE_F32) * node->ne[0] * n_tasks;
+                    cur = ggml_type_size(GGML_TYPE_F32) * (node->ne[0] + CACHE_LINE_SIZE_F32) * n_tasks;
                 } break;
             case GGML_OP_CONV_TRANSPOSE_1D:
                 {
