@@ -817,7 +817,7 @@ static void ggml_vk_load_shaders() {
     // mulmat
     std::initializer_list<uint32_t> warptile_l = { 128, 128, 128, 16, vk_device.subgroup_size * 2, 64, 2, 4, 4, vk_device.subgroup_size };
     std::initializer_list<uint32_t> warptile_m = { 128,  64,  64, 16, vk_device.subgroup_size, 32, 2, 4, 2, vk_device.subgroup_size };
-    std::initializer_list<uint32_t> warptile_s = { vk_device.subgroup_size,  32,  32,  8, 32, 32, 2, 2, 2, vk_device.subgroup_size };
+    std::initializer_list<uint32_t> warptile_s = { vk_device.subgroup_size,  32,  32, 16, 32, 32, 2, 2, 2, vk_device.subgroup_size };
 
     std::array<uint32_t, 3> l_wg_denoms = {128, 128, 1 };
     std::array<uint32_t, 3> m_wg_denoms = { 64,  64, 1 };
