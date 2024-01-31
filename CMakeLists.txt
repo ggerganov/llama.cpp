@@ -507,7 +507,11 @@ if (LLAMA_SYCL)
     set(GGML_HEADERS_SYCL ggml.h ggml-sycl.h)
     set(GGML_SOURCES_SYCL ggml-sycl.cpp)
 
-    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
+    if (WIN32)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl sycl7 OpenCL mkl_sycl_blas_dll.lib mkl_intel_ilp64_dll.lib mkl_sequential_dll.lib mkl_core_dll.lib)
+    else()
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
+    endif()
 endif()
 
 if (LLAMA_KOMPUTE)
