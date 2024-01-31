@@ -637,11 +637,11 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             const std::regex regex{R"([,/]+)"};
             std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
             std::vector<std::string> split_arg{it, {}};
-            if (split_arg.size() >= LLAMA_MAX_DEVICES) {
+            if (split_arg.size() >= llama_max_devices()) {
                 invalid_param = true;
                 break;
             }
-            for (size_t i = 0; i < LLAMA_MAX_DEVICES; ++i) {
+            for (size_t i = 0; i < llama_max_devices(); ++i) {
                 if (i < split_arg.size()) {
                     params.tensor_split[i] = std::stof(split_arg[i]);
                 } else {
@@ -1651,7 +1651,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "cont_batching: %s # default: false\n", params.cont_batching ? "true" : "false");
     fprintf(stream, "temp: %f # default: 0.8\n", sparams.temp);
 
-    const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + LLAMA_MAX_DEVICES);
+    const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + llama_max_devices());
     dump_vector_float_yaml(stream, "tensor_split", tensor_split_vector);
 
     fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
