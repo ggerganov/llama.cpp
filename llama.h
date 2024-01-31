@@ -3,11 +3,6 @@
 
 #include "ggml.h"
 #include "ggml-backend.h"
-#ifdef GGML_USE_CUBLAS
-#include "ggml-cuda.h"
-#elif defined(GGML_USE_SYCL)
-#include "ggml-sycl.h"
-#endif
 
 #include <stddef.h>
 #include <stdint.h>
