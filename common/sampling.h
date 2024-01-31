@@ -121,6 +121,10 @@ void llama_sampling_accept(
         llama_token id,
         bool apply_grammar);
 
+// this performs rollback of the latest sampling operation by "rollback_num" tokens;
+// it simply strikes the latest "rollback_num" tokens from the "prev" vector
+// in general, the rollback is "imperfect", meaning the "forgotten tokens" which were dropped when the length of "prev" exceeded "n_prev" cannot be recalled after rollback
+// however, if `sampling_params.n_prev` >= `sampling_params.penalty_last_n` + `rollback_num`, then it becomes "perfect" rollback
 void llama_sampling_rollback(
         struct llama_sampling_context * ctx_sampling,
         int rollback_num);
