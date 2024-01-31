@@ -392,15 +392,15 @@ Building the program with BLAS support may lead to some performance improvements
 
   Check [BLIS.md](docs/BLIS.md) for more information.
 
-- #### SYCL (using Intel DPCPP)
+- #### SYCL
   SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
 
   llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
 
-  For detailed info, please refer to [llama.cpp for SYCL](README_sycl.md).
+  For detailed info, please refer to [llama.cpp for SYCL](README-sycl.md).
 
 - #### Intel oneMKL
-  Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [llama.cpp for SYCL](./README_sycl.md).
+  Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [llama.cpp for SYCL](./README-sycl.md).
 
   - Using manual oneAPI installation:
     By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
