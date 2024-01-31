@@ -1,7 +1,8 @@
-/*MIT license
-  Copyright (C) 2024 Intel Corporation
-  SPDX-License-Identifier: MIT
-*/
+//
+//  MIT license
+//  Copyright (C) 2024 Intel Corporation
+//  SPDX-License-Identifier: MIT
+//
 
 #pragma once
 

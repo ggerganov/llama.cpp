@@ -2713,10 +2713,10 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "Q5_K - Small";
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "Q5_K - Medium";
         case LLAMA_FTYPE_MOSTLY_Q6_K:   return "Q6_K";
-        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:return "IQ2_XSS - 2.0625 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:return "IQ2_XXS - 2.0625 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ2_XS: return "IQ2_XS - 2.3125 bpw";
         case LLAMA_FTYPE_MOSTLY_Q3_K_XS:return "Q3_K - Extra small";
-        case LLAMA_FTYPE_MOSTLY_IQ3_XXS:return "IQ3_XSS - 3.0625 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ3_XXS:return "IQ3_XXS - 3.0625 bpw";
 
         default: return "unknown, may not work";
     }
@@ -6876,11 +6876,6 @@ static int llama_decode_internal(
     //       with the BLAS calls. need a better solution
     if (n_tokens >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas()) {
         n_threads = std::min(4, n_threads);
-    }
-
-    const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 1;
-    if ((ggml_cpu_has_cublas() || ggml_cpu_has_vulkan()) && fully_offloaded) {
-        n_threads = 1;
     }
 
 #ifdef GGML_USE_MPI
