@@ -602,9 +602,10 @@ Building the program with BLAS support may lead to some performance improvements
 
 - #### Vulkan
 
-  Firstly, you need to make sure you installed [Vulkan SDK](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started_ubuntu.html)
-
   **With docker**:
+
+  You don't need to install Vulkan SDK. It will be installed inside the container.
+
   ```sh
   # Build the image
   docker build -t llama-cpp-vulkan -f .devops/main-vulkan.Dockerfile .
@@ -614,6 +615,8 @@ Building the program with BLAS support may lead to some performance improvements
   ```
 
   **Without docker**:
+
+  Firstly, you need to make sure you installed [Vulkan SDK](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started_ubuntu.html)
 
   For example, on Ubuntu 22.04 (jammy), use the command below:
 
