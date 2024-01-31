@@ -2713,10 +2713,10 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "Q5_K - Small";
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "Q5_K - Medium";
         case LLAMA_FTYPE_MOSTLY_Q6_K:   return "Q6_K";
-        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:return "IQ2_XSS - 2.0625 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:return "IQ2_XXS - 2.0625 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ2_XS: return "IQ2_XS - 2.3125 bpw";
         case LLAMA_FTYPE_MOSTLY_Q3_K_XS:return "Q3_K - Extra small";
-        case LLAMA_FTYPE_MOSTLY_IQ3_XXS:return "IQ3_XSS - 3.0625 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ3_XXS:return "IQ3_XXS - 3.0625 bpw";
 
         default: return "unknown, may not work";
     }
