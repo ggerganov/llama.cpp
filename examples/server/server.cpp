@@ -2115,9 +2115,9 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             const std::regex regex{R"([,/]+)"};
             std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
             std::vector<std::string> split_arg{it, {}};
-            GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
+            GGML_ASSERT(split_arg.size() <= llama_max_devices());
 
-            for (size_t i_device = 0; i_device < LLAMA_MAX_DEVICES; ++i_device)
+            for (size_t i_device = 0; i_device < llama_max_devices(); ++i_device)
             {
                 if (i_device < split_arg.size())
                 {
