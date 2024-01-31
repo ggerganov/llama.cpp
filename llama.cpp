@@ -10090,16 +10090,43 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     return result;
 }
 
-int32_t llama_max_devices(void) {
-    return LLAMA_MAX_DEVICES;
+size_t llama_max_devices(void) {
+#if defined(GGML_USE_METAL)
+    return 1;
+#elif defined(GGML_USE_CUBLAS)
+    return GGML_CUDA_MAX_DEVICES;
+#elif defined(GGML_USE_SYCL)
+    return GGML_SYCL_MAX_DEVICES;
+#else
+    return 1;
+#endif
 }
 
-bool llama_mmap_supported(void) {
+bool llama_supports_mmap(void) {
     return llama_mmap::SUPPORTED;
 }
 
-bool llama_mlock_supported(void) {
+bool llama_supports_mlock(void) {
     return llama_mlock::SUPPORTED;
+}
+
+bool llama_supports_gpu_offload(void) {
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_VULKAN) || \
+    defined(GGML_USE_SYCL)   || defined(GGML_USE_KOMPUTE)
+    // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
+    return true;
+#else
+    return false;
+#endif
+}
+
+// deprecated:
+bool llama_mmap_supported(void) {
+    return llama_supports_mmap();
+}
+
+bool llama_mlock_supported(void) {
+    return llama_supports_mlock();
 }
 
 void llama_backend_init(bool numa) {
@@ -10133,8 +10160,8 @@ int64_t llama_time_us(void) {
 }
 
 struct llama_model * llama_load_model_from_file(
-                             const char * path_model,
-              struct llama_model_params   params) {
+        const char * path_model,
+        struct llama_model_params   params) {
     ggml_time_init();
 
     llama_model * model = new llama_model;

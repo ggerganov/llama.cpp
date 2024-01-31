@@ -160,7 +160,7 @@ struct cmd_params {
     std::vector<int> main_gpu;
     std::vector<bool> no_kv_offload;
     std::vector<bool> mul_mat_q;
-    std::vector<std::array<float, LLAMA_MAX_DEVICES>> tensor_split;
+    std::vector<std::vector<float>> tensor_split;
     int reps;
     bool verbose;
     output_formats output_format;
@@ -179,7 +179,7 @@ static const cmd_params cmd_params_defaults = {
     /* main_gpu      */ {0},
     /* no_kv_offload */ {false},
     /* mul_mat_q     */ {true},
-    /* tensor_split  */ {{}},
+    /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
     /* reps          */ 5,
     /* verbose       */ false,
     /* output_format */ MARKDOWN
@@ -380,10 +380,10 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 const std::regex regex{R"([;/]+)"};
                 std::sregex_token_iterator it{ts.begin(), ts.end(), regex, -1};
                 std::vector<std::string> split_arg{it, {}};
-                GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
+                GGML_ASSERT(split_arg.size() <= llama_max_devices());
 
-                std::array<float, LLAMA_MAX_DEVICES> tensor_split;
-                for (size_t i = 0; i < LLAMA_MAX_DEVICES; ++i) {
+                std::vector<float> tensor_split(llama_max_devices());
+                for (size_t i = 0; i < llama_max_devices(); ++i) {
                     if (i < split_arg.size()) {
                         tensor_split[i] = std::stof(split_arg[i]);
                     } else {
@@ -459,7 +459,7 @@ struct cmd_params_instance {
     int main_gpu;
     bool no_kv_offload;
     bool mul_mat_q;
-    std::array<float, LLAMA_MAX_DEVICES> tensor_split;
+    std::vector<float> tensor_split;
 
     llama_model_params to_llama_mparams() const {
         llama_model_params mparams = llama_model_default_params();
@@ -582,7 +582,7 @@ struct test {
     int main_gpu;
     bool no_kv_offload;
     bool mul_mat_q;
-    std::array<float, LLAMA_MAX_DEVICES> tensor_split;
+    std::vector<float> tensor_split;
     int n_prompt;
     int n_gen;
     std::string test_time;
@@ -704,7 +704,7 @@ struct test {
     std::vector<std::string> get_values() const {
         std::string tensor_split_str;
         int max_nonzero = 0;
-        for (int i = 0; i < LLAMA_MAX_DEVICES; i++) {
+        for (size_t i = 0; i < llama_max_devices(); i++) {
             if (tensor_split[i] > 0) {
                 max_nonzero = i;
             }
