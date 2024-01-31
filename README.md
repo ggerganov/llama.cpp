@@ -10,7 +10,9 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- ⚠️ Incoming backends: https://github.com/ggerganov/llama.cpp/discussions/5138
+- Remove LLAMA_MAX_DEVICES and LLAMA_SUPPORTS_GPU_OFFLOAD: https://github.com/ggerganov/llama.cpp/pull/5240
+- Incoming backends: https://github.com/ggerganov/llama.cpp/discussions/5138
+  - [SYCL backend](README-sycl.md) is ready (1/28/2024), support Linux/Windows in Intel GPUs (iGPU, Arc/Flex/Max series)
 - New SOTA quantized models, including pure 2-bits: https://huggingface.co/ikawrakow
 - Collecting Apple Silicon performance stats:
   - M-series: https://github.com/ggerganov/llama.cpp/discussions/4167
@@ -291,7 +293,7 @@ In order to build llama.cpp you have three different options.
         sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
             opencl clblast openblas
 
-            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
+        gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
         ```
 
     **Notes:** With this packages you can build llama.cpp with OPENBLAS and
@@ -605,7 +607,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   llama.cpp based on SYCL is used to support Intel GPU (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
 
-  For detailed info, please refer to [llama.cpp for SYCL](README_sycl.md).
+  For detailed info, please refer to [llama.cpp for SYCL](README-sycl.md).
 
 
 ### Prepare Data & Run
@@ -614,9 +616,9 @@ Building the program with BLAS support may lead to some performance improvements
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
 65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
-  # [Optional] for models using BPE tokenizers
-  ls ./models
-  65B 30B 13B 7B vocab.json
+# [Optional] for models using BPE tokenizers
+ls ./models
+65B 30B 13B 7B vocab.json
 
 # install Python dependencies
 python3 -m pip install -r requirements.txt
@@ -624,8 +626,8 @@ python3 -m pip install -r requirements.txt
 # convert the 7B model to ggml FP16 format
 python3 convert.py models/7B/
 
-  # [Optional] for models using BPE tokenizers
-  python convert.py models/7B/ --vocabtype bpe
+# [Optional] for models using BPE tokenizers
+python convert.py models/7B/ --vocabtype bpe
 
 # quantize the model to 4-bits (using q4_0 method)
 ./quantize ./models/7B/ggml-model-f16.gguf ./models/7B/ggml-model-q4_0.gguf q4_0

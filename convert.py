@@ -334,7 +334,10 @@ class Params:
 class BpeVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
-        self.vocab = self.bpe_tokenizer["model"]["vocab"]
+        try:
+            self.vocab = self.bpe_tokenizer["model"]["vocab"]
+        except KeyError:
+            self.vocab = self.bpe_tokenizer
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
             # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
