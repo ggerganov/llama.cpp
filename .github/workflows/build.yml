@@ -565,6 +565,31 @@ jobs:
           path: |
             cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
+  windows-latest-cmake-sycl:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/62641e01-1e8d-4ace-91d6-ae03f7f8a71f/w_BaseKit_p_2024.0.0.49563_offline.exe
+      WINDOWS_DPCPP_MKL: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel
+
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        run:  scripts/install-oneapi.bat $WINDOWS_BASEKIT_URL $WINDOWS_DPCPP_MKL
+
+      - name: Build
+        id: cmake_build
+        run:  examples/sycl/win-build-sycl.bat
+
   ios-xcode-build:
     runs-on: macos-latest
 
