@@ -10093,7 +10093,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
 size_t llama_max_devices(void) {
 #if defined(GGML_USE_METAL)
     return 1;
-#elif defined(GGML_USE_CUDA)
+#elif defined(GGML_USE_CUBLAS)
     return GGML_CUDA_MAX_DEVICES;
 #elif defined(GGML_USE_SYCL)
     return GGML_SYCL_MAX_DEVICES;
