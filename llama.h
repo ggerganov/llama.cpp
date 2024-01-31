@@ -46,12 +46,6 @@
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION 4
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL)   || defined(GGML_USE_KOMPUTE)
-// Defined when llama.cpp is compiled with support for offloading model layers to GPU.
-#define LLAMA_SUPPORTS_GPU_OFFLOAD
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -337,8 +331,12 @@ extern "C" {
 
     LLAMA_API size_t llama_max_devices(void);
 
-    LLAMA_API bool llama_mmap_supported (void);
-    LLAMA_API bool llama_mlock_supported(void);
+    LLAMA_API bool llama_supports_mmap       (void);
+    LLAMA_API bool llama_supports_mlock      (void);
+    LLAMA_API bool llama_supports_gpu_offload(void);
+
+    LLAMA_API DEPRECATED(bool llama_mmap_supported (void), "use llama_supports_mmap() instead");
+    LLAMA_API DEPRECATED(bool llama_mlock_supported(void), "use llama_supports_mlock() instead");
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
