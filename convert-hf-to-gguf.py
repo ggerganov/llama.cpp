@@ -1858,10 +1858,12 @@ class MambaModel(Model):
         self.gguf_writer.add_context_length(2**20) # arbitrary value; for those who use the default
         self.gguf_writer.add_embedding_length(d_model)
         self.gguf_writer.add_feed_forward_length(0) # unused, but seemingly required when loading
-        self.gguf_writer.add_head_count(d_inner)
+        self.gguf_writer.add_head_count(d_inner) # the number of rows in conv_state and ssm_state
         self.gguf_writer.add_block_count(self.hparams["n_layer"])
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams.get("rms_norm_eps", 1e-5))
-        self.gguf_writer.add_key_length(self.hparams.get("d_conv", 4))
+        # NOTE: (ab)using the KV cache metadata to store dimensions for conv_state and ssm_state
+        # Since the first column of the conv_state is shifted out each time, it's not actually needed
+        self.gguf_writer.add_key_length(self.hparams.get("d_conv", 4) - 1)
         self.gguf_writer.add_value_length(self.hparams.get("d_state", 16))
         self.gguf_writer.add_file_type(self.ftype)
 
