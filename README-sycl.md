@@ -405,7 +405,7 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
   llama.cpp use mmap as default way to read model file and copy to GPU. In some system, memcpy will be abnormal and block.
 
-  Solution: add **--no-mmap**.
+  Solution: add **--no-mmap** or **--mmap 0**.
 
 ## Q&A
 
