@@ -1689,7 +1689,8 @@ void main() {
     }
 
     const float xi = float(data_a[i]);
-    data_d[i] = D_TYPE(0.5f*xi*(1.0f + tanh(SQRT_2_OVER_PI*xi*(1.0f + GELU_COEF_A*xi*xi))));
+    const float val = SQRT_2_OVER_PI*xi*(1.0f + GELU_COEF_A*xi*xi);
+    data_d[i] = D_TYPE(0.5f*xi*(2.0f - 2.0f / (exp(2 * val) + 1)));
 }
 """
 
