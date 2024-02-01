@@ -2876,6 +2876,9 @@ static void ggml_vk_op_f32(vk_context * ctx, const ggml_tensor * src0, const ggm
         x_sz = ggml_nbytes(src0);
         d_sz = ggml_nbytes(dst);
 
+        if (extra_src0->offset + x_sz >= d_X->size) {
+            x_sz = VK_WHOLE_SIZE;
+        }
         if (extra->offset + d_sz >= d_D->size) {
             d_sz = VK_WHOLE_SIZE;
         }
@@ -2911,12 +2914,16 @@ static void ggml_vk_op_f32(vk_context * ctx, const ggml_tensor * src0, const ggm
             break;
         }
 
-        x_sz *= ne02 * ne03;
-        if (y_sz != VK_WHOLE_SIZE) {
-            y_sz *= ne12 * ne13;
-        }
         if (op != GGML_OP_CPY) {
-            d_sz *= ne02 * ne03;
+            if (x_sz != VK_WHOLE_SIZE) {
+                x_sz *= ne02 * ne03;
+            }
+            if (y_sz != VK_WHOLE_SIZE) {
+                y_sz *= ne12 * ne13;
+            }
+            if (d_sz != VK_WHOLE_SIZE) {
+                d_sz *= ne02 * ne03;
+            }
         }
 
         if (!use_src1 && op == GGML_OP_SOFT_MAX) {
