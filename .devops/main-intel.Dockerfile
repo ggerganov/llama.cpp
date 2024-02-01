@@ -1,6 +1,6 @@
 ARG ONEAPI_VERSION=2024.0.1-devel-ubuntu22.04
 
-FROM intel/hpckit:$ONEAPI_VERSION as build
+FROM intel/oneapi-basekit:$ONEAPI_VERSION as build
 
 ARG LLAMA_SYCL_F16=OFF
 RUN apt-get update && \
@@ -19,7 +19,7 @@ RUN mkdir build && \
     cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx ${OPT_SYCL_F16} && \
     cmake --build . --config Release --target main
 
-FROM intel/hpckit:$ONEAPI_VERSION as runtime
+FROM intel/oneapi-basekit:$ONEAPI_VERSION as runtime
 
 COPY --from=build /app/build/bin/main /main
 
