@@ -578,6 +578,7 @@ struct test_case {
         }
 #else
         int n_nodes = gf->n_nodes;
+        n_runs = 1000;
         for (int i = 1; i < n_runs; i++) {
             for (int j = 0; j < n_nodes; j++) {
                 gf->nodes[gf->n_nodes++] = gf->nodes[j];
