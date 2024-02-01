@@ -1354,6 +1354,7 @@ namespace dpct
             }
 #else
             return q.memcpy(to_ptr, from_ptr, size, dep_events);
+            GGML_UNUSED(direction);
 #endif // DPCT_USM_LEVEL_NONE
         }
 
@@ -1655,7 +1656,7 @@ namespace dpct
             using Ty = typename DataType<T>::T2;
             Ty s_h;
             if (get_pointer_attribute(q, s) == pointer_access_attribute::device_only)
-                detail::dpct_memcpy(q, (void *)&s_h, (void *)s, sizeof(T), device_to_host)
+                detail::dpct_memcpy(q, (void *)&s_h, (const void *)s, sizeof(T), device_to_host)
                     .wait();
             else
                 s_h = *reinterpret_cast<const Ty *>(s);
@@ -1679,6 +1680,20 @@ namespace dpct
                               int ldb, const void *beta, void *c, int ldc)
         {
 #ifndef __INTEL_MKL__
+            GGML_UNUSED(q);
+            GGML_UNUSED(a_trans);
+            GGML_UNUSED(b_trans);
+            GGML_UNUSED(m);
+            GGML_UNUSED(n);
+            GGML_UNUSED(k);
+            GGML_UNUSED(alpha);
+            GGML_UNUSED(a);
+            GGML_UNUSED(lda);
+            GGML_UNUSED(b);
+            GGML_UNUSED(ldb);
+            GGML_UNUSED(beta);
+            GGML_UNUSED(c);
+            GGML_UNUSED(ldc);
             throw std::runtime_error("The oneAPI Math Kernel Library (oneMKL) Interfaces "
                                      "Project does not support this API.");
 #else
@@ -1818,7 +1833,7 @@ namespace dpct
 
     template <typename T>
     T permute_sub_group_by_xor(sycl::sub_group g, T x, unsigned int mask,
-                               int logical_sub_group_size = 32)
+                               unsigned int logical_sub_group_size = 32)
     {
         unsigned int id = g.get_local_linear_id();
         unsigned int start_index =
@@ -2148,6 +2163,7 @@ namespace dpct
         }
 #else
         return q.memcpy(to_ptr, from_ptr, size, dep_events);
+        GGML_UNUSED(direction);
 #endif // DPCT_USM_LEVEL_NONE
     }
 
@@ -3291,7 +3307,7 @@ void log_ggml_var_device(const char*name, float *src, size_t total_elements, boo
     std::ofstream logfile;
     logfile.open(filename);
     // printf("local buf element %d\n", total_elements);
-    for(int i=0; i<total_elements; i++){
+    for(size_t i=0; i<total_elements; i++){
         if((i+1)%20 ==0) logfile <<std::endl;
         else logfile << local_buf[i] <<" ";
     }
@@ -3385,6 +3401,7 @@ static __dpct_inline__ float warp_reduce_max(float x,
 
 static __dpct_inline__ float op_repeat(const float a, const float b) {
     return b;
+    GGML_UNUSED(a);
 }
 
 static __dpct_inline__ float op_add(const float a, const float b) {
@@ -11145,10 +11162,10 @@ DPCT1082:64: Migration of CUmemGenericAllocationHandle type is not supported.
 //     g_sycl_pool_handles[GGML_SYCL_MAX_DEVICES];
 static dpct::device_ptr g_sycl_pool_addr[GGML_SYCL_MAX_DEVICES] = {0};
 static size_t g_sycl_pool_used[GGML_SYCL_MAX_DEVICES] = {0};
-static const size_t SYCL_POOL_VMM_MAX_SIZE = 1ull << 36; // 64 GB
 
 static void *ggml_sycl_pool_malloc_vmm(size_t size, size_t *actual_size) try {
-
+    GGML_UNUSED(size);
+    GGML_UNUSED(actual_size);
     return NULL;
 }
 catch (sycl::exception const &exc) {
@@ -11338,9 +11355,8 @@ void ggml_init_sycl() try {
             if(id!=user_device_id) continue;
 
             device_inx++;
-            int device_vmm = 0;
 
-            g_device_caps[device_inx].vmm = !!device_vmm;
+            g_device_caps[device_inx].vmm = 0;
             g_device_caps[device_inx].device_id = id;
             g_sycl_device_id2index[id].index = device_inx;
 
@@ -12195,7 +12211,6 @@ inline void ggml_sycl_op_mul_mat_sycl(
     // ldc == nrows of the matrix that cuBLAS writes into
     int ldc = dst->backend == GGML_BACKEND_GPU && device_id == g_main_device ? ne0 : row_diff;
 
-    const int compute_capability = g_device_caps[id].cc;
 #ifdef GGML_SYCL_F16
     bool use_fp16 = true;  // TODO(Yu) SYCL capability check
 #else
@@ -12680,7 +12695,7 @@ static void ggml_sycl_set_peer_access(const int n_tokens) {
                 continue;
             }
 
-            int can_access_peer;
+            // int can_access_peer;
             // SYCL_CHECK(syclDeviceCanAccessPeer(&can_access_peer, id, id_other));
             // if (can_access_peer) {
             //     if (enable_peer_access) {
@@ -12705,7 +12720,6 @@ static void ggml_sycl_op_mul_mat(const ggml_tensor *src0,
     const int64_t ne01 = src0->ne[1];
     const int64_t ne02 = src0->ne[2];
     const int64_t ne03 = src0->ne[3];
-    const int64_t nrows0 = ggml_nrows(src0);
 
     const int64_t ne10 = src1->ne[0];
     const int64_t ne11 = src1->ne[1];
@@ -13046,6 +13060,7 @@ catch (sycl::exception const &exc) {
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
 }
+
 
 static void ggml_sycl_repeat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_SYCL_DEBUG("call %s\n", __func__);
@@ -13800,13 +13815,6 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
 
         src1_row_extra.data_device[g_main_device_index] = src1_contiguous.get();
         dst_row_extra.data_device[g_main_device_index]  =  dst_contiguous.get();
-
-        const dpct::memcpy_direction src1_kind =
-            src1->backend == GGML_BACKEND_CPU ? dpct::host_to_device
-                                              : dpct::device_to_device;
-        const dpct::memcpy_direction dst_kind = dst->backend == GGML_BACKEND_CPU
-                                                    ? dpct::device_to_host
-                                                    : dpct::device_to_device;
 
         for (int32_t row_id = 0; row_id < n_as; ++row_id) {
             const struct ggml_tensor * src0_row = dst->src[row_id + 2];
