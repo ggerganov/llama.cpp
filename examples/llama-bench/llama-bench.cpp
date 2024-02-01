@@ -534,12 +534,12 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & sm : params.split_mode)
     for (const auto & mg : params.main_gpu)
     for (const auto & ts : params.tensor_split)
+    for (const auto & mmp : params.use_mmap)
     for (const auto & nb : params.n_batch)
     for (const auto & tk : params.type_k)
     for (const auto & tv : params.type_v)
     for (const auto & mmq : params.mul_mat_q)
     for (const auto & nkvo : params.no_kv_offload)
-    for (const auto & mmp : params.use_mmap)
     for (const auto & nt : params.n_threads) {
         for (const auto & n_prompt : params.n_prompt) {
             if (n_prompt == 0) {
