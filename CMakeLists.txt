@@ -423,10 +423,7 @@ if (LLAMA_VULKAN)
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
 
-        set(GGML_HEADERS_VULKAN ggml-vulkan.h)
-        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
-
-        add_library(ggml-vulkan STATIC ggml-vulkan.cpp ggml-vulkan.h)
+        add_library(ggml-vulkan OBJECT ggml-vulkan.cpp ggml-vulkan.h)
         if (BUILD_SHARED_LIBS)
             set_target_properties(ggml-vulkan PROPERTIES POSITION_INDEPENDENT_CODE ON)
         endif()
@@ -1012,7 +1009,6 @@ add_library(ggml OBJECT
             ggml-quants.h
             ${GGML_SOURCES_CUDA}    ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL}  ${GGML_HEADERS_OPENCL}
-            ${GGML_SOURCES_VULKAN}  ${GGML_HEADERS_VULKAN}
             ${GGML_SOURCES_METAL}   ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_MPI}     ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_EXTRA}   ${GGML_HEADERS_EXTRA}
@@ -1094,7 +1090,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama)
 
 set(GGML_PUBLIC_HEADERS "ggml.h" "ggml-alloc.h" "ggml-backend.h"
-        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}" "${GGML_HEADERS_VULKAN}"
+        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
         "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
 
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
