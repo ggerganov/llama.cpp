@@ -586,8 +586,11 @@ train.o: common/train.cpp common/train.h
 libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
+libllama.a: llama.o ggml.o $(OBJS) $(COMMON_DEPS)
+	ar rcs libllama.a llama.o ggml.o $(OBJS) $(COMMON_DEPS)
+
 clean:
-	rm -vrf *.o tests/*.o *.so *.dll benchmark-matmult common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -vrf *.o tests/*.o *.so *.a *.dll benchmark-matmult common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
 
 #
 # Examples

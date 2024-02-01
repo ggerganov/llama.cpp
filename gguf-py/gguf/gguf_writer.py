@@ -411,6 +411,9 @@ class GGUFWriter:
     def add_add_eos_token(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.ADD_EOS, value)
 
+    def add_add_space_prefix(self, value: bool) -> None:
+        self.add_bool(Keys.Tokenizer.ADD_PREFIX, value)
+
     def add_chat_template(self, value: str) -> None:
         self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
 
