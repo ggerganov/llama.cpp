@@ -2928,7 +2928,6 @@ void   ggml_sycl_set_main_device(int main_device);
 void   ggml_sycl_set_mul_mat_q(bool mul_mat_q);
 void   ggml_sycl_set_scratch_size(size_t scratch_size);
 void   ggml_sycl_free_scratch(void);
-int    ggml_sycl_get_device_count(void);
 void   ggml_sycl_get_device_description(int device, char * description, size_t description_size);
 bool   ggml_backend_is_sycl(ggml_backend_t backend);
 int    ggml_backend_sycl_get_device(ggml_backend_t backend);
@@ -14493,6 +14492,37 @@ bool ggml_sycl_compute_forward(struct ggml_compute_params * params, struct ggml_
     return true;
 }
 
+GGML_API GGML_CALL void   ggml_sycl_get_gpu_list(int *id_list, int max_len) try {
+    int max_compute_units = -1;
+    for(int i=0;i<max_len;i++) id_list[i] = 0;
+
+    int device_count = dpct::dev_mgr::instance().device_count();
+
+    for(int id=0; id< device_count; id++){
+        sycl::device device = dpct::dev_mgr::instance().get_device(id);
+        if (!device.is_gpu()) continue;
+        dpct::device_info prop;
+        dpct::get_device_info(prop, device);
+        if(max_compute_units < prop.get_max_compute_units()) max_compute_units = prop.get_max_compute_units();
+    }
+
+    for(int id=0;id< device_count;id++){
+        sycl::device device = dpct::dev_mgr::instance().get_device(id);
+        if (!device.is_gpu()) continue;
+        dpct::device_info prop;
+        dpct::get_device_info(prop, device);
+        if(max_compute_units == prop.get_max_compute_units() && prop.get_major_version() == 1 ){
+            id_list[id] = 1;
+        }
+    }
+    return;
+}
+catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
+}
+
 int ggml_sycl_get_device_count() try {
     int device_count;
     if (CHECK_TRY_ERROR(device_count =
@@ -14507,7 +14537,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-void ggml_sycl_get_device_description(int device, char *description,
+GGML_API GGML_CALL void ggml_sycl_get_device_description(int device, char *description,
                                       size_t description_size) try {
     dpct::device_info prop;
     SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
