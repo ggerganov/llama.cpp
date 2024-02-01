@@ -2214,7 +2214,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     for (int hs : { 128, }) {
         for (int nh : { 32, }) {
             for (int kv : { 512, 1024, }) {
-                for (int nb : { 1, 2, 4, 8, 512 }) {
+                for (int nb : { 1, 2, 4, 7, 8, 15, 16, 512 }) {
                     test_cases.emplace_back(new test_attn          (hs, nh, kv, nb));
                     test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb));
                 }
