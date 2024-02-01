@@ -178,7 +178,7 @@ struct cmd_params {
     std::vector<bool> no_kv_offload;
     std::vector<bool> mul_mat_q;
     std::vector<std::vector<float>> tensor_split;
-    bool use_mmap;
+    std::vector<bool> use_mmap;
     int reps;
     bool verbose;
     output_formats output_format;
@@ -198,7 +198,7 @@ static const cmd_params cmd_params_defaults = {
     /* no_kv_offload */ {false},
     /* mul_mat_q     */ {true},
     /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
-    /* use_mmap      */ true,
+    /* use_mmap      */ {true},
     /* reps          */ 5,
     /* verbose       */ false,
     /* output_format */ MARKDOWN
@@ -220,7 +220,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -sm, --split-mode <none|layer|row>  (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
-    printf("  -nmmap, --no-mmap\n");
+    printf("  -mmp, --mmap <0|1>                  (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
     printf("  -mmq, --mul-mat-q <0|1>             (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
@@ -390,8 +390,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<bool>(argv[i], split_delim);
             params.mul_mat_q.insert(params.mul_mat_q.end(), p.begin(), p.end());
-        } else if (arg == "-nmmap" || arg == "--no-mmap") {
-            params.use_mmap = false;
+        } else if (arg == "-mmp" || arg == "--mmap") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = split<bool>(argv[i], split_delim);
+            params.use_mmap.insert(params.use_mmap.end(), p.begin(), p.end());
         } else if (arg == "-ts" || arg == "--tensor-split") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -463,6 +468,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.no_kv_offload.empty()){ params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
     if (params.mul_mat_q.empty())    { params.mul_mat_q = cmd_params_defaults.mul_mat_q; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
+    if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
 
     return params;
@@ -501,6 +507,7 @@ struct cmd_params_instance {
                n_gpu_layers == other.n_gpu_layers &&
                split_mode == other.split_mode &&
                main_gpu == other.main_gpu &&
+               use_mmap == other.use_mmap &&
                tensor_split == other.tensor_split;
     }
 
@@ -532,6 +539,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & tv : params.type_v)
     for (const auto & mmq : params.mul_mat_q)
     for (const auto & nkvo : params.no_kv_offload)
+    for (const auto & mmp : params.use_mmap)
     for (const auto & nt : params.n_threads) {
         for (const auto & n_prompt : params.n_prompt) {
             if (n_prompt == 0) {
@@ -551,7 +559,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .no_kv_offload= */ nkvo,
                 /* .mul_mat_q    = */ mmq,
                 /* .tensor_split = */ ts,
-                /* .use_mmap     = */ params.use_mmap,
+                /* .use_mmap     = */ mmp,
             };
             instances.push_back(instance);
         }
@@ -574,7 +582,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .no_kv_offload= */ nkvo,
                 /* .mul_mat_q    = */ mmq,
                 /* .tensor_split = */ ts,
-                /* .use_mmap     = */ params.use_mmap,
+                /* .use_mmap     = */ mmp,
             };
             instances.push_back(instance);
         }
@@ -929,8 +937,8 @@ struct markdown_printer : public printer {
         if (field == "no_kv_offload") {
             return "nkvo";
         }
-        if (field == "no_mmap") {
-            return "nmmap";
+        if (field == "use_mmap") {
+            return "mmap";
         }
         if (field == "tensor_split") {
             return "ts";
@@ -974,6 +982,9 @@ struct markdown_printer : public printer {
         }
         if (params.tensor_split.size() > 1 || params.tensor_split != cmd_params_defaults.tensor_split) {
             fields.push_back("tensor_split");
+        }
+        if (params.use_mmap.size() > 1 || params.use_mmap != cmd_params_defaults.use_mmap) {
+            fields.push_back("use_mmap");
         }
         fields.push_back("test");
         fields.push_back("t/s");
