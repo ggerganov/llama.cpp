@@ -2285,8 +2285,9 @@ static bool ggml_metal_graph_compute(
                         const int64_t nqptg = 8;  // queries per threadgroup    !! sync with kernel template arguments !!
                         const int64_t ncpsg = 32; // cache values per simdgroup !! sync with kernel template arguments !!
 
-                        GGML_ASSERT(nqptg % 8  == 0);
-                        GGML_ASSERT(ncpsg % 32 == 0);
+                        GGML_ASSERT(nqptg <= 32);
+                        GGML_ASSERT(nqptg  % 8  == 0);
+                        GGML_ASSERT(ncpsg  % 32 == 0);
 
                         // simdgroups per threadgroup (a.k.a. warps)
                         // for small batches use more simdgroups (needs more tests, to confirm if it's worth it)
