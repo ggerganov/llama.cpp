@@ -196,8 +196,8 @@ static const cmd_params cmd_params_defaults = {
     /* no_kv_offload */ {false},
     /* mul_mat_q     */ {true},
     /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
-    /* reps          */ 5,
     /* use_mmap      */ true,
+    /* reps          */ 5,
     /* verbose       */ false,
     /* output_format */ MARKDOWN
 };
