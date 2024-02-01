@@ -572,9 +572,18 @@ struct test_case {
         // duplicate the op
         size_t target_size = ggml_backend_is_cpu(backend) ? 1ULL << 33 : 1ULL << 35; // 8 GB CPU, 32 GB GPU
         int n_runs = std::min((size_t)gf->size - gf->n_nodes, target_size / op_size(out)) + 1;
+#if 1
         for (int i = 1; i < n_runs; i++) {
             gf->nodes[gf->n_nodes++] = out;
         }
+#else
+        int n_nodes = gf->n_nodes;
+        for (int i = 1; i < n_runs; i++) {
+            for (int j = 0; j < n_nodes; j++) {
+                gf->nodes[gf->n_nodes++] = gf->nodes[j];
+            }
+        }
+#endif
 
         // calculate memory
         size_t mem = n_runs * op_size(out);
