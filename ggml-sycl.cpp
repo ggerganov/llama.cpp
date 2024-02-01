@@ -11364,18 +11364,12 @@ void ggml_init_sycl() try {
             SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
                 prop, dpct::dev_mgr::instance().get_device(id))));
 
-            // fprintf(stderr,
-            //         "  Device %d: %s, compute capability %d.%d, VMM: %s\n", id,
-            //         prop.get_name(), prop.get_major_version(),
-            //         prop.get_minor_version(), device_vmm ? "yes" : "no");
-
             g_tensor_split[device_inx] = total_vram;
             total_vram += prop.get_global_mem_size();
 
             g_device_caps[device_inx].cc =
                 100 * prop.get_major_version() + 10 * prop.get_minor_version();
 
-            // printf("g_device_caps[%d].cc=%d\n", device_inx, g_device_caps[device_inx].cc);
         }
         device_inx = -1;
         for (int id = 0; id < g_all_sycl_device_count; ++id) {
