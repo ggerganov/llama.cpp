@@ -127,14 +127,16 @@ static std::string get_gpu_info() {
     ggml_sycl_get_gpu_list(device_list, GGML_SYCL_MAX_DEVICES);
 
     for (int i = 0; i < GGML_SYCL_MAX_DEVICES; i++) {
-        if (device_list[i]>0){
+        if (device_list[i] >0 ){
             char buf[128];
             ggml_sycl_get_device_description(i, buf, sizeof(buf));
             id += buf;
             id += "/";
         }
     }
-    if(id.length()>2) id.pop_back();
+    if (id.length() >2 ) {
+        id.pop_back();
+    }
 #endif
     // TODO: other backends
     return id;
@@ -218,7 +220,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -sm, --split-mode <none|layer|row>  (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
-    printf("  -nmmap, --no-mmap                   (default: %s)\n", cmd_params_defaults.use_mmap ? "0" : "1");
+    printf("  -nmmap, --no-mmap\n");
     printf("  -mmq, --mul-mat-q <0|1>             (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
@@ -511,7 +513,6 @@ struct cmd_params_instance {
         cparams.type_v = type_v;
         cparams.mul_mat_q = mul_mat_q;
         cparams.offload_kqv = !no_kv_offload;
-
 
         return cparams;
     }
