@@ -3,10 +3,9 @@
 - [Background](#background)
 - [OS](#os)
 - [Intel GPU](#intel-gpu)
-- Build and run:
-  - [Docker](#docker)
-  - [Linux](#linux)
-  - [Windows](#windows)
+- [Docker](#docker)
+- [Linux](#linux)
+- [Windows](#windows)
 - [Environment Variable](#environment-variable)
 - [Known Issue](#known-issue)
 - [Q&A](#q&a)
