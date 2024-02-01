@@ -13061,7 +13061,6 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-
 static void ggml_sycl_repeat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_repeat);
