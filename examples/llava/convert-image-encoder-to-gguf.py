@@ -203,8 +203,41 @@ if has_vision_encoder:
     fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), v_hparams["layer_norm_eps"])
     block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"]
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), block_count)
+                            #     /**
+                            #      "image_grid_pinpoints": [
+                            #         [
+                            #         336,
+                            #         672
+                            #         ],
+                            #         [
+                            #         672,
+                            #         336
+                            #         ],
+                            #         [
+                            #         672,
+                            #         672
+                            #         ],
+                            #         [
+                            #         1008,
+                            #         336
+                            #         ],
+                            #         [
+                            #         336,
+                            #         1008
+                            #         ]
+                            #     ],
+                            #     Flattened:
+                            #     [
+                            #         336, 672,
+                            #         672, 336,
+                            #         672, 672,
+                            #         1008, 336,
+                            #         336, 1008
+                            #     ]
+                            #  * 
+                            #  */
     if "image_grid_pinpoints" in v_hparams:
-        # no nested array - flatten it
+        # flatten it
         image_grid_pinpoints = []
         for pinpoint in v_hparams["image_grid_pinpoints"]:
             image_grid_pinpoints.extend(pinpoint)
