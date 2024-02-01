@@ -7935,6 +7935,13 @@ struct llm_build_context {
             ggml_tensor * conv_state = ggml_reshape_2d(ctx0, kv_self.k_l[il], d_conv - 1, d_inner);
             ggml_tensor * ssm_state  = ggml_reshape_2d(ctx0, kv_self.v_l[il], d_state, d_inner);
 
+            // reset the states when starting a new sequence
+            // TODO: ensure kv_self clearing is handled
+            if (!batch.pos || batch.pos[0] == 0) {
+                conv_state = ggml_scale(ctx0, conv_state, 0);
+                ssm_state = ggml_scale(ctx0, ssm_state, 0);
+            }
+
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
@@ -7991,36 +7998,79 @@ struct llm_build_context {
                 //  {d_inner, dt_rank + 2*d_state} * {d_inner, n_tok} => {dt_rank + 2*d_state, n_tok}
                 struct ggml_tensor * x_db = ggml_mul_mat(ctx0, model.layers[il].ssm_x, x);
                 // split
-                struct ggml_tensor * dt = ggml_view_2d(ctx0, x_db, dt_rank, x_db->ne[1], x_db->nb[1], 0);
-                struct ggml_tensor * B = ggml_view_2d(ctx0, x_db, d_state, x_db->ne[1], x_db->nb[1], ggml_element_size(x_db)*dt_rank);
-                struct ggml_tensor * C = ggml_view_2d(ctx0, x_db, d_state, x_db->ne[1], x_db->nb[1], ggml_element_size(x_db)*(dt_rank+d_state));
+                struct ggml_tensor * dt = ggml_view_2d(ctx0, x_db, dt_rank, n_tok, x_db->nb[1], 0);
+                struct ggml_tensor * B = ggml_view_2d(ctx0, x_db, d_state, n_tok, x_db->nb[1], ggml_element_size(x_db)*dt_rank);
+                struct ggml_tensor * C = ggml_view_2d(ctx0, x_db, d_state, n_tok, x_db->nb[1], ggml_element_size(x_db)*(dt_rank+d_state));
 
                 // {dt_rank, d_inner} * {dt_rank, n_tok} => {d_inner, n_tok}
                 dt = ggml_mul_mat(ctx0, model.layers[il].ssm_dt, dt);
                 dt = ggml_add(ctx0, dt, model.layers[il].ssm_dt_b);
                 dt = ggml_soft_plus(ctx0, dt);
 
-                // FIXME: support batches with more than 1 token
-                // => {d_state, d_inner}
-                struct ggml_tensor * dA = ggml_exp(ctx0, ggml_mul(ctx0, model.layers[il].ssm_a, ggml_transpose(ctx0, dt)));
+                struct ggml_tensor * dA;
+                struct ggml_tensor * dB;
+                if (n_tok == 1) {
+                    // => {d_state, d_inner}
+                    dA = ggml_exp(ctx0, ggml_mul(ctx0, model.layers[il].ssm_a, ggml_transpose(ctx0, dt)));
 
-                // => {d_state, d_inner}
-                struct ggml_tensor * dB = ggml_out_prod(ctx0, B, dt);
+                    // {d_state} * {d_inner} => {d_state, d_inner}
+                    dB = ggml_out_prod(ctx0, B, dt);
+                } else {
+                    // {d_state, d_inner} * {d_inner, n_tok} => {d_state, d_inner, n_tok} * {1, d_inner, n_tok}
+                    // => {d_state, d_inner, n_tok}
+                    // Trying to do the equivalent of
+                    // dA = torch.exp(rearrange(dt, "b d -> b d 1") * A)  # (batch, dim, dstate)
+                    struct ggml_tensor * A = model.layers[il].ssm_a;
+                    dA = ggml_exp(ctx0,
+                        ggml_mul(ctx0,
+                            ggml_repeat(ctx0, A, ggml_new_tensor_3d(ctx0, A->type, d_state, d_inner, n_tok)),
+                            // {d_inner, n_tok} => {1, d_inner, n_tok}
+                            ggml_permute(ctx0, dt, 1, 2, 0, 3))
+                    );
 
-                // => {d_state, d_inner}
-                cur = ggml_mul(ctx0, dB, ggml_transpose(ctx0, x));
+                    // {d_state, 1, n_tok} * {d_inner, 1, n_tok} => {d_state, d_inner, n_tok}
+                    dB = ggml_out_prod(ctx0,
+                        // {d_state, n_tok} => {d_state, 1, n_tok}
+                        ggml_permute(ctx0, B, 0, 2, 1, 3),
+                        // {d_state, n_tok} => {d_state, 1, n_tok}
+                        ggml_permute(ctx0, dt, 0, 2, 1, 3));
+                }
 
-                ssm_state = ggml_add(ctx0, ggml_mul(ctx0, ssm_state, dA), cur);
+                // {d_state, d_inner, n_tok} * {1, d_inner, n_tok} => {d_state, d_inner, n_tok}
+                cur = ggml_mul(ctx0, dB, ggml_permute(ctx0, x, 1, 2, 0, 3));
 
-                ggml_build_forward_expand(gf, ggml_cpy(ctx0, ssm_state, ggml_view_tensor(ctx0, kv_self.v_l[il])));
+                // The selective scan seems inherently sequential...
+                // To avoid making (n_layer * n_tok) graph nodes, let's use a custom operator.
+                // When n_tok == 1, it's equivalent to the following:
+                //     ssm_state = ggml_add(ctx0, ggml_mul(ctx0, ssm_state, dA), cur);
+                // When n_tok is bigger, it's the same thing, but iterated n_tok times,
+                // with the correct dA and cur for each token.
+                // The resulting states are layered on the ne[2] dimension.
+                // => {d_state, d_inner, n_tok}
+                ssm_state = ggml_ssm_scan(ctx0, ssm_state, dA, cur);
 
-                // row-wise dot product ("dn,n->d")
-                // {d_state, d_inner} * {d_state} => {d_inner, 1}
-                struct ggml_tensor * y = ggml_mul_mat(ctx0, ssm_state, C);
-                y = ggml_add(ctx0, y, ggml_mul(ctx0, model.layers[il].ssm_d, x));
+                // only store last state
+                ggml_build_forward_expand(gf,
+                    ggml_cpy(ctx0,
+                        ggml_view_2d(ctx0, ssm_state, d_state, d_inner, ssm_state->nb[1], (n_tok-1)*ssm_state->nb[2]),
+                        ggml_view_tensor(ctx0, kv_self.v_l[il])));
+
+                struct ggml_tensor * y;
+                if (n_tok == 1) {
+                    // row-wise dot product ("dn,n->d")
+                    // {d_state, d_inner} * {d_state, 1} => {d_inner, 1}
+                    y = ggml_mul_mat(ctx0, ssm_state, C);
+                } else {
+                    // {d_state, d_inner, n_tok} * {d_state, n_tok} => {d_inner, 1, n_tok}
+                    y = ggml_mul_mat(ctx0, ssm_state, ggml_permute(ctx0, C, 0, 2, 1, 3));
+                    // => {d_inner, n_tok}
+                    y = ggml_permute(ctx0, y, 0, 2, 1, 3);
+                }
+                // {d_inner, n_tok} * {d_inner} => {d_inner, n_tok}
+                y = ggml_add(ctx0, y, ggml_mul(ctx0, x, model.layers[il].ssm_d));
                 y = ggml_mul(ctx0, y, ggml_silu(ctx0, z));
 
-                // {d_inner, n_embd} * {d_inner, 1} => {n_embd, 1}
+                // {d_inner, n_embd} * {d_inner, n_tok} => {n_embd, n_tok}
                 cur = ggml_mul_mat(ctx0, model.layers[il].ssm_out, y);
             }
 

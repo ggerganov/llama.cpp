@@ -1831,6 +1831,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "FLASH_ATTN",
     "FLASH_FF",
     "FLASH_ATTN_BACK",
+    "SSM_SCAN",
     "WIN_PART",
     "WIN_UNPART",
     "GET_REL_POS",
@@ -1853,7 +1854,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 74, "GGML_OP_COUNT != 74");
+static_assert(GGML_OP_COUNT == 75, "GGML_OP_COUNT != 75");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -1919,6 +1920,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "flash_attn(x)",
     "flash_ff(x)",
     "flash_attn_back(x)",
+    "ssm_scan(x)",
     "win_part(x)",
     "win_unpart(x)",
     "get_rel_pos(x)",
@@ -1941,7 +1943,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 74, "GGML_OP_COUNT != 74");
+static_assert(GGML_OP_COUNT == 75, "GGML_OP_COUNT != 75");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -6145,6 +6147,40 @@ struct ggml_tensor * ggml_flash_attn_back(
     result->src[1] = k;
     result->src[2] = v;
     result->src[3] = d;
+
+    return result;
+}
+
+// ggml_ssm_scan
+
+struct ggml_tensor * ggml_ssm_scan(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * s,
+        struct ggml_tensor  * dA,
+        struct ggml_tensor  * dB_x) {
+    GGML_ASSERT(ggml_are_same_shape(dA, dB_x));
+
+    GGML_ASSERT(   s->nb[0] == ggml_type_size(   s->type));
+    GGML_ASSERT(  dA->nb[0] == ggml_type_size(  dA->type));
+    GGML_ASSERT(dB_x->nb[0] == ggml_type_size(dB_x->type));
+
+    GGML_ASSERT(s->ne[0] == dA->ne[0]);
+    GGML_ASSERT(s->ne[1] == dA->ne[1]);
+    GGML_ASSERT(s->ne[2] == 1 && s->ne[3] == 1); // the ssm_state should be 2D
+
+    bool is_node = false;
+
+    if (s->grad || dA->grad || dB_x->grad) {
+        is_node = true;
+    }
+
+    struct ggml_tensor * result = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, dA->ne[0], dA->ne[1], dA->ne[2]);
+
+    result->op   = GGML_OP_SSM_SCAN;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = s;
+    result->src[1] = dA;
+    result->src[2] = dB_x;
 
     return result;
 }
@@ -14755,6 +14791,78 @@ static void ggml_compute_forward_flash_attn_back(
     }
 }
 
+// ggml_compute_forward_ssm_scan
+
+static void ggml_compute_forward_ssm_scan_f32(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        const struct ggml_tensor * src2,
+        struct ggml_tensor * dst) {
+    if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
+        return;
+    }
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    const int64_t nc  = src1->ne[0];
+    const int64_t n_b = src1->ne[2]; // number of batches
+    const int64_t nr0 = ggml_nrows(src0);
+
+    GGML_ASSERT(nc*n_b*nr0 == ggml_nelements(src1));
+    GGML_ASSERT(src0->nb[0] == sizeof(float));
+    GGML_ASSERT(src1->nb[0] == sizeof(float));
+    GGML_ASSERT(src2->nb[0] == sizeof(float));
+
+    // rows per thread
+    const int dr = (nr0 + nth - 1)/nth;
+
+    // row range for this thread
+    const int ir0 = dr*ith;
+    const int ir1 = MIN(ir0 + dr, nr0);
+
+    // first batch
+    for (int i1 = ir0; i1 < ir1; i1++) {
+        float * dest = (float *) ((char *) dst->data  + i1*( dst->nb[1]));
+        float * s    = (float *) ((char *) src0->data + i1*(src0->nb[1]));
+        float * dA   = (float *) ((char *) src1->data + i1*(src1->nb[1]));
+        float * dB_x = (float *) ((char *) src2->data + i1*(src2->nb[1]));
+        ggml_vec_mul_f32(nc, dest, s, dA);
+        ggml_vec_add_f32(nc, dest, dest, dB_x);
+    }
+
+    // rest of batches, state comes from dest
+    for (int i2 = 1; i2 < n_b; i2++) {
+        for (int i1 = ir0; i1 < ir1; i1++) {
+            float * dest = (float *) ((char *) dst->data  + i1*( dst->nb[1]) +  i2   *( dst->nb[2]));
+            float * s    = (float *) ((char *) dst->data  + i1*( dst->nb[1]) + (i2-1)*( dst->nb[2]));
+            float * dA   = (float *) ((char *) src1->data + i1*(src1->nb[1]) +  i2   *(src1->nb[2]));
+            float * dB_x = (float *) ((char *) src2->data + i1*(src2->nb[1]) +  i2   *(src2->nb[2]));
+            ggml_vec_mul_f32(nc, dest, s, dA);
+            ggml_vec_add_f32(nc, dest, dest, dB_x);
+        }
+    }
+}
+
+static void ggml_compute_forward_ssm_scan(
+        const struct ggml_compute_params * params,
+        const struct ggml_tensor * src0,
+        const struct ggml_tensor * src1,
+        const struct ggml_tensor * src2,
+        struct ggml_tensor * dst) {
+    switch (src0->type) {
+        case GGML_TYPE_F32:
+            {
+                ggml_compute_forward_ssm_scan_f32(params, src0, src1, src2, dst);
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
 // ggml_compute_forward_win_part
 
 static void ggml_compute_forward_win_part_f32(
@@ -15814,6 +15922,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 bool masked = t != 0;
                 ggml_compute_forward_flash_attn_back(params, masked, tensor);
             } break;
+        case GGML_OP_SSM_SCAN:
+            {
+                ggml_compute_forward_ssm_scan(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
+            } break;
         case GGML_OP_WIN_PART:
             {
                 ggml_compute_forward_win_part(params, tensor);
@@ -16868,6 +16980,10 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 GGML_ASSERT(false); // not supported
             } break;
+        case GGML_OP_SSM_SCAN:
+            {
+                GGML_ASSERT(false); // TODO: not implemented
+            } break;
         case GGML_OP_WIN_PART:
         case GGML_OP_WIN_UNPART:
         case GGML_OP_UNARY:
@@ -17567,6 +17683,10 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
                 n_tasks = n_threads;
             } break;
         case GGML_OP_FLASH_ATTN_BACK:
+            {
+                n_tasks = n_threads;
+            } break;
+        case GGML_OP_SSM_SCAN:
             {
                 n_tasks = n_threads;
             } break;
