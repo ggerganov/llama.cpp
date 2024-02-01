@@ -88,7 +88,7 @@ int main(int argc, char ** argv) {
 
     llama_model_params model_params = llama_model_default_params();
 
-    const std::vector<float> t_split (LLAMA_MAX_DEVICES, 0.0f);
+    const std::vector<float> t_split(llama_max_devices(), 0.0f);
 
     model_params.n_gpu_layers = n_gpu_layers;
     model_params.tensor_split = t_split.data();
