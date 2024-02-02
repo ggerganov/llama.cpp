@@ -143,6 +143,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [iohub/collama](https://github.com/iohub/coLLaMA)
+- [pythops/tenere](https://github.com/pythops/tenere)
 
 ---
 
