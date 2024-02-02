@@ -457,14 +457,14 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
     std::ofstream logits_stream;
     if (!params.logits_file.empty()) {
-        logits_stream.open(params.logits_file.c_str());
+        logits_stream.open(params.logits_file.c_str(), std::ios::binary);
         if (!logits_stream.is_open()) {
             fprintf(stderr, "%s: failed to open %s for writing\n", __func__, params.logits_file.c_str());
             return {};
         }
         fprintf(stderr, "%s: saving all logits to %s\n", __func__, params.logits_file.c_str());
         logits_stream.write("_logits_", 8);
-        logits_stream.write((const char *)&n_ctx, sizeof(n_ctx));
+        logits_stream.write(reinterpret_cast<const char *>(&n_ctx), sizeof(n_ctx));
     }
 
     auto tim1 = std::chrono::high_resolution_clock::now();
