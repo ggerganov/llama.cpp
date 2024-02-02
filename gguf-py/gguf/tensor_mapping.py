@@ -91,7 +91,7 @@ class TensorNameMap:
             "model.layers.layers.{bid}.norm",                       # plamo
             "model.layers.{bid}.attention_norm",                    # internlm2
             "model.layers.{bid}.norm",                              # mamba
-            "backbone.layers.{bid}.mixer.norm",                     # mamba
+            "backbone.layers.{bid}.norm",                           # mamba
         ),
 
         # Attention norm 2
