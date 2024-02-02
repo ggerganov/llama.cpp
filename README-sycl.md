@@ -52,13 +52,13 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 |Intel built-in Arc GPU| Support| built-in Arc GPU in Meteor Lake|
 |Intel iGPU| Support| iGPU in i5-1250P, i7-1165G7|
 
-Note: If the EUs (Execution Unit) in iGPU is less than 80, the inference speed will too slow to use.
+Note: If the EUs (Execution Unit) in iGPU is less than 80, the inference speed will be too slow to use.
 
 ### Memory
 
 The memory is a limitation to run LLM on GPUs.
 
-When run llama.cpp, there is print log to show the applied memory on GPU. You could know how many memory to be used in your case. Like `llm_load_tensors:            buffer size =  3577.56 MiB`.
+When run llama.cpp, there is print log to show the applied memory on GPU. You could know how much memory to be used in your case. Like `llm_load_tensors:            buffer size =  3577.56 MiB`.
 
 For iGPU, please make sure the shared memory from host memory is enough. For llama-2-7b.Q4_0, recommend the host memory is 8GB+.
 
@@ -118,7 +118,7 @@ source /opt/intel/oneapi/setvars.sh
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Please confirm that at least one GPU be present, like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU is present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -273,7 +273,7 @@ In oneAPI command line:
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Please confirm that at least one GPU be present, like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU is present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -456,7 +456,7 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
   Please run **sudo sycl-ls**.
 
-  If see it in result, please add video/render group to your ID:
+  If you see it in result, please add video/render group to your ID:
 
   ```
   sudo usermod -aG render username
@@ -465,7 +465,7 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
   Then **relogin**.
 
-  If no see it, please check the installation GPU steps again.
+  If you do not see it, please check the installation GPU steps again.
 
 ## Todo
 
