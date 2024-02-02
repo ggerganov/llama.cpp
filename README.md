@@ -393,28 +393,28 @@ Building the program with BLAS support may lead to some performance improvements
 
   Check [BLIS.md](docs/BLIS.md) for more information.
 
+- #### SYCL
+  SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
+
+  llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
+
+  For detailed info, please refer to [llama.cpp for SYCL](README-sycl.md).
+
 - #### Intel oneMKL
+  Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [llama.cpp for SYCL](./README-sycl.md).
+
   - Using manual oneAPI installation:
     By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
       ```bash
       mkdir build
       cd build
-      source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-runtime docker image, only required for manual installation
+      source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit docker image, only required for manual installation
       cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
       cmake --build . --config Release
       ```
 
   - Using oneAPI docker image:
-    If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI-runtime](https://hub.docker.com/r/intel/oneapi-runtime)
-
-      ```bash
-      mkdir build
-      cd build
-      cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
-      cmake --build . --config Release
-      ```
-
-  Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni.
+    If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI-basekit](https://hub.docker.com/r/intel/oneapi-basekit). Then, you can use the commands given above.
 
   Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
 
@@ -601,14 +601,48 @@ Building the program with BLAS support may lead to some performance improvements
 
   You can get a list of platforms and devices from the `clinfo -l` command, etc.
 
-- #### SYCL
+- #### Vulkan
 
-  SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
+  **With docker**:
 
-  llama.cpp based on SYCL is used to support Intel GPU (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
+  You don't need to install Vulkan SDK. It will be installed inside the container.
 
-  For detailed info, please refer to [llama.cpp for SYCL](README-sycl.md).
+  ```sh
+  # Build the image
+  docker build -t llama-cpp-vulkan -f .devops/main-vulkan.Dockerfile .
 
+  # Then, use it:
+  docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
+  ```
+
+  **Without docker**:
+
+  Firstly, you need to make sure you installed [Vulkan SDK](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started_ubuntu.html)
+
+  For example, on Ubuntu 22.04 (jammy), use the command below:
+
+  ```bash
+  wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add -
+  wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+  apt update -y
+  apt-get install -y vulkan-sdk
+  # To verify the installation, use the command below:
+  vulkaninfo
+  ```
+
+  Then, build llama.cpp using the cmake command below:
+
+  ```bash
+  mkdir -p build
+  cd build
+  cmake .. -DLLAMA_VULKAN=1
+  cmake --build . --config Release
+  # Test the output binary (with "-ngl 33" to offload all layers to GPU)
+  ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
+
+  # You should see in the output, ggml_vulkan detected your GPU. For example:
+  # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
+  ```
 
 ### Prepare Data & Run
 
