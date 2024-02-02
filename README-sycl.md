@@ -118,7 +118,7 @@ source /opt/intel/oneapi/setvars.sh
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU be present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -273,7 +273,7 @@ In oneAPI command line:
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU be present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -451,6 +451,21 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 - Meet compile error.
 
   Remove folder **build** and try again.
+
+- I can **not** see **[ext_oneapi_level_zero:gpu:0]** afer install GPU driver in Linux.
+
+  Please run **sudo sycl-ls**.
+
+  If see it in result, please add video/render group to your ID:
+
+  ```
+  sudo usermod -aG render username
+  sudo usermod -aG video username
+  ```
+
+  Then **relogin**.
+
+  If no see it, please check the installation GPU steps again.
 
 ## Todo
 
