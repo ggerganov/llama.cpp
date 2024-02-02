@@ -747,13 +747,13 @@ struct LLM_TN {
 // gguf helpers
 //
 
-static std::map<int8_t, std::string> LLAMA_ROPE_SCALING_TYPES = {
+static std::map<int32_t, std::string> LLAMA_ROPE_SCALING_TYPES = {
     { LLAMA_ROPE_SCALING_NONE,   "none"   },
     { LLAMA_ROPE_SCALING_LINEAR, "linear" },
     { LLAMA_ROPE_SCALING_YARN,   "yarn"   },
 };
 
-static int8_t llama_rope_scaling_type_from_string(const std::string & name) {
+static int32_t llama_rope_scaling_type_from_string(const std::string & name) {
     for (const auto & kv : LLAMA_ROPE_SCALING_TYPES) {
         if (kv.second == name) {
             return kv.first;
@@ -1415,6 +1415,7 @@ static const size_t GiB = 1024*MiB;
 
 struct llama_hparams {
     bool     vocab_only;
+    bool     rope_finetuned;
     uint32_t n_vocab;
     uint32_t n_ctx_train; // context size the model was trained on
     uint32_t n_embd;
@@ -1434,8 +1435,7 @@ struct llama_hparams {
     float    rope_freq_base_train;
     float    rope_freq_scale_train;
     uint32_t n_yarn_orig_ctx;
-    int8_t   rope_scaling_type_train : 3;
-    bool     rope_finetuned : 1;
+    int32_t  rope_scaling_type_train;
 
     float f_clamp_kqv;
     float f_max_alibi_bias;
