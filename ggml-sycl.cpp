@@ -337,7 +337,7 @@ namespace dpct
         }
         size_t get_global_mem_size() const { return _global_mem_size; }
         size_t get_local_mem_size() const { return _local_mem_size; }
-	size_t get_max_mem_alloc_size() const { return _max_mem_alloc_size; }
+	    size_t get_max_mem_alloc_size() const { return _max_mem_alloc_size; }
         /// Returns the maximum clock rate of device's global memory in kHz. If
         /// compiler does not support this API then returns default value 3200000 kHz.
         unsigned int get_memory_clock_rate() const { return _memory_clock_rate; }
@@ -399,7 +399,7 @@ namespace dpct
         {
             _local_mem_size = local_mem_size;
         }
-	void set_max_mem_alloc_size(size_t max_mem_alloc_size)
+	    void set_max_mem_alloc_size(size_t max_mem_alloc_size)
         {
             _max_mem_alloc_size = max_mem_alloc_size;
         }
@@ -470,7 +470,7 @@ namespace dpct
         int _max_register_size_per_work_group;
         size_t _global_mem_size;
         size_t _local_mem_size;
-	size_t _max_mem_alloc_size;
+	    size_t _max_mem_alloc_size;
         size_t _max_nd_range_size[3];
         int _max_nd_range_size_i[3];
         uint32_t _device_id;
