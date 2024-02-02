@@ -240,7 +240,11 @@ Please install Intel GPU driver by official guide: [Install GPU Drivers](https:/
 
 Note: **The driver is mandatory for compute function**.
 
-2. Install Intel® oneAPI Base toolkit.
+2. Install Visual Studio.
+
+Please install [Visual Studio](https://visualstudio.microsoft.com/) which impact oneAPI environment enabling in Windows.
+
+3. Install Intel® oneAPI Base toolkit.
 
 a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html).
 
@@ -279,7 +283,7 @@ Output (example):
 [ext_oneapi_level_zero:gpu:0] Intel(R) Level-Zero, Intel(R) Iris(R) Xe Graphics 1.3 [1.3.28044]
 ```
 
-3. Install cmake & make
+4. Install cmake & make
 
 a. Download & install cmake for Windows: https://cmake.org/download/
 
