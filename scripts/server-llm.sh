@@ -274,8 +274,10 @@ for file in $model_files; do
     printf "    %2d) %s %s\n" $iw "$have" "$file"
 done
 
+wfile="${wfiles[$wtype]}"
+
 # ask for weights type until provided and available
-while [[ -z "$wtype" ]]; do
+while [[ -z "$wfile" ]]; do
     printf "\n"
     read -p "[+] Select weight type: " wtype
     wfile="${wfiles[$wtype]}"
