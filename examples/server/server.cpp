@@ -1884,7 +1884,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            sparams.api_keys.push_back(argv[i]);
+            sparams.api_keys.emplace_back(argv[i]);
         }
         else if (arg == "--api-key-file")
         {
@@ -2160,7 +2160,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back(std::make_tuple(argv[i], 1.0f));
+            params.lora_adapter.emplace_back(argv[i], 1.0f);
             params.use_mmap = false;
         }
         else if (arg == "--lora-scaled")
@@ -2176,7 +2176,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back(std::make_tuple(lora_adapter, std::stof(argv[i])));
+            params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
             params.use_mmap = false;
         }
         else if (arg == "--lora-base")
@@ -2318,7 +2318,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
     }
     if (!params.kv_overrides.empty()) {
-        params.kv_overrides.emplace_back(llama_model_kv_override());
+        params.kv_overrides.emplace_back();
         params.kv_overrides.back().key[0] = 0;
     }
 

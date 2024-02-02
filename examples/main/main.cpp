@@ -352,12 +352,12 @@ int main(int argc, char ** argv) {
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
         params.interactive_first = true;
-        params.antiprompt.push_back("### Instruction:\n\n");
+        params.antiprompt.emplace_back("### Instruction:\n\n");
     }
     // similar for chatml mode
     else if (params.chatml) {
         params.interactive_first = true;
-        params.antiprompt.push_back("<|im_start|>user\n");
+        params.antiprompt.emplace_back("<|im_start|>user\n");
     }
 
     // enable interactive mode if interactive start is specified

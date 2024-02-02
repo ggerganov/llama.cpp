@@ -105,7 +105,7 @@ int main()
 
     for (auto rule : expected_rules)
     {
-        parsed_grammar.rules.push_back({});
+        parsed_grammar.rules.emplace_back();
         for (auto element : rule)
         {
             parsed_grammar.rules.back().push_back(element);
