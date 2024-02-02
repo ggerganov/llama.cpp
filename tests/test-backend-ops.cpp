@@ -572,7 +572,7 @@ struct test_case {
         // duplicate the op
         size_t target_size = ggml_backend_is_cpu(backend) ? 1ULL << 33 : 1ULL << 35; // 8 GB CPU, 32 GB GPU
         int n_runs = std::min((size_t)gf->size - gf->n_nodes, target_size / op_size(out)) + 1;
-#if 1
+#if 0
         for (int i = 1; i < n_runs; i++) {
             gf->nodes[gf->n_nodes++] = out;
         }
@@ -2209,8 +2209,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_leaky_relu());
 
-#if 0
-    for (int hs : { 64,  80,  96, 112, 128, 256, }) {
+#if 1
+    for (int hs : { 64, 80, 128, }) {
         for (int nh : { 32, }) {
             for (int kv : { 512, 1024, 2048, 4096, }) {
                 for (int nb : { 1, 2, 4, 8, 512, 1024, 2048, }) {
