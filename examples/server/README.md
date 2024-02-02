@@ -352,6 +352,13 @@ Notice that each `probs` is an array of length `n_probs`.
 
 ## More examples
 
+### Load Balancing
+The server example is mostly stateless since the completion/chat thread is presented by the client in each API call. Since cache is the only local resource it becomes very easy to load balance a cluster or multiple instances of server for concurrent services. Cluster nodes may be heterogenius or homogenius, though homogenius similarly spec'ed nodes will deliver a more consistent user experience:
+![LlamaServerCluster](https://github.com/jboero/llama.cpp/assets/7536012/1ec986f7-d409-449d-8b37-af672e509a9e)
+Example Llama server cluster of 3 heterogenius servers. Each server should use the same model or unexpected results will occur. As OpenCL currently only supports a single device, a single server may be used to support one server instance per GPU but this is only recommended when VRAM fits the entire model.
+
+Behavior will change if server is updated to perform more concurrent sessions per process. Parallel `-np` concurrency does not yet behave as you might think. https://github.com/ggerganov/llama.cpp/issues/4216 Still it is possible to load balance multiple instances of server processes in a mixed environment if you want to build a shared group installation. Load balancing policy is up to the user.
+
 ### Change system prompt on runtime
 
 To use the server example to serve multiple chat-type clients while keeping the same system prompt, you can utilize the option `system_prompt` to achieve that. This only needs to be done once to establish it.
