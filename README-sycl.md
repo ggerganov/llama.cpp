@@ -42,6 +42,8 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 
 ## Intel GPU
 
+### Verified
+
 |Intel GPU| Status | Verified Model|
 |-|-|-|
 |Intel Data Center Max Series| Support| Max 1550|
@@ -50,6 +52,17 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 |Intel built-in Arc GPU| Support| built-in Arc GPU in Meteor Lake|
 |Intel iGPU| Support| iGPU in i5-1250P, i7-1165G7|
 
+Note: If the EUs (Execution Unit) in iGPU is less than 80, the inference speed will be too slow to use.
+
+### Memory
+
+The memory is a limitation to run LLM on GPUs.
+
+When run llama.cpp, there is print log to show the applied memory on GPU. You could know how much memory to be used in your case. Like `llm_load_tensors:            buffer size =  3577.56 MiB`.
+
+For iGPU, please make sure the shared memory from host memory is enough. For llama-2-7b.Q4_0, recommend the host memory is 8GB+.
+
+For dGPU, please make sure the device memory is enough. For llama-2-7b.Q4_0, recommend the device memory is 4GB+.
 
 ## Linux
 
@@ -105,7 +118,7 @@ source /opt/intel/oneapi/setvars.sh
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU is present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -151,6 +164,8 @@ Note:
 ### Run
 
 1. Put model file to folder **models**
+
+You could download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) as example.
 
 2. Enable oneAPI running environment
 
@@ -223,7 +238,13 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
 Please install Intel GPU driver by official guide: [Install GPU Drivers](https://www.intel.com/content/www/us/en/products/docs/discrete-gpus/arc/software/drivers.html).
 
-2. Install Intel® oneAPI Base toolkit.
+Note: **The driver is mandatory for compute function**.
+
+2. Install Visual Studio.
+
+Please install [Visual Studio](https://visualstudio.microsoft.com/) which impact oneAPI environment enabling in Windows.
+
+3. Install Intel® oneAPI Base toolkit.
 
 a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html).
 
@@ -252,7 +273,7 @@ In oneAPI command line:
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU is present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -260,15 +281,21 @@ Output (example):
 [opencl:cpu:1] Intel(R) OpenCL, 11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz OpenCL 3.0 (Build 0) [2023.16.10.0.17_160000]
 [opencl:gpu:2] Intel(R) OpenCL Graphics, Intel(R) Iris(R) Xe Graphics OpenCL 3.0 NEO  [31.0.101.5186]
 [ext_oneapi_level_zero:gpu:0] Intel(R) Level-Zero, Intel(R) Iris(R) Xe Graphics 1.3 [1.3.28044]
-
 ```
 
-3. Install cmake & make
+4. Install cmake & make
 
-a. Download & install cmake for windows: https://cmake.org/download/
+a. Download & install cmake for Windows: https://cmake.org/download/
 
-b. Download & install make for windows provided by mingw-w64: https://www.mingw-w64.org/downloads/
+b. Download & install make for Windows provided by mingw-w64
 
+- Download binary package for Windows in https://github.com/niXman/mingw-builds-binaries/releases.
+
+  Like [x86_64-13.2.0-release-win32-seh-msvcrt-rt_v11-rev1.7z](https://github.com/niXman/mingw-builds-binaries/releases/download/13.2.0-rt_v11-rev1/x86_64-13.2.0-release-win32-seh-msvcrt-rt_v11-rev1.7z).
+
+- Unzip the binary package. In the **bin** sub-folder and rename **xxx-make.exe** to **make.exe**.
+
+- Add the **bin** folder path in the Windows system PATH environment.
 
 ### Build locally:
 
@@ -308,6 +335,8 @@ Note:
 ### Run
 
 1. Put model file to folder **models**
+
+You could download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) as example.
 
 2. Enable oneAPI running environment
 
@@ -419,8 +448,25 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
   Miss to enable oneAPI running environment.
 
-## Todo
+- Meet compile error.
 
-- Support to build in Windows.
+  Remove folder **build** and try again.
+
+- I can **not** see **[ext_oneapi_level_zero:gpu:0]** afer install GPU driver in Linux.
+
+  Please run **sudo sycl-ls**.
+
+  If you see it in result, please add video/render group to your ID:
+
+  ```
+  sudo usermod -aG render username
+  sudo usermod -aG video username
+  ```
+
+  Then **relogin**.
+
+  If you do not see it, please check the installation GPU steps again.
+
+## Todo
 
 - Support multiple cards.

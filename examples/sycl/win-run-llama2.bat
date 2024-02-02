@@ -2,7 +2,7 @@
 ::  Copyright (C) 2024 Intel Corporation
 ::  SPDX-License-Identifier: MIT
 
-INPUT2="Building a website can be done in 10 simple steps:\nStep 1:"
+set INPUT2="Building a website can be done in 10 simple steps:\nStep 1:"
 @call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 --force
 
 
