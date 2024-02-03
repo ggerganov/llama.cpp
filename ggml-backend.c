@@ -1437,7 +1437,7 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
             // this is important to avoid copying constants such as KQ_mask and inp_pos multiple times
             ggml_backend_tensor_copy_async(split_backend, input, input_cpy);
         }
-        ggml_backend_synchronize(split_backend);
+        //ggml_backend_synchronize(split_backend); // necessary to measure copy time
         int64_t copy_end_us = ggml_time_us();
         copy_us[split_backend_id] += copy_end_us - copy_start_us;
 
