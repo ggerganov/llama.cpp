@@ -100,6 +100,10 @@ option(LLAMA_HIPBLAS                         "llama: use hipBLAS"               
 option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_VULKAN                          "llama: use Vulkan"                                OFF)
+option(LLAMA_VULKAN_CHECK_RESULTS            "llama: run Vulkan op checks"                      OFF)
+option(LLAMA_VULKAN_DEBUG                    "llama: enable Vulkan debug output"                OFF)
+option(LLAMA_VULKAN_VALIDATE                 "llama: enable Vulkan validation"                  OFF)
+option(LLAMA_VULKAN_RUN_TESTS                "llama: run Vulkan tests"                          OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
@@ -430,6 +434,22 @@ if (LLAMA_VULKAN)
         target_link_libraries(ggml-vulkan PRIVATE Vulkan::Vulkan)
 
         add_compile_definitions(GGML_USE_VULKAN)
+
+        if (LLAMA_VULKAN_CHECK_RESULTS)
+            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_CHECK_RESULTS)
+        endif()
+
+        if (LLAMA_VULKAN_DEBUG)
+            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_DEBUG)
+        endif()
+
+        if (LLAMA_VULKAN_VALIDATE)
+            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_VALIDATE)
+        endif()
+
+        if (LLAMA_VULKAN_RUN_TESTS)
+            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_RUN_TESTS)
+        endif()
 
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-vulkan)
     else()
