@@ -109,6 +109,7 @@ MK_NVCCFLAGS  += -O3
 else
 MK_CFLAGS     += -O3
 MK_CXXFLAGS   += -O3
+MK_NVCCFLAGS  += -O3
 endif
 
 # clock_gettime came in POSIX.1b (1993)
@@ -365,7 +366,7 @@ ifdef LLAMA_CUBLAS
 	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include -I/usr/local/cuda/targets/aarch64-linux/include
 	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib -L/usr/local/cuda/targets/aarch64-linux/lib -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
-	MK_NVCCFLAGS  = -use_fast_math
+	MK_NVCCFLAGS += -use_fast_math
 ifndef JETSON_EOL_MODULE_DETECT
 	MK_NVCCFLAGS += --forward-unknown-to-host-compiler
 endif # JETSON_EOL_MODULE_DETECT
