@@ -6621,7 +6621,6 @@ static __global__ void flash_attn_ext_f16(
                         M[j] = __hmax(M[j], s);
                     }
 
-                    smax = warp_reduce_max(smax);
                     M[j] = warp_reduce_max(M[j]);
 
                     const half ms = __hisinf(m) == -1 ? __float2half(0.0f) : hexp(m - M[j]);
@@ -6648,6 +6647,8 @@ static __global__ void flash_attn_ext_f16(
                     S[j] = S[j]*ms + warp_reduce_sum(ls);
                 }
             }
+
+            smax = warp_reduce_max(smax);
 
             // skip -INF blocks
             if (__hisinf(smax) == -1) {
