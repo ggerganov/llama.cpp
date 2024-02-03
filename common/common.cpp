@@ -169,10 +169,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
             std::vector<std::string> split_arg{it, {}};
             params.n_threads.resize(split_arg.size());
-            for (size_t i = 0; i < split_arg.size(); ++i) {
-                params.n_threads[i] = std::stoi(split_arg[i]);
-                if (params.n_threads[i] <= 0) {
-                    params.n_threads[i] = std::thread::hardware_concurrency();
+            for (size_t node = 0; node < split_arg.size(); ++node) {
+                params.n_threads[node] = std::stoi(split_arg[node]);
+                if (params.n_threads[node] <= 0) {
+                    params.n_threads[node] = std::thread::hardware_concurrency();
                 }
             }
 
@@ -188,10 +188,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
             std::vector<std::string> split_arg{it, {}};
             params.n_threads_batch.resize(split_arg.size());
-            for (size_t i = 0; i < split_arg.size(); ++i) {
-                params.n_threads_batch[i] = std::stoi(split_arg[i]);
-                if (params.n_threads_batch[i] <= 0) {
-                    params.n_threads_batch[i] = std::thread::hardware_concurrency();
+            for (size_t node = 0; node < split_arg.size(); ++node) {
+                params.n_threads_batch[node] = std::stoi(split_arg[node]);
+                if (params.n_threads_batch[node] <= 0) {
+                    params.n_threads_batch[node] = std::thread::hardware_concurrency();
                 }
             }
         } else if (arg == "-td" || arg == "--threads-draft") {
@@ -199,18 +199,36 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.n_threads_draft = std::stoi(argv[i]);
-            if (params.n_threads_draft <= 0) {
-                params.n_threads_draft = std::thread::hardware_concurrency();
+            std::string arg_next = argv[i];
+
+            // split string by , and /
+            const std::regex regex{R"([,/]+)"};
+            std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+            std::vector<std::string> split_arg{it, {}};
+            params.n_threads_draft.resize(split_arg.size());
+            for (size_t node = 0; node < split_arg.size(); ++node) {
+                params.n_threads_draft[node] = std::stoi(split_arg[node]);
+                if (params.n_threads_draft[node] <= 0) {
+                    params.n_threads_draft[node] = std::thread::hardware_concurrency();
+                }
             }
         } else if (arg == "-tbd" || arg == "--threads-batch-draft") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.n_threads_batch_draft = std::stoi(argv[i]);
-            if (params.n_threads_batch_draft <= 0) {
-                params.n_threads_batch_draft = std::thread::hardware_concurrency();
+            std::string arg_next = argv[i];
+
+            // split string by , and /
+            const std::regex regex{R"([,/]+)"};
+            std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+            std::vector<std::string> split_arg{it, {}};
+            params.n_threads_batch_draft.resize(split_arg.size());
+            for (size_t node = 0; node < split_arg.size(); ++node) {
+                params.n_threads_batch_draft[node] = std::stoi(split_arg[node]);
+                if (params.n_threads_batch_draft[node] <= 0) {
+                    params.n_threads_batch_draft[node] = std::thread::hardware_concurrency();
+                }
             }
         } else if (arg == "-p" || arg == "--prompt") {
             if (++i >= argc) {

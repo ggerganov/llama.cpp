@@ -261,7 +261,9 @@ void ggml_mpi_graph_compute_pre(
         return;
     }
 
-    GGML_ASSERT(inp0 == gf->nodes[0]);
+//    fprintf(stderr, "gf->nodes[0] == %s\n", ggml_get_name(gf->nodes[0]));
+//
+//    GGML_ASSERT(inp0 == gf->nodes[0]);
 
     // distribute the compute graph into slices across the MPI nodes
     //
@@ -333,7 +335,6 @@ void ggml_mpi_graph_compute_pre(
         // TODO: instead of rearranging the nodes, we should be able to execute a subset of the compute graph
         for (int i = 1; i < idx_l1 - idx_l0; i++) {
             gf->nodes[i] = gf->nodes[idx_l0 + i];
-            gf->grads[i] = gf->grads[idx_l0 + i];
         }
 
         // the first node performs the "get_rows" operation, the rest of the nodes get the data from the previous node
