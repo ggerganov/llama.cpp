@@ -553,8 +553,11 @@ $(info I CFLAGS:    $(CFLAGS))
 $(info I CXXFLAGS:  $(CXXFLAGS))
 $(info I NVCCFLAGS: $(NVCCFLAGS))
 $(info I LDFLAGS:   $(LDFLAGS))
-$(info I CC:        $(shell $(CC) --version | head -n 1))
-$(info I CXX:       $(shell $(CXX) --version | head -n 1))
+$(info I CC:        $(shell $(CC)   --version | head -n 1))
+$(info I CXX:       $(shell $(CXX)  --version | head -n 1))
+ifdef LLAMA_CUBLAS
+$(info I NVCC:      $(shell $(NVCC) --version | tail -n 1))
+endif # LLAMA_CUBLAS
 $(info )
 
 #
