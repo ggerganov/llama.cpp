@@ -346,11 +346,15 @@ mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 ```
 ### Vulkan Build
 
-**Vulkan** is a new library aimed at replacing **OpenGL**. Starting from version `b1996`, `llama.cpp` now supports **Vulkan** as a backend. It can be faster (almost 2x on NVIDIA GeForce RTX™ 3060 Laptop GPU) than **CUDA** on a consumer-grade NVIDIA graphics card.
-
+**Vulkan** is a new library aimed at replacing **OpenGL**. Starting from version `b1996`, `llama.cpp` now supports **Vulkan** as a backend.
 To build with **Vulkan**:
 
 - Ensure that your operating system and graphics card support **Vulkan**.
+- Install Vulkan realted dependents:
+  - On Debian based distros:
+      ```
+      apt install libvulkan-dev
+      ```
 - Build `llama.cpp` with the following arguments: `LLAMA_VULKAN=1`.
 ### BLAS Build
 
