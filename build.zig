@@ -3,12 +3,12 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 const Compile = std.Build.Step.Compile;
 const ConfigHeader = std.Build.Step.ConfigHeader;
-const Mode = std.builtin.Mode;
-const CrossTarget = std.zig.CrossTarget;
+const Mode = std.builtin.OptimizeMode;
+const Target = std.Build.ResolvedTarget;
 
 const Maker = struct {
-    builder: *std.build.Builder,
-    target: CrossTarget,
+    builder: *std.Build,
+    target: Target,
     optimize: Mode,
     enable_lto: bool,
 
@@ -34,10 +34,10 @@ const Maker = struct {
         try m.addCxxFlag(flag);
     }
 
-    fn init(builder: *std.build.Builder) !Maker {
+    fn init(builder: *std.Build) !Maker {
         const target = builder.standardTargetOptions(.{});
         const zig_version = @import("builtin").zig_version_string;
-        const commit_hash = try std.ChildProcess.exec(
+        const commit_hash = try std.ChildProcess.run(
             .{ .allocator = builder.allocator, .argv = &.{ "git", "rev-parse", "HEAD" } },
         );
         try std.fs.cwd().writeFile("common/build-info.cpp", builder.fmt(
@@ -46,7 +46,7 @@ const Maker = struct {
             \\char const *LLAMA_COMPILER = "Zig {s}";
             \\char const *LLAMA_BUILD_TARGET = "{s}";
             \\
-        , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.allocDescription(builder.allocator) }));
+        , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.query.zigTriple(builder.allocator) }));
         var m = Maker{
             .builder = builder,
             .target = target,
@@ -67,15 +67,15 @@ const Maker = struct {
 
     fn obj(m: *const Maker, name: []const u8, src: []const u8) *Compile {
         const o = m.builder.addObject(.{ .name = name, .target = m.target, .optimize = m.optimize });
-        if (o.target.getAbi() != .msvc)
+        if (m.target.result.abi != .msvc)
             o.defineCMacro("_GNU_SOURCE", null);
 
         if (std.mem.endsWith(u8, src, ".c")) {
-            o.addCSourceFiles(&.{src}, m.cflags.items);
+            o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cflags.items });
             o.linkLibC();
         } else {
-            o.addCSourceFiles(&.{src}, m.cxxflags.items);
-            if (o.target.getAbi() == .msvc) {
+            o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
+            if (m.target.result.abi == .msvc) {
                 o.linkLibC(); // need winsdk + crt
             } else {
                 // linkLibCpp already add (libc++ + libunwind + libc)
@@ -89,13 +89,13 @@ const Maker = struct {
 
     fn exe(m: *const Maker, name: []const u8, src: []const u8, deps: []const *Compile) *Compile {
         const e = m.builder.addExecutable(.{ .name = name, .target = m.target, .optimize = m.optimize });
-        e.addCSourceFiles(&.{src}, m.cxxflags.items);
+        e.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
         for (deps) |d| e.addObject(d);
         for (m.objs.items) |o| e.addObject(o);
         for (m.include_dirs.items) |i| e.addIncludePath(.{ .path = i });
 
         // https://github.com/ziglang/zig/issues/15448
-        if (e.target.getAbi() == .msvc) {
+        if (m.target.result.abi == .msvc) {
             e.linkLibC(); // need winsdk + crt
         } else {
             // linkLibCpp already add (libc++ + libunwind + libc)
@@ -107,7 +107,7 @@ const Maker = struct {
     }
 };
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     var make = try Maker.init(b);
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
 
@@ -132,7 +132,7 @@ pub fn build(b: *std.build.Builder) !void {
     _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
 
     const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, grammar_parser, clip });
-    if (server.target.isWindows()) {
+    if (make.target.result.os.tag == .windows) {
         server.linkSystemLibrary("ws2_32");
     }
 }
