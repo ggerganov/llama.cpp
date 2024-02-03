@@ -457,6 +457,14 @@ ifdef LLAMA_VULKAN_CHECK_RESULTS
 	MK_CPPFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
 endif
 
+ifdef LLAMA_VULKAN_DEBUG
+	MK_CPPFLAGS  += -DGGML_VULKAN_DEBUG
+endif
+
+ifdef LLAMA_VULKAN_VALIDATE
+	MK_CPPFLAGS  += -DGGML_VULKAN_VALIDATE
+endif
+
 ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif # LLAMA_VULKAN
