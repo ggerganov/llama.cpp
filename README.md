@@ -149,7 +149,7 @@ as the main playground for developing new features for the [ggml](https://github
 
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
 
-```java
+```console
 $ make -j && ./main -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
 I llama.cpp build info:
 I UNAME_S:  Darwin
