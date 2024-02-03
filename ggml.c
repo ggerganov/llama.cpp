@@ -273,6 +273,8 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #include <Accelerate/Accelerate.h>
 #if defined(GGML_USE_CLBLAST) // allow usage of CLBlast alongside Accelerate functions
 #include "ggml-opencl.h"
+#elif defined(GGML_USE_VULKAN)
+#include "ggml-vulkan.h"
 #endif
 #elif defined(GGML_USE_OPENBLAS)
 #if defined(GGML_BLAS_USE_MKL)
