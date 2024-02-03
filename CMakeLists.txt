@@ -79,7 +79,7 @@ if (NOT MSVC)
 endif()
 
 if (WIN32)
-    option(LLAMA_WIN_VER                     "llama: Windows Version"                           0x602)
+    set(LLAMA_WIN_VER "0x602" CACHE STRING "llama: Windows Version")
 endif()
 
 # 3rd party libs
