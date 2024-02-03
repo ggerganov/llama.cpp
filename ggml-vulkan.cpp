@@ -1109,8 +1109,10 @@ static void ggml_vk_instance_init() {
 #ifdef GGML_VULKAN_VALIDATE
         "VK_EXT_validation_features",
 #endif
+        "VK_KHR_portability_enumeration",
     };
-    vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers, extensions);
+
+    vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR), &app_info, layers, extensions);
 #ifdef GGML_VULKAN_VALIDATE
     const std::vector<vk::ValidationFeatureEnableEXT> features_enable = { vk::ValidationFeatureEnableEXT::eBestPractices };
     vk::ValidationFeaturesEXT validation_features = {
