@@ -982,7 +982,7 @@ void ggml_vk_init() {
         "VK_KHR_portability_enumeration",
 #endif
     };
-vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers, extensions);
+    vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers, extensions);
 #ifdef __APPLE__
     instance_create_info.flags = vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
 #endif
