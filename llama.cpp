@@ -4682,15 +4682,13 @@ static bool llm_load_tensors(
                     // FIXME: ceiling instead of floor
                     const int64_t dt_rank = n_embd / 16;
                     GGML_ASSERT(2 * n_embd == d_inner);
-                    // round up the vocab size to the next multiple of 8
-                    const int64_t rounded_vocab = (n_vocab + 7) & -8;
 
-                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, rounded_vocab});
+                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
                     // output
                     {
                         model.output_norm   = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, rounded_vocab});
+                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab});
                     }
 
                     for (int i = 0; i < n_layer; ++i) {

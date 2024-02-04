@@ -1848,6 +1848,13 @@ class StarCoder2Model(Model):
 class MambaModel(Model):
     model_arch = gguf.MODEL_ARCH.MAMBA
 
+    def set_vocab(self):
+        vocab_size = self.hparams["vocab_size"];
+        # Round vocab size to next multiple of 8
+        pad_vocab = self.hparams.get("pad_vocab_size_multiple", 8);
+        self.hparams["vocab_size"] = ((vocab_size + (pad_vocab - 1)) // pad_vocab) * pad_vocab
+        return self._set_vocab_gpt2()
+
     def set_gguf_parameters(self):
         d_model = self.hparams["d_model"]
         d_inner = self.hparams.get("d_inner", 2 * d_model)
