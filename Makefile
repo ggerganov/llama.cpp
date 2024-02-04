@@ -112,6 +112,18 @@ MK_CXXFLAGS   += -O3
 MK_NVCCFLAGS  += -O3
 endif
 
+ifndef LLAMA_NO_CCACHE
+CCACHE := $(shell which ccache)
+ifdef CCACHE
+export CCACHE_SLOPPINESS = time_macros
+$(info I ccache found, compilation results will be cached. Disable with LLAMA_NO_CCACHE.)
+CC    := $(CCACHE) $(CC)
+CXX   := $(CCACHE) $(CXX)
+else
+$(info I ccache not found. Consider installing it for faster compilation.)
+endif # CCACHE
+endif # LLAMA_NO_CCACHE
+
 # clock_gettime came in POSIX.1b (1993)
 # CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
 # posix_memalign came in POSIX.1-2001 / SUSv3
@@ -374,9 +386,9 @@ ifdef LLAMA_DEBUG
 	MK_NVCCFLAGS += -lineinfo
 endif # LLAMA_DEBUG
 ifdef LLAMA_CUDA_NVCC
-	NVCC = $(LLAMA_CUDA_NVCC)
+	NVCC = $(CCACHE) $(LLAMA_CUDA_NVCC)
 else
-	NVCC = nvcc
+	NVCC = $(CCACHE) nvcc
 endif #LLAMA_CUDA_NVCC
 ifdef CUDA_DOCKER_ARCH
 	MK_NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
@@ -483,7 +495,7 @@ ifdef LLAMA_HIPBLAS
 		ROCM_PATH	?= /opt/rocm
 		GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
 	endif
-	HIPCC                   ?= $(ROCM_PATH)/bin/hipcc
+	HIPCC                   ?= $(CCACHE) $(ROCM_PATH)/bin/hipcc
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
