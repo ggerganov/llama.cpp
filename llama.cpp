@@ -3402,61 +3402,17 @@ static bool llm_load_tensors(
         model.buft_layer[i] = llama_default_buffer_type_cpu(true);
     }
 
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_VULKAN)
     if (split_mode == LLAMA_SPLIT_LAYER) {
         // calculate the split points
-        int device_count = ggml_backend_cuda_get_device_count();
+        int device_count = llama_get_device_count();
         bool all_zero = tensor_split == nullptr || std::all_of(tensor_split, tensor_split + device_count, [](float x) { return x == 0.0f; });
-        float splits[GGML_CUDA_MAX_DEVICES];
+        std::vector<float> splits_vec(device_count);
+        float * splits = splits_vec.data();
         if (all_zero) {
             // default split, by free memory
             for (int i = 0; i < device_count; ++i) {
-                size_t total;
-                size_t free;
-                ggml_backend_cuda_get_device_memory(i, &total, &free);
-                splits[i] = free;
-            }
-        } else {
-            std::copy(tensor_split, tensor_split + device_count, splits);
-        }
-
-        // sum and normalize the splits to get the split points
-        float split_sum = 0.0f;
-        for (int i = 0; i < device_count; ++i) {
-            split_sum += splits[i];
-            splits[i] = split_sum;
-        }
-        for (int i = 0; i < device_count; ++i) {
-            splits[i] /= split_sum;
-        }
-
-        // assign the repeating layers to the devices according to the splits
-        int act_gpu_layers = std::min(n_gpu_layers, (int)n_layer + 1);
-        for (int64_t i = i_gpu_start; i < n_layer; ++i) {
-            int layer_gpu = std::upper_bound(splits, splits + device_count, float(i - i_gpu_start)/act_gpu_layers) - splits;
-            model.buft_layer[i] = llama_default_buffer_type_offload(layer_gpu);
-        }
-        // assign the output layer
-        if (n_gpu_layers > n_layer) {
-            int layer_gpu = std::upper_bound(splits, splits + device_count, float(act_gpu_layers - 1)/act_gpu_layers) - splits;
-            model.buft_output = llama_default_buffer_type_offload(layer_gpu);
-        } else {
-            model.buft_output = llama_default_buffer_type_cpu(true);
-        }
-    } else
-#elif defined(GGML_USE_VULKAN)
-    if (split_mode == LLAMA_SPLIT_LAYER) {
-        // calculate the split points
-        int device_count = ggml_backend_vk_get_device_count();
-        bool all_zero = tensor_split == nullptr || std::all_of(tensor_split, tensor_split + device_count, [](float x) { return x == 0.0f; });
-        float splits[GGML_VK_MAX_DEVICES];
-        if (all_zero) {
-            // default split, by free memory
-            for (int i = 0; i < device_count; ++i) {
-                size_t total;
-                size_t free;
-                ggml_backend_vk_get_device_memory(i, &total, &free);
-                splits[i] = free;
+                splits[i] = llama_get_default_device_split(i);
             }
         } else {
             std::copy(tensor_split, tensor_split + device_count, splits);
@@ -10339,6 +10295,36 @@ size_t llama_max_devices(void) {
     return GGML_SYCL_MAX_DEVICES;
 #elif defined(GGML_USE_VULKAN)
     return GGML_VK_MAX_DEVICES;
+#else
+    return 1;
+#endif
+}
+
+size_t llama_get_device_count(void) {
+#if defined(GGML_USE_METAL)
+    return 1;
+#elif defined(GGML_USE_CUBLAS)
+    return ggml_backend_cuda_get_device_count();
+#elif defined(GGML_USE_SYCL)
+    return 1;
+#elif defined(GGML_USE_VULKAN)
+    return ggml_backend_vk_get_device_count();
+#else
+    return 0;
+#endif
+}
+
+LLAMA_API size_t llama_get_default_device_split(int device) {
+#if defined(GGML_USE_CUBLAS)
+    size_t total;
+    size_t free;
+    ggml_backend_cuda_get_device_memory(device, &total, &free);
+    return free;
+#elif defined(GGML_USE_VULKAN)
+    size_t total;
+    size_t free;
+    ggml_backend_vk_get_device_memory(device, &total, &free);
+    return free;
 #else
     return 1;
 #endif
