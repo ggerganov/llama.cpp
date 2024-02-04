@@ -203,6 +203,9 @@
 
     import { llama } from '/completion.js';
     import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    
+    import { chat_templates } from '/chat_templates.js';
+    
     let selected_image = false;
     var slot_id = -1;
 
@@ -710,6 +713,28 @@
         </fieldset>
         `
       );
+     
+    const PromptTemplateOptions = () => {
+        var templatenames = Object.keys(chat_templates);
+        templatenames.sort();
+        var optionlist = templatenames.map(name => html`<option value="${name}">${name}</option>`);
+        return optionlist;
+     };
+
+    const updatePromptTemplate = (el) => {
+      // Get the selected template name
+      var templatename = el.target.value;
+      // console.log(templatename);
+      if (templatename != "") {
+         // set the template parameters
+        session.value.template = chat_templates[templatename]["template"];
+         session.value.historyTemplate = chat_templates[templatename]["historyTemplate"];
+
+         // this line is required to trigger the setting of the textareas
+        session.value = { ...session.value, image_selected: '' };
+      }
+    }
+
 
       const ChatConfigForm = () => (
         html`
@@ -730,12 +755,17 @@
           <fieldset>
             <div>
               <label for="template">Prompt template</label>
+              <select id="templateSelect" onchange=${updatePromptTemplate} >
+                <option value="">- Select a chat template -</option>
+                 ${PromptTemplateOptions()}
+               </select>
+
               <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
             </div>
 
             <div>
               <label for="template">Chat history template</label>
-              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+              <textarea id="historyTemplate" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
             </div>
             ${GrammarControl()}
           </fieldset>
