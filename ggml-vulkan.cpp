@@ -978,8 +978,14 @@ void ggml_vk_init() {
 #ifdef GGML_VULKAN_VALIDATE
         "VK_EXT_validation_features",
 #endif
+#ifdef __APPLE__
+        "VK_KHR_portability_enumeration",
+#endif
     };
-    vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers, extensions);
+vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers, extensions);
+#ifdef __APPLE__
+    instance_create_info.flags = vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+#endif
 #ifdef GGML_VULKAN_VALIDATE
     const std::vector<vk::ValidationFeatureEnableEXT> features_enable = { vk::ValidationFeatureEnableEXT::eBestPractices };
     vk::ValidationFeaturesEXT validation_features = {
