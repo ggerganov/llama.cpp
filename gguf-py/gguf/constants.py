@@ -211,7 +211,6 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down.{xid}",
     MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up.{xid}",
     MODEL_TENSOR.LAYER_OUT_NORM:  "blk.{bid}.layer_output_norm",
-    # FIXME: NAMES FOR MAMBA ARE NOT FINAL
     MODEL_TENSOR.SSM_IN:          "blk.{bid}.ssm_in",
     MODEL_TENSOR.SSM_CONV1D:      "blk.{bid}.ssm_conv1d",
     MODEL_TENSOR.SSM_X:           "blk.{bid}.ssm_x",

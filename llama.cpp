@@ -401,8 +401,6 @@ enum llm_tensor {
     LLM_TENSOR_ATTN_Q_NORM,
     LLM_TENSOR_ATTN_K_NORM,
     LLM_TENSOR_LAYER_OUT_NORM,
-    // TODO: maybe use longer names?
-    // TODO: can the in_proj and/or the out_proj instead re-use some of the above types?
     LLM_TENSOR_SSM_IN,
     LLM_TENSOR_SSM_CONV1D,
     LLM_TENSOR_SSM_X,

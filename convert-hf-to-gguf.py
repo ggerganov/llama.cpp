@@ -1844,7 +1844,7 @@ class StarCoder2Model(Model):
     model_arch = gguf.MODEL_ARCH.STARCODER2
 
 
-@Model.register("MambaForCausalLM")
+@Model.register("MambaForCausalLM", "MambaLMHeadModel")
 class MambaModel(Model):
     model_arch = gguf.MODEL_ARCH.MAMBA
 
