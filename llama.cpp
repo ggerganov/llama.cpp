@@ -4697,9 +4697,6 @@ static bool llm_load_tensors(
 
                         auto & layer = model.layers[i];
 
-                        // TODO: what's the difference between ctx_layer and ctx_split?
-                        //       A: It seems that ctx_split is for matrices (2d???) while ctx_layer is for other things (like 1D bias and norms, probably.)
-
                         // norm
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
 
@@ -7910,7 +7907,6 @@ struct llm_build_context {
 
         const int32_t n_tok = batch.n_tokens;
 
-        // hopefully the compiler does constant folding
         const int64_t d_model = n_embd;
         const int64_t d_inner = n_head;
         GGML_ASSERT(2 * d_model == d_inner);
@@ -7957,8 +7953,8 @@ struct llm_build_context {
 
                 // The following tensor is too big in order to avoid an assertion error when making an overlapping view.
                 // TODO: in ggml_new_tensor_impl, handle overlapping data range in data size calculation
-                // This could then be a tensor with ne[] = {(d_conv-1)+n_tok, d_inner}
-                // which is around (d_conv-1) times as small as its current size.
+                // This could then be a tensor with ne[] = {(d_conv-1)+n_tok, d_inner},
+                // but the size difference is not that big (d_conv is usually 4).
                 struct ggml_tensor * conv_x = ggml_new_tensor_1d(ctx0, conv_state->type, d_conv*d_inner*n_tok);
                 const size_t conv_x_nb1 = (d_conv - 1 + n_tok) * ggml_element_size(conv_x);
 
