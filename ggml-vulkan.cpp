@@ -112,6 +112,7 @@ typedef std::vector<vk_submission> vk_sequence;
 struct vk_device {
     vk::PhysicalDevice physical_device;
     vk::PhysicalDeviceProperties properties;
+    std::string name;
     uint64_t max_memory_allocation_size;
     bool fp16;
     vk::Device device;
@@ -1150,7 +1151,13 @@ void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     if (ctx->device.fp16) {
         device_extensions.push_back("VK_KHR_shader_float16_int8");
     }
-    std::cerr << "ggml_vulkan: Using " << ctx->device.properties.deviceName << " | uma: " << ctx->device.uma << " | fp16: " << ctx->device.fp16 << " | warp size: " << ctx->device.subgroup_size << std::endl;
+    ctx->device.name = ctx->device.properties.deviceName.data();
+    std::cerr << GGML_VK_NAME << idx << ": " << ctx->device.name << " | uma: " << ctx->device.uma << " | fp16: " << ctx->device.fp16 << " | warp size: " << ctx->device.subgroup_size << std::endl;
+
+    if (ctx->device.properties.deviceType == vk::PhysicalDeviceType::eCpu) {
+        std::cerr << "ggml_vulkan: Warning: Device type is CPU. This is probably not the device you want." << std::endl;
+    }
+
     device_create_info = {
         vk::DeviceCreateFlags(),
         device_queue_create_infos,
@@ -4350,6 +4357,8 @@ GGML_CALL void ggml_vk_get_device_description(int device, char * description, si
 void ggml_vk_init_cpu_assist() {
     ggml_vk_instance_init();
 
+    std::cerr << "ggml_vulkan: Found " << ggml_vk_get_device_count() << " Vulkan devices:" << std::endl;
+
     for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
         ggml_backend_vk_init(i);
     }
@@ -4406,10 +4415,10 @@ struct ggml_backend_vk_buffer_context {
     size_t temp_tensor_extra_index = 0;
     std::string name;
 
-    ggml_backend_vk_buffer_context(ggml_backend_vk_context * ctx, vk_buffer dev_buffer) :
+    ggml_backend_vk_buffer_context(ggml_backend_vk_context * ctx, vk_buffer dev_buffer, std::string& name) :
         ctx(ctx),
         dev_buffer(dev_buffer),
-        name(GGML_VK_NAME) {
+        name(name) {
     }
 
     ~ggml_backend_vk_buffer_context() {
@@ -4549,7 +4558,7 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_buffer_type_alloc_buffer(
     ggml_backend_vk_buffer_type_context * ctx = (ggml_backend_vk_buffer_type_context *) buft->context;
     vk_buffer dev_buffer = ggml_vk_create_buffer_device(ctx->ctx, size);
 
-    ggml_backend_vk_buffer_context * bufctx = new ggml_backend_vk_buffer_context(ctx->ctx, dev_buffer);
+    ggml_backend_vk_buffer_context * bufctx = new ggml_backend_vk_buffer_context(ctx->ctx, dev_buffer, ctx->name);
 
     return ggml_backend_buffer_init(buft, ggml_backend_vk_buffer_interface, bufctx, size);
 }
@@ -4642,6 +4651,8 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_host_buffer_type_alloc_bu
 
 GGML_CALL static size_t ggml_backend_vk_host_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     return vk_instance.contexts[0].device.properties.limits.minMemoryMapAlignment;
+
+    UNUSED(buft);
 }
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type() {
@@ -4947,11 +4958,11 @@ GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t idx) {
 #endif
 
     ggml_backend_vk_context * ctx = &vk_instance.contexts[idx];
-    ctx->name = GGML_VK_NAME;
     ggml_vk_init(ctx, idx);
+    ctx->name = GGML_VK_NAME + std::to_string(idx);
     vk_instance.buffer_types[idx] = {
         /* .iface    = */ ggml_backend_vk_buffer_type_interface,
-        /* .context  = */ new ggml_backend_vk_buffer_type_context{ GGML_VK_NAME, ctx },
+        /* .context  = */ new ggml_backend_vk_buffer_type_context{ ctx->name, ctx },
     };
     vk_instance.initialized[idx] = true;
 
@@ -5005,7 +5016,9 @@ extern "C" GGML_CALL int ggml_backend_vk_reg_devices();
 
 GGML_CALL int ggml_backend_vk_reg_devices() {
     for (auto idx : vk_instance.device_indices) {
-        ggml_backend_register(GGML_VK_NAME, ggml_backend_reg_vk_init, ggml_backend_vk_buffer_type(idx), (void *) (intptr_t) idx);
+        char name[128];
+        snprintf(name, sizeof(name), "%s%ld", GGML_VK_NAME, idx);
+        ggml_backend_register(name, ggml_backend_reg_vk_init, ggml_backend_vk_buffer_type(idx), (void *) (intptr_t) idx);
     }
     return vk_instance.device_indices.size();
 }
