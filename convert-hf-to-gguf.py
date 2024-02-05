@@ -24,6 +24,7 @@ import gguf
 
 from convert import HfVocab
 
+
 # check for any of the given keys in the dictionary and return the value of the first key found
 def get_key_opts(d, keys):
     for k in keys:
@@ -1070,6 +1071,7 @@ class MixtralModel(Model):
     def set_vocab(self):
         self._set_vocab_sentencepiece()
 
+
 class MiniCPMModel(Model):
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]
@@ -1083,8 +1085,10 @@ class MiniCPMModel(Model):
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
+
     def set_vocab(self):
         self._set_vocab_hf()
+
 
 class QwenModel(Model):
     @staticmethod
