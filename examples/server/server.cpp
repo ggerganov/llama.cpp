@@ -334,6 +334,7 @@ struct llama_server_context
 
     // slots / clients
     std::vector<llama_client_slot> slots;
+    json default_generation_settings_for_props;
 
     llama_server_queue queue_tasks;
     llama_server_response queue_results;
@@ -429,6 +430,9 @@ struct llama_server_context
 
             slots.push_back(slot);
         }
+
+        default_generation_settings_for_props = get_formated_generation(slots.front());
+        default_generation_settings_for_props["seed"] = -1;
 
         batch = llama_batch_init(n_ctx, 0, params.n_parallel);
 
@@ -2614,7 +2618,8 @@ int main(int argc, char **argv)
                 res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 json data = {
                     { "user_name",      llama.name_user.c_str() },
-                    { "assistant_name", llama.name_assistant.c_str() }
+                    { "assistant_name", llama.name_assistant.c_str() },
+                    { "default_generation_settings", llama.default_generation_settings_for_props }
                 };
                 res.set_content(data.dump(), "application/json; charset=utf-8");
             });
