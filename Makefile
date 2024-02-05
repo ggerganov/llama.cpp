@@ -627,7 +627,7 @@ clean:
 
 # $< is the first prerequisite, i.e. the source file.
 # Explicitly compile this to an object file so that it can be cached with ccache.
-# The source file is then filtered out from the list of all prerequisites $^ and the object file is added instead.
+# The source file is then filtered out from $^ (the list of all prerequisites) and the object file is added instead.
 
 # Helper function that replaces .c, .cpp, and .cu file endings with .o:
 GET_OBJ_FILE = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(patsubst %.cu,%.o,$(1))))
