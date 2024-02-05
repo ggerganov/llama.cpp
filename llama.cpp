@@ -6810,11 +6810,11 @@ struct llm_build_context {
 
         return gf;
     }
-	
+
     // ref: https://arxiv.org/abs/2203.03466
     //      https://github.com/ggerganov/llama.cpp/issues/5276#issuecomment-1925774738
-    // based on the original build_llama() function  
-    struct ggml_cgraph * build_minicpm() {        
+    // based on the original build_llama() function
+    struct ggml_cgraph * build_minicpm() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
@@ -6921,7 +6921,7 @@ struct llm_build_context {
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
-            
+
             // scale the hidden states for residual connection
             cur = ggml_scale(ctx0, cur, scale_res);
             cb(cur, "hidden_scaled_ffn", -1);
