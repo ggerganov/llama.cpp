@@ -6,7 +6,7 @@
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
-Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
+Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
 ### Hot topics
 
@@ -58,18 +58,20 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ## Description
 
-The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quantization on a MacBook
+The main goal of `llama.cpp` is to enable LLM inference with minimal setup and state-of-the-art performance on a wide
+variety of hardware - locally and in the cloud.
 
-- Plain C/C++ implementation without dependencies
-- Apple silicon first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
+- Plain C/C++ implementation without any dependencies
+- Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
 - AVX, AVX2 and AVX512 support for x86 architectures
-- Mixed F16 / F32 precision
-- 2-bit, 3-bit, 4-bit, 5-bit, 6-bit and 8-bit integer quantization support
-- CUDA, Metal, OpenCL, SYCL GPU backend support
+- 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
+- Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP)
+- Vulkan, SYCL, and (partial) OpenCL backend support
+- CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 
-The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
-Since then, the project has improved significantly thanks to many contributions. This project is mainly for educational purposes and serves
-as the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
+Since its [inception](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022), the project has
+improved significantly thanks to many contributions. It is the main playground for developing new features for the
+[ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
 
@@ -77,11 +79,14 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] Linux
 - [X] Windows (via CMake)
 - [X] Docker
+- [X] FreeBSD
 
 **Supported models:**
 
 - [X] LLaMA 🦙
 - [x] LLaMA 2 🦙🦙
+- [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
+- [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [X] Falcon
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
@@ -95,7 +100,6 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Baichuan 1 & 2](https://huggingface.co/models?search=baichuan-inc/Baichuan) + [derivations](https://huggingface.co/hiyouga/baichuan-7b-sft)
 - [X] [Aquila 1 & 2](https://huggingface.co/models?search=BAAI/Aquila)
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
-- [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
 - [X] [Persimmon 8B](https://github.com/ggerganov/llama.cpp/pull/3410)
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
@@ -104,15 +108,14 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [StableLM-3b-4e1t](https://github.com/ggerganov/llama.cpp/pull/3586)
 - [x] [Deepseek models](https://huggingface.co/models?search=deepseek-ai/deepseek)
 - [x] [Qwen models](https://huggingface.co/models?search=Qwen/Qwen)
-- [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [x] [PLaMo-13B](https://github.com/ggerganov/llama.cpp/pull/3557)
 - [x] [GPT-2](https://huggingface.co/gpt2)
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 
 **Multimodal models:**
 
-- [x] [Llava 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e)
-- [x] [Bakllava](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
+- [x] [LLaVA 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e)
+- [x] [BakLLaVA](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
 - [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
@@ -137,14 +140,22 @@ as the main playground for developing new features for the [ggml](https://github
 
 **UI:**
 
+Unless otherwise noted these projects are open-source with permissive licensing:
+
+- [iohub/collama](https://github.com/iohub/coLLaMA)
+- [janhq/jan](https://github.com/janhq/jan) (AGPL)
 - [nat/openplayground](https://github.com/nat/openplayground)
-- [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
-- [withcatai/catai](https://github.com/withcatai/catai)
-- [semperai/amica](https://github.com/semperai/amica)
+- [LMStudio](https://lmstudio.ai/) (proprietary)
+- [LostRuins/koboldcpp](https://github.com/LostRuins/koboldcpp) (AGPL)
+- [Mozilla-Ocho/llamafile](https://github.com/Mozilla-Ocho/llamafile)
+- [nomic-ai/gpt4all](https://github.com/nomic-ai/gpt4all)
+- [ollama/ollama](https://github.com/ollama/ollama)
+- [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) (AGPL)
 - [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
-- [iohub/collama](https://github.com/iohub/coLLaMA)
-- [pythops/tenere](https://github.com/pythops/tenere)
+- [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
+- [semperai/amica](https://github.com/semperai/amica)
+- [withcatai/catai](https://github.com/withcatai/catai)
 
 ---
 
