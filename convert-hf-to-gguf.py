@@ -22,6 +22,7 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
+from convert import HfVocab
 
 # check for any of the given keys in the dictionary and return the value of the first key found
 def get_key_opts(d, keys):
@@ -397,6 +398,31 @@ class Model:
                     tokens.append(key.encode("utf-8"))
                     scores.append(-1000.0)
                     toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _set_vocab_hf(self):
+        path = self.dir_model
+        added_tokens_path = self.dir_model
+        vocab = HfVocab(
+            path, added_tokens_path if added_tokens_path.exists() else None
+        )
+        tokens = []
+        scores = []
+        toktypes = []
+
+        for text, score, toktype in vocab.all_tokens():
+            tokens.append(text)
+            scores.append(score)
+            toktypes.append(toktype)
+
+        assert len(tokens) == vocab.vocab_size
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_token_list(tokens)
@@ -1058,7 +1084,7 @@ class MiniCPMModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
     def set_vocab(self):
-        self._set_vocab_sentencepiece()
+        self._set_vocab_hf()
 
 class QwenModel(Model):
     @staticmethod
