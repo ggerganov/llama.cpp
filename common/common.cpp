@@ -399,6 +399,18 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             sparams.penalty_present = std::stof(argv[i]);
+        } else if (arg == "--dynatemp-range") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.dynatemp_range = std::stof(argv[i]);
+        } else if (arg == "--dynatemp-exp") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.dynatemp_exponent = std::stof(argv[i]);
         } else if (arg == "--mirostat") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -942,6 +954,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)sparams.penalty_repeat);
     printf("  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_present);
     printf("  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_freq);
+    printf("  --dynatemp-range N    dynamic temperature range (default: %.1f, 0.0 = disabled)\n", (double)sparams.dynatemp_range);
+    printf("  --dynatemp-exp N      dynamic temperature exponent (default: %.1f)\n", (double)sparams.dynatemp_exponent);
     printf("  --mirostat N          use Mirostat sampling.\n");
     printf("                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
     printf("                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", sparams.mirostat);
