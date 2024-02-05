@@ -8010,17 +8010,10 @@ struct llm_build_context {
                         ggml_view_2d(ctx0, ssm_state, d_state, d_inner, ssm_state->nb[1], (n_tok-1)*ssm_state->nb[2]),
                         ggml_view_tensor(ctx0, kv_self.v_l[il])));
 
-                struct ggml_tensor * y;
-                if (n_tok == 1) {
-                    // row-wise dot product ("dn,n->d")
-                    // {d_state, d_inner} * {d_state, 1} => {d_inner, 1}
-                    y = ggml_mul_mat(ctx0, ssm_state, C);
-                } else {
-                    // {d_state, d_inner, n_tok} * {d_state, n_tok} => {d_inner, 1, n_tok}
-                    y = ggml_mul_mat(ctx0, ssm_state, ggml_permute(ctx0, C, 0, 2, 1, 3));
-                    // => {d_inner, n_tok}
-                    y = ggml_permute(ctx0, y, 0, 2, 1, 3);
-                }
+                // {d_state, d_inner, n_tok} * {d_state, n_tok} => {d_inner, 1, n_tok}
+                struct ggml_tensor * y = ggml_mul_mat(ctx0, ssm_state, ggml_permute(ctx0, C, 0, 2, 1, 3));
+                // => {d_inner, n_tok}
+                y = ggml_permute(ctx0, y, 0, 2, 1, 3);
                 // {d_inner, n_tok} * {d_inner} => {d_inner, n_tok}
                 y = ggml_add(ctx0, y, ggml_mul(ctx0, x, model.layers[il].ssm_d));
                 y = ggml_mul(ctx0, y, ggml_silu(ctx0, z));
