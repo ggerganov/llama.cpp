@@ -14,16 +14,17 @@
 # - Might be unstable!
 #
 # Usage:
-#   ./server-llm.sh [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose]
+#   ./server-llm.sh [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose] [-non-interactive]
 #
-#   --port:       port number, default is 8888
-#   --repo:       path to a repo containing GGUF model files
-#   --wtype:      weights type (f16, q8_0, q4_0, q4_1), default is user-input
-#   --backend:    cpu, cuda, metal, opencl, depends on the OS
-#   --gpu-id:     gpu id, default is 0
-#   --n-parallel: number of parallel requests, default is 8
-#   --n-kv:       KV cache size, default is 4096
-#   --verbose:    verbose output
+#   --port:            port number, default is 8888
+#   --repo:            path to a repo containing GGUF model files
+#   --wtype:           weights type (f16, q8_0, q4_0, q4_1), default is user-input
+#   --backend:         cpu, cuda, metal, opencl, depends on the OS
+#   --gpu-id:          gpu id, default is 0
+#   --n-parallel:      number of parallel requests, default is 8
+#   --n-kv:            KV cache size, default is 4096
+#   --verbose:         verbose output
+#   --non-interactive: run without asking a permission to run
 #
 # Example:
 #
@@ -67,8 +68,7 @@ verbose=0
 
 function print_usage {
     printf "Usage:\n"
-    printf "  ./server-llm.sh [-interactive] [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose]\n\n"
-    printf "  --non-interactive:  run without asking a permision to run\n"
+    printf "  ./server-llm.sh [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose] [-non-interactive]\n\n"
     printf "  --port:             port number, default is 8888\n"
     printf "  --repo:             path to a repo containing GGUF model files\n"
     printf "  --wtype:            weights type (f16, q8_0, q4_0, q4_1), default is user-input\n"
@@ -77,6 +77,7 @@ function print_usage {
     printf "  --n-parallel:       number of parallel requests, default is 8\n"
     printf "  --n-kv:             KV cache size, default is 4096\n"
     printf "  --verbose:          verbose output\n\n"
+    printf "  --non-interactive:  run without asking a permission to run\n"
     printf "Example:\n\n"
     printf '  bash -c "$(curl -s https://ggml.ai/server-llm.sh)"\n\n'
 }
