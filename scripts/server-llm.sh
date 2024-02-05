@@ -47,6 +47,7 @@ if ! command -v make &> /dev/null; then
 fi
 
 # parse arguments
+is_interactive=1
 port=8888
 repo=""
 wtype=""
@@ -66,15 +67,16 @@ verbose=0
 
 function print_usage {
     printf "Usage:\n"
-    printf "  ./server-llm.sh [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose]\n\n"
-    printf "  --port:       port number, default is 8888\n"
-    printf "  --repo:       path to a repo containing GGUF model files\n"
-    printf "  --wtype:      weights type (f16, q8_0, q4_0, q4_1), default is user-input\n"
-    printf "  --backend:    cpu, cuda, metal, opencl, depends on the OS\n"
-    printf "  --gpu-id:     gpu id, default is 0\n"
-    printf "  --n-parallel: number of parallel requests, default is 8\n"
-    printf "  --n-kv:       KV cache size, default is 4096\n"
-    printf "  --verbose:    verbose output\n\n"
+    printf "  ./server-llm.sh [-interactive] [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose]\n\n"
+    printf "  --non-interactive:  run without asking a permision to run\n"
+    printf "  --port:             port number, default is 8888\n"
+    printf "  --repo:             path to a repo containing GGUF model files\n"
+    printf "  --wtype:            weights type (f16, q8_0, q4_0, q4_1), default is user-input\n"
+    printf "  --backend:          cpu, cuda, metal, opencl, depends on the OS\n"
+    printf "  --gpu-id:           gpu id, default is 0\n"
+    printf "  --n-parallel:       number of parallel requests, default is 8\n"
+    printf "  --n-kv:             KV cache size, default is 4096\n"
+    printf "  --verbose:          verbose output\n\n"
     printf "Example:\n\n"
     printf '  bash -c "$(curl -s https://ggml.ai/server-llm.sh)"\n\n'
 }
@@ -82,6 +84,10 @@ function print_usage {
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
+        --non-interactive)
+            is_interactive=0
+            shift
+            ;;
         --port)
             port="$2"
             shift
@@ -176,31 +182,32 @@ repos=(
     "https://huggingface.co/TheBloke/OpenHermes-2-Mistral-7B-GGUF"
     "https://huggingface.co/TheBloke/CausalLM-7B-GGUF"
 )
+if [ $is_interactive -eq 1 ]; then
+    printf "\n"
+    printf "[I] This is a helper script for deploying llama.cpp's server on this machine.\n\n"
+    printf "    Based on the options that follow, the script might download a model file\n"
+    printf "    from the internet, which can be a few GBs in size. The script will also\n"
+    printf "    build the latest llama.cpp source code from GitHub, which can be unstable.\n"
+    printf "\n"
+    printf "    Upon success, an HTTP server will be started and it will serve the selected\n"
+    printf "    model using llama.cpp for demonstration purposes.\n"
+    printf "\n"
+    printf "    Please note:\n"
+    printf "\n"
+    printf "    - All new data will be stored in the current folder\n"
+    printf "    - The server will be listening on all network interfaces\n"
+    printf "    - The server will run with default settings which are not always optimal\n"
+    printf "    - Do not judge the quality of a model based on the results from this script\n"
+    printf "    - Do not use this script to benchmark llama.cpp\n"
+    printf "    - Do not use this script in production\n"
+    printf "    - This script is only for demonstration purposes\n"
+    printf "\n"
+    printf "    If you don't know what you are doing, please press Ctrl-C to abort now\n"
+    printf "\n"
+    printf "    Press Enter to continue ...\n\n"
 
-printf "\n"
-printf "[I] This is a helper script for deploying llama.cpp's server on this machine.\n\n"
-printf "    Based on the options that follow, the script might download a model file\n"
-printf "    from the internet, which can be a few GBs in size. The script will also\n"
-printf "    build the latest llama.cpp source code from GitHub, which can be unstable.\n"
-printf "\n"
-printf "    Upon success, an HTTP server will be started and it will serve the selected\n"
-printf "    model using llama.cpp for demonstration purposes.\n"
-printf "\n"
-printf "    Please note:\n"
-printf "\n"
-printf "    - All new data will be stored in the current folder\n"
-printf "    - The server will be listening on all network interfaces\n"
-printf "    - The server will run with default settings which are not always optimal\n"
-printf "    - Do not judge the quality of a model based on the results from this script\n"
-printf "    - Do not use this script to benchmark llama.cpp\n"
-printf "    - Do not use this script in production\n"
-printf "    - This script is only for demonstration purposes\n"
-printf "\n"
-printf "    If you don't know what you are doing, please press Ctrl-C to abort now\n"
-printf "\n"
-printf "    Press Enter to continue ...\n\n"
-
-read
+    read
+fi
 
 if [[ -z "$repo" ]]; then
     printf "[+] No repo provided from the command line\n"
