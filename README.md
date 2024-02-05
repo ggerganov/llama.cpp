@@ -107,6 +107,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [x] [PLaMo-13B](https://github.com/ggerganov/llama.cpp/pull/3557)
 - [x] [GPT-2](https://huggingface.co/gpt2)
+- [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 
 **Multimodal models:**
 
