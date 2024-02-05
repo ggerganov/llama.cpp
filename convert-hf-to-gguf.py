@@ -205,6 +205,8 @@ class Model:
             return OrionModel
         if model_architecture == "InternLM2ForCausalLM":
             return InternLM2Model
+        if model_architecture == "MiniCPMForCausalLM":
+            return MiniCPMModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -258,6 +260,8 @@ class Model:
             return gguf.MODEL_ARCH.ORION
         if arch == "InternLM2ForCausalLM":
             return gguf.MODEL_ARCH.INTERNLM2
+        if arch == "MiniCPMForCausalLM":
+            return gguf.MODEL_ARCH.MINICPM
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -1040,6 +1044,21 @@ class MixtralModel(Model):
     def set_vocab(self):
         self._set_vocab_sentencepiece()
 
+class MiniCPMModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        self.gguf_writer.add_name("MiniCPM")
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
 
 class QwenModel(Model):
     @staticmethod
