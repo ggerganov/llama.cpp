@@ -272,7 +272,7 @@ Please install [Visual Studio](https://visualstudio.microsoft.com/) which impact
 
 a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html).
 
-Recommend to install to default folder: **/opt/intel/oneapi**.
+Recommend to install to default folder: **C:\Program Files (x86)\Intel\oneAPI**.
 
 Following guide uses the default folder as example. If you use other folder, please modify the following guide info with your folder.
 
