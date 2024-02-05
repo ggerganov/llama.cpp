@@ -13937,7 +13937,6 @@ static void ggml_sycl_cpy(const ggml_tensor *src0, const ggml_tensor *src1,
     const int64_t ne01 = src0->ne[1];
     const int64_t ne02 = src0->ne[2];
 
-    //GGML_ASSERT(src0->ne[3] == 1);
 
     const int64_t nb00 = src0->nb[0];
     const int64_t nb01 = src0->nb[1];
@@ -13948,7 +13947,6 @@ static void ggml_sycl_cpy(const ggml_tensor *src0, const ggml_tensor *src1,
     const int64_t ne11 = src1->ne[1];
     const int64_t ne12 = src1->ne[2];
 
-    //GGML_ASSERT(src1->ne[3] == 1);
 
     const int64_t nb10 = src1->nb[0];
     const int64_t nb11 = src1->nb[1];
