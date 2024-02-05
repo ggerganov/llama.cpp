@@ -1764,6 +1764,10 @@ struct llama_context {
             ggml_backend_free(backend);
         }
 
+#ifdef GGML_USE_VULKAN
+        ggml_vk_cleanup_cpu_assist();
+#endif
+
         ggml_backend_buffer_free(buf_input);
         ggml_free(ctx_input);
     }
