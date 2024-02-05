@@ -573,7 +573,7 @@ endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_MPI
-ggml-mpi.o: ggml-mpi.c ggml-mpi.h
+ggml-mpi.o: ggml-mpi.cpp ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 

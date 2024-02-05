@@ -4089,6 +4089,18 @@ static bool llm_load_tensors(
         }
     }
 
+#ifdef GGML_USE_MPI
+    for (int64_t i = 0; i < n_layer; i++) {
+        model.buft_layer[i] = {ggml_backend_mpi_wrap_buffer(model.buft_layer[i].buft_matrix),
+                               ggml_backend_mpi_wrap_buffer(model.buft_layer[i].buft)};
+    }
+
+    model.buft_input = {ggml_backend_mpi_wrap_buffer(model.buft_input.buft_matrix),
+                        ggml_backend_mpi_wrap_buffer(model.buft_input.buft)};
+    model.buft_output = {ggml_backend_mpi_wrap_buffer(model.buft_output.buft_matrix),
+                         ggml_backend_mpi_wrap_buffer(model.buft_output.buft)};
+#endif
+
     // count used buffer types
     std::map<ggml_backend_buffer_type_t, int> buft_layer_count;
     buft_layer_count[model.buft_input.buft]++;
@@ -4965,6 +4977,12 @@ static bool llm_load_tensors(
                 mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
             }
         }
+
+#ifdef GGML_USE_MPI
+        if (buf == nullptr) {
+            continue;
+        }
+#endif
         if (buf == nullptr) {
             throw std::runtime_error("failed to allocate buffer");
         }
@@ -12978,6 +12996,19 @@ struct llama_context * llama_new_context_with_model(
             }
             ctx->backends.push_back(backend);
         }
+#endif
+
+#ifdef GGML_USE_MPI
+        // with split_mode LLAMA_SPLIT_NONE or LLAMA_SPLIT_ROW, only the main GPU backend is used
+        ggml_backend_t backend = ggml_backend_mpi_init(model->main_gpu);
+        if (backend == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, model->main_gpu);
+            llama_free(ctx);
+            return nullptr;
+        }
+        ctx->backends.push_back(backend);
+
+
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {

@@ -379,6 +379,7 @@ extern "C" {
         GGML_BACKEND_TYPE_CPU = 0,
         GGML_BACKEND_TYPE_GPU = 10,
         GGML_BACKEND_TYPE_GPU_SPLIT = 20,
+        GGML_BACKEND_TYPE_MPI_SPLIT = 30,
     };
 
     // model file types

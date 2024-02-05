@@ -1,11 +1,14 @@
 #include "ggml-mpi.h"
 
 #include "ggml.h"
+#include "ggml-backend.h"
+#include "ggml-backend-impl.h"
 
 #include <mpi.h>
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <vector>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -17,6 +20,8 @@ struct ggml_mpi_context {
     MPI_Comm comm;
     int layer_start;
     int layer_end;
+    struct ggml_tensor *inp0;
+    std::string name;
 };
 
 void ggml_mpi_backend_init(void) {
@@ -29,7 +34,7 @@ void ggml_mpi_backend_free(void) {
 }
 
 struct ggml_mpi_context * ggml_mpi_init(void) {
-    struct ggml_mpi_context * ctx = calloc(1, sizeof(struct ggml_mpi_context));
+    auto * ctx = static_cast<ggml_mpi_context *>(calloc(1, sizeof(struct ggml_mpi_context)));
 
     MPI_Comm_rank(MPI_COMM_WORLD, &ctx->rank);
     MPI_Comm_size(MPI_COMM_WORLD, &ctx->size);
@@ -39,7 +44,7 @@ struct ggml_mpi_context * ggml_mpi_init(void) {
 }
 
 struct ggml_mpi_context * ggml_mpi_split_comm(struct ggml_mpi_context * ctx, int color, int key) {
-    struct ggml_mpi_context * newCtx = calloc(1, sizeof(struct ggml_mpi_context));
+    auto * newCtx = static_cast<ggml_mpi_context *>(calloc(1, sizeof(struct ggml_mpi_context)));
     MPI_Comm_split(ctx->comm, color, key, &newCtx->comm);
     MPI_Comm_rank(newCtx->comm, &newCtx->rank);
     MPI_Comm_size(newCtx->comm, &newCtx->size);
@@ -70,16 +75,16 @@ void ggml_mpi_eval_init(
 
     MPI_Barrier(ctx_mpi->comm);
     int32_t old_n_tokens = *n_tokens;
-    MPI_Bcast(n_tokens, 1, MPI_INT, 0, ctx_mpi->comm);
+    MPI_Bcast(n_tokens, 1, MPI_INT32_T, 0, ctx_mpi->comm);
 
     // If what was passed in differs from what was broadcast,
     // we can't guarantee the allocated sizes are correct
     // TODO check how often this is done and if it's a problem,
     //      try to allocate ahead of time
     if (old_n_tokens != *n_tokens) {
-        *pos = realloc(*pos, *n_tokens * sizeof(int32_t));
-        *n_seq_ids = realloc(*n_seq_ids, *n_tokens * sizeof(int32_t ));
-        *logits = realloc(*logits, *n_tokens * sizeof(int32_t));
+        *pos = static_cast<int32_t *>(realloc(*pos, *n_tokens * sizeof(int32_t)));
+        *n_seq_ids = static_cast<int32_t *>(realloc(*n_seq_ids, *n_tokens * sizeof(int32_t)));
+        *logits = static_cast<int8_t *>(realloc(*logits, *n_tokens * sizeof(int32_t)));
     }
 
 
@@ -96,7 +101,7 @@ void ggml_mpi_eval_init(
 
     // MPI can't chase the pointers for multidimensional arrays, so we flatten them first
     // for transit
-    int32_t * flattened_seq_ids = calloc(total_n_seq_ids, sizeof(int32_t));
+    auto * flattened_seq_ids = static_cast<int32_t *>(calloc(total_n_seq_ids, sizeof(int32_t)));
 
     int32_t current_index = 0;
 
@@ -114,10 +119,10 @@ void ggml_mpi_eval_init(
     MPI_Bcast(             *pos, *n_tokens,        MPI_INT32_T, 0, ctx_mpi->comm);
     MPI_Bcast(flattened_seq_ids,  total_n_seq_ids, MPI_INT32_T, 0, ctx_mpi->comm);
     //MPI_Bcast(*logits,               *n_tokens,        MPI_INT8_T, 0, ctx_mpi->comm);
-    int32_t ** new_seq_id = calloc(*n_tokens, sizeof(int32_t*));
+    auto ** new_seq_id = static_cast<int32_t **>(calloc(*n_tokens, sizeof(int32_t *)));
     current_index = 0;
     for (int32_t i = 0; i < *n_tokens; i++) {
-        new_seq_id[i] = calloc((*n_seq_ids)[i], sizeof(int32_t));
+        new_seq_id[i] = static_cast<int32_t *>(calloc((*n_seq_ids)[i], sizeof(int32_t)));
         for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
             new_seq_id[i][j] = flattened_seq_ids[current_index];
             current_index++;
@@ -176,7 +181,7 @@ static void ggml_mpi_tensor_recv(struct ggml_tensor * t, int mpi_rank_src, MPI_C
     }
 
     MPI_Status status; UNUSED(status);
-
+    fprintf(stderr, "%s: tensor receive == null: %d\n", __func__, t->data == NULL);
     const int retval = MPI_Recv(t->data, ggml_nelements(t), mpi_type, mpi_rank_src, MPI_ANY_TAG, comm, &status);
     GGML_ASSERT(retval == MPI_SUCCESS);
 }
@@ -241,11 +246,7 @@ void ggml_mpi_scatter_layers(
     fprintf(stderr, "Ranges for rank %d: [%d, %d]\n", ctx_mpi->rank, ctx_mpi->layer_start, ctx_mpi->layer_end);
 }
 
-// TODO: there are many improvements that can be done to this implementation
-void ggml_mpi_graph_compute_pre(
-        struct ggml_mpi_context * ctx_mpi,
-             struct ggml_cgraph * gf,
-                            int   n_layers) {
+void ggml_mpi_graph_creation_post(struct ggml_mpi_context * ctx_mpi, struct ggml_cgraph * gf, int   n_layers) {
     const int mpi_rank = ctx_mpi->rank;
     const int mpi_size = ctx_mpi->size;
 
@@ -260,6 +261,8 @@ void ggml_mpi_graph_compute_pre(
         fprintf(stderr, "%s: tensor 'inp0' not found\n", __func__);
         return;
     }
+
+    ctx_mpi->inp0 = inp0;
 
 //    fprintf(stderr, "gf->nodes[0] == %s\n", ggml_get_name(gf->nodes[0]));
 //
@@ -278,22 +281,10 @@ void ggml_mpi_graph_compute_pre(
     //
 
 
-
-    if (mpi_rank > 0) {
-        if (mpi_rank == 1) {
-            // the first node (1) receives the input tokens from the main node (0)
-            ggml_mpi_tensor_recv(inp_tokens, 0, ctx_mpi->comm);
-        } else {
-            // recv input data for each node into the "inp0" tensor (i.e. the first node in the compute graph)
-            ggml_mpi_tensor_recv(inp0, mpi_rank - 1, ctx_mpi->comm);
-        }
-    } else if (mpi_size > 1) {
-        // node 0 sends the input tokens to node 1
-        ggml_mpi_tensor_send(inp_tokens, 1, ctx_mpi->comm);
-
-        // recv the output data from the last node
-        ggml_mpi_tensor_recv(inp0, mpi_size - 1, ctx_mpi->comm);
+    for (int i = 0; i < gf->n_nodes; i++) {
+        gf->nodes[i]->backend = GGML_BACKEND_MPI_SPLIT;
     }
+
 
     {
 
@@ -347,6 +338,47 @@ void ggml_mpi_graph_compute_pre(
     }
 }
 
+// TODO: there are many improvements that can be done to this implementation
+void ggml_mpi_graph_compute_pre(
+        struct ggml_mpi_context * ctx_mpi,
+             struct ggml_cgraph * gf,
+                            int   n_layers) {
+    const int mpi_rank = ctx_mpi->rank;
+    const int mpi_size = ctx_mpi->size;
+
+    struct ggml_tensor * inp_tokens = ggml_graph_get_tensor(gf, "inp_tokens");
+    if (inp_tokens == NULL) {
+        fprintf(stderr, "%s: tensor 'inp_tokens' not found\n", __func__);
+        return;
+    }
+
+    struct ggml_tensor * inp0 = ctx_mpi->inp0;
+    if (inp0 == NULL) {
+        fprintf(stderr, "%s: tensor 'inp0' not found\n", __func__);
+        return;
+    }
+
+    if (mpi_rank > 0) {
+        if (mpi_rank == 1) {
+            // the first node (1) receives the input tokens from the main node (0)
+            if (inp_tokens->data == NULL) {
+
+            }
+            ggml_mpi_tensor_recv(inp_tokens, 0, ctx_mpi->comm);
+        } else {
+            // recv input data for each node into the "inp0" tensor (i.e. the first node in the compute graph)
+            fprintf(stderr, "%s:%d: receiving layer inp0\n", __func__, ctx_mpi->rank);
+            ggml_mpi_tensor_recv(inp0, mpi_rank - 1, ctx_mpi->comm);
+        }
+    } else if (mpi_size > 1) {
+        // node 0 sends the input tokens to node 1
+        ggml_mpi_tensor_send(inp_tokens, 1, ctx_mpi->comm);
+
+        // recv the output data from the last node
+        ggml_mpi_tensor_recv(inp0, mpi_size - 1, ctx_mpi->comm);
+    }
+}
+
 void ggml_mpi_graph_compute_post(
         struct ggml_mpi_context * ctx_mpi,
              struct ggml_cgraph * gf,
@@ -361,3 +393,121 @@ void ggml_mpi_graph_compute_post(
         ggml_mpi_tensor_send(gf->nodes[gf->n_nodes - 1], (mpi_rank + 1) % mpi_size, ctx_mpi->comm);
     }
 }
+
+// BACKEND V2
+
+static const char * ggml_backend_mpi_name(ggml_backend_t backend) {
+    auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
+    return ctx->name.c_str();
+}
+
+static void ggml_backend_mpi_free(ggml_backend_t backend) {
+    auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
+
+    delete ctx;
+
+
+    delete backend;
+}
+
+static ggml_backend_buffer_type_t ggml_backend_mpi_get_default_buffer_type(ggml_backend_t backend) {
+    return ggml_backend_cpu_buffer_type();
+}
+
+GGML_CALL static bool ggml_backend_mpi_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
+    switch (op->op) {
+        case GGML_OP_CPY:
+            return op->type != GGML_TYPE_IQ2_XXS && op->type != GGML_TYPE_IQ2_XS; // missing type_traits.from_float
+        case GGML_OP_MUL_MAT:
+            return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_internal_get_type_traits(op->src[0]->type).vec_dot_type;
+        default:
+            return true;
+    }
+
+    GGML_UNUSED(backend);
+}
+
+static struct ggml_backend_i mpi_backend_i = {
+        /* .get_name                = */ ggml_backend_mpi_name,
+        /* .free                    = */ ggml_backend_mpi_free,
+        /* .get_default_buffer_type = */ ggml_backend_mpi_get_default_buffer_type,
+        /* .set_tensor_async        = */ NULL,
+        /* .get_tensor_async        = */ NULL,
+        /* .cpy_tensor_async        = */ NULL,
+        /* .synchronize             = */ NULL,
+        /* .graph_plan_create       = */ NULL,
+        /* .graph_plan_free         = */ NULL,
+        /* .graph_plan_compute      = */ NULL,
+        /* .graph_compute           = */ ggml_backend_graph_compute,
+        /* .supports_op             = */ ggml_backend_mpi_supports_op,
+};
+
+
+std::vector<ggml_mpi_device> ggml_mpi_available_devices_internal() {
+    static bool has_init = false;
+    if (!has_init) {
+        ggml_mpi_backend_init();
+        has_init = true;
+    }
+    std::vector<ggml_mpi_device> devices;
+    int s;
+    MPI_Comm_size(MPI_COMM_WORLD, &s);
+    devices.resize(s);
+    for (int i = 0; i < s; i++) {
+        devices[i] = ggml_mpi_device{
+                i,
+                ggml_mpi_init(),
+                ("MPI_COMM_WORLD:" + std::to_string(i)).c_str(),
+                1
+        };
+    }
+    return devices;
+}
+
+ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_type_t buft) {
+    auto* ggml_backend_wrapped_buffer_type = new ggml_backend_buffer_type{
+            /* .iface    = */ buft->iface,
+            /* .context  = */ buft->context,
+    };
+
+    return ggml_backend_wrapped_buffer_type;
+}
+
+ggml_backend_t ggml_backend_mpi_init(int index) {
+    auto *mpi_backend = new ggml_backend {
+            /* .interface = */ mpi_backend_i,
+            /* .context   = */ ggml_mpi_init(),
+    };
+
+    return mpi_backend;
+}
+
+static ggml_backend_t ggml_backend_reg_mpi_init(const char * params, void * user_data) {
+    GGML_UNUSED(params);
+    return ggml_backend_mpi_init(intptr_t(user_data));
+}
+
+
+
+ggml_backend_buffer_type_t ggml_backend_mpi_buffer_type(int index) {
+    return ggml_backend_cpu_buffer_type();
+}
+
+extern "C" GGML_CALL int ggml_backend_mpi_reg_devices();
+
+int ggml_backend_mpi_reg_devices() {
+    auto devices = ggml_mpi_available_devices_internal();
+    for (const auto & device : devices) {
+        ggml_backend_register(
+                device.name,
+                ggml_backend_reg_mpi_init,
+                ggml_backend_mpi_buffer_type(device.index),
+                reinterpret_cast<void *>(intptr_t(device.index))
+        );
+    }
+    return devices.size();
+}
+
+
+
+

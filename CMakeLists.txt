@@ -426,7 +426,7 @@ if (LLAMA_MPI)
         message(STATUS "MPI found")
 
         set(GGML_HEADERS_MPI ggml-mpi.h)
-        set(GGML_SOURCES_MPI ggml-mpi.c)
+        set(GGML_SOURCES_MPI ggml-mpi.cpp)
 
         add_compile_definitions(GGML_USE_MPI)
         add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})

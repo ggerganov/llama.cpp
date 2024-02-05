@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include "ggml.h"
+#include "ggml-backend.h"
 
 struct ggml_context;
 struct ggml_tensor;
@@ -48,6 +50,11 @@ void ggml_mpi_backend_free(void);
  * @return A context for us in the global communicator.
  */
 struct ggml_mpi_context * ggml_mpi_init(void);
+
+void ggml_mpi_graph_creation_post(struct ggml_mpi_context * ctx_mpi, struct ggml_cgraph * cgraph, int   n_layers);
+
+GGML_API ggml_backend_t ggml_backend_mpi_init(int index);
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_type_t buft);
 
 /**
  * Create a new context by splitting the given context's
@@ -193,6 +200,18 @@ void ggml_mpi_graph_compute_post(
         struct ggml_mpi_context * ctx_mpi,
              struct ggml_cgraph * gf,
                             int   n_layers);
+
+// BACKEND V2
+
+struct ggml_mpi_device {
+    int index;
+    struct ggml_mpi_context * ctx_mpi;
+    const char * name;
+    int subgroupSize;
+};
+
+#define MPI_BACKEND_NAME "MPI"
+GGML_CALL int ggml_backend_mpi_reg_devices();
 
 #ifdef __cplusplus
 }
