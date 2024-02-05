@@ -207,7 +207,6 @@ if [ $is_interactive -eq 1 ]; then
     printf "    Press Enter to continue ...\n\n"
 
     read
-
 fi
 
 if [[ -z "$repo" ]]; then
