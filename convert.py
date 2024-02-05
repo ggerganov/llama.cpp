@@ -534,7 +534,7 @@ class HfVocab:
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
             if text in self.specials:
-                toktype = self.get_token_type(self.specials[text], [], self.special_ids)
+                toktype = self.get_token_type(self.specials[text], b'', self.special_ids)
                 score = self.get_token_score(self.specials[text])
             else:
                 toktype = gguf.TokenType.USER_DEFINED
