@@ -137,9 +137,9 @@ node index.js
 
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
 
-    `dynatemp_range`: dynamic temperature range (default: 0.0, 0.0 = disabled).
+    `dynatemp_range`: Dynamic temperature range (default: 0.0, 0.0 = disabled).
 
-    `dynatemp_exponent`: dynamic temperature exponent (default: 1.0).
+    `dynatemp_exponent`: Dynamic temperature exponent (default: 1.0).
 
     `top_k`: Limit the next token selection to the K most probable tokens (default: 40).
 
