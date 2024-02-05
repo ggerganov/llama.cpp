@@ -325,8 +325,6 @@ extern "C" {
     LLAMA_API int64_t llama_time_us(void);
 
     LLAMA_API size_t llama_max_devices(void);
-    LLAMA_API size_t llama_get_device_count(void);
-    LLAMA_API size_t llama_get_default_device_split(int device);
 
     LLAMA_API bool llama_supports_mmap       (void);
     LLAMA_API bool llama_supports_mlock      (void);
