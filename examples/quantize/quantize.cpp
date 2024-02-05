@@ -287,9 +287,9 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if ((params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || params.ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S) && imatrix_data.empty()) {
+    if ((params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || params.ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || params.ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || params.ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) && imatrix_data.empty()) {
         fprintf(stderr, "\n===============================================================================================\n");
-        fprintf(stderr, "Please do not use IQ2_XXS, IQ2_XS or Q2_K_S quantization without an importance matrix\n");
+        fprintf(stderr, "Please do not use IQ2_XXS, IQ2_XS, Q2_K_S or IQ3_XXS quantization without an importance matrix\n");
         fprintf(stderr, "===============================================================================================\n\n\n");
         return 1;
     }
