@@ -6,7 +6,7 @@
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
-Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++.
+Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
 ### Hot topics
 
@@ -58,23 +58,20 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ## Description
 
-The goal of `llama.cpp` is to run large language models such as Meta's LLaMA model
-with minimal setup and state-of-the-art performance on a wide variety of hardware.
-Its selling points are:
+The main goal of `llama.cpp` is to enable LLM inference with minimal setup and state-of-the-art performance on a wide
+variety of hardware - locally and in the cloud.
 
-- Plain C/C++ implementation without any dependencies. AVX, AVX2, and AVX512 support on x86 architectures.
-- First-class Apple silicon support - optimized via ARM NEON, Accelerate and Metal frameworks.
-- Custom CUDA kernels for running LLMs on NVIDIA GPUs. Can be run on AMD GPUs via HIP.
-- Support for Vulkan, SYCL, and OpenCL.
-- 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization support for faster inference and reduced memory use.
-- CPU+GPU hybrid inference to partially accelerate models larger than total VRAM capacity.
-- Fast C++ implementations for a variety of samplers: top-k, top-p, typical free sampling, min-p, Mirostat, temperature.
-- Can be used as a library, from the command line via one of the examples, or via an HTTP web server.
-- Analysis tools that e.g. provide metrics such as perplexity or [KL divergence](https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence) to judge the precision loss from quantization.
+- Plain C/C++ implementation without any dependencies
+- Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
+- AVX, AVX2 and AVX512 support for x86 architectures
+- 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
+- Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP)
+- Vulkan, SYCL, and (partial) OpenCL backend support
+- CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 
-The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
-Since then, the project has improved significantly thanks to many contributions. 
-This project serves as the main playground for the more general [ggml](https://github.com/ggerganov/ggml) machine learning library.
+Since its [inception](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022), the project has
+improved significantly thanks to many contributions. It is the main playground for developing new features for the
+[ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
 
