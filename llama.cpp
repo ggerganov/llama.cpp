@@ -205,7 +205,7 @@ enum llm_arch {
     LLM_ARCH_CODESHELL,
     LLM_ARCH_ORION,
     LLM_ARCH_INTERNLM2,
-	LLM_ARCH_MINICPM,
+    LLM_ARCH_MINICPM,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -229,7 +229,7 @@ static std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_CODESHELL,       "codeshell" },
     { LLM_ARCH_ORION,           "orion"     },
     { LLM_ARCH_INTERNLM2,       "internlm2" },
-	{ LLM_ARCH_MINICPM,         "minicpm"   },
+    { LLM_ARCH_MINICPM,         "minicpm"   },
 };
 
 enum llm_kv {
@@ -692,7 +692,7 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
     },
-	{
+    {
         LLM_ARCH_MINICPM,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
@@ -7114,7 +7114,7 @@ static struct ggml_cgraph * llama_build_graph(
             {
                 result = llm.build_internlm2();
             } break;
-		case LLM_ARCH_MINICPM:
+        case LLM_ARCH_MINICPM:
             {
                 result = llm.build_minicpm();
             } break;

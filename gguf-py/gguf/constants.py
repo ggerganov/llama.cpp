@@ -157,7 +157,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.CODESHELL:      "codeshell",
     MODEL_ARCH.ORION:          "orion",
     MODEL_ARCH.INTERNLM2:      "internlm2",
-	MODEL_ARCH.MINICPM:        "minicpm",
+    MODEL_ARCH.MINICPM:        "minicpm",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
