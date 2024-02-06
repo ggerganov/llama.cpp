@@ -24,6 +24,10 @@
 #include <stdarg.h>
 #include <signal.h>
 
+#ifdef GGML_NUMA_MIRROR
+#include <numanor.h>
+#endif
+
 #ifdef GGML_USE_METAL
 #include <unistd.h>
 #endif
@@ -1912,9 +1916,12 @@ struct ggml_numa_node {
 };
 
 struct ggml_numa_nodes {
+    uint32_t numa_strategy;
     struct ggml_numa_node nodes[GGML_NUMA_MAX_NODES];
     uint32_t n_nodes;
     uint32_t total_cpus; // hardware threads on system
+    uint32_t current_node; // node on which main process is execting
+    cpu_set_t cpuset; // cpuset from numactl
 };
 
 //
@@ -1948,7 +1955,7 @@ inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
 
-void ggml_numa_init(void) {
+void ggml_numa_init(uint32_t numa_flag) {
     if (g_state.numa.n_nodes > 0) {
         fprintf(stderr, "ggml_numa_init: NUMA already initialized\n");
 
@@ -1959,6 +1966,13 @@ void ggml_numa_init(void) {
     struct stat st;
     char path[256];
     int rv;
+
+    // set numa scheme
+    g_state.numa.numa_strategy = numa_flag;
+
+    GGML_PRINT_DEBUG("numa strategy %u\n",g_state.numa.numa_strategy);
+
+    g_state.numa.cpuset = ggml_get_numa_affinity();
 
     // enumerate nodes
     while (g_state.numa.n_nodes < GGML_NUMA_MAX_NODES) {
@@ -1978,10 +1992,16 @@ void ggml_numa_init(void) {
 
     GGML_PRINT_DEBUG("found %u numa nodes, %u CPUs\n", g_state.numa.n_nodes, g_state.numa.total_cpus);
 
-    if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1) {
+    // figure out which node we're on
+    uint current_cpu;
+    int getcpu_ret = getcpu(&current_cpu, &g_state.numa.current_node);
+
+    if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1 || getcpu_ret != 0) {
         g_state.numa.n_nodes = 0;
         return;
     }
+
+    GGML_PRINT_DEBUG("found our process on numa node %u, CPU %u\n", g_state.numa.current_node, current_cpu);
 
     for (uint32_t n = 0; n < g_state.numa.n_nodes; ++n) {
         struct ggml_numa_node * node = &g_state.numa.nodes[n];
@@ -2011,6 +2031,15 @@ void ggml_numa_init(void) {
 #else
     // TODO
 #endif
+}
+
+cpu_set_t ggml_get_numa_affinity(void) {
+    cpu_set_t cpuset;
+    pthread_t thread;
+    thread = pthread_self();
+    CPU_ZERO(&cpuset);
+    int ret = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+    return cpuset;
 }
 
 bool ggml_is_numa(void) {
@@ -16587,10 +16616,35 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) {
         return;
     }
 
-    // run thread on node_num thread_n / (threads per node)
-    const int node_num = thread_n / ((n_threads + g_state.numa.n_nodes - 1) / g_state.numa.n_nodes);
-    struct ggml_numa_node * node = &g_state.numa.nodes[node_num];
+    int node_num;
     size_t setsize = CPU_ALLOC_SIZE(g_state.numa.total_cpus);
+
+    switch(g_state.numa.numa_strategy) {
+        case GGML_NUMA_STRATEGY_INTERLEAVE:
+            // run thread on node_num thread_n / (threads per node)
+            node_num = thread_n / ((n_threads + g_state.numa.n_nodes - 1) / g_state.numa.n_nodes);
+            break;
+        case GGML_NUMA_STRATEGY_ISOLATE:
+            // run thread on current_node
+            node_num = g_state.numa.current_node;
+            break;
+        case GGML_NUMA_STRATEGY_NUMACTL:
+            // use the cpuset that numactl gave us
+            int rv = pthread_setaffinity_np(pthread_self(), setsize, &g_state.numa.cpuset); 
+            if (rv) {
+                fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
+                        strerror(rv));
+            }
+            return;
+#ifdef GGML_NUMA_MIRROR
+        case GGML_NUMA_STRATEGY_MIRROR:
+            printf("Mirror Mode Enabled");
+#endif
+        default:
+            return;
+    }
+
+    struct ggml_numa_node * node = &g_state.numa.nodes[node_num];
 
     cpu_set_t * cpus = CPU_ALLOC(g_state.numa.total_cpus);
     CPU_ZERO_S(setsize, cpus);

@@ -949,7 +949,7 @@ struct llama_mmap {
         int fd = fileno(file->fp);
         int flags = MAP_SHARED;
         // prefetch/readahead impairs performance on NUMA systems
-        if (numa) { prefetch = 0; }
+        if (numa > 0) { prefetch = 0; }
 #ifdef __linux__
         // advise the kernel to read the file sequentially (increases readahead)
         if (posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {
@@ -970,7 +970,7 @@ struct llama_mmap {
                         strerror(errno));
             }
         }
-        if (numa) {
+        if (numa > 0) {
             // advise the kernel not to use readahead
             // (because the next page might not belong on the same node)
             if (posix_madvise(addr, file->size, POSIX_MADV_RANDOM)) {
@@ -10327,7 +10327,7 @@ bool llama_mlock_supported(void) {
     return llama_supports_mlock();
 }
 
-void llama_backend_init(bool numa) {
+void llama_backend_init(uint32_t numa) {
     ggml_time_init();
 
     // needed to initialize f16 tables
@@ -10337,8 +10337,8 @@ void llama_backend_init(bool numa) {
         ggml_free(ctx);
     }
 
-    if (numa) {
-        ggml_numa_init();
+    if (numa > 0) {
+        ggml_numa_init(numa);
     }
 
 #ifdef GGML_USE_MPI
