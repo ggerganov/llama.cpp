@@ -217,7 +217,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <sched.h>
 
 #define GGML_FILE_MAGIC   0x67676d6c // "ggml"
 #define GGML_FILE_VERSION 1
@@ -670,7 +669,6 @@ extern "C" {
 
     GGML_API void       ggml_numa_init(uint32_t numa); // call once for better performance on NUMA systems
     GGML_API bool       ggml_is_numa(void); // true if init detected that system has >1 NUMA node
-    GGML_API cpu_set_t  ggml_get_numa_affinity(void); // get cpuset from numactl
 
     GGML_API void    ggml_print_object (const struct ggml_object * obj);
     GGML_API void    ggml_print_objects(const struct ggml_context * ctx);

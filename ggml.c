@@ -25,7 +25,7 @@
 #include <signal.h>
 
 #ifdef GGML_NUMA_MIRROR
-#include <numa.h>
+#include <numanor.h>
 #endif
 
 #ifdef GGML_USE_METAL
@@ -1955,6 +1955,8 @@ inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
 
+cpu_set_t  ggml_get_numa_affinity(void); // get cpuset from numactl
+
 void ggml_numa_init(uint32_t numa_flag) {
     if (g_state.numa.n_nodes > 0) {
         fprintf(stderr, "ggml_numa_init: NUMA already initialized\n");
@@ -2038,7 +2040,7 @@ cpu_set_t ggml_get_numa_affinity(void) {
     pthread_t thread;
     thread = pthread_self();
     CPU_ZERO(&cpuset);
-    int ret = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+    pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
     return cpuset;
 }
 
@@ -2499,8 +2501,7 @@ size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
     size_t max_size = 0;
 
     for (struct ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor != NULL; tensor = ggml_get_next_tensor(ctx, tensor)) {
-        size_t bytes = ggml_nbytes(tensor);
-        max_size = MAX(max_size, bytes);
+        max_size = MAX(max_size, ggml_nbytes(tensor));
     }
 
     return max_size;
@@ -11917,10 +11918,8 @@ GGML_CALL void ggml_rope_yarn_corr_dims(
     int n_dims, int n_orig_ctx, float freq_base, float beta_fast, float beta_slow, float dims[2]
 ) {
     // start and end correction dims
-    float start = floorf(ggml_rope_yarn_corr_dim(n_dims, n_orig_ctx, beta_fast, freq_base));
-    float end   =  ceilf(ggml_rope_yarn_corr_dim(n_dims, n_orig_ctx, beta_slow, freq_base));
-    dims[0] = MAX(0, start);
-    dims[1] = MIN(n_dims - 1, end);
+    dims[0] = MAX(0,         floorf(ggml_rope_yarn_corr_dim(n_dims, n_orig_ctx, beta_fast, freq_base)));
+    dims[1] = MIN(n_dims - 1, ceilf(ggml_rope_yarn_corr_dim(n_dims, n_orig_ctx, beta_slow, freq_base)));
 }
 
 static void ggml_compute_forward_rope_f32(
@@ -16617,6 +16616,7 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) {
     }
 
     int node_num;
+    int rv;
     size_t setsize = CPU_ALLOC_SIZE(g_state.numa.total_cpus);
 
     switch(g_state.numa.numa_strategy) {
@@ -16630,10 +16630,9 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) {
             break;
         case GGML_NUMA_STRATEGY_NUMACTL:
             // use the cpuset that numactl gave us
-            int rv = pthread_setaffinity_np(pthread_self(), setsize, &g_state.numa.cpuset); 
+            rv = pthread_setaffinity_np(pthread_self(), setsize, &g_state.numa.cpuset); 
             if (rv) {
-                fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
-                        strerror(rv));
+                fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",strerror(rv));
             }
             return;
 #ifdef GGML_NUMA_MIRROR
@@ -16652,10 +16651,9 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) {
         CPU_SET_S(node->cpus[i], setsize, cpus);
     }
 
-    int rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
+    rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
     if (rv) {
-            fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
-                    strerror(rv));
+            fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",strerror(rv));
     }
 
     CPU_FREE(cpus);
@@ -16676,8 +16674,7 @@ static void clear_numa_thread_affinity(void) {
 
     int rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
     if (rv) {
-        fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",
-            strerror(rv));
+        fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",strerror(rv));
     }
 
     CPU_FREE(cpus);
