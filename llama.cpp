@@ -1415,6 +1415,7 @@ enum e_model {
     MODEL_UNKNOWN,
     MODEL_0_5B,
     MODEL_1B,
+    MODEL_2B,
     MODEL_3B,
     MODEL_4B,
     MODEL_7B,
@@ -2773,6 +2774,7 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
 static const char * llama_model_type_name(e_model type) {
     switch (type) {
         case MODEL_1B:     return "1B";
+        case MODEL_2B:     return "2B";
         case MODEL_3B:     return "3B";
         case MODEL_7B:     return "7B";
         case MODEL_8B:     return "8B";
@@ -2898,8 +2900,6 @@ static void llm_load_hparams(
     // arch-specific KVs
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
-        //TODO: add minicpm specific KVs
-        case LLM_ARCH_MINICPM:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
@@ -2911,6 +2911,13 @@ static void llm_load_hparams(
                     case 48: model.type = e_model::MODEL_34B; break;
                     case 60: model.type = e_model::MODEL_30B; break;
                     case 80: model.type = hparams.n_head == hparams.n_head_kv ? e_model::MODEL_65B : e_model::MODEL_70B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
+            } break;
+        case LLM_ARCH_MINICPM:
+            {
+                switch (hparams.n_layer) {
+                    case 40: model.type = e_model::MODEL_2B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
