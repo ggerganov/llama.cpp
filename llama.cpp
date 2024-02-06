@@ -6828,15 +6828,20 @@ struct llm_build_context {
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
+        const int64_t n_embd = hparams.n_embd;
+        //TODO: if the model varies, these parameters need to be read from the model
+        const int scale_emb = 12;
+        const int dim_model_base = 256;
+        const float scale_depth = 1.4f;
+
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
         cb(inpL, "inp_embd", -1);
 
-        // scale_emb - scale the input embeddings
-        float scale_emb = 12.0f;
-        inpL = ggml_scale(ctx0, inpL, scale_emb);
+        // scale the input embeddings
+        inpL = ggml_scale(ctx0, inpL, float(scale_emb));
         cb(inpL, "inp_scaled", -1);
 
         // inp_pos - contains the positions
@@ -6906,7 +6911,7 @@ struct llm_build_context {
             }
 
             // scale_res - scale the hidden states for residual connection
-            float scale_res = 0.2217f; // scale_depth/√(num_layers)
+            const float scale_res = scale_depth/sqrtf(float(n_layer));
             cur = ggml_scale(ctx0, cur, scale_res);
             cb(cur, "hidden_scaled", -1);
 
@@ -6948,7 +6953,7 @@ struct llm_build_context {
         cb(cur, "result_norm", -1);
 
         // lm_head scaling
-        float scale_lmhead = 1.0f/9.0f; // 1/(dim_model/256)
+        const float scale_lmhead = float(dim_model_base)/float(n_embd);
         cur = ggml_scale(ctx0, cur, scale_lmhead);
         cb(cur, "lmhead_scaling", -1);
 
