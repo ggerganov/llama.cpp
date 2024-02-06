@@ -1765,7 +1765,7 @@ struct llama_context {
         }
 
 #ifdef GGML_USE_VULKAN
-        ggml_vk_cleanup_cpu_assist();
+        ggml_vk_free_cpu_assist();
 #endif
 
         ggml_backend_buffer_free(buf_input);

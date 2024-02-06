@@ -20,7 +20,7 @@ GGML_API bool ggml_vk_compute_forward_cpu_assist(struct ggml_compute_params * pa
 void ggml_vk_check_results_1_cpu_assist(struct ggml_compute_params * params, struct ggml_tensor * tensor);
 #endif
 GGML_API void ggml_vk_graph_cleanup_cpu_assist(void);
-GGML_API void ggml_vk_cleanup_cpu_assist(void);
+GGML_API void ggml_vk_free_cpu_assist(void);
 
 // backend API
 GGML_API GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t dev_num);

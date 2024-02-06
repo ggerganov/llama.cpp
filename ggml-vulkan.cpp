@@ -4534,7 +4534,7 @@ void ggml_vk_graph_cleanup_cpu_assist() {
     ggml_vk_graph_cleanup(ctx);
 }
 
-void ggml_vk_cleanup_cpu_assist() {
+void ggml_vk_free_cpu_assist() {
     ggml_backend_vk_context * ctx = &vk_instance.contexts[0];
 
     if (!ctx->initialized || vk_instance.backends[0] == nullptr) {
