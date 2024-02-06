@@ -277,7 +277,7 @@ Notice that each `probs` is an array of length `n_probs`.
   "assistant_name": "",
   "user_name": "",
   "default_generation_settings": { ... },
-  "total_slots": ""
+  "total_slots": 1
 }
 ```
 
