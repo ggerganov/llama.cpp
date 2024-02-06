@@ -112,8 +112,8 @@ option(LLAMA_MPI                             "llama: use MPI"                   
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
-option(LLAMA_SYCL_NVPTX                      "llama: use SYCL build for Nvidia"           OFF)
-option(LLAMA_SYCL_AMD                        "llama: use SYCL build for AMD"              OFF)
+option(LLAMA_SYCL_NVPTX                      "llama: use SYCL build for Nvidia"                 OFF)
+option(LLAMA_SYCL_AMD                        "llama: use SYCL build for AMD"                    OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
