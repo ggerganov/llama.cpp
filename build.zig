@@ -47,6 +47,7 @@ const Maker = struct {
             \\char const *LLAMA_BUILD_TARGET = "{s}";
             \\
         , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.query.zigTriple(builder.allocator) }));
+
         var m = Maker{
             .builder = builder,
             .target = target,
@@ -60,6 +61,13 @@ const Maker = struct {
 
         try m.addCFlag("-std=c11");
         try m.addCxxFlag("-std=c++11");
+
+        if (m.target.result.abi == .gnu) {
+            try m.addFlag("-D_GNU_SOURCE");
+        }
+        try m.addFlag("-D_XOPEN_SOURCE=600");
+        try m.addFlag("-DGGML_USE_VULKAN");
+
         try m.addProjectInclude(&.{});
         try m.addProjectInclude(&.{"common"});
         return m;
@@ -67,8 +75,6 @@ const Maker = struct {
 
     fn obj(m: *const Maker, name: []const u8, src: []const u8) *Compile {
         const o = m.builder.addObject(.{ .name = name, .target = m.target, .optimize = m.optimize });
-        if (m.target.result.abi != .msvc)
-            o.defineCMacro("_GNU_SOURCE", null);
 
         if (std.mem.endsWith(u8, src, ".c")) {
             o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cflags.items });
@@ -91,7 +97,6 @@ const Maker = struct {
         const e = m.builder.addExecutable(.{ .name = name, .target = m.target, .optimize = m.optimize });
         e.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
         for (deps) |d| e.addObject(d);
-        for (m.objs.items) |o| e.addObject(o);
         for (m.include_dirs.items) |i| e.addIncludePath(.{ .path = i });
 
         // https://github.com/ziglang/zig/issues/15448
@@ -101,6 +106,7 @@ const Maker = struct {
             // linkLibCpp already add (libc++ + libunwind + libc)
             e.linkLibCpp();
         }
+        e.linkSystemLibrary("vulkan");
         m.builder.installArtifact(e);
         e.want_lto = m.enable_lto;
         return e;
@@ -121,17 +127,30 @@ pub fn build(b: *std.Build) !void {
     const console = make.obj("console", "common/console.cpp");
     const sampling = make.obj("sampling", "common/sampling.cpp");
     const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
-    const train = make.obj("train", "common/train.cpp");
+    // const train = make.obj("train", "common/train.cpp");
     const clip = make.obj("clip", "examples/llava/clip.cpp");
+    const ggml_vulkan = make.obj("ggml-vulkan", "ggml-vulkan.cpp");
 
-    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser });
-    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
-    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, ggml_vulkan });
+    // _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    // _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    // _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    // _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+    // _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
 
-    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, grammar_parser, clip });
+    const server = make.exe("server", "examples/server/server.cpp", &.{
+        ggml,
+        ggml_alloc,
+        ggml_backend,
+        ggml_quants,
+        llama,
+        common,
+        buildinfo,
+        sampling,
+        grammar_parser,
+        clip,
+        ggml_vulkan,
+    });
     if (make.target.result.os.tag == .windows) {
         server.linkSystemLibrary("ws2_32");
     }
