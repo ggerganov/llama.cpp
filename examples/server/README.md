@@ -20,7 +20,7 @@ Command line options:
 - `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 - `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
 - `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
-- `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
+- `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`. Use `::` for any IPv4+IPv6.
 - `--port`: Set the port to listen. Default: `8080`.
 - `--path`: path from which to serve static files (default examples/server/public)
 - `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
