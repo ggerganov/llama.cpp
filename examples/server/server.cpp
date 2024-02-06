@@ -990,11 +990,6 @@ struct llama_server_context
         queue_results.send(res);
     }
 
-    json get_model_props()
-    {
-        return get_formated_generation(slots[0]);
-    }
-
     json get_formated_generation(llama_client_slot &slot)
     {
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
@@ -2893,12 +2888,6 @@ int main(int argc, char **argv)
 
                     res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
                 }
-            });
-
-    svr.Get("/model.json", [&llama](const httplib::Request &, httplib::Response &res)
-            {
-                const json data = llama.get_model_props();
-                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Options(R"(/.*)", [](const httplib::Request &, httplib::Response &res)
