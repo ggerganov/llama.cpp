@@ -105,11 +105,14 @@ improved significantly thanks to many contributions. It is the main playground f
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
 - [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
 - [x] [Yi models](https://huggingface.co/models?search=01-ai/Yi)
-- [X] [StableLM-3b-4e1t](https://github.com/ggerganov/llama.cpp/pull/3586)
+- [X] [StableLM models](https://huggingface.co/stabilityai)
 - [x] [Deepseek models](https://huggingface.co/models?search=deepseek-ai/deepseek)
 - [x] [Qwen models](https://huggingface.co/models?search=Qwen/Qwen)
 - [x] [PLaMo-13B](https://github.com/ggerganov/llama.cpp/pull/3557)
+- [x] [Phi models](https://huggingface.co/models?search=microsoft/phi)
 - [x] [GPT-2](https://huggingface.co/gpt2)
+- [x] [Orion 14B](https://github.com/ggerganov/llama.cpp/pull/5118)
+- [x] [InternLM2](https://huggingface.co/models?search=internlm2)
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 
 **Multimodal models:**
@@ -119,6 +122,7 @@ improved significantly thanks to many contributions. It is the main playground f
 - [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
+- [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
 
 
 **Bindings:**
