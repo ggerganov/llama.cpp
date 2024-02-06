@@ -205,6 +205,8 @@ class Model:
             return OrionModel
         if model_architecture == "InternLM2ForCausalLM":
             return InternLM2Model
+        if model_architecture == "BertModel":
+            return BertModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -258,6 +260,8 @@ class Model:
             return gguf.MODEL_ARCH.ORION
         if arch == "InternLM2ForCausalLM":
             return gguf.MODEL_ARCH.INTERNLM2
+        if arch == "BertModel":
+            return gguf.MODEL_ARCH.BERT
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -1519,6 +1523,55 @@ in chat mode so that the conversation can end normally.")
                 self.post_write_tensors(tensor_map, f"model.layers.{bid}.attention.wv.weight", v)
             else:
                 self.post_write_tensors(tensor_map, name, data_torch)
+
+
+class BertModel(Model):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.block_count = self.hparams["num_hidden_layers"]
+
+    def set_gguf_parameters(self):
+        # TODO(cebtenzzre): merge with parent class
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_block_count(self.block_count)
+        self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def write_tensors(self):
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
+        tensors = dict(self.get_tensors())
+        for name, data_torch in tensors.items():
+            # we are only using BERT for embeddings so we don't need the pooling layer
+            if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
+                continue  # we don't need these
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            data = data_torch.squeeze().numpy()
+            n_dims = len(data.shape)
+            new_dtype: type[np.floating[Any]]
+
+            if self.ftype == 1 and name.endswith(".weight") and n_dims == 2:
+                # if f16 desired, convert any float32 2-dim weight tensors to float16
+                new_dtype = np.float16
+            else:
+                # if f32 desired, convert any float16 to float32
+                new_dtype = np.float32
+
+            print(f"{new_name}, n_dims = {n_dims}, {data_torch.dtype} --> {new_dtype}")
+
+            if data.dtype != new_dtype:
+                data = data.astype(new_dtype)
+
+            self.gguf_writer.add_tensor(new_name, data)
 
 
 ###### CONVERSION LOGIC ######

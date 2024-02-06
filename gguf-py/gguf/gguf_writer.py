@@ -387,6 +387,9 @@ class GGUFWriter:
     def add_token_types(self, types: Sequence[TokenType] | Sequence[int]) -> None:
         self.add_array(Keys.Tokenizer.TOKEN_TYPE, types)
 
+    def add_token_type_count(self, value: int) -> None:
+        self.add_uint32(Keys.Tokenizer.TOKEN_TYPE_COUNT, value)
+
     def add_token_scores(self, scores: Sequence[float]) -> None:
         self.add_array(Keys.Tokenizer.SCORES, scores)
 
