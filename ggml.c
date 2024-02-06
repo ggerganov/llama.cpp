@@ -16630,7 +16630,7 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) {
             break;
         case GGML_NUMA_STRATEGY_NUMACTL:
             // use the cpuset that numactl gave us
-            rv = pthread_setaffinity_np(pthread_self(), setsize, &g_state.numa.cpuset); 
+            rv = pthread_setaffinity_np(pthread_self(), setsize, &g_state.numa.cpuset);
             if (rv) {
                 fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",strerror(rv));
             }

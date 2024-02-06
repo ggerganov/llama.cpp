@@ -76,7 +76,7 @@ struct gpt_params {
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     int32_t rope_scaling_type     = LLAMA_ROPE_SCALING_UNSPECIFIED;
-    int32_t numa                  = LLAMA_NUMA_STRATEGY_DISABLED; 
+    int32_t numa                  = LLAMA_NUMA_STRATEGY_DISABLED;
 
     // // sampling parameters
     struct llama_sampling_params sparams;

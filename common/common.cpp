@@ -655,7 +655,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.use_mmap = false;
         } else if (arg == "--numa") {
             if (++i >= argc) {
-                invalid_param = true; 
+                invalid_param = true;
                 break;
             } else {
                std::string value(argv[i]);
