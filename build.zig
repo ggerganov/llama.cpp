@@ -65,8 +65,10 @@ const Maker = struct {
         if (m.target.result.abi == .gnu) {
             try m.addFlag("-D_GNU_SOURCE");
         }
+        if (m.target.result.os.tag == .macos) {
+            try m.addFlag("-D_DARWIN_C_SOURCE");
+        }
         try m.addFlag("-D_XOPEN_SOURCE=600");
-        try m.addFlag("-DGGML_USE_VULKAN");
 
         try m.addProjectInclude(&.{});
         try m.addProjectInclude(&.{"common"});
@@ -76,7 +78,7 @@ const Maker = struct {
     fn obj(m: *const Maker, name: []const u8, src: []const u8) *Compile {
         const o = m.builder.addObject(.{ .name = name, .target = m.target, .optimize = m.optimize });
 
-        if (std.mem.endsWith(u8, src, ".c")) {
+        if (std.mem.endsWith(u8, src, ".c") or std.mem.endsWith(u8, src, ".m")) {
             o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cflags.items });
             o.linkLibC();
         } else {
@@ -106,7 +108,6 @@ const Maker = struct {
             // linkLibCpp already add (libc++ + libunwind + libc)
             e.linkLibCpp();
         }
-        e.linkSystemLibrary("vulkan");
         m.builder.installArtifact(e);
         e.want_lto = m.enable_lto;
         return e;
@@ -116,6 +117,31 @@ const Maker = struct {
 pub fn build(b: *std.Build) !void {
     var make = try Maker.init(b);
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
+
+    const llama_vulkan = b.option(bool, "llama-vulkan", "Enable Vulkan backend for Llama, (default: false)") orelse false;
+    const llama_metal = b.option(bool, "llama-metal", "Enable Metal backend for Llama, (default: false, true for macos)") orelse (make.target.result.os.tag == .macos);
+    const llama_no_accelerate = b.option(bool, "llama-no-accelerate", "Disable Accelerate framework for Llama, (default: false)") orelse false;
+    const llama_accelerate = !llama_no_accelerate and make.target.result.os.tag == .macos;
+
+    if (llama_accelerate) {
+        try make.addFlag("-DGGML_USE_ACCELERATE");
+        try make.addFlag("-DACCELERATE_USE_LAPACK");
+        try make.addFlag("-DACCELERATE_LAPACK_ILP64");
+    }
+
+    var extra_objs = ArrayList(*Compile).init(b.allocator);
+
+    if (llama_vulkan) {
+        try make.addFlag("-DGGML_USE_VULKAN");
+        const ggml_vulkan = make.obj("ggml-vulkan", "ggml-vulkan.cpp");
+        try extra_objs.append(ggml_vulkan);
+    }
+
+    if (llama_metal) {
+        try make.addFlag("-DGGML_USE_METAL");
+        const ggml_metal = make.obj("ggml-metal", "ggml-metal.m");
+        try extra_objs.append(ggml_metal);
+    }
 
     const ggml = make.obj("ggml", "ggml.c");
     const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
@@ -127,18 +153,13 @@ pub fn build(b: *std.Build) !void {
     const console = make.obj("console", "common/console.cpp");
     const sampling = make.obj("sampling", "common/sampling.cpp");
     const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
-    // const train = make.obj("train", "common/train.cpp");
     const clip = make.obj("clip", "examples/llava/clip.cpp");
-    const ggml_vulkan = make.obj("ggml-vulkan", "ggml-vulkan.cpp");
+    // const train = make.obj("train", "common/train.cpp");
 
-    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, ggml_vulkan });
-    // _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    // _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    // _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    // _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
-    // _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+    var exes = ArrayList(*Compile).init(b.allocator);
 
-    const server = make.exe("server", "examples/server/server.cpp", &.{
+    var objs = ArrayList(*Compile).init(b.allocator);
+    try objs.appendSlice(&[_]*Compile{
         ggml,
         ggml_alloc,
         ggml_backend,
@@ -147,11 +168,40 @@ pub fn build(b: *std.Build) !void {
         common,
         buildinfo,
         sampling,
+        console,
         grammar_parser,
         clip,
-        ggml_vulkan,
     });
+    try objs.appendSlice(extra_objs.items);
+
+    const main = make.exe("main", "examples/main/main.cpp", objs.items);
+    try exes.append(main);
+
+    // _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    // _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    // _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    // _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+    // _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+
+    const server = make.exe("server", "examples/server/server.cpp", objs.items);
     if (make.target.result.os.tag == .windows) {
         server.linkSystemLibrary("ws2_32");
+    }
+    try exes.append(server);
+
+    for (exes.items) |e| {
+        if (llama_vulkan) {
+            e.linkSystemLibrary("vulkan");
+        }
+
+        if (llama_metal) {
+            e.linkFramework("Foundation");
+            e.linkFramework("Metal");
+            e.linkFramework("MetalKit");
+        }
+
+        if (llama_accelerate) {
+            e.linkFramework("Accelerate");
+        }
     }
 }
