@@ -2243,11 +2243,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 else { invalid_param = true; break; }
             }
         }
-
-        else if (arg == "--numa")
-        {
-            params.numa = GGML_NUMA_STRATEGY_DISABLED;
-        }
         else if (arg == "--embedding")
         {
             params.embedding = true;

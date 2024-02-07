@@ -1951,7 +1951,14 @@ inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
 
-cpu_set_t  ggml_get_numa_affinity(void); // get cpuset from numactl
+static cpu_set_t ggml_get_numa_affinity(void) {
+    cpu_set_t cpuset;
+    pthread_t thread;
+    thread = pthread_self();
+    CPU_ZERO(&cpuset);
+    pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+    return cpuset;
+}
 
 void ggml_numa_init(uint32_t numa_flag) {
     if (g_state.numa.n_nodes > 0) {
@@ -2029,15 +2036,6 @@ void ggml_numa_init(uint32_t numa_flag) {
 #else
     // TODO
 #endif
-}
-
-cpu_set_t ggml_get_numa_affinity(void) {
-    cpu_set_t cpuset;
-    pthread_t thread;
-    thread = pthread_self();
-    CPU_ZERO(&cpuset);
-    pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-    return cpuset;
 }
 
 bool ggml_is_numa(void) {
