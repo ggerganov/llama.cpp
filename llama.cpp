@@ -2947,6 +2947,8 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_MINICPM:
             {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+
                 switch (hparams.n_layer) {
                     case 40: model.type = e_model::MODEL_2B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
