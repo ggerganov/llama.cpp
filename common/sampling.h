@@ -17,7 +17,9 @@ typedef struct llama_sampling_params {
     float       min_p                 = 0.05f;    // 0.0 = disabled
     float       tfs_z                 = 1.00f;    // 1.0 = disabled
     float       typical_p             = 1.00f;    // 1.0 = disabled
-    float       temp                  = 0.80f;    // 1.0 = disabled
+    float       temp                  = 0.80f;    // <= 0.0 to sample greedily, 0.0 to not output probabilities
+    float       dynatemp_range        = 0.00f;    // 0.0 = disabled
+    float       dynatemp_exponent     = 1.00f;    // controls how entropy maps to temperature in dynamic temperature sampler
     int32_t     penalty_last_n        = 64;       // last n tokens to penalize (0 = disable penalty, -1 = context size)
     float       penalty_repeat        = 1.10f;    // 1.0 = disabled
     float       penalty_freq          = 0.00f;    // 0.0 = disabled
@@ -36,6 +38,9 @@ typedef struct llama_sampling_params {
     float       cfg_scale     = 1.f; // how strong is guidance
 
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+
+    std::vector<llama_token> penalty_prompt_tokens;
+    bool                     use_penalty_prompt_tokens = false;
 } llama_sampling_params;
 
 // general sampler context

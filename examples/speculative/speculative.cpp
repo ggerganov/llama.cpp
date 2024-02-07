@@ -65,6 +65,10 @@ int main(int argc, char ** argv) {
     // load the draft model
     params.model = params.model_draft;
     params.n_gpu_layers = params.n_gpu_layers_draft;
+    if (params.n_threads_draft > 0) {
+        params.n_threads = params.n_threads_draft;
+    }
+    params.n_threads_batch = params.n_threads_batch_draft;
     std::tie(model_dft, ctx_dft) = llama_init_from_gpt_params(params);
 
     {
@@ -428,7 +432,7 @@ int main(int argc, char ** argv) {
             ++n_past_tgt;
         }
 
-        // the first token is always proposed by the traget model before the speculation loop so we erase it here
+        // the first token is always proposed by the target model before the speculation loop so we erase it here
         for (int s = 0; s < n_seq_dft; ++s) {
             if (!drafts[s].active) {
                 continue;

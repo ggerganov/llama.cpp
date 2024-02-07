@@ -245,9 +245,8 @@ static struct lora_data * load_lora(struct lora_info * info) {
     params_ggml.no_alloc   = true;
     result->ctx = ggml_init(params_ggml);
 
-    uint32_t LLAMA_FILE_MAGIC_LORA = 0x67676C61; // 'ggla'
     uint32_t magic   = file.read_u32();
-    if (magic != LLAMA_FILE_MAGIC_LORA) {
+    if (magic != LLAMA_FILE_MAGIC_GGLA) {
         die_fmt("unexpected lora header file magic in '%s'", info->filename.c_str());
     }
     uint32_t version = file.read_u32();
@@ -309,7 +308,7 @@ static struct ggml_cgraph * build_graph_lora(
 ) {
     struct ggml_tensor * ab = ggml_mul_mat(ctx, lora_a, lora_b);
     if (scaling != 1.0f) {
-        ab = ggml_scale(ctx, ab, ggml_new_f32(ctx, scaling));
+        ab = ggml_scale(ctx, ab, scaling);
     }
     struct ggml_tensor * res = ggml_add_inplace(ctx, tensor, ab);
 

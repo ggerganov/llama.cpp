@@ -129,13 +129,13 @@ int main(int argc, char ** argv)  {
     const ggml_type qtype = GGML_TYPE_Q4_1;
 
     size_t ctx_size = 0;
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32);
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32);
-    ctx_size += sizex*sizez*ggml_type_sizef(GGML_TYPE_F32);
-    ctx_size += sizex*sizey*ggml_type_sizef(qtype);
-    ctx_size += sizex*sizey*ggml_type_sizef(qtype);
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizez);
+    ctx_size += ggml_row_size(qtype,         sizex*sizey);
+    ctx_size += ggml_row_size(qtype,         sizex*sizey);
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
     ctx_size += 1024*1024*16;
 
     printf("Allocating Memory of size %zi bytes, %zi MB\n",ctx_size, (ctx_size/1024/1024));
@@ -194,7 +194,7 @@ int main(int argc, char ** argv)  {
     // Set up a the benchmark matrices
     // printf("Creating new tensor q11 & Running quantize\n");
     struct ggml_tensor * q11 = ggml_new_tensor_2d(ctx, qtype, sizex, sizey);
-    ggml_quantize_chunk(qtype, (const float *) m11->data, q11->data, 0, nelements, hist_cur.data());
+    ggml_quantize_chunk(qtype, (const float *) m11->data, q11->data, 0, nelements/m11->ne[0], m11->ne[0], hist_cur.data(), nullptr);
 
     // Set up a the compute graph
     // printf("Creating new tensor q31\n");
@@ -207,7 +207,7 @@ int main(int argc, char ** argv)  {
     // Set up a second graph computation to make sure we override the CPU cache lines
     // printf("Creating new tensor q12 & Running quantize\n");
     struct ggml_tensor * q12 = ggml_new_tensor_2d(ctx, qtype, sizex, sizey);
-    ggml_quantize_chunk(qtype, (const float *) m12->data, q12->data, 0, nelements, hist_cur.data());
+    ggml_quantize_chunk(qtype, (const float *) m12->data, q12->data, 0, nelements/m12->ne[0], m12->ne[0], hist_cur.data(), nullptr);
 
     // printf("Creating new tensor q32\n");
     struct ggml_tensor * q32 = ggml_mul_mat(ctx, q12, m2);
