@@ -458,9 +458,6 @@
             )
         ).join("\n"),
       });
-      if (selected_image) {
-        prompt = `A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:[img-10]${msg}\nASSISTANT:`;
-      }
       await runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
