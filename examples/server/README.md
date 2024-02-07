@@ -276,13 +276,15 @@ Notice that each `probs` is an array of length `n_probs`.
 {
   "assistant_name": "",
   "user_name": "",
-  "default_generation_settings": { ... }
+  "default_generation_settings": { ... },
+  "total_slots": 1
 }
 ```
 
 - `assistant_name` - the required assistant name to generate the prompt in case you have specified a system prompt for all slots.
 - `user_name` - the required anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
 - `default_generation_settings` - the default generation settings for the `/completion` endpoint, has the same fields as the `generation_settings` response object from the `/completion` endpoint.
+- `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
 
 - **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint. Compared to `api_like_OAI.py` this API implementation does not require a wrapper to be served.
 

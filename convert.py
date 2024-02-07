@@ -334,9 +334,9 @@ class Params:
 class BpeVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
-        try:
+        if isinstance(self.bpe_tokenizer.get('model'), dict):
             self.vocab = self.bpe_tokenizer["model"]["vocab"]
-        except KeyError:
+        else:
             self.vocab = self.bpe_tokenizer
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:

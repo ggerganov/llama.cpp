@@ -22,6 +22,8 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
+from convert import HfVocab
+
 
 # check for any of the given keys in the dictionary and return the value of the first key found
 def get_key_opts(d, keys):
@@ -205,6 +207,8 @@ class Model:
             return OrionModel
         if model_architecture == "InternLM2ForCausalLM":
             return InternLM2Model
+        if model_architecture == "MiniCPMForCausalLM":
+            return MiniCPMModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -258,6 +262,8 @@ class Model:
             return gguf.MODEL_ARCH.ORION
         if arch == "InternLM2ForCausalLM":
             return gguf.MODEL_ARCH.INTERNLM2
+        if arch == "MiniCPMForCausalLM":
+            return gguf.MODEL_ARCH.MINICPM
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -393,6 +399,31 @@ class Model:
                     tokens.append(key.encode("utf-8"))
                     scores.append(-1000.0)
                     toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _set_vocab_hf(self):
+        path = self.dir_model
+        added_tokens_path = self.dir_model
+        vocab = HfVocab(
+            path, added_tokens_path if added_tokens_path.exists() else None
+        )
+        tokens = []
+        scores = []
+        toktypes = []
+
+        for text, score, toktype in vocab.all_tokens():
+            tokens.append(text)
+            scores.append(score)
+            toktypes.append(toktype)
+
+        assert len(tokens) == vocab.vocab_size
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_token_list(tokens)
@@ -1039,6 +1070,24 @@ class StableLMModel(Model):
 class MixtralModel(Model):
     def set_vocab(self):
         self._set_vocab_sentencepiece()
+
+
+class MiniCPMModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        self.gguf_writer.add_name("MiniCPM")
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
+
+    def set_vocab(self):
+        self._set_vocab_hf()
 
 
 class QwenModel(Model):
