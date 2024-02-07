@@ -3,11 +3,24 @@
 
 #include <cmath>
 #include <cstdio>
+#include <fstream>
+#include <iostream>
 #include <stdlib.h>
 #include <string>
 #include <vector>
 
 int main(int argc, char ** argv){
+    const char * static_input_file = "./wikitext-2-raw/wiki.test.raw";
+    std::ifstream file(static_input_file);
+    if (!file) {
+        fprintf(stderr, "error: failed to open file '%s'\n", static_input_file);
+        exit(1);
+    }
+    std::string static_input;
+    std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(static_input));
+    if (!static_input.empty() && static_input.back() == '\n') {
+        static_input.pop_back();
+    }
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params)) {
