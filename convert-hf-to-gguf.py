@@ -1085,8 +1085,10 @@ class MiniCPMModel(Model):
         self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
         self.gguf_writer.add_file_type(self.ftype)
+
     def set_vocab(self):
         self._set_vocab_hf()
+
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
             n_head //= n_kv_head
@@ -1096,6 +1098,7 @@ class MiniCPMModel(Model):
             .swapaxes(1, 2)
             .reshape(weights.shape)
         )
+
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
