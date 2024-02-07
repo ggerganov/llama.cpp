@@ -150,6 +150,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [ollama/ollama](https://github.com/ollama/ollama)
 - [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui) (AGPL)
 - [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
+- [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
 - [semperai/amica](https://github.com/semperai/amica)
