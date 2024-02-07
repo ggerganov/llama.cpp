@@ -2240,9 +2240,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 /**/ if (value == "interleave" || value == "" )   { params.numa = GGML_NUMA_STRATEGY_INTERLEAVE; }
                 else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
                 else if (value == "numactl")   { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
-#ifdef GGUF_NUMA_MIRROR
-                else if (value == "mirror")   { params.numa = GGML_NUMA_STRATEGY_MIRROR; }
-#endif
                 else { invalid_param = true; break; }
             }
         }
