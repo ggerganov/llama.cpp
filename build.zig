@@ -1,4 +1,4 @@
-// Compatible with Zig Version 0.11.0
+// Compatible with Zig Version 0.12.0-dev.xx
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const Compile = std.Build.Step.Compile;
@@ -118,17 +118,20 @@ pub fn build(b: *std.Build) !void {
     var make = try Maker.init(b);
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
 
+    // Options
     const llama_vulkan = b.option(bool, "llama-vulkan", "Enable Vulkan backend for Llama, (default: false)") orelse false;
     const llama_metal = b.option(bool, "llama-metal", "Enable Metal backend for Llama, (default: false, true for macos)") orelse (make.target.result.os.tag == .macos);
     const llama_no_accelerate = b.option(bool, "llama-no-accelerate", "Disable Accelerate framework for Llama, (default: false)") orelse false;
     const llama_accelerate = !llama_no_accelerate and make.target.result.os.tag == .macos;
 
+    // Flags
     if (llama_accelerate) {
         try make.addFlag("-DGGML_USE_ACCELERATE");
         try make.addFlag("-DACCELERATE_USE_LAPACK");
         try make.addFlag("-DACCELERATE_LAPACK_ILP64");
     }
 
+    // Objects
     var extra_objs = ArrayList(*Compile).init(b.allocator);
 
     if (llama_vulkan) {
@@ -154,42 +157,25 @@ pub fn build(b: *std.Build) !void {
     const sampling = make.obj("sampling", "common/sampling.cpp");
     const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
     const clip = make.obj("clip", "examples/llava/clip.cpp");
-    // const train = make.obj("train", "common/train.cpp");
+    const train = make.obj("train", "common/train.cpp");
 
-    var exes = ArrayList(*Compile).init(b.allocator);
-
-    var objs = ArrayList(*Compile).init(b.allocator);
-    try objs.appendSlice(&[_]*Compile{
-        ggml,
-        ggml_alloc,
-        ggml_backend,
-        ggml_quants,
-        llama,
-        common,
-        buildinfo,
-        sampling,
-        console,
-        grammar_parser,
-        clip,
-    });
-    try objs.appendSlice(extra_objs.items);
-
-    const main = make.exe("main", "examples/main/main.cpp", objs.items);
-    try exes.append(main);
-
-    // _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    // _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    // _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    // _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
-    // _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
-
-    const server = make.exe("server", "examples/server/server.cpp", objs.items);
+    // Executables
+    const main = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, clip });
+    const quantize = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    const perplexity = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    const embedding = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    const finetune = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+    const train_text_from_scratch = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, clip });
     if (make.target.result.os.tag == .windows) {
         server.linkSystemLibrary("ws2_32");
     }
-    try exes.append(server);
 
-    for (exes.items) |e| {
+    const exes = [_]*Compile{ main, server, quantize, perplexity, embedding, finetune, train_text_from_scratch };
+
+    for (exes) |e| {
+        for (extra_objs.items) |o| e.addObject(o);
+
         if (llama_vulkan) {
             e.linkSystemLibrary("vulkan");
         }
