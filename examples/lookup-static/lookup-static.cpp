@@ -85,6 +85,23 @@ int main(int argc, char ** argv){
         }
     }
     printf("\n\n%ld\n\n", hashmap.size());
+    std::unordered_map<int64_t, llama_token> hashmap_max;
+    for (auto item : hashmap) {
+        const int64_t key = item.first;
+        const std::unordered_map<llama_token, int> frequency = item.second;
+
+        llama_token max_token = -1;
+        int max_frequency = 0;
+        for (auto item2 : frequency) {
+            if (item2.second > max_frequency) {
+                max_token = item2.first;
+                max_frequency = item2.second;
+            }
+        }
+
+        hashmap_max.emplace(std::make_pair(key, max_token));
+    }
+    printf("\n\n%ld\n\n", hashmap_max.size());
 
     const int max_context_size     = llama_n_ctx(ctx);
     const int max_tokens_list_size = max_context_size - 4;
