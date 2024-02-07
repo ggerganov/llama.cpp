@@ -274,7 +274,7 @@ Java_com_example_llama_Llm_new_1batch(JNIEnv *, jobject, jint n_tokens, jint emb
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_example_llama_Llm_backend_1init(JNIEnv *, jobject, jboolean numa) {
+Java_com_example_llama_Llm_backend_1init(JNIEnv *, jobject, jint32 numa) {
     llama_backend_init(numa);
 }
 

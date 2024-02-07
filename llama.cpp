@@ -10327,7 +10327,7 @@ bool llama_mlock_supported(void) {
     return llama_supports_mlock();
 }
 
-void llama_backend_init(uint32_t numa) {
+void llama_backend_init(enum ggml_numa_strategies numa) {
     ggml_time_init();
 
     // needed to initialize f16 tables

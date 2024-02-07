@@ -25,7 +25,7 @@
 #include <signal.h>
 
 #ifdef GGML_NUMA_MIRROR
-#include <numanor.h>
+#include <numa.h>
 #endif
 
 #ifdef GGML_USE_METAL

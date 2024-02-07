@@ -1151,7 +1151,7 @@ int main(int argc, char ** argv) {
     if (!params.verbose) {
         llama_log_set(llama_null_log_callback, NULL);
     }
-    bool numa = false;
+    enum ggml_numa_strategies numa = GGML_NUMA_STRATEGY_DISABLED;
     llama_backend_init(numa);
 
     // initialize printer
