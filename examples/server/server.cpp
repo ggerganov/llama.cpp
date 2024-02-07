@@ -432,6 +432,7 @@ struct llama_server_context
         }
 
         default_generation_settings_for_props = get_formated_generation(slots.front());
+        default_generation_settings_for_props["num_slots"] = params.n_parallel;
         default_generation_settings_for_props["seed"] = -1;
 
         batch = llama_batch_init(n_ctx, 0, params.n_parallel);
@@ -524,27 +525,29 @@ struct llama_server_context
             slot->oaicompat_model = "";
         }
 
-        slot->params.stream           = json_value(data, "stream",            false);
-        slot->params.cache_prompt     = json_value(data, "cache_prompt",      false);
-        slot->params.n_predict        = json_value(data, "n_predict",         default_params.n_predict);
-        slot->sparams.top_k           = json_value(data, "top_k",             default_sparams.top_k);
-        slot->sparams.top_p           = json_value(data, "top_p",             default_sparams.top_p);
-        slot->sparams.min_p           = json_value(data, "min_p",             default_sparams.min_p);
-        slot->sparams.tfs_z           = json_value(data, "tfs_z",             default_sparams.tfs_z);
-        slot->sparams.typical_p       = json_value(data, "typical_p",         default_sparams.typical_p);
-        slot->sparams.temp            = json_value(data, "temperature",       default_sparams.temp);
-        slot->sparams.penalty_last_n  = json_value(data, "repeat_last_n",     default_sparams.penalty_last_n);
-        slot->sparams.penalty_repeat  = json_value(data, "repeat_penalty",    default_sparams.penalty_repeat);
-        slot->sparams.penalty_freq    = json_value(data, "frequency_penalty", default_sparams.penalty_freq);
-        slot->sparams.penalty_present = json_value(data, "presence_penalty",  default_sparams.penalty_present);
-        slot->sparams.mirostat        = json_value(data, "mirostat",          default_sparams.mirostat);
-        slot->sparams.mirostat_tau    = json_value(data, "mirostat_tau",      default_sparams.mirostat_tau);
-        slot->sparams.mirostat_eta    = json_value(data, "mirostat_eta",      default_sparams.mirostat_eta);
-        slot->sparams.penalize_nl     = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
-        slot->params.n_keep           = json_value(data, "n_keep",            slot->params.n_keep);
-        slot->params.seed             = json_value(data, "seed",              default_params.seed);
-        slot->sparams.grammar         = json_value(data, "grammar",           default_sparams.grammar);
-        slot->sparams.n_probs         = json_value(data, "n_probs",           default_sparams.n_probs);
+        slot->params.stream             = json_value(data, "stream",            false);
+        slot->params.cache_prompt       = json_value(data, "cache_prompt",      false);
+        slot->params.n_predict          = json_value(data, "n_predict",         default_params.n_predict);
+        slot->sparams.top_k             = json_value(data, "top_k",             default_sparams.top_k);
+        slot->sparams.top_p             = json_value(data, "top_p",             default_sparams.top_p);
+        slot->sparams.min_p             = json_value(data, "min_p",             default_sparams.min_p);
+        slot->sparams.tfs_z             = json_value(data, "tfs_z",             default_sparams.tfs_z);
+        slot->sparams.typical_p         = json_value(data, "typical_p",         default_sparams.typical_p);
+        slot->sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
+        slot->sparams.dynatemp_range    = json_value(data, "dynatemp_range",    default_sparams.dynatemp_range);
+        slot->sparams.dynatemp_exponent = json_value(data, "dynatemp_exponent", default_sparams.dynatemp_exponent);
+        slot->sparams.penalty_last_n    = json_value(data, "repeat_last_n",     default_sparams.penalty_last_n);
+        slot->sparams.penalty_repeat    = json_value(data, "repeat_penalty",    default_sparams.penalty_repeat);
+        slot->sparams.penalty_freq      = json_value(data, "frequency_penalty", default_sparams.penalty_freq);
+        slot->sparams.penalty_present   = json_value(data, "presence_penalty",  default_sparams.penalty_present);
+        slot->sparams.mirostat          = json_value(data, "mirostat",          default_sparams.mirostat);
+        slot->sparams.mirostat_tau      = json_value(data, "mirostat_tau",      default_sparams.mirostat_tau);
+        slot->sparams.mirostat_eta      = json_value(data, "mirostat_eta",      default_sparams.mirostat_eta);
+        slot->sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
+        slot->params.n_keep             = json_value(data, "n_keep",            slot->params.n_keep);
+        slot->params.seed               = json_value(data, "seed",              default_params.seed);
+        slot->sparams.grammar           = json_value(data, "grammar",           default_sparams.grammar);
+        slot->sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
 
         // infill
         if (data.count("input_prefix") != 0)
@@ -987,11 +990,6 @@ struct llama_server_context
         queue_results.send(res);
     }
 
-    json get_model_props()
-    {
-        return get_formated_generation(slots[0]);
-    }
-
     json get_formated_generation(llama_client_slot &slot)
     {
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
@@ -1002,6 +1000,8 @@ struct llama_server_context
             {"model",             params.model_alias},
             {"seed",              slot.params.seed},
             {"temperature",       slot.sparams.temp},
+            {"dynatemp_range",    slot.sparams.dynatemp_range},
+            {"dynatemp_exponent", slot.sparams.dynatemp_exponent},
             {"top_k",             slot.sparams.top_k},
             {"top_p",             slot.sparams.top_p},
             {"min_p",             slot.sparams.min_p},
@@ -2910,12 +2910,6 @@ int main(int argc, char **argv)
 
                     res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
                 }
-            });
-
-    svr.Get("/model.json", [&llama](const httplib::Request &, httplib::Response &res)
-            {
-                const json data = llama.get_model_props();
-                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Options(R"(/.*)", [](const httplib::Request &, httplib::Response &res)
