@@ -33,17 +33,14 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
         <li><a href="#get-the-code">Get the Code</a></li>
         <li><a href="#build">Build</a></li>
         <li><a href="#blas-build">BLAS Build</a></li>
-        <li><a href="#prepare-data--run">Prepare Data & Run</a></li>
+        <li><a href="#prepare-and-quantize">Prepare and Quantize</a></li>
+        <li><a href="#run-the-quantized-model">Run the quantized model</a></li>
         <li><a href="#memorydisk-requirements">Memory/Disk Requirements</a></li>
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#constrained-output-with-grammars">Constrained output with grammars</a></li>
-        <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
-        <li><a href="#using-openllama">Using OpenLLaMA</a></li>
-        <li><a href="#using-gpt4all">Using GPT4All</a></li>
-        <li><a href="#using-pygmalion-7b--metharme-7b">Using Pygmalion 7B & Metharme 7B</a></li>
-        <li><a href="#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data">Obtaining the Facebook LLaMA original model and Stanford Alpaca model data</a></li>
-        <li><a href="#verifying-the-model-files">Verifying the model files</a></li>
+        <li><a href="#instruct-mode">Instruct mode</a></li>
+        <li><a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a></li>
         <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
         <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
         <li><a href="#android">Android</a></li>
@@ -83,20 +80,16 @@ improved significantly thanks to many contributions. It is the main playground f
 
 **Supported models:**
 
+Typically finetunes of the base models below are supported as well.
+
 - [X] LLaMA 🦙
 - [x] LLaMA 2 🦙🦙
-- [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
+- [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [X] Falcon
-- [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
-- [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
-- [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
-- [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
-- [X] [Pygmalion/Metharme](#using-pygmalion-7b--metharme-7b)
-- [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 - [X] [Baichuan 1 & 2](https://huggingface.co/models?search=baichuan-inc/Baichuan) + [derivations](https://huggingface.co/hiyouga/baichuan-7b-sft)
 - [X] [Aquila 1 & 2](https://huggingface.co/models?search=BAAI/Aquila)
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
@@ -166,7 +159,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
 
-```java
+```
 $ make -j && ./main -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
 I llama.cpp build info:
 I UNAME_S:  Darwin
@@ -250,7 +243,7 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the end-to-end binary build and model conversion steps for the LLaMA-7B model.
+Here are the end-to-end binary build and model conversion steps for most supported models.
 
 ### Get the Code
 
@@ -635,7 +628,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   **Without docker**:
 
-  Firstly, you need to make sure you installed [Vulkan SDK](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started_ubuntu.html)
+  Firstly, you need to make sure you have installed [Vulkan SDK](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started_ubuntu.html)
 
   For example, on Ubuntu 22.04 (jammy), use the command below:
 
@@ -647,6 +640,8 @@ Building the program with BLAS support may lead to some performance improvements
   # To verify the installation, use the command below:
   vulkaninfo
   ```
+
+  Alternatively your package manager might be able to provide the appropiate libraries. For example for Ubuntu 22.04 you can install `libvulkan-dev` instead.
 
   Then, build llama.cpp using the cmake command below:
 
@@ -662,34 +657,42 @@ Building the program with BLAS support may lead to some performance improvements
   # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
   ```
 
-### Prepare Data & Run
+### Prepare and Quantize
+
+To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 
 ```bash
-# obtain the original LLaMA model weights and place them in ./models
+# obtain the official LLaMA model weights and place them in ./models
 ls ./models
-65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
+llama-2-7b tokenizer_checklist.chk tokenizer.model
 # [Optional] for models using BPE tokenizers
 ls ./models
-65B 30B 13B 7B vocab.json
+<folder containing weights and tokenizer json> vocab.json
+# [Optional] for PyTorch .bin models like Mistral-7B
+ls ./models
+<folder containing weights and tokenizer json>
 
 # install Python dependencies
 python3 -m pip install -r requirements.txt
 
-# convert the 7B model to ggml FP16 format
-python3 convert.py models/7B/
+# convert the model to ggml FP16 format
+python3 convert.py models/mymodel/
 
 # [Optional] for models using BPE tokenizers
-python convert.py models/7B/ --vocabtype bpe
+python convert.py models/mymodel/ --vocabtype bpe
 
-# quantize the model to 4-bits (using q4_0 method)
-./quantize ./models/7B/ggml-model-f16.gguf ./models/7B/ggml-model-q4_0.gguf q4_0
+# quantize the model to 4-bits (using Q4_K_M method)
+./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
 
-# update the gguf filetype to current if older version is unsupported by another application
-./quantize ./models/7B/ggml-model-q4_0.gguf ./models/7B/ggml-model-q4_0-v2.gguf COPY
+# update the gguf filetype to current version if older version is now unsupported
+./quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
+```
 
+### Run the quantized model
 
-# run the inference
-./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
+```bash
+# start inference on a gguf model
+./main -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -710,7 +713,7 @@ From the unzipped folder, open a terminal/cmd window here and place a pre-conver
 
 As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
-| Model | Original size | Quantized size (4-bit) |
+| Model | Original size | Quantized size (Q4_0) |
 |------:|--------------:|-----------------------:|
 |    7B |         13 GB |                 3.9 GB |
 |   13B |         24 GB |                 7.8 GB |
@@ -826,9 +829,9 @@ The `grammars/` folder contains a handful of sample grammars. To write your own,
 
 For authoring more complex JSON grammars, you can also check out https://grammar.intrinsiclabs.ai/, a browser app that lets you write TypeScript interfaces which it compiles to GBNF grammars that you can save for local use. Note that the app is built and maintained by members of the community, please file any issues or FRs on [its repo](http://github.com/intrinsiclabsai/gbnfgen) and not this one.
 
-### Instruction mode with Alpaca
+### Instruct mode
 
-1. First, download the `ggml` Alpaca model into the `./models` folder
+1. First, download and place the `ggml` model into the `./models` folder
 2. Run the `main` tool like this:
 
 ```
@@ -854,50 +857,6 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 >
 ```
 
-### Using [OpenLLaMA](https://github.com/openlm-research/open_llama)
-
-OpenLLaMA is an openly licensed reproduction of Meta's original LLaMA model. It uses the same architecture and is a drop-in replacement for the original LLaMA weights.
-
-- Download the [3B](https://huggingface.co/openlm-research/open_llama_3b), [7B](https://huggingface.co/openlm-research/open_llama_7b), or [13B](https://huggingface.co/openlm-research/open_llama_13b) model from Hugging Face.
-- Convert the model to ggml FP16 format using `python convert.py <path to OpenLLaMA directory>`
-
-### Using [GPT4All](https://github.com/nomic-ai/gpt4all)
-
-*Note: these instructions are likely obsoleted by the GGUF update*
-
-- Obtain the `tokenizer.model` file from LLaMA model and put it to `models`
-- Obtain the `added_tokens.json` file from Alpaca model and put it to `models`
-- Obtain the `gpt4all-lora-quantized.bin` file from GPT4All model and put it to `models/gpt4all-7B`
-- It is distributed in the old `ggml` format which is now obsoleted
-- You have to convert it to the new format using `convert.py`:
-
-```bash
-python3 convert.py models/gpt4all-7B/gpt4all-lora-quantized.bin
-```
-
-- You can now use the newly generated `models/gpt4all-7B/ggml-model-q4_0.bin` model in exactly the same way as all other models
-
-- The newer GPT4All-J model is not yet supported!
-
-### Using Pygmalion 7B & Metharme 7B
-
-- Obtain the [LLaMA weights](#obtaining-the-facebook-llama-original-model-and-stanford-alpaca-model-data)
-- Obtain the [Pygmalion 7B](https://huggingface.co/PygmalionAI/pygmalion-7b/) or [Metharme 7B](https://huggingface.co/PygmalionAI/metharme-7b) XOR encoded weights
-- Convert the LLaMA model with [the latest HF convert script](https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py)
-- Merge the XOR files with the converted LLaMA weights by running the [xor_codec](https://huggingface.co/PygmalionAI/pygmalion-7b/blob/main/xor_codec.py) script
-- Convert to `ggml` format using the `convert.py` script in this repo:
-```bash
-python3 convert.py pygmalion-7b/ --outtype q4_1
-```
-> The Pygmalion 7B & Metharme 7B weights are saved in [bfloat16](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format) precision. If you wish to convert to `ggml` without quantizating, please specify the `--outtype` as `f32` instead of `f16`.
-
-
-### Obtaining the Facebook LLaMA original model and Stanford Alpaca model data
-
-- **Under no circumstances should IPFS, magnet links, or any other links to model downloads be shared anywhere in this repository, including in issues, discussions, or pull requests. They will be immediately deleted.**
-- The LLaMA models are officially distributed by Facebook and will **never** be provided through this repository.
-- Refer to [Facebook's LLaMA repository](https://github.com/facebookresearch/llama/pull/73/files) if you need to request access to the model data.
-
 ### Obtaining and using the Facebook LLaMA 2 model
 
 - Refer to [Facebook's LLaMA download page](https://ai.meta.com/resources/models-and-libraries/llama-downloads/) if you want to access the model data.
@@ -908,20 +867,6 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
   - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGUF)
   - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGUF)
   - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGUF)
-
-### Verifying the model files
-
-Please verify the [sha256 checksums](SHA256SUMS) of all downloaded model files to confirm that you have the correct model data files before creating an issue relating to your model files.
-- The following python script will verify if you have all possible latest files in your self-installed `./models` subdirectory:
-
-```bash
-# run the verification script
-./scripts/verify-checksum-models.py
-```
-
-- On linux or macOS it is also possible to run the following commands to verify if you have all possible latest files in your self-installed `./models` subdirectory:
-    - On Linux: `sha256sum --ignore-missing -c SHA256SUMS`
-    - on macOS: `shasum -a 256 --ignore-missing -c SHA256SUMS`
 
 ### Seminal papers and background on the models
 
