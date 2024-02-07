@@ -243,6 +243,7 @@ int main(int argc, char ** argv){
                 }
 
                 draft.push_back(item_it->second);
+                llama_batch_add(batch_tgt, item_it->second, n_past + i + 1, { 0 }, true);
                 ++n_drafted;
             }
             return;
