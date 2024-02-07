@@ -680,18 +680,18 @@ python3 convert.py models/mymodel/
 # [Optional] for models using BPE tokenizers
 python convert.py models/mymodel/ --vocabtype bpe
 
-# quantize the model to 4-bits (using q4_0 method)
-./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-q4_0.gguf q4_0
+# quantize the model to 4-bits (using Q4_K_M method)
+./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
 
 # update the gguf filetype to current version if older version is now unsupported
-./quantize ./models/mymodel/ggml-model-q4_0.gguf ./models/mymodel/ggml-model-q4_0-v2.gguf COPY
+./quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
 ```
 
 ### Run the quantized model
 
 ```bash
 # start inference on a gguf model
-./main -m ./models/mymodel/ggml-model-q4_0.gguf -n 128
+./main -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
