@@ -6830,8 +6830,8 @@ struct llm_build_context {
 
         const int64_t n_embd = hparams.n_embd;
         //TODO: if the model varies, these parameters need to be read from the model
-        const int scale_emb = 12;
-        const int dim_model_base = 256;
+        const int64_t n_embd_base = 256;
+        const float scale_embd  = 12.0f;
         const float scale_depth = 1.4f;
 
         struct ggml_tensor * cur;
@@ -6841,7 +6841,7 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // scale the input embeddings
-        inpL = ggml_scale(ctx0, inpL, float(scale_emb));
+        inpL = ggml_scale(ctx0, inpL, scale_embd);
         cb(inpL, "inp_scaled", -1);
 
         // inp_pos - contains the positions
@@ -6953,7 +6953,7 @@ struct llm_build_context {
         cb(cur, "result_norm", -1);
 
         // lm_head scaling
-        const float scale_lmhead = float(dim_model_base)/float(n_embd);
+        const float scale_lmhead = float(n_embd_base)/float(n_embd);
         cur = ggml_scale(ctx0, cur, scale_lmhead);
         cb(cur, "lmhead_scaling", -1);
 
