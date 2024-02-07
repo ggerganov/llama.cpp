@@ -639,7 +639,7 @@ Building the program with BLAS support may lead to some performance improvements
   # To verify the installation, use the command below:
   vulkaninfo
   ```
-  
+
   Alternatively your package manager might be able to provide the appropiate libraries. For example for Ubuntu 22.04 you can install `libvulkan-dev` instead.
 
   Then, build llama.cpp using the cmake command below:
