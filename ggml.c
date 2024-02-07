@@ -2343,7 +2343,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 #elif defined(GGML_USE_CLBLAST)
         ggml_cl_init();
 #elif defined(GGML_USE_VULKAN)
-        ggml_vk_init();
+        ggml_vk_init_cpu_assist();
 #elif defined(GGML_USE_SYCL)
         ggml_init_sycl();
 #endif
@@ -14850,10 +14850,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_CPU);
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_CPU);
 #elif defined(GGML_USE_VULKAN)
-    const bool skip_cpu = ggml_vk_compute_forward(params, tensor);
+    const bool skip_cpu = ggml_vk_compute_forward_cpu_assist(params, tensor);
 #ifdef GGML_VULKAN_CHECK_RESULTS
     if (skip_cpu) {
-        ggml_vk_check_results_1(params, tensor);
+        ggml_vk_check_results_1_cpu_assist(params, tensor);
     }
 #endif
     if (skip_cpu) {
@@ -17269,12 +17269,12 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
 
 #ifdef GGML_USE_VULKAN
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_preallocate_buffers_graph(cgraph->nodes[i]);
+        ggml_vk_preallocate_buffers_graph_cpu_assist(cgraph->nodes[i]);
     }
-    ggml_vk_preallocate_buffers();
+    ggml_vk_preallocate_buffers_cpu_assist();
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_build_graph(cgraph->nodes[i], i == cgraph->n_nodes - 1);
+        ggml_vk_build_graph_cpu_assist(cgraph->nodes[i], i == cgraph->n_nodes - 1);
     }
 #endif
 
@@ -17330,7 +17330,7 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     }
 
 #ifdef GGML_USE_VULKAN
-    ggml_vk_graph_cleanup();
+    ggml_vk_graph_cleanup_cpu_assist();
 #endif
 
     // performance stats (graph)

@@ -46,6 +46,10 @@
 #define GGML_USE_CUBLAS_SYCL
 #endif
 
+#if (defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)) || defined(GGML_USE_VULKAN)
+#define GGML_USE_CUBLAS_SYCL_VULKAN
+#endif
+
 int32_t get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
@@ -660,8 +664,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                     params.tensor_split[i] = 0.0f;
                 }
             }
-#ifndef GGML_USE_CUBLAS_SYCL
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting a tensor split has no effect.\n");
+#ifndef GGML_USE_CUBLAS_SYCL_VULKAN
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL/Vulkan. Setting a tensor split has no effect.\n");
 #endif // GGML_USE_CUBLAS_SYCL
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
