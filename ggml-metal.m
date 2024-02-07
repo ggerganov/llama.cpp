@@ -1343,7 +1343,7 @@ static bool ggml_metal_graph_compute(
                             const int nsg  = 8;
 
                             const int nsg0 = 1;
-                            const int nsh0 = 8;
+                            const int nsh0 = 16;
                             const int nsg1 = 1;
                             const int nsh1 = 64;
 
