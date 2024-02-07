@@ -33,12 +33,13 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
         <li><a href="#get-the-code">Get the Code</a></li>
         <li><a href="#build">Build</a></li>
         <li><a href="#blas-build">BLAS Build</a></li>
-        <li><a href="#prepare-data--run">Prepare Data & Run</a></li>
+        <li><a href="#prepare-and-quantize">Prepare and Quantize</a></li>
+        <li><a href="#run-the-quantized-model">Run the quantized model</a></li>
         <li><a href="#memorydisk-requirements">Memory/Disk Requirements</a></li>
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#constrained-output-with-grammars">Constrained output with grammars</a></li>
-        <li><a href="#instruction-mode-with-alpaca-and-similar-instruct-models">Instruction mode with Alpaca and similar Instruct models</a></li>
+        <li><a href="#instruct-mode">Instruct mode</a></li>
         <li><a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a></li>
         <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
         <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
@@ -86,8 +87,6 @@ Typically finetunes of the base models below are supported as well.
 - [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [X] Falcon
-- [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
-- [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
@@ -243,7 +242,7 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the end-to-end binary build and model conversion steps for the LLaMA 2 7B model.
+Here are the end-to-end binary build and model conversion steps for most supported models.
 
 ### Get the Code
 
@@ -657,9 +656,9 @@ Building the program with BLAS support may lead to some performance improvements
   # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
   ```
 
-### Prepare Data & Run
+### Prepare and Quantize
 
-To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section.
+To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 
 ```bash
 # obtain the official LLaMA model weights and place them in ./models
@@ -667,25 +666,32 @@ ls ./models
 llama-2-7b tokenizer_checklist.chk tokenizer.model
 # [Optional] for models using BPE tokenizers
 ls ./models
-<folder containing .pth weights> vocab.json
+<folder containing weights and tokenizer json> vocab.json
+# [Optional] for PyTorch .bin models like Mistral-7B
+ls ./models
+<folder containing weights and tokenizer json>
 
 # install Python dependencies
 python3 -m pip install -r requirements.txt
 
-# convert the 7B model to ggml FP16 format
-python3 convert.py models/llama-2-7b/
+# convert the model to ggml FP16 format
+python3 convert.py models/mymodel/
 
 # [Optional] for models using BPE tokenizers
-python convert.py models/llama-2-7b/ --vocabtype bpe
+python convert.py models/mymodel/ --vocabtype bpe
 
 # quantize the model to 4-bits (using q4_0 method)
-./quantize ./models/llama-2-7b/ggml-model-f16.gguf ./models/llama-2-7b/ggml-model-q4_0.gguf q4_0
+./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-q4_0.gguf q4_0
 
-# update the gguf filetype to current if older version is unsupported by another application
-./quantize ./models/llama-2-7b/ggml-model-q4_0.gguf ./models/llama-2-7b/ggml-model-q4_0-v2.gguf COPY
+# update the gguf filetype to current version if older version is now unsupported
+./quantize ./models/mymodel/ggml-model-q4_0.gguf ./models/mymodel/ggml-model-q4_0-v2.gguf COPY
+```
 
-# run the inference
-./main -m ./models/llama-2-7b/ggml-model-q4_0.gguf -n 128
+### Run the quantized model
+
+```bash
+# start inference on a gguf model
+./main -m ./models/mymodel/ggml-model-q4_0.gguf -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -822,7 +828,7 @@ The `grammars/` folder contains a handful of sample grammars. To write your own,
 
 For authoring more complex JSON grammars, you can also check out https://grammar.intrinsiclabs.ai/, a browser app that lets you write TypeScript interfaces which it compiles to GBNF grammars that you can save for local use. Note that the app is built and maintained by members of the community, please file any issues or FRs on [its repo](http://github.com/intrinsiclabsai/gbnfgen) and not this one.
 
-### Instruction mode with Alpaca and similar Instruct models
+### Instruct mode
 
 1. First, download and place the `ggml` model into the `./models` folder
 2. Run the `main` tool like this:
