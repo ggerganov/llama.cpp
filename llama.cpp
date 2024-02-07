@@ -8371,6 +8371,10 @@ void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * can
     //     return;
     // }
 
+    if (k <= 0) {
+        k = candidates->size;
+    }
+
     const int64_t t_start_sample_us = ggml_time_us();
 
     k = std::max(k, (int) min_keep);
