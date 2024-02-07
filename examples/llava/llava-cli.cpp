@@ -34,7 +34,7 @@ static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
 
 static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos);
+    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
