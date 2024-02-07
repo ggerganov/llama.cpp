@@ -24,10 +24,6 @@
 #include <stdarg.h>
 #include <signal.h>
 
-#ifdef GGML_NUMA_MIRROR
-#include <numa.h>
-#endif
-
 #ifdef GGML_USE_METAL
 #include <unistd.h>
 #endif
@@ -16635,10 +16631,6 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) {
                 fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",strerror(rv));
             }
             return;
-#ifdef GGML_NUMA_MIRROR
-        case GGML_NUMA_STRATEGY_MIRROR:
-            printf("Mirror Mode Enabled");
-#endif
         default:
             return;
     }

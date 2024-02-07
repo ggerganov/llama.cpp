@@ -1825,9 +1825,6 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                          - interleave: (default) spread execution evenly over all nodes\n");
     printf("                          - isolate: only spawn threads on CPUs on the node that execution started on\n");
     printf("                          - numactl: use the CPU map provided my numactl\n");
-#ifdef GGML_NUMA_MIRROR
-    printf("                          - mirror: NOT YET IMPLEMENTED - attempt to mirror GGUF data buffer on each node's local memory to increase throughput.\n");
-#endif
     if (llama_supports_gpu_offload()) {
         printf("  -ngl N, --n-gpu-layers N\n");
         printf("                            number of layers to store in VRAM\n");

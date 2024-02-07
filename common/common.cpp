@@ -662,9 +662,6 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                /**/ if (value == "interleave" || value == "" )   { params.numa = GGML_NUMA_STRATEGY_INTERLEAVE; }
                else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
                else if (value == "numactl")   { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
-#ifdef GGUF_NUMA_MIRROR
-               else if (value == "mirror")   { params.numa = GGML_NUMA_STRATEGY_MIRROR; }
-#endif
                else { invalid_param = true; break; }
             }
         } else if (arg == "--verbose-prompt") {
@@ -1011,9 +1008,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                          - interleave: (default) spread execution evenly over all nodes\n");
     printf("                          - isolate: only spawn threads on CPUs on the node that execution started on\n");
     printf("                          - numactl: use the CPU map provided my numactl\n");
-#ifdef GGML_NUMA_MIRROR
-    printf("                          - mirror: NOT YET IMPLEMENTED - attempt to mirror GGUF data buffer on each node's local memory to increase throughput.\n");
-#endif
     printf("                        if run without this previously, it is recommended to drop the system page cache before using this\n");
     printf("                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
     if (llama_supports_gpu_offload()) {
