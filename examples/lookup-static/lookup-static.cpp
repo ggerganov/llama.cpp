@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <stdlib.h>
 #include <string>
 #include <vector>
 
@@ -160,33 +161,9 @@ int main(int argc, char ** argv){
 
         // generate n_pred tokens through prompt lookup
         auto prompt_lookup = [&]() -> void {
-            int inp_size = inp.size();
-            for (int ngram_size = ngram_max ; ngram_size > ngram_min; --ngram_size){
-                const llama_token * ngram = &inp[inp_size - ngram_size];
-
-                for (int i = 0; i <= (int) inp_size - (ngram_size * 2); ++i) {
-                    bool match = true;
-                    for (int j = 0; j < ngram_size; ++j) {
-                        if (inp[i + j] != ngram[j]) {
-                            match = false;
-                            break;
-                        }
-                    }
-
-                    if (match) {
-                        const int startIdx = i + ngram_size;
-                        const int endIdx = startIdx + n_draft;
-                        if (endIdx < inp_size) {
-                            for (int j = startIdx; j < endIdx; ++j) {
-                                LOG(" - draft candidate %d: %d\n", j, inp[j]);
-                                draft.push_back(inp[j]);
-                                llama_batch_add(batch_tgt, inp[j], n_past + (j - startIdx) + 1, { 0 }, true);
-                                ++n_drafted;
-                            }
-                            return;
-                        }
-                    }
-                }
+            for (int i = 0; i < n_draft; ++i) {
+                draft.push_back(rand() % 32000);
+                ++n_drafted;
             }
             return;
         };
