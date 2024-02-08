@@ -183,7 +183,7 @@ jobs:
           cd build
           cmake -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx ..
           cmake --build . --config Release -j $(nproc)
-  
+
   ubuntu-22-cmake-sycl-fp16:
     runs-on: ubuntu-22.04
 
