@@ -4980,7 +4980,7 @@ void kernel_mul_mm2_impl(
 
     for (int is = 0; is < NSG1; is++) {
         const int i1 = i11 + is*8;
-        const int nstore = MIN(8*NSG1, ne1 - i1) * (8*NSG0);
+        const int nstore = MIN(8, ne1 - i1) * (8*NSG0);
 
         for (int i = tiisg; i < nstore; i += NW) {
             const int ic = i%(8*NSG0);
