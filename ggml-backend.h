@@ -80,7 +80,6 @@ extern "C" {
     //
     // CPU backend
     //
-
     GGML_API ggml_backend_t ggml_backend_cpu_init(void);
 
     GGML_API GGML_CALL bool ggml_backend_is_cpu                (ggml_backend_t backend);
