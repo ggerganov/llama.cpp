@@ -1348,7 +1348,7 @@ static bool ggml_metal_graph_compute(
                             const int nsh1 = 64;
 
                             GGML_ASSERT(ne00 % 4    == 0); // for zeroing shared memory with half4 / float4
-                            GGML_ASSERT(ne00 % 16   == 0); // dequantize in chunks of 16
+                          //GGML_ASSERT(ne00 % 16   == 0); // dequantize in chunks of 16
                             GGML_ASSERT(nsh0 % 2    == 0); // dequantize in chunks of 2x8 = 16
                             GGML_ASSERT(nsh1 % nsh0 == 0);
                             GGML_ASSERT(nsh0 >= 2*nsg1); // need enough memory to store the results in f32
