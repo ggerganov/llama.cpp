@@ -1960,7 +1960,7 @@ static cpu_set_t ggml_get_numa_affinity(void) {
     return cpuset;
 }
 
-void ggml_numa_init(uint32_t numa_flag) {
+void ggml_numa_init(enum ggml_numa_strategies numa_flag) {
     if (g_state.numa.n_nodes > 0) {
         fprintf(stderr, "ggml_numa_init: NUMA already initialized\n");
 
