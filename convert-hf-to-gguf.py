@@ -1666,12 +1666,11 @@ class BertModel(Model):
 
         # convert to phantom space vocab
         def phantom(tok, typ):
-            if tok.startswith(b'[') and tok.endswith(b']'):
+            if tok.startswith(b"[") and tok.endswith(b"]"):
                 return tok
-            elif tok.startswith(b"##"):
+            if tok.startswith(b"##"):
                 return tok[2:]
-            else:
-                return b"\xe2\x96\x81" + tok
+            return b"\xe2\x96\x81" + tok
         tokens = [phantom(t, y) for t, y in zip(tokens, toktypes)]
 
         # set up bos and eos tokens (cls and sep)
