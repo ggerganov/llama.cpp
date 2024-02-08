@@ -1594,26 +1594,37 @@ class BertModel(Model):
         path = self.dir_model
         added_tokens_path = self.dir_model if self.dir_model.exists() else None
 
+        # use huggingface vocab to get all tokens
         vocab = HfVocab(path, added_tokens_path)
         tokens, scores, toktypes = zip(*vocab.all_tokens())
-
         assert len(tokens) == vocab.vocab_size
 
-        # for some reason set(toktypes) = {1, 3} so we need to compress it
-        all_types, toktypes1 = np.unique(toktypes, return_inverse=True)
-        n_token_types, toktypes1 = len(all_types), toktypes1.tolist()
+        # we need this to validate the size of the token_type embeddings
+        # though currently we are passing all zeros to the token_type embeddings
+        n_token_types = len(set(toktypes))
         self.gguf_writer.add_uint32("tokenizer.ggml.token_type_count", n_token_types)
 
-        # convert tokens to SPM style
-        tokens = [
-            (t[2:] if t.startswith(b"##") else b"\xe2\x96\x81" + t) for t in tokens
-        ]
+        # convert to phantom space vocab
+        def phantom(tok, typ):
+            if tok.startswith(b'[') and tok.endswith(b']'):
+                return tok
+            elif tok.startswith(b"##"):
+                return tok[2:]
+            else:
+                return b"\xe2\x96\x81" + tok
+        tokens = [phantom(t, y) for t, y in zip(tokens, toktypes)]
 
-        self.gguf_writer.add_tokenizer_model("llama")
+        # set up bos and eos tokens (cls and sep)
+        self.gguf_writer.add_bos_token_id(vocab.tokenizer.cls_token_id)
+        self.gguf_writer.add_eos_token_id(vocab.tokenizer.sep_token_id)
+
+        # add vocab to gguf
+        self.gguf_writer.add_tokenizer_model("bert")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes) # ignore types for now (all zero)
+        self.gguf_writer.add_token_types(toktypes)
 
+        # handle special tokens
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
