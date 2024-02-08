@@ -1836,22 +1836,80 @@ bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t 
     return true;
 }
 
-void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tensor) {
+// printf one number from a tensor (cont only) like an array index[0][1][2][3]
+void ggml_print_f32_index(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3) {
+    void * data;
+    if (!ggml_is_contiguous(tensor)) {
+        int64_t id[4] = {i0, i1, i2, i3};
+        int index_cont = i0*tensor->ne[3]*tensor->ne[2]*tensor->ne[1]*tensor->nb[0] + i1*tensor->ne[3]*tensor->ne[2]*tensor->nb[1] + i2*tensor->ne[3]*tensor->nb[2] + i3*tensor->nb[3];
+        ggml_unravel_index(tensor, index_cont, &id[0], &id[1], &id[2], &id[3]); // untested
+        printf("NONCONT");
+        return;
+        i0 = id[0];
+        i1 = id[1];
+        i2 = id[2];
+        i3 = id[3];
+        data = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3]; // untested
+    } else
+    {
+        data = (char *) tensor->data + i0*tensor->ne[3]*tensor->ne[2]*tensor->ne[1]*tensor->nb[0] + i1*tensor->ne[3]*tensor->ne[2]*tensor->nb[1] + i2*tensor->ne[3]*tensor->nb[2] + i3*tensor->nb[3];
+        // void * data = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
+    }
+    
+    
+    switch (tensor->type) {
+        case GGML_TYPE_I8:
+            printf("%8d", *((int8_t *) data));
+            break;
+        case GGML_TYPE_I16:
+            printf("%8d", *((int16_t *) data));
+            break;
+        case GGML_TYPE_I32:
+            printf("%8d", *((int32_t *) data));
 
-    char *tensor_data;
-    if (tensor->backend != GGML_BACKEND_CPU) {
+            break;
+        case GGML_TYPE_F16:
+            printf("%8.4f", GGML_FP16_TO_FP32(*((ggml_fp16_t *) data)));
+            break;
+        case GGML_TYPE_F32:
+            printf("%8.4f", *((float *) data));
+            break;
+        default:
+            printf("UNKTYPE");
+            break;
+    }
+}
+void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tensor_in) {
+    struct ggml_tensor tensor_dummy; // avoid any ctx
+    struct ggml_tensor * tensor = &tensor_dummy;
+
+    if (tensor_in->backend != GGML_BACKEND_CPU) {
         // for any mmap solution we can actually set the CPU data of a tensor during load even if it's GPU offloaded
         // this shouldn't have a negative effect, worked well in ggllm, saves the need of tensor_get operations for weights
-        if (tensor->buffer == NULL) {
+        if (tensor_in->buffer == NULL) {
             printf("ggml_printTensorSample: tensor buffer is NULL\n");
             return;
         }
-        tensor_data = (char *) malloc(ggml_nbytes(tensor));
-        ggml_backend_tensor_get(tensor, tensor_data, 0, ggml_nbytes(tensor));
+        tensor->data = (char *) malloc(ggml_nbytes(tensor_in));
+        ggml_backend_tensor_get(tensor_in, tensor->data, 0, ggml_nbytes(tensor_in));
+        memcpy(tensor->name, tensor_in->name, sizeof(tensor->name));
+        tensor->type = tensor_in->type;
+        tensor->ne[0] = tensor_in->ne[0];
+        tensor->ne[1] = tensor_in->ne[1];
+        tensor->ne[2] = tensor_in->ne[2];
+        tensor->ne[3] = tensor_in->ne[3];
+        tensor->nb[0] = tensor_in->nb[0];
+        tensor->nb[1] = tensor_in->nb[1];
+        tensor->nb[2] = tensor_in->nb[2];
+        tensor->nb[3] = tensor_in->nb[3];
+        tensor->backend = GGML_BACKEND_CPU;
+        tensor->op = tensor_in->op;
+        tensor->view_offs = tensor_in->view_offs;
+        tensor->view_src = tensor_in->view_src;
     } else
     {
-        tensor_data = tensor->data;
-        if (tensor_data == NULL) {
+        tensor = tensor_in;
+        if (tensor->data == NULL) {
             printf("ggml_printTensorSample: tensor data is NULL\n");
             return;
         }
@@ -1876,7 +1934,8 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
     if (n_dims == 1) {
         printf("| 1: ");
         for(int i = 0; i < tensor->ne[0] && i < MAX_ELEMENTS_ROW; i++){
-            printf("%11.3g, ",  *(double *)((char *) tensor_data + i*tensor->nb[0]));
+            ggml_print_f32_index(tensor, i, 0, 0, 0);
+            if(i == MAX_ELEMENTS_ROW - 1 && tensor->ne[0] > MAX_ELEMENTS_ROW) printf(", ..");
         }
         if(MAX_ELEMENTS_ROW < tensor->ne[0]) printf(", ..");
         printf("\n%s", sep);
@@ -1885,7 +1944,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
         for(int i = 0; i < tensor->ne[0] && i < MAX_ELEMENTS_ROW; i++){
             printf("| %d: ", i+1);
             for(int j = 0; j < tensor->ne[1] && j < MAX_ELEMENTS_COL; j++){
-                printf("%11.4g ",  *(double *)((char *) tensor_data + i*tensor->nb[0] + j*tensor->nb[1]));
+                ggml_print_f32_index(tensor, i, j, 0, 0);
                 if(j == MAX_ELEMENTS_COL - 1 && tensor->ne[1] > MAX_ELEMENTS_COL) printf(", ..");
             }
             printf("\n");
@@ -1898,7 +1957,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
             for(int j = 0; j < tensor->ne[1] && j < MAX_ELEMENTS_COL; j++){
                 printf("[");
                 for(int k = 0; k < tensor->ne[2] && k < MAX_ELEMENTS_LAYER; k++){
-                    printf("%11.4g",  *(double *)((char *) tensor_data + i*tensor->nb[0] + j*tensor->nb[1] + k*tensor->nb[2]));
+                    ggml_print_f32_index(tensor, i, j, k, 0);
                     if(k < tensor->ne[2] - 1 && k < MAX_ELEMENTS_LAYER - 1)
                         printf(", ");
                 }
@@ -1917,7 +1976,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
                 for(int j = 0; j < tensor->ne[2] && j < MAX_ELEMENTS_COL; j++){
                     printf("[");
                     for(int k = 0; k < tensor->ne[3] && k < MAX_ELEMENTS_LAYER; k++){
-                        printf("%11.4f",  *(double *)((char *) tensor_data + batch*tensor->nb[0] + i*tensor->nb[1] + j*tensor->nb[2] + k*tensor->nb[3]));
+                        ggml_print_f32_index(tensor, batch, i, j, k);
                         if(k < tensor->ne[3] - 1 && k < MAX_ELEMENTS_LAYER - 1)
                             printf(", ");
                     }
@@ -1931,7 +1990,7 @@ void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tenso
         }
     }
     if (tensor->backend != GGML_BACKEND_CPU)
-        free(tensor_data);
+        free(tensor->data);
 }
 
 void ggml_tensor_printf(const struct ggml_tensor *tensor, char *prefix, int line,  bool extended, bool print_sample) {
