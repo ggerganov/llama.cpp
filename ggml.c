@@ -20667,4 +20667,12 @@ int ggml_cpu_has_vsx(void) {
 #endif
 }
 
+int ggml_cpu_has_matmul_int8(void) {
+#if defined(__ARM_FEATURE_MATMUL_INT8)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 ////////////////////////////////////////////////////////////////////////////////
