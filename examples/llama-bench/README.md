@@ -23,19 +23,23 @@ usage: ./llama-bench [options]
 
 options:
   -h, --help
-  -m, --model <filename>            (default: models/7B/ggml-model-q4_0.gguf)
-  -p, --n-prompt <n>                (default: 512)
-  -n, --n-gen <n>                   (default: 128)
-  -b, --batch-size <n>              (default: 512)
-  --memory-f32 <0|1>                (default: 0)
-  -t, --threads <n>                 (default: 16)
-  -ngl N, --n-gpu-layers <n>        (default: 99)
-  -mg i, --main-gpu <i>             (default: 0)
-  -mmq, --mul-mat-q <0|1>           (default: 1)
-  -ts, --tensor_split <ts0/ts1/..>
-  -r, --repetitions <n>             (default: 5)
-  -o, --output <csv|json|md|sql>    (default: md)
-  -v, --verbose                     (default: 0)
+  -m, --model <filename>              (default: models/7B/ggml-model-q4_0.gguf)
+  -p, --n-prompt <n>                  (default: 512)
+  -n, --n-gen <n>                     (default: 128)
+  -b, --batch-size <n>                (default: 512)
+  -ctk <t>, --cache-type-k <t>        (default: f16)
+  -ctv <t>, --cache-type-v <t>        (default: f16)
+  -t, --threads <n>                   (default: 112)
+  -ngl, --n-gpu-layers <n>            (default: 99)
+  -sm, --split-mode <none|layer|row>  (default: layer)
+  -mg, --main-gpu <i>                 (default: 0)
+  -nkvo, --no-kv-offload <0|1>        (default: 0)
+  -mmp, --mmap <0|1>                  (default: 1)
+  -mmq, --mul-mat-q <0|1>             (default: 1)
+  -ts, --tensor_split <ts0/ts1/..>    (default: 0)
+  -r, --repetitions <n>               (default: 5)
+  -o, --output <csv|json|md|sql>      (default: md)
+  -v, --verbose                       (default: 0)
 
 Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.
 ```
@@ -50,6 +54,10 @@ With the exception of `-r`, `-o` and `-v`, all options can be specified multiple
 Each test is repeated the number of times given by `-r`, and the results are averaged. The results are given in average tokens per second (t/s) and standard deviation. Some output formats (e.g. json) also include the individual results of each repetition.
 
 For a description of the other options, see the [main example](../main/README.md).
+
+Note:
+
+- When using SYCL backend, there would be hang issue in some cases. Please set `--mmp 0`.
 
 ## Examples
 

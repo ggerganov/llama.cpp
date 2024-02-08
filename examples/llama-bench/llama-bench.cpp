@@ -20,6 +20,7 @@
 #include "llama.h"
 #include "common.h"
 #include "ggml-cuda.h"
+#include "ggml-sycl.h"
 
 // utils
 static uint64_t get_time_ns() {
@@ -121,6 +122,22 @@ static std::string get_gpu_info() {
         }
     }
 #endif
+#ifdef GGML_USE_SYCL
+    int device_list[GGML_SYCL_MAX_DEVICES];
+    ggml_sycl_get_gpu_list(device_list, GGML_SYCL_MAX_DEVICES);
+
+    for (int i = 0; i < GGML_SYCL_MAX_DEVICES; i++) {
+        if (device_list[i] >0 ){
+            char buf[128];
+            ggml_sycl_get_device_description(i, buf, sizeof(buf));
+            id += buf;
+            id += "/";
+        }
+    }
+    if (id.length() >2 ) {
+        id.pop_back();
+    }
+#endif
     // TODO: other backends
     return id;
 }
@@ -160,7 +177,8 @@ struct cmd_params {
     std::vector<int> main_gpu;
     std::vector<bool> no_kv_offload;
     std::vector<bool> mul_mat_q;
-    std::vector<std::array<float, LLAMA_MAX_DEVICES>> tensor_split;
+    std::vector<std::vector<float>> tensor_split;
+    std::vector<bool> use_mmap;
     int reps;
     bool verbose;
     output_formats output_format;
@@ -179,7 +197,8 @@ static const cmd_params cmd_params_defaults = {
     /* main_gpu      */ {0},
     /* no_kv_offload */ {false},
     /* mul_mat_q     */ {true},
-    /* tensor_split  */ {{}},
+    /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
+    /* use_mmap      */ {true},
     /* reps          */ 5,
     /* verbose       */ false,
     /* output_format */ MARKDOWN
@@ -201,6 +220,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -sm, --split-mode <none|layer|row>  (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
+    printf("  -mmp, --mmap <0|1>                  (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
     printf("  -mmq, --mul-mat-q <0|1>             (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
@@ -370,6 +390,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<bool>(argv[i], split_delim);
             params.mul_mat_q.insert(params.mul_mat_q.end(), p.begin(), p.end());
+        } else if (arg == "-mmp" || arg == "--mmap") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = split<bool>(argv[i], split_delim);
+            params.use_mmap.insert(params.use_mmap.end(), p.begin(), p.end());
         } else if (arg == "-ts" || arg == "--tensor-split") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -380,10 +407,10 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 const std::regex regex{R"([;/]+)"};
                 std::sregex_token_iterator it{ts.begin(), ts.end(), regex, -1};
                 std::vector<std::string> split_arg{it, {}};
-                GGML_ASSERT(split_arg.size() <= LLAMA_MAX_DEVICES);
+                GGML_ASSERT(split_arg.size() <= llama_max_devices());
 
-                std::array<float, LLAMA_MAX_DEVICES> tensor_split;
-                for (size_t i = 0; i < LLAMA_MAX_DEVICES; ++i) {
+                std::vector<float> tensor_split(llama_max_devices());
+                for (size_t i = 0; i < llama_max_devices(); ++i) {
                     if (i < split_arg.size()) {
                         tensor_split[i] = std::stof(split_arg[i]);
                     } else {
@@ -441,6 +468,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.no_kv_offload.empty()){ params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
     if (params.mul_mat_q.empty())    { params.mul_mat_q = cmd_params_defaults.mul_mat_q; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
+    if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
 
     return params;
@@ -459,7 +487,8 @@ struct cmd_params_instance {
     int main_gpu;
     bool no_kv_offload;
     bool mul_mat_q;
-    std::array<float, LLAMA_MAX_DEVICES> tensor_split;
+    std::vector<float> tensor_split;
+    bool use_mmap;
 
     llama_model_params to_llama_mparams() const {
         llama_model_params mparams = llama_model_default_params();
@@ -468,6 +497,7 @@ struct cmd_params_instance {
         mparams.split_mode = split_mode;
         mparams.main_gpu = main_gpu;
         mparams.tensor_split = tensor_split.data();
+        mparams.use_mmap = use_mmap;
 
         return mparams;
     }
@@ -477,6 +507,7 @@ struct cmd_params_instance {
                n_gpu_layers == other.n_gpu_layers &&
                split_mode == other.split_mode &&
                main_gpu == other.main_gpu &&
+               use_mmap == other.use_mmap &&
                tensor_split == other.tensor_split;
     }
 
@@ -503,6 +534,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & sm : params.split_mode)
     for (const auto & mg : params.main_gpu)
     for (const auto & ts : params.tensor_split)
+    for (const auto & mmp : params.use_mmap)
     for (const auto & nb : params.n_batch)
     for (const auto & tk : params.type_k)
     for (const auto & tv : params.type_v)
@@ -527,6 +559,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .no_kv_offload= */ nkvo,
                 /* .mul_mat_q    = */ mmq,
                 /* .tensor_split = */ ts,
+                /* .use_mmap     = */ mmp,
             };
             instances.push_back(instance);
         }
@@ -549,6 +582,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .no_kv_offload= */ nkvo,
                 /* .mul_mat_q    = */ mmq,
                 /* .tensor_split = */ ts,
+                /* .use_mmap     = */ mmp,
             };
             instances.push_back(instance);
         }
@@ -562,7 +596,10 @@ struct test {
     static const int build_number;
     static const bool cuda;
     static const bool opencl;
+    static const bool vulkan;
+    static const bool kompute;
     static const bool metal;
+    static const bool sycl;
     static const bool gpu_blas;
     static const bool blas;
     static const std::string cpu_info;
@@ -580,7 +617,8 @@ struct test {
     int main_gpu;
     bool no_kv_offload;
     bool mul_mat_q;
-    std::array<float, LLAMA_MAX_DEVICES> tensor_split;
+    std::vector<float> tensor_split;
+    bool use_mmap;
     int n_prompt;
     int n_gen;
     std::string test_time;
@@ -603,6 +641,7 @@ struct test {
         no_kv_offload = inst.no_kv_offload;
         mul_mat_q = inst.mul_mat_q;
         tensor_split = inst.tensor_split;
+        use_mmap = inst.use_mmap;
         n_prompt = inst.n_prompt;
         n_gen = inst.n_gen;
         // RFC 3339 date-time format
@@ -643,8 +682,17 @@ struct test {
         if (opencl) {
             return "OpenCL";
         }
+        if (vulkan) {
+            return "Vulkan";
+        }
+        if (kompute) {
+            return "Kompute";
+        }
         if (metal) {
             return "Metal";
+        }
+        if (sycl) {
+            return GGML_SYCL_NAME;
         }
         if (gpu_blas) {
             return "GPU BLAS";
@@ -652,19 +700,20 @@ struct test {
         if (blas) {
             return "BLAS";
         }
+
         return "CPU";
     }
 
     static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {
             "build_commit", "build_number",
-            "cuda", "opencl", "metal", "gpu_blas", "blas",
+            "cuda", "opencl", "vulkan", "kompute", "metal", "sycl", "gpu_blas", "blas",
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_threads", "type_k", "type_v",
             "n_gpu_layers", "split_mode",
             "main_gpu", "no_kv_offload",
-            "mul_mat_q", "tensor_split",
+            "mul_mat_q", "tensor_split", "use_mmap",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts"
@@ -682,8 +731,9 @@ struct test {
             field == "avg_ns" || field == "stddev_ns") {
             return INT;
         }
-        if (field == "cuda" || field == "opencl" || field == "metal" || field == "gpu_blas" || field == "blas" ||
-            field == "f16_kv" || field == "no_kv_offload" || field == "mul_mat_q") {
+        if (field == "cuda" || field == "opencl"  || field == "vulkan" || field == "kompute" || field == "metal" ||
+            field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
+            field == "mul_mat_q" || field == "use_mmap") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -695,7 +745,7 @@ struct test {
     std::vector<std::string> get_values() const {
         std::string tensor_split_str;
         int max_nonzero = 0;
-        for (int i = 0; i < LLAMA_MAX_DEVICES; i++) {
+        for (size_t i = 0; i < llama_max_devices(); i++) {
             if (tensor_split[i] > 0) {
                 max_nonzero = i;
             }
@@ -710,13 +760,14 @@ struct test {
         }
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
-            std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
+            std::to_string(cuda), std::to_string(opencl), std::to_string(vulkan), std::to_string(vulkan),
+            std::to_string(metal), std::to_string(sycl), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_threads), ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
             std::to_string(main_gpu), std::to_string(no_kv_offload),
-            std::to_string(mul_mat_q), tensor_split_str,
+            std::to_string(mul_mat_q), tensor_split_str, std::to_string(use_mmap),
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -738,9 +789,12 @@ const std::string test::build_commit = LLAMA_COMMIT;
 const int         test::build_number = LLAMA_BUILD_NUMBER;
 const bool        test::cuda         = !!ggml_cpu_has_cublas();
 const bool        test::opencl       = !!ggml_cpu_has_clblast();
+const bool        test::vulkan       = !!ggml_cpu_has_vulkan();
+const bool        test::kompute      = !!ggml_cpu_has_kompute();
 const bool        test::metal        = !!ggml_cpu_has_metal();
 const bool        test::gpu_blas     = !!ggml_cpu_has_gpublas();
 const bool        test::blas         = !!ggml_cpu_has_blas();
+const bool        test::sycl         = !!ggml_cpu_has_sycl();
 const std::string test::cpu_info     = get_cpu_info();
 const std::string test::gpu_info     = get_gpu_info();
 
@@ -883,6 +937,9 @@ struct markdown_printer : public printer {
         if (field == "no_kv_offload") {
             return "nkvo";
         }
+        if (field == "use_mmap") {
+            return "mmap";
+        }
         if (field == "tensor_split") {
             return "ts";
         }
@@ -891,43 +948,46 @@ struct markdown_printer : public printer {
 
     void print_header(const cmd_params & params) override {
         // select fields to print
-        fields.push_back("model");
-        fields.push_back("size");
-        fields.push_back("params");
-        fields.push_back("backend");
+        fields.emplace_back("model");
+        fields.emplace_back("size");
+        fields.emplace_back("params");
+        fields.emplace_back("backend");
         bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
         if (!is_cpu_backend) {
-            fields.push_back("n_gpu_layers");
+            fields.emplace_back("n_gpu_layers");
         }
         if (params.n_threads.size() > 1 || params.n_threads != cmd_params_defaults.n_threads || is_cpu_backend) {
-            fields.push_back("n_threads");
+            fields.emplace_back("n_threads");
         }
         if (params.n_batch.size() > 1 || params.n_batch != cmd_params_defaults.n_batch) {
-            fields.push_back("n_batch");
+            fields.emplace_back("n_batch");
         }
         if (params.type_k.size() > 1 || params.type_k != cmd_params_defaults.type_k) {
-            fields.push_back("type_k");
+            fields.emplace_back("type_k");
         }
         if (params.type_v.size() > 1 || params.type_v != cmd_params_defaults.type_v) {
-            fields.push_back("type_v");
+            fields.emplace_back("type_v");
         }
         if (params.main_gpu.size() > 1 || params.main_gpu != cmd_params_defaults.main_gpu) {
-            fields.push_back("main_gpu");
+            fields.emplace_back("main_gpu");
         }
         if (params.split_mode.size() > 1 || params.split_mode != cmd_params_defaults.split_mode) {
-            fields.push_back("split_mode");
+            fields.emplace_back("split_mode");
         }
         if (params.mul_mat_q.size() > 1 || params.mul_mat_q != cmd_params_defaults.mul_mat_q) {
-            fields.push_back("mul_mat_q");
+            fields.emplace_back("mul_mat_q");
         }
         if (params.no_kv_offload.size() > 1 || params.no_kv_offload != cmd_params_defaults.no_kv_offload) {
-            fields.push_back("no_kv_offload");
+            fields.emplace_back("no_kv_offload");
         }
         if (params.tensor_split.size() > 1 || params.tensor_split != cmd_params_defaults.tensor_split) {
-            fields.push_back("tensor_split");
+            fields.emplace_back("tensor_split");
         }
-        fields.push_back("test");
-        fields.push_back("t/s");
+        if (params.use_mmap.size() > 1 || params.use_mmap != cmd_params_defaults.use_mmap) {
+            fields.emplace_back("use_mmap");
+        }
+        fields.emplace_back("test");
+        fields.emplace_back("t/s");
 
         fprintf(fout, "|");
         for (const auto & field : fields) {

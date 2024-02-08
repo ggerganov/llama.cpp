@@ -46,7 +46,7 @@ Formatting considerations:
 - To define multiple "reverse_prompt" properties simultaneously the expected format is a list of strings.
 - To define a tensor split, pass a list of floats.
 """
-usage = "run_with_preset.py [-h] [yaml_files ...] [--<ARG_NAME> <ARG_VALUE> ...]"
+usage = "run-with-preset.py [-h] [yaml_files ...] [--<ARG_NAME> <ARG_VALUE> ...]"
 epilog = ("  --<ARG_NAME> specify additional CLI ars to be passed to the binary (override all preset files). "
           "Unknown args will be ignored.")
 
