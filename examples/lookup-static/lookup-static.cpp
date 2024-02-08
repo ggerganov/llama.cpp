@@ -77,19 +77,16 @@ int main(int argc, char ** argv){
         const llama_token value = inp_static[i + 2];
 
         auto frequency_it = hashmap.find(key);
-        std::unordered_map<llama_token, int> frequency;
         if (frequency_it != hashmap.end()) {
-            frequency = frequency_it->second;
-        }
-
-        auto token_it = frequency.find(value);
-        if (token_it != frequency.end()) {
-            token_it->second++;
+            auto token_it = frequency_it->second.find(value);
+            if (token_it != frequency_it->second.end()) {
+                token_it->second++;
+            } else {
+                frequency_it->second.emplace(std::make_pair(value, 1));
+            }
         } else {
+            std::unordered_map<llama_token, int> frequency;
             frequency.emplace(std::make_pair(value, 1));
-        }
-
-        if (frequency_it == hashmap.end()) {
             hashmap.emplace(std::make_pair(key, frequency));
         }
     }
