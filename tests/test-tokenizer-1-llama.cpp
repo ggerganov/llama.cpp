@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     llama_model * model;
     llama_context * ctx;
 
-    llama_backend_init(false);
+    llama_backend_init(GGML_NUMA_STRATEGY_DISABLED);
 
     // load the vocab
     {
