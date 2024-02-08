@@ -132,7 +132,7 @@ static void sampler_queue(
     const float         temp              = params.temp;
     const float         dynatemp_range    = params.dynatemp_range;
     const float         dynatemp_exponent = params.dynatemp_exponent;
-    const int32_t       top_k             = params.top_k <= 0 ? n_vocab : params.top_k;
+    const int32_t       top_k             = params.top_k;
     const float         top_p             = params.top_p;
     const float         min_p             = params.min_p;
     const float         tfs_z             = params.tfs_z;
