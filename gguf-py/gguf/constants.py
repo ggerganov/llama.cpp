@@ -50,6 +50,7 @@ class Keys:
         VALUE_LENGTH      = "{arch}.attention.value_length"
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
+        CAUSAL            = "{arch}.attention.causal"
 
     class Rope:
         DIMENSION_COUNT      = "{arch}.rope.dimension_count"
