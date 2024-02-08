@@ -2286,7 +2286,8 @@ extern "C" {
 #endif
     typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k);
-    typedef void (*ggml_vec_dot_t)   (const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
+    typedef void (*ggml_vec_dot_t)   (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x, size_t bx,
+                                      const void * GGML_RESTRICT y, size_t by, int nrc);
 
     typedef struct {
         const char      * type_name;
@@ -2298,6 +2299,7 @@ extern "C" {
         ggml_from_float_t from_float_reference;
         ggml_vec_dot_t    vec_dot;
         enum ggml_type    vec_dot_type;
+        int64_t           nrows; // number of rows to process simultaneously;
     } ggml_type_traits_t;
 
     GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
