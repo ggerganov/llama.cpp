@@ -64,6 +64,7 @@ int main(int argc, char ** argv){
     inp_static = ::llama_tokenize(ctx, static_input,  add_bos, true);
 
     constexpr int n_considered = 2;
+    constexpr float frequency_threshold = 0.50f;
 
     std::unordered_map<uint64_t, std::unordered_map<llama_token, int>> hashmap = {};
     for (size_t i = 0; i < inp_static.size()-n_considered; ++i) {
@@ -99,13 +100,18 @@ int main(int argc, char ** argv){
 
         llama_token max_token = -1;
         int max_frequency = 0;
+        int frequency_sum = 0;
         for (auto item2 : frequency) {
             if (item2.second > max_frequency) {
                 max_token = item2.first;
                 max_frequency = item2.second;
             }
+            frequency_sum += item2.second;
         }
         GGML_ASSERT(max_token != -1);
+        if (max_frequency < frequency_threshold*frequency_sum) {
+            continue;
+        }
 
         hashmap_max.emplace(std::make_pair(key, max_token));
     }
