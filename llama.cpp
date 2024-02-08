@@ -7162,6 +7162,8 @@ static struct ggml_cgraph * llama_build_graph(
 
     llm.free();
 
+    ggml_graph_optimize(result);
+
     return result;
 }
 

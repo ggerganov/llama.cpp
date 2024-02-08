@@ -481,6 +481,8 @@ extern "C" {
     };
 
     enum ggml_unary_op {
+        GGML_UNARY_OP_IDENTITY,
+
         GGML_UNARY_OP_ABS,
         GGML_UNARY_OP_SGN,
         GGML_UNARY_OP_NEG,
@@ -1877,6 +1879,7 @@ extern "C" {
     GGML_API void                 ggml_graph_cpy         (struct ggml_cgraph * src, struct ggml_cgraph * dst);
     GGML_API void                 ggml_graph_reset       (struct ggml_cgraph * cgraph);  // zero grads
     GGML_API void                 ggml_graph_clear       (struct ggml_cgraph * cgraph);
+    GGML_API void                 ggml_graph_optimize    (struct ggml_cgraph * cgraph);
 
     GGML_API size_t ggml_graph_overhead(void);
     GGML_API size_t ggml_graph_overhead_custom(size_t size, bool grads);
