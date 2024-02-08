@@ -211,6 +211,8 @@ class Model:
             return MiniCPMModel
         if model_architecture == "BertModel":
             return BertModel
+        if model_architecture == "NomicBertModel":
+            return NomicBertModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -268,6 +270,8 @@ class Model:
             return gguf.MODEL_ARCH.MINICPM
         if arch == "BertModel":
             return gguf.MODEL_ARCH.BERT
+        if arch == "NomicBertModel":
+            return gguf.MODEL_ARCH.NOMIC_BERT
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -1637,6 +1641,7 @@ class BertModel(Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.block_count = self.hparams["num_hidden_layers"]
+        self.vocab_size = None
 
     def set_gguf_parameters(self):
         # TODO(cebtenzzre): merge with parent class
@@ -1659,6 +1664,7 @@ class BertModel(Model):
         vocab = HfVocab(path, added_tokens_path)
         tokens, scores, toktypes = zip(*vocab.all_tokens())
         assert len(tokens) == vocab.vocab_size
+        self.vocab_size = vocab.vocab_size
 
         # we need this to validate the size of the token_type embeddings
         # though currently we are passing all zeros to the token_type embeddings
@@ -1722,6 +1728,47 @@ class BertModel(Model):
                 data = data.astype(new_dtype)
 
             self.gguf_writer.add_tensor(new_name, data)
+
+
+class NomicBertModel(BertModel):
+    def __init__(self, *args, **kwargs):
+        Model.__init__(self, *args, **kwargs)
+        self.block_count = self.hparams["n_layer"]
+        assert self.hparams["activation_function"] == "swiglu"
+        assert self.hparams["causal"] is False  # True is untested
+        assert self.hparams["qkv_proj_bias"] is False
+        assert self.hparams["mlp_fc1_bias"] is False
+        assert self.hparams["mlp_fc2_bias"] is False
+        assert self.hparams["prenorm"] is False
+        assert self.hparams["rotary_emb_fraction"] == 1.0
+        assert self.hparams["rotary_emb_interleaved"] is False
+        assert self.hparams["rotary_emb_scale_base"] is None
+
+    def set_gguf_parameters(self):
+        # TODO(cebtenzzre): merge with parent class
+        self.gguf_writer.add_name(self.dir_model.name)
+        # the HF config claims n_ctx=8192, but it uses RoPE scaling
+        self.gguf_writer.add_context_length(2048)
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_inner"])
+        self.gguf_writer.add_block_count(self.block_count)
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_causal_attention(self.hparams["causal"])
+        self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
+        self.gguf_writer.add_pooling_layer(True)
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def get_tensors(self):
+        for name, data in super().get_tensors():
+            # Nomic Embed's token embeddings tensor is padded, but llama.cpp wants tensor sizes to match exactly.
+            if name == 'embeddings.word_embeddings.weight' and data.shape[1] != self.vocab_size:
+                rounded_vocab_size = (self.vocab_size + 7) // 8 * 8
+                print(data.shape)
+                print(rounded_vocab_size, self.hparams["n_embd"])
+                assert data.shape == (rounded_vocab_size, self.hparams["n_embd"])
+                data = data[:self.vocab_size, :]
+            yield name, data
 
 
 ###### CONVERSION LOGIC ######
