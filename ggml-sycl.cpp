@@ -12148,7 +12148,8 @@ inline void ggml_sycl_op_dequantize_mul_mat_vec(
     const int64_t src1_ncols, const int64_t src1_padded_row_size,
     const dpct::queue_ptr &stream) {
 
-    const int64_t ne00 = src0->ne[0];
+    GGML_TENSOR_BINARY_OP_LOCALS
+
     const int64_t row_diff = row_high - row_low;
 
     // on some GPUs it is faster to convert src1 to half and to use half precision intrinsics
@@ -12167,8 +12168,9 @@ inline void ggml_sycl_op_dequantize_mul_mat_vec(
         } else {
             src1_dfloat = src1_dfloat_a.alloc(ne00);
             ggml_cpy_f32_f16_sycl((const char *)src1_ddf_i, (char *)src1_dfloat,
-                                  ne00, ne00, 1, sizeof(float), 0, 0, ne00, 1,
-                                  sizeof(sycl::half), 0, 0, stream);
+                                  ne00, ne00, ne01, ne02, nb00, nb01, nb02,
+                                  nb03, ne10, ne11, ne12, nb10, nb11, nb12,
+                                  nb13, stream);
         }
     }
 #else
