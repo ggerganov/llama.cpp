@@ -1588,6 +1588,7 @@ class BertModel(Model):
         self.gguf_writer.add_block_count(self.block_count)
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
+        self.gguf_writer.add_bool("bert.attention.causal", False)
         self.gguf_writer.add_file_type(self.ftype)
 
     def set_vocab(self):

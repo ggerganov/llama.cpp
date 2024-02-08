@@ -263,6 +263,7 @@ enum llm_kv {
     LLM_KV_ATTENTION_VALUE_LENGTH,
     LLM_KV_ATTENTION_LAYERNORM_EPS,
     LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,
+    LLM_KV_ATTENTION_CAUSAL,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
@@ -319,6 +320,7 @@ static std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_VALUE_LENGTH,        "%s.attention.value_length"           },
     { LLM_KV_ATTENTION_LAYERNORM_EPS,       "%s.attention.layer_norm_epsilon"     },
     { LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,   "%s.attention.layer_norm_rms_epsilon" },
+    { LLM_KV_ATTENTION_CAUSAL,              "%s.attention.causal"                 },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
@@ -3033,8 +3035,8 @@ static void llm_load_hparams(
         case LLM_ARCH_BERT:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
+                ml.get_key(LLM_KV_ATTENTION_CAUSAL, hparams.causal_attn);
                 ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
-                hparams.causal_attn = false;
 
                 switch (hparams.n_embd) {
                     case 384: // MiniLM
@@ -7601,9 +7603,11 @@ static int llama_decode_internal(
     if (!lctx.embedding.empty()) {
         auto & embedding_out = lctx.embedding;
 
+        const int64_t embed_pos = res ? n_embd * (n_tokens-1) : 0;
+
         embedding_out.resize(n_embd);
         ggml_backend_t embeddings_backend = ggml_backend_sched_get_node_backend(lctx.sched, embeddings);
-        ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), 0, n_embd*sizeof(float));
+        ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), embed_pos*sizeof(float), n_embd*sizeof(float));
         ggml_backend_synchronize(embeddings_backend);
     }
 
