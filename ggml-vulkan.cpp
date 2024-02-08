@@ -744,6 +744,8 @@ static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t siz
     }
 
     if (memory_type_index >= mem_props.memoryTypeCount) {
+        ctx->device.lock()->device.destroyBuffer(buf->buffer);
+        buf->size = 0;
         throw vk::OutOfDeviceMemoryError("No suitable memory type found");
     }
 
