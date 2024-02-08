@@ -15,9 +15,14 @@
 using json = nlohmann::json;
 
 inline static json oaicompat_completion_params_parse(
-    const json &body /* openai api json semantics */)
+    const json &body, /* openai api json semantics */
+    const std::string &chat_template)
 {
     json llama_params;
+    bool using_chatml = chat_template == "chatml";
+    std::string formated_prompt = using_chatml
+        ? format_chatml(body["messages"])  // OpenAI 'messages' to chatml
+        : format_mistral(body["messages"]); // OpenAI 'messages' to mistral format
 
     llama_params["__oaicompat"] = true;
 
@@ -30,7 +35,7 @@ inline static json oaicompat_completion_params_parse(
     // https://platform.openai.com/docs/api-reference/chat/create
     llama_sampling_params default_sparams;
     llama_params["model"]             = json_value(body, "model", std::string("unknown"));
-    llama_params["prompt"]            = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
+    llama_params["prompt"]            = formated_prompt;
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
     llama_params["temperature"]       = json_value(body, "temperature", 0.0);
     llama_params["top_k"]             = json_value(body, "top_k", default_sparams.top_k);
