@@ -21,7 +21,7 @@ After building, run: `./llava-cli` to see the usage. For example:
 
 ## Model conversion
 
-- Clone `llava-v15-7b`` and `clip-vit-large-patch14-336`` locally:
+- Clone `llava-v15-7b` and `clip-vit-large-patch14-336` locally:
 
 ```sh
 git clone https://huggingface.co/liuhaotian/llava-v1.5-7b
