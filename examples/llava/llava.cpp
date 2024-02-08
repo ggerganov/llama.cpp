@@ -6,27 +6,261 @@
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+#include <numeric>
 
 #include "base64.hpp"
 
-static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos) {
-    clip_image_f32 * img_res = clip_image_f32_init();
-    if (!clip_image_preprocess(ctx_clip, img, img_res, /*pad2square =*/ true)) {
-        fprintf(stderr, "%s: unable to preprocess image\n", __func__);
-        clip_image_f32_free(img_res);
-        return false;
+// Take the image segments in a grid configuration and return the embeddings and the number of embeddings into preallocated memory (image_embd_out)
+static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_embd_v, struct clip_image_grid_shape grid_shape, float * image_embd_out, int * n_img_pos_out) {
+    struct temp_model {
+        struct ggml_tensor *newline;
+        struct ggml_context * ctx; 
+    } model;
+
+    auto & vparams = clip_get_vision_hparams(ctx_clip);
+    auto num_patches_per_side = vparams.image_size / vparams.patch_size; // 336 / 14 = 24 - used for embedding-patching boxes (24*24 = 576 patches)
+    int num_patches_width = grid_shape.first; // grid 1-4
+    int num_patches_height = grid_shape.second; // grid 1-4
+    
+    // TODO: size calculation is not calculated - it's only tens of MB
+    size_t ctx_size = 0;
+    {
+        ctx_size += clip_embd_nbytes(ctx_clip) * image_embd_v.size() * 8; // image_features
+        ctx_size += 1024*1024 * ggml_type_size(GGML_TYPE_F32); // 
+    }
+    
+    struct ggml_init_params params {
+        /*.mem_size   =*/ ctx_size,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ false, // NOTE: this should be false when using the legacy API
+    };
+
+        // Python reference for full unpad:
+        // base_image_feature = image_feature[0]
+        // image_feature = image_feature[1:]
+        // image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
+        // image_feature = image_feature.flatten(1, 2).flatten(2, 3)
+        // image_feature = unpad_image(image_feature, image_sizes[image_idx])
+        // image_feature = torch.cat((
+        //     image_feature,
+        //     self.model.image_newline[:, None, None].expand(*image_feature.shape[:-1], 1)
+        // ), dim=-1)
+        // image_feature = image_feature.flatten(1, 2).transpose(0, 1)
+        // image_feature = torch.cat((base_image_feature, image_feature), dim=0)
+        
+        // embeddings -> tokens -> 24 x 24
+        /**
+         * We now have two options: unpad or no unpad - unpad removes tokens for faster llm eval
+         * In terms of result quality it appears to make no difference, so we'll start with the easier approach given 5D tensors are not supported in ggml yet
+         * Without unpad we have to split the sub-image embeddings into patches of 24 features each and permute them.
+         * Once all images are processed to prepended the base_image_features without any changes.
+         */
+    /**
+        Pytorch reference simplified, modified for ggml compatibility - confirmed identical output in python (for a 2x2 grid image (676x676 scaling))
+        # image_feature = image_feature.view(2, 2, 24, 24, 4096)
+        # image_feature = image_feature.permute(0, 2, 1, 3, 4).contiguous()
+        # image_feature = image_feature.view(2, 24, 2, 24, 4096)
+        # image_feature = image_feature.flatten(0, 3)
+
+        # Reshape to 4D tensor by merging the last two dimensions
+        image_feature = image_feature.view(2, 2, 24, 24*4096)
+        image_feature = image_feature.permute(0, 2, 1, 3).contiguous()
+        image_feature = image_feature.view(-1, 4096)
+     * 
+     */
+    model.ctx = ggml_init(params);
+    
+    ggml_context *ctx_noalloc = ggml_init({2048, NULL, true});
+    // struct ggml_tensor * image_features = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip) * (image_embd_v.size() - 1));
+    
+    ggml_tensor *newline_tmp = clip_get_newline_tensor(ctx_clip);
+    model.newline = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, newline_tmp->ne[0]);
+    if (newline_tmp->backend != GGML_BACKEND_CPU) {
+        if (newline_tmp->buffer == NULL) {
+            printf("newline_tmp tensor buffer is NULL\n");
+        }
+        ggml_backend_tensor_get(newline_tmp, model.newline->data, 0, ggml_nbytes(newline_tmp));
+    } else
+    {
+        model.newline->data = newline_tmp->data;
+        if (model.newline->data == NULL) {
+            printf("newline_tmp tensor data is NULL\n");
+        }
     }
 
-    *n_img_pos = clip_n_patches(ctx_clip);
+    struct ggml_tensor * image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, image_embd_v.size() - 1, clip_n_patches(ctx_clip), clip_n_mmproj_embd(ctx_clip));
+    // fill it with the image embeddings, ignoring the first
+    for (int i = 1; i < image_embd_v.size(); i++)
+    {
+        // printf("Copying image_embd_v[%d] to image_features tensor\n", i);
+        size_t offset = (i-1) * clip_embd_nbytes(ctx_clip);
+
+        // for debugging we now try and set the entire tensor row to 0.0001f,0.0002f,0.0003f,0.0004f etc:
+        // float *floatPtr = static_cast<float*>(image_embd_v[i]);
+        // for (int j = 0; j < clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip); j++)
+        // {
+        //     // floatPtr[j] = (j + 1) / 10000.0f;
+        //     int feature = j % clip_n_mmproj_embd(ctx_clip) + 1;
+        //     floatPtr[j] = i + feature / 10000.0f;
+        // }
+        memcpy((uint8_t *)(image_features->data) + offset, image_embd_v[i], clip_embd_nbytes(ctx_clip));
+    }
+    // printf("image_features size = %d\n", clip_embd_nbytes(ctx_clip) * (image_embd_v.size() - 1));
+
+    struct ggml_cgraph  * gf = ggml_new_graph(model.ctx);
+    // image_feature = image_feature.view(num_patch_height, num_patch_width, height, width, -1)
+    size_t size_ele = ggml_type_size(GGML_TYPE_F32);
+    // struct ggml_tensor *dummy = ggml_new_tensor_4d(ctx_noalloc, GGML_TYPE_F32, num_patches_height, num_patches_width, num_patches_per_side, num_patches_per_side * clip_n_mmproj_embd(ctx_clip));
+
+    struct ggml_tensor *image_features_view = ggml_view_4d(model.ctx, image_features, 
+                                                                    num_patches_height, // nb0 : 4 byte für jedes 
+                                                                    num_patches_width, 
+                                                                    num_patches_per_side * num_patches_per_side, 
+                                                                    clip_n_mmproj_embd(ctx_clip), 
+
+                                                                    size_ele * num_patches_height,
+                                                                    size_ele * num_patches_height * num_patches_width,
+                                                                    size_ele * num_patches_height * num_patches_width * num_patches_per_side,
+                                                                    0);
+                                                                
+    struct ggml_tensor *image_features_patchview = ggml_view_4d(model.ctx, image_features, 
+                                                                num_patches_height, 
+                                                                num_patches_width, 
+                                                                num_patches_per_side, 
+                                                                num_patches_per_side * clip_n_mmproj_embd(ctx_clip),
+                                                                
+                                                                size_ele * num_patches_height,
+                                                                size_ele * num_patches_height * num_patches_width,
+                                                                size_ele * num_patches_height * num_patches_width * num_patches_per_side, 0);
+
+    struct ggml_tensor *permuted_cont = ggml_cont(model.ctx, ggml_permute(model.ctx, image_features_patchview, 0, 2, 1, 3)); 
+    permuted_cont = ggml_cont(model.ctx, ggml_permute(model.ctx, permuted_cont, 0, 2, 1, 3)); // permute back to before - todo: fix bug
+
+    struct ggml_tensor *prepared = ggml_view_2d(model.ctx, permuted_cont, num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side, clip_n_mmproj_embd(ctx_clip), size_ele * num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side, 0);
+    struct ggml_tensor *prepared_cont = ggml_cont(model.ctx, prepared); // not needed
+    // struct ggml_tensor *prepared_cont = prepared; // the view only flattens
+
+    ggml_build_forward_expand(gf, prepared_cont);
+
+    ggml_graph_compute_with_ctx(model.ctx, gf, 1);
+
+    struct ggml_tensor* result = gf->nodes[gf->n_nodes - 1];
+    //  ggml_tensor_printf(image_features,"image_features",__LINE__,false,true);
+    // ggml_tensor_printf(image_features_patchview,"image_features_patchview",__LINE__,false,true);
+    // ggml_tensor_printf(prepared_cont,"prepared_cont",__LINE__,false,true);
+
+    memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as global context
+    // append without newline tokens:
+    // memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip), (float*)prepared_cont->data, clip_embd_nbytes(ctx_clip) * (image_embd_v.size()-1)); // grid patches
+    // append with newline tokens:
+    for (size_t i = 0; i < image_embd_v.size() - 1; ++i) {
+        // we append with +1 offset (base image is prepended)
+        memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip) * (i+1) + model.newline->ne[0] * i,
+            (float*)prepared_cont->data + i * clip_n_mmproj_embd(ctx_clip) * clip_n_patches(ctx_clip),
+            clip_embd_nbytes(ctx_clip));
+        memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip) * (i+2) + model.newline->ne[0] * i ,
+            (float*)model.newline->data,
+            ggml_nbytes(model.newline));
+    }
+
+    size_t newline_tokens = image_embd_v.size()-1;
+    *n_img_pos_out = prepared_cont->ne[0]+clip_n_patches(ctx_clip) + newline_tokens;
+
+    // Debug: Test single segments
+    // Current findings: sending base image, sending a segment embedding all works similar to python
+    // However, permuted embeddings do not work yet (stride issue?)
+    // memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as context
+    // memcpy(image_embd_out, (float*)prepared_cont->data, clip_embd_nbytes(ctx_clip)); // main image as context
+    // *n_img_pos_out=576;
+    
+    ggml_free(model.ctx);
+
+    return true;
+}
+
+
+static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos) {
+    std::vector<clip_image_f32*> img_res_v; // format VectN x H x W x RGB (N x 336 x 336 x 3), so interleaved RGB - different to the python implementation which is N x 3 x 336 x 336
+    if (!clip_image_preprocess(ctx_clip, img, img_res_v, /*pad2square =*/ true)) {
+        fprintf(stderr, "%s: unable to preprocess image\n", __func__);
+        for (auto img_res : img_res_v) {
+            clip_image_f32_free(img_res);
+        }
+        return false;
+    }
 
     const int64_t t_img_enc_start_us = ggml_time_us();
-    bool encoded = clip_image_encode(ctx_clip, n_threads, img_res, image_embd);
-    clip_image_f32_free(img_res);
-    if (!encoded) {
-        fprintf(stderr, "Unable to encode image\n");
+    auto & vparams = clip_get_vision_hparams(ctx_clip);
+    // DEBUG print the "shape" and the first 10 rows and 10 cols of img_res_v in exp format
+    // for (int i = 0; i < img_res_v.size(); i++)
+    // {
+    //     printf("img_res_v[%d] shape: %d x %d\n", i, img_res_v[i]->nx, img_res_v[i]->ny);
+    //     for (int j = 0; j < 10; j++)
+    //     {
+    //         for (int k = 0; k < 10; k++)
+    //         {
+    //             printf("%e ", img_res_v[i]->buf[j*img_res_v[i]->ny + k]);
+    //         }
+    //         printf("\n");
+    //     }
+    // }
 
-        return false;
+    if (strcmp(vparams.mm_patch_merge_type, "spatial_unpad") != 0) 
+    {
+        // flat / default llava-1.5 type embedding
+        *n_img_pos = clip_n_patches(ctx_clip);
+        bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v[0], image_embd); // image_embd shape is 576 x 4096
+        clip_image_f32_free(img_res_v[0]);
+        if (!encoded) {
+            fprintf(stderr, "Unable to encode image\n");
+
+            return false;
+        }
+    } else
+    {
+        // spatial_unpad llava-1.6 type embedding
+        // TODO: CLIP needs batching support - in HF the llm projection is separate after encoding, which might be a solution to quickly get batching working
+        std::vector<float *> image_embd_v;
+        image_embd_v.resize(img_res_v.size());
+        for (int i = 0; i < img_res_v.size(); i++)
+        {
+            image_embd_v[i] = (float *)malloc(clip_embd_nbytes(ctx_clip)); // 576 patches * 4096 embeddings * 4 bytes = 9437184
+            bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v[i], image_embd_v[i]); // image data is in 3x336x336 format and will be converted to 336x336x3 inside
+            clip_image_f32_free(img_res_v[i]);
+            if (!encoded) {
+                fprintf(stderr, "Unable to encode image - spatial_unpad - subimage %d of %d\n", i+1, img_res_v.size());
+                return false;
+            }
+        }
+        const int64_t t_img_enc_batch_us = ggml_time_us();
+        printf("%s: %d segments encoded in %8.2f ms\n", __func__, img_res_v.size(), (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);        
+
+
+        std::vector<std::pair<int, int>> grid_pinpoints;
+        for (int i = 0; i < 32 && vparams.image_grid_pinpoints[i] != 0; i+=2) {
+            grid_pinpoints.push_back({vparams.image_grid_pinpoints[i], vparams.image_grid_pinpoints[i+1]});
+        }
+        img_res_v.clear();
+        struct clip_image_grid_shape grid_shape = get_anyres_image_grid_shape({img->nx,img->ny}, grid_pinpoints, vparams.image_size);
+
+        int n_img_pos_out;
+        handle_patches(ctx_clip, image_embd_v, grid_shape, image_embd, &n_img_pos_out);
+        *n_img_pos = n_img_pos_out;
+
+        for (int i = 0; i < image_embd_v.size(); i++)
+        {
+            free(image_embd_v[i]);
+        }
+        image_embd_v.clear();
+
+        // debug image/segment/normalization content:
+        // clip_image_u8 * tmp = clip_image_u8_init();
+        // clip_image_convert_f32_to_u8(*image_feature, *tmp);
+        // clip_image_save_to_bmp(*tmp, "image_feature.bmp");
+
     }
+    printf("%s: image embedding created: %d tokens\n", __func__, *n_img_pos);
+    
 
     const int64_t t_img_enc_end_us = ggml_time_us();
     float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
@@ -35,6 +269,8 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
     return true;
 }
+
+
 
 bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx * ctx_clip) {
         // make sure that the correct mmproj was used, i.e., compare apples to apples
@@ -48,7 +284,7 @@ bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx *
 }
 
 static bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
-    float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
+    float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*6); // TODO: base on gridsize/llava model
     if (!image_embd) {
         fprintf(stderr, "Unable to allocate memory for image embeddings\n");
         free(image_embd);
@@ -151,7 +387,7 @@ LLAVA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct
         return NULL;
     }
 
-    auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, image_bytes, image_bytes_length);
+    llava_image_embed *embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, image_bytes, image_bytes_length);
     free(image_bytes);
 
     return embed;

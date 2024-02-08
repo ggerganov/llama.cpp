@@ -71,6 +71,11 @@ static std::string format(const char * fmt, ...) {
 #define KEY_IMAGE_STD "clip.vision.image_std"
 #define KEY_PROJ_TYPE "clip.projector_type"
 
+#define KEY_MM_PATCH_MERGE_TYPE "clip.vision.mm_patch_merge_type"
+#define KEY_IMAGE_GRID_PINPOINTS "clip.vision.image_grid_pinpoints"
+#define KEY_IMAGE_CROP_RESOLUTION "clip.vision.image_crop_resolution"
+
+
 //
 // tensor name constants
 //
@@ -94,6 +99,7 @@ static std::string format(const char * fmt, ...) {
 #define TN_LLAVA_PROJ "mm.%d.%s"
 #define TN_MVLM_PROJ_MLP "mm.model.mlp.%d.%s"
 #define TN_MVLM_PROJ_BLOCK "mm.model.mb_block.%d.block.%d.%s"
+#define TN_IMAGE_NEWLINE "model.image_newline"
 
 
 enum projector_type {
@@ -233,26 +239,6 @@ static projector_type clip_projector_type_from_string(const std::string & name) 
     return PROJECTOR_TYPE_UNKNOWN;
 }
 
-//
-// image data
-//
-
-// RGB uint8 image
-struct clip_image_u8 {
-    int nx;
-    int ny;
-
-    std::vector<uint8_t> buf;
-};
-
-// RGB float32 image (NHWC)
-// Memory layout: RGBRGBRGB...
-struct clip_image_f32 {
-    int nx;
-    int ny;
-
-    std::vector<float> buf;
-};
 
 //
 // clip layers
@@ -309,6 +295,7 @@ struct clip_vision_model {
     struct ggml_tensor * mm_0_b = NULL;
     struct ggml_tensor * mm_2_w = NULL;
     struct ggml_tensor * mm_2_b = NULL;
+    struct ggml_tensor * image_newline = NULL;
 
     // Yi type models with mlp+normalization projection
     struct ggml_tensor * mm_1_w = NULL; // Yi type models have 0, 1, 3, 4
@@ -370,6 +357,10 @@ struct clip_ctx {
     ggml_allocr * compute_alloc = NULL;
 };
 
+const struct clip_vision_hparams clip_get_vision_hparams(const struct clip_ctx * ctx) {
+    return ctx->vision_model.hparams;
+}
+
 static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs) {
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
@@ -382,6 +373,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     const int image_size = hparams.image_size;
     const int patch_size = hparams.patch_size;
     const int num_patches = ((image_size / patch_size) * (image_size / patch_size));
+    const int num_patches_per_side = image_size / patch_size;
     const int num_positions = num_patches + 1;
     const int hidden_size = hparams.hidden_size;
     const int n_head = hparams.n_head;
@@ -582,7 +574,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
 
             embeddings = ggml_gelu(ctx0, embeddings);
-
             embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
 
@@ -966,12 +957,37 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         hparams.patch_size     = get_u32(ctx, KEY_PATCH_SIZE);
         hparams.projection_dim = get_u32(ctx, format(KEY_PROJ_DIM, "vision"));
         hparams.eps            = get_f32(ctx, format(KEY_LAYER_NORM_EPS, "vision"));
+        try {
+            int idx = get_key_idx(ctx, KEY_IMAGE_GRID_PINPOINTS);
+            int n = gguf_get_arr_n(ctx, idx);
+            const int32_t * pinpoints = (const int32_t *)gguf_get_arr_data(ctx, idx);
+            for (int i = 0; i < 32 && pinpoints[i] != 0; ++i) {
+                hparams.image_grid_pinpoints[i] = pinpoints[i];
+            }
+            hparams.image_grid_pinpoints[n] = 0;
+        } catch (std::runtime_error & e) {  
+            hparams.image_grid_pinpoints[0]=0;
+        }
+        try {
+            int idx = get_key_idx(ctx, KEY_MM_PATCH_MERGE_TYPE);
+            strcpy(hparams.mm_patch_merge_type, gguf_get_val_str(ctx, idx));
+        } catch (std::runtime_error & e) {
+            strcpy(hparams.mm_patch_merge_type, "flat");
+        }
+        try {
+            hparams.image_crop_resolution = get_u32(ctx, KEY_IMAGE_CROP_RESOLUTION); // llava-1.6
+        }
+        catch(const std::exception& e) {
+            hparams.image_crop_resolution = hparams.image_size;
+        }        
 
         int idx_mean = get_key_idx(ctx, KEY_IMAGE_MEAN);
         int idx_std  = get_key_idx(ctx, KEY_IMAGE_STD);
+        const float * mean_data = (const float *)gguf_get_arr_data(ctx, idx_mean);
+        const float * std_data  = (const float *)gguf_get_arr_data(ctx, idx_std);
         for (int i = 0; i < 3; ++i) {
-            new_clip->image_mean[i] = *((const float *)gguf_get_arr_data(ctx, idx_mean));
-            new_clip->image_std[i]  = *((const float *)gguf_get_arr_data(ctx, idx_std));
+            new_clip->image_mean[i] = mean_data[i];
+            new_clip->image_std[i]  = std_data[i];
         }
 
         if (verbosity >= 2) {
@@ -983,14 +999,30 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             printf("v_projection_dim   %d\n", hparams.projection_dim);
             printf("v_n_head           %d\n", hparams.n_head);
             printf("v_n_layer          %d\n", hparams.n_layer);
+            printf("v_eps              %f\n", hparams.eps);
+            printf("v_image_mean       %f %f %f\n", new_clip->image_mean[0], new_clip->image_mean[1], new_clip->image_mean[2]);
+            printf("v_image_std        %f %f %f\n", new_clip->image_std[0], new_clip->image_std[1], new_clip->image_std[2]);
+            printf("v_image_grid_pinpoints: ");
+            for (int i = 0; i < 32 & hparams.image_grid_pinpoints[i]!=0; ++i) {
+                printf("%d ", hparams.image_grid_pinpoints[i]);
+            }
+            printf("\n");
+            printf("v_mm_patch_merge_type: %s\n", hparams.mm_patch_merge_type);
+
         }
-
-        vision_model.patch_embeddings    = get_tensor(new_clip->ctx_data, TN_PATCH_EMBD);
-        vision_model.class_embedding     = get_tensor(new_clip->ctx_data, TN_CLASS_EMBD);
-        vision_model.position_embeddings = get_tensor(new_clip->ctx_data, format(TN_POS_EMBD, "v"));
-        vision_model.pre_ln_w            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "weight"));
-        vision_model.pre_ln_b            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "bias"));
-
+        try
+        {
+            vision_model.patch_embeddings    = get_tensor(new_clip->ctx_data, TN_PATCH_EMBD);
+            vision_model.class_embedding     = get_tensor(new_clip->ctx_data, TN_CLASS_EMBD);
+            vision_model.position_embeddings = get_tensor(new_clip->ctx_data, format(TN_POS_EMBD, "v"));
+            vision_model.pre_ln_w            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "weight"));
+            vision_model.pre_ln_b            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "bias"));
+        }
+        catch(const std::exception& e)
+        {
+            fprintf(stderr, "%s: failed to load vision model tensors\n", __func__);
+        }
+        
         // LLaVA projection
         if (new_clip->proj_type == PROJECTOR_TYPE_MLP || new_clip->proj_type == PROJECTOR_TYPE_MLP_NORM) {
             vision_model.mm_0_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "weight"));
@@ -1014,6 +1046,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 // Yi-type llava
                 vision_model.mm_4_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "weight"));
                 vision_model.mm_4_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "bias"));
+            } catch (std::runtime_error & e) {  }
+            try {
+                vision_model.image_newline = get_tensor(new_clip->ctx_data, TN_IMAGE_NEWLINE);
+                // fprintf(stderr, "%s: image_newline tensor (llava-1.6) found\n", __func__);
             } catch (std::runtime_error & e) {  }
         }
         else if (new_clip->proj_type == PROJECTOR_TYPE_LDP) {
@@ -1134,12 +1170,422 @@ bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length
     return true;
 }
 
+
+void clip_image_write_image_to_ppm(const clip_image_u8& img, const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return;
+    }
+
+    // PPM header: P6 format, width, height, and max color value
+    file << "P6\n" << img.nx << " " << img.ny << "\n255\n";
+
+    // Write pixel data
+    for (size_t i = 0; i < img.buf.size(); i += 3) {
+        // PPM expects binary data in RGB format, which matches our image buffer
+        file.write(reinterpret_cast<const char*>(&img.buf[i]), 3);
+    }
+
+    file.close();
+}
+void clip_image_save_to_bmp(const clip_image_u8& img, const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return;
+    }
+
+    int fileSize = 54 + 3 * img.nx * img.ny; // File header + info header + pixel data
+    int bytesPerPixel = 3;
+    int widthInBytes = img.nx * bytesPerPixel;
+    int paddingAmount = (4 - (widthInBytes % 4)) % 4;
+    int stride = widthInBytes + paddingAmount;
+
+    // Bitmap file header
+    unsigned char fileHeader[14] = {
+        'B','M',     // Signature
+        0,0,0,0,    // Image file size in bytes
+        0,0,0,0,    // Reserved
+        54,0,0,0    // Start of pixel array
+    };
+
+    // Total file size
+    fileSize = 54 + (stride * img.ny);
+    fileHeader[2] = (unsigned char)(fileSize);
+    fileHeader[3] = (unsigned char)(fileSize >> 8);
+    fileHeader[4] = (unsigned char)(fileSize >> 16);
+    fileHeader[5] = (unsigned char)(fileSize >> 24);
+
+    // Bitmap information header (BITMAPINFOHEADER)
+    unsigned char infoHeader[40] = {
+        40,0,0,0,   // Size of this header (40 bytes)
+        0,0,0,0,    // Image width
+        0,0,0,0,    // Image height
+        1,0,        // Number of color planes
+        24,0,       // Bits per pixel
+        0,0,0,0,    // No compression
+        0,0,0,0,    // Image size (can be 0 for no compression)
+        0,0,0,0,    // X pixels per meter (not specified)
+        0,0,0,0,    // Y pixels per meter (not specified)
+        0,0,0,0,    // Total colors (color table not used)
+        0,0,0,0     // Important colors (all are important)
+    };
+
+    // Width and height in the information header
+    infoHeader[4] = (unsigned char)(img.nx);
+    infoHeader[5] = (unsigned char)(img.nx >> 8);
+    infoHeader[6] = (unsigned char)(img.nx >> 16);
+    infoHeader[7] = (unsigned char)(img.nx >> 24);
+    infoHeader[8] = (unsigned char)(img.ny);
+    infoHeader[9] = (unsigned char)(img.ny >> 8);
+    infoHeader[10] = (unsigned char)(img.ny >> 16);
+    infoHeader[11] = (unsigned char)(img.ny >> 24);
+
+    // Write file headers
+    file.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
+    file.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
+
+    // Pixel data
+    std::vector<unsigned char> padding(3, 0); // Max padding size to be added to each row
+    for (int y = img.ny - 1; y >= 0; --y) { // BMP files are stored bottom-to-top
+        for (int x = 0; x < img.nx; ++x) {
+            // Each pixel
+            size_t pixelIndex = (y * img.nx + x) * 3;
+            unsigned char pixel[3] = {
+                img.buf[pixelIndex + 2], // BMP stores pixels in BGR format
+                img.buf[pixelIndex + 1],
+                img.buf[pixelIndex]
+            };
+            file.write(reinterpret_cast<char*>(pixel), 3);
+        }
+        // Write padding for the row
+        file.write(reinterpret_cast<char*>(padding.data()), paddingAmount);
+    }
+
+    file.close();
+}
+
+// Linear interpolation between two points
+inline float lerp(float s, float e, float t) {
+    return s + (e - s) * t;
+}
+// Bilinear resize function 
+void bilinear_resize(const clip_image_u8& src, clip_image_u8& dst, int target_width, int target_height) {
+    dst.nx = target_width;
+    dst.ny = target_height;
+    dst.buf.resize(3 * target_width * target_height);
+    
+    float x_ratio = static_cast<float>(src.nx - 1) / target_width;
+    float y_ratio = static_cast<float>(src.ny - 1) / target_height;
+    
+    for (int y = 0; y < target_height; y++) {
+        for (int x = 0; x < target_width; x++) {
+            float px = x_ratio * x;
+            float py = y_ratio * y;
+            int x_floor = static_cast<int>(px);
+            int y_floor = static_cast<int>(py);
+            float x_lerp = px - x_floor;
+            float y_lerp = py - y_floor;
+
+            for (int c = 0; c < 3; c++) {
+                float top = lerp(
+                    static_cast<float>(src.buf[3 * (y_floor * src.nx + x_floor) + c]),
+                    static_cast<float>(src.buf[3 * (y_floor * src.nx + (x_floor + 1)) + c]),
+                    x_lerp
+                );
+                float bottom = lerp(
+                    static_cast<float>(src.buf[3 * ((y_floor + 1) * src.nx + x_floor) + c]),
+                    static_cast<float>(src.buf[3 * ((y_floor + 1) * src.nx + (x_floor + 1)) + c]),
+                    x_lerp
+                );
+                dst.buf[3 * (y * target_width + x) + c] = static_cast<uint8_t>(lerp(top, bottom, y_lerp));
+            }
+        }
+    }
+}
+
+// for replication purposes `.to(model.device, dtype=torch.float16)`
+// converts a float to half precision and back to float
+float simulateFloat16Precision(float value) {
+    // Convert float32 to float16
+    uint32_t f32 = *reinterpret_cast<uint32_t*>(&value);
+    uint32_t sign = (f32 >> 16) & 0x8000; // Top bit (sign bit)
+    uint32_t exponent = ((f32 >> 23) & 0xFF) - 112; // Adjust bias (112 is bias of float16, 127 is bias of float32)
+    uint32_t mantissa = (f32 >> 13) & 0x3FF; // Keep top 10 bits (10 bits of precision in float16, 23 in float32)
+
+    // Handle overflow/underflow
+    if ((f32 & 0x7FFFFFFF) > 0x477FE000) { // Not representable
+        exponent = 0x1F;
+        mantissa = 0;
+    } else if ((f32 & 0x7FFFFFFF) < 0x38800000) { // Too small for normal half precision
+        exponent = 0;
+        mantissa = 0;
+    }
+
+    uint16_t f16 = sign | (exponent << 10) | mantissa;
+
+    // Convert back to float32
+    uint32_t sign32 = (f16 & 0x8000) << 16;
+    uint32_t exponent32 = ((f16 >> 10) & 0x1F);
+    uint32_t mantissa32 = (f16 & 0x3FF) << 13;
+
+    // Adjust bias back
+    exponent32 = exponent32 == 0 ? 0 : exponent32 + 112;
+
+    uint32_t f32Result = sign32 | (exponent32 << 23) | mantissa32;
+    float result = *reinterpret_cast<float*>(&f32Result);
+
+    return result;
+}
+// Normalize image to float32 - supports float16 replication as in pytorch .to(model.device, dtype=torch.float16)
+void normalize_image_u8_to_f32(const clip_image_u8* src, clip_image_f32* dst, const float mean[3], const float std[3], bool replicate_float16) {
+    dst->nx = src->nx;
+    dst->ny = src->ny;
+    dst->buf.resize(src->buf.size());
+    
+    for (size_t i = 0; i < src->buf.size(); ++i) {
+        int c = i % 3; // rgb
+        dst->buf[i] = (static_cast<float>(src->buf[i]) / 255.0f - mean[c]) / std[c];
+        
+        if (replicate_float16) {
+            dst->buf[i] = simulateFloat16Precision(dst->buf[i]);
+        }
+    }
+}
+inline float clip(float x, float lower, float upper)
+{
+    return std::max(lower, std::min(x, upper));
+}
+bool bicubic_resize(const clip_image_u8 &img, clip_image_u8 &dst, int target_width, int target_height)
+{
+    const int nx = img.nx;
+    const int ny = img.ny;
+
+    dst.nx = target_width;
+    dst.ny = target_height;
+    dst.buf.resize(3 * target_width * target_height);
+
+    int a, b, c, d, index;
+    float Ca, Cb, Cc;
+    float C[5];
+    float d0, d2, d3, a0, a1, a2, a3;
+    int i, j, k, ii, jj;
+    int x, y;
+    float dx, dy;
+    float tx, ty;
+
+    tx = (float)nx / (float)target_width;
+    ty = (float)ny / (float)target_height;
+
+    float scale = std::max(tx, ty);
+
+    // Bicubic interpolation; adapted from ViT.cpp, inspired from :
+    //    -> https://github.com/yglukhov/bicubic-interpolation-image-processing/blob/master/libimage.c#L36
+    //    -> https://en.wikipedia.org/wiki/Bicubic_interpolation
+
+    for (i = 0; i < target_height; i++)
+    {
+        for (j = 0; j < target_width; j++)
+        {
+            x = (int)(tx * j);
+            y = (int)(ty * i);
+
+            dx = tx * j - x;
+            dy = ty * i - y;
+
+            index = (y * nx + x) * 3;
+            a = (y * nx + (x + 1)) * 3;
+            b = ((y + 1) * nx + x) * 3;
+            c = ((y + 1) * nx + (x + 1)) * 3;
+
+            for (k = 0; k < 3; k++)
+            {
+                for (jj = 0; jj <= 3; jj++)
+                {
+                    d0 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x - 1, 0, nx - 1)) * 3 + k] - img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
+                    d2 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x + 1, 0, nx - 1)) * 3 + k] - img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
+                    d3 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x + 2, 0, nx - 1)) * 3 + k] - img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
+                    a0 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
+
+                    a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
+                    a2 = 1.0 / 2 * d0 + 1.0 / 2 * d2;
+                    a3 = -1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3;
+                    C[jj] = a0 + a1 * dx + a2 * dx * dx + a3 * dx * dx * dx;
+
+                    d0 = C[0] - C[1];
+                    d2 = C[2] - C[1];
+                    d3 = C[3] - C[1];
+                    a0 = C[1];
+                    a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
+                    a2 = 1.0 / 2 * d0 + 1.0 / 2 * d2;
+                    a3 = -1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3;
+                    Cc = a0 + a1 * dy + a2 * dy * dy + a3 * dy * dy * dy;
+
+                    const uint8_t Cc2 = std::min(std::max(std::round(Cc), 0.0f), 255.0f);
+                    dst.buf[(i * target_width + j) * 3 + k] = float(Cc2);
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+// llava-1.6 type of resize_and_pad (black)
+void resize_and_pad_image(const clip_image_u8& image, clip_image_u8 &image_output, const std::pair<int, int>& target_resolution) {
+    int target_width = target_resolution.first;
+    int target_height = target_resolution.second;
+
+    float scale_w = static_cast<float>(target_width) / image.nx;
+    float scale_h = static_cast<float>(target_height) / image.ny;
+
+    int new_width, new_height;
+
+    if (scale_w < scale_h) {
+        new_width = target_width;
+        new_height = std::min(static_cast<int>(std::ceil(image.ny * scale_w)), target_height);
+    } else {
+        new_height = target_height;
+        new_width = std::min(static_cast<int>(std::ceil(image.nx * scale_h)), target_width);
+    }
+
+    clip_image_u8 resized_image;
+    // bilinear_resize(image, resized_image, new_width, new_height);
+    bicubic_resize(image, resized_image, new_width, new_height);
+
+    clip_image_u8 padded_image;
+    padded_image.nx = target_width;
+    padded_image.ny = target_height;
+    padded_image.buf.resize(3 * target_width * target_height, 0); // Initialize with black
+
+    // Calculate padding offsets
+    int pad_x = (target_width - new_width) / 2;
+    int pad_y = (target_height - new_height) / 2;
+
+    // Copy the resized image into the center of the padded buffer
+    for (int y = 0; y < new_height; ++y) {
+        for (int x = 0; x < new_width; ++x) {
+            for (int c = 0; c < 3; ++c) {
+                padded_image.buf[3 * ((y + pad_y) * target_width + (x + pad_x)) + c] = resized_image.buf[3 * (y * new_width + x) + c];
+            }
+        }
+    }
+
+    image_output = std::move(padded_image);
+}
+
+
+/**
+ * Selects the best resolution from a list of possible resolutions based on the original size.
+ *
+ * @param original_size The original size of the image in the format (width, height).
+ * @param possible_resolutions A list of possible resolutions in the format [(width1, height1), (width2, height2), ...].
+ * @return The best fit resolution in the format (width, height).
+ */
+static std::pair<int, int> select_best_resolution(const std::pair<int, int>& original_size, const std::vector<std::pair<int, int>>& possible_resolutions) {
+    int original_width = original_size.first;
+    int original_height = original_size.second;
+    std::pair<int, int> best_fit;
+    int max_effective_resolution = 0;
+    int min_wasted_resolution = std::numeric_limits<int>::max();
+
+    for (const auto& resolution : possible_resolutions) {
+        int width = resolution.first;
+        int height = resolution.second;
+        float scale = std::min(static_cast<float>(width) / original_width, static_cast<float>(height) / original_height);
+        int downscaled_width = static_cast<int>(original_width * scale);
+        int downscaled_height = static_cast<int>(original_height * scale);
+        int effective_resolution = std::min(downscaled_width * downscaled_height, original_width * original_height);
+        int wasted_resolution = (width * height) - effective_resolution;
+        // fprintf(stderr, "resolution: %d %d, scale: %f, downscaled: %d %d, effective: %d, wasted: %d\n", width, height, scale, downscaled_width, downscaled_height, effective_resolution, wasted_resolution);
+        if (effective_resolution > max_effective_resolution || (effective_resolution == max_effective_resolution && wasted_resolution < min_wasted_resolution)) {
+            max_effective_resolution = effective_resolution;
+            min_wasted_resolution = wasted_resolution;
+            best_fit = resolution;
+        }
+    }
+
+    return best_fit;
+}
+
+
+std::vector<clip_image_u8*> divide_to_patches_u8(const clip_image_u8& image, int patch_size) {
+    std::vector<clip_image_u8*> patches;
+    int width = image.nx;
+    int height = image.ny;
+    for (int i = 0; i < height; i += patch_size) {
+        for (int j = 0; j < width; j += patch_size) {
+            clip_image_u8 *patch = clip_image_u8_init();
+            patch->nx = std::min(patch_size, width - j);
+            patch->ny = std::min(patch_size, height - i);
+            patch->buf.resize(3 * patch->nx * patch->ny);
+            for (int y = 0; y < patch->ny; ++y) {
+                for (int x = 0; x < patch->nx; ++x) {
+                    for (int c = 0; c < 3; ++c) {
+                        patch->buf[3 * (y * patch->nx + x) + c] = image.buf[3 * ((i + y) * width + (j + x)) + c];
+                    }
+                }
+            }
+            patches.push_back(patch);
+        }
+    }
+    return patches;
+}
+
+
+// debug function to convert f32 to u8
+void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u8& dst) {
+    dst.nx = src.nx;
+    dst.ny = src.ny;
+    dst.buf.resize(3 * src.nx * src.ny);
+    for (size_t i = 0; i < src.buf.size(); ++i) {
+        dst.buf[i] = static_cast<uint8_t>(std::min(std::max(int(src.buf[i] * 255.0f), 0), 255));
+    }
+}
+
+/**
+ * @brief Get the anyres image grid shape object
+ * 
+ * @param image_size 
+ * @param grid_pinpoints 
+ * @param image_patch_size 
+ * @return <int, int> 
+ */
+struct clip_image_grid_shape get_anyres_image_grid_shape(const std::pair<int, int>& image_size, const std::vector<std::pair<int, int>>& grid_pinpoints, int image_patch_size) {
+    /**
+        Conversion from gguf flat array to vector: 
+        std::vector<std::pair<int, int>> possible_resolutions;
+        for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
+            possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
+        }
+     */
+    auto best_resolution = select_best_resolution(image_size, grid_pinpoints);
+    return {best_resolution.first / image_patch_size, best_resolution.second / image_patch_size};
+}
+
+
 // normalize: x = (x - mean) / std
 // TODO: implement bicubic interpolation instead of linear.
-bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32 * res, const bool pad2square) {
+// returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patche tensors as a vector
+bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std::vector<clip_image_f32*>& res_tensor, bool pad2square) {
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return false;
+    }
+    auto & params = ctx->vision_model.hparams;
+    // The model config actually contains all we need to decide on how to preprocess, here we automatically switch to the new llava-1.6 preprocessing
+    if (strcmp(params.mm_patch_merge_type, "spatial_unpad") == 0) {
+        pad2square = false;
+    } else {
+        // pad2square = true; // todo: consider automatic decisions on that options for all models
+    }
+    // free the previous res_tensor
+    if (res_tensor.size() > 0) {
+        for (size_t i = 0; i < res_tensor.size(); i++) {
+            clip_image_f32_free(res_tensor[i]);
+        }
+        res_tensor.clear();
     }
 
     // the logic below is to pad the shorter side to the longer side with a background color: rgb(122, 116, 104)
@@ -1151,7 +1597,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         temp->nx = longer_side;
         temp->ny = longer_side;
         temp->buf.resize(3 * longer_side * longer_side);
-        const uint8_t bc[3] = {122, 116, 104}; // background color in RGB from LLaVA
+        const uint8_t bc[3] = {122, 116, 104}; // background color in RGB from LLaVA (this is the mean rgb color * 255)
 
         // fill with background color
         for (size_t i = 0; i < temp->buf.size(); i++) {
@@ -1169,18 +1615,65 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
             }
         }
     } else {
-        temp->nx = img->nx;
-        temp->ny = img->ny;
-        temp->buf.resize(img->buf.size());
-        memcpy(temp->buf.data(), img->buf.data(), temp->buf.size());
+        if (params.image_grid_pinpoints[0] != 0)
+        {
+            // "spatial_unpad" with "anyres" processing for llava-1.6
+            std::vector<std::pair<int, int>> possible_resolutions;
+            for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
+                possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
+            }
+            std::pair<int, int> best_resolution = select_best_resolution({img->nx, img->ny}, possible_resolutions);
+            // fprintf(stderr, "%s - Working with resolution: %d %d\n", __func__, best_resolution.first, best_resolution.second);
+            // clip_image_save_to_bmp(*img, "input.bmp");
+            resize_and_pad_image(*img, *temp, best_resolution);  // we do not pad with mean-bg color anymore in llava-1.6
+            // clip_image_save_to_bmp(*temp, "resized.bmp");
+            // visually verify normalized image:
+            // normalize_image_u8_to_f32(*temp, *res, ctx->image_mean, ctx->image_std); 
+            // {
+            //     clip_image_u8 * temp2 = clip_image_u8_init();
+            //     clip_image_convert_f32_to_u8(*res, *temp2);
+            //     clip_image_save_to_bmp(*temp2, "resized_normalized_f32.bmp");
+            //     clip_image_u8_free(temp2);
+            // }
+
+            std::vector<clip_image_u8 *> patches = divide_to_patches_u8(*temp, params.image_size); // prepare spatial sorted main patches of image_size each (336 in llava-1.6)
+            // fprintf(stderr, "patches: %d, %d\n", patches.size(), params.image_size);
+        
+            clip_image_u8 *image_original_resize = clip_image_u8_init();
+            // bilinear_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square ?
+            bicubic_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square ?
+            patches.insert(patches.begin(), image_original_resize);
+
+            res_tensor.clear();
+            for (auto& patch : patches) {
+                clip_image_f32 *temp_image_f32 = clip_image_f32_init();
+                normalize_image_u8_to_f32(patch, temp_image_f32, ctx->image_mean, ctx->image_std, true);
+                res_tensor.push_back(temp_image_f32);
+            }
+
+            for (size_t i = 0; i < patches.size(); i++) {
+                // printf("patch %d: %d %d\n", i, patches[i]->nx, patches[i]->ny);
+                clip_image_u8_free(patches[i]);
+            }
+
+            clip_image_u8_free(temp);
+            
+            return true;
+        } else {
+            temp->nx = img->nx;
+            temp->ny = img->ny;
+            temp->buf.resize(img->buf.size());
+            memcpy(temp->buf.data(), img->buf.data(), temp->buf.size());
+        }
     }
 
     const int nx = temp->nx;
     const int ny = temp->ny;
+    // clip_image_save_to_bmp(*temp, "resized_vanilla.bmp");
 
     const int nx2 = ctx->vision_model.hparams.image_size;
     const int ny2 = ctx->vision_model.hparams.image_size;
-
+    clip_image_f32 * res = clip_image_f32_init();
     res->nx = nx2;
     res->ny = ny2;
     res->buf.resize(3 * nx2 * ny2);
@@ -1234,6 +1727,13 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
     }
     clip_image_u8_free(temp);
 
+    // {
+    //     clip_image_u8 * temp2 = clip_image_u8_init();
+    //     clip_image_convert_f32_to_u8(*res, *temp2);
+    //     clip_image_save_to_bmp(*temp2, "resized_normalized_f32_vanilla.bmp");
+    //     clip_image_u8_free(temp2);
+    // }
+    res_tensor.push_back(res);
     return true;
 }
 
@@ -1302,6 +1802,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     type = static_cast<ggml_type>(itype);
 
     auto * ctx_clip = clip_model_load(fname_inp, 2);
+    
 
     const auto & ctx_src = ctx_clip->ctx_gguf;
     const auto & ctx_data = ctx_clip->ctx_data;
@@ -1493,6 +1994,10 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
         std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];
         throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
     }
+}
+
+ggml_tensor *clip_get_newline_tensor(const struct clip_ctx * ctx) {
+    return ctx->vision_model.image_newline;
 }
 
 int clip_n_patches(const struct clip_ctx * ctx) {

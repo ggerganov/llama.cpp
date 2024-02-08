@@ -240,7 +240,8 @@ if has_vision_encoder:
         # flatten it
         image_grid_pinpoints = []
         for pinpoint in v_hparams["image_grid_pinpoints"]:
-            image_grid_pinpoints.extend(pinpoint)
+            for p in pinpoint:
+                image_grid_pinpoints.append(p)
         fout.add_array("clip.vision.image_grid_pinpoints", image_grid_pinpoints)
     if "image_crop_resolution" in v_hparams:
         fout.add_uint32("clip.vision.image_crop_resolution", v_hparams["image_crop_resolution"])

@@ -13,11 +13,12 @@ def is_safetensor_file(file_path):
 # Unified loading function
 def load_model(file_path):
     if is_safetensor_file(file_path):
-        # return safe_load(file_path,framework="pt", device="cpu"), 'safetensor'
         tensors = {}
         with safe_open(file_path, framework="pt", device="cpu") as f:
             for key in f.keys():
                 tensors[key] = f.get_tensor(key).clone()
+                # output shape
+                print(f"{key} : {tensors[key].shape}")
         return tensors, 'safetensor'
     else:
         return torch.load(file_path, map_location=torch.device('cpu')), 'pytorch'

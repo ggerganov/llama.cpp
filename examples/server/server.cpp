@@ -943,13 +943,14 @@ struct llama_server_context
             {
                 continue;
             }
-            clip_image_f32 * img_res = clip_image_f32_init();
-            if (!clip_image_preprocess(clp_ctx, img.img_data, img_res, /*pad2square =*/ true))
+            std::vector<clip_image_f32*> img_res_v;
+            if (!clip_image_preprocess(clp_ctx, img.img_data, img_res_v, /*pad2square =*/ true))
             {
                 LOG_TEE("Error processing the given image");
                 clip_free(clp_ctx);
                 return false;
             }
+            clip_image_f32 * img_res = img_res_v[0];
             img.image_tokens = clip_n_patches(clp_ctx);
             img.image_embedding = (float *)malloc(clip_embd_nbytes(clp_ctx));
             if (!img.image_embedding)
