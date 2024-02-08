@@ -12185,9 +12185,6 @@ inline void ggml_sycl_op_dequantize_mul_mat_vec(
             src1_dfloat = (sycl::half *)src1->data + src1_padded_row_size;
         } else {
             src1_dfloat = src1_dfloat_a.alloc(ne00);
-            //ggml_cpy_f32_f16_sycl((const char *)src1_ddf_i, (char *)src1_dfloat,
-            //                      ne00, ne00, 1, sizeof(float), 0, 0, ne00, 1,
-            //                      sizeof(sycl::half), 0, 0, stream);
             ggml_cpy_f32_f16_sycl((const char *)src1_ddf_i, (char *)src1_dfloat,
                                    ne00, ne00, ne01, ne02, nb00, nb01, nb02,
                                    nb03, ne10, ne11, ne12, nb10, nb11, nb12,
