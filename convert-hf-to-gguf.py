@@ -1590,6 +1590,33 @@ class BertModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
         self.gguf_writer.add_file_type(self.ftype)
 
+    def set_vocab(self):
+        path = self.dir_model
+        added_tokens_path = self.dir_model if self.dir_model.exists() else None
+
+        vocab = HfVocab(path, added_tokens_path)
+        tokens, scores, toktypes = zip(*vocab.all_tokens())
+
+        assert len(tokens) == vocab.vocab_size
+
+        # for some reason set(toktypes) = {1, 3} so we need to compress it
+        all_types, toktypes1 = np.unique(toktypes, return_inverse=True)
+        n_token_types, toktypes1 = len(all_types), toktypes1.tolist()
+        self.gguf_writer.add_uint32("tokenizer.ggml.token_type_count", n_token_types)
+
+        # convert tokens to SPM style
+        tokens = [
+            (t[2:] if t.startswith(b"##") else b"\xe2\x96\x81" + t) for t in tokens
+        ]
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes) # ignore types for now (all zero)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
     def write_tensors(self):
         tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         tensors = dict(self.get_tensors())
