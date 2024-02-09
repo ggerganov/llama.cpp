@@ -2947,6 +2947,8 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_MINICPM:
             {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+
                 switch (hparams.n_layer) {
                     case 40: model.type = e_model::MODEL_2B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
@@ -4207,8 +4209,7 @@ static bool llm_load_tensors(
         ctx_bufs.emplace_back(ctx, buf);
     }
 
-    // print memory requirements
-    {
+    if (llama_supports_gpu_offload()) {
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
         LLAMA_LOG_INFO("%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
@@ -4220,10 +4221,11 @@ static bool llm_load_tensors(
         const int max_offloadable_layers       = hparams.n_layer + 1;
 
         LLAMA_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
+    }
 
-        for (ggml_backend_buffer_t buf : model.bufs) {
-            LLAMA_LOG_INFO("%s: %10s buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
-        }
+    // print memory requirements
+    for (ggml_backend_buffer_t buf : model.bufs) {
+        LLAMA_LOG_INFO("%s: %10s buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
     }
 
     // populate tensors_by_name
@@ -8585,6 +8587,10 @@ void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * can
     // }
 
     const int64_t t_start_sample_us = ggml_time_us();
+
+    if (k <= 0) {
+        k = candidates->size;
+    }
 
     k = std::max(k, (int) min_keep);
     k = std::min(k, (int) candidates->size);
