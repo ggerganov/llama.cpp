@@ -2300,7 +2300,13 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            sparams.chat_template = argv[i];
+            std::string value(argv[i]);
+            if (value != "chatml" && value != "llama2") {
+                fprintf(stderr, "error: chat template can be \"llama2\" or \"chatml\", but got: %s\n", value.c_str());
+                invalid_param = true;
+                break;
+            }
+            sparams.chat_template = value;
         }
         else if (arg == "--override-kv")
         {
