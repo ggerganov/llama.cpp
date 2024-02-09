@@ -40,6 +40,7 @@ class Keys:
         TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
         EXPERT_COUNT          = "{arch}.expert_count"
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
+        POOLING_LAYER         = "{arch}.pooling_layer"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
