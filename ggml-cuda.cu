@@ -153,6 +153,11 @@
 // max batch size to use MMQ kernels when tensor cores are available
 #define MMQ_MAX_BATCH_SIZE 32
 
+// The release threshold specifies the maximum amount of memory the CUDA memory pool caches
+// Default value is 0. This means all unused memory is released back to the OS on every synchronization operation
+// Define to use the maximum release threshold. Recommended when a single proces uses the GPU device
+// #define GGML_CUDA_USE_MAX_RELEASE_THRESHOLD
+
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
 
@@ -10628,7 +10633,9 @@ GGML_CALL static bool ggml_backend_buffer_is_cuda(ggml_backend_buffer_t buffer) 
 
 GGML_CALL static void ggml_backend_cuda_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
-    CUDA_CHECK(cudaFree(ctx->dev_ptr));
+    cudaStream_t main_stream = g_cudaStreams[ctx->device][0];
+    CUDA_CHECK(cudaFreeAsync(ctx->dev_ptr, main_stream));
+    CUDA_CHECK(cudaStreamSynchronize(main_stream));
     delete ctx;
 }
 
@@ -10744,10 +10751,12 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffe
 
     size = std::max(size, (size_t)1); // cudaMalloc returns null for size 0
 
+    cudaStream_t main_stream = g_cudaStreams[buft_ctx->device][0];
     void * dev_ptr;
-    cudaError_t err = cudaMalloc(&dev_ptr, size);
+    cudaError_t err = cudaMallocAsync(&dev_ptr, size, main_stream);
+    cudaStreamSynchronize(main_stream);
     if (err != cudaSuccess) {
-        fprintf(stderr, "%s: allocating %.2f MiB on device %d: cudaMalloc failed: %s\n", __func__, size/1024.0/1024.0, buft_ctx->device, cudaGetErrorString(err));
+        fprintf(stderr, "%s: allocating %.2f MiB on device %d: cudaMallocAsync failed: %s\n", __func__, size/1024.0/1024.0, buft_ctx->device, cudaGetErrorString(err));
         return nullptr;
     }
 
@@ -11414,6 +11423,13 @@ GGML_CALL ggml_backend_t ggml_backend_cuda_init(int device) {
         /* .interface = */ ggml_backend_cuda_interface,
         /* .context   = */ ctx
     };
+
+#if defined(GGML_CUDA_USE_MAX_RELEASE_THRESHOLD)
+    uint64_t release_threshold = UINT64_MAX;
+    cudaMemPool_t default_mem_pool;
+    CUDA_CHECK(cudaDeviceGetDefaultMemPool(&default_mem_pool, device));
+    CUDA_CHECK(cudaMemPoolSetAttribute(default_mem_pool, cudaMemPoolAttrReleaseThreshold, &release_threshold));
+#endif
 
     return cuda_backend;
 }
