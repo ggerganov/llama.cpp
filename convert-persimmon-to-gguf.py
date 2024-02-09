@@ -1,13 +1,17 @@
-import torch
-import os
-from pprint import pprint
-import sys
+#!/usr/bin/env python3
 import argparse
+import os
+import sys
 from pathlib import Path
+from pprint import pprint
+
+import torch
 from sentencepiece import SentencePieceProcessor
+
 if 'NO_LOCAL_GGUF' not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
+
 
 def _flatten_dict(dct, tensors, prefix=None):
     assert isinstance(dct, dict)
@@ -20,6 +24,7 @@ def _flatten_dict(dct, tensors, prefix=None):
         else:
             raise ValueError(type(dct[key]))
     return None
+
 
 def _get_sentencepiece_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
@@ -54,6 +59,7 @@ def _get_sentencepiece_tokenizer_info(dir_model: Path):
         pass
     return tokens, scores, toktypes
 
+
 def main():
     parser = argparse.ArgumentParser(description="Convert a Persimmon model from Adept (e.g. Persimmon 8b chat) to a GGML compatible file")
     parser.add_argument("--outfile",             type=Path, help="path to write to; default: based on input")
@@ -65,7 +71,7 @@ def main():
     persimmon_model = torch.load(args.ckpt_path)
     hparams = persimmon_model['args']
     pprint(hparams)
-    tensors = {}
+    tensors: dict[str, torch.Tensor] = {}
     _flatten_dict(persimmon_model['model'], tensors, None)
 
     arch = gguf.MODEL_ARCH.PERSIMMON
@@ -123,7 +129,6 @@ def main():
 
     print(f"gguf: model successfully exported to '{args.outfile}'")
     print("")
-
 
 
 if __name__ == '__main__':

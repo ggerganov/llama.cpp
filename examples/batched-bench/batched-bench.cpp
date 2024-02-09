@@ -88,7 +88,10 @@ int main(int argc, char ** argv) {
 
     llama_model_params model_params = llama_model_default_params();
 
+    const std::vector<float> t_split(llama_max_devices(), 0.0f);
+
     model_params.n_gpu_layers = n_gpu_layers;
+    model_params.tensor_split = t_split.data();
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
@@ -155,7 +158,7 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("\n");
-    LOG_TEE("%s: n_kv_max = %d, is_pp_shared = %d, n_gpu_layers = %d, mmq = %d\n", __func__, n_kv_max, is_pp_shared, n_gpu_layers, mmq);
+    LOG_TEE("%s: n_kv_max = %d, is_pp_shared = %d, n_gpu_layers = %d, mmq = %d, n_threads = %d, n_threads_batch = %d\n", __func__, n_kv_max, is_pp_shared, n_gpu_layers, mmq, ctx_params.n_threads, ctx_params.n_threads_batch);
     LOG_TEE("\n");
 
     LOG_TEE("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP",     "TG",     "B",    "N_KV",     "T_PP s",   "S_PP t/s", "T_TG s",   "S_TG t/s", "T s",      "S t/s");

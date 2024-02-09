@@ -21,7 +21,7 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
 ./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
 ```
 
-Finetune output files will be saved every N iterations (config with `--save-every N`).
+**Only llama based models are supported!** The output files will be saved every N iterations (config with `--save-every N`).
 The pattern 'ITERATION' in the output filenames will be replaced with the iteration number and with 'LATEST' for the latest output.
 So in above example after 10 iterations these files will be written:
 - chk-lora-open-llama-3b-v2-q8_0-shakespeare-10.gguf
@@ -61,7 +61,7 @@ For example to apply 40% of the 'shakespeare' LORA adapter, 80% of the 'bible' L
   --lora lora-open-llama-3b-v2-q8_0-yet-another-one-LATEST.bin
 ```
 
-The scale numbers don't need to add up to one, and you can also use numbers greater than 1 to further increase the influence of an adapter. But making the values to big will sometimes result in worse output. Play around to find good values.
+The scale numbers don't need to add up to one, and you can also use numbers greater than 1 to further increase the influence of an adapter. But making the values too big will sometimes result in worse output. Play around to find good values.
 
 Gradient checkpointing reduces the memory requirements by ~50% but increases the runtime.
 If you have enough RAM, you can make finetuning a bit faster by disabling checkpointing with `--no-checkpointing`.

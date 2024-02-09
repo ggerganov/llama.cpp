@@ -1,5 +1,3 @@
-#include "build-info.h"
-
 #include "common.h"
 #include "llama.h"
 
@@ -39,9 +37,11 @@ int main(int argc, char ** argv) {
     // max number of parallel drafting sequences (i.e. tree branches)
     const int n_seq_dft = params.n_parallel;
 
-    // TODO: make this configurable
-    const float p_accept = 0.80f;
-    const float p_split  = 0.10f;
+    // probability threshold for accepting a token from the draft model
+    const float p_accept = params.p_accept;
+
+    // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
+    const float p_split  = params.p_split;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("speculative", "log"));
@@ -65,6 +65,10 @@ int main(int argc, char ** argv) {
     // load the draft model
     params.model = params.model_draft;
     params.n_gpu_layers = params.n_gpu_layers_draft;
+    if (params.n_threads_draft > 0) {
+        params.n_threads = params.n_threads_draft;
+    }
+    params.n_threads_batch = params.n_threads_batch_draft;
     std::tie(model_dft, ctx_dft) = llama_init_from_gpt_params(params);
 
     {
@@ -94,9 +98,22 @@ int main(int argc, char ** argv) {
         }
     }
 
-    // tokenize the prompt
+
+    // Tokenize the prompt
+    const bool add_bos_tgt = llama_should_add_bos_token(model_tgt);
+    LOG("add_bos tgt: %d\n", add_bos_tgt);
+
+    const bool add_bos_dft = llama_should_add_bos_token(model_dft);
+    LOG("add_bos dft: %d\n", add_bos_dft);
+
+    if (add_bos_tgt != add_bos_dft) {
+        fprintf(stderr, "%s: error: draft model add_bos must match target model to use speculation but ", __func__);
+        fprintf(stderr, "add_bos_dft = %d while add_bos_tgt = %d\n", add_bos_dft, add_bos_tgt);
+        return 1;
+    }
+
     std::vector<llama_token> inp;
-    inp = ::llama_tokenize(ctx_tgt, params.prompt, true);
+    inp = ::llama_tokenize(ctx_tgt, params.prompt, add_bos_tgt, true);
 
     const int max_context_size     = llama_n_ctx(ctx_tgt);
     const int max_tokens_list_size = max_context_size - 4;
@@ -190,8 +207,9 @@ int main(int argc, char ** argv) {
 
             const std::string token_str = llama_token_to_piece(ctx_tgt, id);
 
-            printf("%s", token_str.c_str());
-            fflush(stdout);
+            if (!params.use_color) {
+                printf("%s", token_str.c_str());
+            }
 
             if (id == llama_token_eos(model_tgt)) {
                 has_eos = true;
@@ -223,10 +241,18 @@ int main(int argc, char ** argv) {
                     ++n_past_tgt;
                     ++n_past_dft;
                     ++i_dft;
-
+                    if (params.use_color) {
+                        // Color token according to its origin sequence
+                        printf("\u001b[%dm%s\u001b[37m", (36 - s_keep % 6), token_str.c_str());
+                        fflush(stdout);
+                    }
                     continue;
                 }
             }
+            if (params.use_color) {
+                printf("%s", token_str.c_str());
+            }
+            fflush(stdout);
 
             LOG("the sampled target token (%d, '%s') did not match, or we ran out of drafted tokens\n", id, token_str.c_str());
 
@@ -406,7 +432,7 @@ int main(int argc, char ** argv) {
             ++n_past_tgt;
         }
 
-        // the first token is always proposed by the traget model before the speculation loop so we erase it here
+        // the first token is always proposed by the target model before the speculation loop so we erase it here
         for (int s = 0; s < n_seq_dft; ++s) {
             if (!drafts[s].active) {
                 continue;

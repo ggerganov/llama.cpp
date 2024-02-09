@@ -1,5 +1,4 @@
 #define LLAMA_API_INTERNAL
-#include "build-info.h"
 #include "common.h"
 #include "ggml.h"
 #include "llama.h"
@@ -258,13 +257,13 @@ int main(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            params.include_layers.push_back(argv[i]);
+            params.include_layers.emplace_back(argv[i]);
         } else if (arg == "-L" || arg == "--exclude-layer") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.exclude_layers.push_back(argv[i]);
+            params.exclude_layers.emplace_back(argv[i]);
         } else if (arg == "-t" || arg == "--type") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -322,7 +321,6 @@ int main(int argc, char ** argv) {
         auto cparams = llama_context_default_params();
         cparams.n_ctx      = 256;
         cparams.seed       = 1;
-        cparams.f16_kv     = false;
 
         ctx = llama_new_context_with_model(model, cparams);
 
@@ -379,6 +377,8 @@ int main(int argc, char ** argv) {
             if (params.verbose) {
                 printf("testing %s ...\n",  ggml_type_name(type));
             }
+
+            ggml_quantize_init(type);
 
             error_stats global_stats {};
 

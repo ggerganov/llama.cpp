@@ -5,6 +5,7 @@
 // GGML internal header
 
 #include <assert.h>
+#include <stdlib.h> // load `stdlib.h` before other headers to work around MinGW bug: https://sourceforge.net/p/mingw-w64/bugs/192/
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h> // memcpy
@@ -18,11 +19,13 @@ extern "C" {
 // fall back to the _Static_assert C11 keyword.
 // if C99 - static_assert is noop
 // ref: https://stackoverflow.com/a/53923785/4039976
+#ifndef __cplusplus
 #ifndef static_assert
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #else
 #define static_assert(cond, msg) struct global_scope_noop_trick
+#endif
 #endif
 #endif
 
@@ -38,12 +41,6 @@ extern "C" {
 #define __SSE3__
 #endif
 #endif
-
-#undef MIN
-#undef MAX
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 // 16-bit float
 // on Arm, we use __fp16
@@ -230,7 +227,21 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 
 #endif
 
-    // TODO: backend v2 PR
+#define GGML_HASHTABLE_FULL ((size_t)-1)
+#define GGML_HASHTABLE_ALREADY_EXISTS ((size_t)-2)
+
+struct ggml_hash_set ggml_hash_set_new(size_t size);
+
+bool   ggml_hash_contains      (const struct ggml_hash_set hash_set, struct ggml_tensor * key);
+
+// returns GGML_HASHTABLE_FULL if table is full, otherwise the current index of the key or where it should be inserted
+size_t ggml_hash_find          (const struct ggml_hash_set hash_set, struct ggml_tensor * key);
+
+// returns GGML_HASHTABLE_ALREADY_EXISTS if key already exists, index otherwise, asserts if table is full
+size_t ggml_hash_insert        (      struct ggml_hash_set hash_set, struct ggml_tensor * key);
+
+// return index, asserts if table is full
+size_t ggml_hash_find_or_insert(      struct ggml_hash_set hash_set, struct ggml_tensor * key);
 
 #ifdef __cplusplus
 }

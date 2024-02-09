@@ -263,7 +263,6 @@ static void init_model(struct my_llama_model * model) {
     model->data.resize(size + tensor_alignment);
     alloc = ggml_allocr_new(model->data.data(), model->data.size(), tensor_alignment);
     alloc_model(alloc, model);
-    ggml_allocr_free(alloc);
 }
 
 static void randomize_model(struct my_llama_model * model, int seed, float mean, float std, float min, float max) {
@@ -349,9 +348,9 @@ static struct ggml_tensor * llama_build_train_graphs(
         // not capturing these, to silcence warnings
         const int rope_mode = 0;
 
-        return ggml_rope_custom(ctx,
-            t, KQ_pos, n_rot, rope_mode, n_ctx,
-            rope_freq_base, rope_freq_scale);
+        return ggml_rope_custom(
+            ctx, t, KQ_pos, n_rot, rope_mode, n_ctx, 0, rope_freq_base, rope_freq_scale, 0.0f, 1.0f, 0.0f, 0.0f
+        );
     };
 
     set_name(tokens_input, "tokens_input");
@@ -369,10 +368,7 @@ static struct ggml_tensor * llama_build_train_graphs(
     checkpoints.push_back(t00);
     checkpoints.push_back(t01);
 
-    struct ggml_tensor * kv_scale = NULL;
-    if (!enable_flash_attn) {
-        kv_scale = ggml_new_f32(ctx, 1.0f/sqrtf(float(n_embd)/n_head));
-    }
+    const float kv_scale = 1.0f/sqrtf(float(n_embd)/n_head);
 
     for (int il = 0; il < n_layer; ++il) {
         struct my_llama_layer & layer = model->layers[il];
@@ -436,7 +432,7 @@ static struct ggml_tensor * llama_build_train_graphs(
     if (enable_checkpointing) {
         ggml_build_backward_gradient_checkpointing(ctx, gf, gb, gb_tmp, checkpoints.data(), (int) checkpoints.size());
     } else {
-        *gb = *gf;
+        ggml_graph_cpy(gf, gb);
         ggml_build_backward_expand(ctx, gf, gb, true);
     }
 
@@ -444,14 +440,13 @@ static struct ggml_tensor * llama_build_train_graphs(
         // make sure some tensors are not reallocated by inserting new temporary nodes depending on them
         int n_leafs_before = gb->n_leafs;
         int n_nodes_before = gb->n_nodes;
-        struct ggml_tensor * one = ggml_new_f32(ctx, 1.0f);
         // output tensors
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t35, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t35, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, 1.0f));
         // input gradient
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, 1.0f));
         // KQ_pos
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, 1.0f));
         GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
 
         ggml_allocr_alloc(alloc, t36->grad);
@@ -1006,6 +1001,7 @@ int main(int argc, char ** argv) {
     opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
     opt->params.print_forward_graph     = false;
     opt->params.print_backward_graph    = false;
+    opt->params.graph_size              = LLAMA_TRAIN_MAX_NODES;
     opt->params.n_threads               = params.common.n_threads;
     opt->params.past                    = params.common.opt_past;
     opt->params.delta                   = params.common.opt_delta;
@@ -1105,14 +1101,11 @@ int main(int argc, char ** argv) {
     alloc = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
     ggml_allocr_alloc(alloc, tokens_input);
     ggml_allocr_alloc(alloc, target_probs);
-    ggml_allocr_free(alloc);
 
     // context for compute tensors without their data
-    size_t estimated_compute_size_wo_data = (
-        ggml_tensor_overhead()*GGML_MAX_NODES*2
-      + (GGML_OBJECT_SIZE+GGML_GRAPH_SIZE)*(
-            params.common.use_checkpointing ? 3 : 2
-        )
+    const size_t estimated_compute_size_wo_data = (
+            2*LLAMA_TRAIN_MAX_NODES*ggml_tensor_overhead() +
+            (params.common.use_checkpointing ? 3 : 2)*(GGML_OBJECT_SIZE+ggml_graph_overhead_custom(LLAMA_TRAIN_MAX_NODES, true))
     );
     struct ggml_init_params ctx_compute_params = {
         estimated_compute_size_wo_data, // mem_size
@@ -1135,11 +1128,11 @@ int main(int argc, char ** argv) {
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
         alloc = ggml_allocr_new_measure(tensor_alignment);
-        gf = ggml_new_graph(ctx_compute);
+        gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
-        gb = ggml_new_graph(ctx_compute);
+        gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gb_tmp = params.common.use_checkpointing
-            ? ggml_new_graph(ctx_compute)
+            ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true)
             : NULL;
         loss = llama_build_train_graphs(
             &model, alloc, ctx_compute,
@@ -1154,7 +1147,6 @@ int main(int argc, char ** argv) {
             best_compute_size = max_compute_size;
             best_order = gf->order;
         }
-        ggml_allocr_free(alloc);
         ggml_free(ctx_compute);
     }
     size_t max_compute_size = best_compute_size;
@@ -1168,11 +1160,11 @@ int main(int argc, char ** argv) {
     mem_compute_data.resize(max_compute_size);
     ctx_compute = ggml_init(ctx_compute_params);
     alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
-    gf = ggml_new_graph(ctx_compute);
+    gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
-    gb = ggml_new_graph(ctx_compute);
+    gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gb_tmp = params.common.use_checkpointing
-        ? ggml_new_graph(ctx_compute)
+        ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true)
         : NULL;
     loss = llama_build_train_graphs(
         &model, alloc, ctx_compute,
@@ -1182,7 +1174,6 @@ int main(int argc, char ** argv) {
         params.common.use_flash,
         params.common.use_checkpointing
     );
-    ggml_allocr_free(alloc);
 
     std::vector<llama_token> train_tokens;
     std::vector<size_t> train_samples_begin;
@@ -1294,10 +1285,6 @@ int main(int argc, char ** argv) {
 
         save_train_files(&save_data, train);
         opt_cb_data.last_save_iter = opt->iter;
-    }
-
-    if (alloc) {
-        ggml_allocr_free(alloc);
     }
 
     ggml_free(opt->ctx);
