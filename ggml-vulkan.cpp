@@ -744,6 +744,8 @@ static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t siz
     }
 
     if (memory_type_index >= mem_props.memoryTypeCount) {
+        ctx->device.lock()->device.destroyBuffer(buf->buffer);
+        buf->size = 0;
         throw vk::OutOfDeviceMemoryError("No suitable memory type found");
     }
 
@@ -3875,7 +3877,7 @@ static ggml_tensor * ggml_vk_find_last_use(const ggml_tensor * node, ggml_cgraph
 
 static void ggml_vk_preallocate_buffers_graph(ggml_backend_vk_context * ctx, ggml_tensor * node){
 #ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_ctx->preallocate_buffers_graph(" << node << ")" << std::endl;
+    std::cerr << "ggml_vk_preallocate_buffers_graph(" << node << ")" << std::endl;
 #endif
     const bool any_on_device = node->backend == GGML_BACKEND_GPU
         || (node->src[0] != nullptr && (node->src[0]->backend == GGML_BACKEND_GPU || node->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
@@ -3994,8 +3996,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         return;
     }
 #ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_ctx->preallocate_buffers()" << std::endl;
-    std::cerr << "qx_size: " << ctx->prealloc_size_qx << " qy_size: " << ctx->prealloc_size_qy << " x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << std::endl;
+    std::cerr << "ggml_vk_preallocate_buffers(qx_size: " << ctx->prealloc_size_qx << " qy_size: " << ctx->prealloc_size_qy << " x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << ")" << std::endl;
 #endif
 #if defined(GGML_VULKAN_RUN_TESTS)
     ctx->staging = ggml_vk_create_buffer_check(ctx, 100ul * 1024ul * 1024ul, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
