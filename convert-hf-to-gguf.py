@@ -1705,7 +1705,10 @@ class BertModel(Model):
             n_dims = len(data.shape)
             new_dtype: type[np.floating[Any]]
 
-            if self.ftype == 1 and name.endswith(".weight") and n_dims == 2:
+            if (
+                self.ftype == 1 and name.endswith(".weight") and n_dims == 2
+                and name != "embeddings.token_type_embeddings.weight"  # not used with get_rows, must be F32
+            ):
                 # if f16 desired, convert any float32 2-dim weight tensors to float16
                 new_dtype = np.float16
             else:

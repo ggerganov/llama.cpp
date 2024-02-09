@@ -1881,7 +1881,6 @@ struct llama_context {
     struct ggml_tensor * inp_tokens;    // I32 [n_batch]
     struct ggml_tensor * inp_embd;      // F32 [n_embd, n_batch]
     struct ggml_tensor * inp_pos;       // I32 [n_batch]
-    struct ggml_tensor * inp_type;      // I32 [n_batch]
     struct ggml_tensor * inp_KQ_mask;   // F32 [n_ctx, n_batch]
     struct ggml_tensor * inp_K_shift;   // I32 [n_ctx]
     struct ggml_tensor * inp_sum;       // F32 [1, n_batch]
@@ -5746,13 +5745,14 @@ struct llm_build_context {
         struct ggml_tensor * inpL;
 
         // get input vectors with right size
-        struct ggml_tensor * inp_type = ggml_view_1d(ctx0, lctx.inp_type, n_tokens, 0);
         struct ggml_tensor * inp_pos = ggml_view_1d(ctx0, lctx.inp_pos, n_tokens, 0);
         struct ggml_tensor * inp_sum = ggml_view_1d(ctx0, lctx.inp_sum, n_tokens, 0);
 
         // construct input embeddings (token, type, position)
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
-        inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.type_embd, inp_type), inpL);
+        // token types are hardcoded to zero ("Sentence A")
+        struct ggml_tensor * type_row0 = ggml_view_1d(ctx0, model.type_embd, n_embd, 0);
+        inpL = ggml_add(ctx0, inpL, type_row0);
         inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.pos_embd, inp_pos), inpL);
         cb(inpL, "inp_embd", -1);
 
@@ -7247,12 +7247,6 @@ static struct ggml_cgraph * llama_build_graph(
             const int64_t n_tokens = batch.n_tokens;
 
             ggml_backend_tensor_set(lctx.inp_pos, batch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
-        }
-
-        {
-            // for embedding models, token type is always zero ("sentence A")
-            GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_type->buffer));
-            memset(lctx.inp_type->data, 0, batch.n_tokens * ggml_element_size(lctx.inp_type));
         }
 
         {
@@ -11240,7 +11234,6 @@ struct llama_context * llama_new_context_with_model(
             ctx->inp_tokens  = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
             ctx->inp_embd    = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, hparams.n_embd, cparams.n_batch);
             ctx->inp_pos     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
-            ctx->inp_type    = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
             ctx->inp_KQ_mask = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx, cparams.n_batch);
             ctx->inp_K_shift = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_ctx);
             ctx->inp_sum     = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, 1, cparams.n_batch);
@@ -11248,7 +11241,6 @@ struct llama_context * llama_new_context_with_model(
             ggml_set_name(ctx->inp_tokens,  "inp_tokens");
             ggml_set_name(ctx->inp_embd,    "inp_embd");
             ggml_set_name(ctx->inp_pos,     "inp_pos");
-            ggml_set_name(ctx->inp_type,    "inp_type");
             ggml_set_name(ctx->inp_KQ_mask, "inp_KQ_mask");
             ggml_set_name(ctx->inp_K_shift, "inp_K_shift");
             ggml_set_name(ctx->inp_sum,     "inp_sum");
