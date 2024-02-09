@@ -3893,9 +3893,9 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_BLOOM:
                 {
-                    model.tok_embd   = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD,      "weight"), {n_embd, n_vocab});
-                    model.tok_norm   = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd});
-                    model.tok_norm_b = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {n_embd});
+                    model.tok_embd   = ml.create_tensor(ctx_input,  tn(LLM_TENSOR_TOKEN_EMBD,      "weight"), {n_embd, n_vocab});
+                    model.tok_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd});
+                    model.tok_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {n_embd});
 
                     // output
                     {
@@ -5757,6 +5757,7 @@ struct llm_build_context {
 
         // embed layer norm
         inpL = llm_build_norm(ctx0, inpL, hparams, model.tok_norm, model.tok_norm_b, LLM_NORM, cb, -1);
+        cb(inpL, "inp_norm", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = ggml_view_2d(ctx0, lctx.inp_KQ_mask, n_kv, n_tokens, n_kv*ggml_type_size(lctx.inp_KQ_mask->type), 0);
@@ -5793,6 +5794,7 @@ struct llm_build_context {
             cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].attn_norm, model.layers[il].attn_norm_b, LLM_NORM, cb, il);
 
             struct ggml_tensor * ffn_inp = cur;
+            cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
             cur = llm_build_ffn(ctx0, cur,
@@ -5801,6 +5803,7 @@ struct llm_build_context {
                     model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                     NULL,
                     LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
+            cb(cur, "ffn_out", il);
 
             // attentions bypass the intermediate layer
             cur = ggml_add(ctx0, cur, ffn_inp);
