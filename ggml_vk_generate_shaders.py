@@ -2067,6 +2067,8 @@ type_names = {
 
 K_QUANTS_PER_ITERATION = 2
 
+ASYNCIO_CONCURRENCY = 64
+
 output_dir = gettempdir()
 
 lock = asyncio.Lock()
@@ -2291,7 +2293,14 @@ async def main():
     tasks.append(string_to_spv("rope_neox_f32", rope_neox_src, {"A_TYPE": "float", "D_TYPE": "float"}))
     tasks.append(string_to_spv("rope_neox_f16", rope_neox_src, {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}))
 
-    await asyncio.gather(*tasks)
+    # Helper to decorate tasks with semaphore acquisition.
+    async def withSemaphore(sem, task):
+        async with sem:
+            return await task
+
+    # Run tasks concurrently guarded by a concurrency limit.
+    sem = asyncio.Semaphore(ASYNCIO_CONCURRENCY)
+    await asyncio.gather(*(withSemaphore(sem, task) for task in tasks))
 
     with open("ggml-vulkan-shaders.hpp", "w") as f:
         f.write("#include <cstdint>\n\n")
