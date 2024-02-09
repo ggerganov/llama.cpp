@@ -8175,7 +8175,9 @@ struct llm_tokenizer_wpm {
         // find the longest tokens that form the words
         for (const std::string &word : words) {
             // skip empty words
-            if (word.size() == 0) continue;
+            if (word.size() == 0) {
+                continue;
+            }
 
             // prepend phantom space
             std::string word1 = "\xe2\x96\x81" + word;
@@ -8201,7 +8203,9 @@ struct llm_tokenizer_wpm {
                 }
 
                 // must be an unknown character
-                if (!match) i++;
+                if (!match) {
+                    i++;
+                }
             }
 
             // we didn't find any matches for this word
@@ -8215,8 +8219,7 @@ struct llm_tokenizer_wpm {
     }
 
     std::vector<std::string> preprocess(const std::string & text) {
-        std::string ori_str = text;
-        ori_str = normalize(ori_str);
+        std::string ori_str = normalize(text);
         uint64_t ori_size = ori_str.size();
 
         // single punct / single symbol / single digit
@@ -8267,8 +8270,7 @@ struct llm_tokenizer_wpm {
     std::string normalize(const std::string &text) {
         // TODO: handle chinese characters? https://github.com/huggingface/tokenizers/blob/ef5f50605ddf9f8caef1598c0e4853862b9707a7/tokenizers/src/normalizers/bert.rs#L98
         std::string text2 = strip_accents(text);
-        for (size_t i = 0; i < text2.size(); i += utf8_len(text2[i]))
-        {
+        for (size_t i = 0; i < text2.size(); i += utf8_len(text2[i])) {
             char c = text2[i];
             if (c >= 'A' && c <= 'Z')
                 text2[i] = c - 'A' + 'a';
@@ -8331,20 +8333,16 @@ struct llm_tokenizer_wpm {
             {"Ô", 'O'}, {"Õ", 'O'}, {"Ö", 'O'}, {"ò", 'o'}, {"ó", 'o'}, {"ô", 'o'},
             {"õ", 'o'}, {"ö", 'o'}, {"Ù", 'U'}, {"Ú", 'U'}, {"Û", 'U'}, {"Ü", 'U'},
             {"ù", 'u'}, {"ú", 'u'}, {"û", 'u'}, {"ü", 'u'}, {"Ý", 'Y'}, {"ý", 'y'},
-            {"Ç", 'C'}, {"ç", 'c'}, {"Ñ", 'N'},{ "ñ", 'n'},
+            {"Ç", 'C'}, {"ç", 'c'}, {"Ñ", 'N'}, {"ñ", 'n'},
         };
 
-        for (size_t i = 0; i < inputString.length();)
-        {
+        for (size_t i = 0; i < inputString.length();) {
             int len = utf8_len(inputString[i]);
             std::string curChar = inputString.substr(i, len);
             auto iter = accentMap.find(curChar);
-            if (iter != accentMap.end())
-            {
+            if (iter != accentMap.end()) {
                 resultString += iter->second;
-            }
-            else
-            {
+            } else {
                 resultString += curChar;
             }
             i += len;
@@ -8362,12 +8360,12 @@ struct llm_tokenizer_wpm {
     const llama_vocab & vocab;
 };
 
-typedef enum FRAGMENT_BUFFER_VARIANT_TYPE{
+typedef enum FRAGMENT_BUFFER_VARIANT_TYPE {
     FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN,
     FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT
 } FRAGMENT_BUFFER_VARIANT_TYPE;
 
-struct fragment_buffer_variant{
+struct fragment_buffer_variant {
     fragment_buffer_variant(llama_vocab::id _token)
     :
         type(FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN),
@@ -8397,8 +8395,7 @@ struct fragment_buffer_variant{
 
 // #define PRETOKENIZERDEBUG
 
-static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer)
-{
+static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer) {
     // for each special token
     for (const auto & st: vocab.special_tokens_cache) {
         const auto & special_token = st.first;
@@ -8516,10 +8513,8 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
     switch (vocab.type) {
         case LLAMA_VOCAB_TYPE_SPM:
             {
-                for (const auto & fragment: fragment_buffer)
-                {
-                    if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT)
-                    {
+                for (const auto & fragment: fragment_buffer) {
+                    if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         // without adding this leading whitespace, we do not get the same results as the original tokenizer
 
                         // TODO: It's likely possible to get rid of this string copy entirely
@@ -8539,19 +8534,15 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         llm_tokenizer_spm tokenizer(vocab);
                         llama_escape_whitespace(raw_text);
                         tokenizer.tokenize(raw_text, output);
-                    }
-                    else // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
-                    {
+                    } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                     }
                 }
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
-                for (const auto & fragment: fragment_buffer)
-                {
-                    if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT)
-                    {
+                for (const auto & fragment: fragment_buffer) {
+                    if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
@@ -8559,19 +8550,15 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 #endif
                         llm_tokenizer_bpe tokenizer(vocab);
                         tokenizer.tokenize(raw_text, output);
-                    }
-                    else // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
-                    {
+                    } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                     }
                 }
             } break;
         case LLAMA_VOCAB_TYPE_WPM:
             {
-                for (const auto & fragment: fragment_buffer)
-                {
-                    if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT)
-                    {
+                for (const auto & fragment: fragment_buffer) {
+                    if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
 #ifdef PRETOKENIZERDEBUG
@@ -8579,9 +8566,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 #endif
                         llm_tokenizer_wpm tokenizer(vocab);
                         tokenizer.tokenize(raw_text, output);
-                    }
-                    else // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
-                    {
+                    } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                     }
                 }
