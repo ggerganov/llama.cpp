@@ -174,7 +174,7 @@ inline std::string format_llama2(std::vector<json> messages)
 
     for (auto it = messages.begin(); it != messages.end(); ++it) {
         if (!is_inside_turn) {
-            output << "<s>[INST] ";
+            output << "[INST] ";
         }
         std::string role    = json_value(*it, "role", std::string("user"));
         std::string content = json_value(*it, "content", std::string(""));
