@@ -167,7 +167,7 @@ static T json_value(const json &body, const std::string &key, const T &default_v
         : default_value;
 }
 
-inline std::string format_mistral(std::vector<json> messages)
+inline std::string format_llama2(std::vector<json> messages)
 {
     std::ostringstream output;
     bool is_inside_turn = false;
@@ -190,7 +190,7 @@ inline std::string format_mistral(std::vector<json> messages)
         }
     }
 
-    LOG_VERBOSE("format_mistral", {{"text", output.str()}});
+    LOG_VERBOSE("format_llama2", {{"text", output.str()}});
 
     return output.str();
 }

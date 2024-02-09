@@ -21,8 +21,8 @@ inline static json oaicompat_completion_params_parse(
     json llama_params;
     bool using_chatml = chat_template == "chatml";
     std::string formatted_prompt = using_chatml
-        ? format_chatml(body["messages"])  // OpenAI 'messages' to chatml
-        : format_mistral(body["messages"]); // OpenAI 'messages' to mistral format
+        ? format_chatml(body["messages"])  // OpenAI 'messages' to chatml (with <|im_start|>,...)
+        : format_llama2(body["messages"]); // OpenAI 'messages' to llama2 (with [INST],...)
 
     llama_params["__oaicompat"] = true;
 
