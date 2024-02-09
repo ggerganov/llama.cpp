@@ -16649,7 +16649,7 @@ struct ggml_compute_state_shared {
     atomic_int node_n;    // active graph node
     atomic_int node_task; // active graph node task phase
 
-    bool (*abort_callback)(void * data); // abort ggml_graph_compute when true
+    ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
     void * abort_callback_data;
 };
 

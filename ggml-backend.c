@@ -653,6 +653,9 @@ struct ggml_backend_cpu_context {
     int n_threads;
     void * work_data;
     size_t work_size;
+
+    ggml_abort_callback abort_callback;
+    void *              abort_callback_data;
 };
 
 GGML_CALL static const char * ggml_backend_cpu_name(ggml_backend_t backend) {
@@ -691,6 +694,9 @@ GGML_CALL static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(gg
         cpu_plan->cplan.work_data = malloc(cpu_plan->cplan.work_size);
     }
 
+    cpu_plan->cplan.abort_callback      = cpu_ctx->abort_callback;
+    cpu_plan->cplan.abort_callback_data = cpu_ctx->abort_callback_data;
+
     return cpu_plan;
 }
 
@@ -721,8 +727,10 @@ GGML_CALL static bool ggml_backend_cpu_graph_compute(ggml_backend_t backend, str
         cpu_ctx->work_data = realloc(cpu_ctx->work_data, cplan.work_size);
         cpu_ctx->work_size = cplan.work_size;
     }
-
     cplan.work_data = cpu_ctx->work_data;
+
+    cplan.abort_callback      = cpu_ctx->abort_callback;
+    cplan.abort_callback_data = cpu_ctx->abort_callback_data;
 
     ggml_graph_compute(cgraph, &cplan);
     return true;
@@ -759,9 +767,11 @@ static struct ggml_backend_i cpu_backend_i = {
 ggml_backend_t ggml_backend_cpu_init(void) {
     struct ggml_backend_cpu_context * ctx = malloc(sizeof(struct ggml_backend_cpu_context));
 
-    ctx->n_threads = GGML_DEFAULT_N_THREADS;
-    ctx->work_data = NULL;
-    ctx->work_size = 0;
+    ctx->n_threads           = GGML_DEFAULT_N_THREADS;
+    ctx->work_data           = NULL;
+    ctx->work_size           = 0;
+    ctx->abort_callback      = NULL;
+    ctx->abort_callback_data = NULL;
 
     ggml_backend_t cpu_backend = malloc(sizeof(struct ggml_backend));
 
@@ -781,6 +791,14 @@ void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads) {
 
     struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
     ctx->n_threads = n_threads;
+}
+
+void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_callback abort_callback, void * abort_callback_data) {
+    GGML_ASSERT(ggml_backend_is_cpu(backend_cpu));
+
+    struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
+    ctx->abort_callback = abort_callback;
+    ctx->abort_callback_data = abort_callback_data;
 }
 
 GGML_CALL ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) {

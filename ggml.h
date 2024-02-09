@@ -567,6 +567,11 @@ extern "C" {
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
 
+    // Abort callback
+    // If not NULL, called before ggml computation
+    // If it returns true, the computation is aborted
+    typedef bool (*ggml_abort_callback)(void * data);
+
     // the compute plan that needs to be prepared for ggml_graph_compute()
     // since https://github.com/ggerganov/ggml/issues/287
     struct ggml_cplan {
@@ -576,8 +581,8 @@ extern "C" {
         int n_threads;
 
         // abort ggml_graph_compute when true
-        bool (*abort_callback)(void * data);
-        void * abort_callback_data;
+        ggml_abort_callback abort_callback;
+        void *              abort_callback_data;
     };
 
     enum ggml_cgraph_eval_order {
