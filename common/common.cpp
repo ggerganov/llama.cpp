@@ -1166,7 +1166,7 @@ std::vector<llama_sampler_type> sampler_types_from_chars(const std::string& name
 
     std::vector<llama_sampler_type> sampler_types;
     sampler_types.reserve(names_string.size());
-    for(const auto& c : names_string) {
+    for (const auto & c : names_string) {
         const auto sampler_item = sampler_name_map.find(c);
         if (sampler_item != sampler_name_map.end()) {
             sampler_types.push_back(sampler_item->second);
