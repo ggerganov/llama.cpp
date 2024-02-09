@@ -438,6 +438,15 @@ dequant_head = """#version 450
 
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_shader_16bit_storage : require
+
+layout (push_constant) uniform parameter
+{
+    uint M;
+    uint K;
+    uint stride_a;
+    uint stride_b;
+    uint num_groups;
+} p;
 """
 
 dequant_body = """
@@ -446,37 +455,61 @@ layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int K;
-    int stride_a;
-    int stride_b;
-} p;
-
 void main() {
-    const int i = int(gl_GlobalInvocationID.x);
+    const uint i = gl_GlobalInvocationID.x;
 
     // Transposed
-    const int row = i % (p.K / QUANT_K);
-    const int col = i / (p.K / QUANT_K);
+    const uint row = i % (p.K / QUANT_K);
+    const uint col = i / (p.K / QUANT_K);
 
     if (row * QUANT_K >= p.K || col >= p.M) {
         return;
     }
 
-    const int stride_a = p.stride_a / QUANT_K;
+    const uint stride_a = p.stride_a / QUANT_K;
 
-    const int ib = col * stride_a + row;
+    const uint ib = col * stride_a + row;
 
-    const int y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
-    const int step = QUANT_R == 1 ? 2 : 1;
+    const uint y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
+    const uint step = QUANT_R == 1 ? 2 : 1;
 
-    [[unroll]] for (int iqs = 0; iqs < QUANT_K/QUANT_R; iqs += step) {
+    [[unroll]] for (uint iqs = 0; iqs < QUANT_K/QUANT_R; iqs += step) {
         DEQUANT_FUNC
 
         data_b[col * p.stride_b + row*QUANT_K + iqs + 0       ] = D_TYPE(v.x);
         data_b[col * p.stride_b + row*QUANT_K + iqs + y_offset] = D_TYPE(v.y);
+    }
+}
+"""
+
+dequant_q4_0_body = """
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {block_q4_0 data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
+
+void main() {
+    const uint i = gl_WorkGroupID.x;
+
+    // assume 32 threads
+    const uint tid = gl_LocalInvocationID.x;
+    const uint il  = tid/8;
+    const uint ir  = tid%8;
+    const uint ib = 8*i + ir;
+    if (ib >= p.num_groups) {
+        return;
+    }
+
+    const uint b_idx = 256*i + 32*ir + 4*il;
+
+    const float d = float(data_a[ib].d);
+    const float dm = -8.0f * d;
+
+    const uint q_idx = 4*il;
+
+    [[unroll]] for (uint l = 0; l < 4; ++l) {
+        data_b[b_idx + l +  0] = D_TYPE(d * (data_a[ib].qs[q_idx + l] & 0xF) + dm);
+        data_b[b_idx + l + 16] = D_TYPE(d * (data_a[ib].qs[q_idx + l] >>  4) + dm);
     }
 }
 """
@@ -488,29 +521,21 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int K;
-    int stride_a;
-    int stride_b;
-} p;
-
 void main() {
-    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
-        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+    [[unroll]] for (uint wgy = 0; wgy < 256; wgy++) {
+        const uint i = gl_WorkGroupID.x * 256 + wgy;
         if (i >= p.M * p.K / QUANT_K) {
             return;
         }
 
-        const int tid = int(gl_LocalInvocationID.x);
-        const int ip = tid / 32;
-        const int il = tid - 32 * ip;
-        const int is = 8 * ip + il / 16;
+        const uint tid = gl_LocalInvocationID.x;
+        const uint ip = tid / 32;
+        const uint il = tid - 32 * ip;
+        const uint is = 8 * ip + il / 16;
 
-        const int y_idx = i * QUANT_K + 128 * ip + il;
+        const uint y_idx = i * QUANT_K + 128 * ip + il;
 
-        const int ql_idx = 32 * ip + il;
+        const uint ql_idx = 32 * ip + il;
         const uint8_t qs = data_a[i].qs[32 * ip + il];
 
         FLOAT_TYPE dall = FLOAT_TYPE(data_a[i].d.x);
@@ -528,31 +553,23 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int K;
-    int stride_a;
-    int stride_b;
-} p;
-
 void main() {
-    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
-        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+    [[unroll]] for (uint wgy = 0; wgy < 256; wgy++) {
+        const uint i = uint(gl_WorkGroupID.x * 256 + wgy);
         if (i >= p.M * p.K / QUANT_K) {
             return;
         }
 
-        const int r = int(gl_LocalInvocationID.x) / 4;
-        const int tid = r / 2;
-        const int is0 = r % 2;
-        const int l0 = 16 * is0 + 4 * (int(gl_LocalInvocationID.x) % 4);
-        const int n = tid / 4;
-        const int j = tid - 4*n;
+        const uint r = gl_LocalInvocationID.x / 4;
+        const uint tid = r / 2;
+        const uint is0 = r % 2;
+        const uint l0 = 16 * is0 + 4 * (gl_LocalInvocationID.x % 4);
+        const uint n = tid / 4;
+        const uint j = tid - 4*n;
 
         const uint8_t m = uint8_t(1 << (4*n + j));
-        const int is = 8*n + 2*j + is0;
-        const int shift = 2*j;
+        const uint is = 8*n + 2*j + is0;
+        const uint shift = 2*j;
 
         const int8_t us = int8_t(is <  4 ? (data_a[i].scales[is-0] & 0xF) | (((data_a[i].scales[is+8] >> 0) & 3) << 4) :
                                  is <  8 ? (data_a[i].scales[is-0] & 0xF) | (((data_a[i].scales[is+4] >> 2) & 3) << 4) :
@@ -561,10 +578,10 @@ void main() {
         const FLOAT_TYPE d_all = FLOAT_TYPE(data_a[i].d);
         const FLOAT_TYPE dl    = d_all * FLOAT_TYPE(us - 32);
 
-        const int y_idx = i * QUANT_K + 128 * n + 32 * j;
-        const int qs_idx = 32*n;
+        const uint y_idx = i * QUANT_K + 128 * n + 32 * j;
+        const uint qs_idx = 32*n;
 
-        for (int l = l0; l < l0 + 4; ++l) {
+        for (uint l = l0; l < l0 + 4; ++l) {
             data_b[y_idx + l] = D_TYPE(dl * FLOAT_TYPE(int8_t((data_a[i].qs[qs_idx + l] >> shift) & 3) - (((data_a[i].hmask[l] & m) != 0) ? 0 : 4)));
         }
     }
@@ -576,32 +593,24 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int K;
-    int stride_a;
-    int stride_b;
-} p;
-
 void main() {
-    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
-        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+    [[unroll]] for (uint wgy = 0; wgy < 256; wgy++) {
+        const uint i = gl_WorkGroupID.x * 256 + wgy;
         if (i >= p.M * p.K / QUANT_K) {
             return;
         }
 
-        const int tid = int(gl_LocalInvocationID.x);
-        const int il = tid / 8;
-        const int ir = tid % 8;
-        const int is = 2 * il;
-        const int n = 4;
+        const uint tid = gl_LocalInvocationID.x;
+        const uint il = tid / 8;
+        const uint ir = tid % 8;
+        const uint is = 2 * il;
+        const uint n = 4;
 
         const FLOAT_TYPE dall = FLOAT_TYPE(data_a[i].d.x);
         const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[i].d.y);
 
-        const int y_idx = i * QUANT_K + 64 * il + n * ir;
-        const int qs_idx = 32*il + n * ir;
+        const uint y_idx = i * QUANT_K + 64 * il + n * ir;
+        const uint qs_idx = 32*il + n * ir;
 
         uint8_t sc;
         uint8_t m;
@@ -625,7 +634,7 @@ void main() {
         const FLOAT_TYPE d2 = dall * sc;
         const FLOAT_TYPE m2 = dmin * m;
 
-        [[unroll]] for (int l = 0; l < n; ++l) {
+        [[unroll]] for (uint l = 0; l < n; ++l) {
             data_b[y_idx + l     ] = D_TYPE(d1 * FLOAT_TYPE(data_a[i].qs[qs_idx + l] & 0xF) - m1);
             data_b[y_idx + l + 32] = D_TYPE(d2 * FLOAT_TYPE(data_a[i].qs[qs_idx + l] >>  4) - m2);
         }
@@ -638,32 +647,24 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int K;
-    int stride_a;
-    int stride_b;
-} p;
-
 void main() {
-    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
-        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+    [[unroll]] for (uint wgy = 0; wgy < 256; wgy++) {
+        const uint i = gl_WorkGroupID.x * 256 + wgy;
         if (i >= p.M * p.K / QUANT_K) {
             return;
         }
 
-        const int tid = int(gl_LocalInvocationID.x);
-        const int il = tid / 16;
-        const int ir = tid % 16;
-        const int is = 2 * il;
+        const uint tid = gl_LocalInvocationID.x;
+        const uint il = tid / 16;
+        const uint ir = tid % 16;
+        const uint is = 2 * il;
 
         const FLOAT_TYPE dall = FLOAT_TYPE(data_a[i].d.x);
         const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[i].d.y);
 
-        const int y_idx = i * QUANT_K + 64 * il + 2 * ir;
-        const int qs_idx = 32*il + 2 * ir;
-        const int qh_idx = 2 * ir;
+        const uint y_idx = i * QUANT_K + 64 * il + 2 * ir;
+        const uint qs_idx = 32*il + 2 * ir;
+        const uint qh_idx = 2 * ir;
 
         uint8_t sc;
         uint8_t m;
@@ -702,28 +703,20 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int K;
-    int stride_a;
-    int stride_b;
-} p;
-
 void main() {
-    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
-        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+    [[unroll]] for (uint wgy = 0; wgy < 256; wgy++) {
+        const uint i = gl_WorkGroupID.x * 256 + wgy;
         if (i >= p.M * p.K / QUANT_K) {
             return;
         }
-        const int tid = int(gl_LocalInvocationID.x);
-        const int ip = tid / 32;
-        const int il = tid - 32 * ip;
-        const int is = 8 * ip + il / 16;
+        const uint tid = gl_LocalInvocationID.x;
+        const uint ip = tid / 32;
+        const uint il = tid - 32 * ip;
+        const uint is = 8 * ip + il / 16;
 
-        const int y_idx = i * QUANT_K + 128 * ip + il;
+        const uint y_idx = i * QUANT_K + 128 * ip + il;
 
-        const int ql_idx = 64 * ip + il;
+        const uint ql_idx = 64 * ip + il;
         const uint8_t qh = data_a[i].qh[32 * ip + il];
 
         const FLOAT_TYPE d = FLOAT_TYPE(data_a[i].d);
@@ -2208,7 +2201,7 @@ async def main():
         if i == GGML_TYPE_F16:
             stream.extend((shader_f16_defines,  shader_f16_dequant_func,  dequant_body))
         elif i == GGML_TYPE_Q4_0:
-            stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func, dequant_body))
+            stream.extend((shader_q4_0_defines, dequant_q4_0_body))
         elif i == GGML_TYPE_Q4_1:
             stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func, dequant_body))
         elif i == GGML_TYPE_Q5_0:
