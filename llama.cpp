@@ -7789,7 +7789,7 @@ private:
         work_queue.push(bigram);
     }
 
-    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
+    static std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
         std::vector<std::string> bpe_words;
         std::vector<std::string> bpe_encoded_words;
 
@@ -7819,7 +7819,7 @@ private:
             const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
 
             // handling contractions
-            if (!split_condition && bytes_remain >= 2) {
+            if (!split_condition && bytes_remain >= 2 && token != " ") {
                 // 's|'t|'m|'d
                 if (utf_char == "\'" && (utf_char_next == "s" || utf_char_next == "t" || utf_char_next == "m" || utf_char_next == "d")) {
                     split_condition = true;
@@ -7835,13 +7835,13 @@ private:
                     continue;
                 }
             }
-            if (!split_condition && bytes_remain >= 3) {
+            if (!split_condition && bytes_remain >= 3 && token != " ") {
                 // 're|'ve|'ll
                 if (utf_char == "\'" && (
-                    (utf_char_next == "r" && utf_char_next_next == "e") ||
-                    (utf_char_next == "v" && utf_char_next_next == "e") ||
-                    (utf_char_next == "l" && utf_char_next_next == "l"))
-                    ) {
+                        (utf_char_next == "r" && utf_char_next_next == "e") ||
+                        (utf_char_next == "v" && utf_char_next_next == "e") ||
+                        (utf_char_next == "l" && utf_char_next_next == "l"))
+                        ) {
                     split_condition = true;
                 }
                 if (split_condition) {
@@ -7867,9 +7867,9 @@ private:
                     collecting = true;
                 }
                 else if (
-                    ((codepoint_type(utf_char) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (codepoint_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
-                    (!token.size() && utf_char == " " && codepoint_type(utf_char_next) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
-                    ) {
+                        ((codepoint_type(utf_char) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (codepoint_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
+                        (!token.size() && utf_char == " " && codepoint_type(utf_char_next) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
+                        ) {
                     collecting_special = true;
                     collecting = true;
                 }
@@ -7891,7 +7891,7 @@ private:
                 else if (collecting_special && (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
                     split_condition = true;
                 }
-                else if (collecting_whitespace_lookahead && (codepoint_type(utf_char_next) == CODEPOINT_TYPE_LETTER || codepoint_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                else if (collecting_whitespace_lookahead && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE) {
                     split_condition = true;
                 }
             }
@@ -7913,7 +7913,12 @@ private:
                 collecting_whitespace_lookahead = false;
             }
             else {
-                token += utf_char;
+                if (codepoint_type(token) == CODEPOINT_TYPE_PUNCTUATION && codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER) {
+                    bpe_words.emplace_back(token);
+                    token = utf_char;
+                } else {
+                    token += utf_char;
+                }
             }
         }
 
