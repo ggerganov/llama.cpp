@@ -735,49 +735,50 @@ mul_mat_vec_head = """#version 450
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_8bit_storage : require
+
+layout (push_constant) uniform parameter
+{
+    uint ncols;
+    uint b_offset;
+    uint d_offset;
+} p;
 """
 
 mul_mat_vec_body = """
-layout(local_size_x = QUANT_K, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
-layout (push_constant) uniform parameter
-{
-    int ncols;
-    int b_offset;
-    int d_offset;
-} p;
+layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 
-shared FLOAT_TYPE tmp[QUANT_K];
+shared FLOAT_TYPE tmp[BLOCK_SIZE];
 
 void main() {
-    const int block_size = int(gl_WorkGroupSize.x);
-    const int row = int(gl_WorkGroupID.x);
-    const int tid = int(gl_LocalInvocationID.x);
+    const uint row = gl_WorkGroupID.x;
+    const uint tid = gl_LocalInvocationID.x;
 
-    const int y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
+    const uint y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
 
     tmp[tid] = FLOAT_TYPE(0.0f);
 
-    [[unroll]] for (int i = 0; i < p.ncols/block_size; i += 2) {
-        const int col = i*block_size + 2*tid;
-        const int ib = (row*p.ncols + col)/QUANT_K; // block index
-        const int iqs = (col%QUANT_K)/QUANT_R; // quant index
-        const int iybs = col - col%QUANT_K; // y block start index
+    [[unroll]] for (uint i = 0; i < p.ncols/BLOCK_SIZE; i += 2) {
+        const uint col = i*BLOCK_SIZE + 2*tid;
+        const uint ib = (row*p.ncols + col)/QUANT_K; // block index
+        const uint iqs = (col%QUANT_K)/QUANT_R; // quant index
+        const uint iybs = col - col%QUANT_K; // y block start index
 
         DEQUANT_FUNC
 
         // matrix multiplication
-        tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(data_b[p.b_offset + iybs + iqs + 0]);
-        tmp[tid] += FLOAT_TYPE(v.y) * FLOAT_TYPE(data_b[p.b_offset + iybs + iqs + y_offset]);
+        tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(data_b[p.b_offset + iybs + iqs + 0]) +
+                    FLOAT_TYPE(v.y) * FLOAT_TYPE(data_b[p.b_offset + iybs + iqs + y_offset]);
     }
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (int s = block_size/2; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = BLOCK_SIZE/2; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
@@ -797,38 +798,31 @@ layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
-layout (push_constant) uniform parameter
-{
-    int ncols;
-    int b_offset;
-    int d_offset;
-} p;
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
-    const int row = int(gl_WorkGroupID.x);
+    const uint row = gl_WorkGroupID.x;
 
-    const int num_blocks_per_row = p.ncols / QUANT_K;
-    const int ib0 = row*num_blocks_per_row;
+    const uint num_blocks_per_row = p.ncols / QUANT_K;
+    const uint ib0 = row*num_blocks_per_row;
 
-    const int tid = int(gl_LocalInvocationID.x)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
-    const int ix  = int(gl_LocalInvocationID.x)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
+    const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
+    const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
 
-    const int step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
+    const uint step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
 
-    const int v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
-    const int v_in = tid - step*v_im;                      // 0...15 or 0...7
+    const uint v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
+    const uint v_in = tid - step*v_im;                      // 0...15 or 0...7
 
-    const int l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
-    const int q_offset = 32*v_im + l0;
-    const int s_offset = 8*v_im;
-    const int y_offset = 128*v_im + l0;
+    const uint l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
+    const uint q_offset = 32*v_im + l0;
+    const uint s_offset = 8*v_im;
+    const uint y_offset = 128*v_im + l0;
 
     tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
-    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
-        const int y_idx = i * QUANT_K + y_offset;
+    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+        const uint y_idx = i * QUANT_K + y_offset;
 
         const FLOAT_TYPE dall = FLOAT_TYPE(data_a[ib0 + i].d.x);
         const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[ib0 + i].d.y);
@@ -858,7 +852,7 @@ void main() {
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (int s = 16; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = 16; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
@@ -876,41 +870,34 @@ layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
-layout (push_constant) uniform parameter
-{
-    int ncols;
-    int b_offset;
-    int d_offset;
-} p;
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
-    const int row = int(gl_WorkGroupID.x);
+    const uint row = gl_WorkGroupID.x;
 
-    const int num_blocks_per_row = p.ncols / QUANT_K;
-    const int ib0 = row*num_blocks_per_row;
+    const uint num_blocks_per_row = p.ncols / QUANT_K;
+    const uint ib0 = row*num_blocks_per_row;
 
-    const int tid = int(gl_LocalInvocationID.x)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
-    const int ix  = int(gl_LocalInvocationID.x)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
+    const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
+    const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
 
-    const int step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
+    const uint step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
 
-    const int v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
-    const int v_in = tid - step*v_im;                      // 0...15 or 0...7
+    const uint v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
+    const uint v_in = tid - step*v_im;                      // 0...15 or 0...7
 
     const uint8_t m = uint8_t(1 << (4 * v_im));
 
-    const int l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
-    const int q_offset = 32*v_im + l0;
-    const int y_offset = 128*v_im + l0;
+    const uint l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
+    const uint q_offset = 32*v_im + l0;
+    const uint y_offset = 128*v_im + l0;
 
     tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
     const uint s_shift = 4 * v_im;
 
-    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
-        const int y_idx = i * QUANT_K + y_offset;
+    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+        const uint y_idx = i * QUANT_K + y_offset;
 
         const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
 
@@ -930,7 +917,7 @@ void main() {
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (int s = 16; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = 16; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
@@ -948,42 +935,35 @@ layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
-layout (push_constant) uniform parameter
-{
-    int ncols;
-    int b_offset;
-    int d_offset;
-} p;
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
-    const int row = int(gl_WorkGroupID.x);
+    const uint row = gl_WorkGroupID.x;
 
-    const int num_blocks_per_row = p.ncols / QUANT_K;
-    const int ib0 = row*num_blocks_per_row;
+    const uint num_blocks_per_row = p.ncols / QUANT_K;
+    const uint ib0 = row*num_blocks_per_row;
 
-    const int tid = int(gl_LocalInvocationID.x)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
-    const int ix  = int(gl_LocalInvocationID.x)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
+    const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
+    const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
 
-    const int step = 8/K_QUANTS_PER_ITERATION;             // 8 or 4
+    const uint step = 8/K_QUANTS_PER_ITERATION;             // 8 or 4
 
-    const int il = tid/step;                               // 0...3
-    const int ir = tid - step*il;                          // 0...7 or 0...3
-    const int n =  2 * K_QUANTS_PER_ITERATION;             // 2 or 4
+    const uint il = tid/step;                               // 0...3
+    const uint ir = tid - step*il;                          // 0...7 or 0...3
+    const uint n =  2 * K_QUANTS_PER_ITERATION;             // 2 or 4
 
-    const int v_im = il / 2;  // 0 or 1. 0 computes 0,32 + 128,160, 1 computes 64,96 + 192,224
-    const int v_in = il % 2;
+    const uint v_im = il / 2;  // 0 or 1. 0 computes 0,32 + 128,160, 1 computes 64,96 + 192,224
+    const uint v_in = il % 2;
 
-    const int l0 = n * (2 * ir + v_in);            // 0...15
-    const int q_offset = 32*v_im + l0;
-    const int y_offset = 64*v_im + l0;
+    const uint l0 = n * (2 * ir + v_in);            // 0...15
+    const uint q_offset = 32*v_im + l0;
+    const uint y_offset = 64*v_im + l0;
 
     tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
-    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
-        const int y1_idx = i * QUANT_K + y_offset;
-        const int y2_idx = y1_idx + 128;
+    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+        const uint y1_idx = i * QUANT_K + y_offset;
+        const uint y2_idx = y1_idx + 128;
 
         const FLOAT_TYPE dall = FLOAT_TYPE(data_a[ib0 + i].d.x);
         const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[ib0 + i].d.y);
@@ -1051,7 +1031,7 @@ void main() {
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (int s = 16; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = 16; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
@@ -1069,42 +1049,35 @@ layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
-layout (push_constant) uniform parameter
-{
-    int ncols;
-    int b_offset;
-    int d_offset;
-} p;
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
-    const int row = int(gl_WorkGroupID.x);
+    const uint row = gl_WorkGroupID.x;
 
-    const int num_blocks_per_row = p.ncols / QUANT_K;
-    const int ib0 = row*num_blocks_per_row;
+    const uint num_blocks_per_row = p.ncols / QUANT_K;
+    const uint ib0 = row*num_blocks_per_row;
 
-    const int tid = int(gl_LocalInvocationID.x)/2;  // 0...31 or 0...16
-    const int ix  = int(gl_LocalInvocationID.x)%2;  // 0 or 0, 1
+    const uint tid = gl_LocalInvocationID.x/2;  // 0...31 or 0...16
+    const uint ix  = gl_LocalInvocationID.x%2;  // 0 or 0, 1
 
-    const int il = tid/4;                           // 0...3
-    const int ir = tid - 4*il;                      // 0...7 or 0...3
+    const uint il = tid/4;                           // 0...3
+    const uint ir = tid - 4*il;                      // 0...7 or 0...3
 
-    const int v_im = il / 2;  // 0 or 1. 0 computes 0,32 + 128,160, 1 computes 64,96 + 192,224
-    const int v_in = il % 2;
+    const uint v_im = il / 2;  // 0 or 1. 0 computes 0,32 + 128,160, 1 computes 64,96 + 192,224
+    const uint v_in = il % 2;
 
-    const int l0 = 4*ir + 2*v_in;                   // 0...15
-    const int q_offset = 32*v_im + l0;
-    const int y_offset = 64*v_im + l0;
+    const uint l0 = 4*ir + 2*v_in;                   // 0...15
+    const uint q_offset = 32*v_im + l0;
+    const uint y_offset = 64*v_im + l0;
 
     const uint8_t hm1 = uint8_t(1 << (2*v_im));
     const uint8_t hm2 = uint8_t(hm1 << 4);
 
     tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
-    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += 2) {
-        const int y1_idx = i * QUANT_K + y_offset;
-        const int y2_idx = y1_idx + 128;
+    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += 2) {
+        const uint y1_idx = i * QUANT_K + y_offset;
+        const uint y2_idx = y1_idx + 128;
 
         const FLOAT_TYPE dall = FLOAT_TYPE(data_a[ib0 + i].d.x);
         const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[ib0 + i].d.y);
@@ -1168,7 +1141,7 @@ void main() {
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (int s = 16; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = 16; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
@@ -1186,46 +1159,40 @@ layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
-layout (push_constant) uniform parameter
-{
-    int ncols;
-    int b_offset;
-    int d_offset;
-} p;
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
-    const int row = int(gl_WorkGroupID.x);
+    const uint block_size = gl_WorkGroupSize.x;
+    const uint row = gl_WorkGroupID.x;
 
-    const int num_blocks_per_row = p.ncols / QUANT_K;
-    const int ib0 = row*num_blocks_per_row;
+    const uint num_blocks_per_row = p.ncols / QUANT_K;
+    const uint ib0 = row*num_blocks_per_row;
 
-    const int tid = int(gl_LocalInvocationID.x)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
-    const int ix  = int(gl_LocalInvocationID.x)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
+    const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
+    const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
 
-    const int step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
+    const uint step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
 
-    const int v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
-    const int v_in = tid - step*v_im;                      // 0...15 or 0...7
+    const uint v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
+    const uint v_in = tid - step*v_im;                      // 0...15 or 0...7
 
 #if K_QUANTS_PER_ITERATION == 1
-    const int l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
-    const int is = 0;
+    const uint l0 = v_in;                                   // 0...15
+    const uint is = 0;
 #else
-    const int l0 = 4 * v_in;                               // 0, 4, 8, ..., 28
-    const int is = v_in / 4;
+    const uint l0 = 4 * v_in;                               // 0, 4, 8, ..., 28
+    const uint is = v_in / 4;
 #endif
 
-    const int ql_offset = 64*v_im + l0;
-    const int qh_offset = 32*v_im + l0;
-    const int s_offset  =  8*v_im + is;
-    const int y_offset = 128*v_im + l0;
+    const uint ql_offset = 64*v_im + l0;
+    const uint qh_offset = 32*v_im + l0;
+    const uint s_offset  =  8*v_im + is;
+    const uint y_offset = 128*v_im + l0;
 
     tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
-    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
-        const int y_idx    = i * QUANT_K + y_offset;
+    [[unroll]] for (uint i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+        const uint y_idx   = i * QUANT_K + y_offset;
 
         const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
 
@@ -1253,7 +1220,7 @@ void main() {
 
     // sum up partial sums and write back result
     barrier();
-    [[unroll]] for (int s = 16; s > 0; s >>= 1) {
+    [[unroll]] for (uint s = 16; s > 0; s >>= 1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
        }
@@ -2122,6 +2089,8 @@ async def main():
 
     tasks = []
 
+    stream = []
+
     for fp16 in (False, True):
         # mulmat
         if fp16:
@@ -2135,28 +2104,16 @@ async def main():
             vec_type_f16 = "f16vec4"
             vec_type = "vec4"
 
-        stream = []
+        stream.clear()
         stream.extend((mulmat_head, shader_float_type, mulmat_body))
-        tasks.append(string_to_spv("matmul_f32_l", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f32_m", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f32_s", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32_aligned", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
-        tasks.append(string_to_spv("matmul_f16_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_aligned", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
 
-        tasks.append(string_to_spv("matmul_f16_f32_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_f32_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_f32_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("matmul_f16_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32_aligned", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
     # Shaders where precision is needed, so no fp16 version
 
