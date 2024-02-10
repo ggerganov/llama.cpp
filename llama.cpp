@@ -7789,7 +7789,7 @@ private:
         work_queue.push(bigram);
     }
 
-    static std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
+    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
         std::vector<std::string> bpe_words;
         std::vector<std::string> bpe_encoded_words;
 
