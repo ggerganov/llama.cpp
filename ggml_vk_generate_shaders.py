@@ -445,7 +445,7 @@ layout (push_constant) uniform parameter
     uint K;
     uint stride_a;
     uint stride_b;
-    uint num_groups;
+    uint nel;
 } p;
 """
 
@@ -483,31 +483,30 @@ void main() {
 """
 
 dequant_q4_0_body = """
-layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A {block_q4_0 data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
 void main() {
-    const uint i = gl_WorkGroupID.x;
+    const uint i = gl_WorkGroupID.x * 4 + gl_LocalInvocationID.x / 64;
 
-    // assume 32 threads
-    const uint tid = gl_LocalInvocationID.x;
-    const uint il  = tid/8;
-    const uint ir  = tid%8;
-    const uint ib = 8*i + ir;
-    if (ib >= p.num_groups) {
+    const uint tid = gl_LocalInvocationID.x % 64;
+    const uint il  = tid/32;
+    const uint ir  = tid%32;
+    const uint ib = 32*i + ir;
+    if (ib >= p.nel / 32) {
         return;
     }
 
-    const uint b_idx = 256*i + 32*ir + 4*il;
+    const uint b_idx = 1024*i + 32*ir + 8*il;
 
     const float d = float(data_a[ib].d);
     const float dm = -8.0f * d;
 
-    const uint q_idx = 4*il;
+    const uint q_idx = 8*il;
 
-    [[unroll]] for (uint l = 0; l < 4; ++l) {
+    [[unroll]] for (uint l = 0; l < 8; ++l) {
         data_b[b_idx + l +  0] = D_TYPE(d * (data_a[ib].qs[q_idx + l] & 0xF) + dm);
         data_b[b_idx + l + 16] = D_TYPE(d * (data_a[ib].qs[q_idx + l] >>  4) + dm);
     }
