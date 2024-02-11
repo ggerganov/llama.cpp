@@ -1,7 +1,6 @@
 // NOTE: This is modified from clip.cpp only for LLaVA,
 // so there might be still unnecessary artifacts hanging around
 // I'll gradually clean and extend it
-
 #include "clip.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -965,7 +964,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 hparams.image_grid_pinpoints[i] = pinpoints[i];
             }
             hparams.image_grid_pinpoints[n] = 0;
-        } catch (std::runtime_error & e) {  
+        } catch (std::runtime_error & e) {
             hparams.image_grid_pinpoints[0]=0;
         }
         try {
@@ -979,7 +978,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
         catch(const std::exception& e) {
             hparams.image_crop_resolution = hparams.image_size;
-        }        
+        }
 
         int idx_mean = get_key_idx(ctx, KEY_IMAGE_MEAN);
         int idx_std  = get_key_idx(ctx, KEY_IMAGE_STD);
@@ -1022,7 +1021,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         {
             fprintf(stderr, "%s: failed to load vision model tensors\n", __func__);
         }
-        
+
         // LLaVA projection
         if (new_clip->proj_type == PROJECTOR_TYPE_MLP || new_clip->proj_type == PROJECTOR_TYPE_MLP_NORM) {
             vision_model.mm_0_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "weight"));
@@ -1270,12 +1269,12 @@ void clip_image_save_to_bmp(const clip_image_u8& img, const std::string& filenam
 inline float lerp(float s, float e, float t) {
     return s + (e - s) * t;
 }
-// Bilinear resize function 
+// Bilinear resize function
 void bilinear_resize(const clip_image_u8& src, clip_image_u8& dst, int target_width, int target_height) {
     dst.nx = target_width;
     dst.ny = target_height;
     dst.buf.resize(3 * target_width * target_height);
-    
+
     float x_ratio = static_cast<float>(src.nx - 1) / target_width;
     float y_ratio = static_cast<float>(src.ny - 1) / target_height;
     
@@ -1343,11 +1342,11 @@ void normalize_image_u8_to_f32(const clip_image_u8* src, clip_image_f32* dst, co
     dst->nx = src->nx;
     dst->ny = src->ny;
     dst->buf.resize(src->buf.size());
-    
+
     for (size_t i = 0; i < src->buf.size(); ++i) {
         int c = i % 3; // rgb
         dst->buf[i] = (static_cast<float>(src->buf[i]) / 255.0f - mean[c]) / std[c];
-        
+
         if (replicate_float16) {
             dst->buf[i] = simulateFloat16Precision(dst->buf[i]);
         }
@@ -1546,15 +1545,15 @@ void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u8& dst)
 
 /**
  * @brief Get the anyres image grid shape object
- * 
- * @param image_size 
- * @param grid_pinpoints 
- * @param image_patch_size 
- * @return <int, int> 
+ *
+ * @param image_size
+ * @param grid_pinpoints
+ * @param image_patch_size
+ * @return <int, int>
  */
 struct clip_image_grid_shape get_anyres_image_grid_shape(const std::pair<int, int>& image_size, const std::vector<std::pair<int, int>>& grid_pinpoints, int image_patch_size) {
     /**
-        Conversion from gguf flat array to vector: 
+        Conversion from gguf flat array to vector:
         std::vector<std::pair<int, int>> possible_resolutions;
         for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
             possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
@@ -1628,7 +1627,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
             resize_and_pad_image(*img, *temp, best_resolution);  // we do not pad with mean-bg color anymore in llava-1.6
             // clip_image_save_to_bmp(*temp, "resized.bmp");
             // visually verify normalized image:
-            // normalize_image_u8_to_f32(*temp, *res, ctx->image_mean, ctx->image_std); 
+            // normalize_image_u8_to_f32(*temp, *res, ctx->image_mean, ctx->image_std);
             // {
             //     clip_image_u8 * temp2 = clip_image_u8_init();
             //     clip_image_convert_f32_to_u8(*res, *temp2);
@@ -1638,7 +1637,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
 
             std::vector<clip_image_u8 *> patches = divide_to_patches_u8(*temp, params.image_size); // prepare spatial sorted main patches of image_size each (336 in llava-1.6)
             // fprintf(stderr, "patches: %d, %d\n", patches.size(), params.image_size);
-        
+
             clip_image_u8 *image_original_resize = clip_image_u8_init();
             // bilinear_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square ?
             bicubic_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square ?
@@ -1655,9 +1654,9 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
                 // printf("patch %d: %d %d\n", i, patches[i]->nx, patches[i]->ny);
                 clip_image_u8_free(patches[i]);
             }
-
+        
             clip_image_u8_free(temp);
-            
+
             return true;
         } else {
             temp->nx = img->nx;
@@ -1802,7 +1801,6 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     type = static_cast<ggml_type>(itype);
 
     auto * ctx_clip = clip_model_load(fname_inp, 2);
-    
 
     const auto & ctx_src = ctx_clip->ctx_gguf;
     const auto & ctx_data = ctx_clip->ctx_data;

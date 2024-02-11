@@ -234,7 +234,7 @@ if has_vision_encoder:
                             #         1008, 336,
                             #         336, 1008
                             #     ]
-                            #  * 
+                            #  *
                             #  */
     if "image_grid_pinpoints" in v_hparams:
         # flatten it

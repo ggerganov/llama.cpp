@@ -4,7 +4,6 @@ import os
 import torch
 from safetensors.torch import load as safe_load, save as safe_save, safe_open, save_file
 
- 
 # Function to determine if file is a SafeTensor file
 def is_safetensor_file(file_path):
     return file_path.endswith('.safetensors')
@@ -40,12 +39,12 @@ def clean_vision_tower_from_checkpoint(checkpoint_path):
     model_path = os.path.dirname(checkpoint_path)
     print(f"Searching for vision tower tensors in {checkpoint_path}")
     clip_tensors = [k for k, v in checkpoint.items() if (k.startswith("model.vision_tower") ) ]
-    
+
     if len(clip_tensors) > 0:
         print(f"Found {len(clip_tensors)} tensors to extract from {checkpoint_path}")
         # Adapted for file type
         clip_path = os.path.join(model_path, "llava.clip")
-        
+
         if os.path.exists(clip_path):
             existing_clip, _ = load_model(clip_path)
         else:
@@ -142,7 +141,7 @@ for name in mm_tensors:
     projector[name] = last_checkpoint[name].float()
 for name in first_mm_tensors:
     projector[name] = first_checkpoint[name].float()
-    
+
 save_model(projector, f"{args.model}/llava.projector", 'pytorch')
 
 for name in mm_tensors:

@@ -38,7 +38,7 @@ struct clip_vision_hparams {
     float eps;
 
     char mm_patch_merge_type[32]="flat"; // spatial_unpad or flat (default)
-    int32_t image_grid_pinpoints[32]; 
+    int32_t image_grid_pinpoints[32];
     int32_t image_crop_resolution;
 
 };
