@@ -1,7 +1,9 @@
 #include "common.h"
+#include "ggml.h"
 #include "llama.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -72,6 +74,8 @@ int main(int argc, char ** argv){
     int n_predict = 0;
     int n_drafted = 0;
     int n_accept  = 0;
+
+    int64_t t_draft_us = 0;
 
     int n_past = inp.size();
 
@@ -160,7 +164,7 @@ int main(int argc, char ** argv){
 
         // generate n_pred tokens through prompt lookup
         auto prompt_lookup = [&]() -> void {
-            int inp_size = inp.size();
+            const int inp_size = inp.size();
             for (int ngram_size = ngram_max ; ngram_size > ngram_min; --ngram_size){
                 const llama_token * ngram = &inp[inp_size - ngram_size];
 
@@ -191,7 +195,11 @@ int main(int argc, char ** argv){
             return;
         };
 
+        const int64_t t_start_draft_us = ggml_time_us();
+
         prompt_lookup();
+
+        t_draft_us += ggml_time_us() - t_start_draft_us;
 
         llama_decode(ctx, batch_tgt);
         ++n_past;
@@ -210,6 +218,8 @@ int main(int argc, char ** argv){
     LOG_TEE("n_draft   = %d\n", n_draft);
     LOG_TEE("n_predict = %d\n", n_predict);
     LOG_TEE("n_drafted = %d\n", n_drafted);
+    LOG_TEE("t_draft   = %.2f ms, %.2f us per token, %.2f tokens per second\n",
+            t_draft_us*1e-3, 1.0f*t_draft_us/n_drafted, n_drafted/(1e-6*t_draft_us));
     LOG_TEE("n_accept  = %d\n", n_accept);
     LOG_TEE("accept    = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
