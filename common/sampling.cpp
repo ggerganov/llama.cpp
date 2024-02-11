@@ -127,8 +127,6 @@ static void sampler_queue(
             const llama_sampling_params & params,
                  llama_token_data_array & cur_p,
                                  size_t & min_keep) {
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
-
     const float         temp              = params.temp;
     const float         dynatemp_range    = params.dynatemp_range;
     const float         dynatemp_exponent = params.dynatemp_exponent;
