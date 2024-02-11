@@ -517,6 +517,15 @@ typedef struct {
 } block_iq3_xxs;
 static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong iq3_xxs block size/padding");
 
+#define QR1_S 8
+#define QI1_S (QK_K / (4*QR1_S))
+typedef struct {
+    half d;
+    uint8_t qs[QK_K/8];
+    uint8_t scales[QK_K/16];
+} block_iq1_s;
+static_assert(sizeof(block_iq1_s) == sizeof(ggml_fp16_t) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
+
 #define WARP_SIZE 32
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
 
@@ -1681,6 +1690,137 @@ static const __device__ uint32_t iq3xxs_grid[256] = {
     0x3e1c1c1c, 0x3e1c3404, 0x3e24140c, 0x3e24240c, 0x3e2c0404, 0x3e2c0414, 0x3e2c1424, 0x3e341c04,
 };
 
+static const __device__ uint64_t iq1s_grid[512] = {
+    0xffffffffff000101, 0xffffffffff01ff00, 0xffffffff00000000, 0xffffffff01ff00ff,
+    0xffffffff0101ffff, 0xffffffff0101ff01, 0xffffffff01010101, 0xffffff00ff000000,
+    0xffffff000000ff00, 0xffffff00000000ff, 0xffffff0000000100, 0xffffff0000010000,
+    0xffffff0001000000, 0xffffff01ff00ffff, 0xffffff01ff010100, 0xffffff0100ff01ff,
+    0xffffff0100000001, 0xffffff0101ffff00, 0xffffff0101010100, 0xffff00ffff00ff01,
+    0xffff00ffff0000ff, 0xffff00ff00ff0000, 0xffff00ff00010000, 0xffff00ff0100ff00,
+    0xffff00ff010001ff, 0xffff0000ffff01ff, 0xffff0000ff010001, 0xffff0000ff0101ff,
+    0xffff000000ffff00, 0xffff000000000000, 0xffff00000001ff00, 0xffff000001000101,
+    0xffff0000010100ff, 0xffff00010000ff00, 0xffff000101000000, 0xffff01ffffff0000,
+    0xffff01ff00000000, 0xffff01ff01ffffff, 0xffff01ff01ffff01, 0xffff01ff01010001,
+    0xffff0100ffffff01, 0xffff0100ff000101, 0xffff01000000ffff, 0xffff010000000001,
+    0xffff010000000100, 0xffff010001000000, 0xffff0101ff000000, 0xffff0101ff01ffff,
+    0xffff010100ff01ff, 0xffff010100ff0101, 0xffff0101000101ff, 0xffff010101ffffff,
+    0xffff01010101ff01, 0xffff010101010101, 0xff00ffffff000000, 0xff00ffff00ffff00,
+    0xff00ffff00000001, 0xff00ffff000001ff, 0xff00ffff01010000, 0xff00ff00ffff0000,
+    0xff00ff00ff00ff00, 0xff00ff00ff0000ff, 0xff00ff00ff000001, 0xff00ff00ff000100,
+    0xff00ff00ff010000, 0xff00ff0000ff0001, 0xff00ff000000ffff, 0xff00ff0000000000,
+    0xff00ff000001ff00, 0xff00ff0000010100, 0xff00ff0001ff0100, 0xff00ff000100ff00,
+    0xff00ff01ff000000, 0xff00ff010000ff00, 0xff00ff01010100ff, 0xff00ff0101010001,
+    0xff0000ffffffffff, 0xff0000ffffff0100, 0xff0000ff00000000, 0xff0000ff0001ff00,
+    0xff0000ff00010100, 0xff0000ff01ff0001, 0xff000000ff000000, 0xff000000ff01ff00,
+    0xff00000000ff00ff, 0xff0000000000ff00, 0xff00000000000000, 0xff000000000001ff,
+    0xff00000000000101, 0xff0000000001ffff, 0xff00000000010000, 0xff00000001000000,
+    0xff00000001010100, 0xff000001ff00ff01, 0xff000001ff0100ff, 0xff00000100ff0001,
+    0xff000001000000ff, 0xff00000100000100, 0xff0000010001ff00, 0xff00000101ff00ff,
+    0xff0000010100ff00, 0xff00000101010000, 0xff0001ffff000000, 0xff0001ffff01ffff,
+    0xff0001ff00ff00ff, 0xff0001ff00000101, 0xff0001ff00010000, 0xff0001ff01000000,
+    0xff0001000000ff01, 0xff00010000000000, 0xff00010000010100, 0xff00010001ffff00,
+    0xff00010001ff0100, 0xff000100010000ff, 0xff00010001010000, 0xff000101ffffff00,
+    0xff000101ff010001, 0xff00010101000001, 0xff000101010100ff, 0xff01ffffffff00ff,
+    0xff01ffffffff0001, 0xff01ffffff01ffff, 0xff01ffffff01ff01, 0xff01ffffff0101ff,
+    0xff01ffffff010101, 0xff01ffff00000000, 0xff01ffff0101ff01, 0xff01ffff010101ff,
+    0xff01ffff01010101, 0xff01ff00ff000000, 0xff01ff000000ff01, 0xff01ff0000000101,
+    0xff01ff0000010000, 0xff01ff00010000ff, 0xff01ff01ffffff01, 0xff01ff01ff01ff00,
+    0xff01ff01ff010101, 0xff01ff0100ff0000, 0xff01ff01000001ff, 0xff01ff0101ffff01,
+    0xff0100ffff010000, 0xff0100ff0100ffff, 0xff0100ff01000100, 0xff010000ffff0000,
+    0xff01000000ff0100, 0xff010000000000ff, 0xff01000000000001, 0xff0100000101ff00,
+    0xff010001ff00ffff, 0xff010001ff000100, 0xff01000100000000, 0xff01000100010001,
+    0xff01000101000101, 0xff0101ffffff0001, 0xff0101ffff0001ff, 0xff0101ffff010101,
+    0xff0101ff0000ff00, 0xff0101ff01ffff01, 0xff0101ff01ff01ff, 0xff0101ff01ff0101,
+    0xff0101ff01010001, 0xff010100ffffffff, 0xff010100ff000000, 0xff010100ff01ff01,
+    0xff01010000000100, 0xff01010001000000, 0xff010100010101ff, 0xff010101ffff0101,
+    0xff01010100ffff01, 0xff01010100ff01ff, 0xff0101010100ffff, 0x00ffffffffffffff,
+    0x00ffffffffff01ff, 0x00ffffff000000ff, 0x00ffffff00000100, 0x00ffffff00010000,
+    0x00ffffff01ff0101, 0x00ffff00ffff0001, 0x00ffff00ff0000ff, 0x00ffff00ff000100,
+    0x00ffff0000000000, 0x00ffff0001ffffff, 0x00ffff0001000100, 0x00ffff0001010001,
+    0x00ffff01ff01ff01, 0x00ffff010000ff00, 0x00ffff01000100ff, 0x00ff00ffff010101,
+    0x00ff00ff00ff0100, 0x00ff00ff0000ffff, 0x00ff00ff00000001, 0x00ff00ff000101ff,
+    0x00ff0000ff000000, 0x00ff0000ff01ffff, 0x00ff000000ff0001, 0x00ff00000000ff00,
+    0x00ff0000000000ff, 0x00ff000000000000, 0x00ff000000000101, 0x00ff000000010000,
+    0x00ff000001ffff01, 0x00ff000001000000, 0x00ff0001ff0001ff, 0x00ff0001ff000101,
+    0x00ff000100ffffff, 0x00ff000100ff0100, 0x00ff000100000001, 0x00ff0001010001ff,
+    0x00ff00010101ff00, 0x00ff01ffffffffff, 0x00ff01ffffff01ff, 0x00ff01ffff000000,
+    0x00ff01ff0001ff01, 0x00ff01ff01ff01ff, 0x00ff01ff01000101, 0x00ff01ff0101ffff,
+    0x00ff0100ff010000, 0x00ff010000ff00ff, 0x00ff010000000000, 0x00ff010000010101,
+    0x00ff01000100ff00, 0x00ff010001010000, 0x00ff01010000ff01, 0x00ff010100000100,
+    0x00ff010101ff0000, 0x0000ffffff00ff00, 0x0000ffffff0000ff, 0x0000ffffff010000,
+    0x0000ffff00ff0100, 0x0000ffff00000000, 0x0000ffff000100ff, 0x0000ffff00010101,
+    0x0000ffff01ffff01, 0x0000ffff01000100, 0x0000ff00ff000000, 0x0000ff00ff01ff00,
+    0x0000ff00ff0101ff, 0x0000ff0000ff0000, 0x0000ff000000ff00, 0x0000ff00000000ff,
+    0x0000ff0000000000, 0x0000ff0000000001, 0x0000ff0000000100, 0x0000ff0000010000,
+    0x0000ff0001000000, 0x0000ff000101ffff, 0x0000ff01ffffff00, 0x0000ff01ffff0101,
+    0x0000ff01ff010000, 0x0000ff0101000101, 0x0000ff0101010000, 0x000000ffffff0001,
+    0x000000ffff01ff01, 0x000000ff00ffff00, 0x000000ff000000ff, 0x000000ff00000000,
+    0x000000ff00010000, 0x000000ff01000000, 0x000000ff0101ff00, 0x00000000ff00ffff,
+    0x00000000ff00ff01, 0x00000000ff000000, 0x00000000ff000100, 0x00000000ff010000,
+    0x0000000000ffffff, 0x0000000000ffff01, 0x0000000000ff0000, 0x0000000000ff01ff,
+    0x0000000000ff0101, 0x000000000000ff00, 0x00000000000000ff, 0x0000000000000001,
+    0x0000000000000100, 0x000000000001ff00, 0x0000000000010000, 0x0000000001ff00ff,
+    0x000000000100ff00, 0x0000000001000000, 0x0000000001000100, 0x0000000001010000,
+    0x00000001ffff00ff, 0x00000001ff00ff00, 0x0000000100ffff00, 0x0000000100000000,
+    0x00000001000101ff, 0x0000000100010101, 0x0000000101ff0000, 0x0000000101000001,
+    0x000001ffff00ff00, 0x000001ffff0000ff, 0x000001ffff010100, 0x000001ff00ffff01,
+    0x000001ff0000ffff, 0x000001ff00000000, 0x000001ff0100ff00, 0x000001ff010000ff,
+    0x000001ff01010100, 0x00000100ffff0100, 0x00000100ff000000, 0x00000100ff01ff00,
+    0x0000010000ff0000, 0x000001000000ff00, 0x0000010000000000, 0x0000010000000100,
+    0x00000100000100ff, 0x0000010000010001, 0x0000010001000000, 0x000001000101ff01,
+    0x00000101ffff0001, 0x00000101000000ff, 0x0000010100000001, 0x0000010100010000,
+    0x0000010101ffff01, 0x0000010101ff01ff, 0x0000010101ff0101, 0x0001ffff00ffffff,
+    0x0001ffff00000100, 0x0001ffff0001ff00, 0x0001ffff01ff0101, 0x0001ffff01000000,
+    0x0001ff00ffff0000, 0x0001ff00ff00ff00, 0x0001ff00ff010001, 0x0001ff0000000000,
+    0x0001ff0001ffff00, 0x0001ff0001ff01ff, 0x0001ff0001010100, 0x0001ff01ff0000ff,
+    0x0001ff0100ffffff, 0x0001ff010001ffff, 0x0001ff010001ff01, 0x000100ffffff01ff,
+    0x000100ffff00ffff, 0x000100ffff000000, 0x000100ff00ff0000, 0x000100ff0000ff01,
+    0x000100ff00000101, 0x000100ff01010000, 0x00010000ffffff00, 0x00010000ff0000ff,
+    0x00010000ff010100, 0x0001000000ff00ff, 0x000100000000ffff, 0x0001000000000000,
+    0x00010000000001ff, 0x0001000000010000, 0x0001000001ff0001, 0x00010001ff000001,
+    0x00010001ff010000, 0x0001000100ff0000, 0x0001000100ff0101, 0x000100010000ff00,
+    0x0001000100000100, 0x000100010100ff01, 0x00010001010000ff, 0x000101ff00010000,
+    0x000101ff01ff0000, 0x00010100ffff0000, 0x0001010000000000, 0x000101000001ffff,
+    0x0001010000010101, 0x00010101ff00ff00, 0x00010101ff0001ff, 0x0001010100ffffff,
+    0x0001010101ff0000, 0x000101010101ff00, 0x01ffffffff000101, 0x01ffffffff01ffff,
+    0x01ffffffff01ff01, 0x01ffffff00000000, 0x01ffffff010100ff, 0x01ffff000000ff00,
+    0x01ffff0000000001, 0x01ffff00000001ff, 0x01ffff0000010000, 0x01ffff0001ff0000,
+    0x01ffff01ff000000, 0x01ffff01ff01ffff, 0x01ffff0101ff0101, 0x01ffff01010000ff,
+    0x01ff00ffffff0000, 0x01ff00ffff010000, 0x01ff00ff01ffffff, 0x01ff00ff0100ff01,
+    0x01ff00ff01010100, 0x01ff0000ffffffff, 0x01ff0000ffffff01, 0x01ff0000ffff01ff,
+    0x01ff0000ff00ff00, 0x01ff000000000000, 0x01ff00000001ff01, 0x01ff000001ff01ff,
+    0x01ff00000101ffff, 0x01ff0001ff010100, 0x01ff000101000001, 0x01ff000101010100,
+    0x01ff01ffff01ffff, 0x01ff01ff00ff0101, 0x01ff01ff01000000, 0x01ff0100ff000001,
+    0x01ff010000ffff00, 0x01ff010000000100, 0x01ff0100010101ff, 0x01ff0101ffff00ff,
+    0x01ff0101ffff0101, 0x01ff0101ff00ff00, 0x01ff01010001ffff, 0x01ff010100010001,
+    0x01ff0101010000ff, 0x0100ffff00ff00ff, 0x0100ffff00ff0001, 0x0100ffff00000100,
+    0x0100ffff0100ff00, 0x0100ff00ffff0000, 0x0100ff00ff00ffff, 0x0100ff00ff00ff01,
+    0x0100ff00ff000100, 0x0100ff00ff010000, 0x0100ff0000000000, 0x0100ff0000000101,
+    0x0100ff0001000100, 0x0100ff000101ff01, 0x0100ff0100ff00ff, 0x0100ff0100ff0001,
+    0x0100ff0100000100, 0x0100ff0100010001, 0x0100ff0101ffff00, 0x0100ff01010101ff,
+    0x010000ffff00ff00, 0x010000ffff0101ff, 0x010000ff0000ffff, 0x010000ff00000001,
+    0x010000ff01ff0101, 0x010000ff010001ff, 0x010000ff01010001, 0x01000000ffffff00,
+    0x01000000ffff0101, 0x01000000ff0000ff, 0x01000000ff000001, 0x01000000ff010101,
+    0x0100000000ff0000, 0x0100000000000000, 0x0100000000000100, 0x01000000000100ff,
+    0x0100000000010001, 0x01000000010000ff, 0x0100000001000001, 0x01000001ff000000,
+    0x010000010000ffff, 0x010000010000ff01, 0x0100000100010000, 0x0100000101000000,
+    0x010001ffff000101, 0x010001ff00ff00ff, 0x010001ff0000ff00, 0x010001ff000100ff,
+    0x01000100ffff0000, 0x01000100ff00ffff, 0x01000100ff0001ff, 0x0100010000000000,
+    0x010001000001ff00, 0x0100010001ff0000, 0x0100010001000101, 0x01000101ff0100ff,
+    0x0100010100ff0100, 0x0100010100010100, 0x0100010101ffffff, 0x0101ffffffffff00,
+    0x0101ffffff000101, 0x0101ffff00000000, 0x0101ffff000101ff, 0x0101ffff01010101,
+    0x0101ff00ff000000, 0x0101ff0000ff0100, 0x0101ff000000ff00, 0x0101ff0000010000,
+    0x0101ff00010000ff, 0x0101ff0001000001, 0x0101ff01ffff01ff, 0x0101ff01ff000101,
+    0x0101ff01ff01ff00, 0x0101ff01ff0101ff, 0x0101ff0100000000, 0x0101ff010101ff00,
+    0x010100ffff010000, 0x010100ff000000ff, 0x01010000ff000100, 0x01010000ff01ffff,
+    0x01010000ff01ff01, 0x0101000000ffff01, 0x0101000000000000, 0x0101000001ffffff,
+    0x010100000101ffff, 0x01010001ffff0000, 0x01010001000001ff, 0x0101000101ff0100,
+    0x0101000101010001, 0x010101ffffffff00, 0x010101ff00ff0001, 0x010101ff00000100,
+    0x010101ff0100ffff, 0x010101ff0100ff01, 0x010101ff01010101, 0x01010100ff000001,
+    0x0101010000ff01ff, 0x010101000000ff00, 0x01010100000101ff, 0x0101010001000000,
+    0x01010101ffffff01, 0x0101010100000101, 0x010101010001ff01, 0x01010101010100ff,
+};
+
 static const __device__ uint8_t ksigns_iq2xs[128] = {
       0, 129, 130,   3, 132,   5,   6, 135, 136,   9,  10, 139,  12, 141, 142,  15,
     144,  17,  18, 147,  20, 149, 150,  23,  24, 153, 154,  27, 156,  29,  30, 159,
@@ -1822,6 +1962,29 @@ static __global__ void dequantize_block_iq3_xxs(const void * __restrict__ vx, ds
 #endif
 
 }
+
+template<typename dst_t>
+static __global__ void dequantize_block_iq1_s(const void * __restrict__ vx, dst_t * __restrict__ yy) {
+
+    const int i   = blockIdx.x;
+    const block_iq1_s * x = (const block_iq1_s  *) vx;
+
+    const int tid = threadIdx.x;
+#if QK_K == 256
+    const int il = tid/8; // 0...3
+    const int ib = tid%8; // 0...7
+    dst_t * y = yy + i*QK_K + 32*ib + 8*il;
+    const int i8 = 4*ib+il;
+    uint8_t h = x[i].scales[i8/2] >> 4*(i8%2);
+    const int8_t * grid = (const int8_t *)(iq1s_grid + (x[i].qs[i8] | ((h & 8) << 5)));
+    const float d = (float)x[i].d * (2*(h & 7) + 1);
+    for (int j = 0; j < 8; ++j) y[j] = d * grid[j];
+#else
+    assert(false);
+#endif
+
+}
+
 
 static __global__ void dequantize_mul_mat_vec_q2_k(const void * __restrict__ vx, const float * __restrict__ yy, float * __restrict__ dst, const int ncols, int nrows) {
 
@@ -4522,6 +4685,49 @@ static __device__ __forceinline__ float vec_dot_iq3_xxs_q8_1(
 #endif
 }
 
+static __device__ __forceinline__ float vec_dot_iq1_s_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
+#if QK_K == 256
+    const block_iq1_s * bq1 = (const block_iq1_s *) vbq;
+
+    const int ib32 = iqs;
+    int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
+    const uint8_t h1 = bq1->scales[2*ib32+0];
+    const uint8_t h2 = bq1->scales[2*ib32+1];
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    const int * q8 = (const int *)bq8_1[ib32].qs;
+    const int * grid1 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+0] | ((h1 & 0x08) << 5)));
+    const int * grid2 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+1] | ((h1 & 0x80) << 1)));
+    const int * grid3 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+2] | ((h2 & 0x08) << 5)));
+    const int * grid4 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+3] | ((h2 & 0x80) << 1)));
+    for (int j = 0; j < 2; ++j) {
+        sumi1 = __dp4a(q8[j+0], grid1[j], sumi1);
+        sumi2 = __dp4a(q8[j+2], grid2[j], sumi2);
+        sumi3 = __dp4a(q8[j+4], grid3[j], sumi3);
+        sumi4 = __dp4a(q8[j+6], grid4[j], sumi4);
+    }
+#else
+    const int8_t   * q8 = bq8_1[ib32].qs;
+    const int8_t * grid1 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+0] | ((h1 & 0x08) << 5)));
+    const int8_t * grid2 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+1] | ((h1 & 0x80) << 1)));
+    const int8_t * grid3 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+2] | ((h2 & 0x08) << 5)));
+    const int8_t * grid4 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+3] | ((h2 & 0x80) << 1)));
+    for (int j = 0; j < 8; ++j) {
+        sumi1 += q8[j+ 0] * grid1[j];
+        sumi2 += q8[j+ 8] * grid2[j];
+        sumi3 += q8[j+16] * grid3[j];
+        sumi4 += q8[j+24] * grid4[j];
+    }
+#endif
+    const float d = (float)bq1->d * __low2float(bq8_1[ib32].ds);
+    return d * (sumi1 * (2*(h1 & 7) + 1) + sumi2 * (2*((h1 >> 4) & 7) + 1) +
+                sumi3 * (2*(h2 & 7) + 1) + sumi4 * (2*((h2 >> 4) & 7) + 1));
+#else
+    assert(false);
+    return 0.f;
+#endif
+}
+
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x, int mmq_y, int nwarps,
               allocate_tiles_cuda_t allocate_tiles, load_tiles_cuda_t load_tiles, int vdr, vec_dot_q_mul_mat_cuda_t vec_dot>
 static __device__ __forceinline__ void mul_mat_q(
@@ -6678,6 +6884,12 @@ static void dequantize_row_iq3_xxs_cuda(const void * vx, dst_t * y, const int k,
     dequantize_block_iq3_xxs<<<nb, 32, 0, stream>>>(vx, y);
 }
 
+template<typename dst_t>
+static void dequantize_row_iq1_s_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
+    const int nb = k / QK_K;
+    dequantize_block_iq1_s<<<nb, 32, 0, stream>>>(vx, y);
+}
+
 template <typename src_t, typename dst_t>
 static void convert_unary_cuda(const void * __restrict__ vx, dst_t * __restrict__ y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
@@ -6717,6 +6929,8 @@ static to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
             return dequantize_row_iq2_xs_cuda;
         case GGML_TYPE_IQ3_XXS:
             return dequantize_row_iq3_xxs_cuda;
+        case GGML_TYPE_IQ1_S:
+            return dequantize_row_iq1_s_cuda;
         case GGML_TYPE_F32:
             return convert_unary_cuda<float>;
         default:
@@ -6752,6 +6966,8 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
             return dequantize_row_iq2_xs_cuda;
         case GGML_TYPE_IQ3_XXS:
             return dequantize_row_iq3_xxs_cuda;
+        case GGML_TYPE_IQ1_S:
+            return dequantize_row_iq1_s_cuda;
         case GGML_TYPE_F16:
             return convert_unary_cuda<half>;
         default:
@@ -8530,6 +8746,7 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_CUD
         case GGML_TYPE_IQ2_XXS:
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
+        case GGML_TYPE_IQ1_S:
             return max_compute_capability >= CC_RDNA2 ? 128 : 64;
         default:
             GGML_ASSERT(false);
@@ -8553,6 +8770,7 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_CUD
         case GGML_TYPE_IQ2_XXS:
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
+        case GGML_TYPE_IQ1_S:
             return max_compute_capability >= CC_VOLTA ? 128 : 64;
         case GGML_TYPE_Q6_K:
             return 64;
@@ -8648,6 +8866,10 @@ static void ggml_cuda_op_mul_mat_vec_q(
             break;
         case GGML_TYPE_IQ3_XXS:
             mul_mat_vec_q_cuda<QK_K, QI3_XXS, block_iq3_xxs, 1, vec_dot_iq3_xxs_q8_1>
+                (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
+            break;
+        case GGML_TYPE_IQ1_S:
+            mul_mat_vec_q_cuda<QK_K, QI1_S, block_iq1_s, 1, vec_dot_iq1_s_q8_1>
                 (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
             break;
         default:
@@ -11360,7 +11582,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                     return false;
                 }
                 ggml_type a_type = a->type;
-                if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ3_XXS) {
+                if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ3_XXS || a_type == GGML_TYPE_IQ1_S) {
                     if (b->ne[1] == 1 && ggml_nrows(b) > 1) {
                         return false;
                     }

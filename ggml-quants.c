@@ -3710,6 +3710,49 @@ void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y
     }
 }
 
+// ====================== 1.5625 bpw (de)-quantization
+
+void dequantize_row_iq1_s(const block_iq1_s * restrict x, float * restrict y, int k) {
+    assert(k % QK_K == 0);
+    const int nb = k / QK_K;
+
+    float db[4];
+    uint16_t idx[4];
+    //const int8_t * grid[4];
+
+    for (int i = 0; i < nb; i++) {
+
+        const float d = GGML_FP16_TO_FP32(x[i].d);
+        const uint8_t * sc = x[i].scales;
+        const uint8_t * qs = x[i].qs;
+
+        for (int i8 = 0; i8 < QK_K/8; i8 += 4) {
+            idx[0] = qs[0] | ((sc[0] & 0x08) << 5);
+            idx[1] = qs[1] | ((sc[0] & 0x80) << 1);
+            idx[2] = qs[2] | ((sc[1] & 0x08) << 5);
+            idx[3] = qs[3] | ((sc[1] & 0x80) << 1);
+            //grid[0] = (const int8_t *)(iq1s_grid + (qs[0] | ((sc[0] & 0x08) << 5)));
+            //grid[1] = (const int8_t *)(iq1s_grid + (qs[1] | ((sc[0] & 0x80) << 1)));
+            //grid[2] = (const int8_t *)(iq1s_grid + (qs[2] | ((sc[1] & 0x08) << 5)));
+            //grid[3] = (const int8_t *)(iq1s_grid + (qs[3] | ((sc[1] & 0x80) << 1)));
+            db[0] = d * (2*(sc[0] & 7) + 1);
+            db[1] = d * (2*((sc[0] >> 4) & 7) + 1);
+            db[2] = d * (2*(sc[1] & 7) + 1);
+            db[3] = d * (2*((sc[1] >> 4) & 7) + 1);
+            for (int l = 0; l < 4; ++l) {
+                const int8_t * grid = (const int8_t *)(iq1s_grid + idx[l]);
+                for (int j = 0; j < 8; ++j) {
+                    //y[j] = db[l] * grid[l][j];
+                    y[j] = db[l] * grid[j];
+                }
+                y += 8;
+            }
+            qs += 4;
+            sc += 2;
+        }
+    }
+}
+
 //===================================== Q8_K ==============================================
 
 void quantize_row_q8_K_reference(const float * restrict x, block_q8_K * restrict y, int k) {
@@ -10378,3 +10421,131 @@ static int iq1_sort_helper(const void * left, const void * right) {
     return *l < *r ? -1 : *l > *r ? 1 : 0;
 }
 
+static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights) {
+
+    const int gindex = iq2_data_index(GGML_TYPE_IQ1_S);
+
+    const uint64_t * kgrid_q2xs      = iq2_data[gindex].grid;
+    const int      * kmap_q2xs       = iq2_data[gindex].map;
+    const uint16_t * kneighbors_q2xs = iq2_data[gindex].neighbours;
+
+    GGML_ASSERT(quant_weights   && "missing quantization weights");
+    GGML_ASSERT(kgrid_q2xs      && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kmap_q2xs       && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kneighbors_q2xs && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(n%QK_K == 0);
+
+    const int nbl = n/256;
+
+    block_iq1_s * y = vy;
+
+    float  scales[QK_K/8];
+    float  weight[8];
+    int8_t L[8];
+    float  sumx[9];
+    float  sumw[9];
+    float  pairs[16];
+    int * idx = (int *)(pairs + 1);
+    uint8_t hbit[QK_K/8];
+
+    for (int ibl = 0; ibl < nbl; ++ibl) {
+
+        y[ibl].d = GGML_FP32_TO_FP16(0.f);
+        memset(y[ibl].qs, 0, QK_K/8);
+        memset(y[ibl].scales, 0, QK_K/16);
+
+        float max_scale = 0;
+
+        const float * xbl = x + QK_K*ibl;
+        float sumx2 = 0;
+        for (int i = 0; i < QK_K; ++i) sumx2 += xbl[i]*xbl[i];
+        float sigma2 = sumx2/QK_K;
+
+        for (int ib = 0; ib < QK_K/8; ++ib) {
+            const float * xb = xbl + 8*ib;
+            const float * qw = quant_weights + QK_K*ibl + 8*ib;
+            for (int i = 0; i < 8; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+            float max = fabsf(xb[0]);
+            for (int i = 1; i < 8; ++i) max = MAX(max, fabsf(xb[i]));
+            if (!max) {
+                scales[ib] = 0;
+                memset(L, 1, 8);
+                continue;
+            }
+            for (int j = 0; j < 8; ++j) {
+                pairs[2*j] = xb[j];
+                idx[2*j] = j;
+            }
+            qsort(pairs, 8, 2*sizeof(float), iq1_sort_helper);
+            {
+                sumx[0] = sumw[0] = 0;
+                for (int j = 0; j < 8; ++j) {
+                    int i = idx[2*j];
+                    sumx[j+1] = sumx[j] + weight[i]*xb[i];
+                    sumw[j+1] = sumw[j] + weight[i];
+                }
+            }
+            float best_score = 0, scale = max;
+            int besti1 = 0, besti2 = 0;
+            for (int i1 = 0; i1 <= 8; ++i1) {
+                for (int i2 = i1; i2 <= 8; ++i2) {
+                    float sumqx = -(sumx[i1] - sumx[0]) + (sumx[8] - sumx[i2]);
+                    float sumq2 =  (sumw[i1] - sumw[0]) + (sumw[8] - sumw[i2]);
+                    if (sumq2 > 0 && sumqx*sumqx > best_score*sumq2) {
+                        scale = sumqx/sumq2; best_score = scale*sumqx;
+                        besti1 = i1; besti2 = i2;
+                    }
+                }
+            }
+            for (int j =      0; j < besti1; ++j) L[idx[2*j]] = 0;
+            for (int j = besti1; j < besti2; ++j) L[idx[2*j]] = 1;
+            for (int j = besti2; j <      8; ++j) L[idx[2*j]] = 2;
+            if (scale < 0) {
+                for (int j = 0; j < 8; ++j) L[j] = 2 - L[j];
+                scale = -scale;
+            }
+            uint16_t u = 0;
+            for (int j = 0; j < 8; ++j) u |= (L[j] << 2*j);
+            int grid_index = kmap_q2xs[u];
+            if (grid_index < 0) {
+                const uint16_t * neighbours = kneighbors_q2xs - kmap_q2xs[u] - 1;
+                grid_index = iq1_find_best_neighbour(neighbours, kgrid_q2xs, xb, weight, &scale, L, NGRID_IQ2XXS);
+                GGML_ASSERT(grid_index >= 0);
+            }
+            y[ibl].qs[ib] = grid_index & 255;
+            hbit[ib] = grid_index >> 8;
+            GGML_ASSERT(scale >= 0);
+            scales[ib] = scale;
+            max_scale = MAX(max_scale, scale);
+        }
+
+        if (!max_scale) {
+            memset(y[ibl].qs, 0, QK_K/8);
+            continue;
+        }
+
+        float d = max_scale/15;
+        //y[ibl].d = GGML_FP32_TO_FP16(d*1.075f); // 1.075f is another fudge factor. Don't ask me why it is needed.
+        y[ibl].d = GGML_FP32_TO_FP16(d*1.085f); // 1.08f is another fudge factor. Don't ask me why it is needed.
+        float id = 1/d;
+        for (int ib = 0; ib < QK_K/8; ++ib) {
+            int l = nearest_int(0.5f*(id*scales[ib]-1));
+            l = MAX(0, MIN(7, l));
+            if (hbit[ib]) l |= 8;
+            y[ibl].scales[ib/2] |= (l << 4*(ib%2));
+        }
+    }
+}
+
+size_t quantize_iq1_s(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
+    (void)hist;
+    GGML_ASSERT(n_per_row%QK_K == 0);
+    int nblock = n_per_row/QK_K;
+    char * qrow = (char *)dst;
+    for (int row = 0; row < nrow; ++row) {
+        quantize_row_iq1_s_impl(src, qrow, n_per_row, quant_weights);
+        src += n_per_row;
+        qrow += nblock*sizeof(block_iq1_s);
+    }
+    return nrow * nblock * sizeof(block_iq1_s);
+}
