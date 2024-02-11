@@ -1516,9 +1516,10 @@ generic_unary_op_head = """#version 450
 layout (push_constant) uniform parameter
 {
     uint ne;
-    uint ne00; uint ne01; uint ne02; uint nb00; uint nb01; uint nb02; uint nb03;
-    uint ne10; uint ne11; uint ne12; uint nb10; uint nb11; uint nb12; uint nb13;
+    uint ne00; uint ne01; uint ne02; uint ne03; uint nb00; uint nb01; uint nb02; uint nb03;
+    uint ne10; uint ne11; uint ne12; uint ne13; uint nb10; uint nb11; uint nb12; uint nb13;
     uint d_offset;
+    float param1; float param2;
 } p;
 
 layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
@@ -1559,16 +1560,18 @@ generic_binary_op_head = """#version 450
 layout (push_constant) uniform parameter
 {
     uint ne;
-    uint ne00; uint ne01; uint ne02; uint nb00; uint nb01; uint nb02; uint nb03;
-    uint ne10; uint ne11; uint ne12; uint nb10; uint nb11; uint nb12; uint nb13;
-    uint ne20; uint ne21; uint ne22; uint nb20; uint nb21; uint nb22; uint nb23;
+    uint ne00; uint ne01; uint ne02; uint ne03; uint nb00; uint nb01; uint nb02; uint nb03;
+    uint ne10; uint ne11; uint ne12; uint ne13; uint nb10; uint nb11; uint nb12; uint nb13;
+    uint ne20; uint ne21; uint ne22; uint ne23; uint nb20; uint nb21; uint nb22; uint nb23;
     uint d_offset;
+    uint param1; uint param2;
 } p;
 
 layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+layout (binding = 1) readonly buffer B {A_TYPE data_b[];};
+layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
 
 uint src0_idx(uint idx) {
     const uint i03 = idx / (p.ne02*p.ne01*p.ne00);
@@ -1581,13 +1584,14 @@ uint src0_idx(uint idx) {
 }
 
 uint src1_idx(uint idx) {
-    const uint i13 = idx / (p.ne12*p.ne11*p.ne10);
-    const uint i13_offset = i13 * p.ne12*p.ne11*p.ne10;
-    const uint i12 = (idx - i13_offset) / (p.ne11*p.ne10);
-    const uint i12_offset = i12*p.ne11*p.ne10;
-    const uint i11 = (idx - i13_offset - i12_offset) / p.ne10;
-    const uint i10 = idx - i13_offset - i12_offset - i11*p.ne10;
-    return i13*p.nb13 + i12*p.nb12 + i11*p.nb11 + i10*p.nb10;
+    const uint i03 = idx / (p.ne02*p.ne01*p.ne00);
+    const uint i03_offset = i03 * p.ne02*p.ne01*p.ne00;
+    const uint i02 = (idx - i03_offset) / (p.ne01*p.ne00);
+    const uint i02_offset = i02*p.ne01*p.ne00;
+    const uint i01 = (idx - i03_offset - i02_offset) / p.ne00;
+    const uint i00 = idx - i03_offset - i02_offset - i01*p.ne00;
+
+    return (i03 % p.ne13)*p.nb13 + (i02 % p.ne12)*p.nb12 + (i01 % p.ne11)*p.nb11 + (i00 % p.ne10)*p.nb10;
 }
 
 uint dst_idx(uint idx) {
@@ -1607,92 +1611,34 @@ void main() {
 """
 
 # MUL F32
-mul_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
-
-layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
-
-void main() {
-    const uint idx = gl_GlobalInvocationID.x;
-
-    if (idx >= p.KX) {
-        return;
-    }
-
-    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) * FLOAT_TYPE(data_b[idx % p.KY]));
+mul_body = """
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(FLOAT_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]) * FLOAT_TYPE(data_b[src1_idx(gl_GlobalInvocationID.x)]));
 }
 """
 
 # ADD
 add_body = """
-layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
-
-layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
-
-void main() {
-    const uint idx = gl_GlobalInvocationID.x;
-
-    if (idx >= p.KX) {
-        return;
-    }
-
-    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) + FLOAT_TYPE(data_b[idx % p.KY]));
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(FLOAT_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]) + FLOAT_TYPE(data_b[src1_idx(gl_GlobalInvocationID.x)]));
 }
 """
 
 # SCALE
-scale_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
-
-layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
-layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
-
-void main() {
-    const uint idx = gl_GlobalInvocationID.x;
-
-    if (idx >= p.KX) {
-        return;
-    }
-
-    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) * FLOAT_TYPE(p.param1));
+scale_body = """
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(FLOAT_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]) + FLOAT_TYPE(p.param1));
 }
 """
 
 # SQR
-sqr_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
-
-layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
-layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
-
-void main() {
-    const uint idx = gl_GlobalInvocationID.x;
-
-    if (idx >= p.KX) {
-        return;
-    }
-
-    const FLOAT_TYPE val = FLOAT_TYPE(data_a[idx]);
-    data_d[idx] = D_TYPE(val * val);
+sqr_body = """
+    const FLOAT_TYPE val = FLOAT_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]);
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(val * val);
 }
 """
 
 # CLAMP
-clamp_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
-
-layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
-layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
-
-void main() {
-    const uint idx = gl_GlobalInvocationID.x;
-
-    if (idx >= p.KX) {
-        return;
-    }
-
-    const FLOAT_TYPE val = FLOAT_TYPE(data_a[idx]);
-    data_d[idx] = D_TYPE(val < p.param1 ? p.param1 : (val > p.param2 ? p.param2 : val));
+clamp_body = """
+    const FLOAT_TYPE val = FLOAT_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]);
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(val < p.param1 ? p.param1 : (val > p.param2 ? p.param2 : val));
 }
 """
 
@@ -2367,16 +2313,16 @@ async def main():
     tasks.append(string_to_spv("cpy_f32_f16", f"{generic_unary_op_head}\n{cpy_end}", {"A_TYPE": "float", "D_TYPE": "float16_t"}))
     tasks.append(string_to_spv("cpy_f16_f16", f"{generic_unary_op_head}\n{cpy_f16_f16_end}", {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}))
 
-    tasks.append(string_to_spv("add_f32", f"{generic_head}\n{shader_f32}\n{add_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}))
+    tasks.append(string_to_spv("add_f32", f"{generic_binary_op_head}\n{add_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
     tasks.append(string_to_spv("split_k_reduce", mulmat_split_k_reduce_src, {}))
-    tasks.append(string_to_spv("mul_f32", f"{generic_head}\n{shader_f32}\n{mul_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}))
+    tasks.append(string_to_spv("mul_f32", f"{generic_binary_op_head}\n{mul_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
-    tasks.append(string_to_spv("scale_f32", f"{generic_head}\n{shader_f32}\n{scale_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
+    tasks.append(string_to_spv("scale_f32", f"{generic_unary_op_head}\n{scale_body}", {"A_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
-    tasks.append(string_to_spv("sqr_f32", f"{generic_head}\n{shader_f32}\n{sqr_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
+    tasks.append(string_to_spv("sqr_f32", f"{generic_unary_op_head}\n{sqr_body}", {"A_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
-    tasks.append(string_to_spv("clamp_f32", f"{generic_head}\n{shader_f32}\n{clamp_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
+    tasks.append(string_to_spv("clamp_f32", f"{generic_unary_op_head}\n{clamp_body}", {"A_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
     tasks.append(string_to_spv("gelu_f32", f"{generic_head}\n{shader_f32}\n{gelu_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
     tasks.append(string_to_spv("silu_f32", f"{generic_head}\n{shader_f32}\n{silu_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
