@@ -9932,7 +9932,8 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
             }
         }
     } else {
-        min_compute_capability = g_device_caps[g_main_device].cc;
+        min_compute_capability    = g_device_caps[g_main_device].cc;
+        any_pascal_with_slow_fp16 = g_device_caps[g_main_device].cc == 610;
     }
 
     // check data types and tensor shapes for custom matrix multiplication kernels:
