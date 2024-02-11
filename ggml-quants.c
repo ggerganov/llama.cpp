@@ -9282,6 +9282,52 @@ void ggml_vec_dot_iq3_xxs_q8_K(int n, float * restrict s, size_t bs, const void 
 #endif
 }
 
+void ggml_vec_dot_iq1_s_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+    assert(n % QK_K == 0);
+
+    const block_iq1_s * restrict x = vx;
+    const block_q8_K  * restrict y = vy;
+
+    const int nb = n / QK_K;
+
+    int db[4];
+    uint16_t idx[4];
+
+    float sumf = 0;
+    for (int i = 0; i < nb; ++i) {
+
+        const int8_t  * q8 = y[i].qs;
+        const uint8_t * qs = x[i].qs;
+        const uint8_t * sc = x[i].scales;
+
+        int sumi = 0;
+        for (int i32 = 0; i32 < QK_K/32; ++i32) {
+            idx[0] = qs[0] | ((sc[0] & 0x08) << 5);
+            idx[1] = qs[1] | ((sc[0] & 0x80) << 1);
+            idx[2] = qs[2] | ((sc[1] & 0x08) << 5);
+            idx[3] = qs[3] | ((sc[1] & 0x80) << 1);
+            db[0] = (2*(sc[0] & 7) + 1);
+            db[1] = (2*((sc[0] >> 4) & 7) + 1);
+            db[2] = (2*(sc[1] & 7) + 1);
+            db[3] = (2*((sc[1] >> 4) & 7) + 1);
+            for (int l = 0; l < 4; ++l) {
+                const int8_t * grid = (const int8_t *)(iq1s_grid + idx[l]);
+                int suml = 0;
+                for (int j = 0; j < 8; ++j) suml += q8[j] * grid[j];
+                sumi += db[l] * suml;
+                q8 += 8;
+            }
+            qs += 4;
+            sc += 2;
+        }
+
+        sumf += GGML_FP16_TO_FP32(x[i].d) * y[i].d * sumi;
+    }
+
+    *s = sumf;
+
+}
+
 // ================================ IQ2 quantization =============================================
 
 typedef struct {
@@ -10472,6 +10518,12 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
                 memset(L, 1, 8);
                 continue;
             }
+            // Here we solve exactly the sum of squared difference (SSD) weighted minimization problem.
+            // With just 3 allowed quant values (-1, 0, 1), we can search exhaustively for the two
+            // boundaries that split the weights xb[i] into 3 groups. To do so, we sort the weights
+            // in ascending order, compute Si = sum[weight[j] xb[j], j = 0...i] and
+            // Wi = sum[weight[j], j = 0...i], and use these to quckly get get the optimum scale
+            // for each possible and score for each split.
             for (int j = 0; j < 8; ++j) {
                 pairs[2*j] = xb[j];
                 idx[2*j] = j;
@@ -10504,6 +10556,8 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
                 for (int j = 0; j < 8; ++j) L[j] = 2 - L[j];
                 scale = -scale;
             }
+            // Now we check if the solution found above corresponds to a grid point and, if not, use a neighbouring
+            // grid point that minimizes SSD.
             uint16_t u = 0;
             for (int j = 0; j < 8; ++j) u |= (L[j] << 2*j);
             int grid_index = kmap_q2xs[u];
@@ -10525,8 +10579,7 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
         }
 
         float d = max_scale/15;
-        //y[ibl].d = GGML_FP32_TO_FP16(d*1.075f); // 1.075f is another fudge factor. Don't ask me why it is needed.
-        y[ibl].d = GGML_FP32_TO_FP16(d*1.085f); // 1.08f is another fudge factor. Don't ask me why it is needed.
+        y[ibl].d = GGML_FP32_TO_FP16(d*1.085f); // 1.085f is another fudge factor. Don't ask me why it is needed.
         float id = 1/d;
         for (int ib = 0; ib < QK_K/8; ++ib) {
             int l = nearest_int(0.5f*(id*scales[ib]-1));
