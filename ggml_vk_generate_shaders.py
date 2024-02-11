@@ -1509,6 +1509,103 @@ layout (push_constant) uniform parameter
 } p;
 """
 
+generic_unary_op_head = """#version 450
+
+#extension GL_EXT_shader_16bit_storage : require
+
+layout (push_constant) uniform parameter
+{
+    uint ne;
+    uint ne00; uint ne01; uint ne02; uint nb00; uint nb01; uint nb02; uint nb03;
+    uint ne10; uint ne11; uint ne12; uint nb10; uint nb11; uint nb12; uint nb13;
+    uint d_offset;
+} p;
+
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+uint src0_idx(uint idx) {
+    const uint i03 = idx / (p.ne02*p.ne01*p.ne00);
+    const uint i03_offset = i03 * p.ne02*p.ne01*p.ne00;
+    const uint i02 = (idx - i03_offset) / (p.ne01*p.ne00);
+    const uint i02_offset = i02*p.ne01*p.ne00;
+    const uint i01 = (idx - i03_offset - i02_offset) / p.ne00;
+    const uint i00 = idx - i03_offset - i02_offset - i01*p.ne00;
+    return i03*p.nb03 + i02*p.nb02 + i01*p.nb01 + i00*p.nb00;
+}
+
+uint dst_idx(uint idx) {
+    const uint i13 = idx / (p.ne12*p.ne11*p.ne10);
+    const uint i13_offset = i13 * p.ne12*p.ne11*p.ne10;
+    const uint i12 = (idx - i13_offset) / (p.ne11*p.ne10);
+    const uint i12_offset = i12*p.ne11*p.ne10;
+    const uint i11 = (idx - i13_offset - i12_offset) / p.ne10;
+    const uint i10 = idx - i13_offset - i12_offset - i11*p.ne10;
+    return i13*p.nb13 + i12*p.nb12 + i11*p.nb11 + i10*p.nb10;
+}
+
+void main() {
+    if (gl_GlobalInvocationID.x >= p.ne) {
+        return;
+    }
+"""
+
+generic_binary_op_head = """#version 450
+
+#extension GL_EXT_shader_16bit_storage : require
+
+layout (push_constant) uniform parameter
+{
+    uint ne;
+    uint ne00; uint ne01; uint ne02; uint nb00; uint nb01; uint nb02; uint nb03;
+    uint ne10; uint ne11; uint ne12; uint nb10; uint nb11; uint nb12; uint nb13;
+    uint ne20; uint ne21; uint ne22; uint nb20; uint nb21; uint nb22; uint nb23;
+    uint d_offset;
+} p;
+
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+uint src0_idx(uint idx) {
+    const uint i03 = idx / (p.ne02*p.ne01*p.ne00);
+    const uint i03_offset = i03 * p.ne02*p.ne01*p.ne00;
+    const uint i02 = (idx - i03_offset) / (p.ne01*p.ne00);
+    const uint i02_offset = i02*p.ne01*p.ne00;
+    const uint i01 = (idx - i03_offset - i02_offset) / p.ne00;
+    const uint i00 = idx - i03_offset - i02_offset - i01*p.ne00;
+    return i03*p.nb03 + i02*p.nb02 + i01*p.nb01 + i00*p.nb00;
+}
+
+uint src1_idx(uint idx) {
+    const uint i13 = idx / (p.ne12*p.ne11*p.ne10);
+    const uint i13_offset = i13 * p.ne12*p.ne11*p.ne10;
+    const uint i12 = (idx - i13_offset) / (p.ne11*p.ne10);
+    const uint i12_offset = i12*p.ne11*p.ne10;
+    const uint i11 = (idx - i13_offset - i12_offset) / p.ne10;
+    const uint i10 = idx - i13_offset - i12_offset - i11*p.ne10;
+    return i13*p.nb13 + i12*p.nb12 + i11*p.nb11 + i10*p.nb10;
+}
+
+uint dst_idx(uint idx) {
+    const uint i23 = idx / (p.ne22*p.ne21*p.ne20);
+    const uint i23_offset = i23 * p.ne22*p.ne21*p.ne20;
+    const uint i22 = (idx - i23_offset) / (p.ne21*p.ne20);
+    const uint i22_offset = i22*p.ne21*p.ne20;
+    const uint i21 = (idx - i23_offset - i22_offset) / p.ne20;
+    const uint i20 = idx - i23_offset - i22_offset - i21*p.ne20;
+    return i23*p.nb23 + i22*p.nb22 + i21*p.nb21 + i20*p.nb20;
+}
+
+void main() {
+    if (gl_GlobalInvocationID.x >= p.ne) {
+        return;
+    }
+"""
+
 # MUL F32
 mul_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
@@ -1600,45 +1697,13 @@ void main() {
 """
 
 # CPY
-cpy_src = """#version 450
-
-#extension GL_EXT_shader_16bit_storage : require
-
-layout (push_constant) uniform parameter
-{
-    uint ne;
-    uint ne00; uint ne01; uint nb00; uint nb01; uint nb02;
-    uint ne10; uint ne11; uint nb10; uint nb11; uint nb12;
-    uint d_offset;
-} p;
-
-layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
-
-layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
-
-void main() {
-    if (gl_GlobalInvocationID.x >= p.ne) {
-        return;
-    }
-
-    const uint i02 = gl_GlobalInvocationID.x / (p.ne00*p.ne01);
-    const uint i01 = (gl_GlobalInvocationID.x - i02*p.ne01*p.ne00) / p.ne00;
-    const uint i00 = gl_GlobalInvocationID.x - i02*p.ne01*p.ne00 - i01*p.ne00;
-    const uint a_idx = i00*p.nb00 + i01*p.nb01 + i02*p.nb02;
-
-    const uint i12 = gl_GlobalInvocationID.x / (p.ne10*p.ne11);
-    const uint i11 = (gl_GlobalInvocationID.x - i12*p.ne11*p.ne10) / p.ne10;
-    const uint i10 = gl_GlobalInvocationID.x - i12*p.ne11*p.ne10 - i11*p.ne10;
-    const uint d_idx = i10*p.nb10 + i11*p.nb11 + i12*p.nb12;
-"""
 cpy_end = """
-    data_d[p.d_offset + d_idx] = D_TYPE(data_a[a_idx]);
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]);
 }
 """
 # Causes an optimization error otherwise
 cpy_f16_f16_end = """
-    data_d[p.d_offset + d_idx] = data_a[a_idx];
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = data_a[src0_idx(gl_GlobalInvocationID.x)];
 }
 """
 
@@ -2298,9 +2363,9 @@ async def main():
     tasks.append(string_to_spv("norm_f32", f"{generic_head}\n{shader_f32}\n{norm_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
     tasks.append(string_to_spv("rms_norm_f32", f"{generic_head}\n{shader_f32}\n{rms_norm_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
 
-    tasks.append(string_to_spv("cpy_f32_f32", f"{cpy_src}\n{cpy_end}", {"A_TYPE": "float", "D_TYPE": "float"}))
-    tasks.append(string_to_spv("cpy_f32_f16", f"{cpy_src}\n{cpy_end}", {"A_TYPE": "float", "D_TYPE": "float16_t"}))
-    tasks.append(string_to_spv("cpy_f16_f16", f"{cpy_src}\n{cpy_f16_f16_end}", {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}))
+    tasks.append(string_to_spv("cpy_f32_f32", f"{generic_unary_op_head}\n{cpy_end}", {"A_TYPE": "float", "D_TYPE": "float"}))
+    tasks.append(string_to_spv("cpy_f32_f16", f"{generic_unary_op_head}\n{cpy_end}", {"A_TYPE": "float", "D_TYPE": "float16_t"}))
+    tasks.append(string_to_spv("cpy_f16_f16", f"{generic_unary_op_head}\n{cpy_f16_f16_end}", {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}))
 
     tasks.append(string_to_spv("add_f32", f"{generic_head}\n{shader_f32}\n{add_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}))
 
