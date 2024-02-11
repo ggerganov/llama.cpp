@@ -19209,7 +19209,8 @@ size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t *
 bool ggml_quantize_requires_imatrix(enum ggml_type type) {
     return
         type == GGML_TYPE_IQ2_XXS ||
-        type == GGML_TYPE_IQ2_XS;
+        type == GGML_TYPE_IQ2_XS  ||
+        type == GGML_TYPE_IQ1_S;
 }
 
 size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, int start,

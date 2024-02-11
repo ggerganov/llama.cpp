@@ -9651,7 +9651,7 @@ static int iq2_find_best_neighbour(const uint16_t * restrict neighbours, const u
 
 static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights) {
 
-    const int gindex = iq2_data_index(256);
+    const int gindex = iq2_data_index(GGML_TYPE_IQ2_XXS);
 
     const uint64_t * kgrid_q2xs      = iq2_data[gindex].grid;
     const int      * kmap_q2xs       = iq2_data[gindex].map;
@@ -9824,7 +9824,7 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
 
 static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights) {
 
-    const int gindex = iq2_data_index(512);
+    const int gindex = iq2_data_index(GGML_TYPE_IQ2_XS);
 
     const uint64_t * kgrid_q2xs      = iq2_data[gindex].grid;
     const int      * kmap_q2xs       = iq2_data[gindex].map;
