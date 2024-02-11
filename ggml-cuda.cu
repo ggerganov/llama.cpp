@@ -6898,7 +6898,7 @@ static void mul_mat_vec_q_cuda(
     const dim3 block_nums(nblocks, 1, 1);
     const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-    switch(ncols_y) {
+    switch (ncols_y) {
         case 1:
             mul_mat_vec_q<1, qk, qi, block_q_t, vdr, vec_dot>
                 <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
