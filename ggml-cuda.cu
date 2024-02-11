@@ -9914,12 +9914,21 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 
     int64_t min_compute_capability = INT_MAX;
 
+    bool any_pascal_with_slow_fp16 = false;
     if (split) {
         ggml_backend_cuda_split_buffer_type_context * buft_ctx = (ggml_backend_cuda_split_buffer_type_context *) src0->buffer->buft->context;
         auto & tensor_split = buft_ctx->tensor_split;
         for (int id = 0; id < g_device_count; ++id) {
-            if (min_compute_capability > g_device_caps[id].cc && tensor_split[id] < (id + 1 < g_device_count ? tensor_split[id + 1] : 1.0f)) {
+            // skip devices that are not going to do any work:
+            if (tensor_split[id] >= (id + 1 < g_device_count ? tensor_split[id + 1] : 1.0f)) {
+                continue;
+            }
+
+            if (min_compute_capability > g_device_caps[id].cc) {
                 min_compute_capability = g_device_caps[id].cc;
+            }
+            if (g_device_caps[id].cc == 610) {
+                any_pascal_with_slow_fp16 = true;
             }
         }
     } else {
@@ -9949,13 +9958,7 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 #else
 
     // fp16 performance is good on Volta or newer and on P100 (compute capability 6.0)
-    bool fp16_performance_good = true;
-    for (int id = 0; id < g_device_count; ++id) {
-        if (g_device_caps[id].cc < CC_VOLTA && g_device_caps[id].cc != CC_PASCAL) {
-            fp16_performance_good = false;
-            break;
-        }
-    }
+    const bool fp16_performance_good = min_compute_capability >= CC_PASCAL && !any_pascal_with_slow_fp16;
 
     // mmvq and mmq need the __dp4a instruction which on NVIDIA is only available for CC >= 6.1
     use_mul_mat_vec_q = use_mul_mat_vec_q && min_compute_capability >= MIN_CC_DP4A;
