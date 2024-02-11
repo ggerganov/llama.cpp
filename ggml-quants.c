@@ -3689,6 +3689,10 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 #else
     assert(nrc == 1);
 #endif
+    UNUSED(nrc);
+    UNUSED(bx);
+    UNUSED(by);
+    UNUSED(bs);
 
     const block_q4_0 * restrict x = vx;
     const block_q8_0 * restrict y = vy;
@@ -4052,6 +4056,10 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 #else
     assert(nrc == 1);
 #endif
+    UNUSED(nrc);
+    UNUSED(bx);
+    UNUSED(by);
+    UNUSED(bs);
 
     const block_q4_1 * restrict x = vx;
     const block_q8_1 * restrict y = vy;
@@ -4861,6 +4869,10 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 #else
     assert(nrc == 1);
 #endif
+    UNUSED(nrc);
+    UNUSED(bx);
+    UNUSED(by);
+    UNUSED(bs);
 
     const block_q8_0 * restrict x = vx;
     const block_q8_0 * restrict y = vy;
