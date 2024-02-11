@@ -1411,6 +1411,8 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
             return false;
         }
     }
+
+    return true;
 }
 
 static bool ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
