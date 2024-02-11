@@ -27,6 +27,7 @@
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
 #define VK_VENDOR_ID_AMD 0x1002
+#define VK_VENDOR_ID_APPLE 0x106b
 #define VK_VENDOR_ID_INTEL 0x8086
 #define VK_VENDOR_ID_NVIDIA 0x10de
 
@@ -2073,6 +2074,22 @@ static vk_pipeline* ggml_vk_guess_matmul_pipeline_amd(ggml_backend_vk_context * 
     return aligned ? &ctx->pipeline_matmul_f32_aligned_m : &ctx->pipeline_matmul_f32_m;
 }
 
+static vk_pipeline* ggml_vk_guess_matmul_pipeline_apple(ggml_backend_vk_context * ctx, bool bit16_x, bool bit16_y, bool aligned) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " M" << std::endl;
+#endif
+    if (bit16_x && bit16_y) {
+        return aligned ? &ctx->pipeline_matmul_f16_aligned_m : &ctx->pipeline_matmul_f16_m;
+    }
+    if (bit16_x && !bit16_y) {
+        return aligned ? &ctx->pipeline_matmul_f16_f32_aligned_m : &ctx->pipeline_matmul_f16_f32_m;
+    }
+    if (!bit16_x && bit16_y) {
+        GGML_ASSERT(false);
+    }
+    return aligned ? &ctx->pipeline_matmul_f32_aligned_m : &ctx->pipeline_matmul_f32_m;
+}
+
 static vk_pipeline* ggml_vk_guess_matmul_pipeline_intel(ggml_backend_vk_context * ctx, bool bit16_x, bool bit16_y, bool aligned) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << " S" << std::endl;
@@ -2096,6 +2113,8 @@ static vk_pipeline* ggml_vk_guess_matmul_pipeline(ggml_backend_vk_context * ctx,
     switch (ctx->device.lock()->vendor_id) {
     case VK_VENDOR_ID_AMD:
         return ggml_vk_guess_matmul_pipeline_amd(ctx, bit16_x, bit16_y, m, n, aligned);
+    case VK_VENDOR_ID_APPLE:
+        return ggml_vk_guess_matmul_pipeline_apple(ctx, bit16_x, bit16_y, aligned);
     case VK_VENDOR_ID_INTEL:
         return ggml_vk_guess_matmul_pipeline_intel(ctx, bit16_x, bit16_y, aligned);
     }
