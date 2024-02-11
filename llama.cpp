@@ -11869,6 +11869,7 @@ const char * llama_print_system_info(void) {
     s += "SSE3 = "        + std::to_string(ggml_cpu_has_sse3())        + " | ";
     s += "SSSE3 = "       + std::to_string(ggml_cpu_has_ssse3())       + " | ";
     s += "VSX = "         + std::to_string(ggml_cpu_has_vsx())         + " | ";
+    s += "MATMUL_INT8 = " + std::to_string(ggml_cpu_has_matmul_int8()) + " | ";
 
     return s.c_str();
 }
