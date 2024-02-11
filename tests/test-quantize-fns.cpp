@@ -87,7 +87,7 @@ static float dot_product_error(
     vdot.from_float(test_data2, tmp_q2.data(), test_size);
 
     float result = INFINITY;
-    qfns.vec_dot(test_size, &result, tmp_q1.data(), tmp_q2.data());
+    qfns.vec_dot(test_size, &result, 0, tmp_q1.data(), 0, tmp_q2.data(), 0, 1);
 
     const float dot_ref = dot_product(test_data1, test_data2, test_size);
 

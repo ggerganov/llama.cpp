@@ -162,10 +162,13 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 void process_escapes(std::string& input);
 
 //
-// String parsing
+// String utils
 //
 
-std::string parse_samplers_input(std::string input);
+std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names);
+std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string);
+std::vector<std::string> string_split(std::string input, char separator);
+std::string sampler_type_to_name_string(llama_sampler_type sampler_type);
 
 //
 // Model utils
