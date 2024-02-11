@@ -8268,18 +8268,19 @@ struct llm_tokenizer_wpm {
         return words;
     }
 
-    std::string normalize(const std::string &text) {
+    std::string normalize(const std::string & text) {
         // TODO: handle chinese characters? https://github.com/huggingface/tokenizers/blob/ef5f50605ddf9f8caef1598c0e4853862b9707a7/tokenizers/src/normalizers/bert.rs#L98
         std::string text2 = strip_accents(text);
         for (size_t i = 0; i < text2.size(); i += utf8_len(text2[i])) {
             char c = text2[i];
-            if (c >= 'A' && c <= 'Z')
+            if (c >= 'A' && c <= 'Z') {
                 text2[i] = c - 'A' + 'a';
+            }
         }
         return text2;
     }
 
-    bool is_chinese_char(const std::string& str) {
+    bool is_chinese_char(const std::string & str) {
         int len = str.length();
         unsigned int codepoint = 0;
         int num_bytes = 0;
@@ -8308,24 +8309,24 @@ struct llm_tokenizer_wpm {
             }
             codepoint = (codepoint << 6) | (next_ch & 0x3f);
         }
-        if ((codepoint >= 0x4E00 && codepoint <= 0x9FFF) ||
-            (codepoint >= 0x3400 && codepoint <= 0x4DBF) ||
+        if ((codepoint >= 0x4E00  && codepoint <= 0x9FFF)  ||
+            (codepoint >= 0x3400  && codepoint <= 0x4DBF)  ||
             (codepoint >= 0x20000 && codepoint <= 0x2A6DF) ||
             (codepoint >= 0x2A700 && codepoint <= 0x2B73F) ||
             (codepoint >= 0x2B740 && codepoint <= 0x2B81F) ||
             (codepoint >= 0x2B920 && codepoint <= 0x2CEAF) || // this should be 0x2B820 but in hf rust code it is 0x2B920
-            (codepoint >= 0xF900 && codepoint <= 0xFAFF) ||
+            (codepoint >= 0xF900  && codepoint <= 0xFAFF)  ||
             (codepoint >= 0x2F800 && codepoint <= 0x2FA1F) ||
-            (codepoint >= 0x3000 && codepoint <= 0x303F) ||
-            (codepoint >= 0xFF00 && codepoint <= 0xFFEF)) {
-            return true;
+            (codepoint >= 0x3000  && codepoint <= 0x303F)  ||
+            (codepoint >= 0xFF00  && codepoint <= 0xFFEF)) {
+            return true; // NOLINT
         }
         return false;
     }
 
-    std::string strip_accents(const std::string &inputString) {
+    std::string strip_accents(const std::string & input_string) {
         std::string resultString;
-        std::map<std::string, char> accentMap = {
+        std::map<std::string, char> accent_map = {
             {"À", 'A'}, {"Á", 'A'}, {"Â", 'A'}, {"Ã", 'A'}, {"Ä", 'A'}, {"Å", 'A'},
             {"à", 'a'}, {"á", 'a'}, {"â", 'a'}, {"ã", 'a'}, {"ä", 'a'}, {"å", 'a'},
             {"È", 'E'}, {"É", 'E'}, {"Ê", 'E'}, {"Ë", 'E'}, {"è", 'e'}, {"é", 'e'},
@@ -8337,11 +8338,11 @@ struct llm_tokenizer_wpm {
             {"Ç", 'C'}, {"ç", 'c'}, {"Ñ", 'N'}, {"ñ", 'n'},
         };
 
-        for (size_t i = 0; i < inputString.length();) {
-            int len = utf8_len(inputString[i]);
-            std::string curChar = inputString.substr(i, len);
-            auto iter = accentMap.find(curChar);
-            if (iter != accentMap.end()) {
+        for (size_t i = 0; i <  input_string.length();) {
+            int len = utf8_len(input_string[i]);
+            std::string curChar = input_string.substr(i, len);
+            auto iter = accent_map.find(curChar);
+            if (iter != accent_map.end()) {
                 resultString += iter->second;
             } else {
                 resultString += curChar;
