@@ -27,6 +27,7 @@
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
 #define VK_VENDOR_ID_AMD 0x1002
+#define VK_VENDOR_ID_APPLE 0x106b
 #define VK_VENDOR_ID_INTEL 0x8086
 #define VK_VENDOR_ID_NVIDIA 0x10de
 
@@ -744,6 +745,8 @@ static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t siz
     }
 
     if (memory_type_index >= mem_props.memoryTypeCount) {
+        ctx->device.lock()->device.destroyBuffer(buf->buffer);
+        buf->size = 0;
         throw vk::OutOfDeviceMemoryError("No suitable memory type found");
     }
 
@@ -2032,18 +2035,100 @@ static uint32_t ggml_vk_guess_matmul_pipeline_align(ggml_backend_vk_context * ct
     return ctx->pipeline_matmul_f32_aligned_l.align;
 }
 
-static vk_pipeline* ggml_vk_guess_matmul_pipeline(ggml_backend_vk_context * ctx, bool bit16_x, bool bit16_y, int m, int n, bool aligned) {
-#ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_vk_guess_matmul_pipeline(" << bit16_x << ", " << bit16_y << ", " << m << ", " << n << ", " << aligned << ")";
-#endif
+static vk_pipeline* ggml_vk_guess_matmul_pipeline_amd(ggml_backend_vk_context * ctx, bool bit16_x, bool bit16_y, int m, int n, bool aligned) {
     if (bit16_x && bit16_y) {
-        if (ctx->device.lock()->vendor_id == VK_VENDOR_ID_INTEL || m <= 32 || n <= 32) {
+        if (m <= 32 || n <= 32) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << " S" << std::endl;
 #endif
             return aligned ? &ctx->pipeline_matmul_f16_aligned_s : &ctx->pipeline_matmul_f16_s;
         }
-        if (ctx->device.lock()->subgroup_size == 64 || m <= 64 || n <= 64) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " M" << std::endl;
+#endif
+        return aligned ? &ctx->pipeline_matmul_f16_aligned_m : &ctx->pipeline_matmul_f16_m;
+    }
+    if (bit16_x && !bit16_y) {
+        if (m <= 32 || n <= 32) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " S" << std::endl;
+#endif
+            return aligned ? &ctx->pipeline_matmul_f16_f32_aligned_s : &ctx->pipeline_matmul_f16_f32_s;
+        }
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " M" << std::endl;
+#endif
+        return aligned ? &ctx->pipeline_matmul_f16_f32_aligned_m : &ctx->pipeline_matmul_f16_f32_m;
+    }
+    if (!bit16_x && bit16_y) {
+        GGML_ASSERT(false);
+    }
+
+    if (m <= 32 || n <= 32) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " S" << std::endl;
+#endif
+        return aligned ? &ctx->pipeline_matmul_f32_aligned_s : &ctx->pipeline_matmul_f32_s;
+    }
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " M" << std::endl;
+#endif
+    return aligned ? &ctx->pipeline_matmul_f32_aligned_m : &ctx->pipeline_matmul_f32_m;
+}
+
+static vk_pipeline* ggml_vk_guess_matmul_pipeline_apple(ggml_backend_vk_context * ctx, bool bit16_x, bool bit16_y, bool aligned) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " M" << std::endl;
+#endif
+    if (bit16_x && bit16_y) {
+        return aligned ? &ctx->pipeline_matmul_f16_aligned_m : &ctx->pipeline_matmul_f16_m;
+    }
+    if (bit16_x && !bit16_y) {
+        return aligned ? &ctx->pipeline_matmul_f16_f32_aligned_m : &ctx->pipeline_matmul_f16_f32_m;
+    }
+    if (!bit16_x && bit16_y) {
+        GGML_ASSERT(false);
+    }
+    return aligned ? &ctx->pipeline_matmul_f32_aligned_m : &ctx->pipeline_matmul_f32_m;
+}
+
+static vk_pipeline* ggml_vk_guess_matmul_pipeline_intel(ggml_backend_vk_context * ctx, bool bit16_x, bool bit16_y, bool aligned) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " S" << std::endl;
+#endif
+    if (bit16_x && bit16_y) {
+        return aligned ? &ctx->pipeline_matmul_f16_aligned_s : &ctx->pipeline_matmul_f16_s;
+    }
+    if (bit16_x && !bit16_y) {
+        return aligned ? &ctx->pipeline_matmul_f16_f32_aligned_s : &ctx->pipeline_matmul_f16_f32_s;
+    }
+    if (!bit16_x && bit16_y) {
+        GGML_ASSERT(false);
+    }
+    return aligned ? &ctx->pipeline_matmul_f32_aligned_s : &ctx->pipeline_matmul_f32_s;
+}
+
+static vk_pipeline* ggml_vk_guess_matmul_pipeline(ggml_backend_vk_context * ctx, bool bit16_x, bool bit16_y, int m, int n, bool aligned) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_guess_matmul_pipeline(" << bit16_x << ", " << bit16_y << ", " << m << ", " << n << ", " << aligned << ")";
+#endif
+    switch (ctx->device.lock()->vendor_id) {
+    case VK_VENDOR_ID_AMD:
+        return ggml_vk_guess_matmul_pipeline_amd(ctx, bit16_x, bit16_y, m, n, aligned);
+    case VK_VENDOR_ID_APPLE:
+        return ggml_vk_guess_matmul_pipeline_apple(ctx, bit16_x, bit16_y, aligned);
+    case VK_VENDOR_ID_INTEL:
+        return ggml_vk_guess_matmul_pipeline_intel(ctx, bit16_x, bit16_y, aligned);
+    }
+
+    if (bit16_x && bit16_y) {
+        if (m <= 32 || n <= 32) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << " S" << std::endl;
+#endif
+            return aligned ? &ctx->pipeline_matmul_f16_aligned_s : &ctx->pipeline_matmul_f16_s;
+        }
+        if (m <= 64 || n <= 64) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << " M" << std::endl;
 #endif
@@ -2055,13 +2140,13 @@ static vk_pipeline* ggml_vk_guess_matmul_pipeline(ggml_backend_vk_context * ctx,
         return aligned ? &ctx->pipeline_matmul_f16_aligned_l : &ctx->pipeline_matmul_f16_l;
     }
     if (bit16_x && !bit16_y) {
-        if (ctx->device.lock()->vendor_id == VK_VENDOR_ID_INTEL || m <= 32 || n <= 32) {
+        if (m <= 32 || n <= 32) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << " S" << std::endl;
 #endif
             return aligned ? &ctx->pipeline_matmul_f16_f32_aligned_s : &ctx->pipeline_matmul_f16_f32_s;
         }
-        if (ctx->device.lock()->subgroup_size == 64 || m <= 64 || n <= 64) {
+        if (m <= 64 || n <= 64) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << " M" << std::endl;
 #endif
@@ -2076,13 +2161,13 @@ static vk_pipeline* ggml_vk_guess_matmul_pipeline(ggml_backend_vk_context * ctx,
         GGML_ASSERT(false);
     }
 
-    if (ctx->device.lock()->vendor_id == VK_VENDOR_ID_INTEL || m <= 32 || n <= 32) {
+    if (m <= 32 || n <= 32) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << " S" << std::endl;
 #endif
         return aligned ? &ctx->pipeline_matmul_f32_aligned_s : &ctx->pipeline_matmul_f32_s;
     }
-    if (ctx->device.lock()->subgroup_size == 64 || m <= 64 || n <= 64) {
+    if (m <= 64 || n <= 64) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << " M" << std::endl;
 #endif
@@ -3875,7 +3960,7 @@ static ggml_tensor * ggml_vk_find_last_use(const ggml_tensor * node, ggml_cgraph
 
 static void ggml_vk_preallocate_buffers_graph(ggml_backend_vk_context * ctx, ggml_tensor * node){
 #ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_ctx->preallocate_buffers_graph(" << node << ")" << std::endl;
+    std::cerr << "ggml_vk_preallocate_buffers_graph(" << node << ")" << std::endl;
 #endif
     const bool any_on_device = node->backend == GGML_BACKEND_GPU
         || (node->src[0] != nullptr && (node->src[0]->backend == GGML_BACKEND_GPU || node->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
@@ -3994,8 +4079,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         return;
     }
 #ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_ctx->preallocate_buffers()" << std::endl;
-    std::cerr << "qx_size: " << ctx->prealloc_size_qx << " qy_size: " << ctx->prealloc_size_qy << " x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << std::endl;
+    std::cerr << "ggml_vk_preallocate_buffers(qx_size: " << ctx->prealloc_size_qx << " qy_size: " << ctx->prealloc_size_qy << " x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << ")" << std::endl;
 #endif
 #if defined(GGML_VULKAN_RUN_TESTS)
     ctx->staging = ggml_vk_create_buffer_check(ctx, 100ul * 1024ul * 1024ul, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
