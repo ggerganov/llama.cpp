@@ -1277,7 +1277,7 @@ void bilinear_resize(const clip_image_u8& src, clip_image_u8& dst, int target_wi
 
     float x_ratio = static_cast<float>(src.nx - 1) / target_width;
     float y_ratio = static_cast<float>(src.ny - 1) / target_height;
-    
+
     for (int y = 0; y < target_height; y++) {
         for (int x = 0; x < target_width; x++) {
             float px = x_ratio * x;
@@ -1654,7 +1654,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
                 // printf("patch %d: %d %d\n", i, patches[i]->nx, patches[i]->ny);
                 clip_image_u8_free(patches[i]);
             }
-        
+
             clip_image_u8_free(temp);
 
             return true;
