@@ -1122,7 +1122,7 @@ std::vector<std::string> string_split(std::string input, char separator) {
     return parts;
 }
 
-std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string>& names) {
+std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names) {
     // since samplers names are written multiple ways
     // make it ready for both system names and input names
     std::unordered_map<std::string, llama_sampler_type> sampler_name_map {
@@ -1154,7 +1154,7 @@ std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::
     return sampler_types;
 }
 
-std::vector<llama_sampler_type> sampler_types_from_chars(const std::string& names_string) {
+std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string) {
     std::unordered_map<char, llama_sampler_type> sampler_name_map {
         {'k', llama_sampler_type::TOP_K},
         {'p', llama_sampler_type::TOP_P},

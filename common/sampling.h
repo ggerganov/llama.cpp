@@ -38,6 +38,7 @@ typedef struct llama_sampling_params {
     float       mirostat_tau          = 5.00f;    // target entropy
     float       mirostat_eta          = 0.10f;    // learning rate
     bool        penalize_nl           = true;     // consider newlines as a repeatable token
+
     std::vector<llama_sampler_type> samplers_sequence = {
         llama_sampler_type::TOP_K,
         llama_sampler_type::TFS_Z,
