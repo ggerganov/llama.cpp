@@ -3480,6 +3480,138 @@ static const uint32_t iq3xxs_grid[256] = {
     0x3e1c1c1c, 0x3e1c3404, 0x3e24140c, 0x3e24240c, 0x3e2c0404, 0x3e2c0414, 0x3e2c1424, 0x3e341c04,
 };
 
+#define NGRID_IQ2XXS 512
+static const  uint64_t iq1s_grid[NGRID_IQ2XXS] = {
+    0xffffffffff000101, 0xffffffffff01ff00, 0xffffffff00000000, 0xffffffff01ff00ff,
+    0xffffffff0101ffff, 0xffffffff0101ff01, 0xffffffff01010101, 0xffffff00ff000000,
+    0xffffff000000ff00, 0xffffff00000000ff, 0xffffff0000000100, 0xffffff0000010000,
+    0xffffff0001000000, 0xffffff01ff00ffff, 0xffffff01ff010100, 0xffffff0100ff01ff,
+    0xffffff0100000001, 0xffffff0101ffff00, 0xffffff0101010100, 0xffff00ffff00ff01,
+    0xffff00ffff0000ff, 0xffff00ff00ff0000, 0xffff00ff00010000, 0xffff00ff0100ff00,
+    0xffff00ff010001ff, 0xffff0000ffff01ff, 0xffff0000ff010001, 0xffff0000ff0101ff,
+    0xffff000000ffff00, 0xffff000000000000, 0xffff00000001ff00, 0xffff000001000101,
+    0xffff0000010100ff, 0xffff00010000ff00, 0xffff000101000000, 0xffff01ffffff0000,
+    0xffff01ff00000000, 0xffff01ff01ffffff, 0xffff01ff01ffff01, 0xffff01ff01010001,
+    0xffff0100ffffff01, 0xffff0100ff000101, 0xffff01000000ffff, 0xffff010000000001,
+    0xffff010000000100, 0xffff010001000000, 0xffff0101ff000000, 0xffff0101ff01ffff,
+    0xffff010100ff01ff, 0xffff010100ff0101, 0xffff0101000101ff, 0xffff010101ffffff,
+    0xffff01010101ff01, 0xffff010101010101, 0xff00ffffff000000, 0xff00ffff00ffff00,
+    0xff00ffff00000001, 0xff00ffff000001ff, 0xff00ffff01010000, 0xff00ff00ffff0000,
+    0xff00ff00ff00ff00, 0xff00ff00ff0000ff, 0xff00ff00ff000001, 0xff00ff00ff000100,
+    0xff00ff00ff010000, 0xff00ff0000ff0001, 0xff00ff000000ffff, 0xff00ff0000000000,
+    0xff00ff000001ff00, 0xff00ff0000010100, 0xff00ff0001ff0100, 0xff00ff000100ff00,
+    0xff00ff01ff000000, 0xff00ff010000ff00, 0xff00ff01010100ff, 0xff00ff0101010001,
+    0xff0000ffffffffff, 0xff0000ffffff0100, 0xff0000ff00000000, 0xff0000ff0001ff00,
+    0xff0000ff00010100, 0xff0000ff01ff0001, 0xff000000ff000000, 0xff000000ff01ff00,
+    0xff00000000ff00ff, 0xff0000000000ff00, 0xff00000000000000, 0xff000000000001ff,
+    0xff00000000000101, 0xff0000000001ffff, 0xff00000000010000, 0xff00000001000000,
+    0xff00000001010100, 0xff000001ff00ff01, 0xff000001ff0100ff, 0xff00000100ff0001,
+    0xff000001000000ff, 0xff00000100000100, 0xff0000010001ff00, 0xff00000101ff00ff,
+    0xff0000010100ff00, 0xff00000101010000, 0xff0001ffff000000, 0xff0001ffff01ffff,
+    0xff0001ff00ff00ff, 0xff0001ff00000101, 0xff0001ff00010000, 0xff0001ff01000000,
+    0xff0001000000ff01, 0xff00010000000000, 0xff00010000010100, 0xff00010001ffff00,
+    0xff00010001ff0100, 0xff000100010000ff, 0xff00010001010000, 0xff000101ffffff00,
+    0xff000101ff010001, 0xff00010101000001, 0xff000101010100ff, 0xff01ffffffff00ff,
+    0xff01ffffffff0001, 0xff01ffffff01ffff, 0xff01ffffff01ff01, 0xff01ffffff0101ff,
+    0xff01ffffff010101, 0xff01ffff00000000, 0xff01ffff0101ff01, 0xff01ffff010101ff,
+    0xff01ffff01010101, 0xff01ff00ff000000, 0xff01ff000000ff01, 0xff01ff0000000101,
+    0xff01ff0000010000, 0xff01ff00010000ff, 0xff01ff01ffffff01, 0xff01ff01ff01ff00,
+    0xff01ff01ff010101, 0xff01ff0100ff0000, 0xff01ff01000001ff, 0xff01ff0101ffff01,
+    0xff0100ffff010000, 0xff0100ff0100ffff, 0xff0100ff01000100, 0xff010000ffff0000,
+    0xff01000000ff0100, 0xff010000000000ff, 0xff01000000000001, 0xff0100000101ff00,
+    0xff010001ff00ffff, 0xff010001ff000100, 0xff01000100000000, 0xff01000100010001,
+    0xff01000101000101, 0xff0101ffffff0001, 0xff0101ffff0001ff, 0xff0101ffff010101,
+    0xff0101ff0000ff00, 0xff0101ff01ffff01, 0xff0101ff01ff01ff, 0xff0101ff01ff0101,
+    0xff0101ff01010001, 0xff010100ffffffff, 0xff010100ff000000, 0xff010100ff01ff01,
+    0xff01010000000100, 0xff01010001000000, 0xff010100010101ff, 0xff010101ffff0101,
+    0xff01010100ffff01, 0xff01010100ff01ff, 0xff0101010100ffff, 0x00ffffffffffffff,
+    0x00ffffffffff01ff, 0x00ffffff000000ff, 0x00ffffff00000100, 0x00ffffff00010000,
+    0x00ffffff01ff0101, 0x00ffff00ffff0001, 0x00ffff00ff0000ff, 0x00ffff00ff000100,
+    0x00ffff0000000000, 0x00ffff0001ffffff, 0x00ffff0001000100, 0x00ffff0001010001,
+    0x00ffff01ff01ff01, 0x00ffff010000ff00, 0x00ffff01000100ff, 0x00ff00ffff010101,
+    0x00ff00ff00ff0100, 0x00ff00ff0000ffff, 0x00ff00ff00000001, 0x00ff00ff000101ff,
+    0x00ff0000ff000000, 0x00ff0000ff01ffff, 0x00ff000000ff0001, 0x00ff00000000ff00,
+    0x00ff0000000000ff, 0x00ff000000000000, 0x00ff000000000101, 0x00ff000000010000,
+    0x00ff000001ffff01, 0x00ff000001000000, 0x00ff0001ff0001ff, 0x00ff0001ff000101,
+    0x00ff000100ffffff, 0x00ff000100ff0100, 0x00ff000100000001, 0x00ff0001010001ff,
+    0x00ff00010101ff00, 0x00ff01ffffffffff, 0x00ff01ffffff01ff, 0x00ff01ffff000000,
+    0x00ff01ff0001ff01, 0x00ff01ff01ff01ff, 0x00ff01ff01000101, 0x00ff01ff0101ffff,
+    0x00ff0100ff010000, 0x00ff010000ff00ff, 0x00ff010000000000, 0x00ff010000010101,
+    0x00ff01000100ff00, 0x00ff010001010000, 0x00ff01010000ff01, 0x00ff010100000100,
+    0x00ff010101ff0000, 0x0000ffffff00ff00, 0x0000ffffff0000ff, 0x0000ffffff010000,
+    0x0000ffff00ff0100, 0x0000ffff00000000, 0x0000ffff000100ff, 0x0000ffff00010101,
+    0x0000ffff01ffff01, 0x0000ffff01000100, 0x0000ff00ff000000, 0x0000ff00ff01ff00,
+    0x0000ff00ff0101ff, 0x0000ff0000ff0000, 0x0000ff000000ff00, 0x0000ff00000000ff,
+    0x0000ff0000000000, 0x0000ff0000000001, 0x0000ff0000000100, 0x0000ff0000010000,
+    0x0000ff0001000000, 0x0000ff000101ffff, 0x0000ff01ffffff00, 0x0000ff01ffff0101,
+    0x0000ff01ff010000, 0x0000ff0101000101, 0x0000ff0101010000, 0x000000ffffff0001,
+    0x000000ffff01ff01, 0x000000ff00ffff00, 0x000000ff000000ff, 0x000000ff00000000,
+    0x000000ff00010000, 0x000000ff01000000, 0x000000ff0101ff00, 0x00000000ff00ffff,
+    0x00000000ff00ff01, 0x00000000ff000000, 0x00000000ff000100, 0x00000000ff010000,
+    0x0000000000ffffff, 0x0000000000ffff01, 0x0000000000ff0000, 0x0000000000ff01ff,
+    0x0000000000ff0101, 0x000000000000ff00, 0x00000000000000ff, 0x0000000000000001,
+    0x0000000000000100, 0x000000000001ff00, 0x0000000000010000, 0x0000000001ff00ff,
+    0x000000000100ff00, 0x0000000001000000, 0x0000000001000100, 0x0000000001010000,
+    0x00000001ffff00ff, 0x00000001ff00ff00, 0x0000000100ffff00, 0x0000000100000000,
+    0x00000001000101ff, 0x0000000100010101, 0x0000000101ff0000, 0x0000000101000001,
+    0x000001ffff00ff00, 0x000001ffff0000ff, 0x000001ffff010100, 0x000001ff00ffff01,
+    0x000001ff0000ffff, 0x000001ff00000000, 0x000001ff0100ff00, 0x000001ff010000ff,
+    0x000001ff01010100, 0x00000100ffff0100, 0x00000100ff000000, 0x00000100ff01ff00,
+    0x0000010000ff0000, 0x000001000000ff00, 0x0000010000000000, 0x0000010000000100,
+    0x00000100000100ff, 0x0000010000010001, 0x0000010001000000, 0x000001000101ff01,
+    0x00000101ffff0001, 0x00000101000000ff, 0x0000010100000001, 0x0000010100010000,
+    0x0000010101ffff01, 0x0000010101ff01ff, 0x0000010101ff0101, 0x0001ffff00ffffff,
+    0x0001ffff00000100, 0x0001ffff0001ff00, 0x0001ffff01ff0101, 0x0001ffff01000000,
+    0x0001ff00ffff0000, 0x0001ff00ff00ff00, 0x0001ff00ff010001, 0x0001ff0000000000,
+    0x0001ff0001ffff00, 0x0001ff0001ff01ff, 0x0001ff0001010100, 0x0001ff01ff0000ff,
+    0x0001ff0100ffffff, 0x0001ff010001ffff, 0x0001ff010001ff01, 0x000100ffffff01ff,
+    0x000100ffff00ffff, 0x000100ffff000000, 0x000100ff00ff0000, 0x000100ff0000ff01,
+    0x000100ff00000101, 0x000100ff01010000, 0x00010000ffffff00, 0x00010000ff0000ff,
+    0x00010000ff010100, 0x0001000000ff00ff, 0x000100000000ffff, 0x0001000000000000,
+    0x00010000000001ff, 0x0001000000010000, 0x0001000001ff0001, 0x00010001ff000001,
+    0x00010001ff010000, 0x0001000100ff0000, 0x0001000100ff0101, 0x000100010000ff00,
+    0x0001000100000100, 0x000100010100ff01, 0x00010001010000ff, 0x000101ff00010000,
+    0x000101ff01ff0000, 0x00010100ffff0000, 0x0001010000000000, 0x000101000001ffff,
+    0x0001010000010101, 0x00010101ff00ff00, 0x00010101ff0001ff, 0x0001010100ffffff,
+    0x0001010101ff0000, 0x000101010101ff00, 0x01ffffffff000101, 0x01ffffffff01ffff,
+    0x01ffffffff01ff01, 0x01ffffff00000000, 0x01ffffff010100ff, 0x01ffff000000ff00,
+    0x01ffff0000000001, 0x01ffff00000001ff, 0x01ffff0000010000, 0x01ffff0001ff0000,
+    0x01ffff01ff000000, 0x01ffff01ff01ffff, 0x01ffff0101ff0101, 0x01ffff01010000ff,
+    0x01ff00ffffff0000, 0x01ff00ffff010000, 0x01ff00ff01ffffff, 0x01ff00ff0100ff01,
+    0x01ff00ff01010100, 0x01ff0000ffffffff, 0x01ff0000ffffff01, 0x01ff0000ffff01ff,
+    0x01ff0000ff00ff00, 0x01ff000000000000, 0x01ff00000001ff01, 0x01ff000001ff01ff,
+    0x01ff00000101ffff, 0x01ff0001ff010100, 0x01ff000101000001, 0x01ff000101010100,
+    0x01ff01ffff01ffff, 0x01ff01ff00ff0101, 0x01ff01ff01000000, 0x01ff0100ff000001,
+    0x01ff010000ffff00, 0x01ff010000000100, 0x01ff0100010101ff, 0x01ff0101ffff00ff,
+    0x01ff0101ffff0101, 0x01ff0101ff00ff00, 0x01ff01010001ffff, 0x01ff010100010001,
+    0x01ff0101010000ff, 0x0100ffff00ff00ff, 0x0100ffff00ff0001, 0x0100ffff00000100,
+    0x0100ffff0100ff00, 0x0100ff00ffff0000, 0x0100ff00ff00ffff, 0x0100ff00ff00ff01,
+    0x0100ff00ff000100, 0x0100ff00ff010000, 0x0100ff0000000000, 0x0100ff0000000101,
+    0x0100ff0001000100, 0x0100ff000101ff01, 0x0100ff0100ff00ff, 0x0100ff0100ff0001,
+    0x0100ff0100000100, 0x0100ff0100010001, 0x0100ff0101ffff00, 0x0100ff01010101ff,
+    0x010000ffff00ff00, 0x010000ffff0101ff, 0x010000ff0000ffff, 0x010000ff00000001,
+    0x010000ff01ff0101, 0x010000ff010001ff, 0x010000ff01010001, 0x01000000ffffff00,
+    0x01000000ffff0101, 0x01000000ff0000ff, 0x01000000ff000001, 0x01000000ff010101,
+    0x0100000000ff0000, 0x0100000000000000, 0x0100000000000100, 0x01000000000100ff,
+    0x0100000000010001, 0x01000000010000ff, 0x0100000001000001, 0x01000001ff000000,
+    0x010000010000ffff, 0x010000010000ff01, 0x0100000100010000, 0x0100000101000000,
+    0x010001ffff000101, 0x010001ff00ff00ff, 0x010001ff0000ff00, 0x010001ff000100ff,
+    0x01000100ffff0000, 0x01000100ff00ffff, 0x01000100ff0001ff, 0x0100010000000000,
+    0x010001000001ff00, 0x0100010001ff0000, 0x0100010001000101, 0x01000101ff0100ff,
+    0x0100010100ff0100, 0x0100010100010100, 0x0100010101ffffff, 0x0101ffffffffff00,
+    0x0101ffffff000101, 0x0101ffff00000000, 0x0101ffff000101ff, 0x0101ffff01010101,
+    0x0101ff00ff000000, 0x0101ff0000ff0100, 0x0101ff000000ff00, 0x0101ff0000010000,
+    0x0101ff00010000ff, 0x0101ff0001000001, 0x0101ff01ffff01ff, 0x0101ff01ff000101,
+    0x0101ff01ff01ff00, 0x0101ff01ff0101ff, 0x0101ff0100000000, 0x0101ff010101ff00,
+    0x010100ffff010000, 0x010100ff000000ff, 0x01010000ff000100, 0x01010000ff01ffff,
+    0x01010000ff01ff01, 0x0101000000ffff01, 0x0101000000000000, 0x0101000001ffffff,
+    0x010100000101ffff, 0x01010001ffff0000, 0x01010001000001ff, 0x0101000101ff0100,
+    0x0101000101010001, 0x010101ffffffff00, 0x010101ff00ff0001, 0x010101ff00000100,
+    0x010101ff0100ffff, 0x010101ff0100ff01, 0x010101ff01010101, 0x01010100ff000001,
+    0x0101010000ff01ff, 0x010101000000ff00, 0x01010100000101ff, 0x0101010001000000,
+    0x01010101ffffff01, 0x0101010100000101, 0x010101010001ff01, 0x01010101010100ff,
+};
+
 static const uint8_t ksigns_iq2xs[128] = {
       0, 129, 130,   3, 132,   5,   6, 135, 136,   9,  10, 139,  12, 141, 142,  15,
     144,  17,  18, 147,  20, 149, 150,  23,  24, 153, 154,  27, 156,  29,  30, 159,
@@ -9115,14 +9247,22 @@ typedef struct {
     uint16_t * neighbours;
 } iq2_entry_t;
 
-static iq2_entry_t iq2_data[2] = {
+static iq2_entry_t iq2_data[3] = {
+    {NULL, NULL, NULL},
     {NULL, NULL, NULL},
     {NULL, NULL, NULL},
 };
 
-static inline int iq2_data_index(int grid_size) {
-    GGML_ASSERT(grid_size == 256 || grid_size == 512);
-    return grid_size == 256 ? 0 : 1;
+static inline int iq2_data_index(enum ggml_type type) {
+    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S);
+    return type == GGML_TYPE_IQ2_XXS ? 0 :
+           type == GGML_TYPE_IQ2_XS  ? 1 : 2;
+}
+
+static inline int iq2_grid_size(enum ggml_type type) {
+    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S);
+    return type == GGML_TYPE_IQ2_XXS ? 256 :
+           type == GGML_TYPE_IQ2_XS  ? 512 : 512;
 }
 
 static int iq2_compare_func(const void * left, const void * right) {
@@ -9131,12 +9271,13 @@ static int iq2_compare_func(const void * left, const void * right) {
     return l[0] < r[0] ? -1 : l[0] > r[0] ? 1 : l[1] < r[1] ? -1 : l[1] > r[1] ? 1 : 0;
 }
 
-void iq2xs_init_impl(int grid_size) {
-    const int gindex = iq2_data_index(grid_size);
+void iq2xs_init_impl(enum ggml_type type) {
+    const int gindex = iq2_data_index(type);
+    const int grid_size = iq2_grid_size(type);
     if (iq2_data[gindex].grid) {
         return;
     }
-    static const uint16_t kgrid_256[256] = {
+    static const uint16_t kgrid_2bit_256[256] = {
             0,     2,     5,     8,    10,    17,    20,    32,    34,    40,    42,    65,    68,    80,    88,    97,
           100,   128,   130,   138,   162,   257,   260,   272,   277,   320,   388,   408,   512,   514,   546,   642,
          1025,  1028,  1040,  1057,  1060,  1088,  1090,  1096,  1120,  1153,  1156,  1168,  1188,  1280,  1282,  1288,
@@ -9154,7 +9295,7 @@ void iq2xs_init_impl(int grid_size) {
         33888, 34048, 34118, 34196, 34313, 34368, 34400, 34818, 35076, 35345, 36868, 36880, 36900, 36928, 37025, 37142,
         37248, 37445, 37888, 37922, 37956, 38225, 39041, 39200, 40962, 41040, 41093, 41225, 41472, 42008, 43088, 43268,
     };
-    static const uint16_t kgrid_512[512] = {
+    static const uint16_t kgrid_2bit_512[512] = {
             0,     2,     5,     8,    10,    17,    20,    22,    25,    32,    34,    37,    40,    65,    68,    70,
            73,    80,    82,    85,    88,    97,   100,   128,   130,   133,   136,   145,   148,   153,   160,   257,
           260,   262,   265,   272,   274,   277,   280,   282,   289,   292,   320,   322,   325,   328,   337,   340,
@@ -9188,9 +9329,45 @@ void iq2xs_init_impl(int grid_size) {
         40962, 40968, 40970, 40992, 41002, 41120, 41297, 41305, 41382, 41472, 41474, 41480, 41514, 41600, 41632, 42048,
         42133, 42597, 42648, 43018, 43040, 43042, 43048, 43168, 43176, 43268, 43396, 43398, 43560, 43562, 43665, 43690,
     };
+    static const uint16_t kgrid_1bit_512[512] = {
+           26,    33,    85,   132,   160,   162,   170,   277,   337,   340,   345,   357,   405,   528,   553,   584,
+          598,   641,   681,  1042,  1044,  1093,  1125,  1169,  1176,  1288,  1318,  1320,  1345,  1365,  1377,  1434,
+         1444,  1617,  1685,  2053,  2133,  2176,  2178,  2214,  2306,  2330,  2384,  2390,  2393,  2453,  2581,  2592,
+         2632,  2634,  2664,  2688,  2722,  2730,  4117,  4161,  4182,  4184,  4261,  4357,  4369,  4372,  4374,  4377,
+         4389,  4422,  4432,  4437,  4449,  4457,  4489,  4497,  4629,  4689,  4772,  4774,  5120,  5129,  5205,  5217,
+         5225,  5254,  5397,  5409,  5444,  5457,  5461,  5464,  5466,  5472,  5477,  5525,  5545,  5650,  5668,  5702,
+         5716,  5721,  5729,  5764,  5777,  5797,  6165,  6176,  6212,  6234,  6245,  6293,  6482,  6485,  6505,  6529,
+         6537,  6548,  6565,  6657,  6694,  6806,  6820,  8196,  8198,  8224,  8226,  8232,  8234,  8277,  8354,  8360,
+         8362,  8469,  8530,  8538,  8549,  8596,  8706,  8737,  8746,  8773,  8792,  8834,  9253,  9360,  9369,  9477,
+         9545,  9556,  9558,  9633,  9744,  9753,  9813,  9830,  9882, 10246, 10264, 10282, 10321, 10370, 10376, 10378,
+        10406, 10496, 10517, 10530, 10585, 10645, 10664, 10762, 10818, 10824, 10896, 16384, 16392, 16468, 16473, 16485,
+        16522, 16646, 16660, 16665, 16725, 16768, 16793, 16806, 16930, 16977, 16996, 17450, 17481, 17488, 17494, 17512,
+        17685, 17696, 17734, 17745, 17748, 17749, 17754, 17765, 17794, 17813, 17944, 17946, 17984, 17993, 18006, 18072,
+        18081, 18432, 18440, 18453, 18530, 18568, 18586, 18592, 18725, 18756, 18773, 18794, 18833, 18853, 19026, 19033,
+        19077, 20497, 20500, 20517, 20553, 20565, 20580, 20586, 20610, 20633, 20757, 20769, 20776, 20805, 20817, 20820,
+        20821, 20822, 20825, 20837, 20885, 20896, 20993, 21002, 21029, 21146, 21157, 21510, 21538, 21569, 21588, 21589,
+        21605, 21653, 21665, 21776, 21778, 21781, 21785, 21797, 21824, 21826, 21829, 21832, 21834, 21841, 21844, 21846,
+        21849, 21857, 21861, 21892, 21905, 21909, 21913, 21925, 22020, 22033, 22081, 22101, 22120, 22122, 22149, 22166,
+        22545, 22548, 22569, 22594, 22608, 22613, 22673, 22676, 22697, 22793, 22805, 22817, 22853, 22865, 22869, 22873,
+        22884, 22886, 22933, 22946, 23046, 23124, 23126, 23141, 23170, 23176, 23178, 24640, 24665, 24673, 24714, 24725,
+        24837, 24849, 24870, 24917, 24961, 24968, 25001, 25108, 25152, 25184, 25186, 25608, 25616, 25621, 25669, 25682,
+        25690, 25765, 25857, 25876, 25897, 25924, 25936, 25941, 25944, 25957, 25990, 26134, 26149, 26181, 26186, 26193,
+        26201, 26258, 26260, 26725, 26757, 26885, 26965, 26976, 26986, 27153, 27160, 27200, 27269, 27297, 32794, 32800,
+        32802, 32853, 32932, 33105, 33110, 33112, 33125, 33157, 33301, 33312, 33418, 33428, 33797, 33829, 33920, 33938,
+        33961, 34048, 34050, 34056, 34065, 34133, 34146, 34184, 34208, 34345, 34454, 34473, 34848, 34890, 34965, 35094,
+        35137, 35161, 35240, 35332, 35338, 35345, 35424, 35430, 35476, 36932, 36934, 36953, 37009, 37125, 37136, 37138,
+        37145, 37157, 37205, 37210, 37273, 37282, 37444, 37446, 37465, 37478, 37505, 37544, 37905, 37928, 37968, 37974,
+        38026, 38040, 38054, 38145, 38154, 38164, 38166, 38186, 38213, 38229, 38233, 38244, 38246, 38292, 38294, 38421,
+        38480, 38482, 38501, 38549, 38938, 38980, 38993, 39012, 39173, 39184, 39192, 39253, 39265, 39301, 39322, 39460,
+        39497, 39529, 39552, 40961, 40986, 41045, 41064, 41130, 41237, 41289, 41297, 41317, 41364, 41366, 41480, 41498,
+        41505, 41512, 41557, 41633, 42021, 42068, 42265, 42272, 42274, 42306, 42325, 42368, 42400, 42501, 42584, 42633,
+        42662, 43009, 43078, 43097, 43152, 43154, 43178, 43286, 43336, 43345, 43368, 43413, 43522, 43610, 43618, 43684,
+    };
+
     const int kmap_size = 43692;
-    const int nwant = 2;
-    const uint16_t * kgrid = grid_size == 256 ? kgrid_256 : kgrid_512;
+    const int nwant = type == GGML_TYPE_IQ1_S ? 3 : 2;
+    const uint16_t * kgrid = type == GGML_TYPE_IQ2_XXS ? kgrid_2bit_256 :
+                             type == GGML_TYPE_IQ2_XS  ? kgrid_2bit_512 : kgrid_1bit_512;
     uint64_t * kgrid_q2xs;
     int      * kmap_q2xs;
     uint16_t * kneighbors_q2xs;
@@ -9286,9 +9463,9 @@ void iq2xs_init_impl(int grid_size) {
     free(dist2);
 }
 
-void iq2xs_free_impl(int grid_size) {
-    GGML_ASSERT(grid_size == 256 || grid_size == 512 || grid_size == 1024);
-    const int gindex = iq2_data_index(grid_size);
+void iq2xs_free_impl(enum ggml_type type) {
+    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S);
+    const int gindex = iq2_data_index(type);
     if (iq2_data[gindex].grid) {
         free(iq2_data[gindex].grid);       iq2_data[gindex].grid = NULL;
         free(iq2_data[gindex].map);        iq2_data[gindex].map  = NULL;
@@ -10132,3 +10309,72 @@ void quantize_row_iq3_xxs_reference(const float * restrict x, block_iq3_xxs * re
     assert(k % QK_K == 0);
     quantize_row_iq3_xxs_impl(x, y, k, NULL);
 }
+
+// =================================== 1.5 bpw ===================================================
+
+static int iq1_find_best_neighbour(const uint16_t * restrict neighbours, const uint64_t * restrict grid,
+        const float * restrict xval, const float * restrict weight, float * scale, int8_t * restrict L, int ngrid) {
+    int num_neighbors = neighbours[0];
+    GGML_ASSERT(num_neighbors > 0);
+    float best_score = 0;
+    int grid_index = -1;
+    for (int j = 1; j <= num_neighbors; ++j) {
+        const int8_t * pg = (const int8_t *)(grid + neighbours[j]);
+        float sumqx = 0, sumq2 = 0;
+        for (int i = 0; i < 8; ++i) {
+            float q = (pg[i] - 3)/2;
+            float w = weight[i];
+            sumqx += w*q*xval[i];
+            sumq2 += w*q*q;
+        }
+        if (sumqx > 0 && sumq2 > 0 && sumqx*sumqx > best_score*sumq2) {
+            *scale = sumqx/sumq2; best_score = *scale * sumqx;
+            grid_index = neighbours[j];
+        }
+    }
+    if (grid_index < 0) {
+        for (int i = 0; i < ngrid; ++i) {
+            const int8_t * grid_i = (const int8_t *)(grid + i);
+            float sumqx = 0, sumq2 = 0;
+            for (int j = 0; j < 8; ++j) {
+                float w = weight[j];
+                float q = (grid_i[j] - 3)/2;
+                sumqx += w*q*xval[j];
+                sumq2 += w*q*q;
+            }
+            if (sumqx > 0 && sumq2 > 0 && sumqx*sumqx > best_score*sumq2) {
+                *scale = sumqx/sumq2; best_score = *scale*sumqx;
+                grid_index = i;
+            }
+        }
+    }
+    if (grid_index < 0) {
+        printf("Oops, did not find grid point\n");
+        printf("Have %d neighbours\n", num_neighbors);
+        for (int j = 1; j <= num_neighbors; ++j) {
+            const int8_t * pg = (const int8_t *)(grid + neighbours[j]);
+            float sumqx = 0, sumq2 = 0;
+            for (int i = 0; i < 8; ++i) {
+                float q = (pg[i] - 3)/2;
+                float w = weight[i];
+                sumqx += w*q*xval[i];
+                sumq2 += w*q*q;
+            }
+            printf("    neighbour %d: sumqx = %g sumq2 = %g\n", j, (double)sumqx, (double)sumq2);
+        }
+    }
+    GGML_ASSERT(grid_index >= 0);
+    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    *scale *= 1.05f;  // This is a fudge factor. Don't ask me why it improves the result.
+    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    const int8_t * pg = (const int8_t *)(grid + grid_index);
+    for (int i = 0; i < 8; ++i) L[i] = (pg[i] - 1)/2;
+    return grid_index;
+}
+
+static int iq1_sort_helper(const void * left, const void * right) {
+    const float * l = left;
+    const float * r = right;
+    return *l < *r ? -1 : *l > *r ? 1 : 0;
+}
+
