@@ -38,9 +38,9 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
         { "    Hello\n    Hello"  , {     466,  23090,    742,  23090, }, },
         // { "\n ="                  , {    1212,     40, }, },
         // This test has been disabled. Please re-enable it once the following issue has been resolved.
-        // Falcon requires extra steps during the pre-tokenization phase, as detailed in the pull request at https://github.com/ggerganov/llama.cpp/pull/5446. 
+        // Falcon requires extra steps during the pre-tokenization phase, as detailed in the pull request at https://github.com/ggerganov/llama.cpp/pull/5446.
         // For more information on pre-tokenizers, you can refer to the Hugging Face documentation:
-        // https://huggingface.co/docs/tokenizers/en/api/pre-tokenizers#tokenizers.pre_tokenizers. 
+        // https://huggingface.co/docs/tokenizers/en/api/pre-tokenizers#tokenizers.pre_tokenizers.
         // It's crucial that we address this issue ASAP to avoid any unforeseen outcomes.
 
         { "' era"                 , {      18,   4932, }, },
