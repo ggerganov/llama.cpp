@@ -3854,7 +3854,7 @@ static inline __m128i get_scale_shuffle(int i) {
 }
 #endif
 
-void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bbx, const void * restrict vy, size_t bby, int nrc) {
     const int qk = QK8_0;
     const int nb = n / qk;
 
@@ -3865,8 +3865,8 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     assert(nrc == 1);
 #endif
     UNUSED(nrc);
-    UNUSED(bx);
-    UNUSED(by);
+    UNUSED(bbx);
+    UNUSED(bby);
     UNUSED(bs);
 
     const block_q4_0 * restrict x = vx;
@@ -4221,7 +4221,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 #endif
 }
 
-void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bbx, const void * restrict vy, size_t bby, int nrc) {
     const int qk = QK8_1;
     const int nb = n / qk;
 
@@ -4232,8 +4232,8 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
     assert(nrc == 1);
 #endif
     UNUSED(nrc);
-    UNUSED(bx);
-    UNUSED(by);
+    UNUSED(bbx);
+    UNUSED(bby);
     UNUSED(bs);
 
     const block_q4_1 * restrict x = vx;
@@ -4439,7 +4439,7 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 #endif
 }
 
-void ggml_vec_dot_q5_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+void ggml_vec_dot_q5_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bbx, const void * restrict vy, size_t bby, int nrc) {
     const int qk = QK8_0;
     const int nb = n / qk;
 
@@ -4447,8 +4447,8 @@ void ggml_vec_dot_q5_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     assert(qk == QK5_0);
     assert(nrc == 1);
     UNUSED(nrc);
-    UNUSED(bx);
-    UNUSED(by);
+    UNUSED(bbx);
+    UNUSED(bby);
     UNUSED(bs);
 
     const block_q5_0 * restrict x = vx;
@@ -4730,7 +4730,7 @@ void ggml_vec_dot_q5_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 #endif
 }
 
-void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bbx, const void * restrict vy, size_t bby, int nrc) {
     const int qk = QK8_1;
     const int nb = n / qk;
 
@@ -4738,8 +4738,8 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
     assert(qk == QK5_1);
     assert(nrc == 1);
     UNUSED(nrc);
-    UNUSED(bx);
-    UNUSED(by);
+    UNUSED(bbx);
+    UNUSED(bby);
     UNUSED(bs);
 
     const block_q5_1 * restrict x = vx;
@@ -5034,7 +5034,7 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 #endif
 }
 
-void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bbx, const void * restrict vy, size_t bby, int nrc) {
     const int qk = QK8_0;
     const int nb = n / qk;
 
@@ -5045,8 +5045,8 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     assert(nrc == 1);
 #endif
     UNUSED(nrc);
-    UNUSED(bx);
-    UNUSED(by);
+    UNUSED(bbx);
+    UNUSED(bby);
     UNUSED(bs);
 
     const block_q8_0 * restrict x = vx;
@@ -9290,8 +9290,13 @@ static inline __m256i mul_add_epi8(const __m256i x, const __m256i y) {
 }
 #endif
 
-void ggml_vec_dot_iq1_s_q8_K(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+void ggml_vec_dot_iq1_s_q8_K  (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(n % QK_K == 0);
+    assert(nrc == 1);
+    UNUSED(nrc);
+    UNUSED(bx);
+    UNUSED(by);
+    UNUSED(bs);
 
     const block_iq1_s * restrict x = vx;
     const block_q8_K  * restrict y = vy;
