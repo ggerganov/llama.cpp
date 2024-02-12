@@ -13333,7 +13333,7 @@ static void ggml_sycl_mul_mat_mat_batched_sycl(const ggml_tensor *src0,
     GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne);
 
     GGML_TENSOR_LOCALS(int64_t, nb1, src1, nb);
-    
+
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
 
@@ -13635,15 +13635,15 @@ static void ggml_sycl_mul_mat_id_sycl(ggml_tensor * dst) {
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
     GGML_TENSOR_LOCALS(int64_t, ne0, src00, ne);
-    
+
     //const int64_t nb01 = src00->nb[1];
     GGML_TENSOR_LOCALS(int64_t, nb0, src00, nb);
-    
+
     GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne);
 
     GGML_TENSOR_LOCALS(int64_t, nb1, src1, nb);
     //const int64_t nb11 = src1->nb[1];
-    
+
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
 
