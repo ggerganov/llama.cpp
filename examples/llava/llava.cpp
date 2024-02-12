@@ -183,7 +183,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
         image_feature,
         self.model.image_newline[:, None, None].expand(*image_feature.shape[:-1], 1).to(image_feature.device)
     ), dim=-1)
-     * 
+     *
      */
 
     // ggml_tensor_printf(permuted_cont,"permuted_cont",__LINE__,false,false);
