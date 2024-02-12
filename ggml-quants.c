@@ -9307,6 +9307,7 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * GGML_RESTRICT s, size_t bs, const 
 
     const __m128i m8 = _mm_set1_epi8(0x08);
     const __m128i m7 = _mm_set1_epi8(0x07);
+    const __m128i m1 = _mm_set1_epi8(0x01);
     const __m128i shuffle_h = _mm_set_epi8(15, 7, 14, 6, 13, 5, 12, 4, 11, 3, 10, 2, 9, 1, 8, 0);
     const __m128i shuffle_s[4] = {
         _mm_set_epi32(0x03030303, 0x02020202, 0x01010101, 0x00000000),
@@ -9334,7 +9335,7 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * GGML_RESTRICT s, size_t bs, const 
             const __m128i qh = _mm_shuffle_epi8(_mm_set_epi64x(aux64 >> 4, aux64), shuffle_h);
             const __m256i hbit = _mm256_cvtepi8_epi16(_mm_and_si128(qh, m8));
             v_gindex = _mm256_or_si256(_mm256_cvtepi8_epi16(ql), _mm256_slli_epi16(hbit, 5));
-            const __m128i scales = _mm_and_si128(qh, m7);
+            const __m128i scales = _mm_or_si128(_mm_slli_epi16(_mm_and_si128(qh, m7), 1), m1);
 
             for (int i32 = 0; i32 < 4; ++i32) {
                 const __m256i q8b = _mm256_loadu_si256((const __m256i*)q8); q8 += 32;
