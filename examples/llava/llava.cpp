@@ -10,8 +10,78 @@
 
 #include "base64.hpp"
 
+// RGB uint8 image
+struct clip_image_u8 {
+    int nx;
+    int ny;
+
+    std::vector<uint8_t> buf;
+};
+
+// RGB float32 image (NHWC)
+// Memory layout: RGBRGBRGB...
+struct clip_image_f32 {
+    int nx;
+    int ny;
+
+    std::vector<float> buf;
+};
+
+/**
+ * Selects the best resolution from a list of possible resolutions based on the original size.
+ *
+ * @param original_size The original size of the image in the format (width, height).
+ * @param possible_resolutions A list of possible resolutions in the format [(width1, height1), (width2, height2), ...].
+ * @return The best fit resolution in the format (width, height).
+ */
+static std::pair<int, int> select_best_resolution(const std::pair<int, int>& original_size, const std::vector<std::pair<int, int>>& possible_resolutions) {
+    int original_width = original_size.first;
+    int original_height = original_size.second;
+    std::pair<int, int> best_fit;
+    int max_effective_resolution = 0;
+    int min_wasted_resolution = std::numeric_limits<int>::max();
+
+    for (const auto& resolution : possible_resolutions) {
+        int width = resolution.first;
+        int height = resolution.second;
+        float scale = std::min(static_cast<float>(width) / original_width, static_cast<float>(height) / original_height);
+        int downscaled_width = static_cast<int>(original_width * scale);
+        int downscaled_height = static_cast<int>(original_height * scale);
+        int effective_resolution = std::min(downscaled_width * downscaled_height, original_width * original_height);
+        int wasted_resolution = (width * height) - effective_resolution;
+        // fprintf(stderr, "resolution: %d %d, scale: %f, downscaled: %d %d, effective: %d, wasted: %d\n", width, height, scale, downscaled_width, downscaled_height, effective_resolution, wasted_resolution);
+        if (effective_resolution > max_effective_resolution || (effective_resolution == max_effective_resolution && wasted_resolution < min_wasted_resolution)) {
+            max_effective_resolution = effective_resolution;
+            min_wasted_resolution = wasted_resolution;
+            best_fit = resolution;
+        }
+    }
+
+    return best_fit;
+}
+/**
+ * @brief Get the anyres image grid shape object
+ *
+ * @param image_size
+ * @param grid_pinpoints
+ * @param image_patch_size
+ * @return <int, int>
+ */
+struct clip_image_grid_shape get_anyres_image_grid_shape(const std::pair<int, int>& image_size, const std::vector<std::pair<int, int>>& grid_pinpoints, int image_patch_size) {
+    /**
+        Conversion from gguf flat array to vector:
+        std::vector<std::pair<int, int>> possible_resolutions;
+        for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
+            possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
+        }
+     */
+    auto best_resolution = select_best_resolution(image_size, grid_pinpoints);
+    return {best_resolution.first / image_patch_size, best_resolution.second / image_patch_size};
+}
+
+
 // Take the image segments in a grid configuration and return the embeddings and the number of embeddings into preallocated memory (image_embd_out)
-static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_embd_v, struct clip_image_grid_shape grid_shape, float * image_embd_out, int * n_img_pos_out) {
+static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_embd_v, struct clip_image_grid_shape grid_shape, float * image_embd_out, int * n_img_pos_out) {
     struct temp_model {
         struct ggml_tensor *newline;
         struct ggml_context * ctx;
@@ -21,11 +91,12 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
     auto num_patches_per_side = vparams.image_size / vparams.patch_size; // 336 / 14 = 24 - used for embedding-patching boxes (24*24 = 576 patches)
     int num_patches_width = grid_shape.first; // grid 1-4
     int num_patches_height = grid_shape.second; // grid 1-4
+    const size_t num_images = num_patches_width + num_patches_height + 1;
 
     // TODO: size calculation is not calculated - it's only tens of MB
     size_t ctx_size = 0;
     {
-        ctx_size += clip_embd_nbytes(ctx_clip) * image_embd_v.size() * 8; // image_features
+        ctx_size += clip_embd_nbytes(ctx_clip) * num_images * 8; // image_features
         ctx_size += 1024*1024 * ggml_type_size(GGML_TYPE_F32);
     }
 
@@ -84,10 +155,10 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
         }
     }
 
-    struct ggml_tensor * image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, clip_n_mmproj_embd(ctx_clip), clip_n_patches(ctx_clip), image_embd_v.size() - 1); // example: 4096 x 576 x 4
+    struct ggml_tensor * image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, clip_n_mmproj_embd(ctx_clip), clip_n_patches(ctx_clip), num_images - 1); // example: 4096 x 576 x 4
     // ggml_tensor_printf(image_features,"image_features",__LINE__,false,false);
     // fill it with the image embeddings, ignoring the base
-    for (int i = 1; i < image_embd_v.size(); i++)
+    for (int i = 1; i < num_images; i++)
     {
         size_t offset = (i-1) * clip_embd_nbytes(ctx_clip);
         memcpy((uint8_t *)(image_features->data) + offset, image_embd_v[i], clip_embd_nbytes(ctx_clip));
@@ -106,6 +177,15 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
                                                                 size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip) * num_patches_per_side * num_patches_width, 0);
     // ggml_tensor_printf(image_features_patchview,"image_features_patchview",__LINE__,false,false);
     struct ggml_tensor *permuted_cont = ggml_cont(model.ctx, ggml_permute(model.ctx, image_features_patchview, 0, 2, 1, 3));
+    /**
+     At the end of each row we have to add the row_end embeddings, which are the same as the newline embeddings
+         image_feature = torch.cat((
+        image_feature,
+        self.model.image_newline[:, None, None].expand(*image_feature.shape[:-1], 1).to(image_feature.device)
+    ), dim=-1)
+     * 
+     */
+
     // ggml_tensor_printf(permuted_cont,"permuted_cont",__LINE__,false,false);
     struct ggml_tensor *flatten = ggml_view_2d(model.ctx, permuted_cont, clip_n_mmproj_embd(ctx_clip), num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side,  size_ele * clip_n_mmproj_embd(ctx_clip), 0);
     // ggml_tensor_printf(flatten,"flatten",__LINE__,false,false);
@@ -115,7 +195,7 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
 
     memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as global context
     // append without newline tokens (default behavior in llava_arch when not using unpad ):
-    memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip), (float*)result->data, clip_embd_nbytes(ctx_clip) * (image_embd_v.size()-1)); // grid patches
+    memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip), (float*)result->data, clip_embd_nbytes(ctx_clip) * (num_images-1)); // grid patches
     *n_img_pos_out = static_cast<int>(result->ne[1]+clip_n_patches(ctx_clip));
 
     // Debug: Test single segments
@@ -131,37 +211,25 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
 
 
 static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos) {
-    std::vector<clip_image_f32*> img_res_v; // format VectN x H x W x RGB (N x 336 x 336 x 3), so interleaved RGB - different to the python implementation which is N x 3 x 336 x 336
-    if (!clip_image_preprocess(ctx_clip, img, img_res_v, /*pad2square =*/ true)) {
+    // std::vector<clip_image_f32*> img_res_v; // format VectN x H x W x RGB (N x 336 x 336 x 3), so interleaved RGB - different to the python implementation which is N x 3 x 336 x 336
+    clip_image_f32_batch img_res_v;
+    img_res_v.size = 0;
+    img_res_v.data = nullptr;
+    if (!clip_image_preprocess(ctx_clip, img, img_res_v)) {
         fprintf(stderr, "%s: unable to preprocess image\n", __func__);
-        for (auto img_res : img_res_v) {
-            clip_image_f32_free(img_res);
-        }
+        delete[] img_res_v.data;
         return false;
     }
 
     const int64_t t_img_enc_start_us = ggml_time_us();
     auto & vparams = clip_get_vision_hparams(ctx_clip);
-    // DEBUG print the "shape" and the first 10 rows and 10 cols of img_res_v in exp format
-    // for (int i = 0; i < img_res_v.size(); i++)
-    // {
-    //     printf("img_res_v[%d] shape: %d x %d\n", i, img_res_v[i]->nx, img_res_v[i]->ny);
-    //     for (int j = 0; j < 10; j++)
-    //     {
-    //         for (int k = 0; k < 10; k++)
-    //         {
-    //             printf("%e ", img_res_v[i]->buf[j*img_res_v[i]->ny + k]);
-    //         }
-    //         printf("\n");
-    //     }
-    // }
 
     if (strcmp(vparams.mm_patch_merge_type, "spatial_unpad") != 0)
     {
         // flat / default llava-1.5 type embedding
         *n_img_pos = clip_n_patches(ctx_clip);
-        bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v[0], image_embd); // image_embd shape is 576 x 4096
-        clip_image_f32_free(img_res_v[0]);
+        bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd); // image_embd shape is 576 x 4096
+        delete[] img_res_v.data;
         if (!encoded) {
             fprintf(stderr, "Unable to encode image\n");
 
@@ -172,30 +240,32 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         // spatial_unpad llava-1.6 type embedding
         // TODO: CLIP needs batching support - in HF the llm projection is separate after encoding, which might be a solution to quickly get batching working
         std::vector<float *> image_embd_v;
-        image_embd_v.resize(img_res_v.size());
-        for (int i = 0; i < img_res_v.size(); i++)
+        image_embd_v.resize(img_res_v.size);
+        for (int i = 0; i < img_res_v.size; i++)
         {
             image_embd_v[i] = (float *)malloc(clip_embd_nbytes(ctx_clip)); // 576 patches * 4096 embeddings * 4 bytes = 9437184
-            bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v[i], image_embd_v[i]); // image data is in 3x336x336 format and will be converted to 336x336x3 inside
-            clip_image_f32_free(img_res_v[i]);
+            bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]); // image data is in 3x336x336 format and will be converted to 336x336x3 inside
             if (!encoded) {
-                fprintf(stderr, "Unable to encode image - spatial_unpad - subimage %d of %d\n", i+1, (int)img_res_v.size());
+                fprintf(stderr, "Unable to encode image - spatial_unpad - subimage %d of %d\n", i+1, (int)img_res_v.size);
                 return false;
             }
         }
         const int64_t t_img_enc_batch_us = ggml_time_us();
-        printf("%s: %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size(), (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
+        printf("%s: %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size, (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
 
 
         std::vector<std::pair<int, int>> grid_pinpoints;
         for (int i = 0; i < 32 && vparams.image_grid_pinpoints[i] != 0; i+=2) {
             grid_pinpoints.push_back({vparams.image_grid_pinpoints[i], vparams.image_grid_pinpoints[i+1]});
         }
-        img_res_v.clear();
+        // free all img_res_v - not needed anymore
+        delete[] img_res_v.data;
+        img_res_v.size = 0;
+        img_res_v.data = nullptr;
         struct clip_image_grid_shape grid_shape = get_anyres_image_grid_shape({img->nx,img->ny}, grid_pinpoints, vparams.image_size);
 
         int n_img_pos_out;
-        handle_patches(ctx_clip, image_embd_v, grid_shape, image_embd, &n_img_pos_out);
+        clip_llava_handle_patches(ctx_clip, image_embd_v, grid_shape, image_embd, &n_img_pos_out);
         *n_img_pos = n_img_pos_out;
 
         for (int i = 0; i < image_embd_v.size(); i++)

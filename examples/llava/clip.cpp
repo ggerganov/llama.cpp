@@ -31,6 +31,25 @@
 #include <sstream>
 #include <cinttypes>
 
+// #define CLIP_DEBUG_FUNCTIONS
+
+// RGB uint8 image
+struct clip_image_u8 {
+    int nx;
+    int ny;
+
+    std::vector<uint8_t> buf;
+};
+
+// RGB float32 image (NHWC)
+// Memory layout: RGBRGBRGB...
+struct clip_image_f32 {
+    int nx;
+    int ny;
+
+    std::vector<float> buf;
+};
+
 static std::string format(const char * fmt, ...) {
     va_list ap;
     va_list ap2;
@@ -961,10 +980,11 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             int idx = get_key_idx(ctx, KEY_IMAGE_GRID_PINPOINTS);
             int n = gguf_get_arr_n(ctx, idx);
             const int32_t * pinpoints = (const int32_t *)gguf_get_arr_data(ctx, idx);
-            for (int i = 0; i < 32 && pinpoints[i] != 0; ++i) {
+            for (int i = 0; i < 32 && i < n && pinpoints[i] != 0; ++i) {
                 hparams.image_grid_pinpoints[i] = pinpoints[i];
             }
-            hparams.image_grid_pinpoints[n] = 0;
+            if (n < 32)
+                hparams.image_grid_pinpoints[n] = 0;
         } catch (std::runtime_error & e) {
             hparams.image_grid_pinpoints[0]=0;
         }
@@ -1170,7 +1190,7 @@ bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length
     return true;
 }
 
-
+#ifdef CLIP_DEBUG_FUNCTIONS
 void clip_image_write_image_to_ppm(const clip_image_u8& img, const std::string& filename) {
     std::ofstream file(filename, std::ios::binary);
     if (!file.is_open()) {
@@ -1265,6 +1285,7 @@ void clip_image_save_to_bmp(const clip_image_u8& img, const std::string& filenam
 
     file.close();
 }
+#endif
 
 // Linear interpolation between two points
 inline float lerp(float s, float e, float t) {
@@ -1305,41 +1326,8 @@ void bilinear_resize(const clip_image_u8& src, clip_image_u8& dst, int target_wi
     }
 }
 
-// for replication purposes `.to(model.device, dtype=torch.float16)`
-// converts a float to half precision and back to float
-float simulateFloat16Precision(float value) {
-    // Convert float32 to float16
-    uint32_t f32 = *reinterpret_cast<uint32_t*>(&value);
-    uint32_t sign = (f32 >> 16) & 0x8000; // Top bit (sign bit)
-    uint32_t exponent = ((f32 >> 23) & 0xFF) - 112; // Adjust bias (112 is bias of float16, 127 is bias of float32)
-    uint32_t mantissa = (f32 >> 13) & 0x3FF; // Keep top 10 bits (10 bits of precision in float16, 23 in float32)
-
-    // Handle overflow/underflow
-    if ((f32 & 0x7FFFFFFF) > 0x477FE000) { // Not representable
-        exponent = 0x1F;
-        mantissa = 0;
-    } else if ((f32 & 0x7FFFFFFF) < 0x38800000) { // Too small for normal half precision
-        exponent = 0;
-        mantissa = 0;
-    }
-
-    uint16_t f16 = sign | (exponent << 10) | mantissa;
-
-    // Convert back to float32
-    uint32_t sign32 = (f16 & 0x8000) << 16;
-    uint32_t exponent32 = ((f16 >> 10) & 0x1F);
-    uint32_t mantissa32 = (f16 & 0x3FF) << 13;
-
-    // Adjust bias back
-    exponent32 = exponent32 == 0 ? 0 : exponent32 + 112;
-
-    uint32_t f32Result = sign32 | (exponent32 << 23) | mantissa32;
-    float result = *reinterpret_cast<float*>(&f32Result);
-
-    return result;
-}
-// Normalize image to float32 - supports float16 replication as in pytorch .to(model.device, dtype=torch.float16)
-void normalize_image_u8_to_f32(const clip_image_u8* src, clip_image_f32* dst, const float mean[3], const float std[3], bool replicate_float16) {
+// Normalize image to float32 - careful with pytorch .to(model.device, dtype=torch.float16) - this sometimes reduces precision (32>16>32), sometimes not
+void normalize_image_u8_to_f32(const clip_image_u8* src, clip_image_f32* dst, const float mean[3], const float std[3]) {
     dst->nx = src->nx;
     dst->ny = src->ny;
     dst->buf.resize(src->buf.size());
@@ -1347,12 +1335,9 @@ void normalize_image_u8_to_f32(const clip_image_u8* src, clip_image_f32* dst, co
     for (size_t i = 0; i < src->buf.size(); ++i) {
         int c = i % 3; // rgb
         dst->buf[i] = (static_cast<float>(src->buf[i]) / 255.0f - mean[c]) / std[c];
-
-        if (replicate_float16) {
-            dst->buf[i] = simulateFloat16Precision(dst->buf[i]);
-        }
     }
 }
+
 inline float clip(float x, float lower, float upper)
 {
     return std::max(lower, std::min(x, upper));
@@ -1471,7 +1456,6 @@ void resize_and_pad_image(const clip_image_u8& image, clip_image_u8 &image_outpu
             }
         }
     }
-
     image_output = std::move(padded_image);
 }
 
@@ -1533,7 +1517,7 @@ std::vector<clip_image_u8*> divide_to_patches_u8(const clip_image_u8& image, int
     return patches;
 }
 
-
+#ifdef CLIP_DEBUG_FUNCTIONS
 // debug function to convert f32 to u8
 void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u8& dst) {
     dst.nx = src.nx;
@@ -1543,32 +1527,12 @@ void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u8& dst)
         dst.buf[i] = static_cast<uint8_t>(std::min(std::max(int(src.buf[i] * 255.0f), 0), 255));
     }
 }
+#endif
 
-/**
- * @brief Get the anyres image grid shape object
- *
- * @param image_size
- * @param grid_pinpoints
- * @param image_patch_size
- * @return <int, int>
- */
-struct clip_image_grid_shape get_anyres_image_grid_shape(const std::pair<int, int>& image_size, const std::vector<std::pair<int, int>>& grid_pinpoints, int image_patch_size) {
-    /**
-        Conversion from gguf flat array to vector:
-        std::vector<std::pair<int, int>> possible_resolutions;
-        for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
-            possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
-        }
-     */
-    auto best_resolution = select_best_resolution(image_size, grid_pinpoints);
-    return {best_resolution.first / image_patch_size, best_resolution.second / image_patch_size};
-}
-
-
-// normalize: x = (x - mean) / std
-// TODO: implement bicubic interpolation instead of linear.
-// returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patche tensors as a vector
-bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std::vector<clip_image_f32*>& res_tensor, bool pad2square) {
+// returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
+// res_imgs memory is being allocated here, previous allocations will be freed if found
+bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch& res_imgs ) {
+    bool pad_to_square = true;
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return false;
@@ -1576,23 +1540,23 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
     auto & params = ctx->vision_model.hparams;
     // The model config actually contains all we need to decide on how to preprocess, here we automatically switch to the new llava-1.6 preprocessing
     if (strcmp(params.mm_patch_merge_type, "spatial_unpad") == 0) {
-        pad2square = false;
-    } else {
-        // pad2square = true; // todo: consider automatic decisions on that options for all models
+        pad_to_square = false;
     }
-    // free the previous res_tensor
-    if (res_tensor.size() > 0) {
-        for (size_t i = 0; i < res_tensor.size(); i++) {
-            clip_image_f32_free(res_tensor[i]);
+    // free the previous res_imgs if any set
+    if (res_imgs.size > 0 && res_imgs.size < 100) {
+        for (size_t i = 0; i < res_imgs.size; i++) {
+            clip_image_f32_free(&(res_imgs.data[i]));
         }
-        res_tensor.clear();
+        delete[] res_imgs.data;
     }
+    res_imgs.data = nullptr;
+    res_imgs.size = 0;
 
     // the logic below is to pad the shorter side to the longer side with a background color: rgb(122, 116, 104)
     // see https://github.com/haotian-liu/LLaVA/blob/e854a2bf85118c504f6f16bf5c3c7c92f8fa8c6b/llava/conversation.py#L113-L156
 
     clip_image_u8 * temp = clip_image_u8_init(); // we will keep the input image data here temporarily
-    if (pad2square && img->nx != img->ny) {
+    if (pad_to_square && img->nx != img->ny) {
         int longer_side = std::max(img->nx, img->ny);
         temp->nx = longer_side;
         temp->ny = longer_side;
@@ -1636,18 +1600,18 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
             // }
 
             std::vector<clip_image_u8 *> patches = divide_to_patches_u8(*temp, params.image_size); // prepare spatial sorted main patches of image_size each (336 in llava-1.6)
-            // fprintf(stderr, "patches: %d, %d\n", patches.size(), params.image_size);
 
             clip_image_u8 *image_original_resize = clip_image_u8_init();
-            // bilinear_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square ?
-            bicubic_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square ?
+            // bilinear_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square
+            bicubic_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square
             patches.insert(patches.begin(), image_original_resize);
-
-            res_tensor.clear();
+            // clip_image_f32_batch_init(patches.size());
+            res_imgs.size = patches.size();
+            res_imgs.data = new clip_image_f32[res_imgs.size];
+            int num=0;
             for (auto& patch : patches) {
-                clip_image_f32 *temp_image_f32 = clip_image_f32_init();
-                normalize_image_u8_to_f32(patch, temp_image_f32, ctx->image_mean, ctx->image_std, false); // set to true for pytorch fp16 value replication
-                res_tensor.push_back(temp_image_f32);
+                normalize_image_u8_to_f32(patch, &res_imgs.data[num], ctx->image_mean, ctx->image_std);
+                num++;
             }
 
             for (size_t i = 0; i < patches.size(); i++) {
@@ -1732,7 +1696,10 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
     //     clip_image_save_to_bmp(*temp2, "resized_normalized_f32_vanilla.bmp");
     //     clip_image_u8_free(temp2);
     // }
-    res_tensor.push_back(res);
+    // res_imgs.push_back(res);
+    res_imgs.size = 1;
+    res_imgs.data = new clip_image_f32[res_imgs.size];
+    res_imgs.data[0] = std::move(*res);
     return true;
 }
 
