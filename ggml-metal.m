@@ -1301,7 +1301,7 @@ static bool ggml_metal_graph_compute(
 
                         // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
                         // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
-                        if (src1t == GGML_TYPE_F32 && ne11 <= 8) {
+                        if (src1t == GGML_TYPE_F32) {
                             id<MTLComputePipelineState> pipeline = nil;
 
                             switch (src0->type) {
@@ -1340,12 +1340,12 @@ static bool ggml_metal_graph_compute(
                             [encoder setBytes:&r2      length:sizeof(r2)   atIndex:13];
                             [encoder setBytes:&r3      length:sizeof(r3)   atIndex:14];
 
-                            const int nsg  = 8;
+                            const int nsg  = 4;
 
-                            const int nsg0 = 1;
-                            const int nsh0 = 16;
-                            const int nsg1 = 1;
-                            const int nsh1 = 64;
+                            const int nsg0 = 4;
+                            const int nsh0 = 4;
+                            const int nsg1 = 2;
+                            const int nsh1 = 4;
 
                             GGML_ASSERT(ne00 % 4    == 0); // for zeroing shared memory with half4 / float4
                           //GGML_ASSERT(ne00 % 16   == 0); // dequantize in chunks of 16

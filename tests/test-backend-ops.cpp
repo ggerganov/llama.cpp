@@ -2075,7 +2075,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {10, 10}, {2, 2}));
         }
     }
-#else
+#elif 0
     for (int r0 = 0; r0 < 32; ++r0) {
         for (int c0 = 0; c0 < 4096; c0 += 512) {
             for (ggml_type type_a : {GGML_TYPE_Q4_0, GGML_TYPE_Q8_0, GGML_TYPE_F16}) {
@@ -2090,6 +2090,19 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
                     test_cases.emplace_back(new test_mul_mat(type_a, type_b, 64 + r0, 8, 64 + c0, { 1,  1}, {1, 1}));
                 }
             }
+        }
+    }
+#elif 1
+    for (ggml_type type_a : {GGML_TYPE_Q4_0, GGML_TYPE_Q8_0, GGML_TYPE_F16}) {
+        for (ggml_type type_b : {GGML_TYPE_F32}) {
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
+            test_cases.emplace_back(new test_mul_mat(type_a, type_b, 4096, 512, 4096, { 1,  1}, {1, 1}));
         }
     }
 #endif
