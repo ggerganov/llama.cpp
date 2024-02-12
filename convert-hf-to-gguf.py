@@ -1763,9 +1763,7 @@ class NomicBertModel(BertModel):
         for name, data in super().get_tensors():
             # Nomic Embed's token embeddings tensor is padded, but llama.cpp wants tensor sizes to match exactly.
             if name == 'embeddings.word_embeddings.weight' and data.shape[1] != self.vocab_size:
-                rounded_vocab_size = (self.vocab_size + 7) // 8 * 8
-                print(data.shape)
-                print(rounded_vocab_size, self.hparams["n_embd"])
+                rounded_vocab_size = (self.vocab_size + 63) // 64 * 64
                 assert data.shape == (rounded_vocab_size, self.hparams["n_embd"])
                 data = data[:self.vocab_size, :]
             yield name, data
