@@ -116,7 +116,7 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
     memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as global context
     // append without newline tokens (default behavior in llava_arch when not using unpad ):
     memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip), (float*)result->data, clip_embd_nbytes(ctx_clip) * (image_embd_v.size()-1)); // grid patches
-    *n_img_pos_out = result->ne[1]+clip_n_patches(ctx_clip);
+    *n_img_pos_out = static_cast<int>(result->ne[1]+clip_n_patches(ctx_clip));
 
     // Debug: Test single segments
     // Current findings: sending base image, sending a segment embedding all works similar to python
@@ -179,12 +179,12 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
             bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v[i], image_embd_v[i]); // image data is in 3x336x336 format and will be converted to 336x336x3 inside
             clip_image_f32_free(img_res_v[i]);
             if (!encoded) {
-                fprintf(stderr, "Unable to encode image - spatial_unpad - subimage %d of %d\n", i+1, img_res_v.size());
+                fprintf(stderr, "Unable to encode image - spatial_unpad - subimage %d of %d\n", i+1, (int)img_res_v.size());
                 return false;
             }
         }
         const int64_t t_img_enc_batch_us = ggml_time_us();
-        printf("%s: %d segments encoded in %8.2f ms\n", __func__, img_res_v.size(), (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
+        printf("%s: %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size(), (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
 
 
         std::vector<std::pair<int, int>> grid_pinpoints;
