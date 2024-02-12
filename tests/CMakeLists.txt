@@ -41,21 +41,24 @@ llama_test(test-quantize-perf.cpp)
 llama_test(test-sampling.cpp)
 llama_test(test-chat-template.cpp)
 
-llama_test(test-tokenizer-0-llama.cpp  NAME test-tokenizer-0-llama            ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
-llama_test(test-tokenizer-0-falcon.cpp NAME test-tokenizer-0-falcon           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
 
-llama_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-llama            ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
-llama_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-baichuan         ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-baichuan.gguf)
+llama_test(test-tokenizer-0-llama.cpp  NAME test-tokenizer-0-llama                            ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
+llama_test(test-tokenizer-0-falcon.cpp NAME test-tokenizer-0-falcon                           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
 
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-falcon           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-aquila           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-aquila.gguf)
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-mpt              ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-mpt.gguf)
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-stablelm-3b-4e1t ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-stablelm-3b-4e1t.gguf)
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-gpt-neox         ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt-neox.gguf)
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-refact           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-refact.gguf)
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-starcoder        ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-starcoder.gguf)
-llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-gpt2             ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt2.gguf)
-#llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-bloom            ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-bloom.gguf) # BIG
+llama_test(test-tokenizer-0-deepseek-coder.cpp NAME test-tokenizer-0-deepseek-coder           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-coder.gguf)
+
+llama_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-llama                            ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
+llama_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-baichuan                         ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-baichuan.gguf)
+
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-falcon                           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-aquila                           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-aquila.gguf)
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-mpt                              ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-mpt.gguf)
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-stablelm-3b-4e1t                 ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-stablelm-3b-4e1t.gguf)
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-gpt-neox                         ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt-neox.gguf)
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-refact                           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-refact.gguf)
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-starcoder                        ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-starcoder.gguf)
+llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-gpt2                             ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt2.gguf)
+#llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-bloom                           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-bloom.gguf) # BIG
 
 llama_test(test-grammar-parser.cpp)
 llama_test(test-llama-grammar.cpp)

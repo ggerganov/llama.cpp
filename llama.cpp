@@ -4228,9 +4228,19 @@ static void llm_load_vocab(
             if (add_space_prefix_keyidx != -1) {
                 vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
             } // The default value of add_space_prefix is true.
-        } else if (tokenizer_name == "gpt2") {
-            vocab.type = LLAMA_VOCAB_TYPE_BPE;
-
+        } else {
+            if (tokenizer_name == "gpt2") {
+                vocab.type = LLAMA_VOCAB_TYPE_BPE;
+            } else if (tokenizer_name == "deepseek_coder") {
+                vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
+            } else if (tokenizer_name == "deepseek_llm") {
+                vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKLLM;
+            } else {
+                LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
+                LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
+                vocab.type = LLAMA_VOCAB_TYPE_SPM;
+                return;
+            }
             // read bpe merges and populate bpe ranks
             const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
             if (merges_keyidx == -1) {
@@ -11779,6 +11789,7 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
             auto buf = token_data.text.substr(3, 2);
             return strtol(buf.c_str(), NULL, 16);
         }
+        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
         case LLAMA_VOCAB_TYPE_BPE: {
             GGML_ASSERT(false);
             return unicode_utf8_to_byte(token_data.text);
@@ -11806,6 +11817,7 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
             return vocab.token_to_id.at(buf2);
         }
         case LLAMA_VOCAB_TYPE_WPM:
+		case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
         case LLAMA_VOCAB_TYPE_BPE: {
             return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
         }
@@ -12003,7 +12015,21 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
-        auto word_collection = bpe_gpt2_preprocess(text);
+
+        std::vector<std::string> word_collection;
+        switch (vocab.type) {
+            case LLAMA_VOCAB_TYPE_BPE:
+                word_collection = bpe_gpt2_preprocess(text);
+                break;
+            case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
+                word_collection = bpe_deepseek_coder_preprocess(text);
+                break;
+            case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
+                word_collection = bpe_deepseek_llm_preprocess(text);
+                break;
+            default:
+                break;
+        }
 
         symbols_final.clear();
 
@@ -12130,143 +12156,82 @@ private:
         work_queue.push(bigram);
     }
 
-    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
-        std::vector<std::string> bpe_words;
-        std::vector<std::string> bpe_encoded_words;
+    std::vector<std::string> byte_encoding_process(const std::vector<std::string> & bpe_words) {
+        std::vector<std::string>bpe_encoded_words;
+        for (auto word : bpe_words) {
+            std::string text_utf = "";
+            auto utf_word =  unicode_cpts_from_utf8(word);
+            for (size_t i = 0; i < utf_word.size(); ++i)
+                text_utf += unicode_cpt_to_utf8(utf_word[i]);
 
-        std::string token = "";
-        // GPT2 system regex:  's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
-        bool collecting_numeric = false;
-        bool collecting_letter = false;
-        bool collecting_special = false;
-        bool collecting_whitespace_lookahead = false;
-        bool collecting = false;
-
-        std::vector<std::string> text_utf;
-        text_utf.reserve(text.size());
-        bpe_words.reserve(text.size());
-        bpe_encoded_words.reserve(text.size());
-
-        const auto cpts = unicode_cpts_from_utf8(text);
-        for (size_t i = 0; i < cpts.size(); ++i)
-            text_utf.emplace_back(unicode_cpt_to_utf8(cpts[i]));
-
-        for (int i = 0; i < (int)text_utf.size(); i++) {
-            const std::string & utf_char = text_utf[i];
-            bool split_condition = false;
-            int bytes_remain = text_utf.size() - i;
-            // forward backward lookups
-            const std::string & utf_char_next = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
-            const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
-
-            // handling contractions
-            if (!split_condition && bytes_remain >= 2) {
-                // 's|'t|'m|'d
-                if (utf_char == "\'" && (utf_char_next == "s" || utf_char_next == "t" || utf_char_next == "m" || utf_char_next == "d")) {
-                    split_condition = true;
-                }
-                if (split_condition) {
-                    if (token.size()) {
-                        bpe_words.emplace_back(token); // push previous content as token
-                    }
-                    token = utf_char + utf_char_next;
-                    bpe_words.emplace_back(token);
-                    token = "";
-                    i++;
-                    continue;
-                }
-            }
-            if (!split_condition && bytes_remain >= 3) {
-                // 're|'ve|'ll
-                if (utf_char == "\'" && (
-                    (utf_char_next == "r" && utf_char_next_next == "e") ||
-                    (utf_char_next == "v" && utf_char_next_next == "e") ||
-                    (utf_char_next == "l" && utf_char_next_next == "l"))
-                    ) {
-                    split_condition = true;
-                }
-                if (split_condition) {
-                    // current token + next token can be defined
-                    if (token.size()) {
-                        bpe_words.emplace_back(token); // push previous content as token
-                    }
-                    token = utf_char + utf_char_next + utf_char_next_next;
-                    bpe_words.emplace_back(token); // the contraction
-                    token = "";
-                    i += 2;
-                    continue;
-                }
-            }
-
-            if (!split_condition && !collecting) {
-                if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
-                    collecting_letter = true;
-                    collecting = true;
-                }
-                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
-                    collecting_numeric = true;
-                    collecting = true;
-                }
-                else if (
-                    ((unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (unicode_cpt_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
-                    (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
-                    ) {
-                    collecting_special = true;
-                    collecting = true;
-                }
-                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) {
-                    collecting_whitespace_lookahead = true;
-                    collecting = true;
-                }
-                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE) {
-                    split_condition = true;
-                }
-            }
-            else if (!split_condition && collecting) {
-                if (collecting_letter && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER) {
-                    split_condition = true;
-                }
-                else if (collecting_numeric && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) {
-                    split_condition = true;
-                }
-                else if (collecting_special && (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
-                    split_condition = true;
-                }
-                else if (collecting_whitespace_lookahead && (unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
-                    split_condition = true;
-                }
-            }
-
-            if (utf_char_next == "") {
-                split_condition = true; // final
-                token += utf_char;
-            }
-
-            if (split_condition) {
-                if (token.size()) {
-                    bpe_words.emplace_back(token);
-                }
-                token = utf_char;
-                collecting = false;
-                collecting_letter = false;
-                collecting_numeric = false;
-                collecting_special = false;
-                collecting_whitespace_lookahead = false;
-            }
-            else {
-                token += utf_char;
-            }
-        }
-
-        for (std::string & word : bpe_words) {
             std::string encoded_token = "";
-            for (char & c : word) {
+            for (char & c : text_utf) {
                 encoded_token += unicode_byte_to_utf8(c);
             }
             bpe_encoded_words.emplace_back(encoded_token);
         }
-
         return bpe_encoded_words;
+    }
+
+    std::vector<size_t> regex_preprocess(const std::wstring & text, const std::vector<size_t> & offsets, const std::wstring & regex_expr) {
+        std::wregex expr(regex_expr);
+        std::vector<size_t> bpe_words; // stroe the offset of each word
+        bpe_words.reserve(offsets.size()); // Reserve memory for the approximate size
+        size_t start = 0;
+        for (auto offset : offsets) {
+            std::wcregex_iterator it(text.data() + start, text.data() + start + offset, expr);
+            std::wcregex_iterator end;
+
+            int64_t start_idx = 0;
+            while (it != end) {
+                std::wcmatch match = *it;
+                if (match.position() > start_idx) {
+                    bpe_words.emplace_back(match.position() - start_idx);
+                }
+                bpe_words.emplace_back(match.length());
+                start_idx = match.position() + match.length();
+                ++it;
+            }
+
+            if (start_idx < (int64_t) offset) {
+                bpe_words.emplace_back(offset - start_idx);
+            }
+            start += offset;
+        }
+
+        return bpe_words;
+    }
+
+    std::vector<std::string> regex_bpe_preprocess(const std::string & text, const std::vector<std::wstring> & regex_exprs) {
+        std::wstring wtext = from_utf8(text);
+
+        std::vector<size_t> bpe_offsets = {wtext.size()};
+
+        for(auto & regex_expr : regex_exprs) {
+            bpe_offsets = regex_preprocess(wtext, bpe_offsets, regex_expr);
+        }
+
+        std::vector<std::string> bpe_words;
+        bpe_words.reserve(bpe_offsets.size()); // Reserve memory for the approximate size
+        size_t start = 0;
+        for(size_t & offset : bpe_offsets){
+            bpe_words.emplace_back(to_utf8(std::wstring(wtext, start, offset)));
+            start += offset;
+        }
+
+        return byte_encoding_process(bpe_words);
+    }
+
+    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
+        return regex_bpe_preprocess(text, gpt2_regex);
+    }
+
+    std::vector<std::string> bpe_deepseek_coder_preprocess(const std::string & text) {
+        return regex_bpe_preprocess(text, deepseek_coder_regex);
+    }
+
+    std::vector<std::string> bpe_deepseek_llm_preprocess(const std::string & text) {
+        return regex_bpe_preprocess(text, deepseek_llm_regex);
     }
 
     const llama_vocab & vocab;
@@ -12586,6 +12551,8 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     output.push_back(vocab.special_eos_id);
                 }
             } break;
+        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
+        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
         case LLAMA_VOCAB_TYPE_BPE:
             {
                 if (add_special && vocab.special_add_bos == 1) {
@@ -17286,6 +17253,8 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             }
             break;
         }
+        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
+        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
         case LLAMA_VOCAB_TYPE_BPE: {
             // NOTE: we accept all unsupported token types,
             // suppressing them like CONTROL tokens.
