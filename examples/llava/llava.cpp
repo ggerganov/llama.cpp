@@ -34,44 +34,40 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false, // NOTE: this should be false when using the legacy API
     };
+    // Python reference code for full unpad:
+    /*
+        base_image_feature = image_feature[0]
+        image_feature = image_feature[1:]
+        image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
+        image_feature = image_feature.flatten(1, 2).flatten(2, 3)
+        image_feature = unpad_image(image_feature, image_sizes[image_idx])
+        image_feature = torch.cat((
+            image_feature,
+            self.model.image_newline[:, None, None].expand(*image_feature.shape[:-1], 1)
+        ), dim=-1)
+        image_feature = image_feature.flatten(1, 2).transpose(0, 1)
+        image_feature = torch.cat((base_image_feature, image_feature), dim=0)
+    */
+    // We now have two options: unpad or no unpad. Unpad removes tokens for faster llm eval.
+    // In terms of result quality it appears to make no difference, so we'll start with the easier approach given 5D tensors are not supported in ggml yet.
+    // Without unpad we have to split the sub-image embeddings into patches of 24 features each and permute them.
+    // Once all images are processed to prepended the base_image_features without any changes.
 
-        // Python reference for full unpad:
-        // base_image_feature = image_feature[0]
-        // image_feature = image_feature[1:]
-        // image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
-        // image_feature = image_feature.flatten(1, 2).flatten(2, 3)
-        // image_feature = unpad_image(image_feature, image_sizes[image_idx])
-        // image_feature = torch.cat((
-        //     image_feature,
-        //     self.model.image_newline[:, None, None].expand(*image_feature.shape[:-1], 1)
-        // ), dim=-1)
-        // image_feature = image_feature.flatten(1, 2).transpose(0, 1)
-        // image_feature = torch.cat((base_image_feature, image_feature), dim=0)
+    // Pytorch reference simplified, modified for ggml compatibility - confirmed identical output in python (for a 2x2 grid image (676x676 scaling))
+    /*
+        image_feature = image_feature.view(2, 2, 24, 24, 4096)
+        image_feature = image_feature.permute(0, 2, 1, 3, 4).contiguous()
+        image_feature = image_feature.view(2, 24, 2, 24, 4096)
+        image_feature = image_feature.flatten(0, 3)
 
-        // embeddings -> tokens -> 24 x 24
-        /**
-         * We now have two options: unpad or no unpad - unpad removes tokens for faster llm eval
-         * In terms of result quality it appears to make no difference, so we'll start with the easier approach given 5D tensors are not supported in ggml yet
-         * Without unpad we have to split the sub-image embeddings into patches of 24 features each and permute them.
-         * Once all images are processed to prepended the base_image_features without any changes.
-         */
-    /**
-        Pytorch reference simplified, modified for ggml compatibility - confirmed identical output in python (for a 2x2 grid image (676x676 scaling))
-        # image_feature = image_feature.view(2, 2, 24, 24, 4096)
-        # image_feature = image_feature.permute(0, 2, 1, 3, 4).contiguous()
-        # image_feature = image_feature.view(2, 24, 2, 24, 4096)
-        # image_feature = image_feature.flatten(0, 3)
-
-        # Reshape to 4D tensor by merging the last two dimensions
+        // Reshape to 4D tensor by merging the last two dimensions
         image_feature = image_feature.view(2, 2, 24, 24*4096)
         image_feature = image_feature.permute(0, 2, 1, 3).contiguous()
         image_feature = image_feature.view(-1, 4096)
-     *
-     */
-    model.ctx = ggml_init(params);
+    */
 
+    model.ctx = ggml_init(params);
     ggml_context *ctx_noalloc = ggml_init({2048, NULL, true});
-    // struct ggml_tensor * image_features = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip) * (image_embd_v.size() - 1));
 
     ggml_tensor *newline_tmp = clip_get_newline_tensor(ctx_clip);
     model.newline = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, newline_tmp->ne[0]);
@@ -88,83 +84,39 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
         }
     }
 
-    struct ggml_tensor * image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, image_embd_v.size() - 1, clip_n_patches(ctx_clip), clip_n_mmproj_embd(ctx_clip));
-    // fill it with the image embeddings, ignoring the first
+    struct ggml_tensor * image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, clip_n_mmproj_embd(ctx_clip), clip_n_patches(ctx_clip), image_embd_v.size() - 1); // example: 4096 x 576 x 4
+    // ggml_tensor_printf(image_features,"image_features",__LINE__,false,false);
+    // fill it with the image embeddings, ignoring the base
     for (int i = 1; i < image_embd_v.size(); i++)
     {
-        // printf("Copying image_embd_v[%d] to image_features tensor\n", i);
         size_t offset = (i-1) * clip_embd_nbytes(ctx_clip);
-
-        // for debugging we now try and set the entire tensor row to 0.0001f,0.0002f,0.0003f,0.0004f etc:
-        // float *floatPtr = static_cast<float*>(image_embd_v[i]);
-        // for (int j = 0; j < clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip); j++)
-        // {
-        //     // floatPtr[j] = (j + 1) / 10000.0f;
-        //     int feature = j % clip_n_mmproj_embd(ctx_clip) + 1;
-        //     floatPtr[j] = i + feature / 10000.0f;
-        // }
         memcpy((uint8_t *)(image_features->data) + offset, image_embd_v[i], clip_embd_nbytes(ctx_clip));
     }
-    // printf("image_features size = %d\n", clip_embd_nbytes(ctx_clip) * (image_embd_v.size() - 1));
 
     struct ggml_cgraph  * gf = ggml_new_graph(model.ctx);
-    // image_feature = image_feature.view(num_patch_height, num_patch_width, height, width, -1)
     size_t size_ele = ggml_type_size(GGML_TYPE_F32);
-    // struct ggml_tensor *dummy = ggml_new_tensor_4d(ctx_noalloc, GGML_TYPE_F32, num_patches_height, num_patches_width, num_patches_per_side, num_patches_per_side * clip_n_mmproj_embd(ctx_clip));
-
-    struct ggml_tensor *image_features_view = ggml_view_4d(model.ctx, image_features,
-                                                                    num_patches_height,
-                                                                    num_patches_width,
-                                                                    num_patches_per_side * num_patches_per_side,
-                                                                    clip_n_mmproj_embd(ctx_clip),
-
-                                                                    size_ele * num_patches_height,
-                                                                    size_ele * num_patches_height * num_patches_width,
-                                                                    size_ele * num_patches_height * num_patches_width * num_patches_per_side,
-                                                                    0);
 
     struct ggml_tensor *image_features_patchview = ggml_view_4d(model.ctx, image_features,
-                                                                num_patches_height,
-                                                                num_patches_width,
-                                                                num_patches_per_side,
                                                                 num_patches_per_side * clip_n_mmproj_embd(ctx_clip),
-
-                                                                size_ele * num_patches_height,
-                                                                size_ele * num_patches_height * num_patches_width,
-                                                                size_ele * num_patches_height * num_patches_width * num_patches_per_side, 0);
-
+                                                                num_patches_per_side,
+                                                                num_patches_width,
+                                                                num_patches_height,
+                                                                size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip), 
+                                                                size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip) * num_patches_per_side,
+                                                                size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip) * num_patches_per_side * num_patches_width, 0);
+    // ggml_tensor_printf(image_features_patchview,"image_features_patchview",__LINE__,false,false);
     struct ggml_tensor *permuted_cont = ggml_cont(model.ctx, ggml_permute(model.ctx, image_features_patchview, 0, 2, 1, 3));
-    permuted_cont = ggml_cont(model.ctx, ggml_permute(model.ctx, permuted_cont, 0, 2, 1, 3)); // permute back to before - todo: fix bug
-
-    struct ggml_tensor *prepared = ggml_view_2d(model.ctx, permuted_cont, num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side, clip_n_mmproj_embd(ctx_clip), size_ele * num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side, 0);
-    struct ggml_tensor *prepared_cont = ggml_cont(model.ctx, prepared); // not needed
-    // struct ggml_tensor *prepared_cont = prepared; // the view only flattens
-
-    ggml_build_forward_expand(gf, prepared_cont);
-
+    // ggml_tensor_printf(permuted_cont,"permuted_cont",__LINE__,false,false);
+    struct ggml_tensor *flatten = ggml_view_2d(model.ctx, permuted_cont, clip_n_mmproj_embd(ctx_clip), num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side,  size_ele * clip_n_mmproj_embd(ctx_clip), 0);
+    // ggml_tensor_printf(flatten,"flatten",__LINE__,false,false);
+    ggml_build_forward_expand(gf, flatten);
     ggml_graph_compute_with_ctx(model.ctx, gf, 1);
-
     struct ggml_tensor* result = gf->nodes[gf->n_nodes - 1];
-    //  ggml_tensor_printf(image_features,"image_features",__LINE__,false,true);
-    // ggml_tensor_printf(image_features_patchview,"image_features_patchview",__LINE__,false,true);
-    // ggml_tensor_printf(prepared_cont,"prepared_cont",__LINE__,false,true);
 
     memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as global context
-    // append without newline tokens:
-    // memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip), (float*)prepared_cont->data, clip_embd_nbytes(ctx_clip) * (image_embd_v.size()-1)); // grid patches
-    // append with newline tokens:
-    for (size_t i = 0; i < image_embd_v.size() - 1; ++i) {
-        // we append with +1 offset (base image is prepended)
-        memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip) * (i+1) + model.newline->ne[0] * i,
-            (float*)prepared_cont->data + i * clip_n_mmproj_embd(ctx_clip) * clip_n_patches(ctx_clip),
-            clip_embd_nbytes(ctx_clip));
-        memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip) * (i+2) + model.newline->ne[0] * i ,
-            (float*)model.newline->data,
-            ggml_nbytes(model.newline));
-    }
-
-    size_t newline_tokens = image_embd_v.size()-1;
-    *n_img_pos_out = prepared_cont->ne[0]+clip_n_patches(ctx_clip) + newline_tokens;
+    // append without newline tokens (default behavior in llava_arch when not using unpad ):
+    memcpy(image_embd_out + clip_n_patches(ctx_clip) * clip_n_mmproj_embd(ctx_clip), (float*)result->data, clip_embd_nbytes(ctx_clip) * (image_embd_v.size()-1)); // grid patches
+    *n_img_pos_out = result->ne[1]+clip_n_patches(ctx_clip);
 
     // Debug: Test single segments
     // Current findings: sending base image, sending a segment embedding all works similar to python

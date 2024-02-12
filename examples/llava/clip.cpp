@@ -1,6 +1,7 @@
 // NOTE: This is modified from clip.cpp only for LLaVA,
 // so there might be still unnecessary artifacts hanging around
 // I'll gradually clean and extend it
+// Note: Even when using identical normalized image inputs (see normalize_image_u8_to_f32()) we have a significant difference in resulting embeddings compared to pytorch
 #include "clip.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -1622,7 +1623,6 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
                 possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
             }
             std::pair<int, int> best_resolution = select_best_resolution({img->nx, img->ny}, possible_resolutions);
-            // fprintf(stderr, "%s - Working with resolution: %d %d\n", __func__, best_resolution.first, best_resolution.second);
             // clip_image_save_to_bmp(*img, "input.bmp");
             resize_and_pad_image(*img, *temp, best_resolution);  // we do not pad with mean-bg color anymore in llava-1.6
             // clip_image_save_to_bmp(*temp, "resized.bmp");
@@ -1646,7 +1646,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, std
             res_tensor.clear();
             for (auto& patch : patches) {
                 clip_image_f32 *temp_image_f32 = clip_image_f32_init();
-                normalize_image_u8_to_f32(patch, temp_image_f32, ctx->image_mean, ctx->image_std, true);
+                normalize_image_u8_to_f32(patch, temp_image_f32, ctx->image_mean, ctx->image_std, false); // set to true for pytorch fp16 value replication
                 res_tensor.push_back(temp_image_f32);
             }
 
