@@ -11578,11 +11578,8 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
     }
     char * dst_ptr = (char *) dst;
 
-    const int64_t ne0 = src->ne[0];
-    const int64_t nb0 = src->nb[0];
-    const int64_t nb1 = src->nb[1];
-    const int64_t nb2 = src->nb[2];
-    const int64_t nb3 = src->nb[3];
+    GGML_TENSOR_LOCALS_1(int64_t, ne, src, ne);
+    GGML_TENSOR_LOCALS(int64_t, nb, src, nb);
     const enum ggml_type type = src->type;
     const int64_t ts = ggml_type_size(type);
     const int64_t bs = ggml_blck_size(type);
