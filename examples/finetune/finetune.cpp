@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
+#include "ggml-backend.h"
 #include "llama.h"
 #include "common.h"
 #include "train.h"
@@ -12,8 +13,6 @@
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
-
-static const size_t tensor_alignment = 32;
 
 struct my_llama_hparams {
     uint32_t n_vocab    = 32000;
@@ -128,7 +127,7 @@ struct my_llama_lora_layer {
 
 struct my_llama_lora {
     struct ggml_context * ctx = NULL;
-    std::vector<uint8_t> data;
+    ggml_backend_buffer_t data;
 
     my_llama_lora_hparams hparams;
 
@@ -372,63 +371,6 @@ static void set_param_lora(struct my_llama_lora * lora) {
     }
 }
 
-static void alloc_lora(struct ggml_allocr * alloc, struct my_llama_lora * lora) {
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b);
-    ggml_allocr_alloc(alloc, lora->norm_a);
-    ggml_allocr_alloc(alloc, lora->norm_b);
-    ggml_allocr_alloc(alloc, lora->output_a);
-    ggml_allocr_alloc(alloc, lora->output_b);
-    for (uint32_t i = 0; i < lora->layers.size(); ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b);
-        ggml_allocr_alloc(alloc, layer.wq_a);
-        ggml_allocr_alloc(alloc, layer.wq_b);
-        ggml_allocr_alloc(alloc, layer.wk_a);
-        ggml_allocr_alloc(alloc, layer.wk_b);
-        ggml_allocr_alloc(alloc, layer.wv_a);
-        ggml_allocr_alloc(alloc, layer.wv_b);
-        ggml_allocr_alloc(alloc, layer.wo_a);
-        ggml_allocr_alloc(alloc, layer.wo_b);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b);
-        ggml_allocr_alloc(alloc, layer.w1_a);
-        ggml_allocr_alloc(alloc, layer.w1_b);
-        ggml_allocr_alloc(alloc, layer.w2_a);
-        ggml_allocr_alloc(alloc, layer.w2_b);
-        ggml_allocr_alloc(alloc, layer.w3_a);
-        ggml_allocr_alloc(alloc, layer.w3_b);
-    }
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a->grad);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b->grad);
-    ggml_allocr_alloc(alloc, lora->norm_a->grad);
-    ggml_allocr_alloc(alloc, lora->norm_b->grad);
-    ggml_allocr_alloc(alloc, lora->output_a->grad);
-    ggml_allocr_alloc(alloc, lora->output_b->grad);
-    for (uint32_t i = 0; i < lora->layers.size(); ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.wq_a->grad);
-        ggml_allocr_alloc(alloc, layer.wq_b->grad);
-        ggml_allocr_alloc(alloc, layer.wk_a->grad);
-        ggml_allocr_alloc(alloc, layer.wk_b->grad);
-        ggml_allocr_alloc(alloc, layer.wv_a->grad);
-        ggml_allocr_alloc(alloc, layer.wv_b->grad);
-        ggml_allocr_alloc(alloc, layer.wo_a->grad);
-        ggml_allocr_alloc(alloc, layer.wo_b->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.w1_a->grad);
-        ggml_allocr_alloc(alloc, layer.w1_b->grad);
-        ggml_allocr_alloc(alloc, layer.w2_a->grad);
-        ggml_allocr_alloc(alloc, layer.w2_b->grad);
-        ggml_allocr_alloc(alloc, layer.w3_a->grad);
-        ggml_allocr_alloc(alloc, layer.w3_b->grad);
-    }
-}
-
 static void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora) {
     const auto & lparams = lora->hparams;
 
@@ -522,18 +464,8 @@ static void init_lora(const struct my_llama_model * model, struct my_llama_lora 
 
     set_param_lora(lora);
 
-    // measure data size
-    size_t size = 0;
-    for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
-        size += GGML_PAD(ggml_nbytes(t), tensor_alignment);
-    }
-
-    // allocate data
-    struct ggml_allocr * alloc = NULL;
-    lora->data.resize(size + tensor_alignment);
-    alloc = ggml_allocr_new(lora->data.data(), lora->data.size(), tensor_alignment);
-    alloc_lora(alloc, lora);
-    ggml_allocr_free(alloc);
+    // allocate data for lora tensors
+    lora->data = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_cpu_buffer_type());
 }
 
 static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, float std, float min, float max) {
@@ -579,7 +511,7 @@ static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, fl
 static struct ggml_tensor * llama_build_lora_finetune_graphs(
         struct my_llama_model * model,
         struct my_llama_lora  * lora,
-        struct ggml_allocr    * alloc,
+        ggml_gallocr_t          alloc,
         struct ggml_context   * ctx,
         struct ggml_cgraph    * gf,
         struct ggml_cgraph    * gb,
@@ -590,7 +522,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         const  int              n_tokens,
         const  int              n_batch,
         const  bool             enable_flash_attn,
-        const  bool             enable_checkpointing) {
+        const  bool             enable_checkpointing,
+        const  bool             measure_only) {
 
     ggml_set_scratch(ctx, { 0, 0, nullptr, });
     const int n_past = 0;
@@ -622,13 +555,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, N);
-    ggml_allocr_alloc(alloc, KQ_pos);
-    if (!ggml_allocr_is_measure(alloc)) {
-        int * data = (int *) KQ_pos->data;
-        for (int i = 0; i < N; ++i) {
-            data[i] = n_past + i;
-        }
-    }
+    ggml_set_input(KQ_pos);
 
     // rope has so much parameters that we make a custom function for it
     auto rope = [ctx, KQ_pos, n_rot, n_ctx, rope_freq_base, rope_freq_scale]
@@ -780,7 +707,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     // input gradient
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, 1.0f));
     GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
-    ggml_allocr_alloc(alloc, t36->grad);
+    ggml_set_input(t36->grad);
     // KQ_pos
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, 1.0f));
 
@@ -805,11 +732,23 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     // note: they will be freed in reverse order
     for (unsigned int i = 0; i < checkpoints.size(); ++i) {
         if (checkpoints[i]->data == NULL && checkpoints[i]->view_src == NULL) {
-            ggml_allocr_alloc(alloc, checkpoints[i]);
+            ggml_set_input(checkpoints[i]);
         }
     }
 
-    ggml_allocr_alloc_graph(alloc, gb);
+    if (measure_only) {
+        ggml_gallocr_reserve(alloc, gb);
+    } else {
+        ggml_gallocr_alloc_graph(alloc, gb);
+
+        // set KQ_pos
+        {
+            int * data = (int *) KQ_pos->data;
+            for (int i = 0; i < N; ++i) {
+                data[i] = n_past + i;
+            }
+        }
+    }
 
     // remove the additional nodes and leafs
     for (int i = n_leafs_before; i < gb->n_leafs; ++i) {
@@ -1663,7 +1602,7 @@ int main(int argc, char ** argv) {
     printf("%s: seen train_samples     %llu\n", __func__, (long long unsigned) train->train_samples);
     printf("%s: seen train_tokens      %llu\n", __func__, (long long unsigned) train->train_tokens);
     printf("%s: completed train_epochs %llu\n", __func__, (long long unsigned) train->train_epochs);
-    printf("%s: lora_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(lora.ctx) + lora.data.size()), (float) (ggml_used_mem(lora.ctx) + lora.data.size()) / (1024.0f*1024.0f));
+    printf("%s: lora_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(lora.ctx) + ggml_backend_buffer_get_size(lora.data)), (float) (ggml_used_mem(lora.ctx) + ggml_backend_buffer_get_size(lora.data)) / (1024.0f*1024.0f));
 
     if (params.only_write_lora) {
         save_train_files_data save_data;
@@ -1690,10 +1629,6 @@ int main(int argc, char ** argv) {
     int n_vocab  = model.hparams.n_vocab;
     int n_batch  = params.common.n_batch;
 
-
-    std::vector<uint8_t> mem_input_data;
-    std::vector<uint8_t> mem_compute_data;
-
     // context for input tensors without their data
     struct ggml_init_params ctx_input_params = {
         ggml_tensor_overhead() * 2, // mem_size
@@ -1706,17 +1641,11 @@ int main(int argc, char ** argv) {
     struct ggml_tensor * tokens_input  = ggml_new_tensor_2d(ctx_input, GGML_TYPE_I32, n_tokens, n_batch);
     struct ggml_tensor * target_probs  = ggml_new_tensor_3d(ctx_input, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
 
-    // measure required memory for input tensors
-    size_t max_input_size = GGML_PAD(ggml_nbytes(tokens_input), tensor_alignment) +
-                            GGML_PAD(ggml_nbytes(target_probs), tensor_alignment) +
-                            tensor_alignment;
-    printf("%s: input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
-
     // allocate input tensors
-    mem_input_data.resize(max_input_size);
-    ggml_allocr_t alloc_inps = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
-    ggml_allocr_alloc(alloc_inps, tokens_input);
-    ggml_allocr_alloc(alloc_inps, target_probs);
+    // measure required memory for input tensors
+    ggml_backend_buffer_t input_data = ggml_backend_alloc_ctx_tensors_from_buft(ctx_input, ggml_backend_cpu_buffer_type());
+    size_t max_input_size = ggml_backend_buffer_get_size(input_data);
+    printf("%s: input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
 
     // context for compute tensors without their data
     const size_t estimated_compute_size_wo_data = (
@@ -1743,7 +1672,7 @@ int main(int argc, char ** argv) {
     // find best evaluation order
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
-        ggml_allocr_t alloc = ggml_allocr_new_measure(tensor_alignment);
+        ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
         gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1756,14 +1685,15 @@ int main(int argc, char ** argv) {
             &logits, tokens_input, target_probs,
             n_tokens, n_batch,
             params.common.use_flash,
-            params.common.use_checkpointing
+            params.common.use_checkpointing,
+            true
         );
-        size_t max_compute_size = ggml_allocr_max_size(alloc) + tensor_alignment;
+        size_t max_compute_size = ggml_gallocr_get_buffer_size(alloc, 0); // FIXME: this will still allocate the buffer
         if (max_compute_size < best_compute_size) {
             best_compute_size = max_compute_size;
             best_order = gf->order;
         }
-        ggml_allocr_free(alloc);
+        ggml_gallocr_free(alloc);
         ggml_free(ctx_compute);
     }
     size_t max_compute_size = best_compute_size;
@@ -1774,9 +1704,8 @@ int main(int argc, char ** argv) {
         "invalid");
 
     // allocate compute tensors
-    mem_compute_data.resize(max_compute_size);
     ctx_compute = ggml_init(ctx_compute_params);
-    ggml_allocr_t alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
+    ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
     gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1789,11 +1718,9 @@ int main(int argc, char ** argv) {
         &logits, tokens_input, target_probs,
         n_tokens, n_batch,
         params.common.use_flash,
-        params.common.use_checkpointing
+        params.common.use_checkpointing,
+        false
     );
-    ggml_allocr_free(alloc);
-    ggml_allocr_free(alloc_inps);
-
 
     // tokenize data
     std::vector<llama_token> train_tokens;
@@ -1908,6 +1835,8 @@ int main(int argc, char ** argv) {
     ggml_free(ctx_work);
     ggml_free(ctx_compute);
     ggml_free(ctx_input);
+    ggml_gallocr_free(alloc);
+
 
     int64_t t1 = ggml_time_ms();
     printf("%s: total training time: ", __func__);

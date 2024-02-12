@@ -337,24 +337,14 @@ static bool apply_lora(struct ggml_tensor * tensor, struct lora_data * lora, int
     params.mem_buffer = NULL;
     params.no_alloc   = true;
     struct ggml_context * ctx = NULL;
-    struct ggml_allocr * alloc = NULL;
-    struct ggml_cgraph * gf = NULL;
+    struct ggml_gallocr * alloc = NULL;
+    struct ggml_cgraph  * gf = NULL;
 
     ctx   = ggml_init(params);
-    alloc = ggml_allocr_new_measure(tensor_alignment);
+    alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
     gf    = build_graph_lora(ctx, tensor, lora_a, lora_b, scaling);
-    size_t alloc_size = ggml_allocr_alloc_graph(alloc, gf);
-    ggml_allocr_free(alloc);
-    ggml_free(ctx);
 
-    static std::vector<uint8_t> data_compute;
-    data_compute.resize(alloc_size + tensor_alignment);
-
-    ctx   = ggml_init(params);
-    alloc = ggml_allocr_new(data_compute.data(), data_compute.size(), tensor_alignment);
-    gf    = build_graph_lora(ctx, tensor, lora_a, lora_b, scaling);
-    ggml_allocr_alloc_graph(alloc, gf);
-    ggml_allocr_free(alloc);
+    ggml_gallocr_alloc_graph(alloc, gf);
 
     struct ggml_cplan cplan = ggml_graph_plan(gf, n_threads);
     static std::vector<uint8_t> data_work;
@@ -363,6 +353,7 @@ static bool apply_lora(struct ggml_tensor * tensor, struct lora_data * lora, int
 
     ggml_graph_compute(gf, &cplan);
 
+    ggml_gallocr_free(alloc);
     ggml_free(ctx);
     return true;
 }

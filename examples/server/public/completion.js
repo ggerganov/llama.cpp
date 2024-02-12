@@ -195,7 +195,8 @@ export const llamaComplete = async (params, controller, callback) => {
 // Get the model info from the server. This is useful for getting the context window and so on.
 export const llamaModelInfo = async () => {
   if (!generation_settings) {
-    generation_settings = await fetch("/model.json").then(r => r.json());
+    const props = await fetch("/props").then(r => r.json());
+    generation_settings = props.default_generation_settings;
   }
   return generation_settings;
 }

@@ -22,6 +22,8 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
+from convert import HfVocab
+
 
 # check for any of the given keys in the dictionary and return the value of the first key found
 def get_key_opts(d, keys):
@@ -205,6 +207,10 @@ class Model:
             return OrionModel
         if model_architecture == "InternLM2ForCausalLM":
             return InternLM2Model
+        if model_architecture == "MiniCPMForCausalLM":
+            return MiniCPMModel
+        if model_architecture == "BertModel":
+            return BertModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -258,6 +264,10 @@ class Model:
             return gguf.MODEL_ARCH.ORION
         if arch == "InternLM2ForCausalLM":
             return gguf.MODEL_ARCH.INTERNLM2
+        if arch == "MiniCPMForCausalLM":
+            return gguf.MODEL_ARCH.MINICPM
+        if arch == "BertModel":
+            return gguf.MODEL_ARCH.BERT
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -393,6 +403,31 @@ class Model:
                     tokens.append(key.encode("utf-8"))
                     scores.append(-1000.0)
                     toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _set_vocab_hf(self):
+        path = self.dir_model
+        added_tokens_path = self.dir_model
+        vocab = HfVocab(
+            path, added_tokens_path if added_tokens_path.exists() else None
+        )
+        tokens = []
+        scores = []
+        toktypes = []
+
+        for text, score, toktype in vocab.all_tokens():
+            tokens.append(text)
+            scores.append(score)
+            toktypes.append(toktype)
+
+        assert len(tokens) == vocab.vocab_size
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_token_list(tokens)
@@ -1041,6 +1076,83 @@ class MixtralModel(Model):
         self._set_vocab_sentencepiece()
 
 
+class MiniCPMModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        self.gguf_writer.add_name("MiniCPM")
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def set_vocab(self):
+        self._set_vocab_hf()
+
+    def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
+        if n_kv_head is not None and n_head != n_kv_head:
+            n_head //= n_kv_head
+
+        return (
+            weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+            .swapaxes(1, 2)
+            .reshape(weights.shape)
+        )
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_head = self.hparams.get("num_attention_heads")
+        n_kv_head = self.hparams.get("num_key_value_heads")
+        for name, data_torch in self.get_tensors():
+            # we don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
+                continue
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            # HF models permute some of the tensors, so we need to undo that
+            if name.endswith(("q_proj.weight")):
+                data_torch = self._reverse_hf_permute(data_torch, n_head, n_head)
+            if name.endswith(("k_proj.weight")):
+                data_torch = self._reverse_hf_permute(data_torch, n_head, n_kv_head)
+
+            data = data_torch.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+
 class QwenModel(Model):
     @staticmethod
     def token_bytes_to_string(b):
@@ -1138,7 +1250,7 @@ class GPT2Model(Model):
 
         for name, data_torch in self.get_tensors():
             # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq", ".attn.bias")):
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq", ".attn.bias", ".attn.masked_bias")):
                 continue
 
             if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_proj.weight")):
@@ -1416,7 +1528,31 @@ class InternLM2Model(Model):
         self.gguf_writer.add_add_space_prefix(add_prefix)
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        old_eos = special_vocab.special_token_ids["eos"]
+        if "chat" in os.path.basename(self.dir_model.absolute()):
+            # For the chat model, we replace the eos with '<|im_end|>'.
+            special_vocab.special_token_ids["eos"] = self._try_get_sft_eos(tokenizer)
+            print(f"Replace eos:{old_eos} with a special token:{special_vocab.special_token_ids['eos']} \
+in chat mode so that the conversation can end normally.")
+
         special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _try_get_sft_eos(self, tokenizer):
+        unused_145_list = tokenizer.encode('[UNUSED_TOKEN_145]')
+        im_end_list = tokenizer.encode('<|im_end|>')
+        assert (len(unused_145_list) == 1) ^ (len(im_end_list) == 1)
+        if len(unused_145_list) == 1:
+            eos_token = unused_145_list[0]
+        if len(im_end_list) == 1:
+            eos_token = im_end_list[0]
+        return eos_token
+
+    def _hf_permute_qk(self, weights, n_head: int, n_head_kv: int):
+        if n_head_kv is not None and n_head != n_head_kv:
+            n_head = n_head_kv
+        return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+                .swapaxes(1, 2)
+                .reshape(weights.shape))
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name("InternLM2")
@@ -1486,14 +1622,105 @@ class InternLM2Model(Model):
                 qkv = data_torch
                 qkv = rearrange(qkv.T, " o (g n i) ->o g n i", g=num_groups, n=q_per_kv + 2, i=head_dim)
                 q, k, v = qkv[..., : q_per_kv, :], qkv[..., q_per_kv: q_per_kv + 1, :], qkv[..., q_per_kv + 1: q_per_kv + 2, :]
-                q = rearrange(q, " o g n i ->  o (g n i)").T
-                k = rearrange(k, " o g n i ->  o (g n i)").T
+                # The model weights of q and k equire additional reshape.
+                q = self._hf_permute_qk(rearrange(q, " o g n i ->  o (g n i)").T, num_heads, num_heads)
+                k = self._hf_permute_qk(rearrange(k, " o g n i ->  o (g n i)").T, num_heads, num_kv_heads)
                 v = rearrange(v, " o g n i ->  o (g n i)").T
                 self.post_write_tensors(tensor_map, f"model.layers.{bid}.attention.wq.weight", q)
                 self.post_write_tensors(tensor_map, f"model.layers.{bid}.attention.wk.weight", k)
                 self.post_write_tensors(tensor_map, f"model.layers.{bid}.attention.wv.weight", v)
             else:
                 self.post_write_tensors(tensor_map, name, data_torch)
+
+
+class BertModel(Model):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.block_count = self.hparams["num_hidden_layers"]
+
+    def set_gguf_parameters(self):
+        # TODO(cebtenzzre): merge with parent class
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_block_count(self.block_count)
+        self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
+        self.gguf_writer.add_causal_attention(False)
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def set_vocab(self):
+        path = self.dir_model
+        added_tokens_path = self.dir_model if self.dir_model.exists() else None
+
+        # use huggingface vocab to get all tokens
+        vocab = HfVocab(path, added_tokens_path)
+        tokens, scores, toktypes = zip(*vocab.all_tokens())
+        assert len(tokens) == vocab.vocab_size
+
+        # we need this to validate the size of the token_type embeddings
+        # though currently we are passing all zeros to the token_type embeddings
+        n_token_types = len(set(toktypes))
+        self.gguf_writer.add_token_type_count(n_token_types)
+
+        # convert to phantom space vocab
+        def phantom(tok, typ):
+            if tok.startswith(b"[") and tok.endswith(b"]"):
+                return tok
+            if tok.startswith(b"##"):
+                return tok[2:]
+            return b"\xe2\x96\x81" + tok
+        tokens = [phantom(t, y) for t, y in zip(tokens, toktypes)]
+
+        # set up bos and eos tokens (cls and sep)
+        self.gguf_writer.add_bos_token_id(vocab.tokenizer.cls_token_id)
+        self.gguf_writer.add_eos_token_id(vocab.tokenizer.sep_token_id)
+
+        # add vocab to gguf
+        self.gguf_writer.add_tokenizer_model("bert")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        # handle special tokens
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def write_tensors(self):
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
+        tensors = dict(self.get_tensors())
+        for name, data_torch in tensors.items():
+            # we are only using BERT for embeddings so we don't need the pooling layer
+            if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
+                continue  # we don't need these
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            data = data_torch.squeeze().numpy()
+            n_dims = len(data.shape)
+            new_dtype: type[np.floating[Any]]
+
+            if (
+                self.ftype == 1 and name.endswith(".weight") and n_dims == 2
+                and name != "embeddings.token_type_embeddings.weight"  # not used with get_rows, must be F32
+            ):
+                # if f16 desired, convert any float32 2-dim weight tensors to float16
+                new_dtype = np.float16
+            else:
+                # if f32 desired, convert any float16 to float32
+                new_dtype = np.float32
+
+            print(f"{new_name}, n_dims = {n_dims}, {data_torch.dtype} --> {new_dtype}")
+
+            if data.dtype != new_dtype:
+                data = data.astype(new_dtype)
+
+            self.gguf_writer.add_tensor(new_name, data)
 
 
 ###### CONVERSION LOGIC ######
