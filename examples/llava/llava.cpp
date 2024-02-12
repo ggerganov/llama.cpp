@@ -101,7 +101,7 @@ static bool handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_emb
                                                                 num_patches_per_side,
                                                                 num_patches_width,
                                                                 num_patches_height,
-                                                                size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip), 
+                                                                size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip),
                                                                 size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip) * num_patches_per_side,
                                                                 size_ele * num_patches_per_side * clip_n_mmproj_embd(ctx_clip) * num_patches_per_side * num_patches_width, 0);
     // ggml_tensor_printf(image_features_patchview,"image_features_patchview",__LINE__,false,false);
