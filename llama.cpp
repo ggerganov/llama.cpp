@@ -3230,6 +3230,16 @@ static void llm_load_vocab(
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
             } else if (tokenizer_name == "deepseek_llm") {
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKLLM;
+			} else if (tokenizer_name == "bert") {
+				vocab.type = LLAMA_VOCAB_TYPE_WPM;
+
+				// default special tokens
+				vocab.special_bos_id = 101;
+				vocab.special_eos_id = 102;
+				vocab.special_unk_id = 100;
+				vocab.special_sep_id = -1;
+				vocab.special_pad_id = -1;
+				vocab.add_space_prefix = false;
             } else {
                 LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
                 LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
@@ -3267,21 +3277,6 @@ static void llm_load_vocab(
             vocab.special_unk_id = -1;
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
-        } else if (tokenizer_name == "bert") {
-            vocab.type = LLAMA_VOCAB_TYPE_WPM;
-
-            // default special tokens
-            vocab.special_bos_id = 101;
-            vocab.special_eos_id = 102;
-            vocab.special_unk_id = 100;
-            vocab.special_sep_id = -1;
-            vocab.special_pad_id = -1;
-            vocab.add_space_prefix = false;
-        } else {
-            LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
-            LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
-
-            vocab.type = LLAMA_VOCAB_TYPE_SPM;
         }
     }
 
