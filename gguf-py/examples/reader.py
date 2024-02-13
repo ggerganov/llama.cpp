@@ -6,6 +6,7 @@ from gguf.gguf_reader import GGUFReader
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+
 def read_gguf_file(gguf_file_path):
     """
     Reads and prints key-value pairs and tensor information from a GGUF file in an improved format.
@@ -34,6 +35,7 @@ def read_gguf_file(gguf_file_path):
         size_str = str(tensor.n_elements)
         quantization_str = tensor.tensor_type.name
         print(tensor_info_format.format(tensor.name, shape_str, size_str, quantization_str))
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
