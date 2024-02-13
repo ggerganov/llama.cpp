@@ -50,9 +50,9 @@ struct my_llama_layer {
     struct ggml_tensor * ffn_norm;
 
     // ff
-    struct ggml_tensor * w1;
-    struct ggml_tensor * w2;
-    struct ggml_tensor * w3;
+    struct ggml_tensor * ffn_gate; // w1
+    struct ggml_tensor * ffn_down; // w2
+    struct ggml_tensor * ffn_up;   // w3
 };
 
 struct my_llama_model {
@@ -140,9 +140,9 @@ static void set_param_model(struct my_llama_model * model) {
         ggml_set_param(ctx, layer.wv);
         ggml_set_param(ctx, layer.wo);
         ggml_set_param(ctx, layer.ffn_norm);
-        ggml_set_param(ctx, layer.w1);
-        ggml_set_param(ctx, layer.w2);
-        ggml_set_param(ctx, layer.w3);
+        ggml_set_param(ctx, layer.ffn_gate);
+        ggml_set_param(ctx, layer.ffn_down);
+        ggml_set_param(ctx, layer.ffn_up);
     }
 }
 
@@ -198,9 +198,9 @@ static void init_model(struct my_llama_model * model) {
 
         layer.ffn_norm = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
 
-        layer.w1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
-        layer.w2 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32,   n_ff, n_embd);
-        layer.w3 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
+        layer.ffn_gate = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
+        layer.ffn_down = ggml_new_tensor_2d(ctx, GGML_TYPE_F32,   n_ff, n_embd);
+        layer.ffn_up   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
 
         ggml_set_name(layer.attention_norm, tni(LLM_TENSOR_ATTN_NORM, i));
 
@@ -211,9 +211,9 @@ static void init_model(struct my_llama_model * model) {
 
         ggml_set_name(layer.ffn_norm,       tni(LLM_TENSOR_FFN_NORM, i));
 
-        ggml_set_name(layer.w1,             tni(LLM_TENSOR_FFN_GATE, i));
-        ggml_set_name(layer.w2,             tni(LLM_TENSOR_FFN_DOWN, i));
-        ggml_set_name(layer.w3,             tni(LLM_TENSOR_FFN_UP, i));
+        ggml_set_name(layer.ffn_gate,       tni(LLM_TENSOR_FFN_GATE, i));
+        ggml_set_name(layer.ffn_down,       tni(LLM_TENSOR_FFN_DOWN, i));
+        ggml_set_name(layer.ffn_up,         tni(LLM_TENSOR_FFN_UP, i));
     }
 
     set_param_model(model);
@@ -244,9 +244,9 @@ static void randomize_model(struct my_llama_model * model, int seed, float mean,
 
         randomize_tensor_normal(layer.ffn_norm, rnd);
 
-        randomize_tensor_normal(layer.w1, rnd);
-        randomize_tensor_normal(layer.w2, rnd);
-        randomize_tensor_normal(layer.w3, rnd);
+        randomize_tensor_normal(layer.ffn_gate, rnd);
+        randomize_tensor_normal(layer.ffn_down, rnd);
+        randomize_tensor_normal(layer.ffn_up,   rnd);
     }
 
     free_random_normal_distribution(rnd);
@@ -356,11 +356,11 @@ static struct ggml_tensor * llama_build_train_graphs(
         struct ggml_tensor * t22 = ggml_rms_norm     (ctx, t21, f_norm_rms_eps);                    set_name(t22, "t22");     assert_shape_2d(t22, n_embd, N*n_batch);
         struct ggml_tensor * t23 = ggml_repeat       (ctx, layer.ffn_norm, t22);                    set_name(t23, "t23");     assert_shape_2d(t23, n_embd, N*n_batch);
         struct ggml_tensor * t24 = ggml_mul          (ctx, t23, t22);                               set_name(t24, "t24");     assert_shape_2d(t24, n_embd, N*n_batch);
-        struct ggml_tensor * t25 = ggml_mul_mat      (ctx, layer.w3, t24);                          set_name(t25, "t25");     assert_shape_2d(t25, n_ff, N*n_batch);
-        struct ggml_tensor * t26 = ggml_mul_mat      (ctx, layer.w1, t24);                          set_name(t26, "t26");     assert_shape_2d(t26, n_ff, N*n_batch);
+        struct ggml_tensor * t25 = ggml_mul_mat      (ctx, layer.ffn_up, t24);                      set_name(t25, "t25");     assert_shape_2d(t25, n_ff, N*n_batch);
+        struct ggml_tensor * t26 = ggml_mul_mat      (ctx, layer.ffn_gate, t24);                    set_name(t26, "t26");     assert_shape_2d(t26, n_ff, N*n_batch);
         struct ggml_tensor * t27 = ggml_silu         (ctx, t26);                                    set_name(t27, "t27");     assert_shape_2d(t27, n_ff, N*n_batch);
         struct ggml_tensor * t28 = ggml_mul          (ctx, t27, t25);                               set_name(t28, "t28");     assert_shape_2d(t28, n_ff, N*n_batch);
-        struct ggml_tensor * t29 = ggml_mul_mat      (ctx, layer.w2, t28);                          set_name(t29, "t29");     assert_shape_2d(t29, n_embd, N*n_batch);
+        struct ggml_tensor * t29 = ggml_mul_mat      (ctx, layer.ffn_down, t28);                    set_name(t29, "t29");     assert_shape_2d(t29, n_embd, N*n_batch);
         struct ggml_tensor * t30 = ggml_add          (ctx, t29, t21);                               set_name(t30, "t30");     assert_shape_2d(t30, n_embd, N*n_batch);
         cur = t30;
         checkpoints.push_back(cur);
@@ -521,9 +521,9 @@ static void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_contex
         copy_tensor_by_name(layer.wv,             f_ggml_ctx, tni(LLM_TENSOR_ATTN_V, i));
         copy_tensor_by_name(layer.wo,             f_ggml_ctx, tni(LLM_TENSOR_ATTN_OUT, i));
         copy_tensor_by_name(layer.ffn_norm,       f_ggml_ctx, tni(LLM_TENSOR_FFN_NORM, i));
-        copy_tensor_by_name(layer.w1,             f_ggml_ctx, tni(LLM_TENSOR_FFN_GATE, i));
-        copy_tensor_by_name(layer.w2,             f_ggml_ctx, tni(LLM_TENSOR_FFN_DOWN, i));
-        copy_tensor_by_name(layer.w3,             f_ggml_ctx, tni(LLM_TENSOR_FFN_UP, i));
+        copy_tensor_by_name(layer.ffn_gate,       f_ggml_ctx, tni(LLM_TENSOR_FFN_GATE, i));
+        copy_tensor_by_name(layer.ffn_down,       f_ggml_ctx, tni(LLM_TENSOR_FFN_DOWN, i));
+        copy_tensor_by_name(layer.ffn_up,         f_ggml_ctx, tni(LLM_TENSOR_FFN_UP, i));
     }
 }
 
@@ -664,9 +664,9 @@ static void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vo
         gguf_add_tensor(fctx, layer.wv);
         gguf_add_tensor(fctx, layer.wo);
         gguf_add_tensor(fctx, layer.ffn_norm);
-        gguf_add_tensor(fctx, layer.w1);
-        gguf_add_tensor(fctx, layer.w2);
-        gguf_add_tensor(fctx, layer.w3);
+        gguf_add_tensor(fctx, layer.ffn_gate);
+        gguf_add_tensor(fctx, layer.ffn_down);
+        gguf_add_tensor(fctx, layer.ffn_up);
     }
 }
 
@@ -915,9 +915,9 @@ static int64_t get_parameter_count(struct my_llama_model* model) {
         nx += ggml_nelements(layer.wv);
         nx += ggml_nelements(layer.wo);
         nx += ggml_nelements(layer.ffn_norm);
-        nx += ggml_nelements(layer.w1);
-        nx += ggml_nelements(layer.w2);
-        nx += ggml_nelements(layer.w3);
+        nx += ggml_nelements(layer.ffn_gate);
+        nx += ggml_nelements(layer.ffn_down);
+        nx += ggml_nelements(layer.ffn_up);
     }
     return nx;
 }
