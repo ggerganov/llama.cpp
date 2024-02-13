@@ -4384,9 +4384,21 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
 
         model.hparams.vocab_only = params.vocab_only;
 
-        llm_load_arch   (ml, model);
-        llm_load_hparams(ml, model);
-        llm_load_vocab  (ml, model);
+        try {
+            llm_load_arch(ml, model);
+        } catch(const std::exception & e) {
+            throw std::runtime_error("error loading model architecture: " + std::string(e.what()));
+        }
+        try {
+            llm_load_hparams(ml, model);
+        } catch(const std::exception & e) {
+            throw std::runtime_error("error loading model hyperparameters: " + std::string(e.what()));
+        }
+        try {
+            llm_load_vocab(ml, model);
+        } catch(const std::exception & e) {
+            throw std::runtime_error("error loading model vocabulary: " + std::string(e.what()));
+        }
 
         llm_load_print_meta(ml, model);
 
