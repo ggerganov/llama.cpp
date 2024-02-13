@@ -774,22 +774,37 @@ struct LLM_TN {
     llm_arch arch;
 
     std::string operator()(llm_tensor tensor) const {
+        if (LLM_TENSOR_NAMES[arch].find(tensor) == LLM_TENSOR_NAMES[arch].end()) {
+            return "__missing__";
+        }
         return LLM_TENSOR_NAMES[arch].at(tensor);
     }
 
     std::string operator()(llm_tensor tensor, const std::string & suffix) const {
+        if (LLM_TENSOR_NAMES[arch].find(tensor) == LLM_TENSOR_NAMES[arch].end()) {
+            return "__missing__";
+        }
         return LLM_TENSOR_NAMES[arch].at(tensor) + "." + suffix;
     }
 
     std::string operator()(llm_tensor tensor, int bid) const {
+        if (LLM_TENSOR_NAMES[arch].find(tensor) == LLM_TENSOR_NAMES[arch].end()) {
+            return "__missing__";
+        }
         return ::format(LLM_TENSOR_NAMES[arch].at(tensor).c_str(), bid);
     }
 
     std::string operator()(llm_tensor tensor, const std::string & suffix, int bid) const {
+        if (LLM_TENSOR_NAMES[arch].find(tensor) == LLM_TENSOR_NAMES[arch].end()) {
+            return "__missing__";
+        }
         return ::format(LLM_TENSOR_NAMES[arch].at(tensor).c_str(), bid) + "." + suffix;
     }
 
     std::string operator()(llm_tensor tensor, const std::string & suffix, int bid, int xid) const {
+        if (LLM_TENSOR_NAMES[arch].find(tensor) == LLM_TENSOR_NAMES[arch].end()) {
+            return "__missing__";
+        }
         return ::format(LLM_TENSOR_NAMES[arch].at(tensor).c_str(), bid, xid) + "." + suffix;
     }
 };
@@ -10249,6 +10264,7 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         }
         ++qs.i_ffn_up;
     }
+
     //    if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
     //}
     // IK: let's remove this, else Q2_K is almost the same as Q3_K_S
@@ -10308,19 +10324,19 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         // K-quants
         case LLAMA_FTYPE_MOSTLY_Q2_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q2_K:   quantized_type = GGML_TYPE_Q2_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q2_K:    quantized_type = GGML_TYPE_Q2_K;    break;
         case LLAMA_FTYPE_MOSTLY_Q3_K_XS:
         case LLAMA_FTYPE_MOSTLY_Q3_K_S:
         case LLAMA_FTYPE_MOSTLY_Q3_K_M:
-        case LLAMA_FTYPE_MOSTLY_Q3_K_L: quantized_type = GGML_TYPE_Q3_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q3_K_L:  quantized_type = GGML_TYPE_Q3_K;    break;
         case LLAMA_FTYPE_MOSTLY_Q4_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q4_K_M: quantized_type = GGML_TYPE_Q4_K; break;
+        case LLAMA_FTYPE_MOSTLY_Q4_K_M:  quantized_type = GGML_TYPE_Q4_K;    break;
         case LLAMA_FTYPE_MOSTLY_Q5_K_S:
-        case LLAMA_FTYPE_MOSTLY_Q5_K_M: quantized_type = GGML_TYPE_Q5_K; break;
-        case LLAMA_FTYPE_MOSTLY_Q6_K:   quantized_type = GGML_TYPE_Q6_K; break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_XXS:quantized_type = GGML_TYPE_IQ2_XXS; break;
-        case LLAMA_FTYPE_MOSTLY_IQ2_XS :quantized_type = GGML_TYPE_IQ2_XS;  break;
-        case LLAMA_FTYPE_MOSTLY_IQ3_XXS:quantized_type = GGML_TYPE_IQ3_XXS; break;
+        case LLAMA_FTYPE_MOSTLY_Q5_K_M:  quantized_type = GGML_TYPE_Q5_K;    break;
+        case LLAMA_FTYPE_MOSTLY_Q6_K:    quantized_type = GGML_TYPE_Q6_K;    break;
+        case LLAMA_FTYPE_MOSTLY_IQ2_XXS: quantized_type = GGML_TYPE_IQ2_XXS; break;
+        case LLAMA_FTYPE_MOSTLY_IQ2_XS:  quantized_type = GGML_TYPE_IQ2_XS;  break;
+        case LLAMA_FTYPE_MOSTLY_IQ3_XXS: quantized_type = GGML_TYPE_IQ3_XXS; break;
 
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
@@ -10450,7 +10466,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         quantize &= !params->only_copy;
 
         // do not quantize expert gating tensors
-        quantize &= name.find("ffn_gate_inp.weight") == std::string::npos;
+        quantize &= name != LLM_TN(model.arch)(LLM_TENSOR_FFN_GATE_INP, "weight");
+
+        // do not quantize positional embeddings and token types (BERT)
+        quantize &= name != LLM_TN(model.arch)(LLM_TENSOR_POS_EMBD,    "weight");
+        quantize &= name != LLM_TN(model.arch)(LLM_TENSOR_TOKEN_TYPES, "weight");
 
         enum ggml_type new_type;
         void * new_data;
