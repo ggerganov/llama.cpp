@@ -49,8 +49,12 @@ python ./convert.py ../llava-v1.5-7b
 
 Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` directory.
 
+## LLaVA 1.6
+
+- Use `llava-surgery-v2.py`
+
 ## TODO
 
-- [ ] Support non-CPU backend for the image encoding part.
+- [x] Support non-CPU backend for the image encoding part.
 - [ ] Support different sampling methods.
 - [ ] Support more model variants.
