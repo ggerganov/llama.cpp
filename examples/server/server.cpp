@@ -1737,6 +1737,8 @@ struct llama_server_context
                 {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
                     LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
+                    LOG_ERROR("KV cache is full - try increasing it via the context size", {{"ctx-size", params.n_ctx}});
+                    kv_cache_clear();
                     return false;
                 }
 
