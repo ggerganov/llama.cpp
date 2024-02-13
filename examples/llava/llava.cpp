@@ -26,6 +26,11 @@ struct clip_image_f32 {
     std::vector<float> buf;
 };
 
+struct clip_image_grid_shape {
+    int first;
+    int second;
+};
+
 /**
  * Selects the best resolution from a list of possible resolutions based on the original size.
  *
@@ -344,7 +349,7 @@ bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_
     return true;
 }
 
-LLAVA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length) {
+struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length) {
     clip_image_u8 * img = clip_image_u8_init();
     if (!clip_image_load_from_bytes(image_bytes, image_bytes_length, img)) {
         clip_image_u8_free(img);
@@ -401,7 +406,7 @@ static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long 
     return true;
 }
 
-LLAVA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx * ctx_clip, int n_threads, const char * image_path) {
+struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx * ctx_clip, int n_threads, const char * image_path) {
     unsigned char* image_bytes;
     long image_bytes_length;
     auto loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
@@ -416,7 +421,7 @@ LLAVA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct
     return embed;
 }
 
-LLAVA_API void llava_image_embed_free(struct llava_image_embed * embed) {
+void llava_image_embed_free(struct llava_image_embed * embed) {
     free(embed->embed);
     free(embed);
 }
