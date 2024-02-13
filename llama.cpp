@@ -7798,7 +7798,7 @@ private:
         bool collecting_numeric = false;
         bool collecting_letter = false;
         bool collecting_special = false;
-        bool collecting_whitespace_lookahead = false;
+        bool collecting_whitespace = false;
         bool collecting = false;
 
         std::vector<std::string> text_utf;
