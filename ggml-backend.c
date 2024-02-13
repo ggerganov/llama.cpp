@@ -219,6 +219,10 @@ GGML_CALL void ggml_backend_tensor_set(struct ggml_tensor * tensor, const void *
     GGML_ASSERT(buf != NULL && "tensor buffer not set");
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
 
+    if (!size) {
+        return;
+    }
+
     tensor->buffer->iface.set_tensor(buf, tensor, data, offset, size);
 }
 
@@ -228,6 +232,10 @@ GGML_CALL void ggml_backend_tensor_get(const struct ggml_tensor * tensor, void *
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
     GGML_ASSERT(tensor->buffer != NULL && "tensor buffer not set");
     GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
+
+    if (!size) {
+        return;
+    }
 
     tensor->buffer->iface.get_tensor(buf, tensor, data, offset, size);
 }
