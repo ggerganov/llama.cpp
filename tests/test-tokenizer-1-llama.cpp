@@ -4,13 +4,13 @@
 #include "console.h"
 
 #include <cassert>
+#include <codecvt>
 #include <cstdio>
 #include <cstring>
-#include <string>
-#include <codecvt>
-#include <map>
-#include <vector>
 #include <locale>
+#include <string>
+#include <thread>
+#include <vector>
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -72,26 +72,33 @@ int main(int argc, char **argv) {
         }
     }
 
-    for (uint32_t cp = 0x0000; cp < 0xffff; ++cp) {
-        if (cp < 0xd800 || cp > 0xdfff) {
-            std::string str = codepoint_to_utf8(cp);
-            std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
-            std::string check = llama_detokenize_spm(ctx, tokens);
-            if (cp != 9601 && str != check) {
-                fprintf(stderr, "%s : error: codepoint %d detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
-                    __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
-                return 3;
-            }
+    // unicode
+    {
+        const int nthread = std::thread::hardware_concurrency();
+
+        std::vector<std::thread> threads(nthread);
+
+        for (int i = 0; i < nthread; ++i) {
+            threads[i] = std::thread([i, nthread, ctx]() {
+                for (uint32_t cp = i; cp < 0x0010ffff; cp += nthread) {
+                    if (cp >= 0xd800 && cp <= 0xdfff) {
+                        continue;
+                    }
+
+                    std::string str = codepoint_to_utf8(cp);
+                    std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
+                    std::string check = llama_detokenize_spm(ctx, tokens);
+                    if (cp != 9601 && str != check) {
+                        fprintf(stderr, "error: codepoint %x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
+                                cp, check.c_str(), check.length(), str.c_str(), str.length());
+                        std::exit(3);
+                    }
+                }
+            });
         }
-    }
-    for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
-        std::string str = codepoint_to_utf8(cp);
-        std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
-        std::string check = llama_detokenize_spm(ctx, tokens);
-        if (str != check) {
-            fprintf(stderr, "%s : error: codepoint %d detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
-                __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
-            return 4;
+
+        for (auto & t : threads) {
+            t.join();
         }
     }
 

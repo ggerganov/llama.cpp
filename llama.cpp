@@ -7782,7 +7782,7 @@ struct llm_bigram_spm {
 };
 
 struct llm_tokenizer_spm {
-    llm_tokenizer_spm(const llama_vocab & vocab): vocab(vocab) {}
+    llm_tokenizer_spm(const llama_vocab & vocab) : vocab(vocab) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         // split string into utf8 chars
@@ -7857,6 +7857,7 @@ private:
 
         if (p == rev_merge.end()) {
             // output any symbols that did not form tokens as bytes.
+            output.reserve(output.size() + symbol.n);
             for (int j = 0; j < (int)symbol.n; ++j) {
                 llama_vocab::id token_id = llama_byte_to_token(vocab, symbol.text[j]);
                 output.push_back(token_id);
@@ -8419,17 +8420,18 @@ struct fragment_buffer_variant {
         token(_token),
         raw_text(_dummy),
         offset(0),
-        length(0){}
+        length(0) {}
+
     fragment_buffer_variant(const std::string & _raw_text, int64_t _offset, int64_t _length)
     :
         type(FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT),
-        token((llama_vocab::id)-1),
+        token((llama_vocab::id) - 1),
         raw_text(_raw_text),
         offset(_offset),
         length(_length){
-            GGML_ASSERT( _offset >= 0 );
-            GGML_ASSERT( _length >= 1 );
-            GGML_ASSERT( offset + length <= raw_text.length() );
+            GGML_ASSERT(_offset >= 0);
+            GGML_ASSERT(_length >= 1);
+            GGML_ASSERT(offset + length <= raw_text.length());
         }
 
     const FRAGMENT_BUFFER_VARIANT_TYPE type;
@@ -8553,14 +8555,14 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
     }
 
     std::forward_list<fragment_buffer_variant> fragment_buffer;
-    fragment_buffer.emplace_front( raw_text, 0, raw_text.length() );
+    fragment_buffer.emplace_front(raw_text, 0, raw_text.length());
 
-    if (special) tokenizer_st_partition( vocab, fragment_buffer );
+    if (special) tokenizer_st_partition(vocab, fragment_buffer);
 
     switch (vocab.type) {
         case LLAMA_VOCAB_TYPE_SPM:
             {
-                for (const auto & fragment: fragment_buffer) {
+                for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         // without adding this leading whitespace, we do not get the same results as the original tokenizer
 
@@ -8588,7 +8590,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
-                for (const auto & fragment: fragment_buffer) {
+                for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
@@ -8604,7 +8606,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
             } break;
         case LLAMA_VOCAB_TYPE_WPM:
             {
-                for (const auto & fragment: fragment_buffer) {
+                for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
