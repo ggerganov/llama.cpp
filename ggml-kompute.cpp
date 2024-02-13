@@ -1805,10 +1805,6 @@ static void * ggml_backend_kompute_buffer_get_base(ggml_backend_buffer_t buffer)
 static void ggml_backend_kompute_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     GGML_UNUSED(buffer);
 
-    if (!size) {
-        return;
-    }
-
     const auto res = ggml_vk_get_tensor(tensor);
     GGML_ASSERT(res);
 
@@ -1820,9 +1816,6 @@ static void ggml_backend_kompute_buffer_set_tensor(ggml_backend_buffer_t buffer,
 static void ggml_backend_kompute_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     GGML_UNUSED(buffer);
 
-    if (!size) {
-        return;
-    }
     const auto res = ggml_vk_get_tensor(tensor);
     GGML_ASSERT(res);
 
