@@ -3314,7 +3314,12 @@ static void llm_load_vocab(
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
-        vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
+        try {
+            vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
+        } catch (const std::exception & e) {
+            LLAMA_LOG_WARN("%s: SPM vocabulary, but newline token not found: %s! Using special_pad_id instead.", __func__, e.what());
+            vocab.linefeed_id = vocab.special_pad_id;
+        }
     } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
         vocab.linefeed_id = vocab.special_pad_id;
     } else {
