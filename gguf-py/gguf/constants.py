@@ -50,6 +50,7 @@ class Keys:
         VALUE_LENGTH      = "{arch}.attention.value_length"
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
+        CAUSAL            = "{arch}.attention.causal"
 
     class Rope:
         DIMENSION_COUNT      = "{arch}.rope.dimension_count"
@@ -60,22 +61,23 @@ class Keys:
         SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
 
     class Tokenizer:
-        MODEL         = "tokenizer.ggml.model"
-        LIST          = "tokenizer.ggml.tokens"
-        TOKEN_TYPE    = "tokenizer.ggml.token_type"
-        SCORES        = "tokenizer.ggml.scores"
-        MERGES        = "tokenizer.ggml.merges"
-        BOS_ID        = "tokenizer.ggml.bos_token_id"
-        EOS_ID        = "tokenizer.ggml.eos_token_id"
-        UNK_ID        = "tokenizer.ggml.unknown_token_id"
-        SEP_ID        = "tokenizer.ggml.seperator_token_id"
-        PAD_ID        = "tokenizer.ggml.padding_token_id"
-        ADD_BOS       = "tokenizer.ggml.add_bos_token"
-        ADD_EOS       = "tokenizer.ggml.add_eos_token"
-        ADD_PREFIX    = "tokenizer.ggml.add_space_prefix"
-        HF_JSON       = "tokenizer.huggingface.json"
-        RWKV          = "tokenizer.rwkv.world"
-        CHAT_TEMPLATE = "tokenizer.chat_template"
+        MODEL            = "tokenizer.ggml.model"
+        LIST             = "tokenizer.ggml.tokens"
+        TOKEN_TYPE       = "tokenizer.ggml.token_type"
+        TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # for BERT-style token types
+        SCORES           = "tokenizer.ggml.scores"
+        MERGES           = "tokenizer.ggml.merges"
+        BOS_ID           = "tokenizer.ggml.bos_token_id"
+        EOS_ID           = "tokenizer.ggml.eos_token_id"
+        UNK_ID           = "tokenizer.ggml.unknown_token_id"
+        SEP_ID           = "tokenizer.ggml.seperator_token_id"
+        PAD_ID           = "tokenizer.ggml.padding_token_id"
+        ADD_BOS          = "tokenizer.ggml.add_bos_token"
+        ADD_EOS          = "tokenizer.ggml.add_eos_token"
+        ADD_PREFIX       = "tokenizer.ggml.add_space_prefix"
+        HF_JSON          = "tokenizer.huggingface.json"
+        RWKV             = "tokenizer.rwkv.world"
+        CHAT_TEMPLATE    = "tokenizer.chat_template"
 
 
 #
@@ -122,6 +124,7 @@ class MODEL_TENSOR(IntEnum):
     ATTN_OUT        = auto()
     ATTN_NORM       = auto()
     ATTN_NORM_2     = auto()
+    ATTN_OUT_NORM   = auto()
     ATTN_ROT_EMBD   = auto()
     FFN_GATE_INP    = auto()
     FFN_NORM        = auto()
@@ -134,6 +137,7 @@ class MODEL_TENSOR(IntEnum):
     FFN_UP_EXP      = auto()
     ATTN_Q_NORM     = auto()
     ATTN_K_NORM     = auto()
+    LAYER_OUT_NORM  = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -178,6 +182,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_ROT_EMBD:   "blk.{bid}.attn_rot_embd",
     MODEL_TENSOR.ATTN_Q_NORM:     "blk.{bid}.attn_q_norm",
     MODEL_TENSOR.ATTN_K_NORM:     "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.ATTN_OUT_NORM:   "blk.{bid}.attn_output_norm",
     MODEL_TENSOR.FFN_GATE_INP:    "blk.{bid}.ffn_gate_inp",
     MODEL_TENSOR.FFN_NORM:        "blk.{bid}.ffn_norm",
     MODEL_TENSOR.FFN_GATE:        "blk.{bid}.ffn_gate",
@@ -187,6 +192,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_GATE_EXP:    "blk.{bid}.ffn_gate.{xid}",
     MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down.{xid}",
     MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up.{xid}",
+    MODEL_TENSOR.LAYER_OUT_NORM:  "blk.{bid}.layer_output_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -262,17 +268,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     ],
     MODEL_ARCH.BERT: [
         MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.TOKEN_TYPES,
         MODEL_TENSOR.POS_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
-        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_OUT_NORM,
         MODEL_TENSOR.ATTN_Q,
         MODEL_TENSOR.ATTN_K,
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
-        MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.LAYER_OUT_NORM,
     ],
     MODEL_ARCH.MPT: [
         MODEL_TENSOR.TOKEN_EMBD,

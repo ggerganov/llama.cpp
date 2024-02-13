@@ -83,8 +83,9 @@ extern "C" {
 
     GGML_API ggml_backend_t ggml_backend_cpu_init(void);
 
-    GGML_API GGML_CALL bool ggml_backend_is_cpu           (ggml_backend_t backend);
-    GGML_API           void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads);
+    GGML_API GGML_CALL bool ggml_backend_is_cpu                (ggml_backend_t backend);
+    GGML_API           void ggml_backend_cpu_set_n_threads     (ggml_backend_t backend_cpu, int n_threads);
+    GGML_API           void ggml_backend_cpu_set_abort_callback(ggml_backend_t backend_cpu, ggml_abort_callback abort_callback, void * abort_callback_data);
 
     // Create a backend buffer from an existing pointer
     GGML_API GGML_CALL ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size);
@@ -129,11 +130,7 @@ extern "C" {
 
         // in build_graph:
         build_graph(...) {
-            // allocating tensors in a specific backend (optional, recommended: pre-allocate inputs in a different buffer)
-            alloc_cpu = ggml_backend_sched_get_allocr(sched, backend_cpu);
-            ggml_allocr_alloc(alloc_cpu, tensor);
-
-            // manually assigning nodes to a backend (optional, shouldn't be needed in most cases)
+            // manually assign nodes to a backend (optional, should not be needed in most cases)
             struct ggml_tensor * node = ggml_mul_mat(ctx, ...);
             ggml_backend_sched_set_node_backend(sched, node, backend_gpu);
         }
@@ -163,20 +160,19 @@ extern "C" {
     GGML_API ggml_backend_sched_t  ggml_backend_sched_new(ggml_backend_t * backends, ggml_backend_buffer_type_t * bufts, int n_backends, size_t graph_size);
     GGML_API void                  ggml_backend_sched_free(ggml_backend_sched_t sched);
     // Initialize backend buffers from a measure graph
-    GGML_API void                  ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgraph * measure_graph);
+    GGML_API bool                  ggml_backend_sched_reserve(ggml_backend_sched_t sched, struct ggml_cgraph * measure_graph);
     // Get the number of splits of the last graph
     GGML_API int                   ggml_backend_sched_get_n_splits(ggml_backend_sched_t sched);
 
-    GGML_API ggml_tallocr_t        ggml_backend_sched_get_tallocr(ggml_backend_sched_t sched, ggml_backend_t backend);
-    GGML_API ggml_backend_buffer_t ggml_backend_sched_get_buffer (ggml_backend_sched_t sched, ggml_backend_t backend);
+    GGML_API size_t                ggml_backend_sched_get_buffer_size(ggml_backend_sched_t sched, ggml_backend_t backend);
 
     GGML_API void                  ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node, ggml_backend_t backend);
     GGML_API ggml_backend_t        ggml_backend_sched_get_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node);
 
     // Allocate and compute graph on the backend scheduler
-    GGML_API void                  ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
+    GGML_API bool                  ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
 
-    // Reset all assignments and allocators - must be called before using the sched allocators to allocate inputs
+    // Reset all assignments and allocators - must be called before changing the node backends
     GGML_API void                  ggml_backend_sched_reset(ggml_backend_sched_t sched);
 
     // Set a callback to be called for each resulting node during graph compute

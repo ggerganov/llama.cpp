@@ -87,7 +87,17 @@ int main(int argc, char ** argv) {
     }
 
     const int n_embd = llama_n_embd(model);
-    const auto * embeddings = llama_get_embeddings(ctx);
+    auto * embeddings = llama_get_embeddings(ctx);
+
+    // l2-normalize embeddings
+    float norm = 0;
+    for (int i = 0; i < n_embd; i++) {
+        norm += embeddings[i] * embeddings[i];
+    }
+    norm = sqrt(norm);
+    for (int i = 0; i < n_embd; i++) {
+        embeddings[i] /= norm;
+    }
 
     for (int i = 0; i < n_embd; i++) {
         printf("%f ", embeddings[i]);
