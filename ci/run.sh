@@ -633,9 +633,10 @@ ret=0
 
 test $ret -eq 0 && gg_run ctest_debug
 test $ret -eq 0 && gg_run ctest_release
-test $ret -eq 0 && gg_run embd_bge_small
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
+    test $ret -eq 0 && gg_run embd_bge_small
+
     if [ -z ${GG_BUILD_VRAM_GB} ] || [ ${GG_BUILD_VRAM_GB} -ge 8 ]; then
         if [ -z ${GG_BUILD_CUDA} ]; then
             test $ret -eq 0 && gg_run open_llama_3b_v2
