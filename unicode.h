@@ -399,8 +399,7 @@ static int codepoint_type(uint32_t cp) {
 static int codepoint_type(const std::string & utf8) {
     if (utf8.length() == 0)
         return CODEPOINT_TYPE_UNIDENTIFIED;
-    size_t offset = 0;
-    return codepoint_type(codepoint_from_utf8(utf8, offset));
+    return codepoint_type(codepoints_from_utf8(utf8).back());
 }
 
 static std::unordered_map<uint8_t, std::string> bytes_to_unicode_map_bpe() {
