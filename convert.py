@@ -1195,7 +1195,9 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     for name, lazy_tensor in model.items():
         tensor_type, name_new = tmap.get_type_and_name(name, try_suffixes = (".weight", ".bias")) or (None, None)
         if name_new is None:
-            raise Exception(f"Unexpected tensor name: {name}")
+            #raise Exception(f"Unexpected tensor name: {name}")
+            print(f"Unexpected tensor name: {name} - skipping")
+            continue
 
         if tensor_type in should_skip:
             print(f"skipping tensor {name_new}")
