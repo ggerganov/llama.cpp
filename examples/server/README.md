@@ -137,6 +137,10 @@ node index.js
 
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
 
+    `dynatemp_range`: Dynamic temperature range (default: 0.0, 0.0 = disabled).
+
+    `dynatemp_exponent`: Dynamic temperature exponent (default: 1.0).
+
     `top_k`: Limit the next token selection to the K most probable tokens (default: 40).
 
     `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.95).
@@ -181,7 +185,7 @@ node index.js
 
     `ignore_eos`: Ignore end of stream token and continue generating (default: false).
 
-    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
+    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. (default: []).
 
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
 
@@ -264,7 +268,23 @@ Notice that each `probs` is an array of length `n_probs`.
 
     It also accepts all the options of `/completion` except `stream` and `prompt`.
 
-- **GET** `/props`: Return the required assistant name and anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
+- **GET** `/props`: Return current server settings.
+
+### Result JSON
+
+```json
+{
+  "assistant_name": "",
+  "user_name": "",
+  "default_generation_settings": { ... },
+  "total_slots": 1
+}
+```
+
+- `assistant_name` - the required assistant name to generate the prompt in case you have specified a system prompt for all slots.
+- `user_name` - the required anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
+- `default_generation_settings` - the default generation settings for the `/completion` endpoint, has the same fields as the `generation_settings` response object from the `/completion` endpoint.
+- `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
 
 - **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint. Compared to `api_like_OAI.py` this API implementation does not require a wrapper to be served.
 

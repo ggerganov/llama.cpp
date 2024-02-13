@@ -61,6 +61,7 @@ extern "C" {
     enum llama_vocab_type {
         LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
         LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
+        LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
     };
 
     enum llama_token_type {
@@ -213,7 +214,7 @@ extern "C" {
         uint32_t n_batch;           // prompt processing maximum batch size
         uint32_t n_threads;         // number of threads to use for generation
         uint32_t n_threads_batch;   // number of threads to use for batch processing
-        int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
+        int32_t  rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -235,6 +236,7 @@ extern "C" {
         bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embedding;   // embedding mode only
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
+        bool do_pooling;  // whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
     };
 
     // model quantization parameters
@@ -626,6 +628,10 @@ extern "C" {
     // Get the embeddings for the input
     // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
+
+    // Get the embeddings for the ith sequence
+    // llama_get_embeddings(ctx) + i*n_embd
+    LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
 
     //
     // Vocab

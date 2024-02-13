@@ -184,6 +184,47 @@ jobs:
           cmake -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx ..
           cmake --build . --config Release -j $(nproc)
 
+  ubuntu-22-cmake-sycl-fp16:
+    runs-on: ubuntu-22.04
+
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: add oneAPI to apt
+        shell: bash
+        run: |
+          cd /tmp
+          wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          rm GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
+
+      - name: install oneAPI dpcpp compiler
+        shell: bash
+        run: |
+          sudo apt update
+          sudo apt install intel-oneapi-compiler-dpcpp-cpp
+
+      - name: install oneAPI MKL library
+        shell: bash
+        run: |
+          sudo apt install intel-oneapi-mkl-devel
+
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Build
+        id: cmake_build
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          mkdir build
+          cd build
+          cmake -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON ..
+          cmake --build . --config Release -j $(nproc)
+
   # TODO: build with LLAMA_NO_METAL because test-backend-ops fail on "Apple Paravirtual device" and I don't know
   #       how to debug it.
   #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7131777249/job/19420981052#step:5:1124

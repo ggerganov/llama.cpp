@@ -457,14 +457,14 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
     std::ofstream logits_stream;
     if (!params.logits_file.empty()) {
-        logits_stream.open(params.logits_file.c_str());
+        logits_stream.open(params.logits_file.c_str(), std::ios::binary);
         if (!logits_stream.is_open()) {
             fprintf(stderr, "%s: failed to open %s for writing\n", __func__, params.logits_file.c_str());
             return {};
         }
         fprintf(stderr, "%s: saving all logits to %s\n", __func__, params.logits_file.c_str());
         logits_stream.write("_logits_", 8);
-        logits_stream.write((const char *)&n_ctx, sizeof(n_ctx));
+        logits_stream.write(reinterpret_cast<const char *>(&n_ctx), sizeof(n_ctx));
     }
 
     auto tim1 = std::chrono::high_resolution_clock::now();
@@ -881,7 +881,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             size_t li = hs_cur.common_prefix;
             for (int s = 0; s < 4; ++s) {
                 for (size_t j = hs_cur.common_prefix; j < hs_cur.seq_tokens[s].size() - 1; j++) {
-                    eval_pairs.push_back(std::make_pair(hs_cur.i_batch + li++, hs_cur.seq_tokens[s][j + 1]));
+                    eval_pairs.emplace_back(hs_cur.i_batch + li++, hs_cur.seq_tokens[s][j + 1]);
                 }
                 ++li;
             }
@@ -1159,13 +1159,13 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             const int last_1st = task.seq_tokens[0].size() - n_base1 > 1 ? 1 : 0;
             size_t li = n_base1 - 1;
             for (size_t j = n_base1-1; j < task.seq_tokens[0].size()-1-last_1st; ++j) {
-                eval_pairs.push_back(std::make_pair(task.i_batch + li++, task.seq_tokens[0][j+1]));
+                eval_pairs.emplace_back(task.i_batch + li++, task.seq_tokens[0][j+1]);
             }
             const auto& n_base2 = skip_choice ? task.n_base2 : task.common_prefix;
             const int last_2nd = task.seq_tokens[1].size() - n_base2 > 1 ? 1 : 0;
             li = task.seq_tokens[0].size() - task.common_prefix + n_base2 - 1;
             for (size_t j = n_base2-1; j < task.seq_tokens[1].size()-1-last_2nd; ++j) {
-                eval_pairs.push_back(std::make_pair(task.i_batch + li++, task.seq_tokens[1][j+1]));
+                eval_pairs.emplace_back(task.i_batch + li++, task.seq_tokens[1][j+1]);
             }
         }
         compute_logprobs(batch_logits.data(), n_vocab, workers, eval_pairs, eval_results);
@@ -1524,7 +1524,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
             size_t li = cur_task.common_prefix;
             for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
                 for (size_t j = cur_task.common_prefix; j < cur_task.seq_tokens[s].size() - 1; j++) {
-                    eval_pairs.push_back(std::make_pair(cur_task.i_batch + li++, cur_task.seq_tokens[s][j + 1]));
+                    eval_pairs.emplace_back(cur_task.i_batch + li++, cur_task.seq_tokens[s][j + 1]);
                 }
                 ++li;
             }

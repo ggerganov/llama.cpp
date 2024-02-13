@@ -208,13 +208,13 @@ int main(int argc, char ** argv) {
             }
         } else if (strcmp(argv[arg_idx], "--include-weights") == 0) {
             if (arg_idx < argc-1) {
-                included_weights.push_back(argv[++arg_idx]);
+                included_weights.emplace_back(argv[++arg_idx]);
             } else {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--exclude-weights") == 0) {
             if (arg_idx < argc-1) {
-                excluded_weights.push_back(argv[++arg_idx]);
+                excluded_weights.emplace_back(argv[++arg_idx]);
             } else {
                 usage(argv[0]);
             }

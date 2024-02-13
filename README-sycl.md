@@ -1,22 +1,15 @@
 # llama.cpp for SYCL
 
-[Background](#background)
-
-[OS](#os)
-
-[Intel GPU](#intel-gpu)
-
-[Linux](#linux)
-
-[Windows](#windows)
-
-[Environment Variable](#environment-variable)
-
-[Known Issue](#known-issue)
-
-[Q&A](#q&a)
-
-[Todo](#todo)
+- [Background](#background)
+- [OS](#os)
+- [Intel GPU](#intel-gpu)
+- [Docker](#docker)
+- [Linux](#linux)
+- [Windows](#windows)
+- [Environment Variable](#environment-variable)
+- [Known Issue](#known-issue)
+- [Q&A](#q&a)
+- [Todo](#todo)
 
 ## Background
 
@@ -36,11 +29,13 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 
 |OS|Status|Verified|
 |-|-|-|
-|Linux|Support|Ubuntu 22.04|
+|Linux|Support|Ubuntu 22.04, Fedora Silverblue 39|
 |Windows|Support|Windows 11|
 
 
 ## Intel GPU
+
+### Verified
 
 |Intel GPU| Status | Verified Model|
 |-|-|-|
@@ -48,8 +43,51 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 |Intel Data Center Flex Series| Support| Flex 170|
 |Intel Arc Series| Support| Arc 770, 730M|
 |Intel built-in Arc GPU| Support| built-in Arc GPU in Meteor Lake|
-|Intel iGPU| Support| iGPU in i5-1250P, i7-1165G7|
+|Intel iGPU| Support| iGPU in i5-1250P, i7-1260P, i7-1165G7|
 
+Note: If the EUs (Execution Unit) in iGPU is less than 80, the inference speed will be too slow to use.
+
+### Memory
+
+The memory is a limitation to run LLM on GPUs.
+
+When run llama.cpp, there is print log to show the applied memory on GPU. You could know how much memory to be used in your case. Like `llm_load_tensors:            buffer size =  3577.56 MiB`.
+
+For iGPU, please make sure the shared memory from host memory is enough. For llama-2-7b.Q4_0, recommend the host memory is 8GB+.
+
+For dGPU, please make sure the device memory is enough. For llama-2-7b.Q4_0, recommend the device memory is 4GB+.
+
+## Docker
+
+Note:
+- Only docker on Linux is tested. Docker on WSL may not work.
+- You may need to install Intel GPU driver on the host machine (See the [Linux](#linux) section to know how to do that)
+
+### Build the image
+
+You can choose between **F16** and **F32** build. F16 is faster for long-prompt inference.
+
+
+```sh
+# For F16:
+#docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=ON" -f .devops/main-intel.Dockerfile .
+
+# Or, for F32:
+docker build -t llama-cpp-sycl -f .devops/main-intel.Dockerfile .
+
+# Note: you can also use the ".devops/main-server.Dockerfile", which compiles the "server" example
+```
+
+### Run
+
+```sh
+# Firstly, find all the DRI cards:
+ls -la /dev/dri
+# Then, pick the card that you want to use.
+
+# For example with "/dev/dri/card1"
+docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-sycl -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
+```
 
 ## Linux
 
@@ -63,7 +101,7 @@ Note: for iGPU, please install the client GPU driver.
 
 b. Add user to group: video, render.
 
-```
+```sh
 sudo usermod -aG render username
 sudo usermod -aG video username
 ```
@@ -72,7 +110,7 @@ Note: re-login to enable it.
 
 c. Check
 
-```
+```sh
 sudo apt install clinfo
 sudo clinfo -l
 ```
@@ -90,7 +128,6 @@ Platform #0: Intel(R) OpenCL HD Graphics
 
 2. Install Intel® oneAPI Base toolkit.
 
-
 a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html).
 
 Recommend to install to default folder: **/opt/intel/oneapi**.
@@ -99,13 +136,13 @@ Following guide use the default folder as example. If you use other folder, plea
 
 b. Check
 
-```
+```sh
 source /opt/intel/oneapi/setvars.sh
 
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU is present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -118,21 +155,25 @@ Output (example):
 
 2. Build locally:
 
-```
+Note:
+- You can choose between **F16** and **F32** build. F16 is faster for long-prompt inference.
+- By default, it will build for all binary files. It will take more time. To reduce the time, we recommend to build for **example/main** only.
+
+```sh
 mkdir -p build
 cd build
 source /opt/intel/oneapi/setvars.sh
 
-#for FP16
-#cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON # faster for long-prompt inference
+# For FP16:
+#cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
-#for FP32
+# Or, for FP32:
 cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 
-#build example/main only
+# Build example/main only
 #cmake --build . --config Release --target main
 
-#build all binary
+# Or, build all binary
 cmake --build . --config Release -v
 
 cd ..
@@ -140,17 +181,15 @@ cd ..
 
 or
 
-```
+```sh
 ./examples/sycl/build.sh
 ```
-
-Note:
-
-- By default, it will build for all binary files. It will take more time. To reduce the time, we recommend to build for **example/main** only.
 
 ### Run
 
 1. Put model file to folder **models**
+
+You could download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) as example.
 
 2. Enable oneAPI running environment
 
@@ -162,10 +201,10 @@ source /opt/intel/oneapi/setvars.sh
 
 Run without parameter:
 
-```
+```sh
 ./build/bin/ls-sycl-device
 
-or
+# or running the "main" executable and look at the output log:
 
 ./build/bin/main
 ```
@@ -194,13 +233,13 @@ found 4 SYCL devices:
 
 Set device ID = 0 by **GGML_SYCL_DEVICE=0**
 
-```
+```sh
 GGML_SYCL_DEVICE=0 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
 ```
 or run by script:
 
-```
-./examples/sycl/run-llama2.sh
+```sh
+./examples/sycl/run_llama2.sh
 ```
 
 Note:
@@ -223,7 +262,13 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
 Please install Intel GPU driver by official guide: [Install GPU Drivers](https://www.intel.com/content/www/us/en/products/docs/discrete-gpus/arc/software/drivers.html).
 
-2. Install Intel® oneAPI Base toolkit.
+Note: **The driver is mandatory for compute function**.
+
+2. Install Visual Studio.
+
+Please install [Visual Studio](https://visualstudio.microsoft.com/) which impact oneAPI environment enabling in Windows.
+
+3. Install Intel® oneAPI Base toolkit.
 
 a. Please follow the procedure in [Get the Intel® oneAPI Base Toolkit ](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html).
 
@@ -252,7 +297,7 @@ In oneAPI command line:
 sycl-ls
 ```
 
-There should be one or more level-zero devices. Like **[ext_oneapi_level_zero:gpu:0]**.
+There should be one or more level-zero devices. Please confirm that at least one GPU is present, like **[ext_oneapi_level_zero:gpu:0]**.
 
 Output (example):
 ```
@@ -260,15 +305,19 @@ Output (example):
 [opencl:cpu:1] Intel(R) OpenCL, 11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz OpenCL 3.0 (Build 0) [2023.16.10.0.17_160000]
 [opencl:gpu:2] Intel(R) OpenCL Graphics, Intel(R) Iris(R) Xe Graphics OpenCL 3.0 NEO  [31.0.101.5186]
 [ext_oneapi_level_zero:gpu:0] Intel(R) Level-Zero, Intel(R) Iris(R) Xe Graphics 1.3 [1.3.28044]
-
 ```
 
-3. Install cmake & make
+4. Install cmake & make
 
-a. Download & install cmake for windows: https://cmake.org/download/
+a. Download & install cmake for Windows: https://cmake.org/download/
 
-b. Download & install make for windows provided by mingw-w64: https://www.mingw-w64.org/downloads/
+b. Download & install mingw-w64 make for Windows provided by w64devkit
 
+- Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+
+- Extract `w64devkit` on your pc.
+
+- Add the **bin** folder path in the Windows system PATH environment, like `C:\xxx\w64devkit\bin\`.
 
 ### Build locally:
 
@@ -308,6 +357,8 @@ Note:
 ### Run
 
 1. Put model file to folder **models**
+
+You could download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) as example.
 
 2. Enable oneAPI running environment
 
@@ -419,8 +470,25 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
   Miss to enable oneAPI running environment.
 
-## Todo
+- Meet compile error.
 
-- Support to build in Windows.
+  Remove folder **build** and try again.
+
+- I can **not** see **[ext_oneapi_level_zero:gpu:0]** afer install GPU driver in Linux.
+
+  Please run **sudo sycl-ls**.
+
+  If you see it in result, please add video/render group to your ID:
+
+  ```
+  sudo usermod -aG render username
+  sudo usermod -aG video username
+  ```
+
+  Then **relogin**.
+
+  If you do not see it, please check the installation GPU steps again.
+
+## Todo
 
 - Support multiple cards.

@@ -71,7 +71,7 @@ def bytes_to_unicode():
     return dict(zip(bs, cs))
 
 
-ap = argparse.ArgumentParser(prog="convert_hf_to_gguf.py")
+ap = argparse.ArgumentParser()
 ap.add_argument("-m", "--model-dir", help="Path to model directory cloned from HF Hub", required=True)
 ap.add_argument("--use-f32", action="store_true", default=False, help="Use f32 instead of f16")
 ap.add_argument("--text-only", action="store_true", required=False,

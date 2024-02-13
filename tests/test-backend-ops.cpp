@@ -2129,14 +2129,13 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_pad());
     test_cases.emplace_back(new test_leaky_relu());
 
+    // these tests are disabled to save execution time, but they can be handy for debugging
+#if 0
 #if !defined(__SANITIZE_THREAD__)
     // FIXME: these tests use too much memory with thread sanitizer
     test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 8*1024));
     //test_cases.emplace_back(new test_moe(8, 2, 8, 4096, 14336));
 #endif
-
-    // these tests are disabled to save execution time, but they can be handy for debugging
-#if 0
     test_cases.emplace_back(new test_llama(1));
     test_cases.emplace_back(new test_llama(2));
     test_cases.emplace_back(new test_falcon(1));

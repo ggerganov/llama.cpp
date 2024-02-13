@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
+#include "ggml-backend.h"
 #include "llama.h"
 #include "common.h"
 #include "train.h"
@@ -12,8 +13,6 @@
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
-
-static const size_t tensor_alignment = 32;
 
 struct my_llama_hparams {
     uint32_t n_vocab    = 32000;
@@ -61,9 +60,9 @@ struct my_llama_layer {
     struct ggml_tensor * ffn_norm;
 
     // ff
-    struct ggml_tensor * w1;
-    struct ggml_tensor * w2;
-    struct ggml_tensor * w3;
+    struct ggml_tensor * ffn_gate; // w1
+    struct ggml_tensor * ffn_down; // w2
+    struct ggml_tensor * ffn_up;   // w3
 };
 
 struct my_llama_model {
@@ -86,9 +85,9 @@ struct my_llama_lora_hparams {
     uint32_t n_rank_wv = 4;
     uint32_t n_rank_wo = 4;
     uint32_t n_rank_ffn_norm = 1;
-    uint32_t n_rank_w1 = 4;
-    uint32_t n_rank_w2 = 4;
-    uint32_t n_rank_w3 = 4;
+    uint32_t n_rank_ffn_gate = 4;
+    uint32_t n_rank_ffn_down = 4;
+    uint32_t n_rank_ffn_up = 4;
     uint32_t n_rank_tok_embeddings = 4;
     uint32_t n_rank_norm = 1;
     uint32_t n_rank_output = 4;
@@ -118,17 +117,17 @@ struct my_llama_lora_layer {
     struct ggml_tensor * ffn_norm_b;
 
     // ff
-    struct ggml_tensor * w1_a;
-    struct ggml_tensor * w1_b;
-    struct ggml_tensor * w2_a;
-    struct ggml_tensor * w2_b;
-    struct ggml_tensor * w3_a;
-    struct ggml_tensor * w3_b;
+    struct ggml_tensor * ffn_gate_a;
+    struct ggml_tensor * ffn_gate_b;
+    struct ggml_tensor * ffn_down_a;
+    struct ggml_tensor * ffn_down_b;
+    struct ggml_tensor * ffn_up_a;
+    struct ggml_tensor * ffn_up_b;
 };
 
 struct my_llama_lora {
     struct ggml_context * ctx = NULL;
-    std::vector<uint8_t> data;
+    ggml_backend_buffer_t data;
 
     my_llama_lora_hparams hparams;
 
@@ -209,9 +208,9 @@ static void print_lora_params(struct my_llama_lora_hparams * params) {
     printf("%s: n_rank_wv             : %u\n", __func__, params->n_rank_wv);
     printf("%s: n_rank_wo             : %u\n", __func__, params->n_rank_wo);
     printf("%s: n_rank_ffn_norm       : %u\n", __func__, params->n_rank_ffn_norm);
-    printf("%s: n_rank_w1             : %u\n", __func__, params->n_rank_w1);
-    printf("%s: n_rank_w2             : %u\n", __func__, params->n_rank_w2);
-    printf("%s: n_rank_w3             : %u\n", __func__, params->n_rank_w3);
+    printf("%s: n_rank_ffn_gate       : %u\n", __func__, params->n_rank_ffn_gate);
+    printf("%s: n_rank_ffn_down       : %u\n", __func__, params->n_rank_ffn_down);
+    printf("%s: n_rank_ffn_up         : %u\n", __func__, params->n_rank_ffn_up);
     printf("%s: n_rank_tok_embeddings : %u\n", __func__, params->n_rank_tok_embeddings);
     printf("%s: n_rank_norm           : %u\n", __func__, params->n_rank_norm);
     printf("%s: n_rank_output         : %u\n", __func__, params->n_rank_output);
@@ -320,9 +319,9 @@ static void init_model(struct llama_model * input, struct my_llama_model * model
         layer.wv             = llama_get_model_tensor(input, tni(LLM_TENSOR_ATTN_V, i));
         layer.wo             = llama_get_model_tensor(input, tni(LLM_TENSOR_ATTN_OUT, i));
         layer.ffn_norm       = llama_get_model_tensor(input, tni(LLM_TENSOR_FFN_NORM, i));
-        layer.w1             = llama_get_model_tensor(input, tni(LLM_TENSOR_FFN_GATE, i));
-        layer.w2             = llama_get_model_tensor(input, tni(LLM_TENSOR_FFN_DOWN, i));
-        layer.w3             = llama_get_model_tensor(input, tni(LLM_TENSOR_FFN_UP, i));
+        layer.ffn_gate       = llama_get_model_tensor(input, tni(LLM_TENSOR_FFN_GATE, i));
+        layer.ffn_down       = llama_get_model_tensor(input, tni(LLM_TENSOR_FFN_DOWN, i));
+        layer.ffn_up         = llama_get_model_tensor(input, tni(LLM_TENSOR_FFN_UP, i));
 
         assert_shape_1d(layer.attention_norm, hparams.n_embd);
         assert_shape_2d(layer.wq,             hparams.n_embd, hparams.n_embd);
@@ -330,9 +329,9 @@ static void init_model(struct llama_model * input, struct my_llama_model * model
         assert_shape_2d(layer.wv,             hparams.n_embd, hparams.n_embd_gqa());
         assert_shape_2d(layer.wo,             hparams.n_embd, hparams.n_embd);
         assert_shape_1d(layer.ffn_norm,       hparams.n_embd);
-        assert_shape_2d(layer.w1,             hparams.n_embd, hparams.n_ff);
-        assert_shape_2d(layer.w2,             hparams.n_ff,   hparams.n_embd);
-        assert_shape_2d(layer.w3,             hparams.n_embd, hparams.n_ff);
+        assert_shape_2d(layer.ffn_gate,       hparams.n_embd, hparams.n_ff);
+        assert_shape_2d(layer.ffn_down,       hparams.n_ff,   hparams.n_embd);
+        assert_shape_2d(layer.ffn_up,         hparams.n_embd, hparams.n_ff);
     }
 }
 
@@ -363,69 +362,12 @@ static void set_param_lora(struct my_llama_lora * lora) {
         ggml_set_param(ctx, layer.wo_b);
         ggml_set_param(ctx, layer.ffn_norm_a);
         ggml_set_param(ctx, layer.ffn_norm_b);
-        ggml_set_param(ctx, layer.w1_a);
-        ggml_set_param(ctx, layer.w1_b);
-        ggml_set_param(ctx, layer.w2_a);
-        ggml_set_param(ctx, layer.w2_b);
-        ggml_set_param(ctx, layer.w3_a);
-        ggml_set_param(ctx, layer.w3_b);
-    }
-}
-
-static void alloc_lora(struct ggml_allocr * alloc, struct my_llama_lora * lora) {
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b);
-    ggml_allocr_alloc(alloc, lora->norm_a);
-    ggml_allocr_alloc(alloc, lora->norm_b);
-    ggml_allocr_alloc(alloc, lora->output_a);
-    ggml_allocr_alloc(alloc, lora->output_b);
-    for (uint32_t i = 0; i < lora->layers.size(); ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b);
-        ggml_allocr_alloc(alloc, layer.wq_a);
-        ggml_allocr_alloc(alloc, layer.wq_b);
-        ggml_allocr_alloc(alloc, layer.wk_a);
-        ggml_allocr_alloc(alloc, layer.wk_b);
-        ggml_allocr_alloc(alloc, layer.wv_a);
-        ggml_allocr_alloc(alloc, layer.wv_b);
-        ggml_allocr_alloc(alloc, layer.wo_a);
-        ggml_allocr_alloc(alloc, layer.wo_b);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b);
-        ggml_allocr_alloc(alloc, layer.w1_a);
-        ggml_allocr_alloc(alloc, layer.w1_b);
-        ggml_allocr_alloc(alloc, layer.w2_a);
-        ggml_allocr_alloc(alloc, layer.w2_b);
-        ggml_allocr_alloc(alloc, layer.w3_a);
-        ggml_allocr_alloc(alloc, layer.w3_b);
-    }
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a->grad);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b->grad);
-    ggml_allocr_alloc(alloc, lora->norm_a->grad);
-    ggml_allocr_alloc(alloc, lora->norm_b->grad);
-    ggml_allocr_alloc(alloc, lora->output_a->grad);
-    ggml_allocr_alloc(alloc, lora->output_b->grad);
-    for (uint32_t i = 0; i < lora->layers.size(); ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.wq_a->grad);
-        ggml_allocr_alloc(alloc, layer.wq_b->grad);
-        ggml_allocr_alloc(alloc, layer.wk_a->grad);
-        ggml_allocr_alloc(alloc, layer.wk_b->grad);
-        ggml_allocr_alloc(alloc, layer.wv_a->grad);
-        ggml_allocr_alloc(alloc, layer.wv_b->grad);
-        ggml_allocr_alloc(alloc, layer.wo_a->grad);
-        ggml_allocr_alloc(alloc, layer.wo_b->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.w1_a->grad);
-        ggml_allocr_alloc(alloc, layer.w1_b->grad);
-        ggml_allocr_alloc(alloc, layer.w2_a->grad);
-        ggml_allocr_alloc(alloc, layer.w2_b->grad);
-        ggml_allocr_alloc(alloc, layer.w3_a->grad);
-        ggml_allocr_alloc(alloc, layer.w3_b->grad);
+        ggml_set_param(ctx, layer.ffn_gate_a);
+        ggml_set_param(ctx, layer.ffn_gate_b);
+        ggml_set_param(ctx, layer.ffn_down_a);
+        ggml_set_param(ctx, layer.ffn_down_b);
+        ggml_set_param(ctx, layer.ffn_up_a);
+        ggml_set_param(ctx, layer.ffn_up_b);
     }
 }
 
@@ -493,12 +435,12 @@ static void init_lora(const struct my_llama_model * model, struct my_llama_lora 
         layer.ffn_norm_a = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_norm, n_embd);
         layer.ffn_norm_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_norm, 1);
 
-        layer.w1_a = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_w1, n_embd);
-        layer.w1_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_w1, n_ff);
-        layer.w2_a = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_w2, n_ff);
-        layer.w2_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_w2, n_embd);
-        layer.w3_a = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_w3, n_embd);
-        layer.w3_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_w3, n_ff);
+        layer.ffn_gate_a = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_gate, n_embd);
+        layer.ffn_gate_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_gate, n_ff);
+        layer.ffn_down_a = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_down, n_ff);
+        layer.ffn_down_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_down, n_embd);
+        layer.ffn_up_a   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_up,   n_embd);
+        layer.ffn_up_b   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, lparams.n_rank_ffn_up,   n_ff);
 
         ggml_set_name(layer.attention_norm_a, tni(LLM_TENSOR_ATTN_NORM, ".weight.lora_a", i));
         ggml_set_name(layer.attention_norm_b, tni(LLM_TENSOR_ATTN_NORM, ".weight.lora_b", i));
@@ -512,28 +454,18 @@ static void init_lora(const struct my_llama_model * model, struct my_llama_lora 
         ggml_set_name(layer.wo_b,             tni(LLM_TENSOR_ATTN_OUT,  ".weight.lora_b", i));
         ggml_set_name(layer.ffn_norm_a,       tni(LLM_TENSOR_FFN_NORM,  ".weight.lora_a", i));
         ggml_set_name(layer.ffn_norm_b,       tni(LLM_TENSOR_FFN_NORM,  ".weight.lora_b", i));
-        ggml_set_name(layer.w1_a,             tni(LLM_TENSOR_FFN_GATE,  ".weight.lora_a", i));
-        ggml_set_name(layer.w1_b,             tni(LLM_TENSOR_FFN_GATE,  ".weight.lora_b", i));
-        ggml_set_name(layer.w2_a,             tni(LLM_TENSOR_FFN_DOWN,  ".weight.lora_a", i));
-        ggml_set_name(layer.w2_b,             tni(LLM_TENSOR_FFN_DOWN,  ".weight.lora_b", i));
-        ggml_set_name(layer.w3_a,             tni(LLM_TENSOR_FFN_UP,    ".weight.lora_a", i));
-        ggml_set_name(layer.w3_b,             tni(LLM_TENSOR_FFN_UP,    ".weight.lora_b", i));
+        ggml_set_name(layer.ffn_gate_a,       tni(LLM_TENSOR_FFN_GATE,  ".weight.lora_a", i));
+        ggml_set_name(layer.ffn_gate_b,       tni(LLM_TENSOR_FFN_GATE,  ".weight.lora_b", i));
+        ggml_set_name(layer.ffn_down_a,       tni(LLM_TENSOR_FFN_DOWN,  ".weight.lora_a", i));
+        ggml_set_name(layer.ffn_down_b,       tni(LLM_TENSOR_FFN_DOWN,  ".weight.lora_b", i));
+        ggml_set_name(layer.ffn_up_a,         tni(LLM_TENSOR_FFN_UP,    ".weight.lora_a", i));
+        ggml_set_name(layer.ffn_up_b,         tni(LLM_TENSOR_FFN_UP,    ".weight.lora_b", i));
     }
 
     set_param_lora(lora);
 
-    // measure data size
-    size_t size = 0;
-    for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
-        size += GGML_PAD(ggml_nbytes(t), tensor_alignment);
-    }
-
-    // allocate data
-    struct ggml_allocr * alloc = NULL;
-    lora->data.resize(size + tensor_alignment);
-    alloc = ggml_allocr_new(lora->data.data(), lora->data.size(), tensor_alignment);
-    alloc_lora(alloc, lora);
-    ggml_allocr_free(alloc);
+    // allocate data for lora tensors
+    lora->data = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_cpu_buffer_type());
 }
 
 static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, float std, float min, float max) {
@@ -565,12 +497,12 @@ static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, fl
         randomize_tensor_normal(layer.ffn_norm_a, rnd);
         ggml_set_zero(layer.ffn_norm_b);
 
-        randomize_tensor_normal(layer.w1_a, rnd);
-        ggml_set_zero(layer.w1_b);
-        randomize_tensor_normal(layer.w2_a, rnd);
-        ggml_set_zero(layer.w2_b);
-        randomize_tensor_normal(layer.w3_a, rnd);
-        ggml_set_zero(layer.w3_b);
+        randomize_tensor_normal(layer.ffn_gate_a, rnd);
+        ggml_set_zero(layer.ffn_gate_b);
+        randomize_tensor_normal(layer.ffn_down_a, rnd);
+        ggml_set_zero(layer.ffn_down_b);
+        randomize_tensor_normal(layer.ffn_up_a, rnd);
+        ggml_set_zero(layer.ffn_up_b);
     }
 
     free_random_normal_distribution(rnd);
@@ -579,7 +511,7 @@ static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, fl
 static struct ggml_tensor * llama_build_lora_finetune_graphs(
         struct my_llama_model * model,
         struct my_llama_lora  * lora,
-        struct ggml_allocr    * alloc,
+        ggml_gallocr_t          alloc,
         struct ggml_context   * ctx,
         struct ggml_cgraph    * gf,
         struct ggml_cgraph    * gb,
@@ -590,7 +522,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         const  int              n_tokens,
         const  int              n_batch,
         const  bool             enable_flash_attn,
-        const  bool             enable_checkpointing) {
+        const  bool             enable_checkpointing,
+        const  bool             measure_only) {
 
     ggml_set_scratch(ctx, { 0, 0, nullptr, });
     const int n_past = 0;
@@ -622,13 +555,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, N);
-    ggml_allocr_alloc(alloc, KQ_pos);
-    if (!ggml_allocr_is_measure(alloc)) {
-        int * data = (int *) KQ_pos->data;
-        for (int i = 0; i < N; ++i) {
-            data[i] = n_past + i;
-        }
-    }
+    ggml_set_input(KQ_pos);
 
     // rope has so much parameters that we make a custom function for it
     auto rope = [ctx, KQ_pos, n_rot, n_ctx, rope_freq_base, rope_freq_scale]
@@ -683,13 +610,13 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
 
         struct ggml_tensor * attention_norm = add_to_f32(ctx, layer.attention_norm, ggml_mul_mat(ctx, llayer.attention_norm_a, llayer.attention_norm_b));
         struct ggml_tensor * ffn_norm = add_to_f32(ctx, layer.ffn_norm, ggml_mul_mat(ctx, llayer.ffn_norm_a, llayer.ffn_norm_b));
-        struct ggml_tensor * wq = add_to_f32(ctx, layer.wq, ggml_mul_mat(ctx, llayer.wq_a, llayer.wq_b));
-        struct ggml_tensor * wk = add_to_f32(ctx, layer.wk, ggml_mul_mat(ctx, llayer.wk_a, llayer.wk_b));
-        struct ggml_tensor * wv = add_to_f32(ctx, layer.wv, ggml_mul_mat(ctx, llayer.wv_a, llayer.wv_b));
-        struct ggml_tensor * wo = add_to_f32(ctx, layer.wo, ggml_mul_mat(ctx, llayer.wo_a, llayer.wo_b));
-        struct ggml_tensor * w1 = add_to_f32(ctx, layer.w1, ggml_mul_mat(ctx, llayer.w1_a, llayer.w1_b));
-        struct ggml_tensor * w2 = add_to_f32(ctx, layer.w2, ggml_mul_mat(ctx, llayer.w2_a, llayer.w2_b));
-        struct ggml_tensor * w3 = add_to_f32(ctx, layer.w3, ggml_mul_mat(ctx, llayer.w3_a, llayer.w3_b));
+        struct ggml_tensor * wq       = add_to_f32(ctx, layer.wq, ggml_mul_mat(ctx, llayer.wq_a, llayer.wq_b));
+        struct ggml_tensor * wk       = add_to_f32(ctx, layer.wk, ggml_mul_mat(ctx, llayer.wk_a, llayer.wk_b));
+        struct ggml_tensor * wv       = add_to_f32(ctx, layer.wv, ggml_mul_mat(ctx, llayer.wv_a, llayer.wv_b));
+        struct ggml_tensor * wo       = add_to_f32(ctx, layer.wo, ggml_mul_mat(ctx, llayer.wo_a, llayer.wo_b));
+        struct ggml_tensor * ffn_gate = add_to_f32(ctx, layer.ffn_gate, ggml_mul_mat(ctx, llayer.ffn_gate_a, llayer.ffn_gate_b));
+        struct ggml_tensor * ffn_down = add_to_f32(ctx, layer.ffn_down, ggml_mul_mat(ctx, llayer.ffn_down_a, llayer.ffn_down_b));
+        struct ggml_tensor * ffn_up   = add_to_f32(ctx, layer.ffn_up, ggml_mul_mat(ctx, llayer.ffn_up_a, llayer.ffn_up_b));
 
         struct ggml_tensor * t02 = ggml_rms_norm     (ctx, cur, rms_norm_eps);                       set_name(t02, "t02");     assert_shape_2d(t02, n_embd, N*n_batch);
         struct ggml_tensor * t03 = ggml_repeat       (ctx, attention_norm, t02);                     set_name(t03, "t03");     assert_shape_2d(t03, n_embd, N*n_batch);
@@ -732,11 +659,11 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         struct ggml_tensor * t22 = ggml_rms_norm     (ctx, t21, rms_norm_eps);                       set_name(t22, "t22");     assert_shape_2d(t22, n_embd, N*n_batch);
         struct ggml_tensor * t23 = ggml_repeat       (ctx, ffn_norm, t22);                           set_name(t23, "t23");     assert_shape_2d(t23, n_embd, N*n_batch);
         struct ggml_tensor * t24 = ggml_mul          (ctx, t23, t22);                                set_name(t24, "t24");     assert_shape_2d(t24, n_embd, N*n_batch);
-        struct ggml_tensor * t25 = ggml_mul_mat      (ctx, w3, t24);                                 set_name(t25, "t25");     assert_shape_2d(t25, n_ff, N*n_batch);
-        struct ggml_tensor * t26 = ggml_mul_mat      (ctx, w1, t24);                                 set_name(t26, "t26");     assert_shape_2d(t26, n_ff, N*n_batch);
+        struct ggml_tensor * t25 = ggml_mul_mat      (ctx, ffn_up, t24);                             set_name(t25, "t25");     assert_shape_2d(t25, n_ff, N*n_batch);
+        struct ggml_tensor * t26 = ggml_mul_mat      (ctx, ffn_gate, t24);                           set_name(t26, "t26");     assert_shape_2d(t26, n_ff, N*n_batch);
         struct ggml_tensor * t27 = ggml_silu         (ctx, t26);                                     set_name(t27, "t27");     assert_shape_2d(t27, n_ff, N*n_batch);
         struct ggml_tensor * t28 = ggml_mul          (ctx, t27, t25);                                set_name(t28, "t28");     assert_shape_2d(t28, n_ff, N*n_batch);
-        struct ggml_tensor * t29 = ggml_mul_mat      (ctx, w2, t28);                                 set_name(t29, "t29");     assert_shape_2d(t29, n_embd, N*n_batch);
+        struct ggml_tensor * t29 = ggml_mul_mat      (ctx, ffn_down, t28);                           set_name(t29, "t29");     assert_shape_2d(t29, n_embd, N*n_batch);
         struct ggml_tensor * t30 = ggml_add          (ctx, t29, t21);                                set_name(t30, "t30");     assert_shape_2d(t30, n_embd, N*n_batch);
         cur = t30;
         if (enable_checkpointing) {
@@ -780,7 +707,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     // input gradient
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, 1.0f));
     GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
-    ggml_allocr_alloc(alloc, t36->grad);
+    ggml_set_input(t36->grad);
     // KQ_pos
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, 1.0f));
 
@@ -796,20 +723,32 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wk, 1.0f));
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wv, 1.0f));
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wo, 1.0f));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w1, 1.0f));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w2, 1.0f));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w3, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.ffn_gate, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.ffn_down, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.ffn_up, 1.0f));
     }
 
     // allocating checkpoints in one block to reduce memory fragmentation
     // note: they will be freed in reverse order
     for (unsigned int i = 0; i < checkpoints.size(); ++i) {
         if (checkpoints[i]->data == NULL && checkpoints[i]->view_src == NULL) {
-            ggml_allocr_alloc(alloc, checkpoints[i]);
+            ggml_set_input(checkpoints[i]);
         }
     }
 
-    ggml_allocr_alloc_graph(alloc, gb);
+    if (measure_only) {
+        ggml_gallocr_reserve(alloc, gb);
+    } else {
+        ggml_gallocr_alloc_graph(alloc, gb);
+
+        // set KQ_pos
+        {
+            int * data = (int *) KQ_pos->data;
+            for (int i = 0; i < N; ++i) {
+                data[i] = n_past + i;
+            }
+        }
+    }
 
     // remove the additional nodes and leafs
     for (int i = n_leafs_before; i < gb->n_leafs; ++i) {
@@ -859,9 +798,9 @@ static void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context
     GGUF_GET_KEY(fctx, lora->hparams.n_rank_wv,             gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_ATTN_V);
     GGUF_GET_KEY(fctx, lora->hparams.n_rank_wo,             gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_ATTN_OUT);
     GGUF_GET_KEY(fctx, lora->hparams.n_rank_ffn_norm,       gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_FFN_NORM);
-    GGUF_GET_KEY(fctx, lora->hparams.n_rank_w1,             gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_FFN_GATE);
-    GGUF_GET_KEY(fctx, lora->hparams.n_rank_w2,             gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_FFN_DOWN);
-    GGUF_GET_KEY(fctx, lora->hparams.n_rank_w3,             gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_FFN_UP);
+    GGUF_GET_KEY(fctx, lora->hparams.n_rank_ffn_gate,       gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_FFN_GATE);
+    GGUF_GET_KEY(fctx, lora->hparams.n_rank_ffn_down,       gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_FFN_DOWN);
+    GGUF_GET_KEY(fctx, lora->hparams.n_rank_ffn_up,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_FFN_UP);
 
     init_lora(model, lora);
 
@@ -886,12 +825,12 @@ static void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context
         copy_tensor_by_name(layer.wo_b,             f_ggml_ctx, ggml_get_name(layer.wo_b));
         copy_tensor_by_name(layer.ffn_norm_a,       f_ggml_ctx, ggml_get_name(layer.ffn_norm_a));
         copy_tensor_by_name(layer.ffn_norm_b,       f_ggml_ctx, ggml_get_name(layer.ffn_norm_b));
-        copy_tensor_by_name(layer.w1_a,             f_ggml_ctx, ggml_get_name(layer.w1_a));
-        copy_tensor_by_name(layer.w1_b,             f_ggml_ctx, ggml_get_name(layer.w1_b));
-        copy_tensor_by_name(layer.w2_a,             f_ggml_ctx, ggml_get_name(layer.w2_a));
-        copy_tensor_by_name(layer.w2_b,             f_ggml_ctx, ggml_get_name(layer.w2_b));
-        copy_tensor_by_name(layer.w3_a,             f_ggml_ctx, ggml_get_name(layer.w3_a));
-        copy_tensor_by_name(layer.w3_b,             f_ggml_ctx, ggml_get_name(layer.w3_b));
+        copy_tensor_by_name(layer.ffn_gate_a,       f_ggml_ctx, ggml_get_name(layer.ffn_gate_a));
+        copy_tensor_by_name(layer.ffn_gate_b,       f_ggml_ctx, ggml_get_name(layer.ffn_gate_b));
+        copy_tensor_by_name(layer.ffn_down_a,       f_ggml_ctx, ggml_get_name(layer.ffn_down_a));
+        copy_tensor_by_name(layer.ffn_down_b,       f_ggml_ctx, ggml_get_name(layer.ffn_down_b));
+        copy_tensor_by_name(layer.ffn_up_a,         f_ggml_ctx, ggml_get_name(layer.ffn_up_a));
+        copy_tensor_by_name(layer.ffn_up_b,         f_ggml_ctx, ggml_get_name(layer.ffn_up_b));
     }
 }
 
@@ -929,9 +868,9 @@ static void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_mod
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_ATTN_V,       lora->hparams.n_rank_wv);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_ATTN_OUT,     lora->hparams.n_rank_wo);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_FFN_NORM,     lora->hparams.n_rank_ffn_norm);
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_FFN_GATE,     lora->hparams.n_rank_w1);
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_FFN_DOWN,     lora->hparams.n_rank_w2);
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_FFN_UP,       lora->hparams.n_rank_w3);
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_FFN_GATE,     lora->hparams.n_rank_ffn_gate);
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_FFN_DOWN,     lora->hparams.n_rank_ffn_down);
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_FFN_UP,       lora->hparams.n_rank_ffn_up);
 
     gguf_add_tensor(fctx, lora->tok_embeddings_a);
     gguf_add_tensor(fctx, lora->tok_embeddings_b);
@@ -955,12 +894,12 @@ static void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_mod
         gguf_add_tensor(fctx, layer.wo_b);
         gguf_add_tensor(fctx, layer.ffn_norm_a);
         gguf_add_tensor(fctx, layer.ffn_norm_b);
-        gguf_add_tensor(fctx, layer.w1_a);
-        gguf_add_tensor(fctx, layer.w1_b);
-        gguf_add_tensor(fctx, layer.w2_a);
-        gguf_add_tensor(fctx, layer.w2_b);
-        gguf_add_tensor(fctx, layer.w3_a);
-        gguf_add_tensor(fctx, layer.w3_b);
+        gguf_add_tensor(fctx, layer.ffn_gate_a);
+        gguf_add_tensor(fctx, layer.ffn_gate_b);
+        gguf_add_tensor(fctx, layer.ffn_down_a);
+        gguf_add_tensor(fctx, layer.ffn_down_b);
+        gguf_add_tensor(fctx, layer.ffn_up_a);
+        gguf_add_tensor(fctx, layer.ffn_up_b);
     }
 }
 
@@ -1165,12 +1104,12 @@ static void save_as_llama_lora(const char * filename, struct my_llama_lora * lor
         write_tensor(&file, layer.wo_b,             tni(LLM_TENSOR_ATTN_OUT,  i, ".weight.loraB"));
         write_tensor(&file, layer.ffn_norm_a,       tni(LLM_TENSOR_FFN_NORM,  i, ".weight.loraA"));
         write_tensor(&file, layer.ffn_norm_b,       tni(LLM_TENSOR_FFN_NORM,  i, ".weight.loraB"));
-        write_tensor(&file, layer.w1_a,             tni(LLM_TENSOR_FFN_GATE,  i, ".weight.loraA"));
-        write_tensor(&file, layer.w1_b,             tni(LLM_TENSOR_FFN_GATE,  i, ".weight.loraB"));
-        write_tensor(&file, layer.w2_a,             tni(LLM_TENSOR_FFN_DOWN,  i, ".weight.loraA"));
-        write_tensor(&file, layer.w2_b,             tni(LLM_TENSOR_FFN_DOWN,  i, ".weight.loraB"));
-        write_tensor(&file, layer.w3_a,             tni(LLM_TENSOR_FFN_UP,    i, ".weight.loraA"));
-        write_tensor(&file, layer.w3_b,             tni(LLM_TENSOR_FFN_UP,    i, ".weight.loraB"));
+        write_tensor(&file, layer.ffn_gate_a,       tni(LLM_TENSOR_FFN_GATE,  i, ".weight.loraA"));
+        write_tensor(&file, layer.ffn_gate_b,       tni(LLM_TENSOR_FFN_GATE,  i, ".weight.loraB"));
+        write_tensor(&file, layer.ffn_down_a,       tni(LLM_TENSOR_FFN_DOWN,  i, ".weight.loraA"));
+        write_tensor(&file, layer.ffn_down_b,       tni(LLM_TENSOR_FFN_DOWN,  i, ".weight.loraB"));
+        write_tensor(&file, layer.ffn_up_a,         tni(LLM_TENSOR_FFN_UP,    i, ".weight.loraA"));
+        write_tensor(&file, layer.ffn_up_b,         tni(LLM_TENSOR_FFN_UP,    i, ".weight.loraB"));
     }
 }
 
@@ -1200,9 +1139,9 @@ struct train_params {
     uint32_t n_rank_wv;
     uint32_t n_rank_wo;
     uint32_t n_rank_ffn_norm;
-    uint32_t n_rank_w1;
-    uint32_t n_rank_w2;
-    uint32_t n_rank_w3;
+    uint32_t n_rank_ffn_gate;
+    uint32_t n_rank_ffn_down;
+    uint32_t n_rank_ffn_up;
     uint32_t n_rank_tok_embeddings;
     uint32_t n_rank_norm;
     uint32_t n_rank_output;
@@ -1213,9 +1152,9 @@ struct train_params {
     bool custom_n_rank_wv;
     bool custom_n_rank_wo;
     bool custom_n_rank_ffn_norm;
-    bool custom_n_rank_w1;
-    bool custom_n_rank_w2;
-    bool custom_n_rank_w3;
+    bool custom_n_rank_ffn_gate;
+    bool custom_n_rank_ffn_down;
+    bool custom_n_rank_ffn_up;
     bool custom_n_rank_tok_embeddings;
     bool custom_n_rank_norm;
     bool custom_n_rank_output;
@@ -1247,9 +1186,9 @@ static struct train_params get_default_train_params() {
     params.n_rank_wv             = 4;
     params.n_rank_wo             = 4;
     params.n_rank_ffn_norm       = 1;
-    params.n_rank_w1             = 4;
-    params.n_rank_w2             = 4;
-    params.n_rank_w3             = 4;
+    params.n_rank_ffn_gate       = 4;
+    params.n_rank_ffn_down       = 4;
+    params.n_rank_ffn_up         = 4;
     params.n_rank_tok_embeddings = 4;
     params.n_rank_norm           = 1;
     params.n_rank_output         = 4;
@@ -1260,9 +1199,9 @@ static struct train_params get_default_train_params() {
     params.custom_n_rank_wv             = false;
     params.custom_n_rank_wo             = false;
     params.custom_n_rank_ffn_norm       = false;
-    params.custom_n_rank_w1             = false;
-    params.custom_n_rank_w2             = false;
-    params.custom_n_rank_w3             = false;
+    params.custom_n_rank_ffn_gate       = false;
+    params.custom_n_rank_ffn_down       = false;
+    params.custom_n_rank_ffn_up         = false;
     params.custom_n_rank_tok_embeddings = false;
     params.custom_n_rank_norm           = false;
     params.custom_n_rank_output         = false;
@@ -1293,9 +1232,9 @@ static void train_print_usage(int argc, char ** argv, const struct train_params 
     fprintf(stderr, "  --rank-wk N                LORA rank for wk tensor, overrides default rank.\n");
     fprintf(stderr, "  --rank-wv N                LORA rank for wv tensor, overrides default rank.\n");
     fprintf(stderr, "  --rank-wo N                LORA rank for wo tensor, overrides default rank.\n");
-    fprintf(stderr, "  --rank-w1 N                LORA rank for w1 tensor, overrides default rank.\n");
-    fprintf(stderr, "  --rank-w2 N                LORA rank for w2 tensor, overrides default rank.\n");
-    fprintf(stderr, "  --rank-w3 N                LORA rank for w3 tensor, overrides default rank.\n");
+    fprintf(stderr, "  --rank-ffn_gate N          LORA rank for ffn_gate tensor, overrides default rank.\n");
+    fprintf(stderr, "  --rank-ffn_down N          LORA rank for ffn_down tensor, overrides default rank.\n");
+    fprintf(stderr, "  --rank-ffn_up N            LORA rank for ffn_up tensor, overrides default rank.\n");
 
     print_common_train_usage(argc, argv, &params->common);
 }
@@ -1430,27 +1369,27 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
             }
             params->n_rank_wo = std::stoi(argv[i]);
             params->custom_n_rank_wo = true;
-        } else if (arg == "--rank-w1") {
+        } else if (arg == "--rank-ffn_gate") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params->n_rank_w1 = std::stoi(argv[i]);
-            params->custom_n_rank_w1 = true;
-        } else if (arg == "--rank-w2") {
+            params->n_rank_ffn_gate = std::stoi(argv[i]);
+            params->custom_n_rank_ffn_gate = true;
+        } else if (arg == "--rank-ffn_down") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params->n_rank_w2 = std::stoi(argv[i]);
-            params->custom_n_rank_w2 = true;
-        } else if (arg == "--rank-w3") {
+            params->n_rank_ffn_down = std::stoi(argv[i]);
+            params->custom_n_rank_ffn_down = true;
+        } else if (arg == "--rank-ffn_up") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params->n_rank_w3 = std::stoi(argv[i]);
-            params->custom_n_rank_w3 = true;
+            params->n_rank_ffn_up = std::stoi(argv[i]);
+            params->custom_n_rank_ffn_up = true;
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             train_print_usage(argc, argv, &default_params);
@@ -1513,12 +1452,12 @@ static int64_t get_parameter_count(struct my_llama_lora* lora) {
         nx += ggml_nelements(layer.wo_b);
         nx += ggml_nelements(layer.ffn_norm_a);
         nx += ggml_nelements(layer.ffn_norm_b);
-        nx += ggml_nelements(layer.w1_a);
-        nx += ggml_nelements(layer.w1_b);
-        nx += ggml_nelements(layer.w2_a);
-        nx += ggml_nelements(layer.w2_b);
-        nx += ggml_nelements(layer.w3_a);
-        nx += ggml_nelements(layer.w3_b);
+        nx += ggml_nelements(layer.ffn_gate_a);
+        nx += ggml_nelements(layer.ffn_gate_b);
+        nx += ggml_nelements(layer.ffn_down_a);
+        nx += ggml_nelements(layer.ffn_down_b);
+        nx += ggml_nelements(layer.ffn_up_a);
+        nx += ggml_nelements(layer.ffn_up_b);
     }
     return nx;
 }
@@ -1572,9 +1511,9 @@ int main(int argc, char ** argv) {
     uint32_t n_rank_wv                 = params.custom_n_rank_wv             ? params.n_rank_wv             : params.lora_r;
     uint32_t n_rank_wo                 = params.custom_n_rank_wo             ? params.n_rank_wo             : params.lora_r;
     uint32_t n_rank_ffn_norm           = params.custom_n_rank_ffn_norm       ? params.n_rank_ffn_norm       : 1;
-    uint32_t n_rank_w1                 = params.custom_n_rank_w1             ? params.n_rank_w1             : params.lora_r;
-    uint32_t n_rank_w2                 = params.custom_n_rank_w2             ? params.n_rank_w2             : params.lora_r;
-    uint32_t n_rank_w3                 = params.custom_n_rank_w3             ? params.n_rank_w3             : params.lora_r;
+    uint32_t n_rank_ffn_gate           = params.custom_n_rank_ffn_gate       ? params.n_rank_ffn_gate       : params.lora_r;
+    uint32_t n_rank_ffn_down           = params.custom_n_rank_ffn_down       ? params.n_rank_ffn_down       : params.lora_r;
+    uint32_t n_rank_ffn_up             = params.custom_n_rank_ffn_up         ? params.n_rank_ffn_up         : params.lora_r;
     uint32_t n_rank_tok_embeddings     = params.custom_n_rank_tok_embeddings ? params.n_rank_tok_embeddings : params.lora_r;
     uint32_t n_rank_norm               = params.custom_n_rank_norm           ? params.n_rank_norm           : 1;
     uint32_t n_rank_output             = params.custom_n_rank_output         ? params.n_rank_output         : params.lora_r;
@@ -1584,9 +1523,9 @@ int main(int argc, char ** argv) {
     lora.hparams.n_rank_wv             = n_rank_wv;
     lora.hparams.n_rank_wo             = n_rank_wo;
     lora.hparams.n_rank_ffn_norm       = n_rank_ffn_norm;
-    lora.hparams.n_rank_w1             = n_rank_w1;
-    lora.hparams.n_rank_w2             = n_rank_w2;
-    lora.hparams.n_rank_w3             = n_rank_w3;
+    lora.hparams.n_rank_ffn_gate       = n_rank_ffn_gate;
+    lora.hparams.n_rank_ffn_down       = n_rank_ffn_down;
+    lora.hparams.n_rank_ffn_up         = n_rank_ffn_up;
     lora.hparams.n_rank_tok_embeddings = n_rank_tok_embeddings;
     lora.hparams.n_rank_norm           = n_rank_norm;
     lora.hparams.n_rank_output         = n_rank_output;
@@ -1627,9 +1566,9 @@ int main(int argc, char ** argv) {
         || (lora.hparams.n_rank_wv             != n_rank_wv)
         || (lora.hparams.n_rank_wo             != n_rank_wo)
         || (lora.hparams.n_rank_ffn_norm       != n_rank_ffn_norm)
-        || (lora.hparams.n_rank_w1             != n_rank_w1)
-        || (lora.hparams.n_rank_w2             != n_rank_w2)
-        || (lora.hparams.n_rank_w3             != n_rank_w3)
+        || (lora.hparams.n_rank_ffn_gate       != n_rank_ffn_gate)
+        || (lora.hparams.n_rank_ffn_down       != n_rank_ffn_down)
+        || (lora.hparams.n_rank_ffn_up         != n_rank_ffn_up)
         || (lora.hparams.n_rank_tok_embeddings != n_rank_tok_embeddings)
         || (lora.hparams.n_rank_norm           != n_rank_norm)
         || (lora.hparams.n_rank_output         != n_rank_output)
@@ -1663,7 +1602,7 @@ int main(int argc, char ** argv) {
     printf("%s: seen train_samples     %llu\n", __func__, (long long unsigned) train->train_samples);
     printf("%s: seen train_tokens      %llu\n", __func__, (long long unsigned) train->train_tokens);
     printf("%s: completed train_epochs %llu\n", __func__, (long long unsigned) train->train_epochs);
-    printf("%s: lora_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(lora.ctx) + lora.data.size()), (float) (ggml_used_mem(lora.ctx) + lora.data.size()) / (1024.0f*1024.0f));
+    printf("%s: lora_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(lora.ctx) + ggml_backend_buffer_get_size(lora.data)), (float) (ggml_used_mem(lora.ctx) + ggml_backend_buffer_get_size(lora.data)) / (1024.0f*1024.0f));
 
     if (params.only_write_lora) {
         save_train_files_data save_data;
@@ -1690,10 +1629,6 @@ int main(int argc, char ** argv) {
     int n_vocab  = model.hparams.n_vocab;
     int n_batch  = params.common.n_batch;
 
-
-    std::vector<uint8_t> mem_input_data;
-    std::vector<uint8_t> mem_compute_data;
-
     // context for input tensors without their data
     struct ggml_init_params ctx_input_params = {
         ggml_tensor_overhead() * 2, // mem_size
@@ -1706,17 +1641,11 @@ int main(int argc, char ** argv) {
     struct ggml_tensor * tokens_input  = ggml_new_tensor_2d(ctx_input, GGML_TYPE_I32, n_tokens, n_batch);
     struct ggml_tensor * target_probs  = ggml_new_tensor_3d(ctx_input, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
 
-    // measure required memory for input tensors
-    size_t max_input_size = GGML_PAD(ggml_nbytes(tokens_input), tensor_alignment) +
-                            GGML_PAD(ggml_nbytes(target_probs), tensor_alignment) +
-                            tensor_alignment;
-    printf("%s: input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
-
     // allocate input tensors
-    mem_input_data.resize(max_input_size);
-    ggml_allocr_t alloc_inps = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
-    ggml_allocr_alloc(alloc_inps, tokens_input);
-    ggml_allocr_alloc(alloc_inps, target_probs);
+    // measure required memory for input tensors
+    ggml_backend_buffer_t input_data = ggml_backend_alloc_ctx_tensors_from_buft(ctx_input, ggml_backend_cpu_buffer_type());
+    size_t max_input_size = ggml_backend_buffer_get_size(input_data);
+    printf("%s: input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
 
     // context for compute tensors without their data
     const size_t estimated_compute_size_wo_data = (
@@ -1743,7 +1672,7 @@ int main(int argc, char ** argv) {
     // find best evaluation order
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
-        ggml_allocr_t alloc = ggml_allocr_new_measure(tensor_alignment);
+        ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
         gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1756,14 +1685,15 @@ int main(int argc, char ** argv) {
             &logits, tokens_input, target_probs,
             n_tokens, n_batch,
             params.common.use_flash,
-            params.common.use_checkpointing
+            params.common.use_checkpointing,
+            true
         );
-        size_t max_compute_size = ggml_allocr_max_size(alloc) + tensor_alignment;
+        size_t max_compute_size = ggml_gallocr_get_buffer_size(alloc, 0); // FIXME: this will still allocate the buffer
         if (max_compute_size < best_compute_size) {
             best_compute_size = max_compute_size;
             best_order = gf->order;
         }
-        ggml_allocr_free(alloc);
+        ggml_gallocr_free(alloc);
         ggml_free(ctx_compute);
     }
     size_t max_compute_size = best_compute_size;
@@ -1774,9 +1704,8 @@ int main(int argc, char ** argv) {
         "invalid");
 
     // allocate compute tensors
-    mem_compute_data.resize(max_compute_size);
     ctx_compute = ggml_init(ctx_compute_params);
-    ggml_allocr_t alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
+    ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
     gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1789,11 +1718,9 @@ int main(int argc, char ** argv) {
         &logits, tokens_input, target_probs,
         n_tokens, n_batch,
         params.common.use_flash,
-        params.common.use_checkpointing
+        params.common.use_checkpointing,
+        false
     );
-    ggml_allocr_free(alloc);
-    ggml_allocr_free(alloc_inps);
-
 
     // tokenize data
     std::vector<llama_token> train_tokens;
@@ -1908,6 +1835,8 @@ int main(int argc, char ** argv) {
     ggml_free(ctx_work);
     ggml_free(ctx_compute);
     ggml_free(ctx_input);
+    ggml_gallocr_free(alloc);
+
 
     int64_t t1 = ggml_time_ms();
     printf("%s: total training time: ", __func__);
