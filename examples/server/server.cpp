@@ -672,6 +672,24 @@ struct llama_server_context
             }
         }
 
+        const auto &samplers_sequence = data.find("samplers");
+        if (samplers_sequence != data.end() && samplers_sequence->is_array())
+        {
+            std::vector<std::string> sampler_names;
+            for (const auto &sampler_name : *samplers_sequence)
+            {
+                if (sampler_name.is_string())
+                {
+                    sampler_names.emplace_back(sampler_name);
+                }
+            }
+            slot->sparams.samplers_sequence = sampler_types_from_names(sampler_names, false);
+        }
+        else
+        {
+            slot->sparams.samplers_sequence = default_sparams.samplers_sequence;
+        }
+
         if (multimodal)
         {
             const auto &images_data = data.find("image_data");
@@ -1026,6 +1044,12 @@ struct llama_server_context
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
         const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() &&
                                 eos_bias->second < 0.0f && std::isinf(eos_bias->second);
+        std::vector<std::string> samplers_sequence;
+        for (const auto &sampler_type : slot.sparams.samplers_sequence)
+        {
+            samplers_sequence.emplace_back(sampler_type_to_name_string(sampler_type));
+        }
+
         return json {
             {"n_ctx",             slot.n_ctx},
             {"model",             params.model_alias},
@@ -1056,6 +1080,7 @@ struct llama_server_context
             {"logit_bias",        slot.sparams.logit_bias},
             {"n_probs",           slot.sparams.n_probs},
             {"grammar",           slot.sparams.grammar},
+            {"samplers",          samplers_sequence}
         };
     }
 

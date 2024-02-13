@@ -10,12 +10,12 @@
 
 // sampler types
 enum class llama_sampler_type : char {
-    TOP_K     = 'k',
-    TOP_P     = 'p',
-    MIN_P     = 'm',
-    TFS_Z     = 'f',
-    TYPICAL_P = 'y',
-    TEMP      = 't'
+    TOP_K       = 'k',
+    TOP_P       = 'p',
+    MIN_P       = 'm',
+    TFS_Z       = 'f',
+    TYPICAL_P   = 'y',
+    TEMPERATURE = 't'
 };
 
 // sampling parameters
@@ -45,7 +45,7 @@ typedef struct llama_sampling_params {
         llama_sampler_type::TYPICAL_P,
         llama_sampler_type::TOP_P,
         llama_sampler_type::MIN_P,
-        llama_sampler_type::TEMP
+        llama_sampler_type::TEMPERATURE
     };
 
     std::string grammar;  // optional BNF-like grammar to constrain sampling
