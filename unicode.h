@@ -344,8 +344,9 @@ static uint32_t codepoint_from_utf16(const std::vector<uint16_t> & utf16, size_t
 static std::vector<uint32_t> codepoints_from_utf16(const std::vector<uint16_t> & utf16) {
     std::vector<uint32_t> result;
     size_t offset = 0;
-    while (offset < utf16.size())
+    while (offset < utf16.size()) {
         result.push_back(codepoint_from_utf16(utf16, offset));
+    }
     return result;
 }
 
@@ -364,27 +365,27 @@ static std::unordered_map<uint32_t, int> codepoint_type_map() {
         for(auto i = p.first; i <= p.second; ++ i)
             codepoint_types[i] = CODEPOINT_TYPE_DIGIT;
     }
-    for(auto p : letter_ranges) {
+    for (auto p : letter_ranges) {
         for(auto i = p.first; i <= p.second; ++ i)
             codepoint_types[i] = CODEPOINT_TYPE_LETTER;
     }
-    for(auto p : whitespace_ranges) {
+    for (auto p : whitespace_ranges) {
         for(auto i = p.first; i <= p.second; ++ i)
             codepoint_types[i] = CODEPOINT_TYPE_WHITESPACE;
     }
-    for(auto p : accent_mark_ranges) {
+    for (auto p : accent_mark_ranges) {
         for(auto i = p.first; i <= p.second; ++ i)
             codepoint_types[i] = CODEPOINT_TYPE_ACCENT_MARK;
     }
-    for(auto p : punctuation_ranges) {
+    for (auto p : punctuation_ranges) {
         for(auto i = p.first; i <= p.second; ++ i)
             codepoint_types[i] = CODEPOINT_TYPE_PUNCTUATION;
     }
-    for (auto p : symbol_ranges) {
+    for  (auto p : symbol_ranges) {
         for (auto i = p.first; i <= p.second; ++i)
             codepoint_types[i] = CODEPOINT_TYPE_SYMBOL;
     }
-    for(auto p : control_ranges) {
+    for (auto p : control_ranges) {
         for(auto i = p.first; i <= p.second; ++ i)
             codepoint_types[i] = CODEPOINT_TYPE_CONTROL;
     }
@@ -393,12 +394,13 @@ static std::unordered_map<uint32_t, int> codepoint_type_map() {
 
 static int codepoint_type(uint32_t cp) {
     static std::unordered_map<uint32_t, int> codepoint_types = codepoint_type_map();
-    return codepoint_types[cp];
+    return codepoint_types.find(cp) == codepoint_types.end() ? CODEPOINT_TYPE_UNIDENTIFIED : codepoint_types[cp];
 }
 
 static int codepoint_type(const std::string & utf8) {
-    if (utf8.length() == 0)
+    if (utf8.length() == 0) {
         return CODEPOINT_TYPE_UNIDENTIFIED;
+    }
     size_t offset = 0;
     return codepoint_type(codepoint_from_utf8(utf8, offset));
 }
