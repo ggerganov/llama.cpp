@@ -81,13 +81,13 @@ class Model:
         self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_block_count(self.block_count)
 
-        if (n_ctx := self.hparams.get("max_position_embeddings")) is not None:
+        if (n_ctx := self.find_hparam(["max_position_embeddings", "n_ctx"], optional=True)) is not None:
             self.gguf_writer.add_context_length(n_ctx)
 
         n_embd = self.find_hparam(["hidden_size", "n_embd"])
         self.gguf_writer.add_embedding_length(n_embd)
 
-        if (n_ff := self.find_hparam(["intermediate_size", "n_inner"])) is not None:
+        if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional=True)) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
 
         n_head = self.find_hparam(["num_attention_heads", "n_head"])
@@ -98,7 +98,7 @@ class Model:
 
         if (f_rms_eps := self.hparams.get("rms_norm_eps")) is not None:
             self.gguf_writer.add_layer_norm_rms_eps(f_rms_eps)
-        if (f_norm_eps := self.hparams.get("layer_norm_eps")) is not None:
+        if (f_norm_eps := self.find_hparam(["layer_norm_eps", "layer_norm_epsilon"], optional=True)) is not None:
             self.gguf_writer.add_layer_norm_eps(f_norm_eps)
         if (n_experts := self.hparams.get("num_local_experts")) is not None:
             self.gguf_writer.add_expert_count(n_experts)
@@ -1750,9 +1750,7 @@ class NomicBertModel(BertModel):
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        self.gguf_writer.add_causal_attention(self.hparams["causal"])
         self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
-        self.gguf_writer.add_pooling_layer(True)
 
     def get_tensors(self):
         assert self.vocab_size is not None
