@@ -7819,45 +7819,50 @@ private:
             const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
 
             // handling contractions
-            if (!split_condition && bytes_remain >= 2 && token != " ") {
-                // 's|'t|'m|'d
-                if (utf_char == "\'" && (utf_char_next == "s" || utf_char_next == "t" || utf_char_next == "m" || utf_char_next == "d")) {
-                    split_condition = true;
-                }
-                if (split_condition) {
-                    if (token.size()) {
-                        bpe_words.emplace_back(token); // push previous content as token
+            if (!split_condition && bytes_remain >= 2) {
+                if (token.size() == 0 || codepoint_type(token) == CODEPOINT_TYPE_LETTER || codepoint_type(token) == CODEPOINT_TYPE_DIGIT || codepoint_type(token) == CODEPOINT_TYPE_UNIDENTIFIED || (codepoint_type(token) == CODEPOINT_TYPE_WHITESPACE && token.back() != ' ')) {
+                    // 's|'t|'m|'d
+                    if (utf_char == "\'" && (utf_char_next == "s" || utf_char_next == "t" || utf_char_next == "m" || utf_char_next == "d")) {
+                        split_condition = true;
                     }
-                    token = utf_char + utf_char_next;
-                    bpe_words.emplace_back(token);
-                    token = "";
-                    i++;
-                    continue;
+                    if (split_condition) {
+                        if (token.size()) {
+                            bpe_words.emplace_back(token); // push previous content as token
+                        }
+                        token = utf_char + utf_char_next;
+                        bpe_words.emplace_back(token);
+                        token = "";
+                        i++;
+                        continue;
+                    }
                 }
             }
-            if (!split_condition && bytes_remain >= 3 && token != " ") {
-                // 're|'ve|'ll
-                if (utf_char == "\'" && (
-                        (utf_char_next == "r" && utf_char_next_next == "e") ||
-                        (utf_char_next == "v" && utf_char_next_next == "e") ||
-                        (utf_char_next == "l" && utf_char_next_next == "l"))
-                        ) {
-                    split_condition = true;
-                }
-                if (split_condition) {
-                    // current token + next token can be defined
-                    if (token.size()) {
-                        bpe_words.emplace_back(token); // push previous content as token
+            if (!split_condition && bytes_remain >= 3) {
+                if (token.size() == 0 || codepoint_type(token) == CODEPOINT_TYPE_LETTER || codepoint_type(token) == CODEPOINT_TYPE_DIGIT || codepoint_type(token) == CODEPOINT_TYPE_UNIDENTIFIED || (codepoint_type(token) == CODEPOINT_TYPE_WHITESPACE && token.back() != ' ')) {
+                    // 're|'ve|'ll
+                    if (utf_char == "\'" && (
+                            (utf_char_next == "r" && utf_char_next_next == "e") ||
+                            (utf_char_next == "v" && utf_char_next_next == "e") ||
+                            (utf_char_next == "l" && utf_char_next_next == "l"))
+                            ) {
+                        split_condition = true;
                     }
-                    token = utf_char + utf_char_next + utf_char_next_next;
-                    bpe_words.emplace_back(token); // the contraction
-                    token = "";
-                    i += 2;
-                    continue;
+                    if (split_condition) {
+                    // current token + next token can be defined
+                        if (token.size()) {
+                            bpe_words.emplace_back(token); // push previous content as token
+                        }
+                        token = utf_char + utf_char_next + utf_char_next_next;
+                        bpe_words.emplace_back(token); // the contraction
+                        token = "";
+                        i += 2;
+                        continue;
+                    }
                 }
             }
 
             if (!split_condition && !collecting) {
+                restart:
                 if (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
                     collecting_letter = true;
                     collecting = true;
@@ -7873,12 +7878,9 @@ private:
                     collecting_special = true;
                     collecting = true;
                 }
-                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE && codepoint_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) {
-                    collecting_whitespace_lookahead = true;
+                else if ((utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) || (utf_char != " " && codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
+                    collecting_whitespace = true;
                     collecting = true;
-                }
-                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE) {
-                    split_condition = true;
                 }
             }
             else if (!split_condition && collecting) {
@@ -7891,14 +7893,17 @@ private:
                 else if (collecting_special && (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
                     split_condition = true;
                 }
-                else if (collecting_whitespace_lookahead && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE) {
+                else if (collecting_whitespace && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE) {
                     split_condition = true;
                 }
-            }
-
-            if (utf_char_next == "") {
-                split_condition = true; // final
-                token += utf_char;
+                if (split_condition) {
+                    collecting = false;
+                    collecting_letter = false;
+                    collecting_numeric = false;
+                    collecting_special = false;
+                    collecting_whitespace = false;
+                    goto restart;
+                }
             }
 
             if (split_condition) {
@@ -7906,19 +7911,13 @@ private:
                     bpe_words.emplace_back(token);
                 }
                 token = utf_char;
-                collecting = false;
-                collecting_letter = false;
-                collecting_numeric = false;
-                collecting_special = false;
-                collecting_whitespace_lookahead = false;
             }
             else {
-                if (codepoint_type(token) == CODEPOINT_TYPE_PUNCTUATION && codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER) {
-                    bpe_words.emplace_back(token);
-                    token = utf_char;
-                } else {
-                    token += utf_char;
-                }
+                token += utf_char;
+            }
+
+            if (utf_char_next == "") { // final
+                bpe_words.emplace_back(token);
             }
         }
 
