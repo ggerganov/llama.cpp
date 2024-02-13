@@ -150,6 +150,7 @@
             packages =
               {
                 default = config.legacyPackages.llamaPackages.llama-cpp;
+                vulkan = config.packages.default.override { useVulkan = true; };
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
                 opencl = config.packages.default.override { useOpenCL = true; };
@@ -157,7 +158,6 @@
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };
                 mpi-cuda = config.packages.default.override { useMpi = true; };
-                vulkan = config.packages.default.override { useVulkan = true; };
               }
               // lib.optionalAttrs (system == "x86_64-linux") {
                 rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
