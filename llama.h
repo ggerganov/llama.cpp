@@ -234,7 +234,8 @@ extern "C" {
     struct llama_context_params {
         uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
-        uint32_t n_batch;           // prompt processing maximum batch size
+        uint32_t n_batch;           // prompt processing maximum batch size (ignored if n_ubatch is not zero)
+        uint32_t n_ubatch;          // prompt processing maximum batch size
         uint32_t n_seq_max;         // max number of sequences (i.e. distinct states for recurrent models)
         uint32_t n_threads;         // number of threads to use for generation
         uint32_t n_threads_batch;   // number of threads to use for batch processing
@@ -649,6 +650,11 @@ extern "C" {
 
     // Set abort callback
     LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
+
+    // Wait until all computations are finished
+    // This is automatically done when using one of the functions below to obtain the computation results
+    // and is not necessary to call it explicitly in most cases
+    LLAMA_API void llama_synchronize(struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_decode()
     // The logits for the last token are stored in the last row
