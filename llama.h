@@ -236,6 +236,7 @@ extern "C" {
         bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embedding;   // embedding mode only
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
+        bool do_pooling;  // whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
     };
 
     // model quantization parameters
@@ -627,6 +628,10 @@ extern "C" {
     // Get the embeddings for the input
     // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
+
+    // Get the embeddings for the ith sequence
+    // llama_get_embeddings(ctx) + i*n_embd
+    LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
 
     //
     // Vocab
