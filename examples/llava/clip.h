@@ -24,25 +24,7 @@ struct clip_ctx;
 extern "C" {
 #endif
 
-struct clip_vision_hparams {
-    int32_t image_size;
-    int32_t patch_size;
-    int32_t hidden_size;
-    int32_t n_intermediate;
-    int32_t projection_dim;
-    int32_t n_head;
-    int32_t n_layer;
-
-    float eps;
-
-    char mm_patch_merge_type[32]="flat"; // spatial_unpad or flat (default)
-    int32_t image_grid_pinpoints[32];
-    int32_t image_crop_resolution;
-
-};
-
 struct clip_ctx;
-CLIP_API const struct clip_vision_hparams clip_get_vision_hparams(const struct clip_ctx * ctx);
 
 CLIP_API struct clip_ctx * clip_model_load(const char * fname, int verbosity);
 CLIP_API struct clip_ctx * clip_model_load_cpu(const char * fname, int verbosity);
@@ -50,6 +32,15 @@ CLIP_API struct clip_ctx * clip_model_load_cpu(const char * fname, int verbosity
 CLIP_API void clip_free(struct clip_ctx * ctx);
 
 CLIP_API size_t clip_embd_nbytes(const struct clip_ctx * ctx);
+
+CLIP_API int32_t clip_image_size (const struct clip_ctx * ctx);
+CLIP_API int32_t clip_patch_size (const struct clip_ctx * ctx);
+CLIP_API int32_t clip_hidden_size(const struct clip_ctx * ctx);
+
+// TODO: should be enum, not string
+CLIP_API const char * clip_patch_merge_type(const struct clip_ctx * ctx);
+
+CLIP_API const int32_t * clip_image_grid(const struct clip_ctx * ctx);
 
 CLIP_API int clip_n_patches    (const struct clip_ctx * ctx);
 CLIP_API int clip_n_mmproj_embd(const struct clip_ctx * ctx);
