@@ -629,7 +629,7 @@ extern "C" {
     // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
-    // Get the embeddings for the ith token
+    // Get the embeddings for the ith sequence
     // llama_get_embeddings(ctx) + i*n_embd
     LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
 

@@ -5826,7 +5826,7 @@ struct llm_build_context {
         if (do_pooling) {
             cur = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), inp_sum);
         }
-        cb(cur, "result_embed", -1);
+        cb(cur, "result_embd", -1);
 
         ggml_build_forward_expand(gf, cur);
 
@@ -7516,7 +7516,7 @@ static int llama_decode_internal(
             embeddings = gf->nodes[gf->n_nodes - 3];
             GGML_ASSERT(strcmp(embeddings->name, "result_norm") == 0);
         }
-    } else if (strcmp(res->name, "result_embed") == 0) {
+    } else if (strcmp(res->name, "result_embd") == 0) {
         embeddings = res;
         res = nullptr;
     } else {
@@ -7636,12 +7636,12 @@ static int llama_decode_internal(
     if (!lctx.embedding.empty()) {
         auto & embedding_out = lctx.embedding;
 
-        const int64_t embed_pos = res ? n_embd * (n_tokens-1) : 0;
-        const int64_t embed_size = res ? n_embd : n_embd * n_tokens;
+        const int64_t embd_pos  = res ? n_embd * (n_tokens-1) : 0;
+        const int64_t embd_size = res ? n_embd : n_embd * n_tokens;
 
-        embedding_out.resize(embed_size);
+        embedding_out.resize(embd_size);
         ggml_backend_t embeddings_backend = ggml_backend_sched_get_node_backend(lctx.sched, embeddings);
-        ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), embed_pos*sizeof(float), embed_size*sizeof(float));
+        ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), embd_pos*sizeof(float), embd_size*sizeof(float));
         ggml_backend_synchronize(embeddings_backend);
     }
 

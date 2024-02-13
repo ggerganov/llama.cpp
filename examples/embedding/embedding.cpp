@@ -18,16 +18,8 @@ static std::vector<std::string> split_lines(const std::string & s) {
 }
 
 static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, int seq_id) {
-    const uint64_t n_tokens = tokens.size();
-    int n_past = batch.n_tokens;
-    batch.n_tokens += n_tokens;
-    for (uint64_t i = 0; i < n_tokens; i++) {
-        uint64_t j = n_past + i;
-        batch.token[j] = tokens[i];
-        batch.pos[j] = i;
-        batch.n_seq_id[j] = 1;
-        batch.seq_id[j][0] = seq_id;
-        batch.logits[j] = 0;
+    for (size_t i = 0; i < tokens.size(); i++) {
+        llama_batch_add(batch, tokens[i], i, { seq_id }, false);
     }
 }
 
@@ -158,7 +150,7 @@ int main(int argc, char ** argv) {
         if (batch.n_tokens + n_toks > n_batch) {
             float * out = emb + p * n_embd;
             batch_decode(ctx, batch, out, s, n_embd);
-            batch.n_tokens = 0;
+            llama_batch_clear(batch);
             p += s;
             s = 0;
         }
@@ -172,10 +164,13 @@ int main(int argc, char ** argv) {
     float * out = emb + p * n_embd;
     batch_decode(ctx, batch, out, s, n_embd);
 
-    // print first embedding
-    fprintf(stderr, "\nfirst embedding:\n");
-    for (int i = 0; i < n_embd; i++) {
-        fprintf(stderr, "%f ", emb[i]);
+    // print first 3 embeddings
+    for (int j = 0; j < std::min(3, n_prompts); j++) {
+        fprintf(stderr, "embedding %d: ", j);
+        for (int i = 0; i < n_embd; i++) {
+            fprintf(stderr, "%f ", emb[j * n_embd + i]);
+        }
+        fprintf(stderr, "\n\n");
     }
     fprintf(stderr, "\n");
 
