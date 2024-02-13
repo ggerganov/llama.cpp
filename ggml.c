@@ -2537,7 +2537,8 @@ size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
     size_t max_size = 0;
 
     for (struct ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor != NULL; tensor = ggml_get_next_tensor(ctx, tensor)) {
-        max_size = MAX(max_size, ggml_nbytes(tensor));
+        size_t bytes = ggml_nbytes(tensor);
+        max_size = MAX(max_size, bytes);
     }
 
     return max_size;
@@ -16672,9 +16673,9 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) {
     size_t setsize = CPU_ALLOC_SIZE(g_state.numa.total_cpus);
 
     switch(g_state.numa.numa_strategy) {
-        case GGML_NUMA_STRATEGY_INTERLEAVE:
+        case GGML_NUMA_STRATEGY_DISTRIBUTE:
             // run thread on node_num thread_n / (threads per node)
-            node_num = thread_n / ((n_threads + g_state.numa.n_nodes - 1) / g_state.numa.n_nodes);
+            node_num = thread_n % g_state.numa.n_nodes;
             break;
         case GGML_NUMA_STRATEGY_ISOLATE:
             // run thread on current_node

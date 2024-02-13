@@ -676,7 +676,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             } else {
                std::string value(argv[i]);
-               /**/ if (value == "interleave" || value == "" )   { params.numa = GGML_NUMA_STRATEGY_INTERLEAVE; }
+               /**/ if (value == "distribute" || value == "" )   { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
                else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
                else if (value == "numactl")   { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
                else { invalid_param = true; break; }
@@ -976,6 +976,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)sparams.penalty_repeat);
     printf("  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_present);
     printf("  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_freq);
+    printf("  --dynatemp-range N    dynamic temperature range (default: %.1f, 0.0 = disabled)\n", (double)sparams.dynatemp_range);
+    printf("  --dynatemp-exp N      dynamic temperature exponent (default: %.1f)\n", (double)sparams.dynatemp_exponent);
     printf("  --mirostat N          use Mirostat sampling.\n");
     printf("                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
     printf("                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", sparams.mirostat);
@@ -1030,9 +1032,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
         printf("  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
     printf("  --numa TYPE           attempt optimizations that help on some NUMA systems\n");
-    printf("                          - interleave: (default) spread execution evenly over all nodes\n");
+    printf("                          - distribute: spread execution evenly over all nodes\n");
     printf("                          - isolate: only spawn threads on CPUs on the node that execution started on\n");
-    printf("                          - numactl: use the CPU map provided my numactl\n");
+    printf("                          - numactl: use the CPU map provided by numactl\n");
     printf("                        if run without this previously, it is recommended to drop the system page cache before using this\n");
     printf("                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
     if (llama_supports_gpu_offload()) {
