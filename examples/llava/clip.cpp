@@ -1483,7 +1483,7 @@ static void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u
 
 // returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
 // res_imgs memory is being allocated here, previous allocations will be freed if found
-bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch & res_imgs ) {
+bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch & res_imgs) {
     bool pad_to_square = true;
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
@@ -1648,9 +1648,11 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
     //     clip_image_u8_free(temp2);
     // }
     // res_imgs.push_back(res);
+
     res_imgs.size = 1;
     res_imgs.data = new clip_image_f32[res_imgs.size];
     res_imgs.data[0] = std::move(*res);
+
     return true;
 }
 

@@ -31,23 +31,6 @@
 
 using json = nlohmann::json;
 
-// RGB uint8 image
-struct clip_image_u8 {
-    int nx;
-    int ny;
-
-    std::vector<uint8_t> buf;
-};
-
-// RGB float32 image (NHWC)
-// Memory layout: RGBRGBRGB...
-struct clip_image_f32 {
-    int nx;
-    int ny;
-
-    std::vector<float> buf;
-};
-
 struct server_params
 {
     std::string hostname = "127.0.0.1";
@@ -992,10 +975,13 @@ struct llama_server_context
             {
                 LOG_TEE("Error processing the given image");
                 clip_free(clp_ctx);
-                delete[] img_res_v.data;
+                clip_image_f32_free(img_res_v.data);
                 return false;
             }
-            clip_image_f32 * img_res = &img_res_v.data[0];
+
+            // note: assumes only one image was returned by clip_image_preprocess
+            clip_image_f32 * img_res = img_res_v.data;
+
             img.image_tokens = clip_n_patches(clp_ctx);
             img.image_embedding = (float *)malloc(clip_embd_nbytes(clp_ctx));
             if (!img.image_embedding)
@@ -1010,8 +996,9 @@ struct llama_server_context
                 LOG_TEE("Unable to encode image\n");
                 return false;
             }
-            // clip_image_f32_free(img_res);
-            delete[] img_res_v.data;
+
+            clip_image_f32_free(img_res_v.data);
+
             img.request_encode_image = false;
         }
 
