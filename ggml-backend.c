@@ -213,6 +213,10 @@ void ggml_backend_tensor_get_async(ggml_backend_t backend, const struct ggml_ten
 }
 
 GGML_CALL void ggml_backend_tensor_set(struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+    if (!size) {
+        return;
+    }
+
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
@@ -223,6 +227,10 @@ GGML_CALL void ggml_backend_tensor_set(struct ggml_tensor * tensor, const void *
 }
 
 GGML_CALL void ggml_backend_tensor_get(const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
+    if (!size) {
+        return;
+    }
+
     ggml_backend_buffer_t buf = tensor->view_src ? tensor->view_src->buffer : tensor->buffer;
 
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
