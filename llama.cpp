@@ -5768,6 +5768,7 @@ struct llm_build_context {
 
         // construct input embeddings (token, type, position)
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
+
         // token types are hardcoded to zero ("Sentence A")
         struct ggml_tensor * type_row0 = ggml_view_1d(ctx0, model.type_embd, n_embd, 0);
         inpL = ggml_add(ctx0, inpL, type_row0);
@@ -7386,7 +7387,6 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-
     {
         assert(ggml_backend_buffer_is_host(lctx.inp_sum->buffer));
         float * data = (float *) lctx.inp_sum->data;
@@ -7415,6 +7415,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         float * data = (float *) lctx.inp_sum->data;
 
         memset(lctx.inp_sum->data, 0, batch.n_tokens * batch.n_tokens * ggml_element_size(lctx.inp_sum));
+
         for (int i = 0; i < n_tokens; ++i) {
             const llama_seq_id seq_id = batch.seq_id[i][0];
             data[seq_id*n_tokens + i] = 1.0f;
