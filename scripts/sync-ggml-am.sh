@@ -97,6 +97,8 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-cuda.cu            -> ggml-cuda.cu
     # src/ggml-cuda.h             -> ggml-cuda.h
     # src/ggml-impl.h             -> ggml-impl.h
+    # src/ggml-kompute.cpp        -> ggml-kompute.cpp
+    # src/ggml-kompute.h          -> ggml-kompute.h
     # src/ggml-metal.h            -> ggml-metal.h
     # src/ggml-metal.m            -> ggml-metal.m
     # src/ggml-mpi.h              -> ggml-mpi.h
@@ -105,6 +107,10 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-opencl.h           -> ggml-opencl.h
     # src/ggml-quants.c           -> ggml-quants.c
     # src/ggml-quants.h           -> ggml-quants.h
+    # src/ggml-sycl.cpp           -> ggml-sycl.cpp
+    # src/ggml-sycl.h             -> ggml-sycl.h
+    # src/ggml-vulkan.cpp         -> ggml-vulkan.cpp
+    # src/ggml-vulkan.h           -> ggml-vulkan.h
     # include/ggml/ggml.h         -> ggml.h
     # include/ggml/ggml-alloc.h   -> ggml-alloc.h
     # include/ggml/ggml-backend.h -> ggml-backend.h
@@ -123,6 +129,8 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/src\/ggml-cuda\.cu/ggml-cuda.cu/g' \
         -e 's/src\/ggml-cuda\.h/ggml-cuda.h/g' \
         -e 's/src\/ggml-impl\.h/ggml-impl.h/g' \
+        -e 's/src\/ggml-kompute\.cpp/ggml-kompute.cpp/g' \
+        -e 's/src\/ggml-kompute\.h/ggml-kompute.h/g' \
         -e 's/src\/ggml-metal\.h/ggml-metal.h/g' \
         -e 's/src\/ggml-metal\.m/ggml-metal.m/g' \
         -e 's/src\/ggml-mpi\.h/ggml-mpi.h/g' \
@@ -131,6 +139,10 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/src\/ggml-opencl\.h/ggml-opencl.h/g' \
         -e 's/src\/ggml-quants\.c/ggml-quants.c/g' \
         -e 's/src\/ggml-quants\.h/ggml-quants.h/g' \
+        -e 's/src\/ggml-sycl\.cpp/ggml-sycl.cpp/g' \
+        -e 's/src\/ggml-sycl\.h/ggml-sycl.h/g' \
+        -e 's/src\/ggml-vulkan\.cpp/ggml-vulkan.cpp/g' \
+        -e 's/src\/ggml-vulkan\.h/ggml-vulkan.h/g' \
         -e 's/include\/ggml\/ggml\.h/ggml.h/g' \
         -e 's/include\/ggml\/ggml-alloc\.h/ggml-alloc.h/g' \
         -e 's/include\/ggml\/ggml-backend\.h/ggml-backend.h/g' \

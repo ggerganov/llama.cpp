@@ -30,6 +30,7 @@ class TensorNameMap:
         # Normalization of token embeddings
         MODEL_TENSOR.TOKEN_EMBD_NORM: (
             "word_embeddings_layernorm",  # bloom
+            "embeddings.LayerNorm",       # bert
         ),
 
         # Position embeddings
@@ -54,7 +55,6 @@ class TensorNameMap:
             "transformer.ln_f",                        # gpt2 gpt-j falcon
             "model.norm",                              # llama-hf baichuan internlm2
             "norm",                                    # llama-pth
-            "embeddings.LayerNorm",                    # bert
             "transformer.norm_f",                      # mpt
             "ln_f",                                    # refact bloom qwen gpt2
             "language_model.encoder.final_layernorm",  # persimmon
@@ -79,7 +79,6 @@ class TensorNameMap:
             "transformer.h.{bid}.ln_mlp",                           # falcon40b
             "model.layers.{bid}.input_layernorm",                   # llama-hf
             "layers.{bid}.attention_norm",                          # llama-pth
-            "encoder.layer.{bid}.attention.output.LayerNorm",       # bert
             "language_model.encoder.layers.{bid}.input_layernorm",  # persimmon
             "model.layers.{bid}.ln1",                               # yi
             "h.{bid}.ln_1",                                         # gpt2
@@ -155,6 +154,11 @@ class TensorNameMap:
             "model.layers.{bid}.attention.wo",                           # internlm2
         ),
 
+        # Attention output norm
+        MODEL_TENSOR.ATTN_OUT_NORM: (
+            "encoder.layer.{bid}.attention.output.LayerNorm",  # bert
+        ),
+
         # Rotary embeddings
         MODEL_TENSOR.ATTN_ROT_EMBD: (
             "model.layers.{bid}.self_attn.rotary_emb.inv_freq",        # llama-hf
@@ -171,7 +175,6 @@ class TensorNameMap:
             "transformer.blocks.{bid}.norm_2",                               # mpt
             "model.layers.{bid}.post_attention_layernorm",                   # llama-hf
             "layers.{bid}.ffn_norm",                                         # llama-pth
-            "encoder.layer.{bid}.output.LayerNorm",                          # bert
             "language_model.encoder.layers.{bid}.post_attention_layernorm",  # persimmon
             "model.layers.{bid}.ln2",                                        # yi
             "h.{bid}.ln_2",                                                  # gpt2
@@ -266,6 +269,10 @@ class TensorNameMap:
         MODEL_TENSOR.ROPE_FREQS: (
             "language_model.encoder.layers.{bid}.self_attention.rotary_emb.inv_freq",  # persimmon
         ),
+
+        MODEL_TENSOR.LAYER_OUT_NORM: (
+            "encoder.layer.{bid}.output.LayerNorm",  # bert
+        )
     }
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]
