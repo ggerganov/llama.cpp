@@ -1959,7 +1959,11 @@ struct ggml_numa_nodes {
     uint32_t n_nodes;
     uint32_t total_cpus; // hardware threads on system
     uint32_t current_node; // node on which main process is execting
+#ifdef __linux__
     cpu_set_t cpuset; // cpuset from numactl
+#else
+    uint32_t cpuset; // no NUMA support outside of Linux at this time. Use a portable datatype
+#endif
 };
 
 //
@@ -1993,6 +1997,7 @@ inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
 
+#ifdef __linux__
 static cpu_set_t ggml_get_numa_affinity(void) {
     cpu_set_t cpuset;
     pthread_t thread;
@@ -2001,6 +2006,12 @@ static cpu_set_t ggml_get_numa_affinity(void) {
     pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
     return cpuset;
 }
+#else
+static uint32_t ggml_get_numa_affinity(void) {
+    uint32_t cpuset = 0;
+    return cpuset; // No NUMA support outside of Linux, so return a safe datatype set to zero
+}
+#endif
 
 void ggml_numa_init(enum ggml_numa_strategies numa_flag) {
     if (g_state.numa.n_nodes > 0) {
