@@ -6097,15 +6097,15 @@ struct ggml_tensor * ggml_ssm_scan(
     GGML_ASSERT(ggml_is_matrix(s)); // the ssm_state should be 2D
 
     {
-        const int64_t d_state = s->ne[0];
-        const int64_t d_inner = s->ne[1];
-        const int64_t n_tok   = x->ne[1];
+        const int64_t d_state  = s->ne[0];
+        const int64_t d_inner  = s->ne[1];
+        const int64_t n_tokens = x->ne[1];
 
         GGML_ASSERT(x->ne[0] == d_inner);
         GGML_ASSERT(A->ne[0] == d_state);
         GGML_ASSERT(A->ne[1] == d_inner);
         GGML_ASSERT(B->ne[0] == d_state);
-        GGML_ASSERT(B->ne[1] == n_tok);
+        GGML_ASSERT(B->ne[1] == n_tokens);
     }
 
     bool is_node = false;
@@ -14682,12 +14682,12 @@ static void ggml_compute_forward_ssm_scan_f32(
 
     // first batch
     {
-        float * pdst = (float *) ((char *)  dst->data + ir0*( dst->nb[1])); // {d_state, d_inner, n_tok}
+        float * pdst = (float *) ((char *)  dst->data + ir0*( dst->nb[1])); // {d_state, d_inner, n_tokens}
         float * s    = (float *) ((char *) src0->data + ir0*(src0->nb[1])); // {d_state, d_inner}
-        float * x    = (float *) ((char *) src1->data + ir0*(src1->nb[0])); // {d_inner, n_tok}
-        float * dt   = (float *) ((char *) src2->data + ir0*(src2->nb[0])); // {d_inner, n_tok}
+        float * x    = (float *) ((char *) src1->data + ir0*(src1->nb[0])); // {d_inner, n_tokens}
+        float * dt   = (float *) ((char *) src2->data + ir0*(src2->nb[0])); // {d_inner, n_tokens}
         float * A    = (float *) ((char *) src3->data + ir0*(src3->nb[1])); // {d_state, d_inner}
-        float * B    = (float *) ((char *) src4->data);                     // {d_state, n_tok}
+        float * B    = (float *) ((char *) src4->data);                     // {d_state, n_tokens}
         // d_inner
         for (int i1 = 0; i1 < ir; ++i1) {
             float dt_soft_plus = log1pf(expf(dt[i1]));
@@ -14703,12 +14703,12 @@ static void ggml_compute_forward_ssm_scan_f32(
 
     // compute state for rest of tokens, previous state comes from dest
     for (int i2 = 1; i2 < n_t; ++i2) {
-        float * pdst = (float *) ((char *)  dst->data + ir0*( dst->nb[1]) +  i2   *( dst->nb[2])); // {d_state, d_inner, n_tok}
-        float * s    = (float *) ((char *)  dst->data + ir0*( dst->nb[1]) + (i2-1)*( dst->nb[2])); // {d_state, d_inner, n_tok}
-        float * x    = (float *) ((char *) src1->data + ir0*(src1->nb[0]) +  i2   *(src1->nb[1])); // {d_inner, n_tok}
-        float * dt   = (float *) ((char *) src2->data + ir0*(src2->nb[0]) +  i2   *(src2->nb[1])); // {d_inner, n_tok}
+        float * pdst = (float *) ((char *)  dst->data + ir0*( dst->nb[1]) +  i2   *( dst->nb[2])); // {d_state, d_inner, n_tokens}
+        float * s    = (float *) ((char *)  dst->data + ir0*( dst->nb[1]) + (i2-1)*( dst->nb[2])); // {d_state, d_inner, n_tokens}
+        float * x    = (float *) ((char *) src1->data + ir0*(src1->nb[0]) +  i2   *(src1->nb[1])); // {d_inner, n_tokens}
+        float * dt   = (float *) ((char *) src2->data + ir0*(src2->nb[0]) +  i2   *(src2->nb[1])); // {d_inner, n_tokens}
         float * A    = (float *) ((char *) src3->data + ir0*(src3->nb[1])); // {d_state, d_inner}
-        float * B    = (float *) ((char *) src4->data +  i2*(src4->nb[1])); // {d_state, n_tok}
+        float * B    = (float *) ((char *) src4->data +  i2*(src4->nb[1])); // {d_state, n_tokens}
         // d_inner
         for (int i1 = 0; i1 < ir; ++i1) {
             float dt_soft_plus = log1pf(expf(dt[i1]));
