@@ -91,7 +91,7 @@ When running llava-cli you will see a visual information right before the prompt
 `encode_image_with_clip: image embedding created: 576 tokens`
 
 **Llava-1.6 (anything above 576):**
-`encode_image_with_clip: image embedding created: 2880 tokens` 
+`encode_image_with_clip: image embedding created: 2880 tokens`
 
 
 Alternatively just pay notice to how many "tokens" have been used for your prompt, it will also show 1000+ tokens for llava-1.6
