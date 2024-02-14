@@ -1230,10 +1230,20 @@ struct clip_image_f32 * clip_image_f32_init() {
     return new clip_image_f32();
 }
 
-void clip_image_u8_free (struct clip_image_u8  * img) { delete img; }
+void clip_image_u8_free(struct clip_image_u8  * img) { delete img; }
 void clip_image_f32_free(struct clip_image_f32 * img) { delete img; }
-void clip_image_u8_batch_free (struct clip_image_u8  * data) { delete[] data; }
-void clip_image_f32_batch_free(struct clip_image_f32 * data) { delete[] data; }
+void clip_image_u8_batch_free(struct clip_image_u8_batch  & batch) {
+    if (batch.size > 0) {
+        delete[] batch.data;
+        batch.size = 0;
+    }
+}
+void clip_image_f32_batch_free(struct clip_image_f32_batch  & batch) {
+    if (batch.size > 0) {
+        delete[] batch.data;
+        batch.size = 0;
+    }
+}
 
 static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_image_u8 * img) {
     img->nx = nx;
@@ -1497,7 +1507,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
     }
     // free the previous res_imgs if any set
     if (res_imgs.size > 0) {
-        clip_image_f32_batch_free(res_imgs.data);
+        clip_image_f32_batch_free(res_imgs);
     }
     res_imgs.data = nullptr;
     res_imgs.size = 0;
