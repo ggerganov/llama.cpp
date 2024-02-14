@@ -32,7 +32,7 @@
 #include <cinttypes>
 #include <limits>
 
-// #define CLIP_DEBUG_FUNCTIONS
+//#define CLIP_DEBUG_FUNCTIONS
 
 // RGB uint8 image
 struct clip_image_u8 {
@@ -258,6 +258,114 @@ static projector_type clip_projector_type_from_string(const std::string & name) 
     return PROJECTOR_TYPE_UNKNOWN;
 }
 
+#ifdef CLIP_DEBUG_FUNCTIONS
+static void clip_image_write_image_to_ppm(const clip_image_u8& img, const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return;
+    }
+
+    // PPM header: P6 format, width, height, and max color value
+    file << "P6\n" << img.nx << " " << img.ny << "\n255\n";
+
+    // Write pixel data
+    for (size_t i = 0; i < img.buf.size(); i += 3) {
+        // PPM expects binary data in RGB format, which matches our image buffer
+        file.write(reinterpret_cast<const char*>(&img.buf[i]), 3);
+    }
+
+    file.close();
+}
+
+static void clip_image_save_to_bmp(const clip_image_u8& img, const std::string& filename) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return;
+    }
+
+    int fileSize = 54 + 3 * img.nx * img.ny; // File header + info header + pixel data
+    int bytesPerPixel = 3;
+    int widthInBytes = img.nx * bytesPerPixel;
+    int paddingAmount = (4 - (widthInBytes % 4)) % 4;
+    int stride = widthInBytes + paddingAmount;
+
+    // Bitmap file header
+    unsigned char fileHeader[14] = {
+        'B','M',     // Signature
+        0,0,0,0,    // Image file size in bytes
+        0,0,0,0,    // Reserved
+        54,0,0,0    // Start of pixel array
+    };
+
+    // Total file size
+    fileSize = 54 + (stride * img.ny);
+    fileHeader[2] = (unsigned char)(fileSize);
+    fileHeader[3] = (unsigned char)(fileSize >> 8);
+    fileHeader[4] = (unsigned char)(fileSize >> 16);
+    fileHeader[5] = (unsigned char)(fileSize >> 24);
+
+    // Bitmap information header (BITMAPINFOHEADER)
+    unsigned char infoHeader[40] = {
+        40,0,0,0,   // Size of this header (40 bytes)
+        0,0,0,0,    // Image width
+        0,0,0,0,    // Image height
+        1,0,        // Number of color planes
+        24,0,       // Bits per pixel
+        0,0,0,0,    // No compression
+        0,0,0,0,    // Image size (can be 0 for no compression)
+        0,0,0,0,    // X pixels per meter (not specified)
+        0,0,0,0,    // Y pixels per meter (not specified)
+        0,0,0,0,    // Total colors (color table not used)
+        0,0,0,0     // Important colors (all are important)
+    };
+
+    // Width and height in the information header
+    infoHeader[4] = (unsigned char)(img.nx);
+    infoHeader[5] = (unsigned char)(img.nx >> 8);
+    infoHeader[6] = (unsigned char)(img.nx >> 16);
+    infoHeader[7] = (unsigned char)(img.nx >> 24);
+    infoHeader[8] = (unsigned char)(img.ny);
+    infoHeader[9] = (unsigned char)(img.ny >> 8);
+    infoHeader[10] = (unsigned char)(img.ny >> 16);
+    infoHeader[11] = (unsigned char)(img.ny >> 24);
+
+    // Write file headers
+    file.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
+    file.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
+
+    // Pixel data
+    std::vector<unsigned char> padding(3, 0); // Max padding size to be added to each row
+    for (int y = img.ny - 1; y >= 0; --y) { // BMP files are stored bottom-to-top
+        for (int x = 0; x < img.nx; ++x) {
+            // Each pixel
+            size_t pixelIndex = (y * img.nx + x) * 3;
+            unsigned char pixel[3] = {
+                img.buf[pixelIndex + 2], // BMP stores pixels in BGR format
+                img.buf[pixelIndex + 1],
+                img.buf[pixelIndex]
+            };
+            file.write(reinterpret_cast<char*>(pixel), 3);
+        }
+        // Write padding for the row
+        file.write(reinterpret_cast<char*>(padding.data()), paddingAmount);
+    }
+
+    file.close();
+}
+
+// debug function to convert f32 to u8
+static void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u8& dst) {
+    dst.nx = src.nx;
+    dst.ny = src.ny;
+    dst.buf.resize(3 * src.nx * src.ny);
+    for (size_t i = 0; i < src.buf.size(); ++i) {
+        dst.buf[i] = static_cast<uint8_t>(std::min(std::max(int(src.buf[i] * 255.0f), 0), 255));
+    }
+}
+#endif
+
 
 //
 // clip layers
@@ -274,7 +382,7 @@ struct clip_hparams {
 
     float eps;
 
-    char mm_patch_merge_type[32]="flat"; // spatial_unpad or flat (default)
+    char mm_patch_merge_type[32] = "flat"; // spatial_unpad or flat (default)
 
     int32_t image_grid_pinpoints[32];
     int32_t image_crop_resolution;
@@ -1156,103 +1264,6 @@ bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length
     return true;
 }
 
-#ifdef CLIP_DEBUG_FUNCTIONS
-void clip_image_write_image_to_ppm(const clip_image_u8& img, const std::string& filename) {
-    std::ofstream file(filename, std::ios::binary);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open file for writing: " << filename << std::endl;
-        return;
-    }
-
-    // PPM header: P6 format, width, height, and max color value
-    file << "P6\n" << img.nx << " " << img.ny << "\n255\n";
-
-    // Write pixel data
-    for (size_t i = 0; i < img.buf.size(); i += 3) {
-        // PPM expects binary data in RGB format, which matches our image buffer
-        file.write(reinterpret_cast<const char*>(&img.buf[i]), 3);
-    }
-
-    file.close();
-}
-void clip_image_save_to_bmp(const clip_image_u8& img, const std::string& filename) {
-    std::ofstream file(filename, std::ios::binary);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open file for writing: " << filename << std::endl;
-        return;
-    }
-
-    int fileSize = 54 + 3 * img.nx * img.ny; // File header + info header + pixel data
-    int bytesPerPixel = 3;
-    int widthInBytes = img.nx * bytesPerPixel;
-    int paddingAmount = (4 - (widthInBytes % 4)) % 4;
-    int stride = widthInBytes + paddingAmount;
-
-    // Bitmap file header
-    unsigned char fileHeader[14] = {
-        'B','M',     // Signature
-        0,0,0,0,    // Image file size in bytes
-        0,0,0,0,    // Reserved
-        54,0,0,0    // Start of pixel array
-    };
-
-    // Total file size
-    fileSize = 54 + (stride * img.ny);
-    fileHeader[2] = (unsigned char)(fileSize);
-    fileHeader[3] = (unsigned char)(fileSize >> 8);
-    fileHeader[4] = (unsigned char)(fileSize >> 16);
-    fileHeader[5] = (unsigned char)(fileSize >> 24);
-
-    // Bitmap information header (BITMAPINFOHEADER)
-    unsigned char infoHeader[40] = {
-        40,0,0,0,   // Size of this header (40 bytes)
-        0,0,0,0,    // Image width
-        0,0,0,0,    // Image height
-        1,0,        // Number of color planes
-        24,0,       // Bits per pixel
-        0,0,0,0,    // No compression
-        0,0,0,0,    // Image size (can be 0 for no compression)
-        0,0,0,0,    // X pixels per meter (not specified)
-        0,0,0,0,    // Y pixels per meter (not specified)
-        0,0,0,0,    // Total colors (color table not used)
-        0,0,0,0     // Important colors (all are important)
-    };
-
-    // Width and height in the information header
-    infoHeader[4] = (unsigned char)(img.nx);
-    infoHeader[5] = (unsigned char)(img.nx >> 8);
-    infoHeader[6] = (unsigned char)(img.nx >> 16);
-    infoHeader[7] = (unsigned char)(img.nx >> 24);
-    infoHeader[8] = (unsigned char)(img.ny);
-    infoHeader[9] = (unsigned char)(img.ny >> 8);
-    infoHeader[10] = (unsigned char)(img.ny >> 16);
-    infoHeader[11] = (unsigned char)(img.ny >> 24);
-
-    // Write file headers
-    file.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
-    file.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
-
-    // Pixel data
-    std::vector<unsigned char> padding(3, 0); // Max padding size to be added to each row
-    for (int y = img.ny - 1; y >= 0; --y) { // BMP files are stored bottom-to-top
-        for (int x = 0; x < img.nx; ++x) {
-            // Each pixel
-            size_t pixelIndex = (y * img.nx + x) * 3;
-            unsigned char pixel[3] = {
-                img.buf[pixelIndex + 2], // BMP stores pixels in BGR format
-                img.buf[pixelIndex + 1],
-                img.buf[pixelIndex]
-            };
-            file.write(reinterpret_cast<char*>(pixel), 3);
-        }
-        // Write padding for the row
-        file.write(reinterpret_cast<char*>(padding.data()), paddingAmount);
-    }
-
-    file.close();
-}
-#endif
-
 // Linear interpolation between two points
 inline float lerp(float s, float e, float t) {
     return s + (e - s) * t;
@@ -1468,18 +1479,6 @@ static std::vector<clip_image_u8*> divide_to_patches_u8(const clip_image_u8 & im
     }
     return patches;
 }
-
-#ifdef CLIP_DEBUG_FUNCTIONS
-// debug function to convert f32 to u8
-static void clip_image_convert_f32_to_u8(const clip_image_f32& src, clip_image_u8& dst) {
-    dst.nx = src.nx;
-    dst.ny = src.ny;
-    dst.buf.resize(3 * src.nx * src.ny);
-    for (size_t i = 0; i < src.buf.size(); ++i) {
-        dst.buf[i] = static_cast<uint8_t>(std::min(std::max(int(src.buf[i] * 255.0f), 0), 255));
-    }
-}
-#endif
 
 // returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
 // res_imgs memory is being allocated here, previous allocations will be freed if found
