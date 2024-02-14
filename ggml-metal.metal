@@ -351,12 +351,12 @@ kernel void kernel_sum_rows(
 kernel void kernel_soft_max(
         device const float * src0,
         device const float * src1,
-        device const float * src2,
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant     float & scale,
+        constant     float & max_bias,
         threadgroup  float * buf [[threadgroup(0)]],
         uint  tgpig[[threadgroup_position_in_grid]],
         uint  tpitg[[thread_position_in_threadgroup]],
@@ -369,8 +369,21 @@ kernel void kernel_soft_max(
 
     device const float * psrc0 =         src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
     device const float * pmask = src1 != src0 ? src1                               + i01*ne00 : nullptr;
-           const float   slope = src2 != src0 ? src2[i02] : 0.0f;
     device       float * pdst  =         dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
+
+    float slope = 0.0f;
+
+    if (max_bias > 0.0f) {
+        const uint32_t n_head_kv   = ne02;
+        const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2((float) n_head_kv));
+
+        const float m0 = pow(2.0f, -(max_bias       ) / n_head_log2);
+        const float m1 = pow(2.0f, -(max_bias / 2.0f) / n_head_log2);
+
+        const int64_t h = i02;
+
+        slope = h < n_head_log2 ? pow(m0, h + 1) : pow(m1, 2*(h - n_head_log2) + 1);
+    }
 
     // parallel max
     float lmax = -INFINITY;
@@ -439,12 +452,12 @@ kernel void kernel_soft_max(
 kernel void kernel_soft_max_4(
         device const float * src0,
         device const float * src1,
-        device const float * src2,
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant     float & scale,
+        constant     float & max_bias,
         threadgroup  float * buf [[threadgroup(0)]],
         uint  tgpig[[threadgroup_position_in_grid]],
         uint  tpitg[[thread_position_in_threadgroup]],
@@ -457,10 +470,23 @@ kernel void kernel_soft_max_4(
 
     device const float4 * psrc4 =                (device const float4 *)(src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00);
     device const float4 * pmask = src1 != src0 ? (device const float4 *)(src1 +                                      i01*ne00) : nullptr;
-           const float    slope = src2 != src0 ? src2[i02] : 0.0f;
     device       float4 * pdst4 =                (device       float4 *)(dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00);
 
     const float4 s0(0.0f, 1.0f, 2.0f, 3.0f);
+
+    float slope = 0.0f;
+
+    if (max_bias > 0.0f) {
+        const uint32_t n_head_kv   = ne02;
+        const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2((float) n_head_kv));
+
+        const float m0 = pow(2.0f, -(max_bias       ) / n_head_log2);
+        const float m1 = pow(2.0f, -(max_bias / 2.0f) / n_head_log2);
+
+        const int64_t h = i02;
+
+        slope = h < n_head_log2 ? pow(m0, h + 1) : pow(m1, 2*(h - n_head_log2) + 1);
+    }
 
     // parallel max
     float4 lmax4 = -INFINITY;

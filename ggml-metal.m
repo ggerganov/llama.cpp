@@ -1191,7 +1191,8 @@ static bool ggml_metal_graph_compute(
                             pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SOFT_MAX].pipeline;
                         }
 
-                        const float scale = ((float *) dst->op_params)[0];
+                        const float scale    = ((float *) dst->op_params)[0];
+                        const float max_bias = ((float *) dst->op_params)[1];
 
                         [encoder setComputePipelineState:pipeline];
                         [encoder setBuffer:id_src0 offset:offs_src0   atIndex:0];
@@ -1200,16 +1201,12 @@ static bool ggml_metal_graph_compute(
                         } else {
                             [encoder setBuffer:id_src0 offset:offs_src0   atIndex:1];
                         }
-                        if (id_src2) {
-                            [encoder setBuffer:id_src2 offset:offs_src2   atIndex:2];
-                        } else {
-                            [encoder setBuffer:id_src0 offset:offs_src0   atIndex:2];
-                        }
-                        [encoder setBuffer:id_dst  offset:offs_dst    atIndex:3];
-                        [encoder setBytes:&ne00  length:sizeof(ne00)  atIndex:4];
-                        [encoder setBytes:&ne01  length:sizeof(ne01)  atIndex:5];
-                        [encoder setBytes:&ne02  length:sizeof(ne02)  atIndex:6];
-                        [encoder setBytes:&scale length:sizeof(scale) atIndex:7];
+                        [encoder setBuffer:id_dst   offset:offs_dst          atIndex:2];
+                        [encoder setBytes:&ne00     length:sizeof(ne00)      atIndex:3];
+                        [encoder setBytes:&ne01     length:sizeof(ne01)      atIndex:4];
+                        [encoder setBytes:&ne02     length:sizeof(ne02)      atIndex:5];
+                        [encoder setBytes:&scale    length:sizeof(scale)     atIndex:6];
+                        [encoder setBytes:&max_bias length:sizeof(max_bias)  atIndex:7];
                         [encoder setThreadgroupMemoryLength:32*sizeof(float) atIndex:0];
 
                         [encoder dispatchThreadgroups:MTLSizeMake(ne01*ne02*ne03, 1, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
