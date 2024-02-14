@@ -155,11 +155,29 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         system_prompt = prompt.substr(0, image_pos);
         user_prompt = prompt.substr(image_pos + std::string("<image>").length());
         printf("system_prompt: %s\n", system_prompt.c_str());
+        if (params->verbose_prompt) {
+            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+            for (int i = 0; i < (int) tmp.size(); i++) {
+                printf("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            }
+        }
         printf("user_prompt: %s\n", user_prompt.c_str());
+        if (params->verbose_prompt) {
+            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            for (int i = 0; i < (int) tmp.size(); i++) {
+                printf("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            }
+        }
     } else {
         // llava-1.5 native mode
         system_prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
         user_prompt = prompt + "\nASSISTANT:";
+        if (params->verbose_prompt) {
+            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            for (int i = 0; i < (int) tmp.size(); i++) {
+                printf("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            }
+        }
     }
 
     eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, add_bos);
@@ -171,13 +189,17 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     fprintf(stderr, "\n");
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(params->sparams);
-
+    std::string response = "";
     for (int i = 0; i < max_tgt_len; i++) {
         const char * tmp = sample(ctx_sampling, ctx_llava->ctx_llama, &n_past);
+        response += tmp;
         if (strcmp(tmp, "</s>") == 0) break;
         if (strstr(tmp, "###")) break; // Yi-VL behavior
-
         printf("%s", tmp);
+        if (strstr(response.c_str(), "<|im_end|>")) break; // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
+        if (strstr(response.c_str(), "<|im_start|>")) break; // Yi-34B llava-1.6
+        if (strstr(response.c_str(), "USER:")) break; // mistral llava-1.6
+
         fflush(stdout);
     }
 
