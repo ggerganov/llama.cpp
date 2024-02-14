@@ -855,11 +855,21 @@ if (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR CMAKE_GENERATOR_PLATFORM_LWR STR
      CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm.*|ARM64)$"))
     message(STATUS "ARM detected")
     if (MSVC)
+        add_compile_definitions(__aarch64__) # MSVC defines _M_ARM64 instead
         add_compile_definitions(__ARM_NEON)
         add_compile_definitions(__ARM_FEATURE_FMA)
-        add_compile_definitions(__ARM_FEATURE_DOTPROD)
-        # add_compile_definitions(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) # MSVC doesn't support vdupq_n_f16, vld1q_f16, vst1q_f16
-        add_compile_definitions(__aarch64__) # MSVC defines _M_ARM64 instead
+
+        set(CMAKE_REQUIRED_FLAGS_PREV ${CMAKE_REQUIRED_FLAGS})
+        string(JOIN " " CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS} "/arch:armv8.2")
+        check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_DOTPROD)
+        if (GGML_COMPILER_SUPPORT_DOTPROD)
+            add_compile_definitions(__ARM_FEATURE_DOTPROD)
+        endif ()
+        check_cxx_source_compiles("#include <arm_neon.h>\nint main() { float16_t _a; float16x8_t _s = vdupq_n_f16(_a); return 0; }" GGML_COMPILER_SUPPORT_FP16_VECTOR_ARITHMETIC)
+        if (GGML_COMPILER_SUPPORT_FP16_VECTOR_ARITHMETIC)
+            add_compile_definitions(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
+        endif ()
+        set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_PREV})
     else()
         check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
         if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
