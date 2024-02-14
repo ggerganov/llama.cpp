@@ -100,7 +100,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     int num_patches_width  = grid_shape.first;  // grid 1-4
     int num_patches_height = grid_shape.second; // grid 1-4
 
-    const size_t num_images = num_patches_width + num_patches_height + 1;
+    const size_t num_images = num_patches_width * num_patches_height + 1;
 
     // TODO: size calculation is not calculated - it's only tens of MB
     size_t ctx_size = 0;
