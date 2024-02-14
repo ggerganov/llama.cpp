@@ -7789,138 +7789,121 @@ private:
         work_queue.push(bigram);
     }
 
-    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
+    // 's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
+    static std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
         std::vector<std::string> bpe_words;
-        std::vector<std::string> bpe_encoded_words;
-
-        std::string token = "";
-        // GPT2 system regex:  's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
-        bool collecting_numeric = false;
-        bool collecting_letter = false;
-        bool collecting_special = false;
-        bool collecting_whitespace = false;
-        bool collecting = false;
-
-        std::vector<std::string> text_utf;
-        text_utf.reserve(text.size());
-        bpe_words.reserve(text.size());
-        bpe_encoded_words.reserve(text.size());
-
+        std::vector<std::string> text_utf8;
+    
         auto cps = codepoints_from_utf8(text);
-        for (size_t i = 0; i < cps.size(); ++i)
-            text_utf.emplace_back(codepoint_to_utf8(cps[i]));
-
-        for (int i = 0; i < (int)text_utf.size(); i++) {
-            const std::string & utf_char = text_utf[i];
-            bool split_condition = false;
-            int bytes_remain = text_utf.size() - i;
+        text_utf8.reserve(cps.size());
+    
+        for (auto cp : cps) {
+            text_utf8.emplace_back(codepoint_to_utf8(cp));
+        }
+    
+        size_t i = 0;
+        while (i < text_utf8.size()) {
+            const std::string & utf8_char = text_utf8[i];
+            size_t bytes_remain = text_utf8.size() - i;
             // forward backward lookups
-            const std::string & utf_char_next = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
-            const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
-
-            // handling contractions
-            if (!split_condition && bytes_remain >= 2) {
-                if (token.size() == 0 || codepoint_type(token) == CODEPOINT_TYPE_LETTER || codepoint_type(token) == CODEPOINT_TYPE_DIGIT || codepoint_type(token) == CODEPOINT_TYPE_UNIDENTIFIED || (codepoint_type(token) == CODEPOINT_TYPE_WHITESPACE && token.back() != ' ')) {
-                    // 's|'t|'m|'d
-                    if (utf_char == "\'" && (utf_char_next == "s" || utf_char_next == "t" || utf_char_next == "m" || utf_char_next == "d")) {
-                        split_condition = true;
-                    }
-                    if (split_condition) {
-                        if (token.size()) {
-                            bpe_words.emplace_back(token); // push previous content as token
-                        }
-                        token = utf_char + utf_char_next;
-                        bpe_words.emplace_back(token);
-                        token = "";
+            const std::string & utf8_char_next = (i + 1 < text_utf8.size()) ? text_utf8[i + 1] : "";
+            const std::string & utf8_char_next_next = (i + 2 < text_utf8.size()) ? text_utf8[i + 2] : "";
+    
+            bool collect_letter = false;
+            bool collect_number = false;
+            bool collect_special = false;
+            bool collect_whitespace = false;
+    
+            //'s|'t|'re|'ve|'m|'ll|'d
+            if (utf8_char == "'") {
+                if (utf8_char_next == "s" || utf8_char_next == "t" || utf8_char_next == "m" || utf8_char_next == "d") {
+                    bpe_words.push_back(utf8_char+utf8_char_next);
+                    i += 2;
+                    continue;
+                } else if (((utf8_char_next == "r"  || utf8_char_next == "v") && utf8_char_next_next == "e") || (utf8_char_next == "l" && utf8_char_next_next == "l")) {
+                    bpe_words.push_back(utf8_char+utf8_char_next+utf8_char_next_next);
+                    i += 3;
+                    continue;
+                }
+            }
+    
+            auto codepoint_type_utf8_char = codepoint_type(utf8_char);
+            auto codepoint_type_utf8_char_next = codepoint_type(utf8_char_next);
+            auto utf8_char_is_whitespace = codepoint_is_whitespace(utf8_char);
+            auto utf8_char_next_is_whitespace = codepoint_is_whitespace(utf8_char_next);
+            std::string word;
+            std::string buffer;
+            std::string buffer_next;
+    
+            if (codepoint_type_utf8_char == CODEPOINT_TYPE_LETTER || (utf8_char == " " && codepoint_type_utf8_char_next == CODEPOINT_TYPE_LETTER)) { // ?\p{L}+
+                collect_letter = true;
+            } else if (codepoint_type_utf8_char == CODEPOINT_TYPE_NUMBER || (utf8_char == " " && codepoint_type_utf8_char_next == CODEPOINT_TYPE_NUMBER)) { // ?\p{N}+
+                collect_number = true;
+            } else if ((!utf8_char_is_whitespace && codepoint_type_utf8_char != CODEPOINT_TYPE_LETTER  && codepoint_type_utf8_char != CODEPOINT_TYPE_NUMBER) || (utf8_char == " " && !utf8_char_next_is_whitespace && codepoint_type_utf8_char_next != CODEPOINT_TYPE_LETTER && codepoint_type_utf8_char_next != CODEPOINT_TYPE_NUMBER)) { // ?[^\s\p{L}\p{N}]+
+                collect_special = true;
+            } else if (utf8_char_is_whitespace) { //\s+(?!\S)|\s+
+                collect_whitespace = true;
+            }
+    
+            if (collect_letter || collect_number || collect_special || collect_whitespace) {
+                word += utf8_char;
+                i++;
+            }
+    
+            if (collect_letter) {
+                while (i < text_utf8.size()) {
+                    if (codepoint_type(buffer) == CODEPOINT_TYPE_LETTER) {
+                        word += buffer;
                         i++;
-                        continue;
+                    } else {
+                        break;
+                    }
+                }
+            } else if (collect_number) {
+                while (i < text_utf8.size()) {
+                    buffer = text_utf8[i];
+                    if (codepoint_type(buffer) == CODEPOINT_TYPE_NUMBER) {
+                        word += buffer;
+                        i++;
+                    } else {
+                        break;
+                    }
+                }
+            } else if (collect_special) {
+                while (i < text_utf8.size()) {
+                    buffer = text_utf8[i];
+                    auto codepoint_type_buffer = codepoint_type(buffer);
+                    auto buffer_is_whitespace = codepoint_is_whitespace(buffer);
+                    if (!buffer_is_whitespace && codepoint_type_buffer != CODEPOINT_TYPE_LETTER && codepoint_type_buffer != CODEPOINT_TYPE_NUMBER) {
+                        word += buffer;
+                        i++;
+                    } else {
+                        break;
+                    }
+                }
+            } else if (collect_whitespace) {
+                while (i < text_utf8.size()) {
+                    buffer = text_utf8[i];
+                    buffer_next = (i + 1 < text_utf8.size()) ? text_utf8[i + 1] : "";
+                    auto buffer_is_whitespace = codepoint_is_whitespace(buffer);
+                    auto buffer_next_is_whitespace = codepoint_is_whitespace(buffer_next);
+                    if ((!buffer_next.empty() && buffer_is_whitespace && buffer_next_is_whitespace) || (buffer_next.empty() && buffer_is_whitespace)) {
+                        word += buffer;
+                        i++;
+                    } else {
+                        break;
                     }
                 }
             }
-            if (!split_condition && bytes_remain >= 3) {
-                if (token.size() == 0 || codepoint_type(token) == CODEPOINT_TYPE_LETTER || codepoint_type(token) == CODEPOINT_TYPE_DIGIT || codepoint_type(token) == CODEPOINT_TYPE_UNIDENTIFIED || (codepoint_type(token) == CODEPOINT_TYPE_WHITESPACE && token.back() != ' ')) {
-                    // 're|'ve|'ll
-                    if (utf_char == "\'" && (
-                            (utf_char_next == "r" && utf_char_next_next == "e") ||
-                            (utf_char_next == "v" && utf_char_next_next == "e") ||
-                            (utf_char_next == "l" && utf_char_next_next == "l"))
-                            ) {
-                        split_condition = true;
-                    }
-                    if (split_condition) {
-                    // current token + next token can be defined
-                        if (token.size()) {
-                            bpe_words.emplace_back(token); // push previous content as token
-                        }
-                        token = utf_char + utf_char_next + utf_char_next_next;
-                        bpe_words.emplace_back(token); // the contraction
-                        token = "";
-                        i += 2;
-                        continue;
-                    }
-                }
-            }
-
-            if (!split_condition && !collecting) {
-                restart:
-                if (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
-                    collecting_letter = true;
-                    collecting = true;
-                }
-                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || (!token.size() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
-                    collecting_numeric = true;
-                    collecting = true;
-                }
-                else if (
-                        ((codepoint_type(utf_char) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (codepoint_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
-                        (!token.size() && utf_char == " " && codepoint_type(utf_char_next) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
-                        ) {
-                    collecting_special = true;
-                    collecting = true;
-                }
-                else if ((utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) || (utf_char != " " && codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
-                    collecting_whitespace = true;
-                    collecting = true;
-                }
-            }
-            else if (!split_condition && collecting) {
-                if (collecting_letter && codepoint_type(utf_char) != CODEPOINT_TYPE_LETTER) {
-                    split_condition = true;
-                }
-                else if (collecting_numeric && codepoint_type(utf_char) != CODEPOINT_TYPE_DIGIT) {
-                    split_condition = true;
-                }
-                else if (collecting_special && (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
-                    split_condition = true;
-                }
-                else if (collecting_whitespace && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE) {
-                    split_condition = true;
-                }
-                if (split_condition) {
-                    collecting = false;
-                    collecting_letter = false;
-                    collecting_numeric = false;
-                    collecting_special = false;
-                    collecting_whitespace = false;
-                    goto restart;
-                }
-            }
-
-            if (split_condition) {
-                if (token.size()) {
-                    bpe_words.emplace_back(token);
-                }
-                token = utf_char;
-            }
-            else {
-                token += utf_char;
-            }
-
-            if (utf_char_next == "") { // final
-                bpe_words.emplace_back(token);
+    
+            if (!word.empty()) {
+                bpe_words.push_back(word);
             }
         }
 
+        std::vector<std::string> bpe_encoded_words;
+        bpe_encoded_words.reserve(text.size());
+    
         for (std::string & word : bpe_words) {
             std::string encoded_token = "";
             for (char & c : word) {
