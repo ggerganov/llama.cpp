@@ -49,6 +49,34 @@ class ReaderField(NamedTuple):
 
     types: list[GGUFValueType] = []
 
+    def get(self):
+        result = None
+        type = self.types[0]
+        itype = None
+        if type == GGUFValueType.ARRAY or type == GGUFValueType.OBJ:
+            itype = self.types[-1]
+            if itype == GGUFValueType.STRING:
+                result = [str(bytes(self.parts[idx]), encoding="utf-8") for idx in self.data]
+            elif itype == GGUFValueType.OBJ or itype == GGUFValueType.ARRAY:
+                count=self.parts[-1]
+                result = count
+            else:
+                result = [pv for idx in self.data for pv in self.parts[idx].tolist()]
+        elif type == GGUFValueType.STRING:
+            result = str(bytes(self.parts[-1]), encoding="utf-8")
+        else:
+            result = self.parts[-1].tolist()[0]
+
+        return result
+
+    def getType(self):
+        type = self.types[0]
+        if type == GGUFValueType.ARRAY:
+            itype = self.types[-1]
+            return type, itype
+        else:
+            return type
+
 
 class ReaderTensor(NamedTuple):
     name: str
@@ -165,13 +193,16 @@ class GGUFReader:
             val = self._get(offs, nptype)
             return int(val.nbytes), [val], [0], types
         # Handle arrays.
-        if gtype == GGUFValueType.ARRAY:
+        if gtype == GGUFValueType.ARRAY or gtype == GGUFValueType.OBJ:
             raw_itype = self._get(offs, np.uint32)
             offs += int(raw_itype.nbytes)
             alen = self._get(offs, np.uint64)
             offs += int(alen.nbytes)
             aparts: list[npt.NDArray[Any]] = [raw_itype, alen]
             data_idxs: list[int] = []
+            if raw_itype[0] == GGUFValueType.OBJ or raw_itype[0] == GGUFValueType.ARRAY:
+                types += [raw_itype[0]]
+                return offs - orig_offs, aparts, data_idxs, types
             for idx in range(alen[0]):
                 curr_size, curr_parts, curr_idxs, curr_types = self._get_field_parts(offs, raw_itype[0])
                 if idx == 0:
@@ -212,11 +243,12 @@ class GGUFReader:
             offs += int(raw_kv_type.nbytes)
             parts: list[npt.NDArray[Any]] = [kv_klen, kv_kdata, raw_kv_type]
             idxs_offs = len(parts)
+            field_name = str(bytes(kv_kdata), encoding = 'utf-8')
             field_size, field_parts, field_idxs, field_types = self._get_field_parts(offs, raw_kv_type[0])
             parts += field_parts
             self._push_field(ReaderField(
                 orig_offs,
-                str(bytes(kv_kdata), encoding = 'utf-8'),
+                field_name,
                 parts,
                 [idx + idxs_offs for idx in field_idxs],
                 field_types,

@@ -2158,6 +2158,7 @@ extern "C" {
         GGUF_TYPE_UINT64  = 10,
         GGUF_TYPE_INT64   = 11,
         GGUF_TYPE_FLOAT64 = 12,
+        GGUF_TYPE_OBJ     = 13,
         GGUF_TYPE_COUNT,       // marks the end of the enum
     };
 
@@ -2229,6 +2230,9 @@ extern "C" {
     GGML_API void gguf_set_val_str (struct gguf_context * ctx, const char * key, const char * val);
     GGML_API void gguf_set_arr_data(struct gguf_context * ctx, const char * key, enum gguf_type type, const void * data, int n);
     GGML_API void gguf_set_arr_str (struct gguf_context * ctx, const char * key, const char ** data, int n);
+    GGML_API void gguf_set_arr_obj (struct gguf_context * ctx, const char * key, int n);
+    GGML_API void gguf_set_arr_arr (struct gguf_context * ctx, const char * key, int n);
+    GGML_API void gguf_set_obj_str (struct gguf_context * ctx, const char * key, const char ** data, int n);
 
     // set or add KV pairs from another context
     GGML_API void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src);
