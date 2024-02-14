@@ -167,7 +167,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     struct ggml_tensor * image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, clip_n_mmproj_embd(ctx_clip), clip_n_patches(ctx_clip), num_images - 1); // example: 4096 x 576 x 4
     // ggml_tensor_printf(image_features,"image_features",__LINE__,false,false);
     // fill it with the image embeddings, ignoring the base
-    for (size_t i = 1; i < num_images; i++) {
+    for (size_t i = 1; i < image_embd_v.size(); i++) {
         size_t offset = (i-1) * clip_embd_nbytes(ctx_clip);
         memcpy((uint8_t *)(image_features->data) + offset, image_embd_v[i], clip_embd_nbytes(ctx_clip));
     }
