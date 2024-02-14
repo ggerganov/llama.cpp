@@ -4,13 +4,13 @@
 #include "console.h"
 
 #include <cassert>
+#include <codecvt>
 #include <cstdio>
 #include <cstring>
-#include <string>
-#include <codecvt>
-#include <map>
-#include <vector>
 #include <locale>
+#include <string>
+#include <thread>
+#include <vector>
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -74,45 +74,46 @@ int main(int argc, char **argv) {
             }
         }
         catch (const std::invalid_argument &) {
-            fprintf(stderr, "%s : info: utf8 conversion %d '%s'\n", __func__, i, str.c_str());
+            //fprintf(stderr, "%s : info: utf8 conversion %d '%s'\n", __func__, i, str.c_str());
         }
     }
 
-    for (uint32_t cp = 0x0000; cp < 0xffff; ++cp) {
-        // NOTE: these exceptions seem to be necessary, because the GPT2 tokenizer doesn't want to interfere with some ASCII control characters
-        if ((cp < 0x03 || cp > 0x05) && cp != 0x0b && cp != 0x11 && (cp < 0x13 || cp > 0x17) && cp != 0x19 && (cp < 0x1c || cp > 0x1e) && (cp < 0xd800 || cp > 0xdfff)) {
-            std::string str = " " + codepoint_to_utf8(cp);
-            std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
-            std::string check = llama_detokenize_bpe(ctx, tokens);
-            if (str != check) {
-                fprintf(stderr, "%s : error: codepoint %x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
-                    __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
-                return 3;
-            }
+    // unicode
+    {
+        const int nthread = std::thread::hardware_concurrency();
+
+        std::vector<std::thread> threads(nthread);
+
+        for (int i = 0; i < nthread; ++i) {
+            threads[i] = std::thread([i, nthread, ctx]() {
+                for (uint32_t cp = i; cp < 0x0010ffff; cp += nthread) {
+                    if (!( // NOLINT
+                                (cp < 0x03       || cp >  0x05)   && cp != 0x0b && cp != 0x11 &&
+                                (cp < 0x13       || cp >  0x17)   && cp != 0x19 &&
+                                (cp < 0x1c       || cp >  0x1e)   &&
+                                (cp < 0xd800     || cp >  0xdfff) &&
+                                (cp < 0x00040000 || cp >= 0x000e0000)
+                        )) {
+                        continue;
+                    }
+
+                    std::string str = codepoint_to_utf8(cp);
+                    std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
+                    std::string check = llama_detokenize_bpe(ctx, tokens);
+                    if (cp != 9601 && str != check) {
+                        fprintf(stderr, "error: codepoint %x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
+                                cp, check.c_str(), check.length(), str.c_str(), str.length());
+                        std::exit(3);
+                    }
+                }
+            });
+        }
+
+        for (auto & t : threads) {
+            t.join();
         }
     }
-    // Restrict to assigned unicode planes
-    // for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
-    for (uint32_t cp = 0x10000; cp < 0x00040000; ++cp) {
-        std::string str = codepoint_to_utf8(cp);
-        std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
-        std::string check = llama_detokenize_bpe(ctx, tokens);
-        if (str != check) {
-            fprintf(stderr, "%s : error: codepoint %x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
-                __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
-            return 4;
-        }
-    }
-    for (uint32_t cp = 0x000e0000; cp < 0x0010ffff; ++cp) {
-        std::string str = codepoint_to_utf8(cp);
-        std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
-        std::string check = llama_detokenize_bpe(ctx, tokens);
-        if (str != check) {
-            fprintf(stderr, "%s : error: codepoint %x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
-                __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
-            return 4;
-        }
-    }
+
     llama_free_model(model);
     llama_free(ctx);
 

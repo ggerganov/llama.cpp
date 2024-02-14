@@ -569,6 +569,14 @@ $(info I CC:        $(shell $(CC)   --version | head -n 1))
 $(info I CXX:       $(shell $(CXX)  --version | head -n 1))
 ifdef LLAMA_CUBLAS
 $(info I NVCC:      $(shell $(NVCC) --version | tail -n 1))
+CUDA_VERSION := $(shell nvcc --version | grep -oP 'release (\K[0-9]+\.[0-9])')
+ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
+ifndef CUDA_DOCKER_ARCH
+ifndef CUDA_POWER_ARCH
+$(error I ERROR: For CUDA versions < 11.7 a target CUDA architecture must be explicitly provided via CUDA_DOCKER_ARCH)
+endif # CUDA_POWER_ARCH
+endif # CUDA_DOCKER_ARCH
+endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
 endif # LLAMA_CUBLAS
 $(info )
 
