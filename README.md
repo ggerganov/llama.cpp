@@ -958,7 +958,7 @@ We have three Docker images available for this project:
 
 1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization. (platforms: `linux/amd64`, `linux/arm64`)
 2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file. (platforms: `linux/amd64`, `linux/arm64`)
-3. `ghcr.io/ggerganov/llama.cpp:server`: This image only includes the server executabhle file. (platforms: `linux/amd64`, `linux/arm64`)
+3. `ghcr.io/ggerganov/llama.cpp:server`: This image only includes the server executable file. (platforms: `linux/amd64`, `linux/arm64`)
 
 Additionally, there the following images, similar to the above:
 
