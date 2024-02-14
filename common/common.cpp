@@ -340,13 +340,14 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            sparams.samplers_sequence = parse_samplers_input(argv[i]);
+            const auto sampler_names = string_split(argv[i], ';');
+            sparams.samplers_sequence = sampler_types_from_names(sampler_names);
         } else if (arg == "--sampling-seq") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            sparams.samplers_sequence = argv[i];
+            sparams.samplers_sequence = sampler_types_from_chars(argv[i]);
         } else if (arg == "--top-p") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -906,6 +907,14 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const llama_sampling_params & sparams = params.sparams;
 
+    std::string sampler_type_chars;
+    std::string sampler_type_names;
+    for (const auto sampler_type : sparams.samplers_sequence) {
+        sampler_type_chars += static_cast<char>(sampler_type);
+        sampler_type_names += sampler_type_to_name_string(sampler_type) + ";";
+    }
+    sampler_type_names.pop_back();
+
     printf("\n");
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
@@ -947,8 +956,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    printf("  --samplers            samplers that will be used for generation in the order, separated by \';\', for example: \"top_k;tfs;typical;top_p;min_p;temp\"\n");
-    printf("  --sampling-seq        simplified sequence for samplers that will be used (default: %s)\n", sparams.samplers_sequence.c_str());
+    printf("  --samplers            samplers that will be used for generation in the order, separated by \';\' (default: %s)\n", sampler_type_names.c_str());
+    printf("  --sampling-seq        simplified sequence for samplers that will be used (default: %s)\n", sampler_type_chars.c_str());
     printf("  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", sparams.top_k);
     printf("  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)sparams.top_p);
     printf("  --min-p N             min-p sampling (default: %.1f, 0.0 = disabled)\n", (double)sparams.min_p);
@@ -1097,45 +1106,85 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
 }
 
 //
-// String parsing
+// String utils
 //
 
-std::string parse_samplers_input(std::string input) {
-    std::string output = "";
+std::vector<std::string> string_split(std::string input, char separator) {
+    std::vector<std::string> parts;
+    size_t separator_pos = input.find(separator);
+    while (separator_pos != std::string::npos) {
+        std::string part = input.substr(0, separator_pos);
+        parts.emplace_back(part);
+        input = input.substr(separator_pos + 1);
+        separator_pos = input.find(separator);
+    }
+    parts.emplace_back(input);
+    return parts;
+}
+
+std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names) {
     // since samplers names are written multiple ways
     // make it ready for both system names and input names
-    std::unordered_map<std::string, char> samplers_symbols {
-        {"top_k",      'k'},
-        {"top-k",      'k'},
-        {"top_p",      'p'},
-        {"top-p",      'p'},
-        {"nucleus",    'p'},
-        {"typical_p",  'y'},
-        {"typical-p",  'y'},
-        {"typical",    'y'},
-        {"min_p",      'm'},
-        {"min-p",      'm'},
-        {"tfs_z",      'f'},
-        {"tfs-z",      'f'},
-        {"tfs",        'f'},
-        {"temp",       't'},
-        {"temperature",'t'}
+    std::unordered_map<std::string, llama_sampler_type> sampler_name_map {
+        {"top_k",       llama_sampler_type::TOP_K},
+        {"top-k",       llama_sampler_type::TOP_K},
+        {"top_p",       llama_sampler_type::TOP_P},
+        {"top-p",       llama_sampler_type::TOP_P},
+        {"nucleus",     llama_sampler_type::TOP_P},
+        {"typical_p",   llama_sampler_type::TYPICAL_P},
+        {"typical-p",   llama_sampler_type::TYPICAL_P},
+        {"typical",     llama_sampler_type::TYPICAL_P},
+        {"min_p",       llama_sampler_type::MIN_P},
+        {"min-p",       llama_sampler_type::MIN_P},
+        {"tfs_z",       llama_sampler_type::TFS_Z},
+        {"tfs-z",       llama_sampler_type::TFS_Z},
+        {"tfs",         llama_sampler_type::TFS_Z},
+        {"temp",        llama_sampler_type::TEMP},
+        {"temperature", llama_sampler_type::TEMP}
     };
-    // expected format example: "temp;top_k;tfs_z;typical_p;top_p;min_p"
-    size_t separator = input.find(';');
-    while (separator != input.npos) {
-        std::string name = input.substr(0,separator);
-        input = input.substr(separator+1);
-        separator = input.find(';');
 
-        if (samplers_symbols.find(name) != samplers_symbols.end()) {
-            output += samplers_symbols[name];
+    std::vector<llama_sampler_type> sampler_types;
+    sampler_types.reserve(names.size());
+    for (const auto& name : names) {
+        const auto sampler_item = sampler_name_map.find(name);
+        if (sampler_item != sampler_name_map.end()) {
+            sampler_types.push_back(sampler_item->second);
         }
     }
-    if (samplers_symbols.find(input) != samplers_symbols.end()) {
-        output += samplers_symbols[input];
+    return sampler_types;
+}
+
+std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string) {
+    std::unordered_map<char, llama_sampler_type> sampler_name_map {
+        {'k', llama_sampler_type::TOP_K},
+        {'p', llama_sampler_type::TOP_P},
+        {'y', llama_sampler_type::TYPICAL_P},
+        {'m', llama_sampler_type::MIN_P},
+        {'f', llama_sampler_type::TFS_Z},
+        {'t', llama_sampler_type::TEMP}
+    };
+
+    std::vector<llama_sampler_type> sampler_types;
+    sampler_types.reserve(names_string.size());
+    for (const auto & c : names_string) {
+        const auto sampler_item = sampler_name_map.find(c);
+        if (sampler_item != sampler_name_map.end()) {
+            sampler_types.push_back(sampler_item->second);
+        }
     }
-    return output;
+    return sampler_types;
+}
+
+std::string sampler_type_to_name_string(llama_sampler_type sampler_type) {
+    switch (sampler_type) {
+        case llama_sampler_type::TOP_K:     return "top_k";
+        case llama_sampler_type::TFS_Z:     return "tfs_z";
+        case llama_sampler_type::TYPICAL_P: return "typical_p";
+        case llama_sampler_type::TOP_P:     return "top_p";
+        case llama_sampler_type::MIN_P:     return "min_p";
+        case llama_sampler_type::TEMP:      return "temp";
+        default : return "";
+    }
 }
 
 //
@@ -1550,6 +1599,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "cpu_has_blas: %s\n",        ggml_cpu_has_blas()        ? "true" : "false");
     fprintf(stream, "cpu_has_sse3: %s\n",        ggml_cpu_has_sse3()        ? "true" : "false");
     fprintf(stream, "cpu_has_vsx: %s\n",         ggml_cpu_has_vsx()         ? "true" : "false");
+    fprintf(stream, "cpu_has_matmul_int8: %s\n", ggml_cpu_has_matmul_int8() ? "true" : "false");
 
 #ifdef NDEBUG
     fprintf(stream, "debug: false\n");

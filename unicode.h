@@ -526,7 +526,7 @@ static uint32_t codepoint_from_utf8(const std::string & utf8, size_t & offset) {
         offset += 1;
         return result;
     }
-    else if (!(utf8[offset + 0] & 0x40)) {
+    if (!(utf8[offset + 0] & 0x40)) {
         throw std::invalid_argument("invalid character");
     }
     else if (!(utf8[offset + 0] & 0x20)) {
@@ -614,6 +614,7 @@ static bool codepoint_type_init_search_vector() {
     return true;
 }
 
+
 static size_t binary_search_implement(uint32_t cp, const std::vector<std::pair<uint32_t, uint32_t>> & ranges) {
     size_t left = 0;
     size_t right = ranges.size() - 1;
@@ -657,8 +658,8 @@ static bool codepoint_type_init() {
 }
 
 static int codepoint_type(uint32_t cp) {
-    static bool codepoint_type_initialized = codepoint_type_init();
-    return codepoint_type_binary_search(cp);
+    static std::unordered_map<uint32_t, int> codepoint_types = codepoint_type_map();
+    return codepoint_types.find(cp) == codepoint_types.end() ? CODEPOINT_TYPE_UNIDENTIFIED : codepoint_types.at(cp);
 }
 
 static int codepoint_type(const std::string & utf8) {

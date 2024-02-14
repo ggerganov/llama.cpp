@@ -167,6 +167,34 @@ static T json_value(const json &body, const std::string &key, const T &default_v
         : default_value;
 }
 
+inline std::string format_llama2(std::vector<json> messages)
+{
+    std::ostringstream output;
+    bool is_inside_turn = false;
+
+    for (auto it = messages.begin(); it != messages.end(); ++it) {
+        if (!is_inside_turn) {
+            output << "[INST] ";
+        }
+        std::string role    = json_value(*it, "role", std::string("user"));
+        std::string content = json_value(*it, "content", std::string(""));
+        if (role == "system") {
+            output << "<<SYS>>\n" << content << "\n<<SYS>>\n\n";
+            is_inside_turn = true;
+        } else if (role == "user") {
+            output << content << " [/INST]";
+            is_inside_turn = true;
+        } else {
+            output << " " << content << " </s>";
+            is_inside_turn = false;
+        }
+    }
+
+    LOG_VERBOSE("format_llama2", {{"text", output.str()}});
+
+    return output.str();
+}
+
 inline std::string format_chatml(std::vector<json> messages)
 {
     std::ostringstream chatml_msgs;
@@ -179,6 +207,8 @@ inline std::string format_chatml(std::vector<json> messages)
     }
 
     chatml_msgs << "<|im_start|>assistant" << '\n';
+
+    LOG_VERBOSE("format_chatml", {{"text", chatml_msgs.str()}});
 
     return chatml_msgs.str();
 }

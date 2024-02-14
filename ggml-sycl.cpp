@@ -11578,11 +11578,8 @@ static dpct::err0 ggml_sycl_cpy_tensor_2d(void *dst,
     }
     char * dst_ptr = (char *) dst;
 
-    const int64_t ne0 = src->ne[0];
-    const int64_t nb0 = src->nb[0];
-    const int64_t nb1 = src->nb[1];
-    const int64_t nb2 = src->nb[2];
-    const int64_t nb3 = src->nb[3];
+    GGML_TENSOR_LOCALS_1(int64_t, ne, src, ne);
+    GGML_TENSOR_LOCALS(int64_t, nb, src, nb);
     const enum ggml_type type = src->type;
     const int64_t ts = ggml_type_size(type);
     const int64_t bs = ggml_blck_size(type);
@@ -12426,9 +12423,7 @@ inline void ggml_sycl_op_alibi(const ggml_tensor *src0, const ggml_tensor *src1,
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
+    GGML_TENSOR_LOCALS_3(int64_t, ne0, src0, ne);
     const int64_t nrows = ggml_nrows(src0);
 
     //const int n_past = ((int32_t *) dst->op_params)[0];
@@ -12758,15 +12753,9 @@ static void ggml_sycl_op_mul_mat(const ggml_tensor *src0,
                                  ggml_sycl_op_mul_mat_t op,
                                  const bool convert_src1_to_q8_1) try {
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
+    GGML_TENSOR_LOCALS(int64_t, ne0, src0, ne);
 
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2];
-    const int64_t ne13 = src1->ne[3];
+    GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne);
     const int64_t nrows1 = ggml_nrows(src1);
 
     GGML_ASSERT(ne03 == ne13);
@@ -13337,23 +13326,13 @@ static void ggml_sycl_mul_mat_mat_batched_sycl(const ggml_tensor *src0,
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
-    const int64_t ne00 = src0->ne[0]; GGML_UNUSED(ne00);
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-    const int64_t ne03 = src0->ne[3];
+    GGML_TENSOR_LOCALS(int64_t, ne0, src0, ne);
 
-    const int64_t nb01 = src0->nb[1];
-    const int64_t nb02 = src0->nb[2]; GGML_UNUSED(nb02);
-    const int64_t nb03 = src0->nb[3]; GGML_UNUSED(nb03);
+    GGML_TENSOR_LOCALS(int64_t, nb0, src0, nb);
 
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2];
-    const int64_t ne13 = src1->ne[3];
+    GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne);
 
-    const int64_t nb11 = src1->nb[1];
-    const int64_t nb12 = src1->nb[2]; GGML_UNUSED(nb12);
-    const int64_t nb13 = src1->nb[3]; GGML_UNUSED(nb13);
+    GGML_TENSOR_LOCALS(int64_t, nb1, src1, nb);
 
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
@@ -13655,23 +13634,15 @@ static void ggml_sycl_mul_mat_id_sycl(ggml_tensor * dst) {
     GGML_ASSERT(src00->backend != GGML_BACKEND_GPU_SPLIT);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
 
-    const int64_t ne00 = src00->ne[0]; GGML_UNUSED(ne00);
-    const int64_t ne01 = src00->ne[1];
-    const int64_t ne02 = src00->ne[2];
-    const int64_t ne03 = src00->ne[3];
+    GGML_TENSOR_LOCALS(int64_t, ne0, src00, ne);
 
     //const int64_t nb01 = src00->nb[1];
-    const int64_t nb02 = src00->nb[2]; GGML_UNUSED(nb02);
-    const int64_t nb03 = src00->nb[3]; GGML_UNUSED(nb03);
+    GGML_TENSOR_LOCALS(int64_t, nb0, src00, nb);
 
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2];
-    const int64_t ne13 = src1->ne[3];
+    GGML_TENSOR_LOCALS(int64_t, ne1, src1, ne);
 
+    GGML_TENSOR_LOCALS(int64_t, nb1, src1, nb);
     //const int64_t nb11 = src1->nb[1];
-    const int64_t nb12 = src1->nb[2]; GGML_UNUSED(nb12);
-    const int64_t nb13 = src1->nb[3]; GGML_UNUSED(nb13);
 
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
@@ -13940,25 +13911,7 @@ static void ggml_sycl_cpy(const ggml_tensor *src0, const ggml_tensor *src1,
     GGML_ASSERT(ggml_nbytes(src0) <= INT_MAX);
     GGML_ASSERT(ggml_nbytes(src1) <= INT_MAX);
 
-    const int64_t ne00 = src0->ne[0];
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2];
-
-
-    const int64_t nb00 = src0->nb[0];
-    const int64_t nb01 = src0->nb[1];
-    const int64_t nb02 = src0->nb[2];
-    const int64_t nb03 = src0->nb[3];
-
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2];
-
-
-    const int64_t nb10 = src1->nb[0];
-    const int64_t nb11 = src1->nb[1];
-    const int64_t nb12 = src1->nb[2];
-    const int64_t nb13 = src1->nb[3];
+    GGML_TENSOR_BINARY_OP_LOCALS;
 
     SYCL_CHECK(ggml_sycl_set_device(g_main_device));
     dpct::queue_ptr main_stream = g_syclStreams[g_main_device_index][0];
