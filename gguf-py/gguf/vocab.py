@@ -152,10 +152,6 @@ class SpecialVocab:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
                 self.add_special_token[typ] = add_entry
-            if not added_tokens:
-                # We will need this to get the content for the token, so if it's empty
-                # may as well just give up.
-                continue
             entry = tokenizer_config.get(f'{typ}_token')
             if isinstance(entry, str):
                 tc_content = entry
