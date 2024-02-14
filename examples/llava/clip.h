@@ -24,25 +24,7 @@ struct clip_ctx;
 extern "C" {
 #endif
 
-struct clip_vision_hparams {
-    int32_t image_size;
-    int32_t patch_size;
-    int32_t hidden_size;
-    int32_t n_intermediate;
-    int32_t projection_dim;
-    int32_t n_head;
-    int32_t n_layer;
-    float eps;
-};
-
-CLIP_API struct clip_ctx * clip_model_load(const char * fname, int verbosity);
-
-CLIP_API void clip_free(struct clip_ctx * ctx);
-
-CLIP_API size_t clip_embd_nbytes(const struct clip_ctx * ctx);
-
-CLIP_API int clip_n_patches    (const struct clip_ctx * ctx);
-CLIP_API int clip_n_mmproj_embd(const struct clip_ctx * ctx);
+struct clip_ctx;
 
 struct clip_image_u8_batch {
     struct clip_image_u8 * data;
@@ -54,10 +36,29 @@ struct clip_image_f32_batch {
     size_t size;
 };
 
+CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity);
+CLIP_API struct clip_ctx * clip_model_load_cpu(const char * fname, int verbosity);
+
+CLIP_API void clip_free(struct clip_ctx * ctx);
+
+CLIP_API size_t clip_embd_nbytes(const struct clip_ctx * ctx);
+
+CLIP_API int32_t clip_image_size (const struct clip_ctx * ctx);
+CLIP_API int32_t clip_patch_size (const struct clip_ctx * ctx);
+CLIP_API int32_t clip_hidden_size(const struct clip_ctx * ctx);
+
+// TODO: should be enum, not string
+CLIP_API const char * clip_patch_merge_type(const struct clip_ctx * ctx);
+
+CLIP_API const int32_t * clip_image_grid(const struct clip_ctx * ctx);
+
+CLIP_API int clip_n_patches    (const struct clip_ctx * ctx);
+CLIP_API int clip_n_mmproj_embd(const struct clip_ctx * ctx);
+
 CLIP_API struct clip_image_u8  * clip_image_u8_init ();
 CLIP_API struct clip_image_f32 * clip_image_f32_init();
 
-CLIP_API void clip_image_u8_free (struct clip_image_u8 * img);
+CLIP_API void clip_image_u8_free (struct clip_image_u8  * img);
 CLIP_API void clip_image_f32_free(struct clip_image_f32 * img);
 
 CLIP_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8 * img);
@@ -65,7 +66,11 @@ CLIP_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8
 /** interpret bytes as an image file with length bytes_length, and use the result to populate img */
 CLIP_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img);
 
-CLIP_API bool clip_image_preprocess  (struct clip_ctx * ctx, const struct clip_image_u8 * img, struct clip_image_f32 * res, bool pad2square);
+/** preprocess img and store the result in res_imgs, pad_to_square may be overriden to false depending on model configuration */
+CLIP_API bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch & res_imgs );
+
+CLIP_API struct ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx);
+
 CLIP_API bool clip_image_encode      (struct clip_ctx * ctx, int n_threads, struct clip_image_f32 * img, float * vec);
 CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec);
 

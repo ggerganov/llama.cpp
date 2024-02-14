@@ -19,9 +19,9 @@ After building, run: `./llava-cli` to see the usage. For example:
 
 **note**: A lower temperature like 0.1 is recommended for better quality. add `--temp 0.1` to the command to do so.
 
-## Model conversion
+## LLaVA 1.5
 
-- Clone `llava-v15-7b` and `clip-vit-large-patch14-336` locally:
+- Clone a LLaVA and a CLIP model ([available options](https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md)). For example:
 
 ```sh
 git clone https://huggingface.co/liuhaotian/llava-v1.5-7b
@@ -55,8 +55,14 @@ python ./convert.py ../llava-v1.5-7b
 
 Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` directory.
 
+## LLaVA 1.6
+
+- Use `llava-surgery-v2.py`
+
+- TODO: add detailed instructions
+
 ## TODO
 
-- [ ] Support non-CPU backend for the image encoding part.
+- [x] Support non-CPU backend for the image encoding part.
 - [ ] Support different sampling methods.
 - [ ] Support more model variants.

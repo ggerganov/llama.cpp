@@ -1173,7 +1173,7 @@ def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyM
             for (name, tensor) in model.items()}
 
 
-def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
+def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) -> LazyModel:
     tmap = gguf.TensorNameMap(ARCH, params.n_layer)
     should_skip: set[gguf.MODEL_TENSOR] = set(gguf.MODEL_TENSOR_SKIP.get(ARCH, []))
 
@@ -1199,7 +1199,11 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     for name, lazy_tensor in model.items():
         tensor_type, name_new = tmap.get_type_and_name(name, try_suffixes = (".weight", ".bias")) or (None, None)
         if name_new is None:
-            raise Exception(f"Unexpected tensor name: {name}")
+            if skip_unknown:
+                print(f"Unexpected tensor name: {name} - skipping")
+                continue
+            else:
+                raise Exception(f"Unexpected tensor name: {name}. Use --skip-unknown to ignore it (e.g. LLaVA)")
 
         if tensor_type in should_skip:
             print(f"skipping tensor {name_new}")
@@ -1377,19 +1381,20 @@ def main(args_in: list[str] | None = None) -> None:
         output_choices.append("q8_0")
     vocab_types = ["spm", "bpe", "hfft"]
     parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
-    parser.add_argument("--awq-path",    type=Path,              help="Path to scale awq cache file", default=None)
-    parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
-    parser.add_argument("--dump-single", action="store_true",    help="don't convert, just show what's in a single model file")
-    parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
-    parser.add_argument("--outtype",     choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
-    parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
-    parser.add_argument("--vocab-type",  choices=vocab_types,    help="The vocabulary format used to define the tokenizer model (default: spm)", default="spm")
-    parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
-    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
-    parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
-    parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default=DEFAULT_CONCURRENCY)
-    parser.add_argument("--big-endian",  action="store_true",    help="model is executed on big endian machine")
-    parser.add_argument("--pad-vocab",   action="store_true",    help="add pad tokens when model vocab expects more than tokenizer metadata provides")
+    parser.add_argument("--awq-path",     type=Path,              help="Path to scale awq cache file", default=None)
+    parser.add_argument("--dump",         action="store_true",    help="don't convert, just show what's in the model")
+    parser.add_argument("--dump-single",  action="store_true",    help="don't convert, just show what's in a single model file")
+    parser.add_argument("--vocab-only",   action="store_true",    help="extract only the vocab")
+    parser.add_argument("--outtype",      choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
+    parser.add_argument("--vocab-dir",    type=Path,              help="directory containing tokenizer.model, if separate from model file")
+    parser.add_argument("--vocab-type",   choices=vocab_types,    help="The vocabulary format used to define the tokenizer model (default: spm)", default="spm")
+    parser.add_argument("--outfile",      type=Path,              help="path to write to; default: based on input")
+    parser.add_argument("model",          type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
+    parser.add_argument("--ctx",          type=int,               help="model training context (default: based on input)")
+    parser.add_argument("--concurrency",  type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default=DEFAULT_CONCURRENCY)
+    parser.add_argument("--big-endian",   action="store_true",    help="model is executed on big endian machine")
+    parser.add_argument("--pad-vocab",    action="store_true",    help="add pad tokens when model vocab expects more than tokenizer metadata provides")
+    parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
 
     args = parser.parse_args(args_in)
     if args.awq_path:
@@ -1461,7 +1466,7 @@ def main(args_in: list[str] | None = None) -> None:
     print(f"Special vocab info: {special_vocab}")
 
     model   = model_plus.model
-    model   = convert_model_names(model, params)
+    model   = convert_model_names(model, params, args.skip_unknown)
     ftype   = pick_output_type(model, args.outtype)
     model   = convert_to_output_type(model, ftype)
     outfile = args.outfile or default_outfile(model_plus.paths, ftype)
