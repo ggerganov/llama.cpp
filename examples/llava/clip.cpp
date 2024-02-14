@@ -1232,6 +1232,8 @@ struct clip_image_f32 * clip_image_f32_init() {
 
 void clip_image_u8_free (struct clip_image_u8  * img) { delete img; }
 void clip_image_f32_free(struct clip_image_f32 * img) { delete img; }
+void clip_image_u8_batch_free (struct clip_image_u8  * data) { delete[] data; }
+void clip_image_f32_batch_free(struct clip_image_f32 * data) { delete[] data; }
 
 static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_image_u8 * img) {
     img->nx = nx;
@@ -1494,11 +1496,8 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         pad_to_square = false;
     }
     // free the previous res_imgs if any set
-    if (res_imgs.size > 0 && res_imgs.size < 100) {
-        for (size_t i = 0; i < res_imgs.size; i++) {
-            clip_image_f32_free(&(res_imgs.data[i]));
-        }
-        delete[] res_imgs.data;
+    if (res_imgs.size > 0) {
+        clip_image_f32_batch_free(res_imgs.data);
     }
     res_imgs.data = nullptr;
     res_imgs.size = 0;
@@ -1650,7 +1649,8 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
 
     res_imgs.size = 1;
     res_imgs.data = new clip_image_f32[res_imgs.size];
-    res_imgs.data[0] = std::move(*res);
+    res_imgs.data[0] = *res;
+    clip_image_f32_free(res);
 
     return true;
 }
