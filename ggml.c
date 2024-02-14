@@ -11694,22 +11694,20 @@ static void ggml_compute_forward_alibi_f32(
     const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
     const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_heads_log2_floor);
 
-    for (int64_t i = 0; i < ne0; i++) {
-        for (int64_t j = 0; j < ne1; j++) {
-            for (int64_t k = 0; k < ne2_ne3; k++) {
+    for (int64_t k = 0; k < ne2_ne3; k++) {
+        // TODO: k*nb2 or k*nb3
+        float m_k;
+
+        if (k < n_heads_log2_floor) {
+            m_k = powf(m0, k + 1);
+        } else {
+            m_k = powf(m1, 2 * (k - n_heads_log2_floor) + 1);
+        }
+
+        for (int64_t i = 0; i < ne0; i++) {
+            for (int64_t j = 0; j < ne1; j++) {
                 float * const src = (float *)((char *) src0->data + i*nb0 + j*nb1 + k*nb2);
                 float *      pdst = (float *)((char *)  dst->data + i*nb0 + j*nb1 + k*nb2);
-
-                // TODO: k*nb2 or k*nb3
-
-                float m_k;
-
-                if (k < n_heads_log2_floor) {
-                    m_k = powf(m0, k + 1);
-                } else {
-                    m_k = powf(m1, 2 * (k - n_heads_log2_floor) + 1);
-                }
-
                 pdst[0] = i * m_k + src[0];
             }
         }
@@ -11754,21 +11752,20 @@ static void ggml_compute_forward_alibi_f16(
     const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
     const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_heads_log2_floor);
 
-    for (int i = 0; i < ne0; i++) {
-        for (int j = 0; j < ne1; j++) {
-            for (int k = 0; k < ne2_ne3; k++) {
+    for (int k = 0; k < ne2_ne3; k++) {
+        // TODO: k*nb2 or k*nb3
+        float m_k;
+
+        if (k < n_heads_log2_floor) {
+            m_k = powf(m0, k + 1);
+        } else {
+            m_k = powf(m1, 2 * (k - n_heads_log2_floor) + 1);
+        }
+
+        for (int i = 0; i < ne0; i++) {
+            for (int j = 0; j < ne1; j++) {
                 ggml_fp16_t * const src  = (ggml_fp16_t *)((char *) src0->data + i*nb0 + j*nb1 + k*nb2);
-                      float *      pdst  =       (float *)((char *)  dst->data + i*nb0 + j*nb1 + k*nb2);
-
-                // TODO: k*nb2 or k*nb3
-
-                float m_k;
-
-                if (k < n_heads_log2_floor) {
-                    m_k = powf(m0, k + 1);
-                } else {
-                    m_k = powf(m1, 2 * (k - n_heads_log2_floor) + 1);
-                }
+                float       *      pdst  =       (float *)((char *)  dst->data + i*nb0 + j*nb1 + k*nb2);
 
                 // we return F32
                 pdst[0] = i * m_k + GGML_FP16_TO_FP32(src[0]);
