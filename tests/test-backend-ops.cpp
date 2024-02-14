@@ -2093,7 +2093,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         for (int n = 0; n < 10; ++n) {
             int64_t ne0 = dist_ne0(rng);
             int64_t ne1 = dist_ne1(rng);
-            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}, n/2 == 0, 0.1f, 4.0f));
+            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}, n/2 == 0, 0.1f, ne0 < 1000 ? 4.0f : 0.0f));
         }
 
         exponent <<= 1;

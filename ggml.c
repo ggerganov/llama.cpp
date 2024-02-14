@@ -11516,7 +11516,7 @@ static void ggml_compute_forward_soft_max_f32(
             ggml_vec_acc_f32(nc, wp, mp);
         }
 
-        // alibi bias
+        // ALiBi bias
         if (max_bias > 0.0f) {
             const uint32_t h  = (i1/ne01)%ne02; // head
             const float slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);

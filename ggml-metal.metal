@@ -373,6 +373,7 @@ kernel void kernel_soft_max(
 
     float slope = 0.0f;
 
+    // ALiBi
     if (max_bias > 0.0f) {
         const uint32_t n_head_kv   = ne02;
         const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2((float) n_head_kv));
