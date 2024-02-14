@@ -1923,6 +1923,7 @@ struct llama_context {
     struct ggml_tensor * inp_embd;      // F32 [n_embd, n_batch]
     struct ggml_tensor * inp_pos;       // I32 [n_batch]
     struct ggml_tensor * inp_KQ_mask;   // F32 [n_ctx, n_batch]
+    struct ggml_tensor * inp_KQ_slope;  // F32 [n_head_kv]
     struct ggml_tensor * inp_K_shift;   // I32 [n_ctx]
     struct ggml_tensor * inp_sum;       // F32 [n_batch, n_batch]
 
@@ -4782,10 +4783,10 @@ static struct ggml_tensor * llm_build_kqv(
          struct ggml_tensor * wo_b,
          struct ggml_tensor * q_cur,
          struct ggml_tensor * kq_mask,
+         struct ggml_tensor * kq_slope,
                     int64_t   n_ctx,
                     int32_t   n_tokens,
                     int32_t   n_kv,
-                    float     max_alibi_bias,
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
@@ -4815,28 +4816,8 @@ static struct ggml_tensor * llm_build_kqv(
         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
     }
 
-    if (max_alibi_bias > 0.0f) {
-        // temporary branch until we figure out how to handle ggml_alibi through ggml_add
-        kq = ggml_scale(ctx, kq, kq_scale);
-        cb(kq, "kq_scaled", il);
-
-        if (max_alibi_bias > 0.0f) {
-            // TODO: n_head or n_head_kv
-            // TODO: K-shift is likely not working
-            // TODO: change to ggml_add
-            kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, max_alibi_bias);
-            cb(kq, "kq_scaled_alibi", il);
-        }
-
-        kq = ggml_add(ctx, kq, kq_mask);
-        cb(kq, "kq_masked", il);
-
-        kq = ggml_soft_max(ctx, kq);
-        cb(kq, "kq_soft_max", il);
-    } else {
-        kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale);
-        cb(kq, "kq_soft_max_ext", il);
-    }
+    kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_slope, kq_scale);
+    cb(kq, "kq_soft_max_ext", il);
 
     // split cached v into n_head heads
     struct ggml_tensor * v =
@@ -4882,11 +4863,11 @@ static struct ggml_tensor * llm_build_kv(
          struct ggml_tensor * v_cur,
          struct ggml_tensor * q_cur,
          struct ggml_tensor * kq_mask,
+         struct ggml_tensor * kq_slope,
                     int64_t   n_ctx,
                     int32_t   n_tokens,
                     int32_t   kv_head,
                     int32_t   n_kv,
-                    float     max_alibi_bias,
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
@@ -4900,9 +4881,8 @@ static struct ggml_tensor * llm_build_kv(
     llm_build_kv_store(ctx, hparams, kv, graph, k_cur, v_cur, n_ctx, n_tokens, kv_head, cb, il);
 
     struct ggml_tensor * cur;
-    cur  = llm_build_kqv(ctx, model, hparams, kv, graph,
-            wo, wo_b,
-            q_cur, kq_mask, n_ctx, n_tokens, n_kv, max_alibi_bias, kq_scale, cb, il);
+    cur  = llm_build_kqv(ctx, model, hparams, kv, graph, wo, wo_b,
+            q_cur, kq_mask, kq_slope, n_ctx, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
 
     return cur;
@@ -5070,7 +5050,7 @@ struct llm_build_context {
                 }
 
                 Qcur = ggml_rope_custom(
-                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos,
+                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos,
                     hparams.n_rot, 0, 0, n_orig_ctx, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
@@ -5085,7 +5065,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5215,6 +5195,9 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = ggml_view_2d(ctx0, lctx.inp_KQ_mask, n_kv, n_tokens, n_kv*ggml_type_size(lctx.inp_KQ_mask->type), 0);
         cb(KQ_mask, "KQ_mask", -1);
 
+        struct ggml_tensor * KQ_slope = ggml_view_1d(ctx0, lctx.inp_KQ_slope, n_head_kv, 0);
+        cb(KQ_slope, "KQ_slope", -1);
+
         // shift the entire K-cache if needed
         if (do_rope_shift) {
             llm_build_k_shift(ctx0, hparams, cparams, kv_self, gf, lctx.inp_K_shift, LLM_ROPE, n_ctx, freq_base, freq_scale, cb);
@@ -5265,7 +5248,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, hparams.f_max_alibi_bias, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, KQ_slope, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5389,7 +5372,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5488,7 +5471,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5693,7 +5676,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Q, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Q, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5755,6 +5738,9 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = ggml_view_2d(ctx0, lctx.inp_KQ_mask, n_kv, n_tokens, n_kv*ggml_type_size(lctx.inp_KQ_mask->type), 0);
         cb(KQ_mask, "KQ_mask", -1);
 
+        struct ggml_tensor * KQ_slope = ggml_view_1d(ctx0, lctx.inp_KQ_slope, n_head_kv, 0);
+        cb(KQ_slope, "KQ_slope", -1);
+
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
@@ -5782,7 +5768,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, hparams.f_max_alibi_bias, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, KQ_slope, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5882,7 +5868,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             } else {
                 // compute Q and K and RoPE them
@@ -5913,7 +5899,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5985,6 +5971,9 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = ggml_view_2d(ctx0, lctx.inp_KQ_mask, n_kv, n_tokens, n_kv*ggml_type_size(lctx.inp_KQ_mask->type), 0);
         cb(KQ_mask, "KQ_mask", -1);
 
+        struct ggml_tensor * KQ_slope = ggml_view_1d(ctx0, lctx.inp_KQ_slope, n_head_kv, 0);
+        cb(KQ_slope, "KQ_slope", -1);
+
         inpL = llm_build_norm(ctx0, inpL, hparams,
                 model.tok_norm,
                 model.tok_norm_b,
@@ -6018,7 +6007,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, hparams.f_max_alibi_bias, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, KQ_slope, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -6078,6 +6067,9 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = ggml_view_2d(ctx0, lctx.inp_KQ_mask, n_kv, n_tokens, n_kv*ggml_type_size(lctx.inp_KQ_mask->type), 0);
         cb(KQ_mask, "KQ_mask", -1);
 
+        struct ggml_tensor * KQ_slope = ggml_view_1d(ctx0, lctx.inp_KQ_slope, n_head_kv, 0);
+        cb(KQ_slope, "KQ_slope", -1);
+
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * attn_norm;
 
@@ -6111,7 +6103,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, hparams.f_max_alibi_bias, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, KQ_slope, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -6233,7 +6225,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -6348,7 +6340,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -6469,7 +6461,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -6596,7 +6588,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f, cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -6699,7 +6691,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
             struct ggml_tensor * sa_out = cur;
@@ -6798,7 +6790,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -6907,7 +6899,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -7025,7 +7017,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -7144,7 +7136,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -7276,7 +7268,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_ctx, n_tokens, kv_head, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -7503,6 +7495,32 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                     }
                     data[h*(n_kv*n_tokens) + j*n_kv + i] = f;
                 }
+            }
+        }
+    }
+
+    // using Alibi bias
+    if (hparams.f_max_alibi_bias > 0.0f) {
+        const uint32_t n_head_kv = hparams.n_head_kv;
+
+        const float max_bias = hparams.f_max_alibi_bias;
+
+        assert(ggml_backend_buffer_is_host(lctx.inp_KQ_slope->buffer));
+
+        float * data = (float *) lctx.inp_KQ_slope->data;
+
+        // TODO: is this supposed to be ceil instead of floor?
+        //       https://huggingface.co/mosaicml/mpt-7b/blob/main/attention.py#L370
+        const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2(n_head_kv));
+
+        const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
+        const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
+
+        for (uint32_t h = 0; h < n_head_kv; ++h) {
+            if (h < n_head_log2) {
+                data[h] = powf(m0, h + 1);
+            } else {
+                data[h] = powf(m1, 2*(h - n_head_log2) + 1);
             }
         }
     }
@@ -11412,25 +11430,27 @@ struct llama_context * llama_new_context_with_model(
         // graph inputs
         {
             ggml_init_params init_params = {
-                /* .mem_size   */ ggml_tensor_overhead()*7,
+                /* .mem_size   */ ggml_tensor_overhead()*8,
                 /* .mem_buffer */ nullptr,
                 /* .no_alloc   */ true,
             };
             ctx->ctx_input = ggml_init(init_params);
 
-            ctx->inp_tokens  = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
-            ctx->inp_embd    = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, hparams.n_embd, cparams.n_batch);
-            ctx->inp_pos     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
-            ctx->inp_KQ_mask = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx, cparams.n_batch);
-            ctx->inp_K_shift = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_ctx);
-            ctx->inp_sum     = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch, cparams.n_batch);
+            ctx->inp_tokens   = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
+            ctx->inp_embd     = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, hparams.n_embd, cparams.n_batch);
+            ctx->inp_pos      = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
+            ctx->inp_KQ_mask  = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx, cparams.n_batch);
+            ctx->inp_KQ_slope = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_F32, hparams.n_head_kv);
+            ctx->inp_K_shift  = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_ctx);
+            ctx->inp_sum      = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch, cparams.n_batch);
 
-            ggml_set_name(ctx->inp_tokens,  "inp_tokens");
-            ggml_set_name(ctx->inp_embd,    "inp_embd");
-            ggml_set_name(ctx->inp_pos,     "inp_pos");
-            ggml_set_name(ctx->inp_KQ_mask, "inp_KQ_mask");
-            ggml_set_name(ctx->inp_K_shift, "inp_K_shift");
-            ggml_set_name(ctx->inp_sum,     "inp_sum");
+            ggml_set_name(ctx->inp_tokens,   "inp_tokens");
+            ggml_set_name(ctx->inp_embd,     "inp_embd");
+            ggml_set_name(ctx->inp_pos,      "inp_pos");
+            ggml_set_name(ctx->inp_KQ_mask,  "inp_KQ_mask");
+            ggml_set_name(ctx->inp_KQ_slope, "inp_KQ_slope");
+            ggml_set_name(ctx->inp_K_shift,  "inp_K_shift");
+            ggml_set_name(ctx->inp_sum,      "inp_sum");
 
             ctx->buf_input = ggml_backend_alloc_ctx_tensors_from_buft(ctx->ctx_input, llama_default_buffer_type_cpu(true));
 

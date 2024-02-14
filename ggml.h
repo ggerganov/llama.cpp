@@ -1373,12 +1373,14 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
-    // fused soft_max(a*scale + mask)
+    // fused soft_max(a*scale + i*slope + mask)
     // mask is optional
+    // slope is optional
     GGML_API struct ggml_tensor * ggml_soft_max_ext(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * mask,
+            struct ggml_tensor  * slope,
             float                 scale);
 
     GGML_API struct ggml_tensor * ggml_soft_max_back(

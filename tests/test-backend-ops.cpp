@@ -1085,24 +1085,28 @@ struct test_diag_mask_inf : public test_case {
 struct test_soft_max : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
-    const float scale;
     const bool mask;
+    const bool slope;
+    const float scale;
 
     std::string vars() override {
-        return VARS_TO_STR4(type, ne, scale, mask);
+        return VARS_TO_STR5(type, ne, mask, slope, scale);
     }
 
     test_soft_max(ggml_type type = GGML_TYPE_F32,
             std::array<int64_t, 4> ne = {10, 10, 10, 10},
-            float scale = 1.0f,
-            bool mask = false)
-        : type(type), ne(ne), scale(scale), mask(mask) {}
+            bool mask = false,
+            bool slope = false,
+            float scale = 1.0f)
+        : type(type), ne(ne), mask(mask), slope(slope), scale(scale) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
         ggml_tensor * b = nullptr;
-        if (mask) { b = ggml_new_tensor_2d(ctx, type, ne[0], ne[1]); }
-        ggml_tensor * out = ggml_soft_max_ext(ctx, a, b, scale);
+        ggml_tensor * c = nullptr;
+        if (mask)  { b = ggml_new_tensor_2d(ctx, type, ne[0], ne[1]); }
+        if (slope) { c = ggml_new_tensor_1d(ctx, type, ne[2]); }
+        ggml_tensor * out = ggml_soft_max_ext(ctx, a, b, c, scale);
         return out;
     }
 };
@@ -1488,7 +1492,7 @@ struct test_moe : public test_case {
         ggml_tensor * cur = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_tokens);
 
         ggml_tensor * logits = ggml_mul_mat(ctx, ffn_gate_inp, cur);
-        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, 1.0f/sqrtf(n_embd));
+        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, nullptr, 1.0f/sqrtf(n_embd));
 
         // select experts
         ggml_tensor * selected_experts = ggml_top_k(ctx, probs, n_experts_per_tok);
@@ -1636,7 +1640,7 @@ public:
 
         struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
 
-        kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale);
+        kq = ggml_soft_max_ext(ctx, kq, kq_mask, nullptr, kq_scale);
 
         // split cached v into n_head heads
         struct ggml_tensor * v =
@@ -2091,14 +2095,16 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         for (int n = 0; n < 10; ++n) {
             int64_t ne0 = dist_ne0(rng);
             int64_t ne1 = dist_ne1(rng);
-            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}));
+            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}, n/2 == 0, n/3 == 0, 0.1f));
         }
 
         exponent <<= 1;
     }
 
-    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 2, 32, 1}, 0.1f));
-    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {32, 2, 32, 1}, 0.1f, true));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 2, 32, 1}, false, false, 0.1f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {32, 2, 32, 1}, true,  false, 0.1f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 2, 32, 1}, false, true,  0.1f));
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {32, 2, 32, 1}, true,  true,  0.1f));
 
     for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
         test_cases.emplace_back(new test_rope(type, {128,  32, 10, 1}, 128, 0, 512)); // llama 7B

@@ -728,6 +728,7 @@ static bool ggml_metal_graph_compute(
 
         size_t offs_src0 = 0;
         size_t offs_src1 = 0;
+        size_t offs_src2 = 0;
         size_t offs_dst  = 0;
 
         id<MTLCommandBuffer> command_buffer  = command_buffers[cb_idx];
@@ -746,6 +747,7 @@ static bool ggml_metal_graph_compute(
 
             struct ggml_tensor * src0 = gf->nodes[i]->src[0];
             struct ggml_tensor * src1 = gf->nodes[i]->src[1];
+            struct ggml_tensor * src2 = gf->nodes[i]->src[2];
             struct ggml_tensor * dst  = gf->nodes[i];
 
             switch (dst->op) {
@@ -807,6 +809,7 @@ static bool ggml_metal_graph_compute(
 
             id<MTLBuffer> id_src0 = src0 ? ggml_metal_get_buffer(src0, &offs_src0) : nil;
             id<MTLBuffer> id_src1 = src1 ? ggml_metal_get_buffer(src1, &offs_src1) : nil;
+            id<MTLBuffer> id_src2 = src2 ? ggml_metal_get_buffer(src2, &offs_src2) : nil;
             id<MTLBuffer> id_dst  = dst  ? ggml_metal_get_buffer(dst,  &offs_dst)  : nil;
 
             //GGML_METAL_LOG_INFO("%s: op - %s\n", __func__, ggml_op_name(dst->op));
@@ -1197,11 +1200,16 @@ static bool ggml_metal_graph_compute(
                         } else {
                             [encoder setBuffer:id_src0 offset:offs_src0   atIndex:1];
                         }
-                        [encoder setBuffer:id_dst  offset:offs_dst    atIndex:2];
-                        [encoder setBytes:&ne00  length:sizeof(ne00)  atIndex:3];
-                        [encoder setBytes:&ne01  length:sizeof(ne01)  atIndex:4];
-                        [encoder setBytes:&ne02  length:sizeof(ne02)  atIndex:5];
-                        [encoder setBytes:&scale length:sizeof(scale) atIndex:6];
+                        if (id_src2) {
+                            [encoder setBuffer:id_src2 offset:offs_src2   atIndex:2];
+                        } else {
+                            [encoder setBuffer:id_src0 offset:offs_src0   atIndex:2];
+                        }
+                        [encoder setBuffer:id_dst  offset:offs_dst    atIndex:3];
+                        [encoder setBytes:&ne00  length:sizeof(ne00)  atIndex:4];
+                        [encoder setBytes:&ne01  length:sizeof(ne01)  atIndex:5];
+                        [encoder setBytes:&ne02  length:sizeof(ne02)  atIndex:6];
+                        [encoder setBytes:&scale length:sizeof(scale) atIndex:7];
                         [encoder setThreadgroupMemoryLength:32*sizeof(float) atIndex:0];
 
                         [encoder dispatchThreadgroups:MTLSizeMake(ne01*ne02*ne03, 1, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
@@ -1513,8 +1521,6 @@ static bool ggml_metal_graph_compute(
 
                         // max size of the src1ids array in the kernel stack
                         GGML_ASSERT(ne11 <= 512);
-
-                        struct ggml_tensor * src2 = gf->nodes[i]->src[2];
 
                         const int64_t  ne20 = src2 ? src2->ne[0] : 0;
                         const int64_t  ne21 = src2 ? src2->ne[1] : 0;

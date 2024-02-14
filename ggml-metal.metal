@@ -351,12 +351,13 @@ kernel void kernel_sum_rows(
 kernel void kernel_soft_max(
         device const float * src0,
         device const float * src1,
+        device const float * src2,
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant     float & scale,
-        threadgroup float  * buf [[threadgroup(0)]],
+        threadgroup  float * buf [[threadgroup(0)]],
         uint  tgpig[[threadgroup_position_in_grid]],
         uint  tpitg[[thread_position_in_threadgroup]],
         uint  sgitg[[simdgroup_index_in_threadgroup]],
@@ -368,13 +369,14 @@ kernel void kernel_soft_max(
 
     device const float * psrc0 =         src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
     device const float * pmask = src1 != src0 ? src1                               + i01*ne00 : nullptr;
+           const float   slope = src2 != src0 ? src2[i02] : 0.0f;
     device       float * pdst  =         dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
 
     // parallel max
     float lmax = -INFINITY;
 
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-        lmax = MAX(lmax, psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f));
+        lmax = MAX(lmax, psrc0[i00]*scale + slope*i00 + (pmask ? pmask[i00] : 0.0f));
     }
 
     // find the max value in the block
@@ -399,7 +401,7 @@ kernel void kernel_soft_max(
     // parallel sum
     float lsum = 0.0f;
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-        const float exp_psrc0 = exp((psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f)) - max_val);
+        const float exp_psrc0 = exp((psrc0[i00]*scale + slope*i00 + (pmask ? pmask[i00] : 0.0f)) - max_val);
         lsum += exp_psrc0;
         pdst[i00] = exp_psrc0;
     }
@@ -437,12 +439,13 @@ kernel void kernel_soft_max(
 kernel void kernel_soft_max_4(
         device const float * src0,
         device const float * src1,
+        device const float * src2,
         device       float * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant     float & scale,
-        threadgroup float  * buf [[threadgroup(0)]],
+        threadgroup  float * buf [[threadgroup(0)]],
         uint  tgpig[[threadgroup_position_in_grid]],
         uint  tpitg[[thread_position_in_threadgroup]],
         uint  sgitg[[simdgroup_index_in_threadgroup]],
@@ -454,13 +457,16 @@ kernel void kernel_soft_max_4(
 
     device const float4 * psrc4 =                (device const float4 *)(src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00);
     device const float4 * pmask = src1 != src0 ? (device const float4 *)(src1 +                                      i01*ne00) : nullptr;
+           const float    slope = src2 != src0 ? src2[i02] : 0.0f;
     device       float4 * pdst4 =                (device       float4 *)(dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00);
+
+    const float4 s0(0.0f, 1.0f, 2.0f, 3.0f);
 
     // parallel max
     float4 lmax4 = -INFINITY;
 
     for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
-        lmax4 = fmax(lmax4, psrc4[i00]*scale + (pmask ? pmask[i00] : 0.0f));
+        lmax4 = fmax(lmax4, psrc4[i00]*scale + slope*(4*i00 + s0) + (pmask ? pmask[i00] : 0.0f));
     }
 
     const float lmax = MAX(MAX(lmax4[0], lmax4[1]), MAX(lmax4[2], lmax4[3]));
@@ -486,7 +492,7 @@ kernel void kernel_soft_max_4(
     // parallel sum
     float4 lsum4 = 0.0f;
     for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
-        const float4 exp_psrc4 = exp((psrc4[i00]*scale + (pmask ? pmask[i00] : 0.0f)) - max_val);
+        const float4 exp_psrc4 = exp((psrc4[i00]*scale + slope*(4*i00 + s0) + (pmask ? pmask[i00] : 0.0f)) - max_val);
         lsum4 += exp_psrc4;
         pdst4[i00] = exp_psrc4;
     }
