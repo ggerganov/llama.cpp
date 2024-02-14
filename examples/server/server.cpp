@@ -2492,7 +2492,8 @@ int main(int argc, char **argv)
         params.model_alias = params.model;
     }
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     LOG_INFO("build info", {{"build", LLAMA_BUILD_NUMBER},
                             {"commit", LLAMA_COMMIT}});

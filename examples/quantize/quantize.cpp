@@ -237,7 +237,7 @@ int main(int argc, char ** argv) {
         params.imatrix = &imatrix_data;
     }
 
-    llama_backend_init(GGML_NUMA_STRATEGY_DISABLED);
+    llama_backend_init();
 
     // parse command line arguments
     const std::string fname_inp = argv[arg_idx];

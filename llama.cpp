@@ -11156,7 +11156,7 @@ bool llama_mlock_supported(void) {
     return llama_supports_mlock();
 }
 
-void llama_backend_init(enum ggml_numa_strategies numa) {
+void llama_backend_init(void) {
     ggml_time_init();
 
     // needed to initialize f16 tables
@@ -11166,13 +11166,15 @@ void llama_backend_init(enum ggml_numa_strategies numa) {
         ggml_free(ctx);
     }
 
-    if (numa > 0) {
-        ggml_numa_init(numa);
-    }
-
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_init();
 #endif
+}
+
+void llama_numa_init(enum ggml_numa_strategies numa) {
+    if (numa > 0) {
+        ggml_numa_init(numa);
+    }
 }
 
 void llama_backend_free(void) {

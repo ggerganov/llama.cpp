@@ -51,7 +51,7 @@ actor LlamaContext {
     }
 
     static func create_context(path: String) throws -> LlamaContext {
-        llama_backend_init(GGML_NUMA_STRATEGY_DISABLED)
+        llama_backend_init()
         var model_params = llama_model_default_params()
 
 #if targetEnvironment(simulator)
