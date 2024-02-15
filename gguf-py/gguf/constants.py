@@ -73,6 +73,8 @@ class Keys:
         UNK_ID           = "tokenizer.ggml.unknown_token_id"
         SEP_ID           = "tokenizer.ggml.seperator_token_id"
         PAD_ID           = "tokenizer.ggml.padding_token_id"
+        CLS_ID           = "tokenizer.ggml.cls_token_id"
+        MASK_ID          = "tokenizer.ggml.mask_token_id"
         ADD_BOS          = "tokenizer.ggml.add_bos_token"
         ADD_EOS          = "tokenizer.ggml.add_eos_token"
         ADD_PREFIX       = "tokenizer.ggml.add_space_prefix"
@@ -685,5 +687,7 @@ KEY_TOKENIZER_EOS_ID     = Keys.Tokenizer.EOS_ID
 KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
 KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
 KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID
+KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
+KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
 KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
 KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV
