@@ -1,4 +1,5 @@
 {
+  pkgs,
   lib,
   config,
   stdenv,
@@ -160,6 +161,7 @@ effectiveStdenv.mkDerivation (
         ninja
         pkg-config
         git
+        pkgs.glibc.static
       ]
       ++ optionals useCuda [
         cudaPackages.cuda_nvcc
