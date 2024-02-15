@@ -2008,8 +2008,7 @@ static cpu_set_t ggml_get_numa_affinity(void) {
 }
 #else
 static uint32_t ggml_get_numa_affinity(void) {
-    uint32_t cpuset = 0;
-    return cpuset; // No NUMA support outside of Linux, so return a safe datatype set to zero
+    return 0; // no NUMA support
 }
 #endif
 
