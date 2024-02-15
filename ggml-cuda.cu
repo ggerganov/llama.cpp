@@ -5976,12 +5976,12 @@ static __global__ void soft_max_f32(const float * x, const float * mask, const f
         const uint32_t n_head_kv   = gridDim.x/nrows_y;
         const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2((float) n_head_kv));
 
-        const float m0 = pow(2.0f, -(max_bias       ) / n_head_log2);
-        const float m1 = pow(2.0f, -(max_bias / 2.0f) / n_head_log2);
+        const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
+        const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
 
         const int h = rowx/nrows_y; // head index
 
-        slope = h < n_head_log2 ? pow(m0, h + 1) : pow(m1, 2*(h - n_head_log2) + 1);
+        slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);
     }
 
     extern __shared__ float data_soft_max_f32[];
