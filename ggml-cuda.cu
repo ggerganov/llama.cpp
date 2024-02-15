@@ -7943,6 +7943,7 @@ GGML_CALL void ggml_init_cublas() {
         if (cudaGetDeviceCount(&g_device_count) != cudaSuccess) {
             initialized = true;
             g_cublas_loaded = false;
+            fprintf(stderr, "%s: no " GGML_CUDA_NAME " devices found, " GGML_CUDA_NAME " will be disabled\n", __func__);
             return;
         }
 
