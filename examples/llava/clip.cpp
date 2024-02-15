@@ -1103,7 +1103,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             printf("v_image_mean       %f %f %f\n", new_clip->image_mean[0], new_clip->image_mean[1], new_clip->image_mean[2]);
             printf("v_image_std        %f %f %f\n", new_clip->image_std[0], new_clip->image_std[1], new_clip->image_std[2]);
             printf("v_image_grid_pinpoints: ");
-            for (int i = 0; i < 32 & hparams.image_grid_pinpoints[i]!=0; ++i) {
+            for (int i = 0; i < 32 && (hparams.image_grid_pinpoints[i] != 0); ++i) {
                 printf("%d ", hparams.image_grid_pinpoints[i]);
             }
             printf("\n");
