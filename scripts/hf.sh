@@ -5,6 +5,7 @@
 # Usage:
 #   ./main -m $(./examples/hf.sh https://huggingface.co/TheBloke/Mixtral-8x7B-v0.1-GGUF/resolve/main/mixtral-8x7b-v0.1.Q4_K_M.gguf)
 #   ./main -m $(./examples/hf.sh --url https://huggingface.co/TheBloke/Mixtral-8x7B-v0.1-GGUF/blob/main/mixtral-8x7b-v0.1.Q4_K_M.gguf)
+#   ./main -m $(./examples/hf.sh --repo TheBloke/Mixtral-8x7B-v0.1-GGUF --file mixtral-8x7b-v0.1.Q4_K_M.gguf)
 #
 
 # all logs go to stderr
@@ -13,7 +14,7 @@ function log {
 }
 
 function usage {
-    log "Usage: $0 --url <url> [--help]"
+    log "Usage: $0 [[--url] <url>] [--repo <repo>] [--file <file>] [-h|--help]"
     exit 1
 }
 
@@ -34,12 +35,22 @@ else
 fi
 
 url=""
+repo=""
+file=""
 
 # parse args
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --url)
             url="$2"
+            shift 2
+            ;;
+        --repo)
+            repo="$2"
+            shift 2
+            ;;
+        --file)
+            file="$2"
             shift 2
             ;;
         -h|--help)
@@ -51,6 +62,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [ -n "$repo" ] && [ -n "$file" ]; then
+    url="https://huggingface.co/$repo/resolve/main/$file"
+fi
 
 if [ -z "$url" ]; then
     log "[E] missing --url"
