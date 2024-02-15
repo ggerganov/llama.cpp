@@ -60,6 +60,8 @@ CLIP_API struct clip_image_f32 * clip_image_f32_init();
 
 CLIP_API void clip_image_u8_free (struct clip_image_u8  * img);
 CLIP_API void clip_image_f32_free(struct clip_image_f32 * img);
+CLIP_API void clip_image_u8_batch_free (struct clip_image_u8_batch  & batch);
+CLIP_API void clip_image_f32_batch_free(struct clip_image_f32_batch & batch);
 
 CLIP_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8 * img);
 
