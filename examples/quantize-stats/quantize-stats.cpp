@@ -183,7 +183,7 @@ static void test_roundtrip_on_layer(
     if (output_scratch.size() < nelements) output_scratch.resize(nelements);
 
     if (max_thread < 1) max_thread = std::thread::hardware_concurrency();
-    int chunk_size = 32*512;
+    const int chunk_size = 32*512;
     int num_chunks = (nelements + chunk_size - 1)/chunk_size;
 
     if (num_chunks < 2 || max_thread < 2) {
