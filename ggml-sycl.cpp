@@ -1801,7 +1801,6 @@ namespace dpct
               coeff + batch_size * 1 /*beta*/, reinterpret_cast<Tc **>(c),
               dims + batch_size * 5 /*ldc*/, batch_size,
               dims + batch_size * 6 /*group_size*/);
-          q.wait_and_throw();
 
           q.submit([&](sycl::handler &cgh) {
             cgh.depends_on(e);
@@ -13378,7 +13377,6 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
       src1_f16_alloc.alloc(ne_src1);
       GGML_ASSERT(to_fp16_sycl != nullptr);
       to_fp16_sycl(src1_ddf, src1_f16_alloc.get(), ne_src1, main_stream);
-      main_stream->wait_and_throw();
     }
     sycl::half *src1_f16 = src1->type == GGML_TYPE_F16 ? (sycl::half *)src1_ddf
                                                        : src1_f16_alloc.get();
