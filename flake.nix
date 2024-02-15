@@ -155,6 +155,9 @@
               {
                 default = config.legacyPackages.llamaPackages.llama-cpp;
                 vulkan = config.packages.default.override { useVulkan = true; };
+                windows = config.legacyPackages.llamaPackages.llama-cpp.override {
+                  stdenv = pkgs.pkgsCross.mingwW64.stdenv;
+                };
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
                 opencl = config.packages.default.override { useOpenCL = true; };
