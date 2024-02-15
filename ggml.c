@@ -16713,7 +16713,7 @@ static void set_numa_thread_affinity(int thread_n) {
 
     rv = pthread_setaffinity_np(pthread_self(), setsize, cpus);
     if (rv) {
-            fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n",strerror(rv));
+            fprintf(stderr, "warning: pthread_setaffinity_np() failed: %s\n", strerror(rv));
     }
 
     CPU_FREE(cpus);
