@@ -1652,7 +1652,7 @@ class BertModel(Model):
         self.gguf_writer.add_causal_attention(False)
 
         # get pooling path
-        with open(self.dir_model / "modules.json", "r", encoding="utf-8") as f:
+        with open(self.dir_model / "modules.json", encoding="utf-8") as f:
             modules = json.load(f)
         pooling_path = None
         for mod in modules:
@@ -1663,15 +1663,14 @@ class BertModel(Model):
         # get pooling type
         pooling_type = gguf.PoolingType.NONE
         if pooling_path is not None:
-            with open(self.dir_model / pooling_path / "config.json", "r", encoding="utf-8") as f:
+            with open(self.dir_model / pooling_path / "config.json", encoding="utf-8") as f:
                 pooling = json.load(f)
             if pooling["pooling_mode_mean_tokens"]:
                 pooling_type = gguf.PoolingType.MEAN
             elif pooling["pooling_mode_cls_token"]:
                 pooling_type = gguf.PoolingType.CLS
             else:
-                print("Only MEAN and CLS pooling types supported")
-                sys.exit(1)
+                raise NotImplementedError("Only MEAN and CLS pooling types supported")
 
         self.gguf_writer.add_pooling_type(pooling_type.value)
 
