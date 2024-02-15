@@ -678,7 +678,7 @@ extern "C" {
 
     GGML_API void    ggml_print_backtrace(void);
 
-    GGML_API void    ggml_numa_init(enum ggml_numa_strategies numa); // call once for better performance on NUMA systems
+    GGML_API void    ggml_numa_init(enum ggml_numa_strategy numa); // call once for better performance on NUMA systems
     GGML_API bool    ggml_is_numa(void); // true if init detected that system has >1 NUMA node
 
     GGML_API void    ggml_print_object (const struct ggml_object * obj);

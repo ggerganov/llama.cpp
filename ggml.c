@@ -1954,7 +1954,7 @@ struct ggml_numa_node {
 };
 
 struct ggml_numa_nodes {
-    enum ggml_numa_strategies numa_strategy;
+    enum ggml_numa_strategy numa_strategy;
     struct ggml_numa_node nodes[GGML_NUMA_MAX_NODES];
     uint32_t n_nodes;
     uint32_t total_cpus; // hardware threads on system
@@ -2013,7 +2013,7 @@ static uint32_t ggml_get_numa_affinity(void) {
 }
 #endif
 
-void ggml_numa_init(enum ggml_numa_strategies numa_flag) {
+void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
     if (g_state.numa.n_nodes > 0) {
         fprintf(stderr, "ggml_numa_init: NUMA already initialized\n");
 

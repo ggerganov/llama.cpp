@@ -309,7 +309,7 @@ extern "C" {
     LLAMA_API void llama_backend_init(void);
 
     //optional:
-    LLAMA_API void llama_numa_init(enum ggml_numa_strategies numa);
+    LLAMA_API void llama_numa_init(enum ggml_numa_strategy numa);
 
     // Call once at the end of the program - currently only used for MPI
     LLAMA_API void llama_backend_free(void);

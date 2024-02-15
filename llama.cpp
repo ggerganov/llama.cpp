@@ -11171,7 +11171,7 @@ void llama_backend_init(void) {
 #endif
 }
 
-void llama_numa_init(enum ggml_numa_strategies numa) {
+void llama_numa_init(enum ggml_numa_strategy numa) {
     if (numa != GGML_NUMA_STRATEGY_DISABLED) {
         ggml_numa_init(numa);
     }

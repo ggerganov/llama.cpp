@@ -1855,10 +1855,10 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     {
         printf("  --no-mmap                 do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
-    printf("  --numa TYPE           attempt optimizations that help on some NUMA systems\n");
-    printf("                          - distribute: spread execution evenly over all nodes\n");
-    printf("                          - isolate: only spawn threads on CPUs on the node that execution started on\n");
-    printf("                          - numactl: use the CPU map provided my numactl\n");
+    printf("  --numa TYPE               attempt optimizations that help on some NUMA systems\n");
+    printf("                              - distribute: spread execution evenly over all nodes\n");
+    printf("                              - isolate: only spawn threads on CPUs on the node that execution started on\n");
+    printf("                              - numactl: use the CPU map provided my numactl\n");
     if (llama_supports_gpu_offload()) {
         printf("  -ngl N, --n-gpu-layers N\n");
         printf("                            number of layers to store in VRAM\n");
