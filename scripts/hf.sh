@@ -29,7 +29,7 @@ if has_cmd wget; then
 elif has_cmd curl; then
     cmd="curl -C - -f -o %s -L %s"
 else
-    print "Error: curl or wget not found"
+    log "[E] curl or wget not found"
     exit 1
 fi
 
@@ -53,7 +53,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$url" ]; then
-    log "Error: missing --url"
+    log "[E] missing --url"
     usage
 fi
 
@@ -67,6 +67,7 @@ if [[ ${#url} -gt 22 ]]; then
 fi
 
 if [ "$is_url" = false ]; then
+    log "[E] invalid URL, must start with https://huggingface.co"
     exit 0
 fi
 
