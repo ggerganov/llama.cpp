@@ -19,6 +19,7 @@ from .constants import (
     GGUFValueType,
     Keys,
     RopeScalingType,
+    PoolingType,
     TokenType,
 )
 
