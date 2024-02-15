@@ -1104,7 +1104,8 @@ struct test_soft_max : public test_case {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
         ggml_tensor * b = nullptr;
         if (mask) { b = ggml_new_tensor_2d(ctx, type, ne[0], ne[1]); }
-        ggml_tensor * out = ggml_soft_max_ext(ctx, a, b, scale, max_bias);
+        ggml_tensor * c = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, ne[0]);
+        ggml_tensor * out = ggml_soft_max_ext(ctx, a, b, c, scale, max_bias);
         return out;
     }
 };
@@ -1146,30 +1147,6 @@ struct test_rope : public test_case {
                 init_tensor_uniform(t);
             }
         }
-    }
-};
-
-// GGML_OP_ALIBI
-struct test_alibi : public test_case {
-    const ggml_type type;
-    const std::array<int64_t, 4> ne;
-    int n_past;
-    int n_head;
-    float bias_max;
-
-    std::string vars() override {
-        return VARS_TO_STR5(type, ne, n_past, n_head, bias_max);
-    }
-
-    test_alibi(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 10},
-            int n_past = 512, int n_head = 10, float bias_max = 0.5f)
-        : type(type), ne(ne), n_past(n_past), n_head(n_head), bias_max(bias_max) {}
-
-    ggml_tensor * build_graph(ggml_context * ctx) override {
-        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
-        ggml_tensor * out = ggml_alibi(ctx, a, n_past, n_head, bias_max);
-        return out;
     }
 };
 
@@ -1490,7 +1467,7 @@ struct test_moe : public test_case {
         ggml_tensor * cur = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_tokens);
 
         ggml_tensor * logits = ggml_mul_mat(ctx, ffn_gate_inp, cur);
-        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, 1.0f/sqrtf(n_embd), 0.0f);
+        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, nullptr, 1.0f/sqrtf(n_embd), 0.0f);
 
         // select experts
         ggml_tensor * selected_experts = ggml_top_k(ctx, probs, n_experts_per_tok);
@@ -1619,7 +1596,6 @@ public:
         ggml_cpy(ctx, v_cur_t, v_cache_view);
     }
 
-    // if max_alibi_bias > 0 then apply ALiBi
     struct ggml_tensor * llm_build_kqv(
             struct ggml_context * ctx,
              struct ggml_tensor * k_l,
@@ -1638,7 +1614,7 @@ public:
 
         struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
 
-        kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale, 0.0f);
+        kq = ggml_soft_max_ext(ctx, kq, kq_mask, nullptr, kq_scale, 0.0f);
 
         // split cached v into n_head heads
         struct ggml_tensor * v =
@@ -2117,7 +2093,6 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         test_cases.emplace_back(new test_rope(type, { 80,  32, 10, 1},  32, 2, 512)); // neox (phi-2)
     }
 
-    test_cases.emplace_back(new test_alibi());
     test_cases.emplace_back(new test_concat(GGML_TYPE_F32));
     test_cases.emplace_back(new test_concat(GGML_TYPE_I32));
 

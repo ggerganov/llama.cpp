@@ -5060,14 +5060,26 @@ static struct ggml_tensor * ggml_soft_max_impl(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * mask,
+        struct ggml_tensor  * pos,
         float                 scale,
         float                 max_bias,
         bool                  inplace) {
     GGML_ASSERT(ggml_is_contiguous(a));
+
     if (mask) {
         GGML_ASSERT(ggml_is_contiguous(mask));
         GGML_ASSERT(ggml_is_matrix(mask));
         GGML_ASSERT(ggml_can_repeat_rows(mask, a));
+    }
+
+    if (pos) {
+        GGML_ASSERT(ggml_is_vector(pos));
+        GGML_ASSERT(pos->type == GGML_TYPE_F32);
+        GGML_ASSERT(pos->ne[0] == a->ne[0]);
+    }
+
+    if (max_bias > 0.0f) {
+        GGML_ASSERT(pos);
     }
 
     bool is_node = false;
@@ -5085,6 +5097,7 @@ static struct ggml_tensor * ggml_soft_max_impl(
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
     result->src[1] = mask;
+    result->src[2] = pos;
 
     return result;
 }
@@ -5092,22 +5105,23 @@ static struct ggml_tensor * ggml_soft_max_impl(
 struct ggml_tensor * ggml_soft_max(
         struct ggml_context * ctx,
         struct ggml_tensor  * a) {
-    return ggml_soft_max_impl(ctx, a, NULL, 1.0f, 0.0f, false);
+    return ggml_soft_max_impl(ctx, a, NULL, NULL, 1.0f, 0.0f, false);
 }
 
 struct ggml_tensor * ggml_soft_max_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor  * a) {
-    return ggml_soft_max_impl(ctx, a, NULL, 1.0f, 0.0f, true);
+    return ggml_soft_max_impl(ctx, a, NULL, NULL, 1.0f, 0.0f, true);
 }
 
 struct ggml_tensor * ggml_soft_max_ext(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * mask,
+        struct ggml_tensor  * pos,
         float                 scale,
         float                 max_bias) {
-    return ggml_soft_max_impl(ctx, a, mask, scale, max_bias, false);
+    return ggml_soft_max_impl(ctx, a, mask, pos, scale, max_bias, false);
 }
 
 // ggml_soft_max_back
@@ -11460,6 +11474,7 @@ static void ggml_compute_forward_soft_max_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
+        const struct ggml_tensor * src2,
               struct ggml_tensor * dst) {
     assert(ggml_is_contiguous(dst));
     assert(ggml_are_same_shape(src0, dst));
@@ -11503,6 +11518,8 @@ static void ggml_compute_forward_soft_max_f32(
 
     float * wp = (float *) params->wdata + (nc + CACHE_LINE_SIZE_F32) * ith;
 
+    float * pos = (float *) src2->data;
+
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * sp = (float *)((char *) src0->data + i1*src0->nb[1]);
         float * dp = (float *)((char *)  dst->data +  i1*dst->nb[1]);
@@ -11522,7 +11539,7 @@ static void ggml_compute_forward_soft_max_f32(
             const float slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);
 
             for (int i = 0; i < nc; i++) {
-                wp[i] = wp[i] + slope*i;
+                wp[i] = wp[i] + slope*pos[i];
             }
         }
 
@@ -11570,11 +11587,12 @@ static void ggml_compute_forward_soft_max(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
+        const struct ggml_tensor * src2,
               struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_soft_max_f32(params, src0, src1, dst);
+                ggml_compute_forward_soft_max_f32(params, src0, src1, src2, dst);
             } break;
         default:
             {
@@ -15101,7 +15119,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_SOFT_MAX:
             {
-                ggml_compute_forward_soft_max(params, tensor->src[0], tensor->src[1], tensor);
+                ggml_compute_forward_soft_max(params, tensor->src[0], tensor->src[1], tensor->src[2], tensor);
             } break;
         case GGML_OP_SOFT_MAX_BACK:
             {
