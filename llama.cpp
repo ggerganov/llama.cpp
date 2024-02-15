@@ -256,7 +256,7 @@ enum llm_kv {
     LLM_KV_TENSOR_DATA_LAYOUT,
     LLM_KV_EXPERT_COUNT,
     LLM_KV_EXPERT_USED_COUNT,
-    LLM_KV_POOLING_LAYER,
+    LLM_KV_POOLING_TYPE,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -314,7 +314,7 @@ static std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TENSOR_DATA_LAYOUT,            "%s.tensor_data_layout"    },
     { LLM_KV_EXPERT_COUNT,                  "%s.expert_count"          },
     { LLM_KV_EXPERT_USED_COUNT,             "%s.expert_used_count"     },
-    { LLM_KV_POOLING_LAYER,                 "%s.pooling_layer"         },
+    { LLM_KV_POOLING_TYPE ,                 "%s.pooling_type"          },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,          "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,       "%s.attention.head_count_kv"          },
@@ -1561,7 +1561,7 @@ struct llama_hparams {
     float f_max_alibi_bias;
 
     bool causal_attn = true;
-    bool pooling_layer = false;
+    uint32_t pooling_type = LLAMA_POOLING_NONE;
 
 
     bool operator!=(const llama_hparams & other) const {
@@ -1924,7 +1924,8 @@ struct llama_context {
     struct ggml_tensor * inp_pos;       // I32 [n_batch]
     struct ggml_tensor * inp_KQ_mask;   // F32 [n_ctx, n_batch]
     struct ggml_tensor * inp_K_shift;   // I32 [n_ctx]
-    struct ggml_tensor * inp_sum;       // F32 [n_batch, n_batch]
+    struct ggml_tensor * inp_mean;      // F32 [n_batch, n_batch]
+    struct ggml_tensor * inp_cls;       // I32 [n_batch]
 
 #ifdef GGML_USE_MPI
     ggml_mpi_context * ctx_mpi = NULL;
@@ -3086,7 +3087,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL, hparams.causal_attn);
                 ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
-                ml.get_key(LLM_KV_POOLING_LAYER, hparams.pooling_layer);
+                ml.get_key(LLM_KV_POOLING_TYPE, hparams.pooling_type);
 
                 switch (hparams.n_layer) {
                     case 3:
@@ -3107,7 +3108,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL, hparams.causal_attn);
                 ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
-                ml.get_key(LLM_KV_POOLING_LAYER, hparams.pooling_layer);
+                ml.get_key(LLM_KV_POOLING_TYPE, hparams.pooling_type);
 
                 if (hparams.n_layer == 12 && hparams.n_embd == 768) {
                     model.type = e_model::MODEL_137M;
@@ -4934,7 +4935,7 @@ struct llm_build_context {
     const int32_t n_orig_ctx;
 
     const bool do_rope_shift;
-    const bool do_pooling;
+    const uint32_t pooling_type;
 
     const llm_build_cb & cb;
 
@@ -4978,7 +4979,7 @@ struct llm_build_context {
         kv_head          (worst_case ? n_ctx - n_tokens : kv_self.head),
         n_orig_ctx       (cparams.n_yarn_orig_ctx),
         do_rope_shift    (worst_case || kv_self.has_shift),
-        do_pooling       (hparams.pooling_layer && cparams.do_pooling),
+        pooling_type     (cparams.do_pooling ? hparams.pooling_type : (uint32_t)LLAMA_POOLING_NONE),
         cb               (cb),
         buf_compute_meta (lctx.buf_compute_meta) {
             // all initializations should be done in init()
@@ -5835,7 +5836,8 @@ struct llm_build_context {
         // get input vectors with right size
         const size_t stride1 = n_tokens * ggml_type_size(lctx.inp_tokens->type);
         struct ggml_tensor * inp_pos = ggml_view_1d(ctx0, lctx.inp_pos, n_tokens, 0);
-        struct ggml_tensor * inp_sum = ggml_view_2d(ctx0, lctx.inp_sum, n_tokens, n_tokens, stride1, 0);
+        struct ggml_tensor * inp_mean = ggml_view_2d(ctx0, lctx.inp_mean, n_tokens, n_tokens, stride1, 0);
+        struct ggml_tensor * inp_cls = ggml_view_1d(ctx0, lctx.inp_cls, n_tokens, 0);
 
         // construct input embeddings (token, type, position)
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
@@ -5952,8 +5954,12 @@ struct llm_build_context {
         cur = inpL;
 
         // pooling layer
-        if (do_pooling) {
-            cur = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), inp_sum);
+        if (pooling_type == LLAMA_POOLING_MEAN) {
+            cur = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), inp_mean);
+        } else if (pooling_type == LLAMA_POOLING_CLS) {
+            cur = ggml_get_rows(ctx0, cur, inp_cls);
+        } else {
+            GGML_ASSERT(pooling_type == LLAMA_POOLING_NONE && "Invalid pooling type");
         }
         cb(cur, "result_embd", -1);
 
@@ -7501,15 +7507,6 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    {
-        assert(ggml_backend_buffer_is_host(lctx.inp_sum->buffer));
-        float * data = (float *) lctx.inp_sum->data;
-
-        for (int i = 0; i < batch.n_tokens; ++i) {
-            data[i] = 1.0f/float(batch.n_tokens);
-        }
-    }
-
     if (kv_self.has_shift) {
         const int64_t n_ctx = cparams.n_ctx;
 
@@ -7522,17 +7519,46 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    if (hparams.pooling_layer && cparams.do_pooling) {
+    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_MEAN) {
         const int64_t n_tokens = batch.n_tokens;
 
-        GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_sum->buffer));
-        float * data = (float *) lctx.inp_sum->data;
+        GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_mean->buffer));
+        float * data = (float *) lctx.inp_mean->data;
 
-        memset(lctx.inp_sum->data, 0, batch.n_tokens * batch.n_tokens * ggml_element_size(lctx.inp_sum));
+        memset(lctx.inp_mean->data, 0, n_tokens * n_tokens * ggml_element_size(lctx.inp_mean));
+
+        std::vector<uint64_t> sum(n_tokens, 0);
+        for (int i = 0; i < n_tokens; ++i) {
+            const llama_seq_id seq_id = batch.seq_id[i][0];
+            sum[seq_id] += 1;
+        }
+
+        std::vector<float> div(n_tokens, 0.0f);
+        for (int i = 0; i < n_tokens; ++i) {
+            const uint64_t s = sum[i];
+            if (s > 0) {
+                div[i] = 1.0f/float(s);
+            }
+        }
 
         for (int i = 0; i < n_tokens; ++i) {
             const llama_seq_id seq_id = batch.seq_id[i][0];
-            data[seq_id*n_tokens + i] = 1.0f;
+            data[seq_id*n_tokens + i] = div[seq_id];
+        }
+    }
+
+    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_CLS) {
+        const int64_t n_tokens = batch.n_tokens;
+
+        GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_cls->buffer));
+        uint32_t * data = (uint32_t *) lctx.inp_cls->data;
+
+        for (int i = 0; i < n_tokens; ++i) {
+            const llama_seq_id seq_id = batch.seq_id[i][0];
+            const llama_pos pos = batch.pos[i];
+            if (pos == 0) {
+                data[seq_id] = i;
+            }
         }
     }
 }
@@ -11417,14 +11443,16 @@ struct llama_context * llama_new_context_with_model(
             ctx->inp_pos     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
             ctx->inp_KQ_mask = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx, cparams.n_batch);
             ctx->inp_K_shift = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_ctx);
-            ctx->inp_sum     = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch, cparams.n_batch);
+            ctx->inp_mean    = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch, cparams.n_batch);
+            ctx->inp_cls     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
 
             ggml_set_name(ctx->inp_tokens,  "inp_tokens");
             ggml_set_name(ctx->inp_embd,    "inp_embd");
             ggml_set_name(ctx->inp_pos,     "inp_pos");
             ggml_set_name(ctx->inp_KQ_mask, "inp_KQ_mask");
             ggml_set_name(ctx->inp_K_shift, "inp_K_shift");
-            ggml_set_name(ctx->inp_sum,     "inp_sum");
+            ggml_set_name(ctx->inp_mean,    "inp_mean");
+            ggml_set_name(ctx->inp_cls,     "inp_cls");
 
             ctx->buf_input = ggml_backend_alloc_ctx_tensors_from_buft(ctx->ctx_input, llama_default_buffer_type_cpu(true));
 
