@@ -1491,7 +1491,7 @@ extern "C" {
             int                   n_past,
             int                   n_head,
             float                 bias_max),
-        "use ggml_soft_max_ext instead");
+        "use ggml_soft_max_ext instead (will be removed in Mar 2024)");
 
     // clamp
     // in-place, returns view(a)
