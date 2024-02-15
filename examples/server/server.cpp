@@ -975,7 +975,12 @@ struct llama_server_context
             {
                 LOG_TEE("Error processing the given image");
                 clip_free(clp_ctx);
-                clip_image_f32_free(img_res_v.data);
+                clip_image_f32_batch_free(img_res_v);
+                return false;
+            }
+            if (img_res_v.size == 0)
+            {
+                LOG_TEE("Error processing the given image");
                 return false;
             }
 
@@ -987,6 +992,7 @@ struct llama_server_context
             if (!img.image_embedding)
             {
                 LOG_TEE("Unable to allocate memory for image embeddings\n");
+                clip_image_f32_batch_free(img_res_v);
                 clip_free(clp_ctx);
                 return false;
             }
@@ -994,10 +1000,11 @@ struct llama_server_context
             if (!clip_image_encode(clp_ctx, params.n_threads, img_res, img.image_embedding))
             {
                 LOG_TEE("Unable to encode image\n");
+                clip_image_f32_batch_free(img_res_v);
                 return false;
             }
 
-            clip_image_f32_free(img_res_v.data);
+            clip_image_f32_batch_free(img_res_v);
 
             img.request_encode_image = false;
         }
