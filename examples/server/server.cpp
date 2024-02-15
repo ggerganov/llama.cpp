@@ -2266,9 +2266,9 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             } else {
                 std::string value(argv[i]);
-                /**/ if (value == "distribute" || value == "" )   { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
+                /**/ if (value == "distribute" || value == "" ) { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
                 else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
-                else if (value == "numactl")   { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
+                else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
                 else { invalid_param = true; break; }
             }
         }
