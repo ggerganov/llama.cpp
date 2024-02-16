@@ -112,17 +112,14 @@ option(LLAMA_MPI                             "llama: use MPI"                   
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
+option(LLAMA_CPU_HBM                         "llama: use memkind for CPU HBM"                   OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 
-
 # add perf arguments
 option(LLAMA_PERF                            "llama: enable perf"                               OFF)
-if (LLAMA_PERF)
-    add_definitions(-DGGML_PERF)
-endif()
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
@@ -130,6 +127,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 #
 # Compile flags
 #
+
 if (LLAMA_SYCL)
     set(CMAKE_CXX_STANDARD 17)
 else()
@@ -140,6 +138,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
+
 find_package(Threads REQUIRED)
 include(CheckCXXCompilerFlag)
 
@@ -151,17 +150,17 @@ endif()
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)
         add_compile_options(-fsanitize=thread)
-        link_libraries(-fsanitize=thread)
+        link_libraries     (-fsanitize=thread)
     endif()
 
     if (LLAMA_SANITIZE_ADDRESS)
         add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-        link_libraries(-fsanitize=address)
+        link_libraries     (-fsanitize=address)
     endif()
 
     if (LLAMA_SANITIZE_UNDEFINED)
         add_compile_options(-fsanitize=undefined)
-        link_libraries(-fsanitize=undefined)
+        link_libraries     (-fsanitize=undefined)
     endif()
 endif()
 
@@ -298,14 +297,17 @@ if (LLAMA_BLAS)
         endif()
 
         message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
+
         add_compile_options(${BLAS_LINKER_FLAGS})
+
         add_compile_definitions(GGML_USE_OPENBLAS)
+
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${LLAMA_BLAS_VENDOR} MATCHES "Generic" OR ${LLAMA_BLAS_VENDOR} MATCHES "Intel"))
             add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
-        set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
 
+        set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${BLAS_LIBRARIES})
+        set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
     else()
         message(WARNING "BLAS not found, please refer to "
         "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
@@ -330,9 +332,6 @@ if (LLAMA_CUBLAS)
         set(GGML_SOURCES_CUDA ggml-cuda.cu)
 
         add_compile_definitions(GGML_USE_CUBLAS)
-#        if (LLAMA_CUDA_CUBLAS)
-#            add_compile_definitions(GGML_CUDA_CUBLAS)
-#        endif()
         if (LLAMA_CUDA_FORCE_DMMV)
             add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
@@ -435,22 +434,22 @@ if (LLAMA_VULKAN)
         set(GGML_HEADERS_VULKAN ggml-vulkan.h)
         set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
 
-        target_compile_definitions(ggml PUBLIC GGML_USE_VULKAN)
+        add_compile_definitions(GGML_USE_VULKAN)
 
         if (LLAMA_VULKAN_CHECK_RESULTS)
-            target_compile_definitions(ggml PRIVATE GGML_VULKAN_CHECK_RESULTS)
+            add_compile_definitions(GGML_VULKAN_CHECK_RESULTS)
         endif()
 
         if (LLAMA_VULKAN_DEBUG)
-            target_compile_definitions(ggml PRIVATE GGML_VULKAN_DEBUG)
+            add_compile_definitions(GGML_VULKAN_DEBUG)
         endif()
 
         if (LLAMA_VULKAN_VALIDATE)
-            target_compile_definitions(ggml PRIVATE GGML_VULKAN_VALIDATE)
+            add_compile_definitions(GGML_VULKAN_VALIDATE)
         endif()
 
         if (LLAMA_VULKAN_RUN_TESTS)
-            target_compile_definitions(ggml PRIVATE GGML_VULKAN_RUN_TESTS)
+            add_compile_definitions(GGML_VULKAN_RUN_TESTS)
         endif()
 
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} Vulkan::Vulkan)
@@ -479,22 +478,23 @@ if (LLAMA_HIPBLAS)
     set(GGML_HEADERS_ROCM ggml-cuda.h)
     set(GGML_SOURCES_ROCM ggml-cuda.cu)
 
-    target_compile_definitions(ggml PUBLIC GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+    add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+
     if (LLAMA_HIP_UMA)
-        target_compile_definitions(ggml PRIVATE GGML_HIP_UMA)
+        add_compile_definitions(GGML_HIP_UMA)
     endif()
 
     if (LLAMA_CUDA_FORCE_DMMV)
-        target_compile_definitions(ggml PRIVATE GGML_CUDA_FORCE_DMMV)
+        add_compile_definitions(GGML_CUDA_FORCE_DMMV)
     endif()
 
     if (LLAMA_CUDA_FORCE_MMQ)
-        target_compile_definitions(ggml PRIVATE GGML_CUDA_FORCE_MMQ)
+        add_compile_definitions(GGML_CUDA_FORCE_MMQ)
     endif()
 
-    target_compile_definitions(ggml PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
-    target_compile_definitions(ggml PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
-    target_compile_definitions(ggml PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
+    add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+    add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+    add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
     set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
 
@@ -515,16 +515,14 @@ if (LLAMA_SYCL)
 
     message(STATUS "SYCL found")
 
-    target_compile_definitions(ggml PUBLIC GGML_USE_SYCL)
+    add_compile_definitions(GML_USE_SYCL)
 
     if (LLAMA_SYCL_F16)
-        target_compile_definitions(ggml PRIVATE GGML_SYCL_F16)
+        add_compile_definitions(GGML_SYCL_F16)
     endif()
 
-    #add_compile_options(-I./) #include DPCT
-    #add_compile_options(-I/${SYCL_INCLUDE_DIR})
-
-    target_compile_options(ggml PRIVATE -I./ -I/${SYCL_INCLUDE_DIR})
+    add_compile_options(-I./) #include DPCT
+    add_compile_options(-I/${SYCL_INCLUDE_DIR})
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
@@ -685,13 +683,27 @@ if (LLAMA_KOMPUTE)
 
         # Add the stamp to the main sources to ensure dependency tracking
         set(GGML_SOURCES_KOMPUTE ggml-kompute.cpp ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
-        set(GGML_HEADERS_KOMPUTE ggml-kompute.h ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
+        set(GGML_HEADERS_KOMPUTE ggml-kompute.h   ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
+
         add_compile_definitions(GGML_USE_KOMPUTE)
+
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} kompute)
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${CMAKE_BINARY_DIR})
     else()
         message(WARNING "Kompute not found")
     endif()
+endif()
+
+if (LLAMA_CPU_HBM)
+    find_library(memkind memkind REQUIRED)
+
+    add_compile_definitions(GGML_USE_CPU_HBM)
+
+    target_link_libraries(ggml PUBLIC memkind)
+endif()
+
+if (LLAMA_PERF)
+    add_compile_definitions(GGML_PERF)
 endif()
 
 function(get_flags CCID CCVER)
@@ -830,6 +842,7 @@ execute_process(
     ERROR_VARIABLE output
     OUTPUT_QUIET
 )
+
 if (output MATCHES "dyld-1015\.7")
     add_compile_definitions(HAVE_BUGGY_APPLE_LINKER)
 endif()
@@ -839,10 +852,10 @@ endif()
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 message(STATUS "CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}")
 if (MSVC)
-  string(TOLOWER "${CMAKE_GENERATOR_PLATFORM}" CMAKE_GENERATOR_PLATFORM_LWR)
-  message(STATUS "CMAKE_GENERATOR_PLATFORM: ${CMAKE_GENERATOR_PLATFORM}")
+    string(TOLOWER "${CMAKE_GENERATOR_PLATFORM}" CMAKE_GENERATOR_PLATFORM_LWR)
+    message(STATUS "CMAKE_GENERATOR_PLATFORM: ${CMAKE_GENERATOR_PLATFORM}")
 else ()
-  set(CMAKE_GENERATOR_PLATFORM_LWR "")
+    set(CMAKE_GENERATOR_PLATFORM_LWR "")
 endif ()
 
 if (NOT MSVC)
@@ -1036,11 +1049,6 @@ endif()
 
 # ggml
 
-if (GGML_USE_CPU_HBM)
-    add_definitions(-DGGML_USE_CPU_HBM)
-    find_library(memkind memkind REQUIRED)
-endif()
-
 add_library(ggml OBJECT
             ggml.c
             ggml.h
@@ -1066,10 +1074,6 @@ target_compile_features   (ggml PUBLIC c_std_11) # don't bump
 
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 
-if (GGML_USE_CPU_HBM)
-    target_link_libraries(ggml PUBLIC memkind)
-endif()
-
 add_library(ggml_static STATIC $<TARGET_OBJECTS:ggml>)
 
 if (BUILD_SHARED_LIBS)
@@ -1087,7 +1091,8 @@ add_library(llama
             )
 
 target_include_directories(llama PUBLIC .)
-target_compile_features(llama PUBLIC cxx_std_11) # don't bump
+target_compile_features   (llama PUBLIC cxx_std_11) # don't bump
+
 target_link_libraries(llama PRIVATE
     ggml
     ${LLAMA_EXTRA_LIBS}
