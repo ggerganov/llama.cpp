@@ -63,8 +63,8 @@ Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` director
 1) Backup your pth/safetensor model files as llava-surgery modifies them
 2) Use `python llava-surgery-v2.py -C -m /path/to/hf-model` which also supports llava-1.5 variants pytorch as well as safetensor models:
 - you will find a llava.projector and a llava.clip file in your model directory
-3) Copy the llava.clip file into a subdirectory (like vit), rename it to pytorch_model.bin and add a fitting vit configuration to the directory (https://huggingface.co/cmp-nct/llava-1.6-gguf/blob/main/config.json)
-4) Create the visual gguf model: `python ./examples/llava/convert-image-encoder-to-gguf.py -m ../path/to/vit --llava-projector ../path/to/llava.projector --output-dir ../path/to/output --clip_model_is_vision`
+3) Copy the llava.clip file into a subdirectory (like vit), rename it to pytorch_model.bin and add a fitting vit configuration to the directory (https://huggingface.co/cmp-nct/llava-1.6-gguf/blob/main/config_vit.json) and rename it to config.json.
+4) Create the visual gguf model: `python ./examples/llava/convert-image-encoder-to-gguf.py -m ../path/to/vit --llava-projector ../path/to/llava.projector --output-dir ../path/to/output --clip-model-is-vision`
 - This is similar to llava-1.5, the difference is that we tell the encoder that we are working with the pure vision model part of CLIP
 5) Everything else as usual: convert.py the hf model, quantize as needed
 **note** llava-1.6 needs more context than llava-1.5, at least 3000 is needed (just run it at -c 4096)
