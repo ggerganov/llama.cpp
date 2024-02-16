@@ -262,6 +262,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         const int32_t * image_grid = clip_image_grid(ctx_clip);
 
         std::vector<std::pair<int, int>> grid_pinpoints;
+        grid_pinpoints.reserve(16);
         for (int i = 0; i < 32 && image_grid[i] != 0; i += 2) {
             grid_pinpoints.push_back({image_grid[i], image_grid[i+1]});
         }

@@ -1107,6 +1107,7 @@ struct llama_mmap {
 
         // update the list of mapped fragments to avoid unmapping the same range again in the destructor
         std::vector<std::pair<size_t, size_t>> new_mapped_fragments;
+        new_mapped_fragments.reserve(mapped_fragments.size());
         for (const auto & frag : mapped_fragments) {
             if (frag.first < first && frag.second > last) {
                 // the range is in the middle of the fragment, split it
@@ -7908,6 +7909,7 @@ struct llm_tokenizer_spm {
         // split string into utf8 chars
         int index = 0;
         size_t offs = 0;
+        symbols.reserve(text.size());
         while (offs < text.size()) {
             llm_symbol sym;
             size_t len = utf8_len(text[offs]);
@@ -8065,6 +8067,7 @@ struct llm_tokenizer_bpe {
             int index = 0;
             size_t offset = 0;
 
+            symbols.reserve(word.size());
             while (offset < word.size()) {
                 llm_symbol sym;
                 size_t char_len = std::min(word.size() - offset, (size_t) ::utf8_len(word[offset]));
@@ -8138,6 +8141,7 @@ struct llm_tokenizer_bpe {
                 const auto token = vocab.token_to_id.find(str);
 
                 if (token == vocab.token_to_id.end()) {
+                    output.reserve(str.end() - str.begin());
                     for (auto j = str.begin(); j != str.end(); ++j) {
                         std::string byte_str(1, *j);
                         auto token_multibyte = vocab.token_to_id.find(byte_str);
@@ -8309,6 +8313,7 @@ private:
             }
         }
 
+        bpe_encoded_words.reserve(bpe_words.size());
         for (std::string & word : bpe_words) {
             std::string encoded_token = "";
             for (char & c : word) {
@@ -10194,6 +10199,7 @@ static void llama_convert_tensor_internal(
     size_t in_buff_offs = 0;
     size_t out_buff_offs = 0;
 
+    workers.reserve(nthread);
     for (int tnum = 0; tnum < nthread; tnum++) {
         size_t thr_blocks = blocks_per_thread + (tnum == nthread - 1 ? spare_blocks : 0); // num blocks for this thread
         size_t thr_elems = thr_blocks * block_size; // number of elements for this thread
@@ -10697,6 +10703,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                                 first_row * n_per_row, this_nrow, n_per_row, local_hist.data(), imatrix);
                     }
                 };
+                workers.reserve(nthread_use - 1);
                 for (int it = 0; it < nthread_use - 1; ++it) {
                     workers.emplace_back(compute);
                 }

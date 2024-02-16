@@ -883,9 +883,11 @@ size_t tokenize_file(
 
         // generate sample starts at all token positions
         out_samples_begin.clear();
-        out_samples_begin.push_back(0);
-        out_samples_size.push_back(std::min((size_t) context_length, out_tokens.size()));
         size_t end = (out_tokens.size() >= context_length) ? (out_tokens.size() - context_length) : 0;
+        out_samples_begin.reserve(end);
+        out_samples_begin.push_back(0);
+        out_samples_size.reserve(end);
+        out_samples_size.push_back(std::min((size_t) context_length, out_tokens.size()));
         for (size_t sample_begin = 1; sample_begin < end; ++sample_begin) {
             out_samples_begin.push_back(sample_begin);
             out_samples_size.push_back(context_length);

@@ -49,6 +49,7 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
 static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
 
+    ftype_str.reserve(ftype_str_in.size());
     for (auto ch : ftype_str_in) {
         ftype_str.push_back(std::toupper(ch));
     }

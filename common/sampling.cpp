@@ -200,7 +200,8 @@ static llama_token llama_sampling_sample_impl(
     }
 
     cur.clear();
-
+    cur.reserve(n_vocab);
+ 
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
         cur.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
     }

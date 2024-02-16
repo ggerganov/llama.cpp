@@ -181,6 +181,7 @@ int main(int argc, char ** argv){
                         const int startIdx = i + ngram_size;
                         const int endIdx = startIdx + n_draft;
                         if (endIdx < inp_size) {
+                            draft.reserve(endIdx - startIdx);
                             for (int j = startIdx; j < endIdx; ++j) {
                                 LOG(" - draft candidate %d: %d\n", j, inp[j]);
                                 draft.push_back(inp[j]);

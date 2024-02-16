@@ -1473,6 +1473,7 @@ static std::vector<clip_image_u8*> divide_to_patches_u8(const clip_image_u8 & im
     std::vector<clip_image_u8*> patches;
     int width = image.nx;
     int height = image.ny;
+    patches.reserve((height / patch_size) * (width / patch_size));
     for (int i = 0; i < height; i += patch_size) {
         for (int j = 0; j < width; j += patch_size) {
             clip_image_u8 *patch = clip_image_u8_init();
@@ -1542,6 +1543,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         if (params.image_grid_pinpoints[0] != 0) {
             // "spatial_unpad" with "anyres" processing for llava-1.6
             std::vector<std::pair<int, int>> possible_resolutions;
+            possible_resolutions.reserve(16);
             for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
                 possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
             }

@@ -876,10 +876,12 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         // Compute log-probs in parallel
         // First we collect all tasks
         eval_pairs.clear();
+        eval_pairs.reserve((i1 - i0) * 4);
         for (size_t i = i0; i < i1; ++i) {
             auto & hs_cur = hs_data[i];
             size_t li = hs_cur.common_prefix;
             for (int s = 0; s < 4; ++s) {
+                eval_pairs.reserve((hs_cur.seq_tokens[s].size() - 1) - hs_cur.common_prefix);
                 for (size_t j = hs_cur.common_prefix; j < hs_cur.seq_tokens[s].size() - 1; j++) {
                     eval_pairs.emplace_back(hs_cur.i_batch + li++, hs_cur.seq_tokens[s][j + 1]);
                 }
@@ -1148,6 +1150,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         }
 
         eval_pairs.clear();
+        eval_pairs.reserve((i1 - i0));
         for (size_t i = i0; i < i1; ++i) {
             auto & task = data[i];
 
@@ -1158,12 +1161,14 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             const auto& n_base1 = skip_choice ? task.n_base1 : task.common_prefix;
             const int last_1st = task.seq_tokens[0].size() - n_base1 > 1 ? 1 : 0;
             size_t li = n_base1 - 1;
+            eval_pairs.reserve((task.seq_tokens[0].size() - 1 - last_1st) - (n_base1 - 1));
             for (size_t j = n_base1-1; j < task.seq_tokens[0].size()-1-last_1st; ++j) {
                 eval_pairs.emplace_back(task.i_batch + li++, task.seq_tokens[0][j+1]);
             }
             const auto& n_base2 = skip_choice ? task.n_base2 : task.common_prefix;
             const int last_2nd = task.seq_tokens[1].size() - n_base2 > 1 ? 1 : 0;
             li = task.seq_tokens[0].size() - task.common_prefix + n_base2 - 1;
+            eval_pairs.reserve((task.seq_tokens[1].size() - 1 - last_2nd) - (n_base2 - 1));
             for (size_t j = n_base2-1; j < task.seq_tokens[1].size()-1-last_2nd; ++j) {
                 eval_pairs.emplace_back(task.i_batch + li++, task.seq_tokens[1][j+1]);
             }
@@ -1519,10 +1524,13 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
         // Compute log-probs in parallel
         // First we collect all tasks
         eval_pairs.clear();
+        eval_pairs.reserve(i1 - i0);
         for (size_t i = i0; i < i1; ++i) {
             auto& cur_task = tasks[i];
             size_t li = cur_task.common_prefix;
+            eval_pairs.reserve(cur_task.seq_tokens.size());
             for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
+                eval_pairs.reserve((cur_task.seq_tokens[s].size() - 1) - cur_task.common_prefix);
                 for (size_t j = cur_task.common_prefix; j < cur_task.seq_tokens[s].size() - 1; j++) {
                     eval_pairs.emplace_back(cur_task.i_batch + li++, cur_task.seq_tokens[s][j + 1]);
                 }
