@@ -42,5 +42,5 @@ if len(clip_tensors) > 0:
 torch.save(checkpoint, path)
 
 print("Done!")
-print(f"Now you can convert {args.model} to a a regular LLaMA GGUF file.")
+print(f"Now you can convert {args.model} to a regular LLaMA GGUF file.")
 print(f"Also, use {args.model}/llava.projector to prepare a llava-encoder.gguf file.")

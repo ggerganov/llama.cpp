@@ -61,7 +61,7 @@ For example to apply 40% of the 'shakespeare' LORA adapter, 80% of the 'bible' L
   --lora lora-open-llama-3b-v2-q8_0-yet-another-one-LATEST.bin
 ```
 
-The scale numbers don't need to add up to one, and you can also use numbers greater than 1 to further increase the influence of an adapter. But making the values to big will sometimes result in worse output. Play around to find good values.
+The scale numbers don't need to add up to one, and you can also use numbers greater than 1 to further increase the influence of an adapter. But making the values too big will sometimes result in worse output. Play around to find good values.
 
 Gradient checkpointing reduces the memory requirements by ~50% but increases the runtime.
 If you have enough RAM, you can make finetuning a bit faster by disabling checkpointing with `--no-checkpointing`.
@@ -80,9 +80,9 @@ The LORA rank can be configured for each model tensor type separately with these
   --rank-wk N                LORA rank for wk tensor (default 4)
   --rank-wv N                LORA rank for wv tensor (default 4)
   --rank-wo N                LORA rank for wo tensor (default 4)
-  --rank-w1 N                LORA rank for w1 tensor (default 4)
-  --rank-w2 N                LORA rank for w2 tensor (default 4)
-  --rank-w3 N                LORA rank for w3 tensor (default 4)
+  --rank-ffn_gate N          LORA rank for ffn_gate tensor (default 4)
+  --rank-ffn_down N          LORA rank for ffn_down tensor (default 4)
+  --rank-ffn_up N            LORA rank for ffn_up tensor (default 4)
 ```
 
 The LORA rank of 'norm' tensors should always be 1.

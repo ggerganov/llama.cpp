@@ -50,7 +50,8 @@ int main(int argc, char ** argv) {
 
     // init LLM
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     // initialize the model
 
@@ -69,6 +70,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> tokens_list;
     tokens_list = ::llama_tokenize(model, params.prompt, true);
+
     const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size())*n_parallel;
 
     // initialize the context
