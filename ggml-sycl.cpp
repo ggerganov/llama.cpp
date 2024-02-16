@@ -11975,27 +11975,27 @@ inline void ggml_sycl_op_mul_mat_vec_q(
               src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
           break;
         case GGML_TYPE_Q2_K:
-          mul_mat_vec_q_sycl_submitter<QK2_K, QI2_K, block_q2_K,
+          mul_mat_vec_q_sycl_submitter<QK_K, QI2_K, block_q2_K,
                                        VDR_Q2_K_Q8_1_MMVQ, vec_dot_q2_K_q8_1>(
               src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
           break;
         case GGML_TYPE_Q3_K:
-          mul_mat_vec_q_sycl_submitter<QK3_K, QI3_K, block_q3_K,
+          mul_mat_vec_q_sycl_submitter<QK_K, QI3_K, block_q3_K,
                                        VDR_Q3_K_Q8_1_MMVQ, vec_dot_q3_K_q8_1>(
               src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
           break;
         case GGML_TYPE_Q4_K:
-          mul_mat_vec_q_sycl_submitter<QK4_K, QI4_K, block_q4_K,
+          mul_mat_vec_q_sycl_submitter<QK_K, QI4_K, block_q4_K,
                                        VDR_Q4_K_Q8_1_MMVQ, vec_dot_q4_K_q8_1>(
               src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
           break;
         case GGML_TYPE_Q5_K:
-          mul_mat_vec_q_sycl_submitter<QK5_K, QI5_K, block_q5_K,
+          mul_mat_vec_q_sycl_submitter<QK_K, QI5_K, block_q5_K,
                                        VDR_Q5_K_Q8_1_MMVQ, vec_dot_q5_K_q8_1>(
               src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
           break;
         case GGML_TYPE_Q6_K:
-          mul_mat_vec_q_sycl_submitter<QK6_K, QI6_K, block_q6_K,
+          mul_mat_vec_q_sycl_submitter<QK_K, QI6_K, block_q6_K,
                                        VDR_Q6_K_Q8_1_MMVQ, vec_dot_q6_K_q8_1>(
               src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
           break;
