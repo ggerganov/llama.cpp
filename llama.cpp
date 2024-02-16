@@ -1561,6 +1561,7 @@ struct llama_hparams {
     float f_max_alibi_bias = 0.0f;
 
     bool causal_attn = true;
+    bool need_kq_pos = false;
 
     uint32_t pooling_type = LLAMA_POOLING_NONE;
 
@@ -3242,6 +3243,10 @@ static void llm_load_hparams(
     }
 
     model.ftype = ml.ftype;
+
+    if (hparams.f_max_alibi_bias > 0.0f) {
+        hparams.need_kq_pos = true;
+    }
 }
 
 // TODO: This should probably be in llama.h
@@ -7529,7 +7534,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    {
+    if (hparams.need_kq_pos) {
         const int64_t n_kv = kv_self.n;
 
         assert(ggml_backend_buffer_is_host(lctx.inp_KQ_pos->buffer));
