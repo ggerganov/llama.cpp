@@ -1,12 +1,12 @@
 #!/bin/bash
 
-set -e
-set -x
-
 if [ $# -lt 2 ]; then
     echo "usage: ./scripts/compare-commits.sh <commit1> <commit2> [additional llama-bench arguments]"
     exit 1
 fi
+
+set -e
+set -x
 
 bench_args="${@:3}"
 
