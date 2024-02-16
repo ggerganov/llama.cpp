@@ -18576,7 +18576,9 @@ static enum ggml_opt_result linesearch_backtracking(
         (*step) *= width;
     }
 
-    GGML_UNREACHABLE();
+    GGML_ASSERT(false && "line search failed");
+
+    return GGML_LINESEARCH_FAIL;
 }
 
 static enum ggml_opt_result ggml_opt_lbfgs(
@@ -18844,7 +18846,9 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         step[0] = 1.0;
     }
 
-    GGML_UNREACHABLE();
+    GGML_ASSERT(false && "lbfgs failed");
+
+    return GGML_OPT_DID_NOT_CONVERGE;
 }
 
 struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
