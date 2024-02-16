@@ -218,7 +218,8 @@ static struct llava_context * llava_init(gpt_params * params) {
 
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
-    llama_backend_init(params->numa);
+    llama_backend_init();
+    llama_numa_init(params->numa);
 
     llama_model_params model_params = llama_model_params_from_gpt_params(*params);
 

@@ -1855,7 +1855,10 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     {
         printf("  --no-mmap                 do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
-    printf("  --numa                    attempt optimizations that help on some NUMA systems\n");
+    printf("  --numa TYPE               attempt optimizations that help on some NUMA systems\n");
+    printf("                              - distribute: spread execution evenly over all nodes\n");
+    printf("                              - isolate: only spawn threads on CPUs on the node that execution started on\n");
+    printf("                              - numactl: use the CPU map provided my numactl\n");
     if (llama_supports_gpu_offload()) {
         printf("  -ngl N, --n-gpu-layers N\n");
         printf("                            number of layers to store in VRAM\n");
@@ -2264,9 +2267,17 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         {
             params.use_mmap = false;
         }
-        else if (arg == "--numa")
-        {
-            params.numa = true;
+        else if (arg == "--numa") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            } else {
+                std::string value(argv[i]);
+                /**/ if (value == "distribute" || value == "" ) { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
+                else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
+                else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
+                else { invalid_param = true; break; }
+            }
         }
         else if (arg == "--embedding")
         {
@@ -2497,7 +2508,8 @@ int main(int argc, char **argv)
         params.model_alias = params.model;
     }
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     LOG_INFO("build info", {{"build", LLAMA_BUILD_NUMBER},
                             {"commit", LLAMA_COMMIT}});

@@ -237,7 +237,7 @@ int main(int argc, char ** argv) {
         params.imatrix = &imatrix_data;
     }
 
-    llama_backend_init(false);
+    llama_backend_init();
 
     // parse command line arguments
     const std::string fname_inp = argv[arg_idx];

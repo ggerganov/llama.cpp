@@ -16,6 +16,13 @@ Command line options:
 - `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
 - `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 - `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
+- `--numa STRATEGY`: Attempt one of the below optimization strategies  that help on some NUMA systems
+- `--numa distribute`: Spread execution evenly over all nodes
+- `--numa isolate`: Only spawn threads on CPUs on the node that execution started on
+- `--numa numactl`: Use the CPU map provided by numactl
+if run without this previously, it is recommended to drop the system page cache before using this
+see https://github.com/ggerganov/llama.cpp/issues/1437
+
 - `--numa`: Attempt optimizations that help on some NUMA systems.
 - `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 - `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.

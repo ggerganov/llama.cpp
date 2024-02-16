@@ -50,7 +50,8 @@ int main(int argc, char ** argv) {
 
     // init LLM
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     // initialize the model
 
