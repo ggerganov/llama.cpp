@@ -112,6 +112,12 @@ extern "C" {
         LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
     };
 
+    enum llama_pooling_type {
+        LLAMA_POOLING_NONE = 0,
+        LLAMA_POOLING_MEAN = 1,
+        LLAMA_POOLING_CLS  = 2,
+    };
+
     enum llama_split_mode {
         LLAMA_SPLIT_NONE    = 0, // single GPU
         LLAMA_SPLIT_LAYER   = 1, // split layers and KV across GPUs
