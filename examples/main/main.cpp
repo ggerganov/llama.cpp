@@ -522,7 +522,7 @@ int main(int argc, char ** argv) {
                 // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
                 if (n_past + (int) embd.size() + std::max<int>(0, guidance_offset) > n_ctx) {
                     if (params.n_predict == -2) {
-                        LOG_TEE("\n\n%s: context full and n_predict == -%d => stopping\n", __func__, params.n_predict);
+                        LOG_TEE("\n\n%s: context full and n_predict == %d => stopping\n", __func__, params.n_predict);
                         break;
                     }
 
@@ -780,7 +780,7 @@ int main(int argc, char ** argv) {
                 LOG("waiting for user input\n");
 
                 if (params.instruct || params.chatml) {
-                    printf("\n> ");
+                    printf("\033[31m(Tokens used: %d / %d)\033[0m\nJCP: ", n_past, n_ctx);
                 }
 
                 if (params.input_prefix_bos) {
