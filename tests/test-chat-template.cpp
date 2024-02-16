@@ -18,11 +18,6 @@ int main(void) {
         {"user", "Another question"},
     };
     size_t message_count = 6;
-    std::vector<const llama_chat_message *> conversation_vec;
-    conversation_vec.resize(message_count);
-    for (size_t i = 0; i < message_count; i++) {
-        conversation_vec[i] = &conversation[i];
-    }
     std::vector<std::string> templates = {
         // teknium/OpenHermes-2.5-Mistral-7B
         "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\\n' + message['content'] + '<|im_end|>' + '\\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\\n' }}{% endif %}",
