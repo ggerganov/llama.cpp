@@ -315,7 +315,6 @@ static bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_thre
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*6); // TODO: base on gridsize/llava model
     if (!image_embd) {
         fprintf(stderr, "Unable to allocate memory for image embeddings\n");
-        free(image_embd);
         return false;
     }
 
