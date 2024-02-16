@@ -2086,6 +2086,7 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
         }
     }
 #else
+    GGML_UNUSED(numa_flag);
     // TODO
 #endif
 }
