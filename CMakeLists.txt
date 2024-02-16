@@ -610,7 +610,7 @@ if (LLAMA_KOMPUTE)
         add_subdirectory(kompute)
 
         # Compile our shaders
-        Vcompile_shader(SOURCES
+        compile_shader(SOURCES
             kompute-shaders/op_scale.comp
             kompute-shaders/op_scale_8.comp
             kompute-shaders/op_add.comp
