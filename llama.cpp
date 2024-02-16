@@ -10893,7 +10893,7 @@ static int llama_apply_lora_from_file_internal(
                     {
                         LLAMA_LOG_ERROR("%s: invalid tensor data type '%d'\n",
                                 __func__, ftype);
-                        return false;
+                        return 1;
                     }
         }
 
