@@ -1774,7 +1774,9 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
             if (cs_curr[j] < 0) { continue; }
             if (seqs.find(cs_curr[j]) == seqs.end()) {
                 if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
-                seqs[cs_curr[j]] = seqs.size();
+                seqs[cs_curr[j]] = 0;
+                const auto size = seqs.size();
+                seqs[cs_curr[j]] = size;
             }
         }
         if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
