@@ -12,12 +12,26 @@ bench_args="${@:3}"
 
 rm -f llama-bench.sqlite
 
+backend="cpu"
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    backend="metal"
+elif command -v nvcc &> /dev/null; then
+    backend="cuda"
+fi
+
+opts=""
+
+if [[ "$backend" == "cuda" ]]; then
+    opts="LLAMA_CUBLAS=1"
+fi
+
 git checkout $1
-make clean && LLAMA_CUBLAS=1 make -j32 llama-bench
+make clean && $opts make -j32 llama-bench
 ./llama-bench -o sql $bench_args | tee /dev/tty | sqlite3 llama-bench.sqlite
 
 git checkout $2
-make clean && LLAMA_CUBLAS=1 make -j32 llama-bench
+make clean && $opts make -j32 llama-bench
 ./llama-bench -o sql $bench_args | tee /dev/tty | sqlite3 llama-bench.sqlite
 
 ./scripts/compare-llama-bench.py -b $1 -c $2
