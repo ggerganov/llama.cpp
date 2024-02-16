@@ -1091,7 +1091,7 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     }
 }
 
-void ggml_vk_instance_init() {
+static void ggml_vk_instance_init() {
     if (vk_instance_initialized) {
         return;
     }
@@ -1150,7 +1150,7 @@ void ggml_vk_instance_init() {
     vk_instance_initialized = true;
 }
 
-void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
+static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     GGML_ASSERT(idx < vk_instance.device_indices.size());
     size_t dev_num = vk_instance.device_indices[idx];
 #ifdef GGML_VULKAN_DEBUG
@@ -4556,13 +4556,13 @@ static void ggml_vk_cleanup(ggml_backend_vk_context * ctx) {
     }
 }
 
-GGML_CALL int ggml_vk_get_device_count() {
+GGML_CALL static int ggml_vk_get_device_count() {
     ggml_vk_instance_init();
 
     return vk_instance.device_indices.size();
 }
 
-GGML_CALL void ggml_vk_get_device_description(int device, char * description, size_t description_size) {
+GGML_CALL static void ggml_vk_get_device_description(int device, char * description, size_t description_size) {
     ggml_vk_instance_init();
 
     std::vector<vk::PhysicalDevice> devices = vk_instance.instance.enumeratePhysicalDevices();
@@ -4580,7 +4580,7 @@ void ggml_vk_init_cpu_assist() {
 
     std::cerr << "ggml_vulkan: Found " << ggml_vk_get_device_count() << " Vulkan devices:" << std::endl;
 
-    for (size_t i = 0; i < ggml_vk_get_device_count(); i++) {
+    for (int i = 0; i < ggml_vk_get_device_count(); i++) {
         ggml_vk_print_gpu_info(i);
     }
     // Initialize the first backend to make sure CPU matrix multiplications can be offloaded.
@@ -5267,7 +5267,7 @@ GGML_CALL void ggml_backend_vk_get_device_description(int device, char * descrip
 }
 
 GGML_CALL void ggml_backend_vk_get_device_memory(int device, size_t * free, size_t * total) {
-    GGML_ASSERT(device < vk_instance.device_indices.size());
+    GGML_ASSERT(device < (int) vk_instance.device_indices.size());
 
     vk::PhysicalDevice vkdev = vk_instance.instance.enumeratePhysicalDevices()[vk_instance.device_indices[device]];
 
