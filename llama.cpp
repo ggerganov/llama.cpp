@@ -6718,7 +6718,7 @@ static int llama_decode_internal(
     // if we start defragmenting the cache, the benefit from this will be more important
     kv_self.n = std::min((int32_t) cparams.n_ctx, std::max(32, GGML_PAD(llama_kv_cache_cell_max(kv_self), 32)));
     //kv_self.n = llama_kv_cache_cell_max(kv_self);
-
+    // line above and below originally commented out
     //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
     ggml_allocr_reset(lctx.alloc);
@@ -10741,7 +10741,7 @@ void llama_batch_free(struct llama_batch batch) {
 
 int32_t llama_decode(
         struct llama_context * ctx,
-          struct llama_batch   batch) {
+        struct llama_batch   batch) {
     const int ret = llama_decode_internal(*ctx, batch);
     if (ret < 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);

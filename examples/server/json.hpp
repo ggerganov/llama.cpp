@@ -20312,7 +20312,7 @@ class basic_json // NOLINT(cppcoreguidelines-special-member-functions,hicpp-spec
     basic_json(const basic_json& other)
         : m_type(other.m_type)
     {
-        // check of passed value is valid
+        // check if passed value is valid
         other.assert_invariant();
 
         switch (m_type)

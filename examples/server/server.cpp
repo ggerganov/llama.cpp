@@ -3080,7 +3080,7 @@ int main(int argc, char **argv)
 
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
-    svr.set_default_headers({{"Server", "PJllama.cpp"}});
+    svr.set_default_headers({{"Server", "llama.cpp"}});
 
     // CORS preflight (Cross-Origin Resource Sharing)
     svr.Options(R"(.*)", [](const httplib::Request &req, httplib::Response &res)
@@ -3565,6 +3565,22 @@ int main(int argc, char **argv)
         }
     }
     ); // get a SIGABORT error on exception here as GG says above when in Debug but not in Release
+
+    // copied from a later server.cpp
+        llama.queue_tasks.on_new_task(std::bind(
+        &llama_server_context::process_single_task, &llama, std::placeholders::_1));
+    llama.queue_tasks.on_finish_multitask(std::bind(
+        &llama_server_context::on_finish_multitask, &llama, std::placeholders::_1));
+    llama.queue_tasks.on_all_tasks_finished(std::bind(
+        &llama_server_context::run_on_all_tasks_finished, &llama));
+    llama.queue_results.on_multitask_update(std::bind(
+        &llama_server_queue::update_multitask,
+        &llama.queue_tasks,
+        std::placeholders::_1,
+        std::placeholders::_2,
+        std::placeholders::_3
+    ));
+    llama.queue_tasks.start_loop();
 
     t2.join();      // was originally t.join() despite t2 in line 3533 above
 

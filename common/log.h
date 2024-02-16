@@ -41,6 +41,18 @@
 //   log_set_target( FILE* )
 //    allowing to point at stderr, stdout, or any valid FILE* file handler.
 //
+//  One way to find log files is to give a parameter or a name a strange value and then search for it
+//  that is how I discovered the llama.log inside build and log.h inside common
+//  although I don't know why it isn't called server.log
+//  note that server has logging on by default and it can only be disabled, not enabled
+//
+//  and this very useful and informative log.h file is inside examples/common.
+//
+//  As appears below, the llama.log is overwritten on every run if the default is used
+//  so it would be preferable to be able to assign a log file when the server is loaded
+//  or to have a flag that allows timestamped logs to be generated when required.
+//  It isn't very satisfactory to have to add a new filename to the code.
+//
 // --------
 //
 // End of Basic usage.
@@ -112,7 +124,7 @@ inline std::string log_get_pid()
    static std::string pid;
    if (pid.empty())
    {
-       // std::this_thread::get_id() is the most portable way of obtaining a "process id"
+       //  std::this_thread::get_id() is the most portable way of obtaining a "process id"
        //  it's not the same as "pid" but is unique enough to solve multiple instances
        //  trying to write to the same log.
        std::stringstream ss;

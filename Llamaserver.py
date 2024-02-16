@@ -2,6 +2,7 @@ from queue import Queue
 import threading
 import requests
 import json
+from time import sleep
 
 def print_dict(data):
     for k, v in data.items():
@@ -38,6 +39,8 @@ def make_progress_bar(bar, count, num_requests):
 
 def send_request(q, question, event, count, num_requests):
 
+    delay = 0.1
+
     global bar
 
     data = {'prompt': question}
@@ -58,8 +61,12 @@ def send_request(q, question, event, count, num_requests):
         elif response.status_code == 429 and not q.empty():
             event.set()
             print("Server return too many requests; back off!! Reset event.")
+        else:
+            print(f"Server responded with code {response.status_code}\n")
     except Exception as e:
         print(f"Server returned exception error {e}")
+        sleep(delay)
+        delay *= 2
 
 if __name__ == "__main__":
 
@@ -94,7 +101,6 @@ if __name__ == "__main__":
         t = threading.Thread(target=send_request, args=(q, question, event, i, num_requests)) 
         t.start()
         threads.append(t)
-        # input("Any key",)
 
     for thread in threads:
         thread.join()   # wait for all threads to finish
