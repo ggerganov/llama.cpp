@@ -387,15 +387,20 @@ if (LLAMA_MPI)
     find_package(MPI)
     if (MPI_C_FOUND)
         message(STATUS "MPI found")
+
         set(GGML_HEADERS_MPI ggml-mpi.h)
         set(GGML_SOURCES_MPI ggml-mpi.c ggml-mpi.h)
+
         add_compile_definitions(GGML_USE_MPI)
         add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})
+
         if (NOT MSVC)
             add_compile_options(-Wno-cast-qual)
         endif()
+
         set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${MPI_C_LIBRARIES})
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${MPI_C_INCLUDE_DIRS})
+
         # Even if you're only using the C header, C++ programs may bring in MPI
         # C++ functions, so more linkage is needed
         if (MPI_CXX_FOUND)
@@ -427,31 +432,28 @@ if (LLAMA_VULKAN)
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
 
-        add_library(ggml-vulkan OBJECT ggml-vulkan.cpp ggml-vulkan.h)
-        if (BUILD_SHARED_LIBS)
-            set_target_properties(ggml-vulkan PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        endif()
-        target_link_libraries(ggml-vulkan PRIVATE Vulkan::Vulkan)
+        set(GGML_HEADERS_VULKAN ggml-vulkan.h)
+        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
 
-        add_compile_definitions(GGML_USE_VULKAN)
+        target_compile_definitions(ggml PUBLIC GGML_USE_VULKAN)
 
         if (LLAMA_VULKAN_CHECK_RESULTS)
-            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_CHECK_RESULTS)
+            target_compile_definitions(ggml PRIVATE GGML_VULKAN_CHECK_RESULTS)
         endif()
 
         if (LLAMA_VULKAN_DEBUG)
-            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_DEBUG)
+            target_compile_definitions(ggml PRIVATE GGML_VULKAN_DEBUG)
         endif()
 
         if (LLAMA_VULKAN_VALIDATE)
-            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_VALIDATE)
+            target_compile_definitions(ggml PRIVATE GGML_VULKAN_VALIDATE)
         endif()
 
         if (LLAMA_VULKAN_RUN_TESTS)
-            target_compile_definitions(ggml-vulkan PRIVATE GGML_VULKAN_RUN_TESTS)
+            target_compile_definitions(ggml PRIVATE GGML_VULKAN_RUN_TESTS)
         endif()
 
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-vulkan)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} Vulkan::Vulkan)
     else()
         message(WARNING "Vulkan not found")
     endif()
@@ -463,43 +465,44 @@ if (LLAMA_HIPBLAS)
     if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
         message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
     endif()
+
     if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         message(WARNING "Only LLVM is supported for HIP, hint: CXX=/opt/rocm/llvm/bin/clang++")
     endif()
 
-    find_package(hip)
-    find_package(hipblas)
-    find_package(rocblas)
+    find_package(hip     REQUIRED)
+    find_package(hipblas REQUIRED)
+    find_package(rocblas REQUIRED)
 
-    if (${hipblas_FOUND} AND ${hip_FOUND})
-        message(STATUS "HIP and hipBLAS found")
-        add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
-        if (LLAMA_HIP_UMA)
-            add_compile_definitions(GGML_HIP_UMA)
-        endif()
-        add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
-        if (BUILD_SHARED_LIBS)
-            set_target_properties(ggml-rocm PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        endif()
-        if (LLAMA_CUDA_FORCE_DMMV)
-            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_DMMV)
-        endif()
-        if (LLAMA_CUDA_FORCE_MMQ)
-            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_MMQ)
-        endif()
-        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
-        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
-        target_compile_definitions(ggml-rocm PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
-        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
-        target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
+    message(STATUS "HIP and hipBLAS found")
 
-        if (LLAMA_STATIC)
-            message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
-        endif()
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-rocm)
-    else()
-        message(WARNING "hipBLAS or HIP not found. Try setting CMAKE_PREFIX_PATH=/opt/rocm")
+    set(GGML_HEADERS_ROCM ggml-cuda.h)
+    set(GGML_SOURCES_ROCM ggml-cuda.cu)
+
+    target_compile_definitions(ggml PUBLIC GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+    if (LLAMA_HIP_UMA)
+        target_compile_definitions(ggml PRIVATE GGML_HIP_UMA)
     endif()
+
+    if (LLAMA_CUDA_FORCE_DMMV)
+        target_compile_definitions(ggml PRIVATE GGML_CUDA_FORCE_DMMV)
+    endif()
+
+    if (LLAMA_CUDA_FORCE_MMQ)
+        target_compile_definitions(ggml PRIVATE GGML_CUDA_FORCE_MMQ)
+    endif()
+
+    target_compile_definitions(ggml PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+    target_compile_definitions(ggml PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+    target_compile_definitions(ggml PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
+
+    set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+
+    if (LLAMA_STATIC)
+        message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
+    endif()
+
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
 endif()
 
 if (LLAMA_SYCL)
@@ -509,19 +512,25 @@ if (LLAMA_SYCL)
     #todo: AOT
 
     find_package(IntelSYCL REQUIRED)
-    if (LLAMA_SYCL_F16)
-        add_compile_definitions(GGML_SYCL_F16)
-    endif()
-    add_compile_definitions(GGML_USE_SYCL)
 
-    add_compile_options(-I./) #include DPCT
-    add_compile_options(-I/${SYCL_INCLUDE_DIR})
+    message(STATUS "SYCL found")
+
+    target_compile_definitions(ggml PUBLIC GGML_USE_SYCL)
+
+    if (LLAMA_SYCL_F16)
+        target_compile_definitions(ggml PRIVATE GGML_SYCL_F16)
+    endif()
+
+    #add_compile_options(-I./) #include DPCT
+    #add_compile_options(-I/${SYCL_INCLUDE_DIR})
+
+    target_compile_options(ggml PRIVATE -I./ -I/${SYCL_INCLUDE_DIR})
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
 
-    set(GGML_HEADERS_SYCL ggml.h ggml-sycl.h)
+    set(GGML_HEADERS_SYCL ggml-sycl.h)
     set(GGML_SOURCES_SYCL ggml-sycl.cpp)
 
     if (WIN32)
@@ -540,61 +549,61 @@ if (LLAMA_KOMPUTE)
     endif()
 
     function(compile_shader)
-      set(options)
-      set(oneValueArgs)
-      set(multiValueArgs SOURCES)
-      cmake_parse_arguments(compile_shader "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-      foreach(source ${compile_shader_SOURCES})
-        get_filename_component(filename ${source} NAME)
-        set(spv_file ${filename}.spv)
-        add_custom_command(
-            OUTPUT ${spv_file}
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source}
-              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/common.comp
-              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_getrows.comp
-              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_mul_mv_q_n_pre.comp
-              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_mul_mv_q_n.comp
-              COMMAND ${glslc_executable} --target-env=vulkan1.2 -o ${spv_file} ${CMAKE_CURRENT_SOURCE_DIR}/${source}
-            COMMENT "Compiling ${source} to ${spv_file}"
-        )
+        set(options)
+        set(oneValueArgs)
+        set(multiValueArgs SOURCES)
+        cmake_parse_arguments(compile_shader "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+        foreach(source ${compile_shader_SOURCES})
+            get_filename_component(filename ${source} NAME)
+            set(spv_file ${filename}.spv)
+            add_custom_command(
+                OUTPUT ${spv_file}
+                DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source}
+                ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/common.comp
+                ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_getrows.comp
+                ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_mul_mv_q_n_pre.comp
+                ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_mul_mv_q_n.comp
+                COMMAND ${glslc_executable} --target-env=vulkan1.2 -o ${spv_file} ${CMAKE_CURRENT_SOURCE_DIR}/${source}
+                COMMENT "Compiling ${source} to ${spv_file}"
+                )
 
-        get_filename_component(RAW_FILE_NAME ${spv_file} NAME)
-        set(FILE_NAME "shader${RAW_FILE_NAME}")
-        string(REPLACE ".comp.spv" ".h" HEADER_FILE ${FILE_NAME})
-        string(TOUPPER ${HEADER_FILE} HEADER_FILE_DEFINE)
-        string(REPLACE "." "_" HEADER_FILE_DEFINE "${HEADER_FILE_DEFINE}")
-        set(OUTPUT_HEADER_FILE "${HEADER_FILE}")
-        message(STATUS "${HEADER_FILE} generating ${HEADER_FILE_DEFINE}")
-        if(CMAKE_GENERATOR MATCHES "Visual Studio")
-            add_custom_command(
-              OUTPUT ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "/*THIS FILE HAS BEEN AUTOMATICALLY GENERATED - DO NOT EDIT*/" > ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo \"\#ifndef ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo \"\#define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "namespace kp {" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "namespace shader_data {" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_BINARY_DIR}/bin/$<CONFIG>/xxd -i ${RAW_FILE_NAME} >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "}}" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo \"\#endif // define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
-              DEPENDS ${spv_file} xxd
-              COMMENT "Converting to hpp: ${FILE_NAME} ${CMAKE_BINARY_DIR}/bin/$<CONFIG>/xxd"
-            )
-        else()
-            add_custom_command(
-              OUTPUT ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "/*THIS FILE HAS BEEN AUTOMATICALLY GENERATED - DO NOT EDIT*/" > ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo \"\#ifndef ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo \"\#define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "namespace kp {" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "namespace shader_data {" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_BINARY_DIR}/bin/xxd -i ${RAW_FILE_NAME} >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo "}}" >> ${OUTPUT_HEADER_FILE}
-              COMMAND ${CMAKE_COMMAND} -E echo \"\#endif // define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
-              DEPENDS ${spv_file} xxd
-              COMMENT "Converting to hpp: ${FILE_NAME} ${CMAKE_BINARY_DIR}/bin/xxd"
-            )
-        endif()
-      endforeach()
+            get_filename_component(RAW_FILE_NAME ${spv_file} NAME)
+            set(FILE_NAME "shader${RAW_FILE_NAME}")
+            string(REPLACE ".comp.spv" ".h" HEADER_FILE ${FILE_NAME})
+            string(TOUPPER ${HEADER_FILE} HEADER_FILE_DEFINE)
+            string(REPLACE "." "_" HEADER_FILE_DEFINE "${HEADER_FILE_DEFINE}")
+            set(OUTPUT_HEADER_FILE "${HEADER_FILE}")
+            message(STATUS "${HEADER_FILE} generating ${HEADER_FILE_DEFINE}")
+            if(CMAKE_GENERATOR MATCHES "Visual Studio")
+                add_custom_command(
+                    OUTPUT ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "/*THIS FILE HAS BEEN AUTOMATICALLY GENERATED - DO NOT EDIT*/" > ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo \"\#ifndef ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo \"\#define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "namespace kp {" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "namespace shader_data {" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_BINARY_DIR}/bin/$<CONFIG>/xxd -i ${RAW_FILE_NAME} >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "}}" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo \"\#endif // define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
+                    DEPENDS ${spv_file} xxd
+                    COMMENT "Converting to hpp: ${FILE_NAME} ${CMAKE_BINARY_DIR}/bin/$<CONFIG>/xxd"
+                    )
+            else()
+                add_custom_command(
+                    OUTPUT ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "/*THIS FILE HAS BEEN AUTOMATICALLY GENERATED - DO NOT EDIT*/" > ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo \"\#ifndef ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo \"\#define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "namespace kp {" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "namespace shader_data {" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_BINARY_DIR}/bin/xxd -i ${RAW_FILE_NAME} >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo "}}" >> ${OUTPUT_HEADER_FILE}
+                    COMMAND ${CMAKE_COMMAND} -E echo \"\#endif // define ${HEADER_FILE_DEFINE}\" >> ${OUTPUT_HEADER_FILE}
+                    DEPENDS ${spv_file} xxd
+                    COMMENT "Converting to hpp: ${FILE_NAME} ${CMAKE_BINARY_DIR}/bin/xxd"
+                    )
+            endif()
+        endforeach()
     endfunction()
 
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/kompute/CMakeLists.txt")
@@ -603,67 +612,67 @@ if (LLAMA_KOMPUTE)
         add_subdirectory(kompute)
 
         # Compile our shaders
-        compile_shader(SOURCES
-          kompute-shaders/op_scale.comp
-          kompute-shaders/op_scale_8.comp
-          kompute-shaders/op_add.comp
-          kompute-shaders/op_addrow.comp
-          kompute-shaders/op_mul.comp
-          kompute-shaders/op_silu.comp
-          kompute-shaders/op_relu.comp
-          kompute-shaders/op_gelu.comp
-          kompute-shaders/op_softmax.comp
-          kompute-shaders/op_norm.comp
-          kompute-shaders/op_rmsnorm.comp
-          kompute-shaders/op_diagmask.comp
-          kompute-shaders/op_mul_mat_mat_f32.comp
-          kompute-shaders/op_mul_mat_f16.comp
-          kompute-shaders/op_mul_mat_q8_0.comp
-          kompute-shaders/op_mul_mat_q4_0.comp
-          kompute-shaders/op_mul_mat_q4_1.comp
-          kompute-shaders/op_mul_mat_q6_k.comp
-          kompute-shaders/op_getrows_f16.comp
-          kompute-shaders/op_getrows_q4_0.comp
-          kompute-shaders/op_getrows_q4_1.comp
-          kompute-shaders/op_getrows_q6_k.comp
-          kompute-shaders/op_rope_f16.comp
-          kompute-shaders/op_rope_f32.comp
-          kompute-shaders/op_cpy_f16_f16.comp
-          kompute-shaders/op_cpy_f16_f32.comp
-          kompute-shaders/op_cpy_f32_f16.comp
-          kompute-shaders/op_cpy_f32_f32.comp
+        Vcompile_shader(SOURCES
+            kompute-shaders/op_scale.comp
+            kompute-shaders/op_scale_8.comp
+            kompute-shaders/op_add.comp
+            kompute-shaders/op_addrow.comp
+            kompute-shaders/op_mul.comp
+            kompute-shaders/op_silu.comp
+            kompute-shaders/op_relu.comp
+            kompute-shaders/op_gelu.comp
+            kompute-shaders/op_softmax.comp
+            kompute-shaders/op_norm.comp
+            kompute-shaders/op_rmsnorm.comp
+            kompute-shaders/op_diagmask.comp
+            kompute-shaders/op_mul_mat_mat_f32.comp
+            kompute-shaders/op_mul_mat_f16.comp
+            kompute-shaders/op_mul_mat_q8_0.comp
+            kompute-shaders/op_mul_mat_q4_0.comp
+            kompute-shaders/op_mul_mat_q4_1.comp
+            kompute-shaders/op_mul_mat_q6_k.comp
+            kompute-shaders/op_getrows_f16.comp
+            kompute-shaders/op_getrows_q4_0.comp
+            kompute-shaders/op_getrows_q4_1.comp
+            kompute-shaders/op_getrows_q6_k.comp
+            kompute-shaders/op_rope_f16.comp
+            kompute-shaders/op_rope_f32.comp
+            kompute-shaders/op_cpy_f16_f16.comp
+            kompute-shaders/op_cpy_f16_f32.comp
+            kompute-shaders/op_cpy_f32_f16.comp
+            kompute-shaders/op_cpy_f32_f32.comp
         )
 
         # Create a custom target for our generated shaders
         add_custom_target(generated_shaders DEPENDS
-          shaderop_scale.h
-          shaderop_scale_8.h
-          shaderop_add.h
-          shaderop_addrow.h
-          shaderop_mul.h
-          shaderop_silu.h
-          shaderop_relu.h
-          shaderop_gelu.h
-          shaderop_softmax.h
-          shaderop_norm.h
-          shaderop_rmsnorm.h
-          shaderop_diagmask.h
-          shaderop_mul_mat_mat_f32.h
-          shaderop_mul_mat_f16.h
-          shaderop_mul_mat_q8_0.h
-          shaderop_mul_mat_q4_0.h
-          shaderop_mul_mat_q4_1.h
-          shaderop_mul_mat_q6_k.h
-          shaderop_getrows_f16.h
-          shaderop_getrows_q4_0.h
-          shaderop_getrows_q4_1.h
-          shaderop_getrows_q6_k.h
-          shaderop_rope_f16.h
-          shaderop_rope_f32.h
-          shaderop_cpy_f16_f16.h
-          shaderop_cpy_f16_f32.h
-          shaderop_cpy_f32_f16.h
-          shaderop_cpy_f32_f32.h
+            shaderop_scale.h
+            shaderop_scale_8.h
+            shaderop_add.h
+            shaderop_addrow.h
+            shaderop_mul.h
+            shaderop_silu.h
+            shaderop_relu.h
+            shaderop_gelu.h
+            shaderop_softmax.h
+            shaderop_norm.h
+            shaderop_rmsnorm.h
+            shaderop_diagmask.h
+            shaderop_mul_mat_mat_f32.h
+            shaderop_mul_mat_f16.h
+            shaderop_mul_mat_q8_0.h
+            shaderop_mul_mat_q4_0.h
+            shaderop_mul_mat_q4_1.h
+            shaderop_mul_mat_q6_k.h
+            shaderop_getrows_f16.h
+            shaderop_getrows_q4_0.h
+            shaderop_getrows_q4_1.h
+            shaderop_getrows_q6_k.h
+            shaderop_rope_f16.h
+            shaderop_rope_f32.h
+            shaderop_cpy_f16_f16.h
+            shaderop_cpy_f16_f32.h
+            shaderop_cpy_f32_f16.h
+            shaderop_cpy_f32_f32.h
         )
 
         # Create a custom command that depends on the generated_shaders
@@ -1048,16 +1057,21 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_EXTRA}   ${GGML_HEADERS_EXTRA}
             ${GGML_SOURCES_SYCL}    ${GGML_HEADERS_SYCL}
             ${GGML_SOURCES_KOMPUTE} ${GGML_HEADERS_KOMPUTE}
+            ${GGML_SOURCES_VULKAN}  ${GGML_HEADERS_VULKAN}
+            ${GGML_SOURCES_ROCM}    ${GGML_HEADERS_ROCM}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
-target_compile_features(ggml PUBLIC c_std_11) # don't bump
+target_compile_features   (ggml PUBLIC c_std_11) # don't bump
+
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+
 if (GGML_USE_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
 
 add_library(ggml_static STATIC $<TARGET_OBJECTS:ggml>)
+
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
     add_library(ggml_shared SHARED $<TARGET_OBJECTS:ggml>)
