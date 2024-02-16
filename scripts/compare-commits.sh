@@ -20,18 +20,18 @@ elif command -v nvcc &> /dev/null; then
     backend="cuda"
 fi
 
-opts=""
+make_opts=""
 
 if [[ "$backend" == "cuda" ]]; then
-    opts="LLAMA_CUBLAS=1"
+    make_opts="LLAMA_CUBLAS=1"
 fi
 
 git checkout $1
-make clean && $opts make -j32 llama-bench
+make clean && make -j32 $make_opts llama-bench
 ./llama-bench -o sql $bench_args | tee /dev/tty | sqlite3 llama-bench.sqlite
 
 git checkout $2
-make clean && $opts make -j32 llama-bench
+make clean && make -j32 $make_opts llama-bench
 ./llama-bench -o sql $bench_args | tee /dev/tty | sqlite3 llama-bench.sqlite
 
 ./scripts/compare-llama-bench.py -b $1 -c $2
