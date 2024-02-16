@@ -358,6 +358,9 @@ kernel void kernel_soft_max(
         constant   int64_t & ne02,
         constant     float & scale,
         constant     float & max_bias,
+        constant     float & m0,
+        constant     float & m1,
+        constant  uint32_t & n_head_log2,
         threadgroup  float * buf [[threadgroup(0)]],
         uint  tgpig[[threadgroup_position_in_grid]],
         uint  tpitg[[thread_position_in_threadgroup]],
@@ -377,15 +380,12 @@ kernel void kernel_soft_max(
 
     // ALiBi
     if (max_bias > 0.0f) {
-        const uint32_t n_head_kv   = ne02;
-        const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2((float) n_head_kv));
-
-        const float m0 = pow(2.0f, -(max_bias       ) / n_head_log2);
-        const float m1 = pow(2.0f, -(max_bias / 2.0f) / n_head_log2);
-
         const int64_t h = i02;
 
-        slope = h < n_head_log2 ? pow(m0, h + 1) : pow(m1, 2*(h - n_head_log2) + 1);
+        const float base = h < n_head_log2 ? m0 : m1;
+        const int   exp  = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
+
+        slope = pow(base, exp);
     }
 
     // parallel max
@@ -462,6 +462,9 @@ kernel void kernel_soft_max_4(
         constant   int64_t & ne02,
         constant     float & scale,
         constant     float & max_bias,
+        constant     float & m0,
+        constant     float & m1,
+        constant  uint32_t & n_head_log2,
         threadgroup  float * buf [[threadgroup(0)]],
         uint  tgpig[[threadgroup_position_in_grid]],
         uint  tpitg[[thread_position_in_threadgroup]],
@@ -480,15 +483,12 @@ kernel void kernel_soft_max_4(
     float slope = 0.0f;
 
     if (max_bias > 0.0f) {
-        const uint32_t n_head_kv   = ne02;
-        const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2((float) n_head_kv));
-
-        const float m0 = pow(2.0f, -(max_bias       ) / n_head_log2);
-        const float m1 = pow(2.0f, -(max_bias / 2.0f) / n_head_log2);
-
         const int64_t h = i02;
 
-        slope = h < n_head_log2 ? pow(m0, h + 1) : pow(m1, 2*(h - n_head_log2) + 1);
+        const float base = h < n_head_log2 ? m0 : m1;
+        const int   exp  = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
+
+        slope = pow(base, exp);
     }
 
     // parallel max
