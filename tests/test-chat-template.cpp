@@ -34,11 +34,11 @@ int main(void) {
         "</s><s>[INST] Who are you [/INST]    I am an assistant    </s><s>[INST] Another question [/INST]",
         "[/INST] Hi there </s>[INST] Who are you [/INST] I am an assistant </s>[INST] Another question [/INST]",
     };
-    std::string formatted_chat;
+    std::vector<char> formatted_chat(1024);
     int32_t res;
 
     // test invalid chat template
-    res = llama_chat_apply_template(nullptr, "INVALID TEMPLATE", conversation, message_count, true, &(*formatted_chat.begin()), formatted_chat.size());
+    res = llama_chat_apply_template(nullptr, "INVALID TEMPLATE", conversation, message_count, true, formatted_chat.data(), formatted_chat.size());
     assert(res < 0);
 
     for (size_t i = 0; i < templates.size(); i++) {
@@ -51,13 +51,14 @@ int main(void) {
             conversation,
             message_count,
             true,
-            &(*formatted_chat.begin()),
+            formatted_chat.data(),
             formatted_chat.size()
         );
         formatted_chat.resize(res);
-        std::cout << formatted_chat << "\n-------------------------\n";
+        std::string output(formatted_chat.data(), formatted_chat.size());
+        std::cout << output << "\n-------------------------\n";
         // expect the "formatted_chat" to contain pre-defined strings
-        assert(formatted_chat.find(substr) != std::string::npos);
+        assert(output.find(substr) != std::string::npos);
     }
     return 0;
 }

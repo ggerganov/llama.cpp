@@ -12542,14 +12542,14 @@ LLAMA_API int32_t llama_chat_apply_template(
     if (custom_template == nullptr) {
         GGML_ASSERT(model != nullptr);
         // load template from model
-        current_template.resize(2048); // longest known template is about 1200 bytes
+        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
         std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), &(*current_template.begin()), current_template.size());
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), current_template.size());
         if (res < 0) {
             // worst case: there is no information about template, we will use chatml by default
             current_template = "<|im_start|>"; // see llama_chat_apply_template_internal
         } else {
-            current_template.resize(res);
+            current_template = std::string(model_template.data(), model_template.size());
         }
     }
     // format the conversation to string
