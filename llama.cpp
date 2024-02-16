@@ -12459,6 +12459,114 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
     return 0;
 }
 
+int32_t llama_chat_apply_template_internal(std::string &dest, std::string chat_template, std::vector<const llama_chat_message *> conversation, bool add_ass);
+
+// trim whitespace from the beginning and end of a string
+static std::string trim(const std::string & str) {
+    size_t start = 0;
+    size_t end = str.size();
+    while (start < end && isspace(str[start])) {
+        start += 1;
+    }
+    while (end > start && isspace(str[end - 1])) {
+        end -= 1;
+    }
+    return str.substr(start, end - start);
+}
+
+// Simple version of "llama_apply_chat_template" that only works with strings
+// This function uses heuristic checks to determine commonly used template. It is not a jinja parser.
+int32_t llama_chat_apply_template_internal(std::string &dest, std::string chat_template, std::vector<const llama_chat_message *> conversation, bool add_ass) {
+    // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
+    std::stringstream ss;
+    if (chat_template.find("<|im_start|>") != std::string::npos) {
+        // chatml template
+        for (auto message : conversation) {
+            ss << "<|im_start|>" << message->role << "\n" << message->content << "<|im_end|>\n";
+        }
+        if (add_ass) {
+            ss << "<|im_start|>assistant\n";
+        }
+    } else if (chat_template.find("[INST]") != std::string::npos) {
+        // llama2 template and its variants
+        // [variant] support system message
+        bool support_system_message = chat_template.find("<<SYS>>") != std::string::npos;
+        // [variant] space before + after response
+        bool space_around_response = chat_template.find("' ' + eos_token") != std::string::npos;
+        // [variant] add BOS inside history
+        bool add_bos_inside_history = chat_template.find("bos_token + '[INST]") != std::string::npos;
+        // [variant] trim spaces from the input message
+        bool strip_message = chat_template.find("content.strip()") != std::string::npos;
+        // construct the prompt
+        bool is_inside_turn = true; // skip BOS at the beginning
+        ss << "[INST] ";
+        for (auto message : conversation) {
+            std::string content = strip_message ? trim(message->content) : message->content;
+            std::string role(message->role);
+            if (!is_inside_turn) {
+                is_inside_turn = true;
+                ss << (add_bos_inside_history ? "<s>[INST] " : "[INST] ");
+            }
+            if (role == "system") {
+                if (support_system_message) {
+                    ss << "<<SYS>>\n" << content << "\n<</SYS>>\n\n";
+                } else {
+                    // if the model does not support system message, we still include it in the first message, but without <<SYS>>
+                    ss << content << "\n";
+                }
+            } else if (role == "user") {
+                ss << content << " [/INST]";
+            } else {
+                ss << (space_around_response ? " " : "") << content << (space_around_response ? " " : "") << "</s>";
+                is_inside_turn = false;
+            }
+        }
+        // llama2 templates seem to not care about "add_generation_prompt"
+    } else {
+        // template not supported
+        return -1;
+    }
+    dest = ss.str();
+    return dest.size();
+}
+
+LLAMA_API int32_t llama_chat_apply_template(
+                const struct llama_model * model,
+                              const char * custom_template,
+         const struct llama_chat_message * msg,
+                                  size_t   n_msg,
+                                    bool   add_ass,
+                                    char * buf,
+                                 int32_t   length) {
+    std::string current_template(custom_template == nullptr ? "" : custom_template);
+    if (custom_template == nullptr) {
+        GGML_ASSERT(model != nullptr);
+        // load template from model
+        current_template.resize(2048); // longest known template is about 1200 bytes
+        std::string template_key = "tokenizer.chat_template";
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), &(*current_template.begin()), current_template.size());
+        if (res < 0) {
+            // worst case: there is no information about template, we will use chatml by default
+            current_template = "<|im_start|>"; // see llama_chat_apply_template_internal
+        } else {
+            current_template.resize(res);
+        }
+    }
+    // format the conversation to string
+    std::vector<const llama_chat_message *> conversation_vec;
+    conversation_vec.resize(n_msg);
+    for (size_t i = 0; i < n_msg; i++) {
+        conversation_vec[i] = &msg[i];
+    }
+    std::string formatted_chat;
+    int32_t res = llama_chat_apply_template_internal(formatted_chat, current_template, conversation_vec, add_ass);
+    if (res < 0) {
+        return res;
+    }
+    strncpy(buf, formatted_chat.c_str(), length);
+    return res;
+}
+
 struct llama_timings llama_get_timings(struct llama_context * ctx) {
     struct llama_timings result = {
         /*.t_start_ms  =*/ 1e-3 * ctx->t_start_us,

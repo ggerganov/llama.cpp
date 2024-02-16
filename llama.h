@@ -304,6 +304,12 @@ extern "C" {
         int32_t n_eval;
     };
 
+    // used in chat template
+    typedef struct llama_chat_message {
+        const char * role;
+        const char * content;
+    } llama_chat_message;
+
     // Helpers for getting default parameters
     LLAMA_API struct llama_model_params llama_model_default_params(void);
     LLAMA_API struct llama_context_params llama_context_default_params(void);
@@ -695,6 +701,22 @@ extern "C" {
     LLAMA_API int32_t llama_token_to_piece(
               const struct llama_model * model,
                            llama_token   token,
+                                  char * buf,
+                               int32_t   length);
+
+    /// Apply chat template and maybe tokenize it. Inspired by hf apply_chat_template() on python.
+    /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
+    /// @param custom_template A Jinja template to use for this conversion. If this is nullptr, the model’s default chat template will be used instead.
+    /// @param msg Pointer to a list of multiple llama_chat_message
+    /// @param add_ass Whether to end the prompt with the token(s) that indicate the start of an assistant message.
+    /// @return If "tokenize" is set to false, the "buf" must be a string (returned value will be the string length).
+    ///         Otherwise, "buf" must be a list of tokens (returned value will be the number of tokens).
+    LLAMA_API int32_t llama_chat_apply_template(
+              const struct llama_model * model,
+                            const char * custom_template,
+       const struct llama_chat_message * msg,
+                                size_t   n_msg,
+                                  bool   add_ass,
                                   char * buf,
                                int32_t   length);
 
