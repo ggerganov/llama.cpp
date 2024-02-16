@@ -1623,7 +1623,7 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
     uint32_t n_ctx;
     in.read((char *)&n_ctx, sizeof(n_ctx));
     if (n_ctx > llama_n_ctx(ctx)) {
-        fprintf(stderr, "%s: %s has been computed with %d, while the current context is %d. Increase it with -c and retry\n",
+        fprintf(stderr, "%s: %s has been computed with %u, while the current context is %d. Increase it with -c and retry\n",
                 __func__, params.logits_file.c_str(), n_ctx, params.n_ctx);
     }
 
