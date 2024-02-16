@@ -426,7 +426,9 @@ if (LLAMA_VULKAN)
     find_package(Vulkan)
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
-
+        set(GGML_HEADERS_VULKAN ggml-vulkan.h)
+        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
+        
         add_library(ggml-vulkan OBJECT ggml-vulkan.cpp ggml-vulkan.h)
         if (BUILD_SHARED_LIBS)
             set_target_properties(ggml-vulkan PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -1048,6 +1050,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_EXTRA}   ${GGML_HEADERS_EXTRA}
             ${GGML_SOURCES_SYCL}    ${GGML_HEADERS_SYCL}
             ${GGML_SOURCES_KOMPUTE} ${GGML_HEADERS_KOMPUTE}
+            ${GGML_SOURCES_VULKAN}  ${GGML_HEADERS_VULKAN}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
