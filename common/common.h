@@ -165,7 +165,7 @@ void process_escapes(std::string& input);
 // String utils
 //
 
-std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names);
+std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
 std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string);
 std::vector<std::string> string_split(std::string input, char separator);
 std::string sampler_type_to_name_string(llama_sampler_type sampler_type);
