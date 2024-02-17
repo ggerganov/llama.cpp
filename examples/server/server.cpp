@@ -1926,14 +1926,14 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("\n");
+    printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                            advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`");
     printf("  --chat-template FORMAT_NAME");
-    printf("                            set chat template, possible values is: llama2, chatml (default %s)", sparams.chat_template.c_str());
-    printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
+    printf("                            set chat template, possible value is: llama2, chatml (default %s)", sparams.chat_template.c_str());
     printf("\n");
 }
 
