@@ -704,11 +704,6 @@ struct llama_server_context
                     img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : slot->images.size();
                     img_sl.img_data = clip_image_u8_init();
                     img_sl.img_data->buf = image_buffer;
-                    // if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
-                    // {
-                    //     LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
-                    //     return false;
-                    // }
                     LOG_TEE("slot %i - loaded image\n", slot->id);
                     img_sl.request_encode_image = true;
                     slot->images.push_back(img_sl);
