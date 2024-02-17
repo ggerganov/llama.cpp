@@ -1363,12 +1363,12 @@ bool consume_common_train_arg(
                 *invalid_param = true;
                 return true;
             }
-#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
-            params->n_gpu_layers = std::stoi(argv[i]);
-#else
-            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
-            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
-#endif
+            if (llama_supports_gpu_offload()) {
+                params->n_gpu_layers = std::stoi(argv[i]);
+            } else {
+                fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+            }
     } else if (arg == "-h" || arg == "--help") {
         params->print_usage = true;
         return true;

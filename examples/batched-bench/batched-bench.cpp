@@ -82,13 +82,17 @@ int main(int argc, char ** argv) {
 
     // init LLM
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     // initialize the model
 
     llama_model_params model_params = llama_model_default_params();
 
+    const std::vector<float> t_split(llama_max_devices(), 0.0f);
+
     model_params.n_gpu_layers = n_gpu_layers;
+    model_params.tensor_split = t_split.data();
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 

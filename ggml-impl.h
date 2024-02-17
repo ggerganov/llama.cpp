@@ -19,11 +19,13 @@ extern "C" {
 // fall back to the _Static_assert C11 keyword.
 // if C99 - static_assert is noop
 // ref: https://stackoverflow.com/a/53923785/4039976
+#ifndef __cplusplus
 #ifndef static_assert
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #else
 #define static_assert(cond, msg) struct global_scope_noop_trick
+#endif
 #endif
 #endif
 
@@ -227,6 +229,8 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 
 #define GGML_HASHTABLE_FULL ((size_t)-1)
 #define GGML_HASHTABLE_ALREADY_EXISTS ((size_t)-2)
+
+struct ggml_hash_set ggml_hash_set_new(size_t size);
 
 bool   ggml_hash_contains      (const struct ggml_hash_set hash_set, struct ggml_tensor * key);
 

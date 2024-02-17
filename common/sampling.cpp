@@ -13,6 +13,7 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
         // will be empty (default) if there are parse errors
         if (result->parsed_grammar.rules.empty()) {
             fprintf(stderr, "%s: failed to parse grammar\n", __func__);
+            delete result;
             return nullptr;
         }
 
@@ -102,15 +103,10 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
 std::string llama_sampling_order_print(const llama_sampling_params & params) {
     std::string result = "CFG -> Penalties ";
     if (params.mirostat == 0) {
-        for (auto s : params.samplers_sequence) {
-            switch (s) {
-                case 'k': result += "-> top_k "; break;
-                case 'f': result += "-> tfs_z "; break;
-                case 'y': result += "-> typical_p "; break;
-                case 'p': result += "-> top_p "; break;
-                case 'm': result += "-> min_p "; break;
-                case 't': result += "-> temp "; break;
-                default : break;
+        for (auto sampler_type : params.samplers_sequence) {
+            const auto sampler_type_name = sampler_type_to_name_string(sampler_type);
+            if (!sampler_type_name.empty()) {
+                result += "-> " + sampler_type_name + " ";
             }
         }
     } else {
@@ -126,24 +122,32 @@ static void sampler_queue(
             const llama_sampling_params & params,
                  llama_token_data_array & cur_p,
                                  size_t & min_keep) {
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
-
     const float         temp              = params.temp;
-    const int32_t       top_k             = params.top_k <= 0 ? n_vocab : params.top_k;
+    const float         dynatemp_range    = params.dynatemp_range;
+    const float         dynatemp_exponent = params.dynatemp_exponent;
+    const int32_t       top_k             = params.top_k;
     const float         top_p             = params.top_p;
     const float         min_p             = params.min_p;
     const float         tfs_z             = params.tfs_z;
     const float         typical_p         = params.typical_p;
-    const std::string & samplers_sequence = params.samplers_sequence;
+    const std::vector<llama_sampler_type> & samplers_sequence = params.samplers_sequence;
 
-    for (auto s : samplers_sequence) {
-        switch (s){
-            case 'k': llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep); break;
-            case 'f': llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep); break;
-            case 'y': llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
-            case 'p': llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
-            case 'm': llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
-            case 't': llama_sample_temp     (ctx_main, &cur_p, temp); break;
+    for (auto sampler_type : samplers_sequence) {
+        switch (sampler_type) {
+            case llama_sampler_type::TOP_K    : llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep); break;
+            case llama_sampler_type::TFS_Z    : llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep); break;
+            case llama_sampler_type::TYPICAL_P: llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
+            case llama_sampler_type::TOP_P    : llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
+            case llama_sampler_type::MIN_P    : llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
+            case llama_sampler_type::TEMPERATURE:
+                if (dynatemp_range > 0) {
+                    float dynatemp_min = std::max(0.0f, temp - dynatemp_range);
+                    float dynatemp_max = std::max(0.0f, temp + dynatemp_range);
+                    llama_sample_entropy(ctx_main, &cur_p, dynatemp_min, dynatemp_max, dynatemp_exponent);
+                } else {
+                    llama_sample_temp(ctx_main, &cur_p, temp);
+                }
+                break;
             default : break;
         }
     }
@@ -190,6 +194,11 @@ static llama_token llama_sampling_sample_impl(
         logits[it->first] += it->second;
     }
 
+    if (ctx_cfg) {
+        float * logits_guidance = llama_get_logits_ith(ctx_cfg, idx);
+        llama_sample_apply_guidance(ctx_main, logits, logits_guidance, params.cfg_scale);
+    }
+
     cur.clear();
 
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
@@ -197,10 +206,6 @@ static llama_token llama_sampling_sample_impl(
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
-
-    if (ctx_cfg) {
-        llama_sample_classifier_free_guidance(ctx_main, &cur_p, ctx_cfg, params.cfg_scale);
-    }
 
     // apply penalties
     const auto& penalty_tokens = params.use_penalty_prompt_tokens ? params.penalty_prompt_tokens : prev;

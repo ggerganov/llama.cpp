@@ -13,18 +13,22 @@
   cudaPackages,
   darwin,
   rocmPackages,
+  vulkan-headers,
+  vulkan-loader,
   clblast,
   useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
     useOpenCL
     useRocm
+    useVulkan
   ],
   useCuda ? config.cudaSupport,
   useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
   useMpi ? false, # Increases the runtime closure size by ~700M
   useOpenCL ? false,
   useRocm ? config.rocmSupport,
+  useVulkan ? false,
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
 }@inputs:
 
@@ -48,7 +52,8 @@ let
     ++ lib.optionals useMetalKit [ "MetalKit" ]
     ++ lib.optionals useMpi [ "MPI" ]
     ++ lib.optionals useOpenCL [ "OpenCL" ]
-    ++ lib.optionals useRocm [ "ROCm" ];
+    ++ lib.optionals useRocm [ "ROCm" ]
+    ++ lib.optionals useVulkan [ "Vulkan" ];
 
   pnameSuffix =
     strings.optionalString (suffices != [ ])
@@ -73,6 +78,7 @@ let
     ps: [
       ps.numpy
       ps.sentencepiece
+      ps.tiktoken
       ps.torchWithoutCuda
       ps.transformers
     ]
@@ -107,6 +113,11 @@ let
     hipblas
     rocblas
   ];
+
+  vulkanBuildInputs = [
+    vulkan-headers
+    vulkan-loader
+  ];
 in
 
 effectiveStdenv.mkDerivation (
@@ -114,14 +125,22 @@ effectiveStdenv.mkDerivation (
     pname = "llama-cpp${pnameSuffix}";
     version = llamaVersion;
 
+    # Note: none of the files discarded here are visible in the sandbox or
+    # affect the output hash. This also means they can be modified without
+    # triggering a rebuild.
     src = lib.cleanSourceWith {
       filter =
         name: type:
-        !(builtins.any (_: _) [
+        let
+          noneOf = builtins.all (x: !x);
+          baseName = baseNameOf name;
+        in
+        noneOf [
           (lib.hasSuffix ".nix" name) # Ignore *.nix files when computing outPaths
-          (name == "README.md") # Ignore *.md changes whe computing outPaths
-          (lib.hasPrefix "." name) # Skip hidden files and directories
-        ]);
+          (lib.hasSuffix ".md" name) # Ignore *.md changes whe computing outPaths
+          (lib.hasPrefix "." baseName) # Skip hidden files and directories
+          (baseName == "flake.lock")
+        ];
       src = lib.cleanSource ../../.;
     };
 
@@ -155,11 +174,12 @@ effectiveStdenv.mkDerivation (
       ++ optionals useCuda cudaBuildInputs
       ++ optionals useMpi [ mpi ]
       ++ optionals useOpenCL [ clblast ]
-      ++ optionals useRocm rocmBuildInputs;
+      ++ optionals useRocm rocmBuildInputs
+      ++ optionals useVulkan vulkanBuildInputs;
 
     cmakeFlags =
       [
-        (cmakeBool "LLAMA_NATIVE" true)
+        (cmakeBool "LLAMA_NATIVE" false)
         (cmakeBool "LLAMA_BUILD_SERVER" true)
         (cmakeBool "BUILD_SHARED_LIBS" true)
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
@@ -169,6 +189,7 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_HIPBLAS" useRocm)
         (cmakeBool "LLAMA_METAL" useMetalKit)
         (cmakeBool "LLAMA_MPI" useMpi)
+        (cmakeBool "LLAMA_VULKAN" useVulkan)
       ]
       ++ optionals useCuda [
         (
@@ -209,6 +230,7 @@ effectiveStdenv.mkDerivation (
         useMpi
         useOpenCL
         useRocm
+        useVulkan
         ;
 
       shell = mkShell {
@@ -216,6 +238,9 @@ effectiveStdenv.mkDerivation (
         description = "contains numpy and sentencepiece";
         buildInputs = [ llama-python ];
         inputsFrom = [ finalAttrs.finalPackage ];
+        shellHook = ''
+          addToSearchPath "LD_LIBRARY_PATH" "${lib.getLib effectiveStdenv.cc.cc}/lib"
+        '';
       };
 
       shell-extra = mkShell {
@@ -230,11 +255,11 @@ effectiveStdenv.mkDerivation (
       # Configurations we don't want even the CI to evaluate. Results in the
       # "unsupported platform" messages. This is mostly a no-op, because
       # cudaPackages would've refused to evaluate anyway.
-      badPlatforms = optionals (useCuda || useOpenCL) lib.platforms.darwin;
+      badPlatforms = optionals (useCuda || useOpenCL || useVulkan) lib.platforms.darwin;
 
       # Configurations that are known to result in build failures. Can be
       # overridden by importing Nixpkgs with `allowBroken = true`.
-      broken = (useMetalKit && !effectiveStdenv.isDarwin);
+      broken = (useMetalKit && !effectiveStdenv.isDarwin) || (useVulkan && effectiveStdenv.isDarwin);
 
       description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
       homepage = "https://github.com/ggerganov/llama.cpp/";

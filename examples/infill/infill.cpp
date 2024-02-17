@@ -202,7 +202,8 @@ int main(int argc, char ** argv) {
     std::mt19937 rng(params.seed);
 
     LOG("%s: llama backend init\n", __func__);
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     llama_model * model;
     llama_context * ctx;
@@ -241,7 +242,7 @@ int main(int argc, char ** argv) {
     LOG("add_bos: %d\n", add_bos);
 
     bool suff_rm_leading_spc = params.escape;
-    if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+    if (suff_rm_leading_spc && params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
         params.input_suffix.erase(0, 1);
         suff_rm_leading_spc = false;
     }
