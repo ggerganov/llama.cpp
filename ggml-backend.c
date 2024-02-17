@@ -1006,6 +1006,7 @@ static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, gg
         }
     }
     GGML_ASSERT(false && "tensor buffer type not supported by any backend");
+    return -1; // silence warning
 }
 
 #if 0
