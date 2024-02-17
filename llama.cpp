@@ -12522,6 +12522,14 @@ int32_t llama_chat_apply_template_internal(std::string &dest, std::string chat_t
             }
         }
         // llama2 templates seem to not care about "add_generation_prompt"
+    } else if (chat_template.find("<|user|>") != std::string::npos) {
+        // zephyr template
+        for (auto message : conversation) {
+            ss << "<|" << message->role << "|>" << "\n" << message->content << "<|endoftext|>\n";
+        }
+        if (add_ass) {
+            ss << "<|assistant|>\n";
+        }
     } else {
         // template not supported
         return -1;
