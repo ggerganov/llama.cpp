@@ -34,23 +34,6 @@
 
 //#define CLIP_DEBUG_FUNCTIONS
 
-// RGB uint8 image
-struct clip_image_u8 {
-    int nx;
-    int ny;
-
-    std::vector<uint8_t> buf;
-};
-
-// RGB float32 image (NHWC)
-// Memory layout: RGBRGBRGB...
-struct clip_image_f32 {
-    int nx;
-    int ny;
-
-    std::vector<float> buf;
-};
-
 static std::string format(const char * fmt, ...) {
     va_list ap;
     va_list ap2;

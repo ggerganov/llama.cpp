@@ -32,14 +32,6 @@
 
 using json = nlohmann::json;
 
-// TODO should be in clip.h?
-struct clip_image_u8 {
-    int nx;
-    int ny;
-
-    std::vector<uint8_t> buf;
-};
-
 struct server_params
 {
     std::string hostname = "127.0.0.1";
