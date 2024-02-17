@@ -199,9 +199,9 @@ inline void get_scale_min_k4(int j, const __global uint8_t *q, uint8_t *d, uint8
     }
 }
 
-__kernel void dequantize_block_q2_K(__global const struct block_q2_K *x, __global float *yy)
+__kernel void dequantize_block_q2_K(__global const struct block_q2_K *x, uint x_offset, __global float *yy)
 {
-    const int i = get_group_id(0) + get_global_offset(0);
+    const int i = get_group_id(0) + x_offset;
     const int tid = get_local_id(0);
     const int n = tid / 32;
     const int l = tid - 32 * n;
@@ -219,10 +219,10 @@ __kernel void dequantize_block_q2_K(__global const struct block_q2_K *x, __globa
     y[l + 96] = dall * (x[i].scales[is + 6] & 0xF) * ((q >> 6) & 3) - dmin * (x[i].scales[is + 6] >> 4);
 }
 
-__kernel void dequantize_block_q3_K(__global const struct block_q3_K *x, __global float *yy)
+__kernel void dequantize_block_q3_K(__global const struct block_q3_K *x, uint x_offset, __global float *yy)
 {
     int r = get_local_id(0) / 4;
-    int i = get_group_id(0) + get_global_offset(0);
+    int i = get_group_id(0) + x_offset;
     int tid = r / 2;
     int is0 = r % 2;
     int l0 = 16 * is0 + 4 * (get_local_id(0) % 4);
@@ -248,9 +248,9 @@ __kernel void dequantize_block_q3_K(__global const struct block_q3_K *x, __globa
         y[l] = dl * ((int8_t)((q[l] >> shift) & 3) - ((hm[l] & m) ? 0 : 4));
 }
 
-__kernel void dequantize_block_q4_K(__global const struct block_q4_K *x, __global float *yy)
+__kernel void dequantize_block_q4_K(__global const struct block_q4_K *x, uint x_offset, __global float *yy)
 {
-    const int i = get_group_id(0) + get_global_offset(0);
+    const int i = get_group_id(0) + x_offset;
     const int tid = get_local_id(0);
     const int il = tid / 8;
     const int ir = tid % 8;
@@ -278,9 +278,9 @@ __kernel void dequantize_block_q4_K(__global const struct block_q4_K *x, __globa
     }
 }
 
-__kernel void dequantize_block_q5_K(__global const struct block_q5_K *x, __global float *yy)
+__kernel void dequantize_block_q5_K(__global const struct block_q5_K *x, uint x_offset, __global float *yy)
 {
-    const int i = get_group_id(0) + get_global_offset(0);
+    const int i = get_group_id(0) + x_offset;
     const int tid = get_local_id(0);
     const int il = tid / 16;
     const int ir = tid % 16;
@@ -310,9 +310,9 @@ __kernel void dequantize_block_q5_K(__global const struct block_q5_K *x, __globa
     y[33] = d2 * ((ql[1] >> 4) + (qh[1] & hm ? 16 : 0)) - m2;
 }
 
-__kernel void dequantize_block_q6_K(__global const struct block_q6_K *x, __global float *yy)
+__kernel void dequantize_block_q6_K(__global const struct block_q6_K *x, uint x_offset, __global float *yy)
 {
-    const int i = get_group_id(0) + get_global_offset(0);
+    const int i = get_group_id(0) + x_offset;
     const int tid = get_local_id(0);
     const int ip = tid / 32;
     const int il = tid - 32 * ip;
@@ -332,14 +332,14 @@ __kernel void dequantize_block_q6_K(__global const struct block_q6_K *x, __globa
     y[96] = d * sc[6] * ((int8_t)((ql[32] >> 4) | (((qh >> 6) & 3) << 4)) - 32);
 }
 
-__kernel void dequantize_mul_mat_vec_q2_K(__global const struct block_q2_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q2_K(__global const struct block_q2_K * xx, uint x_offset, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
 
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
+    const int ib0 = row*num_blocks_per_row;
 
-    __global const struct block_q2_K * x = xx + ib0;
+    __global const struct block_q2_K * x = xx + ib0 + x_offset;
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...15
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;  // 0 or 0,1
@@ -405,16 +405,16 @@ __kernel void dequantize_mul_mat_vec_q2_K(__global const struct block_q2_K * xx,
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q3_K(__global const struct block_q3_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q3_K(__global const struct block_q3_K * xx, uint x_offset, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
     const uint16_t kmask1 = 0x0303;
     const uint16_t kmask2 = 0x0f0f;
 
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
+    const int ib0 = row*num_blocks_per_row;
 
-    __global const struct block_q3_K * x = xx + ib0;
+    __global const struct block_q3_K * x = xx + ib0 + x_offset;
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;  // 0 or 0,1
@@ -479,7 +479,7 @@ __kernel void dequantize_mul_mat_vec_q3_K(__global const struct block_q3_K * xx,
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx, uint x_offset, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
 
     //to rename it later, just to test now
     const uint16_t kmask1 = 0x3f3f;
@@ -488,7 +488,7 @@ __kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx,
 
     const int row = get_group_id(0);
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
+    const int ib0 = row*num_blocks_per_row;
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...15
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;
@@ -509,7 +509,7 @@ __kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx,
     uint16_t aux[4];
     const uint8_t * sc = (const uint8_t *)aux;
 
-    __global const struct block_q4_K * x = xx + ib0;
+    __global const struct block_q4_K * x = xx + ib0 + x_offset;
 
     tmp[16 * ix + tid] = 0;
 
@@ -553,7 +553,7 @@ __kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx,
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx, uint x_offset, __local float* tmp, __global float* yy, __global float* dst, const int ncols) {
 
     const uint16_t kmask1 = 0x3f3f;
     const uint16_t kmask2 = 0x0f0f;
@@ -561,7 +561,7 @@ __kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx,
 
     const int row = get_group_id(0);
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
+    const int ib0 = row*num_blocks_per_row;
 
     const int tid = get_local_id(0)/2;  // 0...15
     const int ix  = get_local_id(0)%2;
@@ -583,7 +583,7 @@ __kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx,
     uint16_t aux[4];
     const uint8_t * sc = (const uint8_t *)aux;
 
-    __global const struct block_q5_K * x = xx + ib0;
+    __global const struct block_q5_K * x = xx + ib0 + x_offset;
 
     tmp[16 * ix + tid] = 0;
 
@@ -635,14 +635,14 @@ __kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx,
     }
 }
 
-__kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx, __local float* tmp, __global const float * yy, __global float * dst, const int ncols) {
+__kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx, uint x_offset, __local float* tmp, __global const float * yy, __global float * dst, const int ncols) {
 
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
+    const int ib0 = row*num_blocks_per_row;
 
-    __global const struct block_q6_K * x = xx + ib0;
+    __global const struct block_q6_K * x = xx + ib0 + x_offset;
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
@@ -718,7 +718,7 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
 
 
 std::string dequant_template = MULTILINE_QUOTE(
-__kernel void KERNEL_NAME(__global X_TYPE* x, __global float* y) {
+__kernel void KERNEL_NAME(__global X_TYPE* x, uint x_offset, __global float* y) {
     const int i = get_group_id(0)*get_local_size(0) + get_local_id(0)*2;
 
     if (i >= get_global_size(0)) {
@@ -728,21 +728,21 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __global float* y) {
     const uint qk = QUANT_K;
     const uint qr = QUANT_R;
 
-    const int ib = i/qk + get_global_offset(0); // block index
+    const int ib = i/qk; // block index
     const int iqs = (i%qk)/qr; // quant index
     const int iybs = i - i%qk; // y block start index
     const int y_offset = qr == 1 ? 1 : qk/2;
 
     // dequantize
     float v0, v1;
-    DEQUANT_FUNC(x, ib, iqs, &v0, &v1);
+    DEQUANT_FUNC(x + x_offset, ib, iqs, &v0, &v1);
     y[iybs + iqs + 0] = v0;
     y[iybs + iqs + y_offset] = v1;
 }
 );
 
 std::string dequant_mul_mat_vec_template = MULTILINE_QUOTE(
-__kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
+__kernel void KERNEL_NAME(__global X_TYPE* x, uint x_offset, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
     const int local_size = get_local_size(0);
     const int row = get_group_id(0);
     const int tid = get_local_id(0);
@@ -753,7 +753,7 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float
     const int col_step = local_size * 2;
     const int y_offset = qr == 1 ? 1 : qk/2;
 
-    x += get_global_offset(0);
+    x += x_offset;
 
     tmp[tid] = 0;
 
@@ -1812,6 +1812,8 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     size_t ev_idx = 0;
     std::vector<cl_event> events;
 
+    cl_uint x_offset = 0;
+
     for (int64_t i03 = 0; i03 < ne03; i03++) {
         // TODO: copy and dequantize src0 here when r3>1
         for (int64_t i13 = i03 * r3, e13 = i13 + r3; i13 < e13; i13++) {
@@ -1822,6 +1824,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                     CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, events.data() + ev_idx++));
                 } else if (src0->backend == GGML_BACKEND_GPU) {
                     d_Q = (cl_mem) src0->extra;
+                    x_offset = (i03 * ne02 + i02) * x_bps;
                 } else {
                     GGML_ASSERT(false);
                 }
@@ -1829,10 +1832,10 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 if (!mul_mat_vec) {
                     // convert src0 to fp32 on device
                     const size_t global = x_ne / global_denom;
-                    const size_t offset = src0->backend == GGML_BACKEND_GPU ? (i03 * ne02 + i02) * x_bps : 0;
                     CL_CHECK(clSetKernelArg(*to_fp32_cl, 0, sizeof(cl_mem), &d_Q));
-                    CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_mem), &d_X));
-                    CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, &offset, &global, local > 0 ? &local : NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
+                    CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_uint), &x_offset));
+                    CL_CHECK(clSetKernelArg(*to_fp32_cl, 2, sizeof(cl_mem), &d_X));
+                    CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, NULL, &global, local > 0 ? &local : NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
                 }
 
                 for (int64_t i12 = i02 * r2, e12 = i12 + r2; i12 < e12; i12++) {
@@ -1843,15 +1846,15 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
 
                         // compute
                         const size_t global = ne01 * local;
-                        const size_t offset = src0->backend == GGML_BACKEND_GPU ? (i03 * ne02 + i02) * x_bps : 0;
                         const cl_int ncols = ne00;
                         events.emplace_back();
                         CL_CHECK(clSetKernelArg(*dmmv, 0, sizeof(cl_mem), &d_Q));
-                        CL_CHECK(clSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
-                        CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(cl_mem), &d_Y));
-                        CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_D));
-                        CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_int), &ncols));
-                        CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, &offset, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
+                        CL_CHECK(clSetKernelArg(*dmmv, 1, sizeof(cl_uint), &x_offset));
+                        CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(float) * local, NULL));
+                        CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_Y));
+                        CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_mem), &d_D));
+                        CL_CHECK(clSetKernelArg(*dmmv, 5, sizeof(cl_int), &ncols));
+                        CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
                     } else { // CLBlast matrix matrix multiplication
                         // copy src1 to device
                         CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, NULL));
