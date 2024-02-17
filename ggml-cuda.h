@@ -20,6 +20,9 @@ extern "C" {
 // Always success. To check if CUDA is actually loaded, use `ggml_cublas_loaded`.
 GGML_API GGML_CALL void   ggml_init_cublas(void);
 
+// Release CUDA resources
+GGML_API GGML_CALL void   ggml_free_cublas(void);
+
 // Returns `true` if there are available CUDA devices and cublas loads successfully; otherwise, it returns `false`.
 GGML_API GGML_CALL bool   ggml_cublas_loaded(void);
 

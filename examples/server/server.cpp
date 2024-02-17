@@ -309,6 +309,10 @@ struct llama_client_slot
     }
 };
 
+#ifdef GGML_USE_CUBLAS
+extern "C" GGML_CALL void ggml_free_cublas(void);
+#endif
+
 struct llama_server_context
 {
     llama_model *model = nullptr;
@@ -355,6 +359,10 @@ struct llama_server_context
             llama_free_model(model);
             model = nullptr;
         }
+#ifdef GGML_USE_CUBLAS
+        ggml_free_cublas();
+#endif
+
     }
 
     bool load_model(const gpt_params &params_)
@@ -3217,6 +3225,7 @@ int main(int argc, char **argv)
     sigemptyset (&sigint_action.sa_mask);
     sigint_action.sa_flags = 0;
     sigaction(SIGINT, &sigint_action, NULL);
+    sigaction(SIGUSR1, &sigint_action, NULL);
 #elif defined (_WIN32)
     auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
         return (ctrl_type == CTRL_C_EVENT) ? (signal_handler(SIGINT), true) : false;
@@ -3230,3 +3239,4 @@ int main(int argc, char **argv)
     llama_backend_free();
     return 0;
 }
+

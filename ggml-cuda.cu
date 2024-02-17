@@ -39,6 +39,7 @@
 #define __shfl_xor_sync(mask, var, laneMask, width) __shfl_xor(var, laneMask, width)
 #define cublasComputeType_t hipblasDatatype_t //deprecated, new hipblasComputeType_t not in 5.6
 #define cublasCreate hipblasCreate
+#define cublasDestroy hipblasDestroy
 #define cublasGemmEx hipblasGemmEx
 #define cublasGemmBatchedEx hipblasGemmBatchedEx
 #define cublasGemmStridedBatchedEx hipblasGemmStridedBatchedEx
@@ -7991,10 +7992,11 @@ GGML_CALL bool ggml_cublas_loaded(void) {
     return g_cublas_loaded;
 }
 
-GGML_CALL void ggml_init_cublas() {
-    static bool initialized = false;
+static bool g_cublas_initialized = false;
 
-    if (!initialized) {
+GGML_CALL void ggml_init_cublas() {
+
+    if (!g_cublas_initialized) {
 
 #ifdef __HIP_PLATFORM_AMD__
         // Workaround for a rocBLAS bug when using multiple graphics cards:
@@ -8004,7 +8006,7 @@ GGML_CALL void ggml_init_cublas() {
 #endif
 
         if (cudaGetDeviceCount(&g_device_count) != cudaSuccess) {
-            initialized = true;
+            g_cublas_initialized = true;
             g_cublas_loaded = false;
             fprintf(stderr, "%s: no " GGML_CUDA_NAME " devices found, " GGML_CUDA_NAME " will be disabled\n", __func__);
             return;
@@ -8075,7 +8077,7 @@ GGML_CALL void ggml_init_cublas() {
         // configure logging to stdout
         // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
 
-        initialized = true;
+        g_cublas_initialized = true;
         g_cublas_loaded = true;
     }
 }
@@ -11603,4 +11605,18 @@ GGML_CALL int ggml_backend_cuda_reg_devices() {
         ggml_backend_register(name, ggml_backend_reg_cuda_init, ggml_backend_cuda_buffer_type(i), (void *) (intptr_t) i);
     }
     return device_count;
+}
+
+extern "C" GGML_CALL void ggml_free_cublas(void);
+GGML_CALL void ggml_free_cublas(void) {
+    for (int id = 0; id < g_device_count; ++id) {
+#if !defined(GGML_USE_HIPBLAS)
+        CU_CHECK(cuMemUnmap(g_cuda_pool_addr[id], g_cuda_pool_size[id]));
+        g_cuda_pool_size[id] = 0;
+        g_cuda_pool_addr[id] = 0;
+#endif
+        CUBLAS_CHECK(cublasDestroy(g_cublas_handles[id]));
+        g_cublas_handles[id] = nullptr;
+    }
+    g_cublas_initialized = false;
 }
