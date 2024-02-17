@@ -1959,7 +1959,7 @@ struct ggml_numa_nodes {
     uint32_t n_nodes;
     uint32_t total_cpus; // hardware threads on system
     uint32_t current_node; // node on which main process is execting
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__linux__) && !defined(BIONIC)
     cpu_set_t cpuset; // cpuset from numactl
 #else
     uint32_t cpuset; // no NUMA support outside of Linux at this time. Use a portable datatype
