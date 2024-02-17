@@ -1920,7 +1920,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`");
     printf("  --chat-template FORMAT_NAME");
-    printf("                            set chat template, possible valus is: llama2, chatml (default %s)", sparams.chat_template.c_str());
+    printf("                            set chat template, possible values is: llama2, chatml (default %s)", sparams.chat_template.c_str());
+    printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("\n");
 }
 
