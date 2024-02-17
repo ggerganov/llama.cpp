@@ -5,6 +5,7 @@
 #include "oai.hpp"
 
 #include "../llava/clip.h"
+#include "../llava/llava.h"
 
 #include "stb_image.h"
 
@@ -30,6 +31,14 @@
 #include <atomic>
 
 using json = nlohmann::json;
+
+// TODO should be in clip.h?
+struct clip_image_u8 {
+    int nx;
+    int ny;
+
+    std::vector<uint8_t> buf;
+};
 
 struct server_params
 {
@@ -702,11 +711,12 @@ struct llama_server_context
                     slot_image img_sl;
                     img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : slot->images.size();
                     img_sl.img_data = clip_image_u8_init();
-                    if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
-                    {
-                        LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
-                        return false;
-                    }
+                    img_sl.img_data->buf = image_buffer;
+                    // if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
+                    // {
+                    //     LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
+                    //     return false;
+                    // }
                     LOG_TEE("slot %i - loaded image\n", slot->id);
                     img_sl.request_encode_image = true;
                     slot->images.push_back(img_sl);
@@ -983,43 +993,16 @@ struct llama_server_context
             {
                 continue;
             }
-            clip_image_f32_batch img_res_v;
-            img_res_v.size = 0;
-            img_res_v.data = nullptr;
-            if (!clip_image_preprocess(clp_ctx, img.img_data, img_res_v))
-            {
-                LOG_TEE("Error processing the given image");
-                clip_free(clp_ctx);
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-            if (img_res_v.size == 0)
-            {
+
+            // TODO call encode_image_with_clip instead?
+            llava_image_embed * embed = llava_image_embed_make_with_bytes(clp_ctx, params.n_threads, img.img_data->buf.data(), img.img_data->buf.size());
+            if (!embed) {
                 LOG_TEE("Error processing the given image");
                 return false;
             }
 
-            // note: assumes only one image was returned by clip_image_preprocess
-            clip_image_f32 * img_res = img_res_v.data;
-
-            img.image_tokens = clip_n_patches(clp_ctx);
-            img.image_embedding = (float *)malloc(clip_embd_nbytes(clp_ctx));
-            if (!img.image_embedding)
-            {
-                LOG_TEE("Unable to allocate memory for image embeddings\n");
-                clip_image_f32_batch_free(img_res_v);
-                clip_free(clp_ctx);
-                return false;
-            }
-            LOG_TEE("slot %i - encoding image [id: %i]\n", slot.id, img.id);
-            if (!clip_image_encode(clp_ctx, params.n_threads, img_res, img.image_embedding))
-            {
-                LOG_TEE("Unable to encode image\n");
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-
-            clip_image_f32_batch_free(img_res_v);
+            img.image_embedding = embed->embed;
+            img.image_tokens = embed->n_image_pos;
 
             img.request_encode_image = false;
         }
