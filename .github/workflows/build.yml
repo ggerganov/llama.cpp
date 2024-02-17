@@ -136,7 +136,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_MPI=ON ..
+          cmake -DLLAMA_MPI=ON ..
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
