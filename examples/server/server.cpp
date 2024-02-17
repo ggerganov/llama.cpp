@@ -436,10 +436,6 @@ struct llama_server_context
         default_generation_settings_for_props["seed"] = -1;
 
         batch = llama_batch_init(n_ctx, 0, params.n_parallel);
-
-        // empty system prompt
-        system_prompt = "";
-        system_tokens.clear();
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
@@ -676,6 +672,24 @@ struct llama_server_context
             }
         }
 
+        const auto &samplers_sequence = data.find("samplers");
+        if (samplers_sequence != data.end() && samplers_sequence->is_array())
+        {
+            std::vector<std::string> sampler_names;
+            for (const auto &sampler_name : *samplers_sequence)
+            {
+                if (sampler_name.is_string())
+                {
+                    sampler_names.emplace_back(sampler_name);
+                }
+            }
+            slot->sparams.samplers_sequence = sampler_types_from_names(sampler_names, false);
+        }
+        else
+        {
+            slot->sparams.samplers_sequence = default_sparams.samplers_sequence;
+        }
+
         if (multimodal)
         {
             const auto &images_data = data.find("image_data");
@@ -765,27 +779,30 @@ struct llama_server_context
     }
 
     void update_system_prompt() {
-        system_tokens = ::llama_tokenize(ctx, system_prompt, add_bos_token);
-
-        llama_batch_clear(batch);
-
         kv_cache_clear();
+        system_tokens.clear();
 
-        for (int i = 0; i < (int) system_tokens.size(); ++i)
-        {
-            llama_batch_add(batch, system_tokens[i], i, { 0 }, false);
-        }
+        if (!system_prompt.empty()) {
+            system_tokens = ::llama_tokenize(ctx, system_prompt, add_bos_token);
 
-        if (llama_decode(ctx, batch) != 0)
-        {
-            LOG_TEE("%s: llama_decode() failed\n", __func__);
-            return;
-        }
+            llama_batch_clear(batch);
 
-        // assign the system KV cache to all parallel sequences
-        for (int32_t i = 1; i < params.n_parallel; ++i)
-        {
-            llama_kv_cache_seq_cp(ctx, 0, i, 0, system_tokens.size());
+            for (int i = 0; i < (int)system_tokens.size(); ++i)
+            {
+                llama_batch_add(batch, system_tokens[i], i, { 0 }, false);
+            }
+
+            if (llama_decode(ctx, batch) != 0)
+            {
+                LOG_TEE("%s: llama_decode() failed\n", __func__);
+                return;
+            }
+
+            // assign the system KV cache to all parallel sequences
+            for (int32_t i = 1; i < params.n_parallel; ++i)
+            {
+                llama_kv_cache_seq_cp(ctx, 0, i, 0, system_tokens.size());
+            }
         }
 
         LOG_TEE("system prompt updated\n");
@@ -807,10 +824,8 @@ struct llama_server_context
         name_user      = sys_props.value("anti_prompt", "");
         name_assistant = sys_props.value("assistant_name", "");
 
-        if (slots.size() > 0)
-        {
-            notify_system_prompt_changed();
-        }
+
+        notify_system_prompt_changed();
     }
 
     static size_t find_stopping_strings(const std::string &text, const size_t last_token_size,
@@ -1029,6 +1044,12 @@ struct llama_server_context
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
         const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() &&
                                 eos_bias->second < 0.0f && std::isinf(eos_bias->second);
+        std::vector<std::string> samplers_sequence;
+        for (const auto &sampler_type : slot.sparams.samplers_sequence)
+        {
+            samplers_sequence.emplace_back(sampler_type_to_name_string(sampler_type));
+        }
+
         return json {
             {"n_ctx",             slot.n_ctx},
             {"model",             params.model_alias},
@@ -1059,6 +1080,7 @@ struct llama_server_context
             {"logit_bias",        slot.sparams.logit_bias},
             {"n_probs",           slot.sparams.n_probs},
             {"grammar",           slot.sparams.grammar},
+            {"samplers",          samplers_sequence}
         };
     }
 
