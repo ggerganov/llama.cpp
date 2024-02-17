@@ -2546,7 +2546,7 @@ size_t ggml_get_mem_size(const struct ggml_context * ctx) {
 size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
     size_t max_size = 0;
 
-    for (struct ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor != NULL; tensor = ggml_get_next_tensor(ctx, tensor)) {
+    for (const struct ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor != NULL; tensor = ggml_get_next_tensor(ctx, tensor)) {
         size_t bytes = ggml_nbytes(tensor);
         max_size = MAX(max_size, bytes);
     }
@@ -2626,7 +2626,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         enum   ggml_type      type,
         int                   n_dims,
         const int64_t       * ne,
-        struct ggml_tensor  * view_src,
+        const struct ggml_tensor  * view_src,
         size_t                view_offs) {
 
     assert(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);
@@ -2789,7 +2789,7 @@ struct ggml_tensor * ggml_dup_tensor(struct ggml_context * ctx, const struct ggm
     return ggml_new_tensor(ctx, src->type, GGML_MAX_DIMS, src->ne);
 }
 
-static void ggml_set_op_params(struct ggml_tensor * tensor, const void * params, size_t params_size) {
+static void ggml_set_op_params(const struct ggml_tensor * tensor, const void * params, size_t params_size) {
     GGML_ASSERT(tensor != NULL); // silence -Warray-bounds warnings
     assert(params_size <= GGML_MAX_OP_PARAMS);
     memcpy(tensor->op_params, params, params_size);
@@ -2800,7 +2800,7 @@ static int32_t ggml_get_op_params_i32(const struct ggml_tensor * tensor, uint32_
     return ((const int32_t *)(tensor->op_params))[i];
 }
 
-static void ggml_set_op_params_i32(struct ggml_tensor * tensor, uint32_t i, int32_t value) {
+static void ggml_set_op_params_i32(const struct ggml_tensor * tensor, uint32_t i, int32_t value) {
     assert(i < GGML_MAX_OP_PARAMS / sizeof(int32_t));
     ((int32_t *)(tensor->op_params))[i] = value;
 }
@@ -3285,7 +3285,7 @@ struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * nam
 
     while (obj != NULL) {
         if (obj->type == GGML_OBJECT_TENSOR) {
-            struct ggml_tensor * cur = (struct ggml_tensor *)(mem_buffer + obj->offs);
+            const struct ggml_tensor * cur = (struct ggml_tensor *)(mem_buffer + obj->offs);
             if (strcmp(cur->name, name) == 0) {
                 return cur;
             }
@@ -3302,7 +3302,7 @@ struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * nam
 // ggml_dup
 
 static struct ggml_tensor * ggml_dup_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         bool inplace) {
     bool is_node = false;
@@ -3335,7 +3335,7 @@ struct ggml_tensor * ggml_dup_inplace(
 // ggml_add
 
 static struct ggml_tensor * ggml_add_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         bool inplace) {
@@ -3376,7 +3376,7 @@ struct ggml_tensor * ggml_add_inplace(
 // ggml_add_cast
 
 static struct ggml_tensor * ggml_add_cast_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         enum   ggml_type     type) {
@@ -3414,7 +3414,7 @@ struct ggml_tensor * ggml_add_cast(
 // ggml_add1
 
 static struct ggml_tensor * ggml_add1_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         bool inplace) {
@@ -3454,7 +3454,7 @@ struct ggml_tensor * ggml_add1_inplace(
 // ggml_acc
 
 static struct ggml_tensor * ggml_acc_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         size_t               nb1,
@@ -3511,7 +3511,7 @@ struct ggml_tensor * ggml_acc_inplace(
 // ggml_sub
 
 static struct ggml_tensor * ggml_sub_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         bool inplace) {
@@ -3550,7 +3550,7 @@ struct ggml_tensor * ggml_sub_inplace(
 // ggml_mul
 
 static struct ggml_tensor * ggml_mul_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         bool inplace) {
@@ -3595,7 +3595,7 @@ struct ggml_tensor * ggml_mul_inplace(
 // ggml_div
 
 static struct ggml_tensor * ggml_div_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b,
         bool inplace) {
@@ -3638,7 +3638,7 @@ struct ggml_tensor * ggml_div_inplace(
 // ggml_sqr
 
 static struct ggml_tensor * ggml_sqr_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         bool inplace) {
     bool is_node = false;
@@ -3671,7 +3671,7 @@ struct ggml_tensor * ggml_sqr_inplace(
 // ggml_sqrt
 
 static struct ggml_tensor * ggml_sqrt_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         bool inplace) {
     bool is_node = false;
@@ -3704,7 +3704,7 @@ struct ggml_tensor * ggml_sqrt_inplace(
 // ggml_log
 
 static struct ggml_tensor * ggml_log_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         bool inplace) {
     bool is_node = false;
@@ -4098,7 +4098,7 @@ struct ggml_tensor * ggml_hardsigmoid(
 // ggml_norm
 
 static struct ggml_tensor * ggml_norm_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         float eps,
         bool inplace) {
@@ -4137,7 +4137,7 @@ struct ggml_tensor * ggml_norm_inplace(
 // ggml_rms_norm
 
 static struct ggml_tensor * ggml_rms_norm_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         float eps,
         bool inplace) {
@@ -4201,7 +4201,7 @@ struct ggml_tensor * ggml_rms_norm_back(
 // ggml_group_norm
 
 static struct ggml_tensor * ggml_group_norm_impl(
-    struct ggml_context * ctx,
+    const struct ggml_context * ctx,
     struct ggml_tensor * a,
     int n_groups,
     bool inplace) {
@@ -4346,7 +4346,7 @@ struct ggml_tensor * ggml_out_prod(
 // ggml_scale
 
 static struct ggml_tensor * ggml_scale_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         float                 s,
         bool inplace) {
@@ -4386,7 +4386,7 @@ struct ggml_tensor * ggml_scale_inplace(
 // ggml_set
 
 static struct ggml_tensor * ggml_set_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b,
         size_t                nb1,
@@ -4475,7 +4475,7 @@ struct ggml_tensor * ggml_set_2d_inplace(
 // ggml_cpy
 
 static struct ggml_tensor * ggml_cpy_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b) {
     GGML_ASSERT(ggml_nelements(a) == ggml_nelements(b));
@@ -4530,7 +4530,7 @@ struct ggml_tensor * ggml_cast(
 // ggml_cont
 
 static struct ggml_tensor * ggml_cont_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a) {
     bool is_node = false;
 
@@ -4734,7 +4734,7 @@ struct ggml_tensor * ggml_reshape_4d(
 }
 
 static struct ggml_tensor * ggml_view_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_dims,
         const int64_t       * ne,
@@ -5014,7 +5014,7 @@ struct ggml_tensor * ggml_diag(
 // ggml_diag_mask_inf
 
 static struct ggml_tensor * ggml_diag_mask_inf_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_past,
         bool                  inplace) {
@@ -5053,7 +5053,7 @@ struct ggml_tensor * ggml_diag_mask_inf_inplace(
 // ggml_diag_mask_zero
 
 static struct ggml_tensor * ggml_diag_mask_zero_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         int                   n_past,
         bool                  inplace) {
@@ -5092,7 +5092,7 @@ struct ggml_tensor * ggml_diag_mask_zero_inplace(
 // ggml_soft_max
 
 static struct ggml_tensor * ggml_soft_max_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * mask,
         float                 scale,
@@ -5147,7 +5147,7 @@ struct ggml_tensor * ggml_soft_max_ext(
 // ggml_soft_max_back
 
 static struct ggml_tensor * ggml_soft_max_back_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b,
         bool                  inplace) {
@@ -5184,7 +5184,7 @@ struct ggml_tensor * ggml_soft_max_back_inplace(
 // ggml_rope
 
 static struct ggml_tensor * ggml_rope_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b,
         int                   n_dims,
@@ -5730,7 +5730,7 @@ struct ggml_tensor * ggml_pool_2d(
 // ggml_upscale
 
 static struct ggml_tensor * ggml_upscale_impl(
-    struct ggml_context * ctx,
+    const struct ggml_context * ctx,
     struct ggml_tensor * a,
     int scale_factor) {
     bool is_node = false;
@@ -6060,7 +6060,7 @@ struct ggml_tensor * ggml_get_rel_pos(
 // ggml_add_rel_pos
 
 static struct ggml_tensor * ggml_add_rel_pos_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * pw,
         struct ggml_tensor  * ph,
@@ -6112,7 +6112,7 @@ struct ggml_tensor * ggml_add_rel_pos_inplace(
 // gmml_unary
 
 static struct ggml_tensor * ggml_unary_impl(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_tensor * a,
         enum ggml_unary_op op,
         bool inplace) {
@@ -6598,7 +6598,7 @@ void ggml_set_param(
 static void ggml_compute_forward_dup_same_cont(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
     GGML_ASSERT(ggml_is_contiguous(dst) && ggml_is_contiguous(src0));
     GGML_ASSERT(src0->type == dst->type);
@@ -6630,7 +6630,7 @@ static void ggml_compute_forward_dup_same_cont(
 static void ggml_compute_forward_dup_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -6901,7 +6901,7 @@ static void ggml_compute_forward_dup_f16(
 static void ggml_compute_forward_dup_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -7151,7 +7151,7 @@ static void ggml_compute_forward_dup_f32(
 static void ggml_compute_forward_dup_bytes(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
     GGML_ASSERT(src0->type == dst->type);
 
@@ -7300,7 +7300,7 @@ static void ggml_compute_forward_dup_bytes(
 static void ggml_compute_forward_dup(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     if (src0->type == dst->type) {
         ggml_compute_forward_dup_bytes(params, src0, dst);
         return;
@@ -7328,7 +7328,7 @@ static void ggml_compute_forward_add_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_can_repeat(src1, src0) && ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -7416,7 +7416,7 @@ static void ggml_compute_forward_add_f16_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, src1) && ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -7493,7 +7493,7 @@ static void ggml_compute_forward_add_f16_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, src1) && ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -7547,7 +7547,7 @@ static void ggml_compute_forward_add_q_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, src1) && ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -7625,7 +7625,7 @@ static void ggml_compute_forward_add(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -7677,7 +7677,7 @@ static void ggml_compute_forward_add1_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
     GGML_ASSERT(ggml_is_scalar(src1));
 
@@ -7729,7 +7729,7 @@ static void ggml_compute_forward_add1_f16_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
     GGML_ASSERT(ggml_is_scalar(src1));
 
@@ -7779,7 +7779,7 @@ static void ggml_compute_forward_add1_f16_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
     GGML_ASSERT(ggml_is_scalar(src1));
 
@@ -7829,7 +7829,7 @@ static void ggml_compute_forward_add1_q_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
     GGML_ASSERT(ggml_is_scalar(src1));
 
@@ -7896,7 +7896,7 @@ static void ggml_compute_forward_add1(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -7944,7 +7944,7 @@ static void ggml_compute_forward_acc_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
     GGML_ASSERT(ggml_is_contiguous(dst) && ggml_is_contiguous(src0));
 
@@ -8026,7 +8026,7 @@ static void ggml_compute_forward_acc(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
 
     switch (src0->type) {
         case GGML_TYPE_F32:
@@ -8061,7 +8061,7 @@ static void ggml_compute_forward_sub_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, src1) && ggml_are_same_shape(src0, dst));
 
@@ -8121,7 +8121,7 @@ static void ggml_compute_forward_sub(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8140,7 +8140,7 @@ static void ggml_compute_forward_mul_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_can_repeat(src1, src0) && ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -8223,7 +8223,7 @@ static void ggml_compute_forward_mul(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(src1->type == GGML_TYPE_F32 && "only f32 src1 supported for now");
 
     switch (src0->type) {
@@ -8244,7 +8244,7 @@ static void ggml_compute_forward_div_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_can_repeat(src1, src0) && ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -8317,7 +8317,7 @@ static void ggml_compute_forward_div(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8335,7 +8335,7 @@ static void ggml_compute_forward_div(
 static void ggml_compute_forward_sqr_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -8359,7 +8359,7 @@ static void ggml_compute_forward_sqr_f32(
 static void ggml_compute_forward_sqr(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8377,7 +8377,7 @@ static void ggml_compute_forward_sqr(
 static void ggml_compute_forward_sqrt_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -8401,7 +8401,7 @@ static void ggml_compute_forward_sqrt_f32(
 static void ggml_compute_forward_sqrt(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8419,7 +8419,7 @@ static void ggml_compute_forward_sqrt(
 static void ggml_compute_forward_log_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
 
@@ -8443,7 +8443,7 @@ static void ggml_compute_forward_log_f32(
 static void ggml_compute_forward_log(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8461,7 +8461,7 @@ static void ggml_compute_forward_log(
 static void ggml_compute_forward_sum_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_is_scalar(dst));
 
@@ -8494,7 +8494,7 @@ static void ggml_compute_forward_sum_f32(
 static void ggml_compute_forward_sum_f16(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-          struct ggml_tensor * dst) {
+          const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_is_scalar(dst));
 
@@ -8526,7 +8526,7 @@ static void ggml_compute_forward_sum_f16(
 static void ggml_compute_forward_sum(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8548,7 +8548,7 @@ static void ggml_compute_forward_sum(
 static void ggml_compute_forward_sum_rows_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -8581,7 +8581,7 @@ static void ggml_compute_forward_sum_rows_f32(
 static void ggml_compute_forward_sum_rows(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8599,7 +8599,7 @@ static void ggml_compute_forward_sum_rows(
 static void ggml_compute_forward_mean_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -8636,7 +8636,7 @@ static void ggml_compute_forward_mean_f32(
 static void ggml_compute_forward_mean(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8654,7 +8654,7 @@ static void ggml_compute_forward_mean(
 static void ggml_compute_forward_argmax_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -8682,7 +8682,7 @@ static void ggml_compute_forward_argmax_f32(
 static void ggml_compute_forward_argmax(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8700,7 +8700,7 @@ static void ggml_compute_forward_argmax(
 static void ggml_compute_forward_repeat_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
     GGML_ASSERT(ggml_can_repeat(src0, dst));
 
@@ -8743,7 +8743,7 @@ static void ggml_compute_forward_repeat_f32(
 static void ggml_compute_forward_repeat_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
     GGML_ASSERT(ggml_can_repeat(src0, dst));
 
@@ -8789,7 +8789,7 @@ static void ggml_compute_forward_repeat_f16(
 static void ggml_compute_forward_repeat(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
         case GGML_TYPE_I16:
@@ -8813,7 +8813,7 @@ static void ggml_compute_forward_repeat(
 static void ggml_compute_forward_repeat_back_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
     GGML_ASSERT(ggml_can_repeat(dst, src0));
 
@@ -8870,7 +8870,7 @@ static void ggml_compute_forward_repeat_back_f32(
 static void ggml_compute_forward_repeat_back(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8889,7 +8889,7 @@ static void ggml_compute_forward_concat_f32(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
     const struct ggml_tensor * src1,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -8956,7 +8956,7 @@ static void ggml_compute_forward_concat(
 static void ggml_compute_forward_abs_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -8980,7 +8980,7 @@ static void ggml_compute_forward_abs_f32(
 static void ggml_compute_forward_abs(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -8998,7 +8998,7 @@ static void ggml_compute_forward_abs(
 static void ggml_compute_forward_sgn_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9022,7 +9022,7 @@ static void ggml_compute_forward_sgn_f32(
 static void ggml_compute_forward_sgn(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9040,7 +9040,7 @@ static void ggml_compute_forward_sgn(
 static void ggml_compute_forward_neg_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9064,7 +9064,7 @@ static void ggml_compute_forward_neg_f32(
 static void ggml_compute_forward_neg(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9082,7 +9082,7 @@ static void ggml_compute_forward_neg(
 static void ggml_compute_forward_step_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9106,7 +9106,7 @@ static void ggml_compute_forward_step_f32(
 static void ggml_compute_forward_step(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9124,7 +9124,7 @@ static void ggml_compute_forward_step(
 static void ggml_compute_forward_tanh_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9148,7 +9148,7 @@ static void ggml_compute_forward_tanh_f32(
 static void ggml_compute_forward_tanh(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9166,7 +9166,7 @@ static void ggml_compute_forward_tanh(
 static void ggml_compute_forward_elu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9190,7 +9190,7 @@ static void ggml_compute_forward_elu_f32(
 static void ggml_compute_forward_elu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9208,7 +9208,7 @@ static void ggml_compute_forward_elu(
 static void ggml_compute_forward_relu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9232,7 +9232,7 @@ static void ggml_compute_forward_relu_f32(
 static void ggml_compute_forward_relu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9250,7 +9250,7 @@ static void ggml_compute_forward_relu(
 static void ggml_compute_forward_gelu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
@@ -9291,7 +9291,7 @@ static void ggml_compute_forward_gelu_f32(
 static void ggml_compute_forward_gelu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9309,7 +9309,7 @@ static void ggml_compute_forward_gelu(
 static void ggml_compute_forward_gelu_quick_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
@@ -9350,7 +9350,7 @@ static void ggml_compute_forward_gelu_quick_f32(
 static void ggml_compute_forward_gelu_quick(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9368,7 +9368,7 @@ static void ggml_compute_forward_gelu_quick(
 static void ggml_compute_forward_silu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
@@ -9409,7 +9409,7 @@ static void ggml_compute_forward_silu_f32(
 static void ggml_compute_forward_silu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9426,7 +9426,7 @@ static void ggml_compute_forward_silu(
 static void ggml_compute_forward_leaky_relu_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9453,7 +9453,7 @@ static void ggml_compute_forward_leaky_relu_f32(
 static void ggml_compute_forward_leaky_relu(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9472,7 +9472,7 @@ static void ggml_compute_forward_silu_back_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * grad,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(grad));
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
     GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
@@ -9517,7 +9517,7 @@ static void ggml_compute_forward_silu_back(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * grad,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9534,7 +9534,7 @@ static void ggml_compute_forward_silu_back(
 static void ggml_compute_forward_hardswish_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9557,7 +9557,7 @@ static void ggml_compute_forward_hardswish_f32(
 static void ggml_compute_forward_hardswish(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9573,7 +9573,7 @@ static void ggml_compute_forward_hardswish(
 static void ggml_compute_forward_hardsigmoid_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
     assert(ggml_are_same_shape(src0, dst));
 
@@ -9597,7 +9597,7 @@ static void ggml_compute_forward_hardsigmoid_f32(
 static void ggml_compute_forward_hardsigmoid(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9616,7 +9616,7 @@ static void ggml_compute_forward_hardsigmoid(
 static void ggml_compute_forward_norm_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -9669,7 +9669,7 @@ static void ggml_compute_forward_norm_f32(
 static void ggml_compute_forward_norm(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9687,7 +9687,7 @@ static void ggml_compute_forward_norm(
 static void ggml_compute_forward_rms_norm_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -9737,7 +9737,7 @@ static void ggml_compute_forward_rms_norm_f32(
 static void ggml_compute_forward_rms_norm(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9754,7 +9754,7 @@ static void ggml_compute_forward_rms_norm_back_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst) && ggml_are_same_shape(src0, src1));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -9911,7 +9911,7 @@ static void ggml_compute_forward_rms_norm_back(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -9929,7 +9929,7 @@ static void ggml_compute_forward_rms_norm_back(
 static void ggml_compute_forward_group_norm_f32(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -10001,7 +10001,7 @@ static void ggml_compute_forward_group_norm_f32(
 static void ggml_compute_forward_group_norm(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -10053,7 +10053,7 @@ static void ggml_compute_forward_mul_mat(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -10300,7 +10300,7 @@ static void ggml_compute_forward_mul_mat_id(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * ids,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
 
     const struct ggml_tensor * src0 = dst->src[2]; // only for GGML_TENSOR_BINARY_OP_LOCALS
 
@@ -10494,7 +10494,7 @@ static void ggml_compute_forward_out_prod_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     // int64_t t0 = ggml_perf_time_us();
     // UNUSED(t0);
 
@@ -10686,7 +10686,7 @@ static void ggml_compute_forward_out_prod_q_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     // int64_t t0 = ggml_perf_time_us();
     // UNUSED(t0);
 
@@ -10799,7 +10799,7 @@ static void ggml_compute_forward_out_prod(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
@@ -10838,7 +10838,7 @@ static void ggml_compute_forward_out_prod(
 static void ggml_compute_forward_scale_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous(src0));
     GGML_ASSERT(ggml_is_contiguous(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
@@ -10880,7 +10880,7 @@ static void ggml_compute_forward_scale_f32(
 static void ggml_compute_forward_scale(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -10899,7 +10899,7 @@ static void ggml_compute_forward_set_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
     GGML_ASSERT(ggml_is_contiguous(dst) && ggml_is_contiguous(src0));
 
@@ -10972,7 +10972,7 @@ static void ggml_compute_forward_set(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
 
     switch (src0->type) {
         case GGML_TYPE_F32:
@@ -11006,7 +11006,7 @@ static void ggml_compute_forward_set(
 static void ggml_compute_forward_cpy(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     ggml_compute_forward_dup(params, src0, dst);
 }
 
@@ -11015,7 +11015,7 @@ static void ggml_compute_forward_cpy(
 static void ggml_compute_forward_cont(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     ggml_compute_forward_dup(params, src0, dst);
 }
 
@@ -11024,7 +11024,7 @@ static void ggml_compute_forward_cont(
 static void ggml_compute_forward_reshape(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     // NOP
     UNUSED(params);
     UNUSED(src0);
@@ -11067,7 +11067,7 @@ static void ggml_compute_forward_get_rows_q(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -11105,7 +11105,7 @@ static void ggml_compute_forward_get_rows_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -11140,7 +11140,7 @@ static void ggml_compute_forward_get_rows_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -11175,7 +11175,7 @@ static void ggml_compute_forward_get_rows(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
@@ -11234,7 +11234,7 @@ static void ggml_compute_forward_get_rows_back_f32_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
     GGML_ASSERT(ggml_is_contiguous(dst));
 
@@ -11271,7 +11271,7 @@ static void ggml_compute_forward_get_rows_back_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
     GGML_ASSERT(ggml_is_contiguous(dst));
 
@@ -11308,7 +11308,7 @@ static void ggml_compute_forward_get_rows_back(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -11348,7 +11348,7 @@ static void ggml_compute_forward_get_rows_back(
 static void ggml_compute_forward_diag_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -11388,7 +11388,7 @@ static void ggml_compute_forward_diag_f32(
 static void ggml_compute_forward_diag(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -11459,7 +11459,7 @@ static void ggml_compute_forward_diag_mask_f32(
 static void ggml_compute_forward_diag_mask_inf(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -11475,7 +11475,7 @@ static void ggml_compute_forward_diag_mask_inf(
 static void ggml_compute_forward_diag_mask_zero(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -11494,7 +11494,7 @@ static void ggml_compute_forward_soft_max_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     assert(ggml_is_contiguous(dst));
     assert(ggml_are_same_shape(src0, dst));
 
@@ -11581,7 +11581,7 @@ static void ggml_compute_forward_soft_max(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -11600,7 +11600,7 @@ static void ggml_compute_forward_soft_max_back_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous(src0));
     GGML_ASSERT(ggml_is_contiguous(src1));
     GGML_ASSERT(ggml_is_contiguous(dst));
@@ -11677,7 +11677,7 @@ static void ggml_compute_forward_soft_max_back(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -11695,7 +11695,7 @@ static void ggml_compute_forward_soft_max_back(
 static void ggml_compute_forward_alibi_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -11754,7 +11754,7 @@ static void ggml_compute_forward_alibi_f32(
 static void ggml_compute_forward_alibi_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -11815,7 +11815,7 @@ static void ggml_compute_forward_alibi_f16(
 static void ggml_compute_forward_alibi(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -11855,7 +11855,7 @@ static void ggml_compute_forward_alibi(
 static void ggml_compute_forward_clamp_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(params->ith == 0);
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
@@ -11895,7 +11895,7 @@ static void ggml_compute_forward_clamp_f32(
 static void ggml_compute_forward_clamp(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -12330,7 +12330,7 @@ static void ggml_compute_forward_rope(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -12353,7 +12353,7 @@ static void ggml_compute_forward_rope_back(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -12376,7 +12376,7 @@ static void ggml_compute_forward_conv_transpose_1d_f16_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
@@ -12473,7 +12473,7 @@ static void ggml_compute_forward_conv_transpose_1d_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
@@ -12570,7 +12570,7 @@ static void ggml_compute_forward_conv_transpose_1d(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -12594,7 +12594,7 @@ static void ggml_compute_forward_im2col_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
@@ -12680,7 +12680,7 @@ static void ggml_compute_forward_im2col_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F16);
@@ -12762,7 +12762,7 @@ static void ggml_compute_forward_im2col(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     switch (dst->type) {
         case GGML_TYPE_F16:
             {
@@ -12786,7 +12786,7 @@ static void ggml_compute_forward_conv_transpose_2d(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
@@ -12892,7 +12892,7 @@ static void ggml_compute_forward_pool_1d_sk_p0(
         const enum ggml_op_pool op,
         const struct ggml_tensor * src,
         const int k,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     assert(src->type == GGML_TYPE_F32);
     assert(params->ith == 0);
 
@@ -12942,7 +12942,7 @@ static void ggml_compute_forward_pool_1d_sk_p0(
 static void ggml_compute_forward_pool_1d(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
 
     const int32_t * opts = (const int32_t *)dst->op_params;
     enum ggml_op_pool op = opts[0];
@@ -12960,7 +12960,7 @@ static void ggml_compute_forward_pool_1d(
 static void ggml_compute_forward_pool_2d(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(src->type == GGML_TYPE_F32);
     GGML_ASSERT(params->ith == 0);
 
@@ -13034,7 +13034,7 @@ static void ggml_compute_forward_pool_2d(
 static void ggml_compute_forward_upscale_f32(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -13073,7 +13073,7 @@ static void ggml_compute_forward_upscale_f32(
 static void ggml_compute_forward_upscale(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -13091,7 +13091,7 @@ static void ggml_compute_forward_upscale(
 static void ggml_compute_forward_pad_f32(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-          struct ggml_tensor * dst) {
+          const struct ggml_tensor * dst) {
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -13131,7 +13131,7 @@ static void ggml_compute_forward_pad_f32(
 static void ggml_compute_forward_pad(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -13149,7 +13149,7 @@ static void ggml_compute_forward_pad(
 static void ggml_compute_forward_argsort_f32(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
@@ -13191,7 +13191,7 @@ static void ggml_compute_forward_argsort_f32(
 static void ggml_compute_forward_argsort(
     const struct ggml_compute_params * params,
     const struct ggml_tensor * src0,
-    struct ggml_tensor * dst) {
+    const struct ggml_tensor * dst) {
 
     switch (src0->type) {
         case GGML_TYPE_F32:
@@ -13213,7 +13213,7 @@ static void ggml_compute_forward_flash_attn_f32(
         const struct ggml_tensor * k,
         const struct ggml_tensor * v,
         const bool masked,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -13403,7 +13403,7 @@ static void ggml_compute_forward_flash_attn_f16(
         const struct ggml_tensor * k,
         const struct ggml_tensor * v,
         const bool masked,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -13629,7 +13629,7 @@ static void ggml_compute_forward_flash_attn(
         const struct ggml_tensor * k,
         const struct ggml_tensor * v,
         const bool masked,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (q->type) {
         case GGML_TYPE_F16:
             {
@@ -13655,7 +13655,7 @@ static void ggml_compute_forward_flash_ff_f16(
         const struct ggml_tensor * b1, // F32 fc_b
         const struct ggml_tensor * c0, // F16 proj_w
         const struct ggml_tensor * c1, // F32 proj_b
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -13788,7 +13788,7 @@ static void ggml_compute_forward_flash_ff(
         const struct ggml_tensor * b1,
         const struct ggml_tensor * c0,
         const struct ggml_tensor * c1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (b0->type) {
         case GGML_TYPE_F16:
             {
@@ -13814,7 +13814,7 @@ static void ggml_compute_forward_flash_attn_back_f32(
         const struct ggml_tensor * v,
         const struct ggml_tensor * d,
         const bool masked,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -14167,7 +14167,7 @@ static void ggml_compute_forward_flash_attn_back(
         const struct ggml_tensor * v,
         const struct ggml_tensor * d,
         const bool masked,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (q->type) {
         case GGML_TYPE_F32:
             {
@@ -14185,7 +14185,7 @@ static void ggml_compute_forward_flash_attn_back(
 static void ggml_compute_forward_win_part_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
@@ -14229,7 +14229,7 @@ static void ggml_compute_forward_win_part_f32(
 static void ggml_compute_forward_win_part(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -14247,7 +14247,7 @@ static void ggml_compute_forward_win_part(
 static void ggml_compute_forward_win_unpart_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
@@ -14289,7 +14289,7 @@ static void ggml_compute_forward_win_unpart_f32(
 static void ggml_compute_forward_win_unpart(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -14307,7 +14307,7 @@ static void ggml_compute_forward_win_unpart(
 static void ggml_compute_forward_unary(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     const enum ggml_unary_op op = ggml_get_unary_op(dst);
 
     switch (op) {
@@ -14371,7 +14371,7 @@ static void ggml_compute_forward_unary(
 static void ggml_compute_forward_get_rel_pos_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
@@ -14398,7 +14398,7 @@ static void ggml_compute_forward_get_rel_pos_f16(
 static void ggml_compute_forward_get_rel_pos(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
@@ -14418,7 +14418,7 @@ static void ggml_compute_forward_add_rel_pos_f32(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         const struct ggml_tensor * src2,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
 
     const bool inplace = (bool) ((int32_t *) dst->op_params)[0];
     if (!inplace && params->type == GGML_TASK_INIT) {
@@ -14486,7 +14486,7 @@ static void ggml_compute_forward_add_rel_pos(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         const struct ggml_tensor * src2,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -14646,7 +14646,7 @@ static void ggml_compute_forward_map_custom3_f32(
 static void ggml_compute_forward_map_custom1(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * a,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
@@ -14662,7 +14662,7 @@ static void ggml_compute_forward_map_custom2(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * a,
         const struct ggml_tensor * b,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
@@ -14679,7 +14679,7 @@ static void ggml_compute_forward_map_custom3(
         const struct ggml_tensor * a,
         const struct ggml_tensor * b,
         const struct ggml_tensor * c,
-              struct ggml_tensor * dst) {
+              const struct ggml_tensor * dst) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
@@ -14695,7 +14695,7 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous(src0));
     GGML_ASSERT(ggml_is_contiguous(src1));
     GGML_ASSERT(ggml_is_scalar(dst));
@@ -14801,7 +14801,7 @@ static void ggml_compute_forward_cross_entropy_loss(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -14821,7 +14821,7 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         const struct ggml_tensor * opt0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous(dst));
     GGML_ASSERT(ggml_is_contiguous(src0));
     GGML_ASSERT(ggml_is_contiguous(src1));
@@ -14911,7 +14911,7 @@ static void ggml_compute_forward_cross_entropy_loss_back(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
         const struct ggml_tensor * opt0,
-        struct ggml_tensor * dst) {
+        const struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
@@ -14926,7 +14926,7 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 
 /////////////////////////////////
 
-static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
+static void ggml_compute_forward(struct ggml_compute_params * params, const struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
     if (tensor->op == GGML_OP_NONE) {
@@ -15393,7 +15393,7 @@ static void ggml_hash_map_free(struct hash_map * map) {
 // gradient checkpointing
 
 static struct ggml_tensor * ggml_recompute_graph_node(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_cgraph  * graph,
         struct hash_map     * replacements,
         struct ggml_tensor  * node) {
@@ -16177,7 +16177,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             } break;
         case GGML_OP_FLASH_ATTN:
             {
-                struct ggml_tensor * flash_grad = NULL;
+                const struct ggml_tensor * flash_grad = NULL;
                 if (src0->grad || src1->grad || tensor->src[2]->grad) {
                     int32_t t = ggml_get_op_params_i32(tensor, 0);
                     GGML_ASSERT(t == 0 || t == 1);
@@ -16359,7 +16359,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
     }
 }
 
-static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor * node) {
+static void ggml_visit_parents(struct ggml_cgraph * cgraph, const struct ggml_tensor * node) {
     if (node->grad == NULL) {
         // this usually happens when we generate intermediate nodes from constants in the backward pass
         // it can also happen during forward pass, if the user performs computations with constants
@@ -16456,7 +16456,7 @@ void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * 
     }
 
     for (int i = gf->n_nodes - 1; i >= 0; i--) {
-        struct ggml_tensor * node = gf->nodes[i];
+        const struct ggml_tensor * node = gf->nodes[i];
 
         // inplace operations to add gradients are not created by ggml_compute_backward
         // use allocator to automatically make inplace operations
@@ -16466,7 +16466,7 @@ void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * 
     }
 
     for (int i = 0; i < gf->n_nodes; i++) {
-        struct ggml_tensor * node = gf->nodes[i];
+        const struct ggml_tensor * node = gf->nodes[i];
 
         if (node->flags & GGML_TENSOR_FLAG_PARAM) {
             GGML_PRINT_DEBUG("%s: found root node %p\n", __func__, (void *) node);
@@ -16778,7 +16778,7 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
     node->perf_time_us += time_us_cur;
 }
 
-static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
+static int ggml_get_n_tasks(const struct ggml_tensor * node, int n_threads) {
     int n_tasks = 0;
 
     switch (node->op) {
@@ -16947,7 +16947,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             } break;
         case GGML_OP_MAP_CUSTOM1:
             {
-                struct ggml_map_custom1_op_params * p = (struct ggml_map_custom1_op_params *) node->op_params;
+                const struct ggml_map_custom1_op_params * p = (const struct ggml_map_custom1_op_params *) node->op_params;
                 if (p->n_tasks == GGML_N_TASKS_MAX) {
                     n_tasks = n_threads;
                 } else {
@@ -16956,7 +16956,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             } break;
         case GGML_OP_MAP_CUSTOM2:
             {
-                struct ggml_map_custom2_op_params * p = (struct ggml_map_custom2_op_params *) node->op_params;
+                const struct ggml_map_custom2_op_params * p = (const struct ggml_map_custom2_op_params *) node->op_params;
                 if (p->n_tasks == GGML_N_TASKS_MAX) {
                     n_tasks = n_threads;
                 } else {
@@ -16965,7 +16965,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             } break;
         case GGML_OP_MAP_CUSTOM3:
             {
-                struct ggml_map_custom3_op_params * p = (struct ggml_map_custom3_op_params *) node->op_params;
+                const struct ggml_map_custom3_op_params * p = (const struct ggml_map_custom3_op_params *) node->op_params;
                 if (p->n_tasks == GGML_N_TASKS_MAX) {
                     n_tasks = n_threads;
                 } else {
@@ -17065,7 +17065,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
             if (node_n != -1) {
                 /* FINALIZE */
-                struct ggml_tensor * node = cgraph->nodes[node_n];
+                const struct ggml_tensor * node = cgraph->nodes[node_n];
                 if (GGML_OP_HAS_FINALIZE[node->op]) {
                     params.nth = ggml_get_n_tasks(node, n_threads);
                     ggml_compute_forward(&params, node);
@@ -17076,7 +17076,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             // distribute new work or execute it direct if 1T
             while (++node_n < cgraph->n_nodes) {
                 GGML_PRINT_DEBUG_5("%s: %d/%d\n", __func__, node_n, cgraph->n_nodes);
-                struct ggml_tensor * node = cgraph->nodes[node_n];
+                const struct ggml_tensor * node = cgraph->nodes[node_n];
                 const int n_tasks = ggml_get_n_tasks(node, n_threads);
 
                 state->shared->perf_node_start_cycles  = ggml_perf_cycles();
@@ -17124,7 +17124,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         if (node_n >= cgraph->n_nodes) break;
 
         /* INIT & COMPUTE */
-        struct ggml_tensor * node = cgraph->nodes[node_n];
+        const struct ggml_tensor * node = cgraph->nodes[node_n];
         const int n_tasks = ggml_get_n_tasks(node, n_threads);
 
         struct ggml_compute_params params = {
@@ -17188,7 +17188,7 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
 
     // thread scheduling for the different operations + work buffer size estimation
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        struct ggml_tensor * node = cgraph->nodes[i];
+        const struct ggml_tensor * node = cgraph->nodes[i];
 
         const int n_tasks = ggml_get_n_tasks(node, n_threads);
 
@@ -17475,7 +17475,7 @@ void ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph *
 
 struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name) {
     for (int i = 0; i < cgraph->n_leafs; i++) {
-        struct ggml_tensor * leaf = cgraph->leafs[i];
+        const struct ggml_tensor * leaf = cgraph->leafs[i];
 
         if (strcmp(leaf->name, name) == 0) {
             return leaf;
@@ -17483,7 +17483,7 @@ struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const ch
     }
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        struct ggml_tensor * node = cgraph->nodes[i];
+        const struct ggml_tensor * node = cgraph->nodes[i];
 
         if (strcmp(node->name, name) == 0) {
             return node;
@@ -17654,7 +17654,7 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
 
                 // output the op arguments
                 {
-                    struct ggml_tensor * args[GGML_MAX_SRC] = { NULL };
+                    const struct ggml_tensor * args[GGML_MAX_SRC] = { NULL };
 
                     for (int j = 0; j < GGML_MAX_SRC; ++j) {
                         args[j] = tensor->src[j];
@@ -17965,7 +17965,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
 
     GGML_PRINT("n_nodes = %d\n", cgraph->n_nodes);
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        struct ggml_tensor * node = cgraph->nodes[i];
+        const struct ggml_tensor * node = cgraph->nodes[i];
 
         perf_total_per_op_us[node->op] += MAX(1, node->perf_time_us);
 
@@ -17981,7 +17981,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
 
     GGML_PRINT("n_leafs = %d\n", cgraph->n_leafs);
     for (int i = 0; i < cgraph->n_leafs; i++) {
-        struct ggml_tensor * node = cgraph->leafs[i];
+        const struct ggml_tensor * node = cgraph->leafs[i];
 
         GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 "] %8s %16s\n",
                 i,
@@ -18018,7 +18018,7 @@ static bool ggml_graph_find(const struct ggml_cgraph * cgraph, const struct ggml
 
 static struct ggml_tensor * ggml_graph_get_parent(const struct ggml_cgraph * cgraph, const struct ggml_tensor * node) {
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        struct ggml_tensor * parent = cgraph->nodes[i];
+        const struct ggml_tensor * parent = cgraph->nodes[i];
 
         if (parent->grad == node) {
             return parent;
@@ -18028,7 +18028,7 @@ static struct ggml_tensor * ggml_graph_get_parent(const struct ggml_cgraph * cgr
     return NULL;
 }
 
-static void ggml_graph_dump_dot_node_edge(FILE * fp, const struct ggml_cgraph * gb, struct ggml_tensor * node, struct ggml_tensor * parent, const char * label)  {
+static void ggml_graph_dump_dot_node_edge(FILE * fp, const const struct ggml_cgraph * gb, const struct ggml_tensor * node, const struct ggml_tensor * parent, const char * label)  {
     struct ggml_tensor * gparent = ggml_graph_get_parent(gb, node);
     struct ggml_tensor * gparent0 = ggml_graph_get_parent(gb, parent);
     fprintf(fp, "  \"%p\":%s -> \"%p\":%s [ arrowhead = %s; style = %s; label = \"%s\"; ]\n",
@@ -18041,14 +18041,14 @@ static void ggml_graph_dump_dot_node_edge(FILE * fp, const struct ggml_cgraph * 
             label);
 }
 
-static void ggml_graph_dump_dot_leaf_edge(FILE * fp, struct ggml_tensor * node, struct ggml_tensor * parent, const char * label)  {
+static void ggml_graph_dump_dot_leaf_edge(FILE * fp, const struct ggml_tensor * node, const struct ggml_tensor * parent, const char * label)  {
     fprintf(fp, "  \"%p\":%s -> \"%p\":%s [ label = \"%s\"; ]\n",
             (void *) parent, "x",
             (void *) node, "x",
             label);
 }
 
-void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph * gf, const char * filename) {
+void ggml_graph_dump_dot(const const struct ggml_cgraph * gb, const const struct ggml_cgraph * gf, const char * filename) {
     char color[16];
 
     FILE * fp = fopen(filename, "w");
@@ -18059,7 +18059,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
     fprintf(fp, "  rankdir = LR;\n");
 
     for (int i = 0; i < gb->n_nodes; i++) {
-        struct ggml_tensor * node = gb->nodes[i];
+        const struct ggml_tensor * node = gb->nodes[i];
 
         if (ggml_graph_get_parent(gb, node) != NULL) {
             continue;
@@ -18102,7 +18102,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
     }
 
     for (int i = 0; i < gb->n_leafs; i++) {
-        struct ggml_tensor * node = gb->leafs[i];
+        const struct ggml_tensor * node = gb->leafs[i];
 
         snprintf(color, sizeof(color), "pink");
 
@@ -18140,7 +18140,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
     }
 
     for (int i = 0; i < gb->n_nodes; i++) {
-        struct ggml_tensor * node = gb->nodes[i];
+        const struct ggml_tensor * node = gb->nodes[i];
 
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             if (node->src[j]) {
@@ -18152,7 +18152,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
     }
 
     for (int i = 0; i < gb->n_leafs; i++) {
-        struct ggml_tensor * node = gb->leafs[i];
+        const struct ggml_tensor * node = gb->leafs[i];
 
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             if (node->src[j]) {
@@ -18223,12 +18223,12 @@ static void ggml_opt_acc_grad(int np, struct ggml_tensor * const ps[], float * g
 //
 
 static enum ggml_opt_result ggml_opt_adam(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_opt_context * opt,
-        struct ggml_opt_params params,
-        struct ggml_tensor * f,
-        struct ggml_cgraph * gf,
-        struct ggml_cgraph * gb,
+        const struct ggml_opt_params params,
+        const struct ggml_tensor * f,
+        const struct ggml_cgraph * gf,
+        const struct ggml_cgraph * gb,
         ggml_opt_callback callback,
         void * callback_data) {
     GGML_ASSERT(ggml_is_scalar(f));
@@ -18465,8 +18465,8 @@ static enum ggml_opt_result linesearch_backtracking(
         float * d,
         float * step,
         const float * xp,
-        struct ggml_tensor * f,
-        struct ggml_cgraph * gb,
+        const struct ggml_tensor * f,
+        const struct ggml_cgraph * gb,
         struct ggml_cplan  * cplan,
         const int np,
         struct ggml_tensor * ps[],
@@ -18579,12 +18579,12 @@ static enum ggml_opt_result linesearch_backtracking(
 }
 
 static enum ggml_opt_result ggml_opt_lbfgs(
-        struct ggml_context * ctx,
+        const struct ggml_context * ctx,
         struct ggml_opt_context * opt,
-        struct ggml_opt_params params,
-        struct ggml_tensor * f,
-        struct ggml_cgraph * gf,
-        struct ggml_cgraph * gb,
+        const struct ggml_opt_params params,
+        const struct ggml_tensor * f,
+        const struct ggml_cgraph * gf,
+        const struct ggml_cgraph * gb,
         ggml_opt_callback callback,
         void * callback_data) {
     if (params.lbfgs.linesearch == GGML_LINESEARCH_BACKTRACKING_WOLFE ||
@@ -18920,7 +18920,7 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
 GGML_API void ggml_opt_init(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
-        struct ggml_opt_params params,
+        const struct ggml_opt_params params,
         int64_t nx) {
     opt->ctx = ctx;
     opt->params = params;
@@ -19030,10 +19030,10 @@ enum ggml_opt_result ggml_opt_resume(
         struct ggml_tensor * f) {
 
     // build forward + backward compute graphs
-    struct ggml_cgraph * gf = ggml_new_graph_custom(ctx, opt->params.graph_size, true);
+    const struct ggml_cgraph * gf = ggml_new_graph_custom(ctx, opt->params.graph_size, true);
     ggml_build_forward_expand(gf, f);
 
-    struct ggml_cgraph * gb = ggml_graph_dup(ctx, gf);
+    const struct ggml_cgraph * gb = ggml_graph_dup(ctx, gf);
     ggml_build_backward_expand(ctx, gf, gb, true);
 
     return ggml_opt_resume_g(ctx, opt, f, gf, gb, NULL, NULL);
@@ -19811,7 +19811,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         *params.ctx = ggml_init(pdata);
 
-        struct ggml_context * ctx_data = *params.ctx;
+        const struct ggml_context * ctx_data = *params.ctx;
 
         struct ggml_tensor * data = NULL;
 
