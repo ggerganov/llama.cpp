@@ -1873,7 +1873,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     printf("  -t N, --threads N         number of threads to use during computation (default: %d)\n", params.n_threads);
     printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
-    printf("  -c N, --ctx-size N        size of the prompt context (default: %d)\n", params.n_ctx);
+    printf("  -kv N, --kv-size N        Specify the total size of the KV cache (default: %d)\n", params.n_ctx);
     printf("  --rope-scaling {none,linear,yarn}\n");
     printf("                            RoPE frequency scaling method, defaults to linear unless specified by the model\n");
     printf("  --rope-freq-base N        RoPE base frequency (default: loaded from model)\n");
@@ -2044,6 +2044,17 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             exit(0);
         }
         else if (arg == "-c" || arg == "--ctx-size" || arg == "--ctx_size")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.n_ctx = std::stoi(argv[i]);
+            LOG_WARNING("-c,--ctx-size,--ctx_size option is deprecated, use --kv-size instead",
+                        {{"--ctx_size", params.n_ctx}});
+        }
+        else if (arg == "-kv" || arg == "--kv-size" || arg == "--kv_size")
         {
             if (++i >= argc)
             {
