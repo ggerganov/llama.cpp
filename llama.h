@@ -704,18 +704,20 @@ extern "C" {
                                   char * buf,
                                int32_t   length);
 
-    /// Apply chat template and maybe tokenize it. Inspired by hf apply_chat_template() on python.
+    /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
     /// NOTE: This function only support some known jinja templates. It is not a jinja parser.
-    /// @param custom_template A Jinja template to use for this conversion. If this is nullptr, the model’s default chat template will be used instead.
-    /// @param msg Pointer to a list of multiple llama_chat_message
+    /// @param custom_template A Jinja template to use for this chat. If this is nullptr, the model’s default chat template will be used instead.
+    /// @param chat Pointer to a list of multiple llama_chat_message
+    /// @param n_msg Number of llama_chat_message in this chat
     /// @param add_ass Whether to end the prompt with the token(s) that indicate the start of an assistant message.
     /// @param buf A buffer to hold the output formatted prompt. The recommended alloc size is 2 * (total number of characters of all messages)
+    /// @param length The size of the allocated buffer
     /// @return The total number of bytes of the formatted prompt. If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
     LLAMA_API int32_t llama_chat_apply_template(
               const struct llama_model * model,
                             const char * custom_template,
-       const struct llama_chat_message * msg,
+       const struct llama_chat_message * chat,
                                 size_t   n_msg,
                                   bool   add_ass,
                                   char * buf,
