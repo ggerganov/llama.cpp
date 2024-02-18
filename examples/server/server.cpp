@@ -548,6 +548,7 @@ struct llama_server_context
         slot->params.seed               = json_value(data, "seed",              default_params.seed);
         slot->sparams.grammar           = json_value(data, "grammar",           default_sparams.grammar);
         slot->sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
+        slot->sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
         if (slot->n_predict > 0 && slot->params.n_predict > slot->n_predict) {
             // Might be better to reject the request with a 400 ?
@@ -1093,6 +1094,7 @@ struct llama_server_context
             {"stream",            slot.params.stream},
             {"logit_bias",        slot.sparams.logit_bias},
             {"n_probs",           slot.sparams.n_probs},
+            {"min_keep",          slot.sparams.min_keep},
             {"grammar",           slot.sparams.grammar},
             {"samplers",          samplers_sequence}
         };
