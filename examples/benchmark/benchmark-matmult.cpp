@@ -129,16 +129,16 @@ int main(int argc, char ** argv)  {
     const ggml_type qtype = GGML_TYPE_Q4_1;
 
     size_t kv_size = 0;
-    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey);
-    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey);
-    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizez);
-    kv_size += ggml_row_size(qtype, sizex * sizey);
-    kv_size += ggml_row_size(qtype, sizex * sizey);
-    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey); // BLAS
-    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey); // BLAS
-    kv_size += 1024 * 1024 * 16;
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex*sizez);
+    kv_size += ggml_row_size(qtype, sizex*sizey);
+    kv_size += ggml_row_size(qtype, sizex*sizey);
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
+    kv_size += 1024*1024*16;
 
-    printf("Allocating Memory of size %zi bytes, %zi MB\n", kv_size, (kv_size / 1024 / 1024));
+    printf("Allocating Memory of size %zi bytes, %zi MB\n", kv_size, (kv_size/1024/1024));
 
     struct ggml_init_params params = {
         /*.mem_size   =*/ kv_size,
