@@ -39,6 +39,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
 - `--grp-attn-n`: Set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
+- `-n, --n-predict`: Set the maximum tokens to predict (default: -1)
 
 ## Build
 
