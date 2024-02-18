@@ -1962,7 +1962,7 @@ struct ggml_numa_nodes {
     uint32_t n_nodes;
     uint32_t total_cpus; // hardware threads on system
     uint32_t current_node; // node on which main process is execting
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__gnu_linux__)
     cpu_set_t cpuset; // cpuset from numactl
 #else
     uint32_t cpuset; // no NUMA support outside of Linux at this time. Use a portable datatype
@@ -2000,7 +2000,7 @@ inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
 
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__gnu_linux__)
 static cpu_set_t ggml_get_numa_affinity(void) {
     cpu_set_t cpuset;
     pthread_t thread;
@@ -2022,7 +2022,7 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
         return;
     }
 
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__gnu_linux__)
     struct stat st;
     char path[256];
     int rv;
@@ -2062,7 +2062,7 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
     getcpu_ret = syscall(SYS_getcpu,&current_cpu,&g_state.numa.current_node);
 #endif
 
-    if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1 || getcpu_ret != 0 ) {
+    if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1 || getcpu_ret != 0) {
         g_state.numa.n_nodes = 0;
         return;
     }
@@ -16722,7 +16722,7 @@ typedef pthread_t ggml_thread_t;
 #endif
 
 // Android's libc implementation "bionic" does not support setting affinity
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__gnu_linux__)
 static void set_numa_thread_affinity(int thread_n) {
     if (!ggml_is_numa()) {
         return;
