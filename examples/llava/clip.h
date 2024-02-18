@@ -3,7 +3,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <vector>
 
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
@@ -26,23 +25,6 @@ extern "C" {
 #endif
 
 struct clip_ctx;
-
-// RGB uint8 image
-struct clip_image_u8 {
-    int nx;
-    int ny;
-
-    std::vector<uint8_t> buf;
-};
-
-// RGB float32 image (NHWC)
-// Memory layout: RGBRGBRGB...
-struct clip_image_f32 {
-    int nx;
-    int ny;
-
-    std::vector<float> buf;
-};
 
 struct clip_image_u8_batch {
     struct clip_image_u8 * data;
