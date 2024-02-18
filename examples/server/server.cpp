@@ -315,7 +315,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
     int max_length = 128;
     int num_blocks = slots.size();
     size_t slot_cache_size = cache_size / num_blocks;
-    bool cls_flag = true;
+    bool cls_flag = true;   // this flag only prevents repeated cls inside one call
     std::string slot_symbol1 = "";
     std::string slot_symbol2 = "";
     std::string slot_symbol3 = "";
@@ -371,7 +371,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
         }
     printf(" %4zu/%5zu %2d %s %s %s\n", slots[i].cache_tokens.size(), slot_cache_size, slots[i].id, slot_symbol1.c_str(), slot_symbol2.c_str(), slot_symbol3.c_str());
     }
-    //printf("\n\033[%dJ", 0);
+    printf("\n\033[%dJ", 0);
 }
 
 struct llama_server_context
@@ -1784,9 +1784,6 @@ struct llama_server_context
                     slot.n_decoded = 0;
                     slot.i_batch   = batch.n_tokens - 1;
                 }
-                // get all the current slots into a graphics
-                // this only gets run once at initialisation
-                // kvgraphics(slots, params.n_ctx);
             }
         }
 
@@ -1913,14 +1910,13 @@ struct llama_server_context
 
                 slot.i_batch = -1;
             }
-            // this should graph every cycle and so shows each token added to the cache; very slow
-            // kvgraphics(slots, params.n_ctx);
         }
 
         // we are still inside llama_server_context so we can use an unqualified parameter
         if (skvgraphics) {
             kvgraphics(slots, params.n_ctx);
             }
+
         return true;
     }
 
