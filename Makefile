@@ -220,30 +220,6 @@ ifeq ($(LLAMA_FATAL_WARNINGS),1)
 	MK_CXXFLAGS += -Werror
 endif
 
-ifeq ($(CC_IS_CLANG), 1)
-	# clang options
-	MK_CFLAGS        += -Wunreachable-code-break -Wunreachable-code-return
-	MK_HOST_CXXFLAGS += -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi
-
-	ifneq '' '$(and $(CC_IS_LLVM_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 030800)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-	ifneq '' '$(and $(CC_IS_APPLE_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 070300)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-else
-	# gcc options
-	MK_CFLAGS        += -Wdouble-promotion
-	MK_HOST_CXXFLAGS += -Wno-array-bounds
-
-	ifeq ($(shell expr $(CC_VER) \>= 070100), 1)
-		MK_HOST_CXXFLAGS += -Wno-format-truncation
-	endif
-	ifeq ($(shell expr $(CC_VER) \>= 080100), 1)
-		MK_HOST_CXXFLAGS += -Wextra-semi
-	endif
-endif
-
 # this version of Apple ld64 is buggy
 ifneq '' '$(findstring dyld-1015.7,$(shell $(CC) $(LDFLAGS) -Wl,-v 2>&1))'
 	MK_CPPFLAGS += -DHAVE_BUGGY_APPLE_LINKER
@@ -468,7 +444,7 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 ifdef JETSON_EOL_MODULE_DETECT
 	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 else
-	$(NVCC) $(BASE_CXXFLAGS) $(NVCCFLAGS) -Wno-pedantic -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endif # JETSON_EOL_MODULE_DETECT
 endif # LLAMA_CUBLAS
 
@@ -579,7 +555,7 @@ override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
 ifdef LLAMA_CUBLAS
 GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
 include scripts/get-flags.mk
-CUDA_CXXFLAGS := $(GF_CXXFLAGS)
+CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
 endif
 
 #
