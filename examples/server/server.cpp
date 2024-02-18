@@ -28,6 +28,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <atomic>
+#include <signal.h>
 
 using json = nlohmann::json;
 
@@ -40,6 +41,7 @@ struct server_params
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
+    bool slots_endpoint = true;
 };
 
 bool server_verbose = false;
@@ -158,6 +160,7 @@ struct llama_client_slot
     int32_t n_decoded   = 0;
     int32_t n_remaining = -1;
     int32_t i_batch     = -1;
+    int32_t n_predict   = -1;
 
     int32_t num_prompt_tokens           = 0;
     int32_t num_prompt_tokens_processed = 0;
@@ -409,6 +412,7 @@ struct llama_server_context
 
             slot.id = i;
             slot.n_ctx = n_ctx_slot;
+            slot.n_predict = params.n_predict;
 
             LOG_TEE(" -> Slot %i - max context: %i\n", slot.id, n_ctx_slot);
 
@@ -544,6 +548,15 @@ struct llama_server_context
         slot->params.seed               = json_value(data, "seed",              default_params.seed);
         slot->sparams.grammar           = json_value(data, "grammar",           default_sparams.grammar);
         slot->sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
+
+        if (slot->n_predict > 0 && slot->params.n_predict > slot->n_predict) {
+            // Might be better to reject the request with a 400 ?
+            LOG_WARNING("Max tokens to predict exceeds server configuration", {
+                {"params.n_predict", slot->params.n_predict},
+                {"slot.n_predict", slot->n_predict},
+            });
+            slot->params.n_predict = slot->n_predict;
+        }
 
         // infill
         if (data.count("input_prefix") != 0)
@@ -1052,6 +1065,7 @@ struct llama_server_context
 
         return json {
             {"n_ctx",             slot.n_ctx},
+            {"n_predict",         slot.n_predict},
             {"model",             params.model_alias},
             {"seed",              slot.params.seed},
             {"temperature",       slot.sparams.temp},
@@ -1913,14 +1927,16 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable             disables logging to a file.\n");
+    printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
     printf("\n");
+    printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                            advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`");
     printf("  --chat-template FORMAT_NAME");
-    printf("                            set chat template, possible valus is: llama2, chatml (default %s)", sparams.chat_template.c_str());
+    printf("                            set chat template, possible value is: llama2, chatml (default %s)", sparams.chat_template.c_str());
     printf("\n");
 }
 
@@ -2360,6 +2376,10 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             log_set_target(stdout);
             LOG_INFO("logging to file is disabled.", {});
         }
+        else if (arg == "--slots-endpoint-disable")
+        {
+            sparams.slots_endpoint = false;
+        }
         else if (arg == "--chat-template")
         {
             if (++i >= argc)
@@ -2511,6 +2531,9 @@ static void append_to_generated_text_from_generated_token_probs(llama_server_con
     }
 }
 
+std::function<void(int)> shutdown_handler;
+inline void signal_handler(int signal) { shutdown_handler(signal); }
+
 int main(int argc, char **argv)
 {
 #if SERVER_VERBOSE != 1
@@ -2561,8 +2584,35 @@ int main(int argc, char **argv)
         server_state current_state = state.load();
         switch(current_state) {
             case SERVER_STATE_READY:
-                res.set_content(R"({"status": "ok"})", "application/json");
-                res.status = 200; // HTTP OK
+                if (llama.all_slots_are_idle) {
+                    res.set_content(R"({"status": "ok"})", "application/json");
+                    res.status = 200; // HTTP OK
+                } else {
+                    int available_slots = 0;
+                    int processing_slots = 0;
+                    for (llama_client_slot & slot : llama.slots) {
+                        if (slot.available()) {
+                            available_slots++;
+                        } else {
+                            processing_slots++;
+                        }
+                    }
+                    if (available_slots > 0) {
+                        json health = {
+                                {"status",           "ok"},
+                                {"slots_idle",       available_slots},
+                                {"slots_processing", processing_slots}};
+                        res.set_content(health.dump(), "application/json");
+                        res.status = 200; // HTTP OK
+                    } else {
+                        json health = {
+                                {"status",           "no slot available"},
+                                {"slots_idle",       available_slots},
+                                {"slots_processing", processing_slots}};
+                        res.set_content(health.dump(), "application/json");
+                        res.status = 503; // HTTP Service Unavailable
+                    }
+                }
                 break;
             case SERVER_STATE_LOADING_MODEL:
                 res.set_content(R"({"status": "loading model"})", "application/json");
@@ -2574,6 +2624,32 @@ int main(int argc, char **argv)
                 break;
         }
     });
+
+    if (sparams.slots_endpoint) {
+        svr.Get("/slots", [&](const httplib::Request&, httplib::Response& res) {
+            json slots;
+            for (llama_client_slot & slot : llama.slots) {
+                json slot_data = llama.get_formated_generation(slot);
+                slot_data["id"] = slot.id;
+                slot_data["task_id"] = slot.task_id;
+                slot_data["state"] = slot.state;
+                slot_data["prompt"] = slot.prompt;
+                slot_data["next_token"] = {
+                        {"has_next_token", slot.has_next_token},
+                        {"n_remain", slot.n_remaining},
+                        {"num_tokens_predicted", slot.n_decoded},
+                        {"stopped_eos", slot.stopped_eos},
+                        {"stopped_word", slot.stopped_word},
+                        {"stopped_limit", slot.stopped_limit},
+                        {"stopping_word", slot.stopping_word},
+                };
+
+                slots.push_back(slot_data);
+            }
+            res.set_content(slots.dump(), "application/json");
+            res.status = 200; // HTTP OK
+        });
+    }
 
     svr.set_logger(log_server_request);
 
@@ -3128,8 +3204,25 @@ int main(int argc, char **argv)
         std::placeholders::_2,
         std::placeholders::_3
     ));
-    llama.queue_tasks.start_loop();
 
+    shutdown_handler = [&](int) {
+        llama.queue_tasks.terminate();
+    };
+
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+    struct sigaction sigint_action;
+    sigint_action.sa_handler = signal_handler;
+    sigemptyset (&sigint_action.sa_mask);
+    sigint_action.sa_flags = 0;
+    sigaction(SIGINT, &sigint_action, NULL);
+#elif defined (_WIN32)
+    auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
+        return (ctrl_type == CTRL_C_EVENT) ? (signal_handler(SIGINT), true) : false;
+    };
+    SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
+#endif
+    llama.queue_tasks.start_loop();
+    svr.stop();
     t.join();
 
     llama_backend_free();
