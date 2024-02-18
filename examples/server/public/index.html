@@ -234,6 +234,7 @@
       mirostat_eta: 0.1, // learning rate
       grammar: '',
       n_probs: 0, // no completion_probabilities,
+      min_keep: 0, // min probs from each sampler,
       image_data: [],
       cache_prompt: true,
       api_key: ''
@@ -790,6 +791,9 @@
             </fieldset>
             <fieldset>
               ${IntField({ label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs })}
+            </fieldset>
+            <fieldset>
+              ${IntField({ label: "Min Probabilities from each Sampler", max: 10, min: 0, name: "min_keep", value: params.value.min_keep })}
             </fieldset>
             <fieldset>
               <label for="api_key">API Key</label>

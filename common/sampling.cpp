@@ -248,7 +248,10 @@ static llama_token llama_sampling_sample_impl(
             llama_sample_temp(ctx_main, &cur_p, temp);
             id = llama_sample_token_mirostat_v2(ctx_main, &cur_p, mirostat_tau, mirostat_eta, &ctx_sampling->mirostat_mu);
         } else {
-            sampler_queue(ctx_main, params, cur_p, 1);
+            // temperature sampling
+            size_t min_keep = std::max(1, params.min_keep);
+
+            sampler_queue(ctx_main, params, cur_p, min_keep);
 
             id = llama_sample_token(ctx_main, &cur_p);
 

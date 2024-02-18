@@ -768,7 +768,7 @@ The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 thread
 
 #### How to run
 
-1. Download/extract: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
+1. Download/extract: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
 2. Run `./perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
 3. Output:
 ```
