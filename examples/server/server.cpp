@@ -339,7 +339,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
     printf("\033[1;0H\033[K**************************\n\033[KKVcache occupancy by slot:\n\033[K**************************\n");
 
     for(int i=0; i<num_blocks; i++) {
-        printf("\033[K");  // clear the current line
+        //printf("\033[K");  // clear the current line
         for(int j=0; j < max_length; j++) {
             int used = slots[i].cache_tokens.size() * max_length / slot_cache_size;
             if((j < max_length / 2) && (j < used)) {
@@ -355,7 +355,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
         } else if(slots[i].state == IDLE) {
             slot_symbol1 = "\u2705"; // red box white tick
         } else {
-            slot_symbol1 = "\u2620"; // skull and crossbones symbol = dead?
+            slot_symbol1 = "\u274E"; // white cross on read - not doing anything
         }
         if(slots[i].command == LOAD_PROMPT) {
             slot_symbol2 = "\u24C1"; // dingbat L symbol = loading
@@ -371,7 +371,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
         }
     printf(" %4zu/%5zu %2d %s %s %s\n", slots[i].cache_tokens.size(), slot_cache_size, slots[i].id, slot_symbol1.c_str(), slot_symbol2.c_str(), slot_symbol3.c_str());
     }
-    printf("\n\033[%dJ", 0);
+    //printf("\n\033[%dJ", 0);
 }
 
 struct llama_server_context
@@ -389,6 +389,7 @@ struct llama_server_context
     bool clean_kv_cache     = true;
     bool all_slots_are_idle = false;
     bool add_bos_token      = true;
+    bool skvgraphics        = false;
 
     int32_t n_ctx;  // total context for all clients / slots
 
@@ -503,7 +504,7 @@ struct llama_server_context
         default_generation_settings_for_props = get_formatted_generation(slots.front());
         default_generation_settings_for_props["seed"] = -1;
 
-        batch = llama_batch_init(n_ctx, 0, params.n_parallel);
+        batch = llama_batch_init(n_ctx_slot, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
@@ -572,7 +573,7 @@ struct llama_server_context
             {
                 last_used = &slot;
                 t_last = slot.t_last_used;
-                LOG_TEE("Reusing earliest released slot id: %d", slot.id);
+                LOG_TEE("reusing earliest released slot id: %d\n", slot.id);
                 break;
             }
         }
@@ -1784,8 +1785,8 @@ struct llama_server_context
                     slot.i_batch   = batch.n_tokens - 1;
                 }
                 // get all the current slots into a graphics
-                // but I think this only gets run once at initialisation
-                kvgraphics(slots, params.n_ctx);
+                // this only gets run once at initialisation
+                // kvgraphics(slots, params.n_ctx);
             }
         }
 
@@ -1912,9 +1913,14 @@ struct llama_server_context
 
                 slot.i_batch = -1;
             }
-            // this should graph every cycle
-            kvgraphics(slots, params.n_ctx);
+            // this should graph every cycle and so shows each token added to the cache; very slow
+            // kvgraphics(slots, params.n_ctx);
         }
+
+        // we are still inside llama_server_context so we can use an unqualified parameter
+        if (skvgraphics) {
+            kvgraphics(slots, params.n_ctx);
+            }
         return true;
     }
 
@@ -2001,7 +2007,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
 }
 
 static void server_params_parse(int argc, char **argv, server_params &sparams,
-                                gpt_params &params, llama_server_context& llama)
+                                gpt_params &params, llama_server_context &llama)
 {
     gpt_params default_params;
     server_params default_sparams;
@@ -2219,6 +2225,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.n_batch = std::stoi(argv[i]);
             params.n_batch = std::min(512, params.n_batch);
+        }
+                else if (arg == "-skvg" || arg == "--show-graphics")
+        {
+            if (i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            llama.skvgraphics = true;
         }
         else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers")
         {
