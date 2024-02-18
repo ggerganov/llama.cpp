@@ -5,14 +5,15 @@ import json
 from time import sleep
 
 def print_dict(data):
-    for k, v in data.items():
-        if isinstance(v, dict):
-            print_dict(v)
-        elif isinstance(v, list):
-            for entry in v:
-                print_dict(entry)
-        elif k == "content":          
-            print(f"Key: {k:>30}: {v}")
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, dict):
+                print_dict(v)
+    elif isinstance(v, list):
+        for entry in v:
+            print_dict(entry)
+    elif k == "content":          
+        print(f"Key: {k:>30}: {v}")
     return
 
 def print_response(text):
@@ -24,7 +25,7 @@ def make_empty_bar(num_requests):
         bar.append("\u2589")
     bar = ' '.join(bar)
     bar = bar.replace(' ','')
-    print(f"Bar is now {bar}.")
+    print(f"Bar is now {bar}.\n")
     return bar
 
 def make_progress_bar(bar, count, num_requests):
@@ -32,9 +33,9 @@ def make_progress_bar(bar, count, num_requests):
     stride2 = len("\u23F1")
     for i in range(num_requests):
         if i == count:
-            print(f"Bar position {i} is {bar[i]}")
+            # print(f"Bar position {i} is {bar[i]}\n")
             bar = bar[:i*stride1] + "\u23F1" + bar[i*stride1 + stride2:]
-    print(f"Bar is now {bar}")
+    print(f"Bar is now {bar}\n")
     return bar
 
 def send_request(q, question, event, count, num_requests):
@@ -49,9 +50,16 @@ def send_request(q, question, event, count, num_requests):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code in [200,300]:
             print(f"Current Queue Size: {q.qsize()}; processing request {count} / {num_requests}\n")
-            print(f"Status Code for {question}: {response.status_code}")
+            print(f"Status Code for {question}: {response.status_code}\n")
             print(f"Response to {question}:\n")
-            print_dict(json.loads(response.text))
+            if isinstance(response.text, str):
+                data = json.loads(response.text)
+                if isinstance(data, dict):
+                    print_dict(data)
+                elif isinstance(data, str):
+                    print(data)
+                else:
+                    print("\nServer returned data of wrong type.\n")
             # put the response text in the queue
             q.put(response.text)
             if not q.empty():
