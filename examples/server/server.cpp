@@ -41,6 +41,7 @@ struct server_params
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
+    bool slots_endpoint = true;
 };
 
 bool server_verbose = false;
@@ -1926,6 +1927,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable             disables logging to a file.\n");
+    printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
     printf("\n");
     printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
@@ -2374,6 +2376,10 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             log_set_target(stdout);
             LOG_INFO("logging to file is disabled.", {});
         }
+        else if (arg == "--slots-endpoint-disable")
+        {
+            sparams.slots_endpoint = false;
+        }
         else if (arg == "--chat-template")
         {
             if (++i >= argc)
@@ -2618,6 +2624,32 @@ int main(int argc, char **argv)
                 break;
         }
     });
+
+    if (sparams.slots_endpoint) {
+        svr.Get("/slots", [&](const httplib::Request&, httplib::Response& res) {
+            json slots;
+            for (llama_client_slot & slot : llama.slots) {
+                json slot_data = llama.get_formated_generation(slot);
+                slot_data["id"] = slot.id;
+                slot_data["task_id"] = slot.task_id;
+                slot_data["state"] = slot.state;
+                slot_data["prompt"] = slot.prompt;
+                slot_data["next_token"] = {
+                        {"has_next_token", slot.has_next_token},
+                        {"n_remain", slot.n_remaining},
+                        {"num_tokens_predicted", slot.n_decoded},
+                        {"stopped_eos", slot.stopped_eos},
+                        {"stopped_word", slot.stopped_word},
+                        {"stopped_limit", slot.stopped_limit},
+                        {"stopping_word", slot.stopping_word},
+                };
+
+                slots.push_back(slot_data);
+            }
+            res.set_content(slots.dump(), "application/json");
+            res.status = 200; // HTTP OK
+        });
+    }
 
     svr.set_logger(log_server_request);
 

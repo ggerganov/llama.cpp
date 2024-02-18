@@ -40,6 +40,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `--grp-attn-n`: Set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
 - `-n, --n-predict`: Set the maximum tokens to predict (default: -1)
+- `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
 
 ## Build
 
@@ -380,6 +381,69 @@ Notice that each `probs` is an array of length `n_probs`.
             "encoding_format": "float"
     }'
     ```
+
+- **GET** `/slots`: Returns the current slots processing state. Can be disabled with `--slots-endpoint-disable`.
+
+### Result JSON
+
+```json
+[
+    {
+        "dynatemp_exponent": 1.0,
+        "dynatemp_range": 0.0,
+        "frequency_penalty": 0.0,
+        "grammar": "",
+        "id": 0,
+        "ignore_eos": false,
+        "logit_bias": [],
+        "min_p": 0.05000000074505806,
+        "mirostat": 0,
+        "mirostat_eta": 0.10000000149011612,
+        "mirostat_tau": 5.0,
+        "model": "llama-2-7b-32k-instruct.Q2_K.gguf",
+        "n_ctx": 2048,
+        "n_keep": 0,
+        "n_predict": 100000,
+        "n_probs": 0,
+        "next_token": {
+            "has_next_token": true,
+            "n_remain": -1,
+            "num_tokens_predicted": 0,
+            "stopped_eos": false,
+            "stopped_limit": false,
+            "stopped_word": false,
+            "stopping_word": ""
+        },
+        "penalize_nl": true,
+        "penalty_prompt_tokens": [],
+        "presence_penalty": 0.0,
+        "prompt": "Say hello to llama.cpp",
+        "repeat_last_n": 64,
+        "repeat_penalty": 1.100000023841858,
+        "samplers": [
+            "top_k",
+            "tfs_z",
+            "typical_p",
+            "top_p",
+            "min_p",
+            "temperature"
+        ],
+        "seed": 42,
+        "state": 1,
+        "stop": [
+            "\n"
+        ],
+        "stream": false,
+        "task_id": 0,
+        "temperature": 0.0,
+        "tfs_z": 1.0,
+        "top_k": 40,
+        "top_p": 0.949999988079071,
+        "typical_p": 1.0,
+        "use_penalty_prompt_tokens": false
+    }
+]
+```
 
 ## More examples
 
