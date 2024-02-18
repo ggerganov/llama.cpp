@@ -3192,7 +3192,7 @@ int main(int argc, char **argv)
 
     // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
     //     "Bus error: 10" - this is on macOS, it does not crash on Linux
-    //std::thread t2([&]()
+    // std::thread t2([&]() {
     /*{
         bool running = true;
         while (running)
