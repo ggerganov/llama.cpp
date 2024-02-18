@@ -1,0 +1,70 @@
+# Server test scenario
+name: Server Integration Tests
+
+# FIXME put only necessary triggers
+on:
+  push:
+    branches:
+      - master
+      - test/server-add-ci-test # FIXME remove
+    paths: ['.github/workflows/server-test.yml', '**/CMakeLists.txt', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', 'examples/server/**.*']
+
+jobs:
+  ubuntu-latest-cmake:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release -j $(nproc)
+
+      - name: Tests dependencies
+        id: test_dependencies
+        run: |
+          pip install -r examples/server/tests/requirements.txt
+
+      - name: Download test model
+        id: download_model
+        run: |
+          ./scripts/hf.sh --repo TheBloke/Tinyllama-2-1b-miniguanaco-GGUF --file tinyllama-2-1b-miniguanaco.Q2_K.gguf
+
+      - name: Server Integration Tests
+        id: server_integration_test
+        run: |
+          ./build/bin/server \
+            -m tinyllama-2-1b-miniguanaco.Q2_K.gguf \
+            --ctx-size 512 \
+            --parallel 4 \
+            --n-predict 512 \
+            --batch-size 128 \
+            --threads 4 \
+            --threads-batch 128 \
+            --alias phi-2 \
+            --embedding \
+            --cont-batching &
+          sh -c '\
+            max_attempts=30; \
+            attempts=${max_attempts}; \
+            echo "waiting for server to be ready..."; \
+            until curl --silent --show-error --fail "http://localhost:8080/health" | jq -r '.status' | grep ok; do \
+              attempts=$(( attempts - 1)); \
+              [ "${attempts}" -eq 0 ] && { echo "Server did not startup" >&2; exit 1; }; \
+              sleep $(( (max_attempts - attempts) * 2 )); \
+            done;'
+          cd examples/server/tests
+          behave
+          
