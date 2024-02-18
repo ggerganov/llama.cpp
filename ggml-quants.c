@@ -1837,9 +1837,9 @@ static void quantize_row_q2_K_impl(const float * restrict x, block_q2_K * restri
         float sigma2 = sumx2/QK_K;
         for (int j = 0; j < QK_K/16; ++j) {
             const float * restrict qw = quant_weights + QK_K * i + 16*j;
-            for (int l = 0; l < 16; ++l) weight[l] = qw[l] * sqrtf(sigma2 + x[16*j + l]*x[16*j + l]);
-            for (int l = 0; l < 16; ++l) sw[j] += weight[l];
-            scales[j] = make_qkx3_quants(16, 3, x + 16*j, weight, L + 16*j, &mins[j], Laux, -0.9f, 0.05f, 36, false);
+            for (int l = 0; l < QK_K/16; ++l) weight[l] = qw[l] * sqrtf(sigma2 + x[16*j + l]*x[16*j + l]);
+            for (int l = 0; l < QK_K/16; ++l) sw[j] += weight[l];
+            scales[j] = make_qkx3_quants(QK_K/16, 3, x + 16*j, weight, L + 16*j, &mins[j], Laux, -0.9f, 0.05f, 36, false);
         }
 
         float dm  = make_qp_quants(QK_K/16, 15, scales, Ls, sw);
