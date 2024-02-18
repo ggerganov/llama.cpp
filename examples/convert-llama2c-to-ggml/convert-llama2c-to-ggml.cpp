@@ -226,7 +226,7 @@ struct llama_vocab {
 
 struct my_llama_hparams {
     uint32_t n_vocab = 32000;
-    uint32_t n_ctx   = 512;   // this is provided as user input?
+    uint32_t kv_size   = 512;   // this is provided as user input?
     uint32_t n_embd  = 4096;
     uint32_t n_ff    = 11008;
     uint32_t n_mult  = 4;
@@ -326,7 +326,7 @@ struct train_params {
 
 static void print_params(struct my_llama_hparams * params) {
     printf("%s: n_vocab: %u\n", __func__, params->n_vocab);
-    printf("%s: n_ctx:   %u\n", __func__, params->n_ctx);
+    printf("%s: kv_size: %u\n", __func__, params->kv_size);
     printf("%s: n_embd:  %u\n", __func__, params->n_embd);
     printf("%s: n_mult:  %u\n", __func__, params->n_mult);
     printf("%s: n_head:  %u\n", __func__, params->n_head);
@@ -732,7 +732,7 @@ static void save_as_llama_model(
     gguf_set_val_u32(ctx, KV_TOKENIZER_SEP_ID, -1);
     gguf_set_val_u32(ctx, KV_TOKENIZER_PAD_ID, -1);
 
-    gguf_set_val_u32(ctx, KV_CONTEXT_LENGTH, model->hparams.n_ctx);
+    gguf_set_val_u32(ctx, KV_CONTEXT_LENGTH, model->hparams.kv_size);
     gguf_set_val_u32(ctx, KV_EMBEDDING_LENGTH, model->hparams.n_embd);
     gguf_set_val_u32(ctx, KV_FEED_FORWARD_LENGTH, model->hparams.n_ff);
     gguf_set_val_u32(ctx, KV_ATTENTION_HEAD_COUNT, model->hparams.n_head);
@@ -937,7 +937,7 @@ int main(int argc, char ** argv) {
 
     struct my_llama_model model;
     model.hparams.n_vocab = config.vocab_size; //llama_n_vocab(lctx);
-    model.hparams.n_ctx   = params.n_ctx;
+    model.hparams.kv_size = params.n_ctx;
     model.hparams.n_embd  = config.dim; //params.n_embd;
     model.hparams.n_ff    = config.hidden_dim;
     model.hparams.n_mult  = 32;//params.n_mult;

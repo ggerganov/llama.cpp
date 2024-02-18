@@ -27,9 +27,9 @@ SESSION_SIZE_MSG_PATTERN='main: session file matches [[:digit:]]+ / [[:digit:]]+
 SAMPLE_TIME_MSG_PATTERN='sample time =[[:space:]]+[[:digit:]]+.[[:digit:]]+ ms /[[:space:]]+[[:digit:]]+'
 SED_DELETE_MESSAGES="/^(${USER_NAME}:|${AI_NAME}:|\\.\\.\\.)/,\$d"
 
-CTX_SIZE=2048
-CTX_ROTATE_POINT=$((CTX_SIZE * 3 / 5)) # REVIEW
-OPTS=(--model "$MODEL" --ctx_size "$CTX_SIZE" --repeat_last_n 256 "$@")
+KV_SIZE=2048
+KV_ROTATE_POINT=$((KV_SIZE * 3 / 5)) # REVIEW
+OPTS=(--model "$MODEL" --kv_size "$KV_SIZE" --repeat_last_n 256 "$@")
 
 # An unbuffered `tail -c+N`
 skip_bytes() {
@@ -84,7 +84,7 @@ n_tokens=0
 
 while read -e line; do
     # Limit generation to remaining context, with a buffer and estimating 2 chars/token for input
-    n_predict=$((CTX_SIZE - n_tokens - ${#line} / 2 - 32))
+    n_predict=$((KV_SIZE - n_tokens - ${#line} / 2 - 32))
 
     # Swap prompts when we're about to run out of context
     if ((n_predict <= 0)); then
@@ -97,11 +97,11 @@ while read -e line; do
         cp "$PROMPT_CACHE_FILE" "$NEXT_PROMPT_CACHE"
 
         n_tokens=0
-        n_predict=$((CTX_SIZE / 2))
+        n_predict=$((KV_SIZE / 2))
     fi
 
     echo " ${line}" >>"$CUR_PROMPT_FILE"
-    if ((n_tokens > CTX_ROTATE_POINT)); then
+    if ((n_tokens > KV_ROTATE_POINT)); then
         echo " ${line}" >>"$NEXT_PROMPT_FILE"
     fi
 
@@ -139,7 +139,7 @@ while read -e line; do
 
     n_tokens=$(($(cut -d/ -f2 <<<"$session_size_msg") + $(cut -d/ -f2 <<<"$sample_time_msg")))
 
-    if ((n_tokens > CTX_ROTATE_POINT)); then
+    if ((n_tokens > KV_ROTATE_POINT)); then
         tail -c+$((n_prompt_len_pre + 1)) "$CUR_PROMPT_FILE" >>"$NEXT_PROMPT_FILE"
     fi
 

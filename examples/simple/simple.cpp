@@ -52,7 +52,7 @@ int main(int argc, char ** argv) {
     llama_context_params ctx_params = llama_context_default_params();
 
     ctx_params.seed  = 1234;
-    ctx_params.n_ctx = 2048;
+    ctx_params.kv_size = 2048;
     ctx_params.n_threads = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
 
@@ -68,15 +68,15 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> tokens_list;
     tokens_list = ::llama_tokenize(ctx, params.prompt, true);
 
-    const int n_ctx    = llama_n_ctx(ctx);
+    const int kv_size  = llama_kv_size(ctx);
     const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size());
 
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, n_kv_req);
+    LOG_TEE("\n%s: n_len = %d, kv_size = %d, n_kv_req = %d\n", __func__, n_len, kv_size, n_kv_req);
 
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
-    if (n_kv_req > n_ctx) {
-        LOG_TEE("%s: error: n_kv_req > n_ctx, the required KV cache size is not big enough\n", __func__);
-        LOG_TEE("%s:        either reduce n_len or increase n_ctx\n", __func__);
+    if (n_kv_req > kv_size) {
+        LOG_TEE("%s: error: n_kv_req > kv_size, the required KV cache size is not big enough\n", __func__);
+        LOG_TEE("%s:        either reduce n_len or increase kv_size\n", __func__);
         return 1;
     }
 

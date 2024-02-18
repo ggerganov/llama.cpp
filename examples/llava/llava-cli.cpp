@@ -230,7 +230,7 @@ static struct llava_context * llava_init(gpt_params * params) {
     }
 
     llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
-    ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
+    ctx_params.kv_size              = params->kv_size < 2048 ? 2048 : params->kv_size; // we need a longer context size to process image embeddings
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
 

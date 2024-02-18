@@ -15,7 +15,7 @@ rem Adjust to the number of CPU cores you want to use.
 rem if not defined N_THREAD set "N_THREAD=8"
 rem Number of tokens to predict (made it larger than default because we want a long interaction)
 if not defined N_PREDICTS set "N_PREDICTS=2048"
-if not defined GEN_OPTIONS set "GEN_OPTIONS=--ctx_size 2048 --temp 0.7 --top_k 40 --top_p 0.5 --repeat_last_n 256 --batch_size 1024 --repeat_penalty 1.17647"
+if not defined GEN_OPTIONS set "GEN_OPTIONS=--kv_size 2048 --temp 0.7 --top_k 40 --top_p 0.5 --repeat_last_n 256 --batch_size 1024 --repeat_penalty 1.17647"
 
 rem Default main script paths
 set "DEFAULT_MAIN_SCRIPT_PATHS=main.exe build\bin\main.exe"

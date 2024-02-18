@@ -9,7 +9,7 @@ cd ..
 
 ./main -m models/available/Llama2/7B/llama-2-7b.ggmlv3.q4_0.bin \
        --color \
-       --ctx_size 2048 \
+       --kv_size 2048 \
        -n -1 \
        -ins -b 256 \
        --top_k 10000 \

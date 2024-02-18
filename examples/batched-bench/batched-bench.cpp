@@ -104,7 +104,7 @@ int main(int argc, char ** argv) {
     llama_context_params ctx_params = llama_context_default_params();
 
     ctx_params.seed      = 1234;
-    ctx_params.n_ctx     = n_kv_max;
+    ctx_params.kv_size   = n_kv_max;
     ctx_params.n_batch   = 512;
     ctx_params.mul_mat_q = mmq;
 

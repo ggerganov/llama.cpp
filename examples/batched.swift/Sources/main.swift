@@ -38,7 +38,7 @@ let n_kv_req = UInt32(tokens.count) + UInt32((n_len - Int(tokens.count)) * n_par
 
 var context_params = llama_context_default_params()
 context_params.seed = 1234
-context_params.n_ctx = n_kv_req
+context_params.kv_size = n_kv_req
 context_params.n_batch = UInt32(max(n_len, n_parallel))
 context_params.n_threads = 8
 context_params.n_threads_batch = 8
@@ -53,12 +53,12 @@ defer {
     llama_free(context)
 }
 
-let n_ctx = llama_n_ctx(context)
+let kv_size = llama_kv_size(context)
 
-print("\nn_len = \(n_len), n_ctx = \(n_ctx), n_batch = \(context_params.n_batch), n_parallel = \(n_parallel), n_kv_req = \(n_kv_req)\n")
+print("\nn_len = \(n_len), kv_size = \(kv_size), n_batch = \(context_params.n_batch), n_parallel = \(n_parallel), n_kv_req = \(n_kv_req)\n")
 
-if n_kv_req > n_ctx {
-    print("error: n_kv_req (%d) > n_ctx, the required KV cache size is not big enough\n", n_kv_req)
+if n_kv_req > kv_size {
+    print("error: n_kv_req (%d) > kv_size, the required KV cache size is not big enough\n", n_kv_req)
     exit(1)
 }
 

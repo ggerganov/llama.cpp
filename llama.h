@@ -217,7 +217,7 @@ extern "C" {
 
     struct llama_context_params {
         uint32_t seed;              // RNG seed, -1 for random
-        uint32_t n_ctx;             // text context, 0 = from model
+        uint32_t kv_size;           // KV Cache size
         uint32_t n_batch;           // prompt processing maximum batch size
         uint32_t n_threads;         // number of threads to use for generation
         uint32_t n_threads_batch;   // number of threads to use for batch processing
@@ -347,7 +347,7 @@ extern "C" {
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
-    LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
+    LLAMA_API uint32_t llama_kv_size    (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);

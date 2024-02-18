@@ -514,7 +514,7 @@ struct cmd_params_instance {
     llama_context_params to_llama_cparams() const {
         llama_context_params cparams = llama_context_default_params();
 
-        cparams.n_ctx = n_prompt + n_gen;
+        cparams.kv_size = n_prompt + n_gen;
         cparams.n_batch = n_batch;
         cparams.type_k = type_k;
         cparams.type_v = type_v;

@@ -7,7 +7,7 @@ The example demonstrates batched generation from a given prompt
 
 ...
 
-main: n_len = 32, n_ctx = 2048, n_parallel = 4, n_kv_req = 113
+main: n_len = 32, kv_size = 2048, n_parallel = 4, n_kv_req = 113
 
  Hello my name is
 

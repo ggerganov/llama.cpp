@@ -139,8 +139,8 @@ int main(int argc, char ** argv)
 
     std::vector<llama_token> tokens_list = llama_tokenize(ctx, params.prompt, true);
 
-    const size_t max_context_size     = llama_n_ctx( ctx );
-    const size_t max_tokens_list_size = max_context_size - 4 ;
+    const size_t max_kv_size          = llama_kv_size(ctx);
+    const size_t max_tokens_list_size = max_kv_size - 4 ;
 
     if (tokens_list.size() > max_tokens_list_size)
     {

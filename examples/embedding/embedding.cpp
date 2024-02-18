@@ -88,11 +88,11 @@ int main(int argc, char ** argv) {
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
-    const int n_ctx = llama_n_ctx(ctx);
+    const int kv_size = llama_kv_size(ctx);
 
-    if (n_ctx > n_ctx_train) {
+    if (kv_size > n_ctx_train) {
         fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
-                __func__, n_ctx_train, n_ctx);
+                __func__, n_ctx_train, kv_size);
     }
 
     // print system information
@@ -106,7 +106,7 @@ int main(int argc, char ** argv) {
 
     // max batch size
     const uint64_t n_batch = params.n_batch;
-    GGML_ASSERT(params.n_batch == params.n_ctx);
+    GGML_ASSERT(params.n_batch == params.kv_size);
 
     // tokenize the prompts and trim
     std::vector<std::vector<int32_t>> inputs;

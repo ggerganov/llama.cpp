@@ -258,11 +258,19 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             }
             sparams.top_k = std::stoi(argv[i]);
         } else if (arg == "-c" || arg == "--ctx-size") {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.kv_size = std::stoi(argv[i]);
+            fprintf(stderr, "warning: -c,--ctx-size option is deprecated, use --kv-size instead");
+        } else if (arg == "-kv" || arg == "--kv-size" || arg == "--kv_size") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.n_ctx = std::stoi(argv[i]);
+            params.kv_size = std::stoi(argv[i]);
         } else if (arg == "--grp-attn-n" || arg == "-gan") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -962,7 +970,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -bf FNAME, --binary-file FNAME\n");
     printf("                        binary file containing multiple choice tasks.\n");
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
-    printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
+    printf("  -kv N, --kv-size N    Specify the total size of the KV cache (default: %d)\n", params.kv_size);
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --samplers            samplers that will be used for generation in the order, separated by \';\'\n");
     printf("                        (default: %s)\n", sampler_type_names.c_str());
@@ -972,7 +980,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --min-p N             min-p sampling (default: %.1f, 0.0 = disabled)\n", (double)sparams.min_p);
     printf("  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)sparams.tfs_z);
     printf("  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)sparams.typical_p);
-    printf("  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", sparams.penalty_last_n);
+    printf("  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = kv_size)\n", sparams.penalty_last_n);
     printf("  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)sparams.penalty_repeat);
     printf("  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_present);
     printf("  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_freq);
@@ -1269,7 +1277,7 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto cparams = llama_context_default_params();
 
-    cparams.n_ctx             = params.n_ctx;
+    cparams.kv_size           = params.kv_size;
     cparams.n_batch           = params.n_batch;
     cparams.n_threads         = params.n_threads;
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
@@ -1658,7 +1666,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "cfg_scale: %f # default: 1.0\n", sparams.cfg_scale);
     fprintf(stream, "chunks: %d # default: -1 (unlimited)\n", params.n_chunks);
     fprintf(stream, "color: %s # default: false\n", params.use_color ? "true" : "false");
-    fprintf(stream, "ctx_size: %d # default: 512\n", params.n_ctx);
+    fprintf(stream, "kv_size: %d # default: 512\n", params.kv_size);
     fprintf(stream, "escape: %s # default: false\n", params.escape ? "true" : "false");
     fprintf(stream, "file: # never logged, see prompt instead. Can still be specified for input.\n");
     fprintf(stream, "frequency_penalty: %f # default: 0.0 \n", sparams.penalty_freq);

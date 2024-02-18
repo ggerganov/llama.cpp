@@ -186,7 +186,7 @@ llm_load_print_meta: vocab type     = SPM
 llm_load_print_meta: n_vocab        = 32000
 llm_load_print_meta: n_merges       = 0
 llm_load_print_meta: n_ctx_train    = 4096
-llm_load_print_meta: n_ctx          = 512
+llm_load_print_meta: kv_size        = 512
 llm_load_print_meta: n_embd         = 5120
 llm_load_print_meta: n_head         = 40
 llm_load_print_meta: n_head_kv      = 40
@@ -214,7 +214,7 @@ llama_new_context_with_model: compute buffer total size =   75.41 MB
 
 system_info: n_threads = 16 / 24 | AVX = 0 | AVX2 = 0 | AVX512 = 0 | AVX512_VBMI = 0 | AVX512_VNNI = 0 | FMA = 0 | NEON = 1 | ARM_FMA = 1 | F16C = 0 | FP16_VA = 1 | WASM_SIMD = 0 | BLAS = 1 | SSE3 = 0 | VSX = 0 |
 sampling: repeat_last_n = 64, repeat_penalty = 1.100000, presence_penalty = 0.000000, frequency_penalty = 0.000000, top_k = 40, tfs_z = 1.000000, top_p = 0.950000, typical_p = 1.000000, temp = 0.800000, mirostat = 0, mirostat_lr = 0.100000, mirostat_ent = 5.000000
-generate: n_ctx = 512, n_batch = 512, n_predict = 400, n_keep = 0
+generate: kv_size = 512, n_batch = 512, n_predict = 400, n_keep = 0
 
 
  Building a website can be done in 10 simple steps:

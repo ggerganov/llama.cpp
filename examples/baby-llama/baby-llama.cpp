@@ -532,16 +532,16 @@ static struct ggml_tensor * forward(
                 // Vcur shape [n_embd, N, 1, 1]
                 struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wv, cur), n_embd, N)));
 
-                // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
-                // kv_self.v shape [n_embd * n_ctx * n_layer, 1]
+                // kv_self.k shape [n_embd * kv_size * n_layer, 1]
+                // kv_self.v shape [n_embd * kv_size * n_layer, 1]
                 // k         shape [n_embd * N, 1]   == kv_self.k[:,n_past:n_past+N,il,0]
                 // v         shape [N, n_embd, 1, 1] == kv_self.v[:,n_past:n_past+N,il,0]
 
                 /* {
-                    struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
+                    struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*kv_size + n_past));
                     struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
-                            (   n_ctx)*ggml_element_size(kv_self.v),
-                            (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
+                            (   kv_size)*ggml_element_size(kv_self.v),
+                            (il*kv_size)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
 
                     // important: storing RoPE-ed version of K in the KV cache!
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -560,7 +560,7 @@ static struct ggml_tensor * forward(
                         Qcur,
                         0, 2, 1, 3);
 
-            // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
+            // kv_self.k shape [n_embd * kv_size * n_layer, 1]
             // K shape [n_embd/n_head, n_past + N, n_head, 1]
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
@@ -780,16 +780,16 @@ static struct ggml_tensor * forward_batch(
 
                 assert_shape_3d(Vcur, N, n_embd, n_batch);
 
-                // kv_self.k shape [n_embd * n_ctx * n_batch * n_layer]
-                // kv_self.v shape [n_ctx * n_embd * n_batch * n_layer]
+                // kv_self.k shape [n_embd * kv_size * n_batch * n_layer]
+                // kv_self.v shape [kv_size * n_embd * n_batch * n_layer]
                 // k         shape [n_embd * N, n_batch]   == kv_self.k[:,n_past:n_past+N,:,il]
                 // v         shape [N, n_embd, n_batch, 1] == kv_self.v[:,n_past:n_past+N,:,il]
 
                 /* {
-                    struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
+                    struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*kv_size + n_past));
                     struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
-                            (   n_ctx)*ggml_element_size(kv_self.v),
-                            (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
+                            (   kv_size)*ggml_element_size(kv_self.v),
+                            (il*kv_size)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
 
                     // important: storing RoPE-ed version of K in the KV cache!
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -817,7 +817,7 @@ static struct ggml_tensor * forward_batch(
                         0, 2, 1, 3);
             assert_shape_4d(Q, n_embd/n_head, N, n_head, n_batch);
 
-            // kv_self.k shape [n_embd * n_ctx * n_batch * n_layer]
+            // kv_self.k shape [n_embd * kv_size * n_batch * n_layer]
             // K shape [n_embd/n_head, n_past + N, n_head, n_batch]
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
@@ -855,7 +855,7 @@ static struct ggml_tensor * forward_batch(
             assert_shape_4d(KQ_soft_max, n_past + N, N, n_head, n_batch);
 
             // split cached V into n_head heads
-            // kv_self.v shape [n_ctx * n_embd * n_batch * n_layer]
+            // kv_self.v shape [kv_size * n_embd * n_batch * n_layer]
             // V shape [n_past + N, n_embd/n_head, n_head, n_batch] == kv_self.v[:(n_past+N),:,:,il]
             struct ggml_tensor * V =
                 ggml_view_4d(ctx0, vc,
@@ -1082,16 +1082,16 @@ static struct ggml_tensor * forward_lora(
                                                                 cur)),
                                                         n_embd, N)));
 
-                // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
-                // kv_self.v shape [n_embd * n_ctx * n_layer, 1]
+                // kv_self.k shape [n_embd * kv_size * n_layer, 1]
+                // kv_self.v shape [n_embd * kv_size * n_layer, 1]
                 // k         shape [n_embd * N, 1]   == kv_self.k[:,n_past:n_past+N,il,0]
                 // v         shape [N, n_embd, 1, 1] == kv_self.v[:,n_past:n_past+N,il,0]
 
                 /* {
-                    struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + n_past));
+                    struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, N*n_embd, (ggml_element_size(kv_self.k)*n_embd)*(il*kv_size + n_past));
                     struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, N, n_embd,
-                            (   n_ctx)*ggml_element_size(kv_self.v),
-                            (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
+                            (   kv_size)*ggml_element_size(kv_self.v),
+                            (il*kv_size)*ggml_element_size(kv_self.v)*n_embd + n_past*ggml_element_size(kv_self.v));
 
                     // important: storing RoPE-ed version of K in the KV cache!
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -1110,7 +1110,7 @@ static struct ggml_tensor * forward_lora(
                         Qcur,
                         0, 2, 1, 3);
 
-            // kv_self.k shape [n_embd * n_ctx * n_layer, 1]
+            // kv_self.k shape [n_embd * kv_size * n_layer, 1]
             // K shape [n_embd/n_head, n_past + N, n_head, 1]
             struct ggml_tensor * K =
                 ggml_permute(ctx0,
@@ -1470,7 +1470,7 @@ int main(int argc, char ** argv) {
 /*
     struct llama_model_lora model_lora;
     // model.hparams.n_vocab = 6;
-    // model.hparams.n_ctx   = 64;
+    // model.hparams.kv_size = 64;
     // model.hparams.n_embd  = 128;
     // model.hparams.n_mult  = 2;
     // model.hparams.n_head  = 8;
@@ -1478,7 +1478,7 @@ int main(int argc, char ** argv) {
     // model.hparams.n_rot   = model.hparams.n_embd / model.hparams.n_head;
 
     model_lora.hparams.n_vocab = 16;
-    model_lora.hparams.n_ctx   = 32;
+    model_lora.hparams.kv_size = 32;
     model_lora.hparams.n_embd  = 256;
     model_lora.hparams.n_mult  = 2;
     model_lora.hparams.n_head  = 16;
