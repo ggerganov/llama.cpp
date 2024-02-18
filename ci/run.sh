@@ -33,7 +33,7 @@ sd=`dirname $0`
 cd $sd/../
 SRC=`pwd`
 
-CMAKE_EXTRA=""
+CMAKE_EXTRA="-DLLAMA_FATAL_WARNINGS=ON"
 
 if [ ! -z ${GG_BUILD_METAL} ]; then
     CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_METAL_SHADER_DEBUG=ON"
