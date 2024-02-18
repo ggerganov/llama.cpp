@@ -720,6 +720,7 @@ extern "C" {
 
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
     /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
+    /// @param penalty_threshold Only apply penalties to tokens whose relative frequency in the penalty context is less than or equal to this value.
     LLAMA_API void llama_sample_repetition_penalties(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
@@ -727,7 +728,8 @@ extern "C" {
                           size_t   penalty_last_n,
                            float   penalty_repeat,
                            float   penalty_freq,
-                           float   penalty_present);
+                           float   penalty_present,
+                           float   penalty_threshold);
 
     /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
     /// @param logits Logits extracted from the original generation context.

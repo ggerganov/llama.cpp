@@ -182,15 +182,18 @@ Example usage: `--temp 0.5`
 
 -   `--repeat-penalty N`: Control the repetition of token sequences in the generated text (default: 1.1).
 -   `--repeat-last-n N`: Last n tokens to consider for penalizing repetition (default: 64, 0 = disabled, -1 = ctx-size).
+-   `--penalty-threshold N`: Only apply penalties to tokens whose relative frequency in the penalty context is less than or equal to this value (default: 1.0, 1.0 = disabled).
 -   `--no-penalize-nl`: Disable penalization for newline tokens when applying the repeat penalty.
 
 The `repeat-penalty` option helps prevent the model from generating repetitive or monotonous text. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 0.9) will be more lenient. The default value is 1.1.
 
 The `repeat-last-n` option controls the number of tokens in the history to consider for penalizing repetition. A larger value will look further back in the generated text to prevent repetitions, while a smaller value will only consider recent tokens. A value of 0 disables the penalty, and a value of -1 sets the number of tokens considered equal to the context size (`ctx-size`).
 
+The `penalty-threshold` option disables penalties for very common tokens. This is designed to prevent penalizing tokens that are essential to the structure of the text, such as spaces and punctuation, very common words such as "the", names of participants in chats, brackets and tags in code, etc. For example, a value of 0.1 disables penalties for tokens that make up more than 10% of all tokens in the input.
+
 Use the `--no-penalize-nl` option to disable newline penalization when applying the repeat penalty. This option is particularly useful for generating chat conversations, dialogues, code, poetry, or any text where newline tokens play a significant role in structure and formatting. Disabling newline penalization helps maintain the natural flow and intended formatting in these specific use cases.
 
-Example usage: `--repeat-penalty 1.15 --repeat-last-n 128 --no-penalize-nl`
+Example usage: `--repeat-penalty 1.15 --repeat-last-n 128 --penalty-threshold 0.1 --no-penalize-nl`
 
 ### Top-K Sampling
 

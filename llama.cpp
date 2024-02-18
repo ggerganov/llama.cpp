@@ -9634,8 +9634,9 @@ void llama_sample_repetition_penalties(
                           size_t   penalty_last_n,
                            float   penalty_repeat,
                            float   penalty_freq,
-                           float   penalty_present) {
-    if (penalty_last_n == 0 || (penalty_repeat == 1.0f && penalty_freq == 0.0f && penalty_present == 0.0f)) {
+                           float   penalty_present,
+                           float   penalty_threshold) {
+    if (penalty_last_n == 0 || penalty_threshold == 0.0f || (penalty_repeat == 1.0f && penalty_freq == 0.0f && penalty_present == 0.0f)) {
         return;
     }
 
@@ -9655,6 +9656,10 @@ void llama_sample_repetition_penalties(
         }
 
         const int count = token_iter->second;
+
+        if (float(count) / float(penalty_last_n) > penalty_threshold) {
+            continue;
+        }
 
         // The academic publication that described this technique actually just only divided, but that would cause tokens with negative logits to become more likely, which is obviously wrong.
         // This is common fix for this problem, which is to multiply by the penalty instead of dividing.
