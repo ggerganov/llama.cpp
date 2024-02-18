@@ -15,8 +15,8 @@ N_THREAD="${N_THREAD:-8}"
 N_PREDICTS="${N_PREDICTS:-2048}"
 
 # Note: you can also override the generation options by specifying them on the command line:
-# For example, override the context size by doing: ./chatLLaMa --ctx_size 1024
-GEN_OPTIONS="${GEN_OPTIONS:---ctx_size 2048 --temp 0.7 --top_k 40 --top_p 0.5 --repeat_last_n 256 --batch_size 1024 --repeat_penalty 1.17647}"
+# For example, override the context size by doing: ./chatLLaMa --kv_size 1024
+GEN_OPTIONS="${GEN_OPTIONS:---kv_size 2048 --temp 0.7 --top_k 40 --top_p 0.5 --repeat_last_n 256 --batch_size 1024 --repeat_penalty 1.17647}"
 
 DATE_TIME=$(date +%H:%M)
 DATE_YEAR=$(date +%Y)

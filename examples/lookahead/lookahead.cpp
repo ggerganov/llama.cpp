@@ -73,8 +73,8 @@ int main(int argc, char ** argv) {
     inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
     all = inp;
 
-    const int max_context_size     = llama_n_ctx(ctx);
-    const int max_tokens_list_size = max_context_size - 4;
+    const int max_kv_size          = llama_kv_size(ctx);
+    const int max_tokens_list_size = max_kv_size - 4;
 
     if ((int) inp.size() > max_tokens_list_size) {
         fprintf(stderr, "%s: error: prompt too long (%d tokens, max %d)\n", __func__, (int) inp.size(), max_tokens_list_size);
@@ -117,7 +117,7 @@ int main(int argc, char ** argv) {
     // seq_id == 0           : the current input token
     // seq_id [1, W]         : tokens from the past N - 1 Jacobi iterations
     // seq_id [W + 1, W + G] : verification n-grams
-    llama_batch batch = llama_batch_init(params.n_ctx, 0, W + G + 1);
+    llama_batch batch = llama_batch_init(params.kv_size, 0, W + G + 1);
 
     // target model sampling context
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams);

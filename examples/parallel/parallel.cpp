@@ -152,7 +152,7 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "\n\n");
     fflush(stderr);
 
-    const int n_ctx = llama_n_ctx(ctx);
+    const int kv_size = llama_kv_size(ctx);
 
     std::vector<client> clients(n_clients);
     for (size_t i = 0; i < clients.size(); ++i) {
@@ -169,7 +169,7 @@ int main(int argc, char ** argv) {
 
     // the max batch size is as large as the context to handle cases where we get very long input prompt from multiple
     // users. regardless of the size, the main loop will chunk the batch into a maximum of params.n_batch tokens at a time
-    llama_batch batch = llama_batch_init(n_ctx, 0, 1);
+    llama_batch batch = llama_batch_init(kv_size, 0, 1);
 
     int32_t n_total_prompt = 0;
     int32_t n_total_gen    = 0;

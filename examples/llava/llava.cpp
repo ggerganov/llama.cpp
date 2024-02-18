@@ -103,15 +103,15 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     const size_t num_images = num_patches_width * num_patches_height + 1;
 
     // TODO: size calculation is not calculated - it's only tens of MB
-    size_t ctx_size = 0;
+    size_t kv_size = 0;
 
     {
-        ctx_size += clip_embd_nbytes(ctx_clip) * num_images * 8; // image_features
-        ctx_size += 1024*1024 * ggml_type_size(GGML_TYPE_F32);
+        kv_size += clip_embd_nbytes(ctx_clip) * num_images * 8; // image_features
+        kv_size += 1024*1024 * ggml_type_size(GGML_TYPE_F32);
     }
 
     struct ggml_init_params params {
-        /*.mem_size   =*/ ctx_size,
+        /*.mem_size   =*/ kv_size,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false, // NOTE: this should be false when using the legacy API
     };

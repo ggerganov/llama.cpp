@@ -7,11 +7,11 @@ USER_NAME="${USER_NAME:-Anon}"
 
 # Uncomment and adjust to the number of CPU cores you want to use.
 #N_THREAD="${N_THREAD:-4}"
-CTX_SIZE="${CTX_SIZE:-4096}"
+KV_SIZE="${KV_SIZE:-4096}"
 N_PREDICTS="${N_PREDICTS:-4096}"
 
 GEN_OPTIONS=(--batch_size 1024
---ctx_size "$CTX_SIZE"
+--kv_size "$KV_SIZE"
 --keep -1
 --repeat_last_n 256
 --repeat_penalty 1.17647

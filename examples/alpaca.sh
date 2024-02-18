@@ -10,7 +10,7 @@ cd ..
 ./main -m ./models/alpaca.13b.ggmlv3.q8_0.bin \
        --color \
        -f ./prompts/alpaca.txt \
-       --ctx_size 2048 \
+       --kv_size 2048 \
        -n -1 \
        -ins -b 256 \
        --top_k 10000 \

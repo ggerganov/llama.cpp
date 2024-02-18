@@ -8,7 +8,7 @@ import sys
 import yaml
 
 CLI_ARGS_MAIN_PERPLEXITY = [
-    "batch-size", "cfg-negative-prompt", "cfg-scale", "chunks", "color", "ctx-size", "escape",
+    "batch-size", "cfg-negative-prompt", "cfg-scale", "chunks", "color", "kv-size", "escape",
     "export", "file", "frequency-penalty", "grammar", "grammar-file", "hellaswag",
     "hellaswag-tasks", "ignore-eos", "in-prefix", "in-prefix-bos", "in-suffix", "instruct",
     "interactive", "interactive-first", "keep", "logdir", "logit-bias", "lora", "lora-base",
@@ -27,7 +27,7 @@ CLI_ARGS_LLAMA_BENCH = [
 ]
 
 CLI_ARGS_SERVER = [
-    "alias", "batch-size", "ctx-size", "embedding", "host", "memory-f32", "lora", "lora-base",
+    "alias", "batch-size", "kv-size", "embedding", "host", "memory-f32", "lora", "lora-base",
     "low-vram", "main-gpu", "mlock", "model", "n-gpu-layers", "n-probs", "no-mmap", "no-mul-mat-q",
     "numa", "path", "port", "rope-freq-base", "timeout", "rope-freq-scale", "tensor-split",
     "threads", "verbose"

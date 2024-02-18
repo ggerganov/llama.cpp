@@ -47,8 +47,8 @@ int main(int argc, char ** argv){
     std::vector<llama_token> inp;
     inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
 
-    const int max_context_size     = llama_n_ctx(ctx);
-    const int max_tokens_list_size = max_context_size - 4;
+    const int max_kv_size          = llama_kv_size(ctx);
+    const int max_tokens_list_size = max_kv_size - 4;
 
     if ((int) inp.size() > max_tokens_list_size) {
         fprintf(stderr, "%s: error: prompt too long (%d tokens, max %d)\n", __func__, (int) inp.size(), max_tokens_list_size);
@@ -86,7 +86,7 @@ int main(int argc, char ** argv){
 
     std::vector<llama_token> draft;
 
-    llama_batch batch_tgt = llama_batch_init(params.n_ctx, 0, 1);
+    llama_batch batch_tgt = llama_batch_init(params.kv_size, 0, 1);
 
     // debug
     struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, 1);

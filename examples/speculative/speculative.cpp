@@ -116,7 +116,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> inp;
     inp = ::llama_tokenize(ctx_tgt, params.prompt, add_bos_tgt, true);
 
-    const int max_context_size     = llama_n_ctx(ctx_tgt);
+    const int max_context_size     = llama_kv_size(ctx_tgt);
     const int max_tokens_list_size = max_context_size - 4;
 
     if ((int) inp.size() > max_tokens_list_size) {
@@ -172,8 +172,8 @@ int main(int argc, char ** argv) {
         drafts[s].ctx_sampling = llama_sampling_init(params.sparams);
     }
 
-    llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);
-    llama_batch batch_tgt = llama_batch_init(params.n_ctx, 0, n_seq_dft);
+    llama_batch batch_dft = llama_batch_init(params.kv_size, 0, 1);
+    llama_batch batch_tgt = llama_batch_init(params.kv_size, 0, n_seq_dft);
 
     const auto t_dec_start = ggml_time_us();
 

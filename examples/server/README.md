@@ -174,7 +174,7 @@ node index.js
 
     `repeat_penalty`: Control the repetition of token sequences in the generated text (default: 1.1).
 
-    `repeat_last_n`: Last n tokens to consider for penalizing repetition (default: 64, 0 = disabled, -1 = ctx-size).
+    `repeat_last_n`: Last n tokens to consider for penalizing repetition (default: 64, 0 = disabled, -1 = kv-size).
 
     `penalize_nl`: Penalize newline tokens when applying the repeat penalty (default: true).
 
@@ -239,7 +239,7 @@ Notice that each `probs` is an array of length `n_probs`.
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
-- `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
+- `generation_settings`: The provided options above excluding `prompt` but including `kv_size`, `model`
 - `model`: The path to the model loaded with `-m`
 - `prompt`: The provided `prompt`
 - `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
@@ -249,7 +249,7 @@ Notice that each `probs` is an array of length `n_probs`.
 - `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
 - `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
 - `tokens_evaluated`: Number of tokens evaluated in total from the prompt
-- `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
+- `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the KV size (`kv_size`)
 
 - **POST** `/tokenize`: Tokenize a given text.
 
@@ -404,7 +404,7 @@ Notice that each `probs` is an array of length `n_probs`.
         "mirostat_eta": 0.10000000149011612,
         "mirostat_tau": 5.0,
         "model": "llama-2-7b-32k-instruct.Q2_K.gguf",
-        "n_ctx": 2048,
+        "kv_size": 2048,
         "n_keep": 0,
         "n_predict": 100000,
         "n_probs": 0,

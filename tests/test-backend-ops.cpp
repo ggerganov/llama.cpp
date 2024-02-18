@@ -1121,21 +1121,21 @@ struct test_rope : public test_case {
     const std::array<int64_t, 4> ne;
     int n_dims;
     int mode;
-    int n_ctx;
+    int kv_size;
 
     std::string vars() override {
-        return VARS_TO_STR5(type, ne, n_dims, mode, n_ctx);
+        return VARS_TO_STR5(type, ne, n_dims, mode, kv_size);
     }
 
     test_rope(ggml_type type = GGML_TYPE_F32,
             std::array<int64_t, 4> ne = {10, 10, 10, 1},
             int n_dims = 10, int mode = 0, int n_ctx = 512)
-        : type(type), ne(ne), n_dims(n_dims), mode(mode), n_ctx(n_ctx) {}
+        : type(type), ne(ne), n_dims(n_dims), mode(mode), kv_size(n_ctx) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
         ggml_tensor * pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, ne[2]);
-        ggml_tensor * out = ggml_rope(ctx, a, pos, n_dims, mode, n_ctx);
+        ggml_tensor * out = ggml_rope(ctx, a, pos, n_dims, mode, kv_size);
         return out;
     }
 
@@ -1145,7 +1145,7 @@ struct test_rope : public test_case {
                 // pos
                 std::vector<int> data(ne[2]);
                 for (int i = 0; i < ne[2]; i++) {
-                    data[i] = rand() % n_ctx;
+                    data[i] = rand() % kv_size;
                 }
                 ggml_backend_tensor_set(t, data.data(), 0, ne[2] * sizeof(int));
             } else {
@@ -1545,7 +1545,7 @@ struct llama_hparams {
     int32_t n_tokens;
 
     // llm_build_context
-    static constexpr int32_t n_kv    = 32; // size of KV cache to consider (n_kv <= n_ctx
+    static constexpr int32_t n_kv    = 32; // size of KV cache to consider (n_kv <= kv_size
     static constexpr int32_t kv_head = 1;  // index of where we store new KV data in the cache
 
     uint32_t n_embd_gqa() const { // dimension of key embeddings across all k-v heads

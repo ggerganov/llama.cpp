@@ -68,8 +68,8 @@ actor LlamaContext {
         print("Using \(n_threads) threads")
 
         var ctx_params = llama_context_default_params()
-        ctx_params.seed  = 1234
-        ctx_params.n_ctx = 2048
+        ctx_params.seed    = 1234
+        ctx_params.kv_size = 2048
         ctx_params.n_threads       = UInt32(n_threads)
         ctx_params.n_threads_batch = UInt32(n_threads)
 
@@ -112,13 +112,13 @@ actor LlamaContext {
         tokens_list = tokenize(text: text, add_bos: true)
         temporary_invalid_cchars = []
 
-        let n_ctx = llama_n_ctx(context)
+        let kv_size = llama_kv_size(context)
         let n_kv_req = tokens_list.count + (Int(n_len) - tokens_list.count)
 
-        print("\n n_len = \(n_len), n_ctx = \(n_ctx), n_kv_req = \(n_kv_req)")
+        print("\n n_len = \(n_len), kv_size = \(kv_size), n_kv_req = \(n_kv_req)")
 
-        if n_kv_req > n_ctx {
-            print("error: n_kv_req > n_ctx, the required KV cache size is not big enough")
+        if n_kv_req > kv_size {
+            print("error: n_kv_req > kv_size, the required KV cache size is not big enough")
         }
 
         for id in tokens_list {

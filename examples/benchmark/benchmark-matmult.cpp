@@ -128,20 +128,20 @@ int main(int argc, char ** argv)  {
     // TODO: perform the bench for all types or for a user specified type
     const ggml_type qtype = GGML_TYPE_Q4_1;
 
-    size_t ctx_size = 0;
-    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
-    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
-    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizez);
-    ctx_size += ggml_row_size(qtype,         sizex*sizey);
-    ctx_size += ggml_row_size(qtype,         sizex*sizey);
-    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
-    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
-    ctx_size += 1024*1024*16;
+    size_t kv_size = 0;
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey);
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey);
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizez);
+    kv_size += ggml_row_size(qtype, sizex * sizey);
+    kv_size += ggml_row_size(qtype, sizex * sizey);
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey); // BLAS
+    kv_size += ggml_row_size(GGML_TYPE_F32, sizex * sizey); // BLAS
+    kv_size += 1024 * 1024 * 16;
 
-    printf("Allocating Memory of size %zi bytes, %zi MB\n",ctx_size, (ctx_size/1024/1024));
+    printf("Allocating Memory of size %zi bytes, %zi MB\n", kv_size, (kv_size / 1024 / 1024));
 
     struct ggml_init_params params = {
-        /*.mem_size   =*/ ctx_size,
+        /*.mem_size   =*/ kv_size,
         /*.mem_buffer =*/ NULL,
         /* no_alloc   =*/ 0
     };
