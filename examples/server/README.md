@@ -136,6 +136,7 @@ node index.js
   - `{"status": "loading model"}` if the model is still being loaded.
   - `{"status": "error"}` if the model failed to load.
   - `{"status": "ok"}` if the model is successfully loaded and the server is ready for further requests mentioned below.
+  - `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slot are currently available
 
 - **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 

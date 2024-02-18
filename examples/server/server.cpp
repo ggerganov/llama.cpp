@@ -2578,8 +2578,35 @@ int main(int argc, char **argv)
         server_state current_state = state.load();
         switch(current_state) {
             case SERVER_STATE_READY:
-                res.set_content(R"({"status": "ok"})", "application/json");
-                res.status = 200; // HTTP OK
+                if (llama.all_slots_are_idle) {
+                    res.set_content(R"({"status": "ok"})", "application/json");
+                    res.status = 200; // HTTP OK
+                } else {
+                    int available_slots = 0;
+                    int processing_slots = 0;
+                    for (llama_client_slot & slot : llama.slots) {
+                        if (slot.available()) {
+                            available_slots++;
+                        } else {
+                            processing_slots++;
+                        }
+                    }
+                    if (available_slots > 0) {
+                        json health = {
+                                {"status",           "ok"},
+                                {"slots_idle",       available_slots},
+                                {"slots_processing", processing_slots}};
+                        res.set_content(health.dump(), "application/json");
+                        res.status = 200; // HTTP OK
+                    } else {
+                        json health = {
+                                {"status",           "no slot available"},
+                                {"slots_idle",       available_slots},
+                                {"slots_processing", processing_slots}};
+                        res.set_content(health.dump(), "application/json");
+                        res.status = 503; // HTTP Service Unavailable
+                    }
+                }
                 break;
             case SERVER_STATE_LOADING_MODEL:
                 res.set_content(R"({"status": "loading model"})", "application/json");
