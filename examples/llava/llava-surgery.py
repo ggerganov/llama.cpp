@@ -19,10 +19,6 @@ mm_tensors = [k for k, v in checkpoint.items() if k.startswith("model.mm_project
 projector = {name: checkpoint[name].float() for name in mm_tensors}
 torch.save(projector, f"{args.model}/llava.projector")
 
-# remove these tensors from the checkpoint and save it again
-for name in mm_tensors:
-    del checkpoint[name]
-
 # BakLLaVA models contain CLIP tensors in it
 clip_tensors = [k for k, v in checkpoint.items() if k.startswith("model.vision_tower")]
 if len(clip_tensors) > 0:
@@ -39,7 +35,7 @@ if len(clip_tensors) > 0:
             f.write("{}\n")
 
 
-torch.save(checkpoint, path)
+    torch.save(checkpoint, path)
 
 print("Done!")
 print(f"Now you can convert {args.model} to a regular LLaMA GGUF file.")

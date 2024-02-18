@@ -53,7 +53,7 @@ python ./examples/llava/convert-image-encoder-to-gguf.py -m ../clip-vit-large-pa
 5. Use `convert.py` to convert the LLaMA part of LLaVA to GGUF:
 
 ```sh
-python ./convert.py ../llava-v1.5-7b
+python ./convert.py ../llava-v1.5-7b --skip-unknown
 ```
 
 Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` directory.

@@ -111,13 +111,13 @@ static const char * LLM_TENSOR_FFN_DOWN      = "blk.%d.ffn_down";
 static const char * LLM_TENSOR_FFN_UP        = "blk.%d.ffn_up";
 
 static void print_params(struct my_llama_hparams * params) {
-    printf("%s: n_vocab: %d\n", __func__, params->n_vocab);
-    printf("%s: n_ctx:   %d\n", __func__, params->n_ctx);
-    printf("%s: n_embd:  %d\n", __func__, params->n_embd);
-    printf("%s: n_head:  %d\n", __func__, params->n_head);
-    printf("%s: n_ff:    %d\n", __func__, params->n_ff);
-    printf("%s: n_layer: %d\n", __func__, params->n_layer);
-    printf("%s: n_rot:   %d\n", __func__, params->n_rot);
+    printf("%s: n_vocab: %u\n", __func__, params->n_vocab);
+    printf("%s: n_ctx:   %u\n", __func__, params->n_ctx);
+    printf("%s: n_embd:  %u\n", __func__, params->n_embd);
+    printf("%s: n_head:  %u\n", __func__, params->n_head);
+    printf("%s: n_ff:    %u\n", __func__, params->n_ff);
+    printf("%s: n_layer: %u\n", __func__, params->n_layer);
+    printf("%s: n_rot:   %u\n", __func__, params->n_rot);
 }
 
 static void set_param_model(struct my_llama_model * model) {

@@ -220,6 +220,7 @@ inline std::string format_chatml(std::vector<json> messages)
 struct llama_server_queue {
     int id = 0;
     std::mutex mutex_tasks;
+    bool running;
     // queues
     std::vector<task_server> queue_tasks;
     std::vector<task_server> queue_tasks_deferred;
@@ -278,9 +279,18 @@ struct llama_server_queue {
         queue_tasks_deferred.clear();
     }
 
-    // Start the main loop. This call is blocking
-    [[noreturn]]
+    // end the start_loop routine
+    void terminate() {
+        {
+            std::unique_lock<std::mutex> lock(mutex_tasks);
+            running = false;
+        }
+        condition_tasks.notify_all();
+    }
+
+    // Start the main loop.
     void start_loop() {
+        running = true;
         while (true) {
             // new task arrived
             LOG_VERBOSE("have new task", {});
@@ -324,8 +334,12 @@ struct llama_server_queue {
             {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
                 if (queue_tasks.empty()) {
+                    if (!running) {
+                        LOG_VERBOSE("ending start_loop", {});
+                        return;
+                    }
                     condition_tasks.wait(lock, [&]{
-                        return !queue_tasks.empty();
+                        return (!queue_tasks.empty() || !running);
                     });
                 }
             }
