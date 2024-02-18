@@ -779,7 +779,6 @@ set(CUDA_CXX_FLAGS "")
 
 if (LLAMA_CUBLAS)
     set(CUDA_FLAGS -use_fast_math)
-    list(APPEND CUDA_CXX_FLAGS ${CXX_FLAGS})
     if (NOT MSVC)
         list(APPEND CUDA_CXX_FLAGS -Wno-pedantic)
     endif()
