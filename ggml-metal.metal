@@ -4027,7 +4027,10 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
         y4 += 32 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4170,7 +4173,10 @@ void kernel_mul_mv_iq2_xs_f32_impl(
         y4 += 32 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4306,7 +4312,10 @@ void kernel_mul_mv_iq3_xxs_f32_impl(
         y4 += 32 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4424,7 +4433,10 @@ void kernel_mul_mv_iq1_s_f32_impl(
         y4 += 16 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4659,6 +4671,8 @@ void dequantize_q4_K(device const block_q4_K *xb, short il, thread type4x4 & reg
     const float dl = d * sc[0];
     const float ml = min * sc[1];
 #else
+    (void) get_scale_min_k4_just2;
+
     q = q + 16 * (il&1);
     device const uint8_t * s = xb->scales;
     device const half2 * dh = (device const half2 *)xb->d;
