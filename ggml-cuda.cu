@@ -6205,7 +6205,7 @@ static __global__ void soft_max_f32(const float * x, const float * mask, const f
         const int ix = rowx*ncols + col;
         const int iy = rowy*ncols + col;
 
-        const float val = x[ix]*scale + (mask ? mask[iy] : 0.0f) + slope*pos[col];
+        const float val = x[ix]*scale + (mask ? mask[iy] : 0.0f) + (pos ? slope*pos[col] : 0.0f);
 
         vals[col] = val;
         max_val = max(max_val, val);
@@ -9170,17 +9170,17 @@ static void ggml_cuda_op_soft_max(
     memcpy(&max_bias, (float *) dst->op_params + 1, sizeof(float));
 
     // positions tensor
-    float * src2_dd = dst_dd; // default to avoid null checks in the kernel
+    float * src2_dd = nullptr;
     cuda_pool_alloc<float> src2_f;
 
     ggml_tensor * src2 = dst->src[2];
     const bool use_src2 = src2 != nullptr;
 
     if (use_src2) {
-        const bool src2_on_device = use_src2 && src2->backend == GGML_BACKEND_GPU;
-        ggml_tensor_extra_gpu * src2_extra = use_src2 ? (ggml_tensor_extra_gpu *) src2->extra : nullptr;
+        const bool src2_on_device = src2->backend == GGML_BACKEND_GPU;
 
         if (src2_on_device) {
+            ggml_tensor_extra_gpu * src2_extra = (ggml_tensor_extra_gpu *) src2->extra;
             src2_dd = (float *) src2_extra->data_device[g_main_device];
         } else {
             src2_dd = src2_f.alloc(ggml_nelements(src2));
