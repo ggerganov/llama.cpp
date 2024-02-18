@@ -526,7 +526,7 @@ if (LLAMA_SYCL)
 
     message(STATUS "SYCL found")
 
-    add_compile_definitions(GML_USE_SYCL)
+    add_compile_definitions(GGML_USE_SYCL)
 
     if (LLAMA_SYCL_F16)
         add_compile_definitions(GGML_SYCL_F16)
