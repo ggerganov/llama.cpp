@@ -998,7 +998,6 @@ struct llama_server_context
                 continue;
             }
 
-            // TODO call encode_image_with_clip instead?
             llava_image_embed * embed = llava_image_embed_make_with_bytes(clp_ctx, params.n_threads, img.img_data->buf.data(), img.img_data->buf.size());
             if (!embed) {
                 LOG_TEE("Error processing the given image");
