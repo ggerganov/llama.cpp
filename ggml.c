@@ -23,7 +23,7 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <signal.h>
-#if defined(__GLIBC__)
+#if defined(__gnu_linux__)
 #include <syscall.h>
 #endif
 
