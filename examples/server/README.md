@@ -8,6 +8,7 @@ Command line options:
 - `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation.
 - `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 - `-a ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
+- `-c N`, `--ctx-size N`: Deprecated, use `--kv-size` instead.
 - `-kv N`, `--kv-size N`: Specify the total size of the KV cache. This corresponds to the total amount of tokens that can be stored across all independent sequences / slots. `llama.cpp` implements a "unified" cache strategy, the KV cache size is actually shared across all sequences. It's allowed to have sequences with more than `T` tokens as long as the sum of all tokens does not exceed `P*T`. The default is 512.
 - `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 - `-mg i, --main-gpu i`: When using multiple GPUs this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default GPU 0 is used. Requires cuBLAS.
