@@ -6,6 +6,7 @@ then
     exit 1
 fi
 
+# kill the server at the end
 cleanup() {
     pkill -P $$
 }
@@ -29,17 +30,6 @@ set -eu
             --embedding \
             --cont-batching \
             "$@" &
-
-# Wait for the server to start
-max_attempts=30
-attempts=${max_attempts}
-until curl --silent --fail "http://localhost:8080/health" | jq -r '.status' | grep ok; do
-  attempts=$(( attempts - 1));
-  [ "${attempts}" -eq 0 ] && { echo "Server did not startup" >&2; exit 1; }
-  sleep_time=$(( (max_attempts - attempts) * 2 ))
-  echo "waiting for server to be ready ${sleep_time}s..."
-  sleep ${sleep_time}
-done
 
 # Start tests
 behave
