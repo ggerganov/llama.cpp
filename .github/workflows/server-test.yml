@@ -40,12 +40,12 @@ jobs:
       - name: Download test model
         id: download_model
         run: |
-          ./scripts/hf.sh --repo TheBloke/Tinyllama-2-1b-miniguanaco-GGUF --file tinyllama-2-1b-miniguanaco.Q2_K.gguf
+          ./scripts/hf.sh --repo ngxson/dummy-llama --file llama_xs_q4.bin
 
       - name: Server Integration Tests
         id: server_integration_test
         run: |
           cd examples/server/tests
-          ./tests.sh ../../../tinyllama-2-1b-miniguanaco.Q2_K.gguf
+          ./tests.sh ../../../llama_xs_q4.bin
           
           
