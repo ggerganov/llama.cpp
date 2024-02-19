@@ -1505,7 +1505,7 @@ struct test_attn : public test_case {
         struct ggml_tensor * cur;
 
         cur = ggml_mul_mat     (ctx, k, q);
-        cur = ggml_soft_max_ext(ctx, cur, mask, 1.0f/sqrtf(hs));
+        cur = ggml_soft_max_ext(ctx, cur, mask, nullptr, 1.0f/sqrtf(hs), 0.0f);
         cur = ggml_mul_mat     (ctx, v, cur);
         cur = ggml_permute     (ctx, cur, 0, 2, 1, 3);
         cur = ggml_cont_2d     (ctx, cur, hs*nh, nb);

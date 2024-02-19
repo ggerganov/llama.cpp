@@ -102,7 +102,7 @@
 #define LLAMA_MAX_NODES   8192
 #define LLAMA_MAX_EXPERTS 8
 
-#define LLAMA_FLASH_ATTN
+//#define LLAMA_FLASH_ATTN
 
 //
 // logging
@@ -4831,6 +4831,11 @@ static struct ggml_tensor * llm_build_kqv(
     struct ggml_tensor * cur;
 
 #if defined(LLAMA_FLASH_ATTN)
+    GGML_UNUSED(model);
+    GGML_UNUSED(n_ctx);
+
+    GGML_ASSERT(kq_pos == nullptr && "ALiBi is not yet supported with Flash Attention");
+
     // split cached v into n_head heads (not transposed)
     struct ggml_tensor * v =
         ggml_view_3d(ctx, kv.v_l[il],
@@ -5260,7 +5265,7 @@ struct llm_build_context {
         cb(KQ_mask, "KQ_mask", -1);
 
         // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0);
+        struct ggml_tensor * KQ_pos = ggml_cast(ctx0, ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0), GGML_TYPE_F16);
         cb(KQ_pos, "KQ_pos", -1);
 
         // shift the entire K-cache if needed
@@ -5804,7 +5809,7 @@ struct llm_build_context {
         cb(KQ_mask, "KQ_mask", -1);
 
         // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0);
+        struct ggml_tensor * KQ_pos = ggml_cast(ctx0, ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0), GGML_TYPE_F16);
         cb(KQ_pos, "KQ_pos", -1);
 
         for (int il = 0; il < n_layer; ++il) {
@@ -6043,7 +6048,7 @@ struct llm_build_context {
         cb(KQ_mask, "KQ_mask", -1);
 
         // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0);
+        struct ggml_tensor * KQ_pos = ggml_cast(ctx0, ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0), GGML_TYPE_F16);
         cb(KQ_pos, "KQ_pos", -1);
 
         inpL = llm_build_norm(ctx0, inpL, hparams,
@@ -6140,7 +6145,7 @@ struct llm_build_context {
         cb(KQ_mask, "KQ_mask", -1);
 
         // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0);
+        struct ggml_tensor * KQ_pos = ggml_cast(ctx0, ggml_view_1d(ctx0, lctx.inp_KQ_pos, n_kv, 0), GGML_TYPE_F16);
         cb(KQ_pos, "KQ_pos", -1);
 
         for (int il = 0; il < n_layer; ++il) {

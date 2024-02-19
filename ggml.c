@@ -5192,7 +5192,7 @@ static struct ggml_tensor * ggml_soft_max_impl(
         GGML_ASSERT(mask->type == GGML_TYPE_F16);
         GGML_ASSERT(ggml_is_contiguous(mask));
         GGML_ASSERT(ggml_is_matrix(mask));
-        GGML_ASSERT(ggml_can_repeat_rows(mask, a));
+        GGML_ASSERT(mask->ne[1] >= a->ne[1]);
     }
 
     if (pos) {
