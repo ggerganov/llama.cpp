@@ -11,8 +11,12 @@ FROM ${BASE_CUDA_DEV_CONTAINER} as build
 # Unless otherwise specified, we make a fat build.
 ARG CUDA_DOCKER_ARCH=all
 
+# Install gcc-10 and g++-10 to work around and issue CUDA 11.7.1 and gcc-11
 RUN apt-get update && \
-    apt-get install -y build-essential git
+    apt-get install -y build-essential git g++-10  gcc-10
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+
 
 WORKDIR /app
 
