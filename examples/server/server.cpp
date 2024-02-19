@@ -324,7 +324,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
     std::string slot_symbol3 = "";
 
     #ifdef DEBUG
-        return; // do not display graphics when in debug build
+        return; // do not display graphics when in debug build (doesn't seem to work)
     #endif
 
     // return if empty
@@ -374,7 +374,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
         }
     printf(" %4zu/%5zu %2d %s %s %s\n", slots[i].cache_tokens.size(), slot_cache_size, slots[i].id, slot_symbol1.c_str(), slot_symbol2.c_str(), slot_symbol3.c_str());
     }
-    printf("\n\033[%dJ", 0);
+    printf("\n\033[%dJ", num_blocks);    // move cursor to end of cache display
 }
 
 struct llama_server_context

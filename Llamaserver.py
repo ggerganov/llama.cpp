@@ -70,7 +70,7 @@ def send_request(q, question, event, count, num_requests):
                 bar = make_progress_bar(bar, count, num_requests)
             q.task_done()
         elif response.status_code == 429 and not q.empty():
-            event.set()
+            # event.set()
             print("Server return too many requests; back off!! Reset event.")
         else:
             print(f"Server responded with code {response.status_code}\n")
