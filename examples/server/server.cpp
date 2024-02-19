@@ -582,7 +582,7 @@ struct llama_server_context
                 last_used = &slot;
                 t_last = slot.t_last_used;
                 LOG_TEE("Using time-based slot id: %d\n", slot.id);
-                break;
+                //break;
             }
         }
 
