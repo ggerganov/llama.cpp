@@ -53,7 +53,6 @@ struct ggml_mpi_context * ggml_mpi_init(void);
 
 void ggml_mpi_graph_creation_post(struct ggml_mpi_context * ctx_mpi, struct ggml_cgraph * cgraph, int   n_layers);
 
-GGML_API ggml_backend_t ggml_backend_mpi_init(int index);
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_type_t buft);
 
 /**
@@ -185,8 +184,7 @@ void ggml_mpi_scatter_layers(
  */
 void ggml_mpi_graph_compute_pre(
         struct ggml_mpi_context * ctx_mpi,
-             struct ggml_cgraph * gf,
-                            int   n_layers);
+             struct ggml_cgraph * gf);
 
 /**
  * Sends the output tensor to the next node for processing
@@ -198,8 +196,7 @@ void ggml_mpi_graph_compute_pre(
  */
 void ggml_mpi_graph_compute_post(
         struct ggml_mpi_context * ctx_mpi,
-             struct ggml_cgraph * gf,
-                            int   n_layers);
+             struct ggml_cgraph * gf);
 
 // BACKEND V2
 
@@ -212,6 +209,8 @@ struct ggml_mpi_device {
 
 #define MPI_BACKEND_NAME "MPI"
 GGML_CALL int ggml_backend_mpi_reg_devices();
+
+GGML_CALL ggml_backend_t ggml_backend_mpi_init(ggml_backend_t wrapped_backend);
 
 #ifdef __cplusplus
 }

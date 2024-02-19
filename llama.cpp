@@ -4090,15 +4090,15 @@ static bool llm_load_tensors(
     }
 
 #ifdef GGML_USE_MPI
-    for (int64_t i = 0; i < n_layer; i++) {
-        model.buft_layer[i] = {ggml_backend_mpi_wrap_buffer(model.buft_layer[i].buft_matrix),
-                               ggml_backend_mpi_wrap_buffer(model.buft_layer[i].buft)};
-    }
-
-    model.buft_input = {ggml_backend_mpi_wrap_buffer(model.buft_input.buft_matrix),
-                        ggml_backend_mpi_wrap_buffer(model.buft_input.buft)};
-    model.buft_output = {ggml_backend_mpi_wrap_buffer(model.buft_output.buft_matrix),
-                         ggml_backend_mpi_wrap_buffer(model.buft_output.buft)};
+//    for (int64_t i = 0; i < n_layer; i++) {
+//        model.buft_layer[i] = {ggml_backend_mpi_wrap_buffer(model.buft_layer[i].buft_matrix),
+//                               ggml_backend_mpi_wrap_buffer(model.buft_layer[i].buft)};
+//    }
+//
+//    model.buft_input = {ggml_backend_mpi_wrap_buffer(model.buft_input.buft_matrix),
+//                        ggml_backend_mpi_wrap_buffer(model.buft_input.buft)};
+//    model.buft_output = {ggml_backend_mpi_wrap_buffer(model.buft_output.buft_matrix),
+//                         ggml_backend_mpi_wrap_buffer(model.buft_output.buft)};
 #endif
 
     // count used buffer types
@@ -8764,10 +8764,7 @@ static void llama_graph_compute(
         llama_context & lctx,
           ggml_cgraph * gf,
                   int   n_threads) {
-#ifdef GGML_USE_MPI
-    const int64_t n_layer = lctx.model.hparams.n_layer;
-    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
-#endif
+
 
 #ifdef GGML_USE_METAL
     if (ggml_backend_is_metal(lctx.backend_metal)) {
@@ -8783,10 +8780,7 @@ static void llama_graph_compute(
     ggml_backend_sched_graph_compute_async(lctx.sched, gf);
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
-
-#ifdef GGML_USE_MPI
-    ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
-#endif
+    
 }
 
 // decode a batch of tokens by evaluating the transformer
@@ -12619,6 +12613,7 @@ static int llama_apply_lora_from_file_internal(
 //
 struct llama_model_params llama_model_default_params() {
     struct llama_model_params result = {
+            static_cast<int32_t *>(calloc(1, sizeof(int32_t))),
         /*.n_gpu_layers                =*/ 0,
         /*.split_mode                  =*/ LLAMA_SPLIT_MODE_LAYER,
         /*.main_gpu                    =*/ 0,
@@ -12998,18 +12993,7 @@ struct llama_context * llama_new_context_with_model(
         }
 #endif
 
-#ifdef GGML_USE_MPI
-        // with split_mode LLAMA_SPLIT_NONE or LLAMA_SPLIT_ROW, only the main GPU backend is used
-        ggml_backend_t backend = ggml_backend_mpi_init(model->main_gpu);
-        if (backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, model->main_gpu);
-            llama_free(ctx);
-            return nullptr;
-        }
-        ctx->backends.push_back(backend);
 
-
-#endif
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
             LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
@@ -13017,6 +13001,16 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
         ctx->backends.push_back(ctx->backend_cpu);
+
+#ifdef GGML_USE_MPI
+
+        for(auto & backend : ctx->backends) {
+            backend = ggml_backend_mpi_init(backend);
+
+        }
+
+        ctx->backend_cpu = ctx->backends.back();
+#endif
 
         if (!llama_kv_cache_init(ctx->kv_self, ctx->model, type_k, type_v, kv_size, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);

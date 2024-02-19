@@ -202,6 +202,9 @@ extern "C" {
     };
 
     struct llama_model_params {
+        // Array of layers to allocate to each node
+        int32_t* n_node_layers;
+
         int32_t n_gpu_layers; // number of layers to store in VRAM
         enum llama_split_mode split_mode; // how to split the model across multiple GPUs
 
