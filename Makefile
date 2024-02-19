@@ -97,9 +97,10 @@ endif
 #
 
 # keep standard at C11 and C++11
-MK_CPPFLAGS = -I. -Icommon
-MK_CFLAGS   = -std=c11   -fPIC
-MK_CXXFLAGS = -std=c++11 -fPIC
+MK_CPPFLAGS  = -I. -Icommon
+MK_CFLAGS    = -std=c11   -fPIC
+MK_CXXFLAGS  = -std=c++11 -fPIC
+MK_NVCCFLAGS = -std=c++11
 
 # -Ofast tends to produce faster code, but may not be available for some compilers.
 ifdef LLAMA_FAST
@@ -218,30 +219,6 @@ MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
 ifeq ($(LLAMA_FATAL_WARNINGS),1)
 	MK_CFLAGS += -Werror
 	MK_CXXFLAGS += -Werror
-endif
-
-ifeq ($(CC_IS_CLANG), 1)
-	# clang options
-	MK_CFLAGS        += -Wunreachable-code-break -Wunreachable-code-return
-	MK_HOST_CXXFLAGS += -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi
-
-	ifneq '' '$(and $(CC_IS_LLVM_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 030800)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-	ifneq '' '$(and $(CC_IS_APPLE_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 070300)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-else
-	# gcc options
-	MK_CFLAGS        += -Wdouble-promotion
-	MK_HOST_CXXFLAGS += -Wno-array-bounds
-
-	ifeq ($(shell expr $(CC_VER) \>= 070100), 1)
-		MK_HOST_CXXFLAGS += -Wno-format-truncation
-	endif
-	ifeq ($(shell expr $(CC_VER) \>= 080100), 1)
-		MK_HOST_CXXFLAGS += -Wextra-semi
-	endif
 endif
 
 # this version of Apple ld64 is buggy
@@ -468,7 +445,7 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 ifdef JETSON_EOL_MODULE_DETECT
 	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 else
-	$(NVCC) $(BASE_CXXFLAGS) $(NVCCFLAGS) -Wno-pedantic -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endif # JETSON_EOL_MODULE_DETECT
 endif # LLAMA_CUBLAS
 
@@ -579,7 +556,7 @@ override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
 ifdef LLAMA_CUBLAS
 GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
 include scripts/get-flags.mk
-CUDA_CXXFLAGS := $(GF_CXXFLAGS)
+CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
 endif
 
 #
@@ -889,5 +866,9 @@ tests/test-model-load-cancel: tests/test-model-load-cancel.cpp ggml.o llama.o te
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-autorelease: tests/test-autorelease.cpp ggml.o llama.o tests/get-model.cpp $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-chat-template: tests/test-chat-template.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)

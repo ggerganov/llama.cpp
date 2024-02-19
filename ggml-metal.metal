@@ -392,7 +392,7 @@ kernel void kernel_soft_max(
     float lmax = -INFINITY;
 
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-        lmax = MAX(lmax, psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f) + slope*ppos[i00]);
+        lmax = MAX(lmax, psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f));
     }
 
     // find the max value in the block
@@ -417,7 +417,7 @@ kernel void kernel_soft_max(
     // parallel sum
     float lsum = 0.0f;
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-        const float exp_psrc0 = exp((psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f) + slope*ppos[i00]) - max_val);
+        const float exp_psrc0 = exp((psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f)) - max_val);
         lsum += exp_psrc0;
         pdst[i00] = exp_psrc0;
     }
@@ -495,7 +495,7 @@ kernel void kernel_soft_max_4(
     float4 lmax4 = -INFINITY;
 
     for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
-        lmax4 = fmax(lmax4, psrc4[i00]*scale + (pmask ? pmask[i00] : 0.0f) + slope*ppos[i00]);
+        lmax4 = fmax(lmax4, psrc4[i00]*scale + (pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f));
     }
 
     const float lmax = MAX(MAX(lmax4[0], lmax4[1]), MAX(lmax4[2], lmax4[3]));
@@ -521,7 +521,7 @@ kernel void kernel_soft_max_4(
     // parallel sum
     float4 lsum4 = 0.0f;
     for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
-        const float4 exp_psrc4 = exp((psrc4[i00]*scale + (pmask ? pmask[i00] : 0.0f) + slope*ppos[i00]) - max_val);
+        const float4 exp_psrc4 = exp((psrc4[i00]*scale + (pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f)) - max_val);
         lsum4 += exp_psrc4;
         pdst4[i00] = exp_psrc4;
     }
@@ -4027,7 +4027,10 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
         y4 += 32 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4170,7 +4173,10 @@ void kernel_mul_mv_iq2_xs_f32_impl(
         y4 += 32 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4306,7 +4312,10 @@ void kernel_mul_mv_iq3_xxs_f32_impl(
         y4 += 32 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4424,7 +4433,10 @@ void kernel_mul_mv_iq1_s_f32_impl(
         y4 += 16 * 32;
     }
 #else
-    // TODO
+    (void) x;
+    (void) y;
+    (void) yl;
+    (void) nb32;
 #endif
 
     for (int row = 0; row < N_DST; ++row) {
@@ -4659,6 +4671,8 @@ void dequantize_q4_K(device const block_q4_K *xb, short il, thread type4x4 & reg
     const float dl = d * sc[0];
     const float ml = min * sc[1];
 #else
+    (void) get_scale_min_k4_just2;
+
     q = q + 16 * (il&1);
     device const uint8_t * s = xb->scales;
     device const half2 * dh = (device const half2 *)xb->d;

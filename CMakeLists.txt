@@ -741,13 +741,6 @@ function(get_flags CCID CCVER)
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
             list(APPEND CXX_FLAGS -Wextra-semi)
         endif()
-    elseif (CCID MATCHES "Intel")
-        if (NOT LLAMA_SYCL)
-            # enable max optimization level when using Intel compiler
-            set(C_FLAGS   -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
-            set(CXX_FLAGS -ipo -O3 -static -fp-model=fast -flto -fno-stack-protector)
-            add_link_options(-fuse-ld=lld -static-intel)
-        endif()
     endif()
 
     set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)
@@ -778,10 +771,7 @@ endif()
 set(CUDA_CXX_FLAGS "")
 
 if (LLAMA_CUBLAS)
-    set(CUDA_FLAGS ${CXX_FLAGS} -use_fast_math)
-    if (NOT MSVC)
-        list(APPEND CUDA_FLAGS -Wno-pedantic)
-    endif()
+    set(CUDA_FLAGS -use_fast_math)
 
     if (LLAMA_ALL_WARNINGS AND NOT MSVC)
         set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
@@ -814,7 +804,11 @@ if (LLAMA_CUBLAS)
         message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
 
         get_flags(${CUDA_CCID} ${CUDA_CCVER})
-        list(APPEND CUDA_CXX_FLAGS ${GF_CXX_FLAGS})  # This is passed to -Xcompiler later
+        list(APPEND CUDA_CXX_FLAGS ${CXX_FLAGS} ${GF_CXX_FLAGS})  # This is passed to -Xcompiler later
+    endif()
+
+    if (NOT MSVC)
+        list(APPEND CUDA_CXX_FLAGS -Wno-pedantic)
     endif()
 endif()
 

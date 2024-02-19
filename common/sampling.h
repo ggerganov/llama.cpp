@@ -22,6 +22,7 @@ enum class llama_sampler_type : char {
 typedef struct llama_sampling_params {
     int32_t     n_prev                = 64;       // number of previous tokens to remember
     int32_t     n_probs               = 0;        // if greater than 0, output the probabilities of top n_probs tokens.
+    int32_t     min_keep              = 0;        // 0 = disabled, otherwise samplers should return at least min_keep tokens
     int32_t     top_k                 = 40;       // <= 0 to use vocab size
     float       top_p                 = 0.95f;    // 1.0 = disabled
     float       min_p                 = 0.05f;    // 0.0 = disabled
