@@ -16,6 +16,13 @@ Command line options:
 - `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
 - `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 - `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
+- `--numa STRATEGY`: Attempt one of the below optimization strategies  that help on some NUMA systems
+- `--numa distribute`: Spread execution evenly over all nodes
+- `--numa isolate`: Only spawn threads on CPUs on the node that execution started on
+- `--numa numactl`: Use the CPU map provided by numactl
+if run without this previously, it is recommended to drop the system page cache before using this
+see https://github.com/ggerganov/llama.cpp/issues/1437
+
 - `--numa`: Attempt optimizations that help on some NUMA systems.
 - `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 - `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
@@ -32,6 +39,8 @@ Command line options:
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
 - `--grp-attn-n`: Set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
+- `-n, --n-predict`: Set the maximum tokens to predict (default: -1)
+- `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
 
 ## Build
 
@@ -128,6 +137,7 @@ node index.js
   - `{"status": "loading model"}` if the model is still being loaded.
   - `{"status": "error"}` if the model failed to load.
   - `{"status": "ok"}` if the model is successfully loaded and the server is ready for further requests mentioned below.
+  - `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slot are currently available
 
 - **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 
@@ -189,6 +199,8 @@ node index.js
 
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
 
+    `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum (default: 0)
+
     `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
     `slot_id`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
@@ -196,6 +208,8 @@ node index.js
     `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+
+    `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. (default: `["top_k", "tfs_z", "typical_p", "top_p", "min_p", "temperature"]` - these are all the available values)
 
 ### Result JSON
 
@@ -369,6 +383,69 @@ Notice that each `probs` is an array of length `n_probs`.
             "encoding_format": "float"
     }'
     ```
+
+- **GET** `/slots`: Returns the current slots processing state. Can be disabled with `--slots-endpoint-disable`.
+
+### Result JSON
+
+```json
+[
+    {
+        "dynatemp_exponent": 1.0,
+        "dynatemp_range": 0.0,
+        "frequency_penalty": 0.0,
+        "grammar": "",
+        "id": 0,
+        "ignore_eos": false,
+        "logit_bias": [],
+        "min_p": 0.05000000074505806,
+        "mirostat": 0,
+        "mirostat_eta": 0.10000000149011612,
+        "mirostat_tau": 5.0,
+        "model": "llama-2-7b-32k-instruct.Q2_K.gguf",
+        "n_ctx": 2048,
+        "n_keep": 0,
+        "n_predict": 100000,
+        "n_probs": 0,
+        "next_token": {
+            "has_next_token": true,
+            "n_remain": -1,
+            "num_tokens_predicted": 0,
+            "stopped_eos": false,
+            "stopped_limit": false,
+            "stopped_word": false,
+            "stopping_word": ""
+        },
+        "penalize_nl": true,
+        "penalty_prompt_tokens": [],
+        "presence_penalty": 0.0,
+        "prompt": "Say hello to llama.cpp",
+        "repeat_last_n": 64,
+        "repeat_penalty": 1.100000023841858,
+        "samplers": [
+            "top_k",
+            "tfs_z",
+            "typical_p",
+            "top_p",
+            "min_p",
+            "temperature"
+        ],
+        "seed": 42,
+        "state": 1,
+        "stop": [
+            "\n"
+        ],
+        "stream": false,
+        "task_id": 0,
+        "temperature": 0.0,
+        "tfs_z": 1.0,
+        "top_k": 40,
+        "top_p": 0.949999988079071,
+        "typical_p": 1.0,
+        "use_penalty_prompt_tokens": false
+    }
+]
+```
 
 ## More examples
 

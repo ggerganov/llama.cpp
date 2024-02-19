@@ -23,11 +23,13 @@
 .clang-tidy
 .vs/
 .vscode/
+.idea/
 
 lcov-report/
 gcovr-report/
 
 build*
+cmake-build-*
 out/
 tmp/
 
