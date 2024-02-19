@@ -7848,7 +7848,7 @@ static void ggml_cuda_pool_free_leg(int device, void * ptr, size_t size) {
     g_cuda_pool_size[device] -= size;
 }
 
-#if !defined(GGML_USE_HIPBLAS)
+#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
 // pool with virtual memory
 static CUdeviceptr g_cuda_pool_addr[GGML_CUDA_MAX_DEVICES] = {0};
 static size_t g_cuda_pool_used[GGML_CUDA_MAX_DEVICES] = {0};
@@ -7949,7 +7949,7 @@ static void ggml_cuda_pool_free(int device, void * ptr, size_t size) {
 #else
 #define ggml_cuda_pool_malloc ggml_cuda_pool_malloc_leg
 #define ggml_cuda_pool_free ggml_cuda_pool_free_leg
-#endif // !defined(GGML_USE_HIPBLAS)
+#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
 
 template<typename T>
 struct cuda_pool_alloc {
@@ -11610,7 +11610,7 @@ GGML_CALL int ggml_backend_cuda_reg_devices() {
 extern "C" GGML_CALL void ggml_free_cublas(void);
 GGML_CALL void ggml_free_cublas(void) {
     for (int id = 0; id < g_device_count; ++id) {
-#if !defined(GGML_USE_HIPBLAS)
+#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
         CU_CHECK(cuMemUnmap(g_cuda_pool_addr[id], g_cuda_pool_size[id]));
         g_cuda_pool_size[id] = 0;
         g_cuda_pool_addr[id] = 0;
