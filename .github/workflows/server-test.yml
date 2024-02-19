@@ -30,7 +30,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release -j $(nproc)
+          cmake --build . --config Release -j $(nproc) --target server
 
       - name: Tests dependencies
         id: test_dependencies
