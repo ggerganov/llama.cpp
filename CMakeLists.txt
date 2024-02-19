@@ -145,14 +145,6 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 include(CheckCXXCompilerFlag)
 
-if (LLAMA_FATAL_WARNINGS)
-    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        add_compile_options(-Werror)
-    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-        add_compile_options(/WX)
-    endif()
-endif()
-
 # enable libstdc++ assertions for debug builds
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     add_compile_definitions($<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>)
@@ -747,15 +739,24 @@ function(get_flags CCID CCVER)
     set(GF_CXX_FLAGS ${CXX_FLAGS} PARENT_SCOPE)
 endfunction()
 
+if (LLAMA_FATAL_WARNINGS)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        list(APPEND C_FLAGS   -Werror)
+        list(APPEND CXX_FLAGS -Werror)
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        add_compile_options(/WX)
+    endif()
+endif()
+
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
-        set(WARNING_FLAGS -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
-        set(C_FLAGS       -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes
-                          -Werror=implicit-int -Werror=implicit-function-declaration)
-        set(CXX_FLAGS     -Wmissing-declarations -Wmissing-noreturn)
+        list(APPEND WARNING_FLAGS -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
+        list(APPEND C_FLAGS       -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes
+                                  -Werror=implicit-int -Werror=implicit-function-declaration)
+        list(APPEND CXX_FLAGS     -Wmissing-declarations -Wmissing-noreturn)
 
-        set(C_FLAGS   ${WARNING_FLAGS} ${C_FLAGS})
-        set(CXX_FLAGS ${WARNING_FLAGS} ${CXX_FLAGS})
+        list(APPEND C_FLAGS   ${WARNING_FLAGS})
+        list(APPEND CXX_FLAGS ${WARNING_FLAGS})
 
         get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
 
@@ -772,6 +773,10 @@ set(CUDA_CXX_FLAGS "")
 
 if (LLAMA_CUBLAS)
     set(CUDA_FLAGS -use_fast_math)
+
+    if (LLAMA_FATAL_WARNINGS)
+        list(APPEND CUDA_FLAGS -Werror all-warnings)
+    endif()
 
     if (LLAMA_ALL_WARNINGS AND NOT MSVC)
         set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
