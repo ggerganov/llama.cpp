@@ -774,6 +774,10 @@ set(CUDA_CXX_FLAGS "")
 if (LLAMA_CUBLAS)
     set(CUDA_FLAGS -use_fast_math)
 
+    if (LLAMA_FATAL_WARNINGS)
+        list(APPEND CUDA_FLAGS -Werror all-warnings)
+    endif()
+
     if (LLAMA_ALL_WARNINGS AND NOT MSVC)
         set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
         if (NOT CMAKE_CUDA_HOST_COMPILER STREQUAL "")

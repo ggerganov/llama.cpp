@@ -217,7 +217,7 @@ MK_CFLAGS    += $(WARN_FLAGS) -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmis
 MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
 
 ifeq ($(LLAMA_FATAL_WARNINGS),1)
-	MK_CFLAGS += -Werror
+	MK_CFLAGS   += -Werror
 	MK_CXXFLAGS += -Werror
 endif
 
@@ -385,6 +385,9 @@ ifdef LLAMA_CUBLAS
 	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib -L/usr/local/cuda/targets/aarch64-linux/lib -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
 	MK_NVCCFLAGS += -use_fast_math
+ifdef LLAMA_FATAL_WARNINGS
+	MK_NVCCFLAGS += -Werror all-warnings
+endif # LLAMA_FATAL_WARNINGS
 ifndef JETSON_EOL_MODULE_DETECT
 	MK_NVCCFLAGS += --forward-unknown-to-host-compiler
 endif # JETSON_EOL_MODULE_DETECT
