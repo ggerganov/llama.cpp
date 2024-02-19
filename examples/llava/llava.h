@@ -3,7 +3,6 @@
 
 #include "ggml.h"
 
-
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
 #        ifdef LLAMA_BUILD
@@ -41,7 +40,6 @@ LLAVA_API void llava_image_embed_free(struct llava_image_embed * embed);
 
 /** write the image represented by embed into the llama context with batch size n_batch, starting at context pos n_past. on completion, n_past points to the next position in the context after the image embed. */
 LLAVA_API bool llava_eval_image_embed(struct llama_context * ctx_llama, const struct llava_image_embed * embed, int n_batch, int * n_past);
-
 
 #ifdef __cplusplus
 }

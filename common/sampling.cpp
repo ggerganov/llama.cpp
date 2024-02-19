@@ -121,7 +121,7 @@ static void sampler_queue(
                    struct llama_context * ctx_main,
             const llama_sampling_params & params,
                  llama_token_data_array & cur_p,
-                                 size_t & min_keep) {
+                                 size_t   min_keep) {
     const float         temp              = params.temp;
     const float         dynatemp_range    = params.dynatemp_range;
     const float         dynatemp_exponent = params.dynatemp_exponent;
@@ -139,7 +139,7 @@ static void sampler_queue(
             case llama_sampler_type::TYPICAL_P: llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
             case llama_sampler_type::TOP_P    : llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
             case llama_sampler_type::MIN_P    : llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
-            case llama_sampler_type::TEMP:
+            case llama_sampler_type::TEMPERATURE:
                 if (dynatemp_range > 0) {
                     float dynatemp_min = std::max(0.0f, temp - dynatemp_range);
                     float dynatemp_max = std::max(0.0f, temp + dynatemp_range);
@@ -249,7 +249,7 @@ static llama_token llama_sampling_sample_impl(
             id = llama_sample_token_mirostat_v2(ctx_main, &cur_p, mirostat_tau, mirostat_eta, &ctx_sampling->mirostat_mu);
         } else {
             // temperature sampling
-            size_t min_keep = std::max(1, params.n_probs);
+            size_t min_keep = std::max(1, params.min_keep);
 
             sampler_queue(ctx_main, params, cur_p, min_keep);
 

@@ -40,6 +40,7 @@ class Keys:
         TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
         EXPERT_COUNT          = "{arch}.expert_count"
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
+        POOLING_TYPE          = "{arch}.pooling_type"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -72,6 +73,8 @@ class Keys:
         UNK_ID           = "tokenizer.ggml.unknown_token_id"
         SEP_ID           = "tokenizer.ggml.seperator_token_id"
         PAD_ID           = "tokenizer.ggml.padding_token_id"
+        CLS_ID           = "tokenizer.ggml.cls_token_id"
+        MASK_ID          = "tokenizer.ggml.mask_token_id"
         ADD_BOS          = "tokenizer.ggml.add_bos_token"
         ADD_EOS          = "tokenizer.ggml.add_eos_token"
         ADD_PREFIX       = "tokenizer.ggml.add_space_prefix"
@@ -86,27 +89,28 @@ class Keys:
 
 
 class MODEL_ARCH(IntEnum):
-    LLAMA     = auto()
-    FALCON    = auto()
-    BAICHUAN  = auto()
-    GPT2      = auto()
-    GPTJ      = auto()
-    GPTNEOX   = auto()
-    MPT       = auto()
-    STARCODER = auto()
-    PERSIMMON = auto()
-    REFACT    = auto()
-    BERT      = auto()
-    BLOOM     = auto()
-    STABLELM  = auto()
-    QWEN      = auto()
-    QWEN2     = auto()
-    PHI2      = auto()
-    PLAMO     = auto()
-    CODESHELL = auto()
-    ORION     = auto()
+    LLAMA      = auto()
+    FALCON     = auto()
+    BAICHUAN   = auto()
+    GPT2       = auto()
+    GPTJ       = auto()
+    GPTNEOX    = auto()
+    MPT        = auto()
+    STARCODER  = auto()
+    PERSIMMON  = auto()
+    REFACT     = auto()
+    BERT       = auto()
+    NOMIC_BERT = auto()
+    BLOOM      = auto()
+    STABLELM   = auto()
+    QWEN       = auto()
+    QWEN2      = auto()
+    PHI2       = auto()
+    PLAMO      = auto()
+    CODESHELL  = auto()
+    ORION      = auto()
     INTERNLM2  = auto()
-    MINICPM   = auto()
+    MINICPM    = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -152,6 +156,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.PERSIMMON:      "persimmon",
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
+    MODEL_ARCH.NOMIC_BERT:     "nomic-bert",
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
     MODEL_ARCH.QWEN:           "qwen",
@@ -277,6 +282,20 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_K,
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.LAYER_OUT_NORM,
+    ],
+    MODEL_ARCH.NOMIC_BERT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.TOKEN_TYPES,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_OUT_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
         MODEL_TENSOR.LAYER_OUT_NORM,
@@ -542,6 +561,12 @@ class RopeScalingType(Enum):
     YARN   = 'yarn'
 
 
+class PoolingType(IntEnum):
+    NONE = 0
+    MEAN = 1
+    CLS  = 2
+
+
 class GGMLQuantizationType(IntEnum):
     F32  = 0
     F16  = 1
@@ -668,5 +693,7 @@ KEY_TOKENIZER_EOS_ID     = Keys.Tokenizer.EOS_ID
 KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
 KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
 KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID
+KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
+KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
 KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
 KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV
