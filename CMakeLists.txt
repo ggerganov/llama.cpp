@@ -742,7 +742,7 @@ function(get_flags CCID CCVER)
             list(APPEND CXX_FLAGS -Wextra-semi)
         endif()
     endif()
-     
+
     set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)
     set(GF_CXX_FLAGS ${CXX_FLAGS} PARENT_SCOPE)
 endfunction()
