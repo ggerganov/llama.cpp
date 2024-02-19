@@ -6,4 +6,6 @@ Functional server tests suite.
 `pip install -r requirements.txt`
 
 ### Run tests
-`python -m behave`
+1. Build the server
+2. download a GGUF model: `../../../scripts/hf.sh --repo TheBloke/Tinyllama-2-1b-miniguanaco-GGUF --file tinyllama-2-1b-miniguanaco.Q2_K.gguf`
+3. Start the test: `./tests.sh tinyllama-2-1b-miniguanaco.Q2_K.gguf -ngl 23 --log-disable`

@@ -1,4 +1,14 @@
-Feature: OpenAI compatible completions request
+Feature: llama.cpp server
+
+  Scenario Outline: run a completion request
+    Given a prompt <prompt>
+    When we request a completion
+    Then tokens are predicted
+
+    Examples: Prompts
+      | prompt       |
+      | I believe    |
+      | Write a joke |
 
   Scenario Outline: run a completion on the OAI endpoint
     Given a system prompt <system_prompt>
@@ -9,5 +19,5 @@ Feature: OpenAI compatible completions request
 
     Examples: Prompts
       | model          | system_prompt                | user_prompt                            |
-      | tinyllama-2    | You are ChatGPT.             | I believe the meaning of life is       |
+      | tinyllama-2    | You are ChatGPT.             | Say hello                              |
       | tinyllama-2    | You are a coding assistant.  | Write the fibonacci function in c++    |

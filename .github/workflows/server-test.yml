@@ -45,26 +45,7 @@ jobs:
       - name: Server Integration Tests
         id: server_integration_test
         run: |
-          ./build/bin/server \
-            -m tinyllama-2-1b-miniguanaco.Q2_K.gguf \
-            --ctx-size 512 \
-            --parallel 4 \
-            --n-predict 512 \
-            --batch-size 128 \
-            --threads 4 \
-            --threads-batch 128 \
-            --alias phi-2 \
-            --embedding \
-            --cont-batching &
-          sh -c '\
-            max_attempts=30; \
-            attempts=${max_attempts}; \
-            echo "waiting for server to be ready..."; \
-            until curl --silent --show-error --fail "http://localhost:8080/health" | jq -r '.status' | grep ok; do \
-              attempts=$(( attempts - 1)); \
-              [ "${attempts}" -eq 0 ] && { echo "Server did not startup" >&2; exit 1; }; \
-              sleep $(( (max_attempts - attempts) * 2 )); \
-            done;'
           cd examples/server/tests
-          behave
+          ./tests.sh
+          
           
