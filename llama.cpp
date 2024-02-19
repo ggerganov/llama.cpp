@@ -12525,7 +12525,7 @@ static std::string trim(const std::string & str) {
 // This function uses heuristic checks to determine commonly used template. It is not a jinja parser.
 static int32_t llama_chat_apply_template_internal(
     const std::string & tmpl,
-    const std::vector<const llama_chat_message *> & chat, 
+    const std::vector<const llama_chat_message *> & chat,
     std::string & dest, bool add_ass) {
     // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
     std::stringstream ss;
