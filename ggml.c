@@ -11507,7 +11507,7 @@ static void ggml_compute_forward_diag_mask_inf(
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_diag_mask_f32(params, src0, dst, -INFINITY);
+                ggml_compute_forward_diag_mask_f32(params, src0, dst, -FLT_MAX);
             } break;
         default:
             {
