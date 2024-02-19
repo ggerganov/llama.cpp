@@ -4968,6 +4968,7 @@ void dequantize_iq1_s(device const block_iq1_s * xb, short il, thread type4x4 & 
     }
 }
 
+template <typename type4x4>
 void dequantize_iq4_nl(device const block_iq4_nl * xb, short il, thread type4x4 & reg) {
     device const uint16_t * q4 = (device const uint16_t *)xb->qs;
     const float d = xb->d;
