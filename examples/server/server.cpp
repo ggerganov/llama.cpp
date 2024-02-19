@@ -43,23 +43,6 @@ struct server_params
     int32_t write_timeout = 600;
 };
 
-// RGB uint8 image
-struct clip_image_u8 {
-    int nx;
-    int ny;
-
-    std::vector<uint8_t> buf;
-};
-
-// RGB float32 image (NHWC)
-// Memory layout: RGBRGBRGB...
-struct clip_image_f32 {
-    int nx;
-    int ny;
-
-    std::vector<float> buf;
-};
-
 bool server_verbose = false;
 
 static size_t common_part(const std::vector<llama_token> &a, const std::vector<llama_token> &b)
@@ -720,7 +703,11 @@ struct llama_server_context
                     slot_image img_sl;
                     img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : slot->images.size();
                     img_sl.img_data = clip_image_u8_init();
-                    img_sl.img_data->buf = image_buffer;
+                    if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
+                    {
+                        LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
+                        return false;
+                    }
                     LOG_TEE("slot %i - loaded image\n", slot->id);
                     img_sl.request_encode_image = true;
                     slot->images.push_back(img_sl);
@@ -998,14 +985,11 @@ struct llama_server_context
                 continue;
             }
 
-            llava_image_embed * embed = llava_image_embed_make_with_bytes(clp_ctx, params.n_threads, img.img_data->buf.data(), img.img_data->buf.size());
-            if (!embed) {
+            if (!llava_image_embed_make_with_clip_img(clp_ctx, params.n_threads, img.img_data, &img.image_embedding, &img.image_tokens)) {
                 LOG_TEE("Error processing the given image");
                 return false;
             }
 
-            img.image_embedding = embed->embed;
-            img.image_tokens = embed->n_image_pos;
 
             img.request_encode_image = false;
         }
