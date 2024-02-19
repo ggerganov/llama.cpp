@@ -2044,6 +2044,7 @@ struct llama_context {
     struct ggml_tensor * inp_mean;      // F32 [n_batch, n_batch]
     struct ggml_tensor * inp_cls;       // I32 [n_batch]
     struct ggml_tensor * inp_s_mask;    // F32 [kv_size] (only used by constant state models like Mamba)
+    struct ggml_tensor * inp_s_seq;     // I32 [kv_size, n_batch]
 
 #ifdef GGML_USE_MPI
     ggml_mpi_context * ctx_mpi = NULL;
@@ -4761,8 +4762,9 @@ static bool llm_load_tensors(
                     const int64_t d_conv  = hparams.n_embd_head_k + 1;
                     const int64_t d_state = hparams.n_embd_head_v;
                     const int64_t d_inner = hparams.n_head;
-                    // FIXME: ceiling instead of floor
-                    const int64_t dt_rank = n_embd / 16;
+                    // TODO: allow loading dt_rank from the model config
+                    // ceiling division
+                    const int64_t dt_rank = (n_embd / 16) + (n_embd % 16 > 0);
                     GGML_ASSERT(2 * n_embd == d_inner);
 
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
@@ -8012,12 +8014,11 @@ struct llm_build_context {
         GGML_ASSERT(2 * d_model == d_inner);
         const int64_t d_conv = n_embd_head_k + 1;
         const int64_t d_state = n_embd_head_v;
-        const int64_t dt_rank = d_model / 16;
+        // ceiling division
+        const int64_t dt_rank = (d_model / 16) + (d_model % 16 > 0);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
-
-        GGML_ASSERT(kv_self.used - kv_self.head + 1 == 1); // TODO: support more than one sequence per batch
 
         // {n_embd, n_tokens}
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
@@ -8040,8 +8041,8 @@ struct llm_build_context {
                     state_mask);
             }
 
-            struct ggml_tensor * conv_state = ggml_reshape_3d(ctx0, conv_states, d_conv - 1, d_inner, n_kv);
-            struct ggml_tensor * ssm_state  = ggml_reshape_3d(ctx0,  ssm_states,    d_state, d_inner, n_kv);
+            conv_states = ggml_reshape_3d(ctx0, conv_states, d_conv - 1, d_inner, n_kv);
+            ssm_states  = ggml_reshape_3d(ctx0,  ssm_states,    d_state, d_inner, n_kv);
 
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
@@ -8056,37 +8057,31 @@ struct llm_build_context {
             struct ggml_tensor * x = ggml_view_2d(ctx0, xz, d_inner, xz->ne[1], xz->nb[1], 0);
             struct ggml_tensor * z = ggml_view_2d(ctx0, xz, d_inner, xz->ne[1], xz->nb[1], ggml_element_size(xz)*d_inner);
 
+            struct ggml_tensor * state_seq = ggml_view_2d(ctx0, lctx.inp_s_seq, n_kv, n_tokens, n_kv*ggml_element_size(lctx.inp_s_seq), 0);
+
             // conv
             {
-                // concat last (d_conv - 1) columns of conv_state, and x
+                // Custom operator which is needed only to ease simultaneous sequence processing.
+                // For a single sequence, the equivalent is to concatenate the columns of conv_states and x,
+                // then make a self-overlapping view of that over d_conv columns at each stride in the 3rd dimension,
+                // then element-wise multiply that with the conv1d weigth,
+                // then sum the elements of each row,
+                // (the last two steps are a dot product over rows (also doable with mul_mat))
+                // then permute away the ne[0] dimension,
+                // and then you're left with the resulting x tensor.
+                // The new conv_states is the last (d_conv - 1) columns
+                // of the last 3rd dimensional "layer" of the self-overlapping view.
+                // For simultaneous sequences, it's more complicated.
+                struct ggml_tensor * x_conv = ggml_ssm_conv(ctx0, conv_states, x, model.layers[il].ssm_conv1d, state_seq);
 
-                // The following tensor is too big in order to avoid an assertion error when making an overlapping view.
-                // TODO: in ggml_new_tensor_impl, handle overlapping data range in data size calculation
-                // This could then be a tensor with ne[] = {(d_conv-1)+n_tokens, d_inner},
-                // but the size difference is not that big (d_conv is usually 4).
-                struct ggml_tensor * conv_x = ggml_new_tensor_1d(ctx0, conv_state->type, d_conv*d_inner*n_tokens);
-                const size_t conv_x_nb1 = (d_conv - 1 + n_tokens) * ggml_element_size(conv_x);
-
-                conv_x = ggml_set_2d(ctx0, conv_x, conv_state, conv_x_nb1, 0);
-                // making x contiguous is necessary because ggml_set expects it
-                conv_x = ggml_set_2d(ctx0, conv_x, ggml_cont(ctx0, ggml_transpose(ctx0, x)), conv_x_nb1, (d_conv - 1)*ggml_element_size(conv_x));
-
-                // store last (d_conv - 1) columns of conv_x back into the KV cache for the next conv_state
+                // store last (d_conv - 1) columns of the conv_state part of x_conv back into the KV cache
                 ggml_build_forward_expand(gf,
                     ggml_cpy(ctx0,
-                        ggml_view_2d(ctx0, conv_x, d_conv - 1, d_inner, conv_x_nb1, n_tokens*ggml_element_size(conv_x)),
-                        ggml_view_1d(ctx0, kv_self.k_l[il], (d_conv - 1)*(d_inner), kv_self.head*(d_conv - 1)*(d_inner)*ggml_element_size(conv_x))));
+                        ggml_view_2d(ctx0, x_conv, d_conv - 1, d_inner*n_kv, d_conv*ggml_element_size(x_conv), (1+d_inner*n_tokens)*ggml_element_size(x_conv)),
+                        ggml_view_1d(ctx0, kv_self.k_l[il], (d_conv - 1)*(d_inner)*(n_kv), kv_self.head*(d_conv - 1)*(d_inner)*ggml_element_size(x_conv))));
 
-                // prepare convolution for all tokens in the batch with a self-overlapping view,
-                // shifting by one column each ... depth? ... with a window of d_conv columns.
-                // {(d_conv-1)+n_tokens, d_inner} => {d_conv, d_inner, n_tokens}
-                conv_x = ggml_view_3d(ctx0, conv_x, d_conv, d_inner, n_tokens, conv_x_nb1, 1*ggml_element_size(conv_x), 0);
-
-                // perform convolution
-                // => {1, d_inner, n_tokens}
-                x = ggml_sum_rows(ctx0, ggml_mul(ctx0, conv_x, model.layers[il].ssm_conv1d));
-                // => {d_inner, n_tokens, 1}
-                x = ggml_permute(ctx0, x, 2, 0, 1, 3);
+                // extract x from x_conv
+                x = ggml_view_2d(ctx0, x_conv, d_inner, n_tokens, d_inner*ggml_element_size(x_conv), 0);
 
                 // bias
                 x = ggml_add(ctx0, x, model.layers[il].ssm_conv1d_b);
@@ -8111,13 +8106,13 @@ struct llm_build_context {
                 // as described in the Annex D of the Mamba paper.
                 // => {d_inner, n_tokens} and {d_state, d_inner, n_kv} combined,
                 // because only a single tensor can be returned.
-                struct ggml_tensor * y_ssm_states = ggml_ssm_scan(ctx0, ssm_state, x, dt, model.layers[il].ssm_a, B, C);
+                struct ggml_tensor * y_ssm_states = ggml_ssm_scan(ctx0, ssm_states, x, dt, model.layers[il].ssm_a, B, C, state_seq);
 
                 // store last states (the second part of y_ssm_states)
                 ggml_build_forward_expand(gf,
                     ggml_cpy(ctx0,
                         ggml_view_1d(ctx0, y_ssm_states, d_state*d_inner*n_kv, d_inner*n_tokens*ggml_element_size(y_ssm_states)),
-                        ggml_view_1d(ctx0, kv_self.v_l[il], d_state*d_inner*n_kv, kv_self.head*d_state*d_inner*ggml_element_size(ssm_state))));
+                        ggml_view_1d(ctx0, kv_self.v_l[il], d_state*d_inner*n_kv, kv_self.head*d_state*d_inner*ggml_element_size(ssm_states))));
 
                 struct ggml_tensor * y = ggml_view_2d(ctx0, y_ssm_states, d_inner, n_tokens, d_inner*ggml_element_size(y_ssm_states), 0);
 
@@ -8362,7 +8357,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
         float * data = (float *) lctx.inp_KQ_mask->data;
 
-        // For Transformers, use only the previous KV cells
+        // For Transformers, use only the previous KV cells (or all, when non-causal)
         // of the correct sequence for each token of the batch.
         // It's assumed that if a token in the batch has multiple sequences, they are equivalent.
         for (int h = 0; h < 1; ++h) {
@@ -8382,13 +8377,6 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                 }
             }
         }
-        // For Mamba (and other constant-time-and-size architectures),
-        // update the correct state(s)/sequence(s) for each token of the batch.
-        // Source and destination states are both the same for the sake of implementation simplicity.
-        // It would be more complex if they were sometimes the same and somtimes not.
-        // (with Transformers, source KV cells are never the destination,
-        //  which is also simpler, but more memory hungry)
-        // TODO: implement
     }
 
     if (hparams.need_kq_pos) {
@@ -8447,28 +8435,54 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
     }
 
     if (kv_self.unlimited) {
-        const uint32_t kv_size = kv_self.size;
-        const uint32_t n_kv    = kv_self.n;
+        const int64_t kv_size = kv_self.size;
+        const int64_t n_kv    = kv_self.n;
 
-        GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_s_mask->buffer));
-        float * data = (float *) lctx.inp_s_mask->data;
+        {
+            GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_s_mask->buffer));
+            float * data = (float *) lctx.inp_s_mask->data;
 
-        // states which are not affected by the current batch are left untouched
-        for (uint32_t i = 0; i < n_kv; ++i) {
-            llama_seq_id    seq_id        = i + lctx.kv_self.head;
-            llama_kv_cell & kv_cell       = lctx.kv_self.cells[seq_id];
-            bool            has_self_seq  = kv_cell.has_seq_id(seq_id);
+            // states which are not affected by the current batch are left untouched
+            for (int i = 0; i < n_kv; ++i) {
+                llama_seq_id    seq_id        = i + lctx.kv_self.head;
+                llama_kv_cell & kv_cell       = lctx.kv_self.cells[seq_id];
+                bool            has_self_seq  = kv_cell.has_seq_id(seq_id);
 
-            data[i] = (float) has_self_seq;
+                data[i] = (float) has_self_seq;
 
-            // ensure current sequences will be kept
-            if (!has_self_seq) {
-                kv_cell.seq_id.insert(seq_id);
+                // ensure current sequences will be kept
+                if (!has_self_seq) {
+                    kv_cell.seq_id.insert(seq_id);
+                }
+            }
+        }
+        // For Mamba (and other constant-time-and-size architectures),
+        // update the correct state(s)/sequence(s) for each token of the batch.
+        // Like with the KQ_mask, if a token in the batch has multiple sequences,
+        // they are assumed to be equivalent (not here, but in ggml_ssm_scan and ggml_ssm_conv).
+        {
+            const int64_t n_tokens = batch.n_tokens;
+
+            GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_s_seq->buffer));
+            int32_t * data = (int32_t *) lctx.inp_s_seq->data;
+
+            for (int j = 0; j < n_tokens; ++j) {
+                const int32_t n_seq = batch.n_seq_id[j];
+                GGML_ASSERT(0 < n_seq); // a token should be part of at least 1 sequence
+
+                for (int i = 0; i < n_kv; ++i) {
+                    if (i < n_seq) {
+                        // for this type of model, the head is the minimum seq_id of the batch
+                        data[j*n_kv + i] = batch.seq_id[j][i] - kv_self.head;
+                    } else {
+                        data[j*n_kv + i] = -1;
+                    }
+                }
             }
         }
         // remove extraneous seq_ids when state copies are made
         {
-            for (uint32_t i = 0; i < kv_size; ++i) {
+            for (int i = 0; i < kv_size; ++i) {
                 llama_kv_cell & kv_cell      = lctx.kv_self.cells[i];
                 uint32_t        n_seqs       = kv_cell.seq_id.size();
                 bool            has_self_seq = kv_cell.has_seq_id(i);
@@ -12642,7 +12656,7 @@ struct llama_context * llama_new_context_with_model(
         // graph inputs
         {
             ggml_init_params init_params = {
-                /* .mem_size   */ ggml_tensor_overhead()*(8 + ctx->kv_self.unlimited),
+                /* .mem_size   */ ggml_tensor_overhead()*(8 + 2*(ctx->kv_self.unlimited)),
                 /* .mem_buffer */ nullptr,
                 /* .no_alloc   */ true,
             };
@@ -12656,8 +12670,10 @@ struct llama_context * llama_new_context_with_model(
             ctx->inp_K_shift = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, kv_size);
             ctx->inp_mean    = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch, cparams.n_batch);
             ctx->inp_cls     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
-            if (ctx->kv_self.unlimited)
+            if (ctx->kv_self.unlimited) {
                 ctx->inp_s_mask = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_F32, kv_size);
+                ctx->inp_s_seq  = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_I32, kv_size, cparams.n_batch);
+            }
 
             ggml_set_name(ctx->inp_tokens,  "inp_tokens");
             ggml_set_name(ctx->inp_embd,    "inp_embd");
@@ -12667,8 +12683,10 @@ struct llama_context * llama_new_context_with_model(
             ggml_set_name(ctx->inp_K_shift, "inp_K_shift");
             ggml_set_name(ctx->inp_mean,    "inp_mean");
             ggml_set_name(ctx->inp_cls,     "inp_cls");
-            if (ctx->kv_self.unlimited)
+            if (ctx->kv_self.unlimited) {
                 ggml_set_name(ctx->inp_s_mask, "inp_s_mask");
+                ggml_set_name(ctx->inp_s_seq,  "inp_s_seq");
+            }
 
             ctx->buf_input = ggml_backend_alloc_ctx_tensors_from_buft(ctx->ctx_input, llama_default_buffer_type_cpu(true));
             LLAMA_LOG_INFO("%s: %10s input buffer size   = %8.2f MiB\n", __func__,
