@@ -741,7 +741,7 @@ function(get_flags CCID CCVER)
         if (CCVER VERSION_GREATER_EQUAL 8.1.0)
             list(APPEND CXX_FLAGS -Wextra-semi)
         endif()
-     endif()
+    endif()
      
     set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)
     set(GF_CXX_FLAGS ${CXX_FLAGS} PARENT_SCOPE)
