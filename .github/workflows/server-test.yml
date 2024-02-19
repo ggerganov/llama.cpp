@@ -46,6 +46,6 @@ jobs:
         id: server_integration_test
         run: |
           cd examples/server/tests
-          ./tests.sh tinyllama-2-1b-miniguanaco.Q2_K.gguf
+          ./tests.sh ../../../tinyllama-2-1b-miniguanaco.Q2_K.gguf
           
           
