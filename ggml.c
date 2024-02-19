@@ -23,6 +23,9 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <signal.h>
+#if defined(__gnu_linux__)
+#include <syscall.h>
+#endif
 
 #ifdef GGML_USE_METAL
 #include <unistd.h>
@@ -1971,7 +1974,7 @@ struct ggml_numa_nodes {
     uint32_t n_nodes;
     uint32_t total_cpus; // hardware threads on system
     uint32_t current_node; // node on which main process is execting
-#ifdef __linux__
+#if defined(__gnu_linux__)
     cpu_set_t cpuset; // cpuset from numactl
 #else
     uint32_t cpuset; // no NUMA support outside of Linux at this time. Use a portable datatype
@@ -2009,7 +2012,7 @@ inline static void ggml_critical_section_end(void) {
     atomic_fetch_sub(&g_state_barrier, 1);
 }
 
-#ifdef __linux__
+#if defined(__gnu_linux__)
 static cpu_set_t ggml_get_numa_affinity(void) {
     cpu_set_t cpuset;
     pthread_t thread;
@@ -2031,7 +2034,7 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
         return;
     }
 
-#ifdef __linux__
+#if defined(__gnu_linux__)
     struct stat st;
     char path[256];
     int rv;
@@ -2063,7 +2066,13 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
 
     // figure out which node we're on
     uint current_cpu;
-    int getcpu_ret = getcpu(&current_cpu, &g_state.numa.current_node);
+    int getcpu_ret = 0;
+#if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 28)
+    getcpu_ret = getcpu(&current_cpu, &g_state.numa.current_node);
+#else
+    // old glibc doesn't have a wrapper for this call. Fall back on direct syscall
+    getcpu_ret = syscall(SYS_getcpu,&current_cpu,&g_state.numa.current_node);
+#endif
 
     if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1 || getcpu_ret != 0) {
         g_state.numa.n_nodes = 0;
@@ -16734,7 +16743,7 @@ typedef pthread_t ggml_thread_t;
 #endif
 
 // Android's libc implementation "bionic" does not support setting affinity
-#if defined(__linux__) && !defined(__BIONIC__)
+#if defined(__gnu_linux__)
 static void set_numa_thread_affinity(int thread_n) {
     if (!ggml_is_numa()) {
         return;
