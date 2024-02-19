@@ -10497,8 +10497,8 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
             case GGML_TYPE_IQ2_XS:
             case GGML_TYPE_IQ3_XXS:
             case GGML_TYPE_IQ1_S:
-            case GGML_TYPE_Q2_K: new_type = GGML_TYPE_Q4_0; break;
-            case GGML_TYPE_Q3_K: new_type = GGML_TYPE_Q4_1; break;
+            case GGML_TYPE_Q2_K:
+            case GGML_TYPE_Q3_K: new_type = GGML_TYPE_IQ4_NL; break;
             case GGML_TYPE_Q4_K: new_type = GGML_TYPE_Q5_0; break;
             case GGML_TYPE_Q5_K: new_type = GGML_TYPE_Q5_1; break;
             case GGML_TYPE_Q6_K: new_type = GGML_TYPE_Q8_0; break;
