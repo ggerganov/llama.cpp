@@ -651,18 +651,18 @@ static __device__ __forceinline__ float2 warp_reduce_sum(float2 a) {
     return a;
 }
 
-static __device__ __forceinline__ half2 warp_reduce_sum(half2 a) {
-#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        a = __hadd2(a, __shfl_xor_sync(0xffffffff, a, mask, 32));
-    }
-    return a;
-#else
-    (void) a;
-    NO_DEVICE_CODE;
-#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
-}
+//static __device__ __forceinline__ half2 warp_reduce_sum(half2 a) {
+//#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
+//#pragma unroll
+//    for (int mask = 16; mask > 0; mask >>= 1) {
+//        a = __hadd2(a, __shfl_xor_sync(0xffffffff, a, mask, 32));
+//    }
+//    return a;
+//#else
+//    (void) a;
+//    NO_DEVICE_CODE;
+//#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
+//}
 
 static __device__ __forceinline__ float warp_reduce_max(float x) {
 #pragma unroll
@@ -672,18 +672,18 @@ static __device__ __forceinline__ float warp_reduce_max(float x) {
     return x;
 }
 
-static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
-#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        x = __hmax2(x, __shfl_xor_sync(0xffffffff, x, mask, 32));
-    }
-    return x;
-#else
-    (void) x;
-    NO_DEVICE_CODE;
-#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
-}
+//static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
+//#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
+//#pragma unroll
+//    for (int mask = 16; mask > 0; mask >>= 1) {
+//        x = __hmax2(x, __shfl_xor_sync(0xffffffff, x, mask, 32));
+//    }
+//    return x;
+//#else
+//    (void) x;
+//    NO_DEVICE_CODE;
+//#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
+//}
 
 static __device__ __forceinline__ float op_repeat(const float a, const float b) {
     return b;
@@ -4641,10 +4641,12 @@ static __device__ __forceinline__ float vec_dot_iq2_xs_q8_1(
     const float d = (float)bq2->d * __low2float(bq8_1[ib32].ds) * 0.25f;
     return d * ((0.5f + ls1) * sumi1 + (0.5f + ls2) * sumi2);
 #else
+    (void) ksigns64;
     assert(false);
     return 0.f;
 #endif
 #else
+    (void) ksigns64;
     assert(false);
     return 0.f;
 #endif
