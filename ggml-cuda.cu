@@ -6852,6 +6852,7 @@ static void dequantize_row_iq1_s_cuda(const void * vx, dst_t * y, const int k, c
     dequantize_block_iq1_s<<<nb, 32, 0, stream>>>(vx, y);
 }
 
+template<typename dst_t>
 static void dequantize_row_iq4_nl_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int nb = (k + QK_K - 1) / QK_K;
     dequantize_block_iq4_nl<<<nb, 32, 0, stream>>>(vx, y);
