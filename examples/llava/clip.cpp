@@ -616,7 +616,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             KQ = ggml_soft_max_inplace(ctx0, KQ);
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ);
             KQV = ggml_reshape_4d(ctx0, KQV, d_head, num_positions, n_head, batch_size);
-            KQV = ggml_cont(ctx0, ggml_permute(ctx0, KQV, 0, 2, 1, 3));
+            KQV = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
 
             cur = ggml_cont_3d(ctx0, KQV, hidden_size, num_positions, batch_size);
         }
