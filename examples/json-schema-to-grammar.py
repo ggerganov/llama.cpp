@@ -93,6 +93,7 @@ class SchemaConverter:
             if min_items > 0:
                first_item = f"({item_rule_name})"
                successive_items = list_item_operator * (min_items - 1)
+               min_items -= 1
             else:
                first_item = f"({item_rule_name})?"
             max_items = schema.get("maxItems")
