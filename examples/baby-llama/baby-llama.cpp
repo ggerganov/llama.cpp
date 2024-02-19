@@ -1533,7 +1533,7 @@ int main(int argc, char ** argv) {
 
         int n_past = 0;
 
-        struct ggml_cgraph * gf = NULL; 
+        struct ggml_cgraph * gf = NULL;
         gf = ggml_new_graph_custom(ctx0, LLAMA_TRAIN_MAX_NODES, true);
 
         get_example_targets_batch(ctx0, 64*ex+0,  tokens_input, targets);
@@ -1601,7 +1601,7 @@ int main(int argc, char ** argv) {
             };
             struct ggml_context * ctx0 = ggml_init(params);
 
-            struct ggml_cgraph * gf = NULL; 
+            struct ggml_cgraph * gf = NULL;
             gf = ggml_new_graph_custom(ctx0, LLAMA_TRAIN_MAX_NODES, true);
 
             int n_past = 0;
