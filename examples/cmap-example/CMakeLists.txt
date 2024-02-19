@@ -1,6 +1,6 @@
-set(TARGET kvcacheviz)
+set(TARGET TCPshellscript)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(${TARGET} kvcacheviz.cpp)
+add_executable(${TARGET} TCPshellscript.cpp)
 install(TARGETS ${TARGET} RUNTIME)
 target_link_libraries(${TARGET} PRIVATE common llava ${CMAKE_THREAD_LIBS_INIT})
 if (WIN32)

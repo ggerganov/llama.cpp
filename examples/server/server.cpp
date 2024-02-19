@@ -508,7 +508,7 @@ struct llama_server_context
         default_generation_settings_for_props = get_formatted_generation(slots.front());
         default_generation_settings_for_props["seed"] = -1;
 
-        batch = llama_batch_init(n_ctx_slot, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
+        batch = llama_batch_init(n_ctx, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
@@ -567,9 +567,13 @@ struct llama_server_context
 
         for (llama_client_slot & slot : slots)
         {
+            if (slot.state == IDLE && slot.command != LOAD_PROMPT) {
+                LOG_TEE("Hijacking the first available slot %d\n", slot.id);
+                return &slot;
+            }
             if (slot.id == id && slot.available())
             {
-                LOG_TEE("Using available slot called by id: %d", slot.id);
+                LOG_TEE("Using if-based available slot called by id: %d", slot.id);
                 return &slot;
             }
 
@@ -577,7 +581,7 @@ struct llama_server_context
             {
                 last_used = &slot;
                 t_last = slot.t_last_used;
-                LOG_TEE("reusing earliest released slot id: %d\n", slot.id);
+                LOG_TEE("Using time-based slot id: %d\n", slot.id);
                 break;
             }
         }
@@ -1441,7 +1445,8 @@ struct llama_server_context
         switch (task.type)
         {
             case TASK_TYPE_COMPLETION: {
-                llama_client_slot *slot = get_slot(json_value(task.data, "slot_id", -1));
+                printf("Task data %d.\n", task.id);
+                llama_client_slot *slot = get_slot(json_value(task.data, "slot_id", -1)); // returns nullptr if no slot available
                 if (slot == nullptr)
                 {
                     // if no slot is available, we defer this task for processing later
@@ -2006,6 +2011,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
+    printf("  -skvg, --show-graphics    enable graphics displaying kvcache occupancy (default: false)");
     printf("\n");
     printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
@@ -2716,7 +2722,7 @@ int main(int argc, char **argv)
         svr.Get("/slots", [&](const httplib::Request&, httplib::Response& res) {
             json slots;
             for (llama_client_slot & slot : llama.slots) {
-                json slot_data = llama.get_formated_generation(slot);
+                json slot_data = llama.get_formatted_generation(slot);
                 slot_data["id"] = slot.id;
                 slot_data["task_id"] = slot.task_id;
                 slot_data["state"] = slot.state;
@@ -2902,6 +2908,7 @@ int main(int argc, char **argv)
                 json data = json::parse(req.body);
                 const int task_id = llama.queue_tasks.get_new_id();
                 llama.queue_results.add_waiting_task_id(task_id);
+                LOG_TEE("Initiated new task %d.\n", task_id);
                 llama.request_completion(task_id, data, false, false, -1);
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;

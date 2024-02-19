@@ -9,11 +9,14 @@ def print_dict(data):
         for k, v in data.items():
             if isinstance(v, dict):
                 print_dict(v)
-    elif isinstance(v, list):
+            elif k == "content":          
+                print(f"Key: {k:>30}: {v}")
+                return
+    elif isinstance(data, list):
         for entry in v:
             print_dict(entry)
-    elif k == "content":          
-        print(f"Key: {k:>30}: {v}")
+    elif isinstance(data, str):
+        print(f"Incoming string is {data}.\n")
     return
 
 def print_response(text):

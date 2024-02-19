@@ -53,7 +53,7 @@ enum task_type {
 };
 
 struct task_server {
-    int id = -1; // to be filled by llama_server_queue
+    int id = -1; // for any instance, task id is not assigned yet; to be filled by llama_server_queue
     int target_id;
     task_type type;
     json data;
@@ -162,6 +162,9 @@ template <typename T>
 static T json_value(const json &body, const std::string &key, const T &default_value)
 {
     // Fallback null to default value
+    if (body.contains(key) && !body.at(key).is_null()) {
+        LOG_TEE("Body at %s in %d\n", key.c_str(), int(body.at(key)));
+    }
     return body.contains(key) && !body.at(key).is_null()
         ? body.value(key, default_value)
         : default_value;
@@ -238,6 +241,7 @@ struct llama_server_queue {
             task.id = id++;
         }
         queue_tasks.push_back(std::move(task));
+        //LOG_TEE("Queue now has %2zu members.\n", queue_tasks.size());
         condition_tasks.notify_one();
         return task.id;
     }
@@ -246,11 +250,13 @@ struct llama_server_queue {
     void defer(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         queue_tasks_deferred.push_back(std::move(task));
+        LOG_TEE("Deferred task queue now has %3zu members.\n", queue_tasks_deferred.size());
     }
 
-    // Get the next id for creating anew task
+    // Get the next id for creating a new task
     int get_new_id() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
+        LOG_TEE("New task id returned with value %d.\n", id);
         return id++;
     }
 
@@ -293,7 +299,7 @@ struct llama_server_queue {
         running = true;
         while (true) {
             // new task arrived
-            LOG_VERBOSE("have new task", {});
+            LOG_VERBOSE("have new task number %d.\n", {});
             {
                 while (true)
                 {
@@ -305,10 +311,8 @@ struct llama_server_queue {
                     task_server task = queue_tasks.front();
                     queue_tasks.erase(queue_tasks.begin());
                     lock.unlock();
-                    LOG_VERBOSE("callback_new_task", {});
                     callback_new_task(task);
                 }
-                LOG_VERBOSE("callback_all_task_finished", {});
                 // process and update all the multitasks
                 auto queue_iterator = queue_multitasks.begin();
                 while (queue_iterator != queue_multitasks.end())
@@ -326,7 +330,7 @@ struct llama_server_queue {
                         ++queue_iterator;
                     }
                 }
-                // all tasks in the current loop is finished
+                // all tasks in the current loop are finished
                 callback_all_task_finished();
             }
             LOG_VERBOSE("wait for new task", {});
