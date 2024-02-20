@@ -1937,9 +1937,9 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`");
-    printf("  --chat-template JINJA_TEMPLATE");
-    printf("                            set custom jinja chat template (default: template taken from model's metadata)");
-    printf("                            Note: only commonly used templates are accepted, since we don't have jinja parser");
+    printf("  --chat-template JINJA_TEMPLATE\n");
+    printf("                            set custom jinja chat template (default: template taken from model's metadata)\n");
+    printf("                            Note: only commonly used templates are accepted, since we don't have jinja parser\n");
     printf("\n");
 }
 
