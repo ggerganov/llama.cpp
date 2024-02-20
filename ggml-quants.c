@@ -10552,7 +10552,7 @@ void iq3xs_init_impl(int grid_size) {
     };
 
     const int kmap_size = 4096;
-    const int nwant = 2;
+    const int nwant = grid_size == 256 ? 2 : 3;
     const uint16_t * kgrid = grid_size == 256 ? kgrid_256 : kgrid_512;
     uint32_t * kgrid_q3xs;
     int      * kmap_q3xs;
@@ -10883,60 +10883,10 @@ static void quantize_row_iq3_xs_impl(int grid_size, const float * restrict x, vo
         float d = max_scale/31;
         dh[0] = GGML_FP32_TO_FP16(d * 1.0125f);  // small improvement via this fudge factor
         float id = 1/d;
-        //float sumqx = 0, sumq2 = 0;
         for (int ib = 0; ib < QK_K/32; ++ib) {
             int l = nearest_int(0.5f*(id*scales[ib]-1));
             l = MAX(0, MIN(15, l));
             scales_and_signs[ib] |= ((uint32_t)l << 28);
-            if (false) {
-                const float * xb = xbl + 32*ib;
-                if (quant_weights) {
-                    const float * qw = quant_weights + QK_K*ibl + 32*ib;
-                    for (int i = 0; i < 32; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
-                } else {
-                    for (int i = 0; i < 32; ++i) weight[i] = xb[i]*xb[i];
-                }
-                uint8_t h = 0;
-                if (grid_size == 512) { h = qh[ib]; qh[ib] = 0; }
-                const float db = d * (1 + 2*l);
-                for (int k = 0; k < 8; ++k) {
-                    const int8_t * signs = keven_signs_q2xs + 8*((scales_and_signs[ib] >> 7*(k/2)) & 127) + 4*(k%2);
-                    const float * xk = xb + 4*k;
-                    const float * wk = weight + 4*k;
-                    int idx = q3[8*ib+k];
-                    if (grid_size == 512) idx |= ((h << (8-k)) & 256);
-                    const uint8_t * grid = (const uint8_t *)(kgrid_q3xs + idx);
-                    float best_mse = 0; int best_index = idx;
-                    for (int j = 0; j < 4; ++j) {
-                        float diff = db * grid[j] * signs[j] - xk[j];
-                        best_mse += wk[j] * diff * diff;
-                    }
-                    for (idx = 0; idx < grid_size; ++idx) {
-                        grid = (const uint8_t *)(kgrid_q3xs + idx);
-                        float mse = 0;
-                        for (int j = 0; j < 4; ++j) {
-                            float diff = db * grid[j] * signs[j] - xk[j];
-                            mse += wk[j] * diff * diff;
-                        }
-                        if (mse < best_mse) {
-                            best_mse = mse; best_index = idx;
-                        }
-                    }
-                    if (grid_size == 256) {
-                        q3[8*ib+k] = best_index;
-                    } else {
-                        q3[8*ib+k] = best_index & 255;
-                        qh[ib] |= ((best_index >> 8) << k);
-                    }
-                    //grid = (const uint8_t *)(kgrid_q3xs + best_index);
-                    //for (int j = 0; j < 4; ++j) {
-                    //    float q = db * grid[j] * signs[j];
-                    //    sumqx += wk[j] * q * xk[j];
-                    //    sumq2 += wk[j] * q * q;
-                    //}
-                }
-                //if (sumq2 > 0) y[ibl].d = GGML_FP32_TO_FP16(d*sumqx/sumq2);
-            }
         }
         memcpy(qs, q3, quant_size);
 
