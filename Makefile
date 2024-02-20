@@ -535,7 +535,7 @@ ifdef LLAMA_METAL_NDEBUG
 endif
 ifdef LLAMA_METAL_EMBED_LIBRARY
 	MK_CPPFLAGS += -DGGML_METAL_EMBED_LIBRARY
-	OBJS    += ggml-metal-embed.o
+	OBJS        += ggml-metal-embed.o
 endif
 endif # LLAMA_METAL
 
