@@ -204,7 +204,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), true, buf.data(), buf.size());
     }
 
-    std::string formatted_chat(buf.data(), buf.size());
+    std::string formatted_chat(buf.data(), res);
     LOG_VERBOSE("formatted_chat", {{"text", formatted_chat.c_str()}});
 
     return formatted_chat;
