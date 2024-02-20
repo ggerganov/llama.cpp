@@ -57,3 +57,26 @@ Feature: llama.cpp server
     Then the server is busy
     Then the server is idle
     Then all prompts are predicted
+
+
+  Scenario: Multi users OAI Compatibility
+    Given a system prompt "You are an AI assistant."
+    And a model tinyllama-2
+    And 1024 max tokens to predict
+    And streaming is enabled
+    Given a prompt:
+      """
+      Write a very long story about AI.
+      """
+    And a prompt:
+      """
+      Write another very long music lyrics.
+      """
+    And a prompt:
+      """
+      Write yet another very long music lyrics.
+      """
+    Given concurrent OAI completions requests
+    Then the server is busy
+    Then the server is idle
+    Then all prompts are predicted
