@@ -37,7 +37,7 @@ struct server_params
     std::string hostname = "127.0.0.1";
     std::vector<std::string> api_keys;
     std::string public_path = "examples/server/public";
-    std::string chat_template = "chatml";
+    std::string chat_template = "";
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
@@ -1937,8 +1937,9 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`");
-    printf("  --chat-template FORMAT_NAME");
-    printf("                            set chat template, possible value is: llama2, chatml (default %s)", sparams.chat_template.c_str());
+    printf("  --chat-template JINJA_TEMPLATE\n");
+    printf("                            set custom jinja chat template (default: template taken from model's metadata)\n");
+    printf("                            Note: only commonly used templates are accepted, since we don't have jinja parser\n");
     printf("\n");
 }
 
@@ -2389,13 +2390,13 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            std::string value(argv[i]);
-            if (value != "chatml" && value != "llama2") {
-                fprintf(stderr, "error: chat template can be \"llama2\" or \"chatml\", but got: %s\n", value.c_str());
+            if (!verify_custom_template(argv[i])) {
+                fprintf(stderr, "error: the supplied chat template is not supported: %s\n", argv[i]);
+                fprintf(stderr, "note: llama.cpp does not use jinja parser, we only support commonly used templates\n");
                 invalid_param = true;
                 break;
             }
-            sparams.chat_template = value;
+            sparams.chat_template = argv[i];
         }
         else if (arg == "--override-kv")
         {
@@ -2913,7 +2914,7 @@ int main(int argc, char **argv)
                 if (!validate_api_key(req, res)) {
                     return;
                 }
-                json data = oaicompat_completion_params_parse(json::parse(req.body), sparams.chat_template);
+                json data = oaicompat_completion_params_parse(llama.model, json::parse(req.body), sparams.chat_template);
 
                 const int task_id = llama.queue_tasks.get_new_id();
                 llama.queue_results.add_waiting_task_id(task_id);
