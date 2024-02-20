@@ -14966,7 +14966,7 @@ static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_ten
                 if (a->ne[3] != b->ne[3]) {
                     return false;
                 }
-                
+
                 if (a->type == GGML_TYPE_IQ1_S) {
                     return false;
                 }
