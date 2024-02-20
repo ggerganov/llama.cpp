@@ -76,8 +76,8 @@ def send_request(q, question, event, count, num_requests):
             print(f"Server responded with code {response.status_code}\n")
     except Exception as e:
         print(f"Server returned exception error {e}")
-        sleep(delay)
-        delay *= 2
+       # sleep(delay)
+       # delay *= 2
 
 if __name__ == "__main__":
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     
     for i in range(num_requests):
         country = country_list[i % len(country_list)]
-        question = f"When was the first democratic election (if any) in {country}?"
+        question = f"What was the total population of {country} in 2018?"
         # NOTE: don't pass the parameter as a function call; pass in args
         print(f"Processing request {i} / {num_requests}: {question}\n")
         event = threading.Event()

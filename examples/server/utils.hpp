@@ -162,9 +162,6 @@ template <typename T>
 static T json_value(const json &body, const std::string &key, const T &default_value)
 {
     // Fallback null to default value
-    if (body.contains(key) && !body.at(key).is_null()) {
-        LOG_TEE("Body at %s in %d\n", key.c_str(), int(body.at(key)));
-    }
     return body.contains(key) && !body.at(key).is_null()
         ? body.value(key, default_value)
         : default_value;
@@ -238,7 +235,7 @@ struct llama_server_queue {
     int post(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         if (task.id == -1) {
-            task.id = id++;
+            task.id = id;   // originally id++ but this repeats get_new_id below
         }
         queue_tasks.push_back(std::move(task));
         //LOG_TEE("Queue now has %2zu members.\n", queue_tasks.size());
@@ -294,12 +291,12 @@ struct llama_server_queue {
         condition_tasks.notify_all();
     }
 
-    // Start the main loop.
+    // Start the main loop. Called from the very end of server.cpp
     void start_loop() {
         running = true;
         while (true) {
             // new task arrived
-            LOG_VERBOSE("have new task number %d.\n", {});
+            LOG_TEE("In start_loop have new task number %d.\n", id);
             {
                 while (true)
                 {
@@ -383,7 +380,7 @@ struct llama_server_response {
     typedef std::function<void(int, int, task_result&)> callback_multitask_t;
     callback_multitask_t callback_update_multitask;
     // for keeping track of all tasks waiting for the result
-    std::set<int> waiting_task_ids;
+    std::set<int> waiting_task_ids;     // so this stores waiting tasks with no obvious limit
     // the main result queue
     std::vector<task_result> queue_results;
     std::mutex mutex_results;
@@ -392,11 +389,13 @@ struct llama_server_response {
     void add_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
+        LOG_TEE("Waiting task list size after addition: %zu.\n", waiting_task_ids.size());
     }
 
     void remove_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
+        LOG_TEE("Waiting task list size after removal: %zu.\n", waiting_task_ids.size());
     }
 
     // This function blocks the thread until there is a response for this task_id
