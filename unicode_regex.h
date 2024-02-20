@@ -193,7 +193,7 @@ private:
                 continue;
             }
                 // ?\p{L}+
-            else if (unicode_engine.is_category(codepoint, "LETTER") || codepoint == 32 && unicode_engine.is_category(codepoint_next, "LETTER")) {
+            else if (unicode_engine.is_category(codepoint, "LETTER") || (codepoint == 32 && unicode_engine.is_category(codepoint_next, "LETTER"))) {
                 codepoints_buffer.push_back(codepoint);
                 offset++;
                 while (offset < codepoints.size() && unicode_engine.is_category(codepoints[offset], "LETTER")) {
@@ -202,7 +202,7 @@ private:
                 }
             }
                 // ?\p{N}+
-            else if (unicode_engine.is_category(codepoint, "NUMBER") || codepoint == 32 && unicode_engine.is_category(codepoint_next, "NUMBER")) {
+            else if (unicode_engine.is_category(codepoint, "NUMBER") || (codepoint == 32 && unicode_engine.is_category(codepoint_next, "NUMBER"))) {
                 codepoints_buffer.push_back(codepoint);
                 offset++;
                 while (offset < codepoints.size() && unicode_engine.is_category(codepoints[offset], "NUMBER")) {
@@ -211,7 +211,7 @@ private:
                 }
             }
                 // ?[^\s\p{L}\p{N}]+
-            else if (!unicode_engine.is_category(codepoint, codepoint_rules_2) || codepoint == 32 && !unicode_engine.is_category(codepoint_next, codepoint_rules_2)) {
+            else if (!unicode_engine.is_category(codepoint, codepoint_rules_2) || (codepoint == 32 && !unicode_engine.is_category(codepoint_next, codepoint_rules_2))) {
                 codepoints_buffer.push_back(codepoint);
                 offset++;
                 while (offset < codepoints.size() && !unicode_engine.is_category(codepoints[offset], codepoint_rules_2)) {
