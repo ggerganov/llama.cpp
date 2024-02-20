@@ -182,7 +182,7 @@ def step_detokenize(context):
     })
     assert response.status_code == 200
     print(response.json())
-    # FIXME the detokenize answer contains a space prefix ?
+    # FIXME the detokenize answer contains a space prefix ? see #3287
     assert context.tokenized_text == response.json()['content'].strip()
 
 
