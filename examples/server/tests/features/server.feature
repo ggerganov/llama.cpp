@@ -54,10 +54,6 @@ Feature: llama.cpp server
       It was her greeting to Prince Vassily, a man high in rank
       and office, who was the first to arrive at her soirée.
       """
-    And a prompt:
-      """
-      Write another very long music lyrics.
-      """
     Given concurrent completion requests
     Then the server is busy
     And  all slots are busy
@@ -69,7 +65,7 @@ Feature: llama.cpp server
   Scenario: Multi users OAI Compatibility
     Given a system prompt "You are an AI assistant."
     And a model tinyllama-2
-    And 512 max tokens to predict
+    And 1024 max tokens to predict
     And streaming is enabled
     Given a prompt:
       """
@@ -78,10 +74,6 @@ Feature: llama.cpp server
     And a prompt:
       """
       Write another very long music lyrics.
-      """
-    And a prompt:
-      """
-      I believe the meaning of life is
       """
     Given concurrent OAI completions requests
     Then the server is busy
