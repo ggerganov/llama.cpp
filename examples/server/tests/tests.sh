@@ -32,4 +32,4 @@ set -eu
             "$@" &
 
 # Start tests
-behave
+behave --summary --stop

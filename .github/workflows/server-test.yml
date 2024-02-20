@@ -47,5 +47,3 @@ jobs:
         run: |
           cd examples/server/tests
           ./tests.sh ../../../stories260K.gguf
-          
-          

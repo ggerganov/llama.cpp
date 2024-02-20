@@ -74,6 +74,11 @@ def step_max_tokens(context, max_tokens):
     context.max_tokens = int(max_tokens)
 
 
+@step(u'streaming is {enable_streaming}')
+def step_streaming(context, enable_streaming):
+    context.enable_streaming = bool(enable_streaming)
+
+
 @step(u'an OAI compatible chat completions request')
 def step_oai_chat_completions(context):
     chat_completion = openai.Completion.create(
@@ -88,14 +93,31 @@ def step_oai_chat_completions(context):
             }
         ],
         model=context.model,
-        max_tokens=context.max_tokens
+        max_tokens=context.max_tokens,
+        stream=context.enable_streaming
     )
-    context.completions.append({
-        'content': chat_completion.choices[0].message,
-        'timings': {
-            'predicted_n': chat_completion.usage.completion_tokens
+    if context.enable_streaming:
+        completion_response = {
+            'content': '',
+            'timings': {
+                'predicted_n': 0
+            }
         }
-    })
+        for chunk in chat_completion:
+            assert len(chunk.choices) == 1
+            delta = chunk.choices[0].delta
+            if 'content' in delta:
+                completion_response['content'] += delta['content']
+                completion_response['timings']['predicted_n'] += 1
+        context.completions.append(completion_response)
+    else:
+        assert len(chat_completion.choices) == 1
+        context.completions.append({
+            'content': chat_completion.choices[0].message,
+            'timings': {
+                'predicted_n': chat_completion.usage.completion_tokens
+            }
+        })
 
 
 @step(u'a prompt')

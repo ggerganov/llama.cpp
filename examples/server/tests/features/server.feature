@@ -23,13 +23,14 @@ Feature: llama.cpp server
     And   a user prompt <user_prompt>
     And   a model <model>
     And   <max_tokens> max tokens to predict
+    And   streaming is <enable_streaming>
     Given an OAI compatible chat completions request
     Then  <predicted_n> tokens are predicted
 
     Examples: Prompts
-      | model        | system_prompt               | user_prompt                          | max_tokens | predicted_n |
-      | llama-2      | You are ChatGPT.            | Say hello.                           | 64         | 64          |
-      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 512        | 512         |
+      | model        | system_prompt               | user_prompt                          | max_tokens | enable_streaming | predicted_n |
+      | llama-2      | You are ChatGPT.            | Say hello.                           | 64         | false            | 64          |
+      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 512        | true             | 512         |
 
   Scenario: Multi users
     Given a prompt:
