@@ -156,6 +156,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
+- [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
 
 ---
 
