@@ -91,10 +91,10 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
 
     snprintf(result, sizeof(result),
             "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
-            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, typical_p = %.3f, temp = %.3f\n"
+            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, min_p = %.3f, top_a = %.3f, typical_p = %.3f, temp = %.3f\n"
             "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f",
             params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present,
-            params.top_k, params.tfs_z, params.top_p, params.min_p, params.typical_p, params.temp,
+            params.top_k, params.tfs_z, params.top_p, params.min_p, params.top_a, params.typical_p, params.temp,
             params.mirostat, params.mirostat_eta, params.mirostat_tau);
 
     return std::string(result);
@@ -128,6 +128,7 @@ static void sampler_queue(
     const int32_t       top_k             = params.top_k;
     const float         top_p             = params.top_p;
     const float         min_p             = params.min_p;
+    const float         top_a             = params.top_a;
     const float         tfs_z             = params.tfs_z;
     const float         typical_p         = params.typical_p;
     const std::vector<llama_sampler_type> & samplers_sequence = params.samplers_sequence;
@@ -139,6 +140,7 @@ static void sampler_queue(
             case llama_sampler_type::TYPICAL_P: llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
             case llama_sampler_type::TOP_P    : llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
             case llama_sampler_type::MIN_P    : llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
+            case llama_sampler_type::TOP_A    : llama_sample_top_a    (ctx_main, &cur_p, top_a,     min_keep); break;
             case llama_sampler_type::TEMPERATURE:
                 if (dynatemp_range > 0) {
                     float dynatemp_min = std::max(0.0f, temp - dynatemp_range);

@@ -10725,7 +10725,7 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
     }
 }
 
-void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
+static void llama_sample_min_p_pow(struct llama_context * ctx, llama_token_data_array * candidates, float p, float pow, size_t min_keep) {
     if (p <= 0.0f || !candidates->size) {
         return;
     }
@@ -10742,7 +10742,7 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
         for (size_t i = 0; i < candidates->size; ++i) {
             max_logit = std::max(max_logit, candidates->data[i].logit);
         }
-        const float min_logit = max_logit + logf(p); // min logit for p_i >= p * p_max
+        const float min_logit = max_logit + logf(p) * pow; // min logit for p_i >= p * p_max^pow
 
         for (size_t i = 0; i < candidates->size; ++i) {
             if (candidates->data[i].logit >= min_logit) {
@@ -10768,7 +10768,7 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
             candidates->sorted = true;
         }
 
-        const float min_logit = candidates->data[0].logit + logf(p); // min logit for p_i >= p * p_max
+        const float min_logit = candidates->data[0].logit + logf(p) * pow; // min logit for p_i >= p * p_max^pow
         size_t i = 1; // first token always matches
 
         for (; i < candidates->size; ++i) {
@@ -10784,6 +10784,14 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     }
+}
+
+void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
+    llama_sample_min_p_pow(ctx, candidates, p, 1.f, min_keep);
+}
+
+void llama_sample_top_a(struct llama_context * ctx, llama_token_data_array * candidates, float a, size_t min_keep) {
+    llama_sample_min_p_pow(ctx, candidates, a, 2.f, min_keep);
 }
 
 void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep) {

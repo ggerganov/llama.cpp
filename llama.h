@@ -813,6 +813,13 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
+    /// @details Top-A sampling as described in https://github.com/BlinkDL/RWKV-LM/tree/4cb363e5aa31978d801a47bc89d28e927ab6912e#the-top-a-sampling-method
+    LLAMA_API void llama_sample_top_a(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+                           float   a,
+                          size_t   min_keep);
+
     /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
     LLAMA_API void llama_sample_tail_free(
             struct llama_context * ctx,

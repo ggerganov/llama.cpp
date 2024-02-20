@@ -816,6 +816,7 @@ struct server_context {
         slot.sparams.top_k             = json_value(data, "top_k",             default_sparams.top_k);
         slot.sparams.top_p             = json_value(data, "top_p",             default_sparams.top_p);
         slot.sparams.min_p             = json_value(data, "min_p",             default_sparams.min_p);
+        slot.sparams.top_a             = json_value(data, "top_a",             default_sparams.top_a);
         slot.sparams.tfs_z             = json_value(data, "tfs_z",             default_sparams.tfs_z);
         slot.sparams.typical_p         = json_value(data, "typical_p",         default_sparams.typical_p);
         slot.sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
@@ -1194,6 +1195,7 @@ struct server_context {
             {"top_k",                     slot.sparams.top_k},
             {"top_p",                     slot.sparams.top_p},
             {"min_p",                     slot.sparams.min_p},
+            {"top_a",                     slot.sparams.top_a},
             {"tfs_z",                     slot.sparams.tfs_z},
             {"typical_p",                 slot.sparams.typical_p},
             {"repeat_last_n",             slot.sparams.penalty_last_n},
