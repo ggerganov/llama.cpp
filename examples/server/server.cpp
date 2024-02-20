@@ -2390,7 +2390,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            std::string value(argv[i]);
             if (!verify_custom_template(argv[i])) {
                 fprintf(stderr, "error: the supplied chat template is not supported: %s\n", argv[i]);
                 fprintf(stderr, "note: llama.cpp does not use jinja parser, we only support commonly used templates\n");

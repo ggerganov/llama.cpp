@@ -168,7 +168,7 @@ static T json_value(const json &body, const std::string &key, const T &default_v
 }
 
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-inline bool verify_custom_template(std::string tmpl) {
+inline bool verify_custom_template(const std::string & tmpl) {
     llama_chat_message chat[] = {{"user", "test"}};
     std::vector<char> buf(1);
     int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, buf.data(), buf.size());
@@ -176,7 +176,7 @@ inline bool verify_custom_template(std::string tmpl) {
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string tmpl, std::vector<json> messages)
+inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages)
 {
     size_t alloc_size = 0;
     // vector holding all allocated string to be passed to llama_chat_apply_template
@@ -185,11 +185,11 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
 
     for (size_t i = 0; i < messages.size(); ++i) {
         auto &curr_msg = messages[i];
-        str[i]          = json_value(curr_msg, "role",    std::string(""));
-        str[i + 1]      = json_value(curr_msg, "content", std::string(""));
-        alloc_size     += str[i + 1].length();
-        chat[i].role    = str[i].c_str();
-        chat[i].content = str[i + 1].c_str();
+        str[i*2 + 0]    = json_value(curr_msg, "role",    std::string(""));
+        str[i*2 + 1]    = json_value(curr_msg, "content", std::string(""));
+        alloc_size     += str[i*2 + 1].length();
+        chat[i].role    = str[i*2 + 0].c_str();
+        chat[i].content = str[i*2 + 1].c_str();
     }
 
     const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
