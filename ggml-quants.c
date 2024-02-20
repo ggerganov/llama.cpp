@@ -10881,7 +10881,7 @@ static void quantize_row_iq3_xs_impl(int grid_size, const float * restrict x, vo
         }
 
         float d = max_scale/31;
-        dh[0] = GGML_FP32_TO_FP16(d);
+        dh[0] = GGML_FP32_TO_FP16(d * 1.0125f);  // small improvement via this fudge factor
         float id = 1/d;
         //float sumqx = 0, sumq2 = 0;
         for (int ib = 0; ib < QK_K/32; ++ib) {
@@ -10903,7 +10903,6 @@ static void quantize_row_iq3_xs_impl(int grid_size, const float * restrict x, vo
                     const int8_t * signs = keven_signs_q2xs + 8*((scales_and_signs[ib] >> 7*(k/2)) & 127) + 4*(k%2);
                     const float * xk = xb + 4*k;
                     const float * wk = weight + 4*k;
-                    //const uint8_t * grid = (const uint8_t *)(kgrid_q3xs + q3[8*ib+k]);
                     int idx = q3[8*ib+k];
                     if (grid_size == 512) idx |= ((h << (8-k)) & 256);
                     const uint8_t * grid = (const uint8_t *)(kgrid_q3xs + idx);
