@@ -52,6 +52,12 @@
 #define UNUSED GGML_UNUSED
 
 #define MM256_SET_M128I(a, b) _mm256_insertf128_si256(_mm256_castsi128_si256(b), (a), 1)
+#ifdef __GNUC__ 
+#if __GNUC__ < 8
+#define _mm256_set_m128i(a, b) _mm256_permute2f128_si256(_mm256_castsi128_si256(a), _mm256_castsi128_si256(b), 2)
+#endif
+#endif
+
 
 #if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__)
 // multiply int8_t, add results pairwise twice
