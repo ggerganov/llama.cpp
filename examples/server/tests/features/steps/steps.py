@@ -164,6 +164,28 @@ def step_oai_compute_embedding(context):
     context.embeddings = embeddings
 
 
+@step(u'tokenizing')
+def step_tokenize(context):
+    context.tokenized_text = context.text
+    response = requests.post(f'{context.base_url}/tokenize', json={
+        "content":context.tokenized_text,
+    })
+    assert response.status_code == 200
+    context.tokens = response.json()['tokens']
+
+
+@step(u'tokens can be detokenize')
+def step_detokenize(context):
+    assert len(context.tokens) > 0
+    response = requests.post(f'{context.base_url}/detokenize', json={
+        "tokens": context.tokens,
+    })
+    assert response.status_code == 200
+    print(response.json())
+    # FIXME the detokenize answer contains a space prefix ?
+    assert context.tokenized_text == response.json()['content'].strip()
+
+
 def concurrent_requests(context, f_completion):
     context.completions.clear()
     context.completion_threads.clear()

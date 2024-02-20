@@ -103,7 +103,7 @@ Feature: llama.cpp server
   Scenario: Embedding
     When embeddings are computed for:
     """
-    What is the capital of France ?
+    What is the capital of Bulgaria ?
     """
     Then embeddings are generated
 
@@ -116,3 +116,13 @@ Feature: llama.cpp server
     What is the capital of Spain ?
     """
     Then embeddings are generated
+
+
+  @llama.cpp
+  Scenario: Tokenize / Detokenize
+    When tokenizing:
+    """
+    What is the capital of France ?
+    """
+    Then tokens can be detokenize
+
