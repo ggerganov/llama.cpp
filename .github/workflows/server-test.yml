@@ -40,12 +40,12 @@ jobs:
       - name: Download test model
         id: download_model
         run: |
-          ./scripts/hf.sh --repo ngxson/dummy-llama --file llama_xs_q4.bin
+          ./scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf
 
       - name: Server Integration Tests
         id: server_integration_test
         run: |
           cd examples/server/tests
-          ./tests.sh ../../../llama_xs_q4.bin
+          ./tests.sh ../../../stories260K.gguf
           
           
