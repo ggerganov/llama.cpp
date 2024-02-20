@@ -1,6 +1,5 @@
 import socket
 import threading
-import time
 from contextlib import closing
 
 import openai
@@ -38,11 +37,44 @@ def step_wait_for_the_server_to_be_started(context, expecting_status):
         case 'healthy':
             wait_for_health_status(context, 200, 'ok')
         case 'ready' | 'idle':
-            wait_for_health_status(context, 200, 'ok', params={'fail_on_no_slot': True})
+            wait_for_health_status(context, 200, 'ok',
+                                   params={'fail_on_no_slot': True},
+                                   slots_idle=context.n_slots,
+                                   slots_processing=0)
+            request_slots_status(context, [
+                {'id': 0, 'state': 0},
+                {'id': 1, 'state': 0}
+            ])
         case 'busy':
-            wait_for_health_status(context, 503, 'no slot available', params={'fail_on_no_slot': True})
+            wait_for_health_status(context, 503, 'no slot available',
+                                   params={'fail_on_no_slot': True},
+                                   slots_idle=0,
+                                   slots_processing=context.n_slots)
+            request_slots_status(context, [
+                {'id': 0, 'state': 1},
+                {'id': 1, 'state': 1}
+            ])
         case _:
             assert False, "unknown status"
+
+
+@step(u'all slots are {expected_slot_status_string}')
+def step_all_slots_status(context, expected_slot_status_string):
+    match expected_slot_status_string:
+        case 'idle':
+            expected_slot_status = 0
+        case 'busy':
+            expected_slot_status = 1
+        case _:
+            assert False, "unknown status"
+
+    expected_slots = []
+    for slot_id in range(context.n_slots):
+        expected_slots.append({
+            'id': slot_id,
+            'state': expected_slot_status
+        })
+    request_slots_status(context, expected_slots)
 
 
 @step(u'a {prompt} completion request with maximum {n_predict} tokens')
@@ -123,8 +155,7 @@ def request_completion(context, prompt, n_predict=None):
         "prompt": prompt,
         "n_predict": int(n_predict) if n_predict is not None else 4096,
     })
-    status_code = response.status_code
-    assert status_code == 200
+    assert response.status_code == 200
     context.completions.append(response.json())
 
 
@@ -177,10 +208,27 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None):
                                                      f' "{n_predicted}" <> "{expected_predicted_n}"')
 
 
-def wait_for_health_status(context, expected_http_status_code, expected_health_status, params=None):
+def wait_for_health_status(context, expected_http_status_code,
+                           expected_health_status,
+                           params=None,
+                           slots_idle=None,
+                           slots_processing=None):
     while True:
         health_response = requests.get(f'{context.base_url}/health', params)
         status_code = health_response.status_code
         health = health_response.json()
-        if status_code == expected_http_status_code and health['status'] == expected_health_status:
+        if (status_code == expected_http_status_code
+                and health['status'] == expected_health_status
+                and (slots_idle is None or health['slots_idle'] == slots_idle)
+                and (slots_processing is None or health['slots_processing'] == slots_processing)):
             break
+
+
+def request_slots_status(context, expected_slots):
+    slots_response = requests.get(f'{context.base_url}/slots')
+    assert slots_response.status_code == 200
+    slots = slots_response.json()
+    assert len(slots) == len(expected_slots)
+    for expected, slot in zip(expected_slots, slots):
+        for key in expected:
+            assert expected[key] == slot[key], f"expected[{key}] != slot[{key}]"

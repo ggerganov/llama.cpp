@@ -8,6 +8,7 @@ Feature: llama.cpp server
   Scenario: Health
     When the server is healthy
     Then the server is ready
+    And  all slots are idle
 
   Scenario Outline: Completion
     Given a <prompt> completion request with maximum <n_predict> tokens
@@ -55,7 +56,9 @@ Feature: llama.cpp server
       """
     Given concurrent completion requests
     Then the server is busy
+    And  all slots are busy
     Then the server is idle
+    And  all slots are idle
     Then all prompts are predicted
 
 
@@ -78,5 +81,7 @@ Feature: llama.cpp server
       """
     Given concurrent OAI completions requests
     Then the server is busy
+    And  all slots are busy
     Then the server is idle
+    And  all slots are idle
     Then all prompts are predicted
