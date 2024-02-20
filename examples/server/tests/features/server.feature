@@ -36,24 +36,13 @@ Feature: llama.cpp server
   Scenario: Multi users
     Given a prompt:
       """
-      Write a formal complaint email to Air France about my delayed
-      baggage from my flight on Tuesday, January 17th, from Paris to Toulouse. Be verbose.
+      Write a very long story about AI.
       """
     And a prompt:
       """
-      Translate the following War & Peace chapter into Russian: WELL, PRINCE,
-      Genoa and Lucca are now no more than private estates of the Bonaparte
-      family. No, I warn you, that if you do not tell me we are at war,
-      if you again allow yourself to palliate all the infamies and atrocities
-      of this Antichrist (upon my word, I believe he is), I don’t know you
-      in future, you are no longer my friend, no longer my faithful slave,
-      as you say. There, how do you do, how do you do? I see I’m scaring you,
-      sit down and talk to me.” These words were uttered in July 1805 by
-      Anna Pavlovna Scherer, a distinguished lady of the court,
-      and confidential maid-of-honour to the Empress Marya Fyodorovna.
-      It was her greeting to Prince Vassily, a man high in rank
-      and office, who was the first to arrive at her soirée.
+      Write another very long music lyrics.
       """
+    And 512 max tokens to predict
     Given concurrent completion requests
     Then the server is busy
     And  all slots are busy
@@ -65,8 +54,6 @@ Feature: llama.cpp server
   Scenario: Multi users OAI Compatibility
     Given a system prompt "You are an AI assistant."
     And a model tinyllama-2
-    And 1024 max tokens to predict
-    And streaming is enabled
     Given a prompt:
       """
       Write a very long story about AI.
@@ -75,7 +62,31 @@ Feature: llama.cpp server
       """
       Write another very long music lyrics.
       """
+    And 512 max tokens to predict
+    And streaming is enabled
     Given concurrent OAI completions requests
+    Then the server is busy
+    And  all slots are busy
+    Then the server is idle
+    And  all slots are idle
+    Then all prompts are predicted
+
+  # FIXME: infinite loop on the CI, not locally, if n_prompt * n_predict > kv_size
+  Scenario: Multi users with total number of tokens to predict exceeds the KV Cache size
+    Given a prompt:
+      """
+      Write a very long story about AI.
+      """
+    And a prompt:
+      """
+      Write another very long music lyrics.
+      """
+    And a prompt:
+      """
+      Write a very long poem.
+      """
+    And 1024 max tokens to predict
+    Given concurrent completion requests
     Then the server is busy
     And  all slots are busy
     Then the server is idle

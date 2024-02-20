@@ -105,7 +105,7 @@ def step_model(context, model):
 
 @step(u'{max_tokens} max tokens to predict')
 def step_max_tokens(context, max_tokens):
-    context.max_tokens = int(max_tokens)
+    context.n_predict = int(max_tokens)
 
 
 @step(u'streaming is {enable_streaming}')
@@ -154,7 +154,7 @@ def concurrent_requests(context, f_completion):
 def request_completion(context, prompt, n_predict=None):
     response = requests.post(f'{context.base_url}/completion', json={
         "prompt": prompt,
-        "n_predict": int(n_predict) if n_predict is not None else 4096,
+        "n_predict": int(n_predict) if n_predict is not None else context.n_predict,
         "seed": context.seed
     })
     assert response.status_code == 200
@@ -174,7 +174,7 @@ def oai_chat_completions(context, user_prompt):
             }
         ],
         model=context.model,
-        max_tokens=context.max_tokens,
+        max_tokens=context.n_predict,
         stream=context.enable_streaming,
         seed = context.seed
     )
