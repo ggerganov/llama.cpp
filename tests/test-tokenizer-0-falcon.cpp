@@ -38,6 +38,7 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
         { "    Hello\n    Hello"  , {     466,  23090,    742,  23090, }, },
         { "\n ="                  , {    1212,     40, }, },
         { "' era"                 , {      18,   4932, }, },
+        { "12345678-1239-0fsjk"    , {   10963,  27681, 5070, 24, 10963, 36, 24, 27, 5577, 85, 86, }, },
     };
 
     return _k_tests;
