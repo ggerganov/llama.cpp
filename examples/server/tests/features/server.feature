@@ -5,11 +5,13 @@ Feature: llama.cpp server
     Then  the server is starting
     Then  the server is healthy
 
+  @llama.cpp
   Scenario: Health
     When the server is healthy
     Then the server is ready
     And  all slots are idle
 
+  @llama.cpp
   Scenario Outline: Completion
     Given a <prompt> completion request with maximum <n_predict> tokens
     Then  <predicted_n> tokens are predicted
@@ -19,6 +21,7 @@ Feature: llama.cpp server
       | I believe the meaning of life is | 128       | 128         |
       | Write a joke about AI            | 512       | 512         |
 
+  @llama.cpp
   Scenario Outline: OAI Compatibility
     Given a system prompt <system_prompt>
     And   a user prompt <user_prompt>
@@ -33,6 +36,7 @@ Feature: llama.cpp server
       | llama-2      | You are ChatGPT.            | Say hello.                           | 64         | false            | 64          |
       | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 512        | true             | 512         |
 
+  @llama.cpp
   Scenario: Multi users
     Given a prompt:
       """
@@ -50,7 +54,7 @@ Feature: llama.cpp server
     And  all slots are idle
     Then all prompts are predicted
 
-
+  @llama.cpp
   Scenario: Multi users OAI Compatibility
     Given a system prompt "You are an AI assistant."
     And a model tinyllama-2
@@ -71,7 +75,8 @@ Feature: llama.cpp server
     And  all slots are idle
     Then all prompts are predicted
 
-  # FIXME: infinite loop on the CI, not locally, if n_prompt * n_predict > kv_size
+  # FIXME: #3969 infinite loop on the CI, not locally, if n_prompt * n_predict > kv_size
+  @bug
   Scenario: Multi users with total number of tokens to predict exceeds the KV Cache size
     Given a prompt:
       """

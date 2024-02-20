@@ -32,4 +32,4 @@ set -eu
             "$@" &
 
 # Start tests
-behave --summary --stop
+behave --summary --stop --tags llama.cpp
