@@ -42,7 +42,7 @@ Feature: llama.cpp server
       """
       Write another very long music lyrics.
       """
-    And 512 max tokens to predict
+    And 256 max tokens to predict
     Given concurrent completion requests
     Then the server is busy
     And  all slots are busy
@@ -62,7 +62,7 @@ Feature: llama.cpp server
       """
       Write another very long music lyrics.
       """
-    And 512 max tokens to predict
+    And 256 max tokens to predict
     And streaming is enabled
     Given concurrent OAI completions requests
     Then the server is busy

@@ -176,7 +176,7 @@ def oai_chat_completions(context, user_prompt):
         model=context.model,
         max_tokens=context.n_predict,
         stream=context.enable_streaming,
-        seed = context.seed
+        seed=context.seed
     )
     if context.enable_streaming:
         completion_response = {
