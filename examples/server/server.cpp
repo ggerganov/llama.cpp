@@ -5,6 +5,7 @@
 #include "oai.hpp"
 
 #include "../llava/clip.h"
+#include "../llava/llava.h"
 
 #include "stb_image.h"
 
@@ -39,7 +40,7 @@ struct server_params
     std::string hostname = "127.0.0.1";
     std::vector<std::string> api_keys;
     std::string public_path = "examples/server/public";
-    std::string chat_template = "chatml";
+    std::string chat_template = "";
     int32_t port = 8080;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
@@ -1073,43 +1074,12 @@ struct llama_server_context
             {
                 continue;
             }
-            clip_image_f32_batch img_res_v;
-            img_res_v.size = 0;
-            img_res_v.data = nullptr;
-            if (!clip_image_preprocess(clp_ctx, img.img_data, img_res_v))
-            {
-                LOG_TEE("Error processing the given image");
-                clip_free(clp_ctx);
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-            if (img_res_v.size == 0)
-            {
+
+            if (!llava_image_embed_make_with_clip_img(clp_ctx, params.n_threads, img.img_data, &img.image_embedding, &img.image_tokens)) {
                 LOG_TEE("Error processing the given image");
                 return false;
             }
 
-            // note: assumes only one image was returned by clip_image_preprocess
-            clip_image_f32 * img_res = img_res_v.data;
-
-            img.image_tokens = clip_n_patches(clp_ctx);
-            img.image_embedding = (float *)malloc(clip_embd_nbytes(clp_ctx));
-            if (!img.image_embedding)
-            {
-                LOG_TEE("Unable to allocate memory for image embeddings\n");
-                clip_image_f32_batch_free(img_res_v);
-                clip_free(clp_ctx);
-                return false;
-            }
-            LOG_TEE("slot %i - encoding image [id: %i]\n", slot.id, img.id);
-            if (!clip_image_encode(clp_ctx, params.n_threads, img_res, img.image_embedding))
-            {
-                LOG_TEE("Unable to encode image\n");
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-
-            clip_image_f32_batch_free(img_res_v);
 
             img.request_encode_image = false;
         }
@@ -2021,8 +1991,9 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`");
-    printf("  --chat-template FORMAT_NAME");
-    printf("                            set chat template, possible value is: llama2, chatml (default %s)", sparams.chat_template.c_str());
+    printf("  --chat-template JINJA_TEMPLATE\n");
+    printf("                            set custom jinja chat template (default: template taken from model's metadata)\n");
+    printf("                            Note: only commonly used templates are accepted, since we don't have jinja parser\n");
     printf("\n");
 }
 
@@ -2482,13 +2453,13 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            std::string value(argv[i]);
-            if (value != "chatml" && value != "llama2") {
-                fprintf(stderr, "error: chat template can be \"llama2\" or \"chatml\", but got: %s\n", value.c_str());
+            if (!verify_custom_template(argv[i])) {
+                fprintf(stderr, "error: the supplied chat template is not supported: %s\n", argv[i]);
+                fprintf(stderr, "note: llama.cpp does not use jinja parser, we only support commonly used templates\n");
                 invalid_param = true;
                 break;
             }
-            sparams.chat_template = value;
+            sparams.chat_template = argv[i];
         }
         else if (arg == "--override-kv")
         {
@@ -2675,40 +2646,40 @@ int main(int argc, char **argv)
         res.set_header("Access-Control-Allow-Headers", "*");
     });
 
-    svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+    svr.Get("/health", [&](const httplib::Request& req, httplib::Response& res) {
         server_state current_state = state.load();
         switch(current_state) {
-            case SERVER_STATE_READY:
-                if (llama.all_slots_are_idle) {
-                    res.set_content(R"({"status": "ok"})", "application/json");
+            case SERVER_STATE_READY: {
+                int available_slots  = 0;
+                int processing_slots = 0;
+                for (llama_client_slot &slot: llama.slots) {
+                    if (slot.available()) {
+                        available_slots++;
+                    } else {
+                        processing_slots++;
+                    }
+                }
+                if (available_slots > 0) {
+                    json health = {
+                            {"status",           "ok"},
+                            {"slots_idle",       available_slots},
+                            {"slots_processing", processing_slots}};
+                    res.set_content(health.dump(), "application/json");
                     res.status = 200; // HTTP OK
                 } else {
-                    int available_slots = 0;
-                    int processing_slots = 0;
-                    for (llama_client_slot & slot : llama.slots) {
-                        if (slot.available()) {
-                            available_slots++;
-                        } else {
-                            processing_slots++;
-                        }
-                    }
-                    if (available_slots > 0) {
-                        json health = {
-                                {"status",           "ok"},
-                                {"slots_idle",       available_slots},
-                                {"slots_processing", processing_slots}};
-                        res.set_content(health.dump(), "application/json");
-                        res.status = 200; // HTTP OK
-                    } else {
-                        json health = {
-                                {"status",           "no slot available"},
-                                {"slots_idle",       available_slots},
-                                {"slots_processing", processing_slots}};
-                        res.set_content(health.dump(), "application/json");
+                    json health = {
+                            {"status",           "no slot available"},
+                            {"slots_idle",       available_slots},
+                            {"slots_processing", processing_slots}};
+                    res.set_content(health.dump(), "application/json");
+                    if (req.has_param("fail_on_no_slot")) {
                         res.status = 503; // HTTP Service Unavailable
+                    } else {
+                        res.status = 200; // HTTP OK
                     }
                 }
                 break;
+            }
             case SERVER_STATE_LOADING_MODEL:
                 res.set_content(R"({"status": "loading model"})", "application/json");
                 res.status = 503; // HTTP Service Unavailable
@@ -3007,7 +2978,7 @@ int main(int argc, char **argv)
                 if (!validate_api_key(req, res)) {
                     return;
                 }
-                json data = oaicompat_completion_params_parse(json::parse(req.body), sparams.chat_template);
+                json data = oaicompat_completion_params_parse(llama.model, json::parse(req.body), sparams.chat_template);
 
                 const int task_id = llama.queue_tasks.get_new_id();
                 llama.queue_results.add_waiting_task_id(task_id);

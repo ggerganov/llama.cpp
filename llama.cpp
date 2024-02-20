@@ -12602,7 +12602,7 @@ LLAMA_API int32_t llama_chat_apply_template(
         // load template from model
         std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
         std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), curr_tmpl.size());
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
         if (res < 0) {
             // worst case: there is no information about template, we will use chatml by default
             curr_tmpl = "<|im_start|>"; // see llama_chat_apply_template_internal
