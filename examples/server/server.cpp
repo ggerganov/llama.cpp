@@ -5,6 +5,7 @@
 #include "oai.hpp"
 
 #include "../llava/clip.h"
+#include "../llava/llava.h"
 
 #include "stb_image.h"
 
@@ -997,43 +998,12 @@ struct llama_server_context
             {
                 continue;
             }
-            clip_image_f32_batch img_res_v;
-            img_res_v.size = 0;
-            img_res_v.data = nullptr;
-            if (!clip_image_preprocess(clp_ctx, img.img_data, img_res_v))
-            {
-                LOG_TEE("Error processing the given image");
-                clip_free(clp_ctx);
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-            if (img_res_v.size == 0)
-            {
+
+            if (!llava_image_embed_make_with_clip_img(clp_ctx, params.n_threads, img.img_data, &img.image_embedding, &img.image_tokens)) {
                 LOG_TEE("Error processing the given image");
                 return false;
             }
 
-            // note: assumes only one image was returned by clip_image_preprocess
-            clip_image_f32 * img_res = img_res_v.data;
-
-            img.image_tokens = clip_n_patches(clp_ctx);
-            img.image_embedding = (float *)malloc(clip_embd_nbytes(clp_ctx));
-            if (!img.image_embedding)
-            {
-                LOG_TEE("Unable to allocate memory for image embeddings\n");
-                clip_image_f32_batch_free(img_res_v);
-                clip_free(clp_ctx);
-                return false;
-            }
-            LOG_TEE("slot %i - encoding image [id: %i]\n", slot.id, img.id);
-            if (!clip_image_encode(clp_ctx, params.n_threads, img_res, img.image_embedding))
-            {
-                LOG_TEE("Unable to encode image\n");
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-
-            clip_image_f32_batch_free(img_res_v);
 
             img.request_encode_image = false;
         }
