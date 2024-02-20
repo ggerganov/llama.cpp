@@ -2582,40 +2582,40 @@ int main(int argc, char **argv)
         res.set_header("Access-Control-Allow-Headers", "*");
     });
 
-    svr.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+    svr.Get("/health", [&](const httplib::Request& req, httplib::Response& res) {
         server_state current_state = state.load();
         switch(current_state) {
-            case SERVER_STATE_READY:
-                if (llama.all_slots_are_idle) {
-                    res.set_content(R"({"status": "ok"})", "application/json");
+            case SERVER_STATE_READY: {
+                int available_slots  = 0;
+                int processing_slots = 0;
+                for (llama_client_slot &slot: llama.slots) {
+                    if (slot.available()) {
+                        available_slots++;
+                    } else {
+                        processing_slots++;
+                    }
+                }
+                if (available_slots > 0) {
+                    json health = {
+                            {"status",           "ok"},
+                            {"slots_idle",       available_slots},
+                            {"slots_processing", processing_slots}};
+                    res.set_content(health.dump(), "application/json");
                     res.status = 200; // HTTP OK
                 } else {
-                    int available_slots = 0;
-                    int processing_slots = 0;
-                    for (llama_client_slot & slot : llama.slots) {
-                        if (slot.available()) {
-                            available_slots++;
-                        } else {
-                            processing_slots++;
-                        }
-                    }
-                    if (available_slots > 0) {
-                        json health = {
-                                {"status",           "ok"},
-                                {"slots_idle",       available_slots},
-                                {"slots_processing", processing_slots}};
-                        res.set_content(health.dump(), "application/json");
-                        res.status = 200; // HTTP OK
-                    } else {
-                        json health = {
-                                {"status",           "no slot available"},
-                                {"slots_idle",       available_slots},
-                                {"slots_processing", processing_slots}};
-                        res.set_content(health.dump(), "application/json");
+                    json health = {
+                            {"status",           "no slot available"},
+                            {"slots_idle",       available_slots},
+                            {"slots_processing", processing_slots}};
+                    res.set_content(health.dump(), "application/json");
+                    if (req.has_param("fail_on_no_slot")) {
                         res.status = 503; // HTTP Service Unavailable
+                    } else {
+                        res.status = 200; // HTTP OK
                     }
                 }
                 break;
+            }
             case SERVER_STATE_LOADING_MODEL:
                 res.set_content(R"({"status": "loading model"})", "application/json");
                 res.status = 503; // HTTP Service Unavailable

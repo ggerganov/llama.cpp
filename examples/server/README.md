@@ -134,10 +134,11 @@ node index.js
 ## API Endpoints
 
 - **GET** `/health`: Returns the current state of the server:
-  - `{"status": "loading model"}` if the model is still being loaded.
-  - `{"status": "error"}` if the model failed to load.
-  - `{"status": "ok"}` if the model is successfully loaded and the server is ready for further requests mentioned below.
-  - `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slot are currently available
+  - 503 -> `{"status": "loading model"}` if the model is still being loaded.
+  - 500 -> `{"status": "error"}` if the model failed to load.
+  - 200 -> `{"status": "ok", "slots_idle": 1, "slots_processing": 2 }` if the model is successfully loaded and the server is ready for further requests mentioned below.
+  - 200 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slot are currently available.
+  - 503 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if the query parameter `fail_on_no_slot` is provided and no slot are currently available.
 
 - **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 
