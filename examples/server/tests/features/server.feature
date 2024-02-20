@@ -98,3 +98,21 @@ Feature: llama.cpp server
     And  all slots are idle
     Then all prompts are predicted
 
+
+  @llama.cpp
+  Scenario: Embedding
+    When embeddings are computed for:
+    """
+    What is the capital of France ?
+    """
+    Then embeddings are generated
+
+
+  @llama.cpp
+  Scenario: OAI Embeddings compatibility
+    Given a model tinyllama-2
+    When an OAI compatible embeddings computation request for:
+    """
+    What is the capital of Spain ?
+    """
+    Then embeddings are generated

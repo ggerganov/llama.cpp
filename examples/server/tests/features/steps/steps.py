@@ -20,7 +20,6 @@ def step_server_config(context, server_fqdn, server_port, n_slots, seed):
     context.prompts = []
 
     openai.api_key = 'llama.cpp'
-    openai.api_base = f'{context.base_url}/v1/chat'
 
 
 @step(u"the server is {expecting_status}")
@@ -141,6 +140,30 @@ def step_all_prompts_are_predicted(context):
         assert_n_tokens_predicted(completion)
 
 
+@step(u'embeddings are computed for')
+def step_compute_embedding(context):
+    response = requests.post(f'{context.base_url}/embedding', json={
+        "content": context.text,
+    })
+    assert response.status_code == 200
+    context.embeddings = response.json()['embedding']
+
+
+@step(u'embeddings are generated')
+def step_compute_embeddings(context):
+    assert len(context.embeddings) > 0
+
+
+@step(u'an OAI compatible embeddings computation request for')
+def step_oai_compute_embedding(context):
+    openai.api_base = f'{context.base_url}/v1'
+    embeddings = openai.Embedding.create(
+        model=context.model,
+        input=context.text,
+    )
+    context.embeddings = embeddings
+
+
 def concurrent_requests(context, f_completion):
     context.completions.clear()
     context.completion_threads.clear()
@@ -162,6 +185,7 @@ def request_completion(context, prompt, n_predict=None):
 
 
 def oai_chat_completions(context, user_prompt):
+    openai.api_base = f'{context.base_url}/v1/chat'
     chat_completion = openai.Completion.create(
         messages=[
             {
