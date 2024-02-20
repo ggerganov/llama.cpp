@@ -14,12 +14,12 @@ Feature: llama.cpp server
   @llama.cpp
   Scenario Outline: Completion
     Given a <prompt> completion request with maximum <n_predict> tokens
-    Then  <predicted_n> tokens are predicted
+    Then  <n_predict> tokens are predicted
 
     Examples: Prompts
-      | prompt                           | n_predict | predicted_n |
-      | I believe the meaning of life is | 128       | 128         |
-      | Write a joke about AI            | 512       | 512         |
+      | prompt                           | n_predict |
+      | I believe the meaning of life is | 128       |
+      | Write a joke about AI            | 512       |
 
   @llama.cpp
   Scenario Outline: OAI Compatibility
@@ -29,12 +29,12 @@ Feature: llama.cpp server
     And   <max_tokens> max tokens to predict
     And   streaming is <enable_streaming>
     Given an OAI compatible chat completions request
-    Then  <predicted_n> tokens are predicted
+    Then  <max_tokens> tokens are predicted
 
     Examples: Prompts
-      | model        | system_prompt               | user_prompt                          | max_tokens | enable_streaming | predicted_n |
-      | llama-2      | You are ChatGPT.            | Say hello.                           | 64         | false            | 64          |
-      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 512        | true             | 512         |
+      | model        | system_prompt               | user_prompt                          | max_tokens | enable_streaming |
+      | llama-2      | You are ChatGPT.            | Say hello.                           | 64         | false            |
+      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 512        | true             |
 
   @llama.cpp
   Scenario: Multi users
