@@ -533,11 +533,29 @@ ifdef LLAMA_METAL
 ifdef LLAMA_METAL_NDEBUG
 	MK_CPPFLAGS += -DGGML_METAL_NDEBUG
 endif
+ifdef LLAMA_METAL_EMBED_LIBRARY
+	MK_CPPFLAGS += -DGGML_METAL_EMBED_LIBRARY
+	OBJS        += ggml-metal-embed.o
+endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
 ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
+
+ifdef LLAMA_METAL_EMBED_LIBRARY
+ggml-metal-embed.o: ggml-metal.metal
+	@echo "Embedding Metal library"
+	$(eval TEMP_ASSEMBLY=$(shell mktemp))
+	@echo ".section __DATA, __ggml_metallib" > $(TEMP_ASSEMBLY)
+	@echo ".globl _ggml_metallib_start" >> $(TEMP_ASSEMBLY)
+	@echo "_ggml_metallib_start:" >> $(TEMP_ASSEMBLY)
+	@echo ".incbin \"$<\"" >> $(TEMP_ASSEMBLY)
+	@echo ".globl _ggml_metallib_end" >> $(TEMP_ASSEMBLY)
+	@echo "_ggml_metallib_end:" >> $(TEMP_ASSEMBLY)
+	@$(AS) $(TEMP_ASSEMBLY) -o $@
+	@rm -f ${TEMP_ASSEMBLY}
+endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_MPI
