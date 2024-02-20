@@ -7,11 +7,12 @@ import requests
 from behave import step
 
 
-@step(u"a server listening on {server_fqdn}:{server_port} with {n_slots} slots")
-def step_server_config(context, server_fqdn, server_port, n_slots):
+@step(u"a server listening on {server_fqdn}:{server_port} with {n_slots} slots and {seed} as seed")
+def step_server_config(context, server_fqdn, server_port, n_slots, seed):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
     context.n_slots = int(n_slots)
+    context.seed = int(seed)
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
     context.completions = []
@@ -154,6 +155,7 @@ def request_completion(context, prompt, n_predict=None):
     response = requests.post(f'{context.base_url}/completion', json={
         "prompt": prompt,
         "n_predict": int(n_predict) if n_predict is not None else 4096,
+        "seed": context.seed
     })
     assert response.status_code == 200
     context.completions.append(response.json())
@@ -173,7 +175,8 @@ def oai_chat_completions(context, user_prompt):
         ],
         model=context.model,
         max_tokens=context.max_tokens,
-        stream=context.enable_streaming
+        stream=context.enable_streaming,
+        seed = context.seed
     )
     if context.enable_streaming:
         completion_response = {

@@ -1,7 +1,7 @@
 Feature: llama.cpp server
 
   Background: Server startup
-    Given a server listening on localhost:8080 with 2 slots
+    Given a server listening on localhost:8080 with 2 slots and 42 as seed
     Then  the server is starting
     Then  the server is healthy
 
