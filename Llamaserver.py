@@ -85,8 +85,8 @@ if __name__ == "__main__":
     
     url = "http://localhost:8080/completion"
 
-    num_requests = 40
-    q = Queue(maxsize = 40)
+    num_requests = 256
+    q = Queue(maxsize = 256)
     threads = []
 
     bar = make_empty_bar(num_requests)
