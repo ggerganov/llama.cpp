@@ -2791,13 +2791,7 @@ struct llama_model_loader {
 
         std::vector<no_init<uint8_t>> read_buf;
 
-        for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
-            struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
-            if (!cur) {
-                // some tensors may be allocated in a different context
-                continue;
-            }
-
+        for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             if (progress_callback) {
                 if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
                     return false;
@@ -3722,7 +3716,7 @@ static bool llm_load_tensors(
     }
 
     // create one context per buffer type
-    size_t ctx_size = ggml_tensor_overhead()*ml.n_tensors;
+    size_t ctx_size = ggml_tensor_overhead()*(ml.n_tensors + 1); // +1 for models where tok_embd is duplicated as output
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
     for (auto & it : buft_layer_count) {
         struct ggml_init_params params = {
@@ -3860,6 +3854,7 @@ static bool llm_load_tensors(
                         } else {
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}); // needs to be on GPU
                             ml.n_created--; // artificial tensor
+                            ml.size_data += ggml_nbytes(model.output);
                         }
                     }
 
@@ -4396,6 +4391,7 @@ static bool llm_load_tensors(
                     model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                     model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}); // same as tok_embd, duplicated to allow offloading
                     ml.n_created--; // artificial tensor
+                    ml.size_data += ggml_nbytes(model.output);
 
                     const int64_t n_ff          = hparams.n_ff;
                     const int64_t n_embd_head_k = hparams.n_embd_head_k;
