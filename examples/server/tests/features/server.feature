@@ -98,7 +98,12 @@ Feature: llama.cpp server
       """
       Write a very long poem.
       """
-    And 1024 max tokens to predict
+    And a prompt:
+      """
+      Write a very long joke.
+      """
+    And 512 max tokens to predict
+    And a user api key llama.cpp
     Given concurrent completion requests
     Then the server is busy
     And  all slots are busy
