@@ -29,6 +29,7 @@ set -eu
             --threads-batch 4 \
             --embedding \
             --cont-batching \
+            --api-key llama.cpp \
             "$@" &
 
 # Start tests

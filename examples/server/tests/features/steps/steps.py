@@ -7,8 +7,9 @@ import requests
 from behave import step
 
 
-@step(u"a server listening on {server_fqdn}:{server_port} with {n_slots} slots and {seed} as seed")
-def step_server_config(context, server_fqdn, server_port, n_slots, seed):
+@step(
+    u"a server listening on {server_fqdn}:{server_port} with {n_slots} slots, {seed} as seed and {api_key} as api key")
+def step_server_config(context, server_fqdn, server_port, n_slots, seed, api_key):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
     context.n_slots = int(n_slots)
@@ -19,7 +20,8 @@ def step_server_config(context, server_fqdn, server_port, n_slots, seed):
     context.completion_threads = []
     context.prompts = []
 
-    openai.api_key = 'llama.cpp'
+    context.api_key = api_key
+    openai.api_key = context.api_key
 
 
 @step(u"the server is {expecting_status}")
@@ -77,14 +79,16 @@ def step_all_slots_status(context, expected_slot_status_string):
     request_slots_status(context, expected_slots)
 
 
-@step(u'a {prompt} completion request with maximum {n_predict} tokens')
-def step_request_completion(context, prompt, n_predict):
-    request_completion(context, prompt, n_predict)
+@step(u'a completion request')
+def step_request_completion(context):
+    request_completion(context, context.prompts.pop(), context.n_predict, context.user_api_key)
+    context.user_api_key = None
 
 
 @step(u'{predicted_n} tokens are predicted')
 def step_n_tokens_predicted(context, predicted_n):
-    assert_n_tokens_predicted(context.completions[0], int(predicted_n))
+    if int(predicted_n) > 0:
+        assert_n_tokens_predicted(context.completions[0], int(predicted_n))
 
 
 @step(u'a user prompt {user_prompt}')
@@ -112,9 +116,20 @@ def step_streaming(context, enable_streaming):
     context.enable_streaming = enable_streaming == 'enabled' or bool(enable_streaming)
 
 
-@step(u'an OAI compatible chat completions request')
-def step_oai_chat_completions(context):
-    oai_chat_completions(context, context.user_prompt)
+@step(u'a user api key {user_api_key}')
+def step_user_api_key(context, user_api_key):
+    context.user_api_key = user_api_key
+
+
+@step(u'a user api key ')
+def step_user_api_key(context):
+    context.user_api_key = None
+
+
+@step(u'an OAI compatible chat completions request with an api error {api_error}')
+def step_oai_chat_completions(context, api_error):
+    oai_chat_completions(context, context.user_prompt, api_error=api_error == 'raised')
+    context.user_api_key = None
 
 
 @step(u'a prompt')
@@ -122,14 +137,19 @@ def step_a_prompt(context):
     context.prompts.append(context.text)
 
 
+@step(u'a prompt {prompt}')
+def step_a_prompt_prompt(context, prompt):
+    context.prompts.append(prompt)
+
+
 @step(u'concurrent completion requests')
 def step_concurrent_completion_requests(context):
-    concurrent_requests(context, request_completion)
+    concurrent_requests(context, request_completion, context.n_predict, context.user_api_key)
 
 
 @step(u'concurrent OAI completions requests')
 def step_oai_chat_completions(context):
-    concurrent_requests(context, oai_chat_completions)
+    concurrent_requests(context, oai_chat_completions, context.user_api_key)
 
 
 @step(u'all prompts are predicted')
@@ -168,7 +188,7 @@ def step_oai_compute_embedding(context):
 def step_tokenize(context):
     context.tokenized_text = context.text
     response = requests.post(f'{context.base_url}/tokenize', json={
-        "content":context.tokenized_text,
+        "content": context.tokenized_text,
     })
     assert response.status_code == 200
     context.tokens = response.json()['tokens']
@@ -181,49 +201,82 @@ def step_detokenize(context):
         "tokens": context.tokens,
     })
     assert response.status_code == 200
-    print(response.json())
     # FIXME the detokenize answer contains a space prefix ? see #3287
     assert context.tokenized_text == response.json()['content'].strip()
 
 
-def concurrent_requests(context, f_completion):
+@step(u'an OPTIONS request is sent from {origin}')
+def step_options_request(context, origin):
+    options_response = requests.options(f'{context.base_url}/v1/chat/completions',
+                                        headers={"Origin": origin})
+    assert options_response.status_code == 200
+    context.options_response = options_response
+
+
+@step(u'CORS header {cors_header} is set to {cors_header_value}')
+def step_check_options_header_value(context, cors_header, cors_header_value):
+    assert context.options_response.headers[cors_header] == cors_header_value
+
+
+def concurrent_requests(context, f_completion, *argv):
     context.completions.clear()
     context.completion_threads.clear()
     for prompt in context.prompts:
-        completion_thread = threading.Thread(target=f_completion, args=(context, prompt))
+        completion_thread = threading.Thread(target=f_completion, args=(context, prompt, *argv))
         completion_thread.start()
         context.completion_threads.append(completion_thread)
     context.prompts.clear()
 
 
-def request_completion(context, prompt, n_predict=None):
-    response = requests.post(f'{context.base_url}/completion', json={
-        "prompt": prompt,
-        "n_predict": int(n_predict) if n_predict is not None else context.n_predict,
-        "seed": context.seed
-    })
-    assert response.status_code == 200
-    context.completions.append(response.json())
+def request_completion(context, prompt, n_predict=None, user_api_key=None):
+    origin = "my.super.domain"
+    headers = {
+        'Origin': origin
+    }
+    if 'user_api_key' in context:
+        headers['Authorization'] = f'Bearer {user_api_key}'
+
+    response = requests.post(f'{context.base_url}/completion',
+                             json={
+                                 "prompt": prompt,
+                                 "n_predict": int(n_predict) if n_predict is not None else context.n_predict,
+                                 "seed": context.seed
+                             },
+                             headers=headers)
+    if n_predict is not None and n_predict > 0:
+        assert response.status_code == 200
+        assert response.headers['Access-Control-Allow-Origin'] == origin
+        context.completions.append(response.json())
+    else:
+        assert response.status_code == 401
 
 
-def oai_chat_completions(context, user_prompt):
+
+def oai_chat_completions(context, user_prompt, api_error=None):
+    openai.api_key = context.user_api_key
     openai.api_base = f'{context.base_url}/v1/chat'
-    chat_completion = openai.Completion.create(
-        messages=[
-            {
-                "role": "system",
-                "content": context.system_prompt,
-            },
-            {
-                "role": "user",
-                "content": user_prompt,
-            }
-        ],
-        model=context.model,
-        max_tokens=context.n_predict,
-        stream=context.enable_streaming,
-        seed=context.seed
-    )
+    try:
+        chat_completion = openai.Completion.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": context.system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                }
+            ],
+            model=context.model,
+            max_tokens=context.n_predict,
+            stream=context.enable_streaming,
+            seed=context.seed
+        )
+    except openai.error.APIError:
+        if api_error:
+            openai.api_key = context.api_key
+            return
+    openai.api_key = context.api_key
     if context.enable_streaming:
         completion_response = {
             'content': '',
