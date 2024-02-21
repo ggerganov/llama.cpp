@@ -15091,7 +15091,7 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
 
     ggml_backend_sycl_context * ctx = new ggml_backend_sycl_context {
         /* .device = */ device,
-	/* .name   = */ std::to_string(device),
+	/* .name   = */ GGML_SYCL_NAME + std::to_string(device),
     };
 
     ggml_backend_t sycl_backend = new ggml_backend {
