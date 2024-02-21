@@ -2723,8 +2723,10 @@ int main(int argc, char **argv)
         LOG_INFO("model loaded", {});
     }
 
-    // check if the template comes with the model is supported by us
-    llama.validate_model_chat_template(sparams);
+    if (sparams.chat_template.empty()) { // custom chat template is not supplied
+        // check if the template comes with the model is supported by us
+        llama.validate_model_chat_template(sparams);
+    }
 
     // Middleware for API key validation
     auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
