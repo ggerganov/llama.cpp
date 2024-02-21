@@ -1,4 +1,6 @@
+import os
 import socket
+import subprocess
 import threading
 from contextlib import closing
 
@@ -8,26 +10,62 @@ from behave import step
 
 
 @step(
-    u"a server listening on {server_fqdn}:{server_port} with {n_slots} slots, {seed} as seed and {api_key} as api key")
-def step_server_config(context, server_fqdn, server_port, n_slots, seed, api_key):
+    u"a server listening on {server_fqdn}:{server_port}")
+def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
-    context.n_slots = int(n_slots)
-    context.seed = int(seed)
+
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
+
+    context.model_alias = None
+    context.n_ctx = None
+    context.n_predict = None
+    context.n_server_predict = None
+    context.n_slots = None
+    context.server_api_key = None
+    context.server_seed = None
+    context.user_api_key = None
 
     context.completions = []
     context.completion_threads = []
     context.prompts = []
 
-    context.api_key = api_key
-    openai.api_key = context.api_key
+
+@step(u'a model file {model_file}')
+def step_model_file(context, model_file):
+    context.model_file = model_file
+
+
+@step(u'a model alias {model_alias}')
+def step_model_alias(context, model_alias):
+    context.model_alias = model_alias
+
+
+@step(u'{seed} as server seed')
+def step_seed(context, seed):
+    context.server_seed = int(seed)
+
+
+@step(u'{n_ctx} KV cache size')
+def step_n_ctx(context, n_ctx):
+    context.n_ctx = int(n_ctx)
+
+
+@step(u'{n_slots} slots')
+def step_n_slots(context, n_slots):
+    context.n_slots = int(n_slots)
+
+
+@step(u'{n_predict} server max tokens to predict')
+def step_server_n_predict(context, n_predict):
+    context.n_server_predict = int(n_predict)
 
 
 @step(u"the server is {expecting_status}")
 def step_wait_for_the_server_to_be_started(context, expecting_status):
     match expecting_status:
         case 'starting':
+            start_server_background(context)
             server_started = False
             while not server_started:
                 with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
@@ -43,19 +81,13 @@ def step_wait_for_the_server_to_be_started(context, expecting_status):
                                    params={'fail_on_no_slot': True},
                                    slots_idle=context.n_slots,
                                    slots_processing=0)
-            request_slots_status(context, [
-                {'id': 0, 'state': 0},
-                {'id': 1, 'state': 0}
-            ])
+            request_slots_status(context, [{'id': slot_id, 'state': 0} for slot_id in range(context.n_slots)])
         case 'busy':
             wait_for_health_status(context, 503, 'no slot available',
                                    params={'fail_on_no_slot': True},
                                    slots_idle=0,
                                    slots_processing=context.n_slots)
-            request_slots_status(context, [
-                {'id': 0, 'state': 1},
-                {'id': 1, 'state': 1}
-            ])
+            request_slots_status(context, [{'id': slot_id, 'state': 1} for slot_id in range(context.n_slots)])
         case _:
             assert False, "unknown status"
 
@@ -79,10 +111,16 @@ def step_all_slots_status(context, expected_slot_status_string):
     request_slots_status(context, expected_slots)
 
 
-@step(u'a completion request')
-def step_request_completion(context):
-    request_completion(context, context.prompts.pop(), context.n_predict, context.user_api_key)
-    context.user_api_key = None
+@step(u'a completion request with {api_error} api error')
+def step_request_completion(context, api_error):
+    request_completion(context, context.prompts.pop(),
+                       n_predict=context.n_predict,
+                       expect_api_error=api_error == 'raised')
+
+
+@step(u'{predicted_n} tokens are predicted with content: {content}')
+def step_n_tokens_predicted_with_content(context, predicted_n, content):
+    assert_n_tokens_predicted(context.completions[0], int(predicted_n), content)
 
 
 @step(u'{predicted_n} tokens are predicted')
@@ -122,14 +160,23 @@ def step_user_api_key(context, user_api_key):
 
 
 @step(u'a user api key ')
-def step_user_api_key(context):
+def step_no_user_api_key(context):
     context.user_api_key = None
 
 
-@step(u'an OAI compatible chat completions request with an api error {api_error}')
+@step(u'no user api key')
+def step_no_user_api_key(context):
+    context.user_api_key = None
+
+
+@step(u'a server api key {server_api_key}')
+def step_server_api_key(context, server_api_key):
+    context.server_api_key = server_api_key
+
+
+@step(u'an OAI compatible chat completions request with {api_error} api error')
 def step_oai_chat_completions(context, api_error):
     oai_chat_completions(context, context.user_prompt, api_error=api_error == 'raised')
-    context.user_api_key = None
 
 
 @step(u'a prompt')
@@ -144,12 +191,12 @@ def step_a_prompt_prompt(context, prompt):
 
 @step(u'concurrent completion requests')
 def step_concurrent_completion_requests(context):
-    concurrent_requests(context, request_completion, context.n_predict, context.user_api_key)
+    concurrent_requests(context, request_completion)
 
 
 @step(u'concurrent OAI completions requests')
 def step_oai_chat_completions(context):
-    concurrent_requests(context, oai_chat_completions, context.user_api_key)
+    concurrent_requests(context, oai_chat_completions)
 
 
 @step(u'all prompts are predicted')
@@ -177,6 +224,9 @@ def step_compute_embeddings(context):
 
 @step(u'an OAI compatible embeddings computation request for')
 def step_oai_compute_embedding(context):
+    openai.api_key = 'nope'  # openai client always expects an api_keu
+    if context.user_api_key is not None:
+        openai.api_key = context.user_api_key
     openai.api_base = f'{context.base_url}/v1'
     embeddings = openai.Embedding.create(
         model=context.model,
@@ -202,7 +252,7 @@ def step_detokenize(context):
         "tokens": context.tokens,
     })
     assert response.status_code == 200
-    # FIXME the detokenize answer contains a space prefix ? see #3287
+    # SPM tokenizer adds a whitespace prefix: https://github.com/google/sentencepiece/issues/15
     assert context.tokenized_text == response.json()['content'].strip()
 
 
@@ -229,22 +279,23 @@ def concurrent_requests(context, f_completion, *argv):
     context.prompts.clear()
 
 
-def request_completion(context, prompt, n_predict=None, user_api_key=None):
+def request_completion(context, prompt, n_predict=None, expect_api_error=None):
     origin = "my.super.domain"
     headers = {
         'Origin': origin
     }
-    if 'user_api_key' in context:
-        headers['Authorization'] = f'Bearer {user_api_key}'
+    if context.user_api_key is not None:
+        print(f"Set user_api_key: {context.user_api_key}")
+        headers['Authorization'] = f'Bearer {context.user_api_key}'
 
     response = requests.post(f'{context.base_url}/completion',
                              json={
                                  "prompt": prompt,
                                  "n_predict": int(n_predict) if n_predict is not None else context.n_predict,
-                                 "seed": context.seed
+                                 "seed": context.server_seed if context.server_seed is not None else 42
                              },
                              headers=headers)
-    if n_predict is not None and n_predict > 0:
+    if expect_api_error is not None and not expect_api_error:
         assert response.status_code == 200
         assert response.headers['Access-Control-Allow-Origin'] == origin
         context.completions.append(response.json())
@@ -253,7 +304,9 @@ def request_completion(context, prompt, n_predict=None, user_api_key=None):
 
 
 def oai_chat_completions(context, user_prompt, api_error=None):
-    openai.api_key = context.user_api_key
+    openai.api_key = 'nope'  # openai client always expects an api_keu
+    if context.user_api_key is not None:
+        openai.api_key = context.user_api_key
     openai.api_base = f'{context.base_url}/v1/chat'
     try:
         chat_completion = openai.Completion.create(
@@ -270,13 +323,11 @@ def oai_chat_completions(context, user_prompt, api_error=None):
             model=context.model,
             max_tokens=context.n_predict,
             stream=context.enable_streaming,
-            seed=context.seed
+            seed=context.server_seed if context.server_seed is not None else 42
         )
     except openai.error.APIError:
-        if api_error:
-            openai.api_key = context.api_key
+        if api_error is not None and api_error:
             return
-    openai.api_key = context.api_key
     if context.enable_streaming:
         completion_response = {
             'content': '',
@@ -301,13 +352,17 @@ def oai_chat_completions(context, user_prompt, api_error=None):
         })
 
 
-def assert_n_tokens_predicted(completion_response, expected_predicted_n=None):
+def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, expected_content=None):
     content = completion_response['content']
     n_predicted = completion_response['timings']['predicted_n']
     assert len(content) > 0, "no token predicted"
     if expected_predicted_n is not None:
         assert n_predicted == expected_predicted_n, (f'invalid number of tokens predicted:'
-                                                     f' "{n_predicted}" <> "{expected_predicted_n}"')
+                                                     f' {n_predicted} <> {expected_predicted_n}')
+    if expected_content is not None:
+        expected_content = expected_content.replace('<space>', ' ').replace('<LF>', '\n')
+        assert content == expected_content, (f'invalid tokens predicted:'
+                                             f' ```\n{content}\n``` <> ```\n{expected_content}\n```')
 
 
 def wait_for_health_status(context, expected_http_status_code,
@@ -334,3 +389,28 @@ def request_slots_status(context, expected_slots):
     for expected, slot in zip(expected_slots, slots):
         for key in expected:
             assert expected[key] == slot[key], f"expected[{key}] != slot[{key}]"
+
+
+def start_server_background(context):
+    context.server_path = '../../../build/bin/server'
+    if 'LLAMA_SERVER_BIN_PATH' in os.environ:
+        context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
+    server_args = [
+        '--model', context.model_file
+    ]
+    if context.model_alias is not None:
+        server_args.extend(['--alias', context.model_alias])
+    if context.server_seed is not None:
+        server_args.extend(['--alias', context.model_alias])
+    if context.n_ctx is not None:
+        server_args.extend(['--ctx-size', context.n_ctx])
+    if context.n_slots is not None:
+        server_args.extend(['--parallel', context.n_slots])
+    if context.n_server_predict is not None:
+        server_args.extend(['--n-predict', context.n_server_predict])
+    if context.server_api_key is not None:
+        server_args.extend(['--api-key', context.server_api_key])
+    print(f"starting server with: {context.server_path}", *server_args)
+    context.server_process = subprocess.Popen(
+        [str(arg) for arg in [context.server_path, *server_args]],
+        close_fds=True)
