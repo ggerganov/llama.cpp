@@ -65,9 +65,7 @@ def clean_vision_tower_from_checkpoint(checkpoint_path):
         for name in clip_tensors:
             del checkpoint[name]
 
-        # Save the updated checkpoint
         checkpoint_path = checkpoint_path
-        save_model(checkpoint, checkpoint_path, file_type)
         return True
     return False
 
@@ -151,16 +149,6 @@ for name in first_mm_tensors:
 
 if len(projector) > 0:
     save_model(projector, f"{args.model}/llava.projector", 'pytorch')
-
-for name in mm_tensors:
-    del last_checkpoint[name]
-for name in first_mm_tensors:
-    del first_checkpoint[name]
-
-if len(mm_tensors) > 0:
-    save_model(last_checkpoint, projector_checkpoint_path, file_type)
-if len(first_mm_tensors) > 0:
-    save_model(first_checkpoint, newline_checkpoint_path, file_type)
 
 print("Done!")
 print(f"Now you can convert {args.model} to a a regular LLaMA GGUF file.")
