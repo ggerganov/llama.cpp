@@ -2601,6 +2601,7 @@ int main(int argc, char **argv)
                 task_server task;
                 task.id   = llama.queue_tasks.get_new_id();
                 task.type = TASK_TYPE_SLOTS_DATA;
+                task.target_id = -1;
 
                 llama.queue_results.add_waiting_task_id(task.id);
                 llama.queue_tasks.post(task);
@@ -2617,7 +2618,7 @@ int main(int argc, char **argv)
                         {"slots_idle",       n_idle_slots},
                         {"slots_processing", n_processing_slots}};
                 res.status = 200; // HTTP OK
-                if (req.has_param("include_slots")) {
+                if (sparams.slots_endpoint && req.has_param("include_slots")) {
                     health["slots"] = result.result_json["slots"];
                 }
 
@@ -2647,6 +2648,7 @@ int main(int argc, char **argv)
             task_server task;
             task.id = llama.queue_tasks.get_new_id();
             task.type = TASK_TYPE_SLOTS_DATA;
+            task.target_id = -1;
 
             llama.queue_results.add_waiting_task_id(task.id);
             llama.queue_tasks.post(task);
