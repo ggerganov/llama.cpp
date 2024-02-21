@@ -30,6 +30,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <signal.h>
+#include <string>
 
 #include <iostream> // do we still need this?
 
@@ -350,7 +351,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
     printf("\033[1;0H\033[K**************************\n\033[KKVcache occupancy by slot:\n\033[K**************************\n");
 
     for(int i=0; i<num_blocks; i++) {
-        //printf("\033[K");  // clear the current line
+        printf("\033[K");  // clear the current line
         for(int j=0; j < max_length; j++) {
             int used = slots[i].cache_tokens.size() * max_length / slot_cache_size;
             if((j < max_length / 2) && (j < used)) {
@@ -382,7 +383,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
         }
     printf(" %4zu/%5zu %2d %s %s %s\n", slots[i].cache_tokens.size(), slot_cache_size, slots[i].id, slot_symbol1.c_str(), slot_symbol2.c_str(), slot_symbol3.c_str());
     }
-    printf("\n\033[%dJ", num_blocks+5);    // move cursor to end of cache display
+    printf("\n\033[%dJ", num_blocks+5);     // move cursor to end of cache display
 }
 
 struct llama_server_context
@@ -2664,6 +2665,7 @@ int main(int argc, char **argv)
 
     llama_backend_init();
     llama_numa_init(params.numa);
+    ggml_time_init();
 
     LOG_INFO("build info", {{"build", LLAMA_BUILD_NUMBER},
                             {"commit", LLAMA_COMMIT}});

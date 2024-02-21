@@ -291,9 +291,10 @@ struct llama_server_queue {
     // Start the main loop. Called from the very end of server.cpp
     void start_loop() {
         running = true;
+        //LOG_TEE("In start_loop have new task number %d.\n", id);
         while (true) {
             // new task arrived
-            LOG_TEE("In start_loop have new task number %d.\n", id);
+            // LOG_TEE("In start_loop have new task number %d.\n", id);
             {
                 while (true)
                 {
@@ -377,7 +378,7 @@ struct llama_server_response {
     typedef std::function<void(int, int, task_result&)> callback_multitask_t;
     callback_multitask_t callback_update_multitask;
     // for keeping track of all tasks waiting for the result
-    std::set<int> waiting_task_ids;     // so this stores waiting tasks with no obvious limit
+    std::set<int> waiting_task_ids;     // this stores waiting tasks with no obvious limit
     // the main result queue
     std::vector<task_result> queue_results;
     std::mutex mutex_results;
