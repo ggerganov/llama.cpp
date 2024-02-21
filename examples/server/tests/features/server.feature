@@ -84,7 +84,7 @@ Feature: llama.cpp server
     Then all prompts are predicted
 
   # FIXME: #3969 infinite loop on the CI, not locally, if n_prompt * n_predict > kv_size
-  @bug
+  @llama.cpp
   Scenario: Multi users with total number of tokens to predict exceeds the KV Cache size
     Given a prompt:
       """

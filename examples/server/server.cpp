@@ -2719,19 +2719,6 @@ int main(int argc, char **argv)
         log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
     }
 
-    LOG_INFO("HTTP server listening", log_data);
-    // run the HTTP server in a thread - see comment below
-    std::thread t([&]()
-            {
-                if (!svr.listen_after_bind())
-                {
-                    state.store(SERVER_STATE_ERROR);
-                    return 1;
-                }
-
-                return 0;
-            });
-
     // load the model
     if (!llama.load_model(params))
     {
@@ -3193,6 +3180,19 @@ int main(int argc, char **argv)
         }
     }*/
     //);
+
+    LOG_INFO("HTTP server listening", log_data);
+    // run the HTTP server in a thread - see comment below
+    std::thread t([&]()
+            {
+                if (!svr.listen_after_bind())
+                {
+                    state.store(SERVER_STATE_ERROR);
+                    return 1;
+                }
+
+                return 0;
+            });
 
     llama.queue_tasks.on_new_task(std::bind(
         &llama_server_context::process_single_task, &llama, std::placeholders::_1));
