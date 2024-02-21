@@ -6,6 +6,7 @@ Feature: Security
     And   a model file stories260K.gguf
     And   a server api key llama.cpp
     Then  the server is starting
+    Then  the server is healthy
 
   Scenario Outline: Completion with some user api key
     Given a prompt test
