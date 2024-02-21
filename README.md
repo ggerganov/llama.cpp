@@ -141,6 +141,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [Faraday](https://faraday.dev/) (proprietary)
 - [LMStudio](https://lmstudio.ai/) (proprietary)
+- [LocalAI](https://github.com/mudler/LocalAI) (MIT)
 - [LostRuins/koboldcpp](https://github.com/LostRuins/koboldcpp) (AGPL)
 - [Mozilla-Ocho/llamafile](https://github.com/Mozilla-Ocho/llamafile)
 - [nomic-ai/gpt4all](https://github.com/nomic-ai/gpt4all)
