@@ -1,12 +1,14 @@
 # Server test scenario
 name: Server Integration Tests
 
-# FIXME put only necessary triggers
 on:
   push:
     branches:
       - master
       - test/server-add-ci-test # FIXME remove
+    paths: ['.github/workflows/server-test.yml', '**/CMakeLists.txt', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', 'examples/server/**.*']
+  pull_request:
+    types: [opened, synchronize, reopened]
     paths: ['.github/workflows/server-test.yml', '**/CMakeLists.txt', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', 'examples/server/**.*']
 
 jobs:
