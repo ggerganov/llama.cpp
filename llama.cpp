@@ -12176,18 +12176,19 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
         data_ctx->write(&kv_used,     sizeof(kv_used));
 
         if (kv_buf_size) {
-            const size_t elt_size = ggml_element_size(kv_self.k_l[0]);
-
             std::vector<uint8_t> tmp_buf;
             for (int il = 0; il < (int) n_layer; ++il) {
-                tmp_buf.resize(elt_size*n_embd_k_gqa*kv_head);
+                size_t k_size = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*kv_head);
+                tmp_buf.resize(k_size);
                 ggml_backend_tensor_get(kv_self.k_l[il], tmp_buf.data(), 0, tmp_buf.size());
                 data_ctx->write(tmp_buf.data(), tmp_buf.size());
 
                 // v is not contiguous, copy row by row
-                tmp_buf.resize(elt_size*kv_head);
+                size_t v_row_size = ggml_row_size(kv_self.v_l[il]->type, kv_head);
+                size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, n_ctx);
+                tmp_buf.resize(v_row_size);
                 for (int ir = 0; ir < (int) n_embd_v_gqa; ++ir) {
-                    ggml_backend_tensor_get(kv_self.v_l[il], tmp_buf.data(), ir*elt_size*n_ctx, tmp_buf.size());
+                    ggml_backend_tensor_get(kv_self.v_l[il], tmp_buf.data(), ir*v_row_stride, tmp_buf.size());
                     data_ctx->write(tmp_buf.data(), tmp_buf.size());
                 }
             }
@@ -12289,17 +12290,16 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         if (kv_buf_size) {
             GGML_ASSERT(kv_self.total_size() == kv_buf_size);
 
-            const size_t elt_size = ggml_element_size(kv_self.k_l[0]);
-
             for (int il = 0; il < (int) n_layer; ++il) {
-                size_t k_size = elt_size*n_embd_k_gqa*kv_head;
+                size_t k_size = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*kv_head);
                 ggml_backend_tensor_set(kv_self.k_l[il], inp, 0, k_size);
                 inp += k_size;
 
                 // v is not contiguous, copy row by row
-                size_t v_row_size = elt_size*kv_head;
+                size_t v_row_size = ggml_row_size(kv_self.v_l[il]->type, kv_head);
+                size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, n_ctx);
                 for (int ir = 0; ir < (int) n_embd_v_gqa; ++ir) {
-                    ggml_backend_tensor_set(kv_self.v_l[il], inp, ir*elt_size*n_ctx, v_row_size);
+                    ggml_backend_tensor_set(kv_self.v_l[il], inp, ir*v_row_stride, v_row_size);
                     inp += v_row_size;
                 }
             }
