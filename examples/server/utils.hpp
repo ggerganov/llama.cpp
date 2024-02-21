@@ -49,7 +49,8 @@ enum server_state {
 enum task_type {
     TASK_TYPE_COMPLETION,
     TASK_TYPE_CANCEL,
-    TASK_TYPE_NEXT_RESPONSE
+    TASK_TYPE_NEXT_RESPONSE,
+    TASK_TYPE_SLOTS_DATA
 };
 
 struct task_server {

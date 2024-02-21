@@ -5,6 +5,7 @@
 #include "oai.hpp"
 
 #include "../llava/clip.h"
+#include "../llava/llava.h"
 
 #include "stb_image.h"
 
@@ -997,43 +998,12 @@ struct llama_server_context
             {
                 continue;
             }
-            clip_image_f32_batch img_res_v;
-            img_res_v.size = 0;
-            img_res_v.data = nullptr;
-            if (!clip_image_preprocess(clp_ctx, img.img_data, img_res_v))
-            {
-                LOG_TEE("Error processing the given image");
-                clip_free(clp_ctx);
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-            if (img_res_v.size == 0)
-            {
+
+            if (!llava_image_embed_make_with_clip_img(clp_ctx, params.n_threads, img.img_data, &img.image_embedding, &img.image_tokens)) {
                 LOG_TEE("Error processing the given image");
                 return false;
             }
 
-            // note: assumes only one image was returned by clip_image_preprocess
-            clip_image_f32 * img_res = img_res_v.data;
-
-            img.image_tokens = clip_n_patches(clp_ctx);
-            img.image_embedding = (float *)malloc(clip_embd_nbytes(clp_ctx));
-            if (!img.image_embedding)
-            {
-                LOG_TEE("Unable to allocate memory for image embeddings\n");
-                clip_image_f32_batch_free(img_res_v);
-                clip_free(clp_ctx);
-                return false;
-            }
-            LOG_TEE("slot %i - encoding image [id: %i]\n", slot.id, img.id);
-            if (!clip_image_encode(clp_ctx, params.n_threads, img_res, img.image_embedding))
-            {
-                LOG_TEE("Unable to encode image\n");
-                clip_image_f32_batch_free(img_res_v);
-                return false;
-            }
-
-            clip_image_f32_batch_free(img_res_v);
 
             img.request_encode_image = false;
         }
@@ -1424,6 +1394,46 @@ struct llama_server_context
             case TASK_TYPE_NEXT_RESPONSE: {
                 // do nothing
             } break;
+            case TASK_TYPE_SLOTS_DATA: {
+                json slots_data        = json::array();
+                int n_idle_slots       = 0;
+                int n_processing_slots = 0;
+
+                for (llama_client_slot &slot: slots) {
+                    if (slot.available()) {
+                        n_idle_slots++;
+                    } else {
+                        n_processing_slots++;
+                    }
+                    json slot_data = get_formated_generation(slot);
+                    slot_data["id"] = slot.id;
+                    slot_data["task_id"] = slot.task_id;
+                    slot_data["state"] = slot.state;
+                    slot_data["prompt"] = slot.prompt;
+                    slot_data["next_token"] = {
+                            {"has_next_token", slot.has_next_token},
+                            {"n_remain", slot.n_remaining},
+                            {"num_tokens_predicted", slot.n_decoded},
+                            {"stopped_eos", slot.stopped_eos},
+                            {"stopped_word", slot.stopped_word},
+                            {"stopped_limit", slot.stopped_limit},
+                            {"stopping_word", slot.stopping_word},
+                    };
+                    slots_data.push_back(slot_data);
+                }
+                LOG_TEE("task %i - slots data: idle=%i processing=%i\n", task.id, n_idle_slots, n_processing_slots);
+                task_result res;
+                res.id = task.id;
+                res.multitask_id = task.multitask_id;
+                res.stop = true;
+                res.error = false;
+                res.result_json = {
+                        { "idle",       n_idle_slots       },
+                        { "processing", n_processing_slots },
+                        { "slots",      slots_data         }
+                };
+                queue_results.send(res);
+            } break;
         }
     }
 
@@ -1477,14 +1487,15 @@ struct llama_server_context
                 if (slot.is_processing() && system_tokens.size() + slot.cache_tokens.size() >= (size_t) slot.n_ctx)
                 {
                     // Shift context
-                    const int n_left    = system_tokens.size() + slot.n_past - slot.params.n_keep - 1;
+                    const int n_keep    = slot.params.n_keep + add_bos_token;
+                    const int n_left    = system_tokens.size() + slot.n_past - n_keep;
                     const int n_discard = n_left / 2;
 
-                    LOG_TEE("slot %d: context shift - n_keep = %d, n_left = %d, n_discard = %d\n", slot.id, slot.params.n_keep, n_left, n_discard);
-                    llama_kv_cache_seq_rm   (ctx, slot.id, slot.params.n_keep + 1            , slot.params.n_keep + n_discard + 1);
-                    llama_kv_cache_seq_shift(ctx, slot.id, slot.params.n_keep + 1 + n_discard, system_tokens.size() + slot.n_past, -n_discard);
+                    LOG_TEE("slot %d: context shift - n_keep = %d, n_left = %d, n_discard = %d\n", slot.id, n_keep, n_left, n_discard);
+                    llama_kv_cache_seq_rm   (ctx, slot.id, n_keep            , n_keep + n_discard);
+                    llama_kv_cache_seq_shift(ctx, slot.id, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
 
-                    for (size_t i = slot.params.n_keep + 1 + n_discard; i < slot.cache_tokens.size(); i++)
+                    for (size_t i = n_keep + n_discard; i < slot.cache_tokens.size(); i++)
                     {
                         slot.cache_tokens[i - n_discard] = slot.cache_tokens[i];
                     }
@@ -1497,7 +1508,7 @@ struct llama_server_context
 
                     LOG_VERBOSE("context shift", {
                         { "n_ctx", n_ctx },
-                        { "n_keep", params.n_keep },
+                        { "n_keep", n_keep },
                         { "n_left", n_left },
                     });
                 }
@@ -2587,34 +2598,38 @@ int main(int argc, char **argv)
         server_state current_state = state.load();
         switch(current_state) {
             case SERVER_STATE_READY: {
-                int available_slots  = 0;
-                int processing_slots = 0;
-                for (llama_client_slot &slot: llama.slots) {
-                    if (slot.available()) {
-                        available_slots++;
-                    } else {
-                        processing_slots++;
-                    }
+                // request slots data using task queue
+                task_server task;
+                task.id   = llama.queue_tasks.get_new_id();
+                task.type = TASK_TYPE_SLOTS_DATA;
+                task.target_id = -1;
+
+                llama.queue_results.add_waiting_task_id(task.id);
+                llama.queue_tasks.post(task);
+
+                // get the result
+                task_result result = llama.queue_results.recv(task.id);
+                llama.queue_results.remove_waiting_task_id(task.id);
+
+                int n_idle_slots       = result.result_json["idle"];
+                int n_processing_slots = result.result_json["processing"];
+
+                json health = {
+                        {"status",           "ok"},
+                        {"slots_idle",       n_idle_slots},
+                        {"slots_processing", n_processing_slots}};
+                res.status = 200; // HTTP OK
+                if (sparams.slots_endpoint && req.has_param("include_slots")) {
+                    health["slots"] = result.result_json["slots"];
                 }
-                if (available_slots > 0) {
-                    json health = {
-                            {"status",           "ok"},
-                            {"slots_idle",       available_slots},
-                            {"slots_processing", processing_slots}};
-                    res.set_content(health.dump(), "application/json");
-                    res.status = 200; // HTTP OK
-                } else {
-                    json health = {
-                            {"status",           "no slot available"},
-                            {"slots_idle",       available_slots},
-                            {"slots_processing", processing_slots}};
-                    res.set_content(health.dump(), "application/json");
+
+                if (n_idle_slots == 0) {
+                    health["status"] = "no slot available";
                     if (req.has_param("fail_on_no_slot")) {
                         res.status = 503; // HTTP Service Unavailable
-                    } else {
-                        res.status = 200; // HTTP OK
                     }
                 }
+                res.set_content(health.dump(), "application/json");
                 break;
             }
             case SERVER_STATE_LOADING_MODEL:
@@ -2630,26 +2645,20 @@ int main(int argc, char **argv)
 
     if (sparams.slots_endpoint) {
         svr.Get("/slots", [&](const httplib::Request&, httplib::Response& res) {
-            json slots;
-            for (llama_client_slot & slot : llama.slots) {
-                json slot_data = llama.get_formated_generation(slot);
-                slot_data["id"] = slot.id;
-                slot_data["task_id"] = slot.task_id;
-                slot_data["state"] = slot.state;
-                slot_data["prompt"] = slot.prompt;
-                slot_data["next_token"] = {
-                        {"has_next_token", slot.has_next_token},
-                        {"n_remain", slot.n_remaining},
-                        {"num_tokens_predicted", slot.n_decoded},
-                        {"stopped_eos", slot.stopped_eos},
-                        {"stopped_word", slot.stopped_word},
-                        {"stopped_limit", slot.stopped_limit},
-                        {"stopping_word", slot.stopping_word},
-                };
+            // request slots data using task queue
+            task_server task;
+            task.id = llama.queue_tasks.get_new_id();
+            task.type = TASK_TYPE_SLOTS_DATA;
+            task.target_id = -1;
 
-                slots.push_back(slot_data);
-            }
-            res.set_content(slots.dump(), "application/json");
+            llama.queue_results.add_waiting_task_id(task.id);
+            llama.queue_tasks.post(task);
+
+            // get the result
+            task_result result = llama.queue_results.recv(task.id);
+            llama.queue_results.remove_waiting_task_id(task.id);
+
+            res.set_content(result.result_json["slots"].dump(), "application/json");
             res.status = 200; // HTTP OK
         });
     }
