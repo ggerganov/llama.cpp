@@ -517,7 +517,7 @@ struct llama_server_context
         default_generation_settings_for_props = get_formatted_generation(slots.front());
         default_generation_settings_for_props["seed"] = -1;
 
-        batch = llama_batch_init(n_ctx, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
+        batch = llama_batch_init(n_ctx_slot, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
@@ -2600,7 +2600,6 @@ static json format_detokenized_response(std::string content)
         {"content", content}};
 }
 
-
 static void log_server_request(const httplib::Request &req, const httplib::Response &res)
 {
     LOG_INFO("request", {
@@ -2934,8 +2933,7 @@ int main(int argc, char **argv)
                 LOG_TEE("Initiated new task %d.\n", task_id);
                 llama.request_completion(task_id, data, false, false, -1);
                 if (!json_value(data, "stream", false)) {
-                    std::string completion_text;    // is this the ANSWER? never used?
-                    LOG_TEE("The answer is %s\n", completion_text.c_str());
+                    std::string completion_text;    // is this ever used?
                     task_result result = llama.queue_results.recv(task_id);
                     if (!result.error && result.stop) {
                         res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
