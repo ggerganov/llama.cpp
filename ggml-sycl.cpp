@@ -14642,7 +14642,8 @@ GGML_CALL static const char * ggml_backend_sycl_buffer_type_name(ggml_backend_bu
 static ggml_backend_buffer_t
 ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
                                            size_t size) try {
-    int device = (int) (intptr_t) buft->context;
+    ggml_backend_sycl_buffer_type_context * buft_ctx = (ggml_backend_sycl_buffer_type_context *)buft->context;
+    int device = (int) buft_ctx->device;
 
     ggml_sycl_set_device(device);
     int device_index = get_device_index_by_id(device);
@@ -14720,7 +14721,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device) {
         for (int i = 0; i < GGML_SYCL_MAX_DEVICES; i++) {
             ggml_backend_sycl_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_sycl_buffer_type_interface,
-                /* .context  = */ (ggml_backend_buffer_type_context_t) (intptr_t) i,
+                /* .context  = */ new ggml_backend_sycl_buffer_type_context{i, GGML_SYCL_NAME + std::to_string(i)},
             };
         }
         ggml_backend_sycl_buffer_type_initialized = true;
@@ -14782,10 +14783,6 @@ ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type() {
 
 // backend
 
-struct ggml_backend_context_sycl {
-    int device;
-};
-
 static const char * ggml_backend_sycl_name(ggml_backend_t backend) {
     return GGML_SYCL_NAME;
 
@@ -14793,14 +14790,14 @@ static const char * ggml_backend_sycl_name(ggml_backend_t backend) {
 }
 
 static void ggml_backend_sycl_free(ggml_backend_t backend) {
-    ggml_backend_context_sycl * sycl_ctx = (ggml_backend_context_sycl *)backend->context;
+    ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     delete sycl_ctx;
     delete backend;
 }
 
 static ggml_backend_buffer_type_t ggml_backend_sycl_get_default_buffer_type(ggml_backend_t backend) {
-    ggml_backend_context_sycl * sycl_ctx = (ggml_backend_context_sycl *)backend->context;
+    ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     return ggml_backend_sycl_buffer_type(sycl_ctx->device);
 }
@@ -14809,7 +14806,7 @@ static void ggml_backend_sycl_set_tensor_async(ggml_backend_t backend,
                                                ggml_tensor *tensor,
                                                const void *data, size_t offset,
                                                size_t size) try {
-    ggml_backend_context_sycl * sycl_ctx = (ggml_backend_context_sycl *)backend->context;
+    ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
@@ -14827,7 +14824,7 @@ static void ggml_backend_sycl_get_tensor_async(ggml_backend_t backend,
                                                const ggml_tensor *tensor,
                                                void *data, size_t offset,
                                                size_t size) try {
-    ggml_backend_context_sycl * sycl_ctx = (ggml_backend_context_sycl *)backend->context;
+    ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
@@ -14842,7 +14839,7 @@ catch (sycl::exception const &exc) {
 }
 
 static void ggml_backend_sycl_synchronize(ggml_backend_t backend) try {
-    ggml_backend_context_sycl * sycl_ctx = (ggml_backend_context_sycl *)backend->context;
+    ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     SYCL_CHECK(CHECK_TRY_ERROR(g_syclStreams[sycl_ctx->device][0]->wait()));
 
@@ -14878,7 +14875,7 @@ static void ggml_backend_sycl_graph_plan_compute(ggml_backend_t backend, ggml_ba
 }
 
 static bool ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
-    ggml_backend_context_sycl * sycl_ctx = (ggml_backend_context_sycl *)backend->context;
+    ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
 
     ggml_sycl_set_main_device(sycl_ctx->device);
 
@@ -15092,8 +15089,9 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
     // not strictly necessary, but it may reduce the overhead of the first graph_compute
     ggml_sycl_set_main_device(device);
 
-    ggml_backend_context_sycl * ctx = new ggml_backend_context_sycl {
-        /* .device = */ device
+    ggml_backend_sycl_context * ctx = new ggml_backend_sycl_context {
+        /* .device = */ device,
+        /* .name   = */ GGML_SYCL_NAME + std::to_string(device),
     };
 
     ggml_backend_t sycl_backend = new ggml_backend {
