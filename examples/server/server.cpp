@@ -30,7 +30,6 @@
 #include <condition_variable>
 #include <atomic>
 #include <signal.h>
-#include <string>
 
 #include <iostream> // do we still need this?
 
@@ -305,7 +304,9 @@ struct llama_client_slot
     }
 
     void print_timings(llama_client_slot &slot, bool flag = false) const {
-        printf("\033[21;0H");
+        if (flag) {
+            printf("\033[21;0H");        // needs to be sensitive to the number of slots
+        };
         LOG_TEE("Finished processing slot %d.\n", slot.id);
         LOG_TEE("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, t_prompt_processing, num_prompt_tokens_processed, t_prompt_processing / num_prompt_tokens_processed, 1e3 / t_prompt_processing * num_prompt_tokens_processed);
@@ -1449,8 +1450,6 @@ struct llama_server_context
                     break;
                 } else {
                     LOG_TEE("Activating slot %d.\n", (*slot).id);
-                    (*slot).state = PROCESSING;       // makes slot.is_processing true
-                    (*slot).command = LOAD_PROMPT;    // why not a new flag 'RUNNING'? does this do anything when state is PROC
                 }
 
                 if (task.data.contains("system_prompt"))

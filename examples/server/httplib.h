@@ -96,7 +96,7 @@
 // the value here (8u, 16u, 32u, etc) is what governs max threads at 5126
 #ifndef CPPHTTPLIB_THREAD_POOL_COUNT
 #define CPPHTTPLIB_THREAD_POOL_COUNT                                           \
-  ((std::max)(32u, std::thread::hardware_concurrency() > 0                     \
+  ((std::max)(64u, std::thread::hardware_concurrency() > 0                     \
                       ? std::thread::hardware_concurrency() - 1                \
                       : 0))
 #endif
