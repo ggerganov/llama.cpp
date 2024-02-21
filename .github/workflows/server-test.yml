@@ -43,7 +43,8 @@ jobs:
       - name: Download test model
         id: download_model
         run: |
-          ./scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf
+          cd examples/server/tests
+          ../../../scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf
 
       - name: Server Integration Tests
         id: server_integration_test
