@@ -1440,8 +1440,6 @@ struct llama_server_context
         task.target_id = -1;
         queue_tasks.post(task);
 
-        int32_t n_keep = slot.params.n_keep + add_bos_token;
-
         for (llama_client_slot &slot : slots)
         {
             if (slot.ga_n == 1)
@@ -1449,6 +1447,7 @@ struct llama_server_context
                 if (slot.is_processing() && system_tokens.size() + slot.cache_tokens.size() >= (size_t) slot.n_ctx)
                 {
                     // Shift context
+                    const int n_keep    = slot.params.n_keep + add_bos_token;
                     const int n_left    = system_tokens.size() + slot.n_past - n_keep;
                     const int n_discard = n_left / 2;
 
