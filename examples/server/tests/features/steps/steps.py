@@ -156,6 +156,7 @@ def step_oai_chat_completions(context):
 def step_all_prompts_are_predicted(context):
     for completion_thread in context.completion_threads:
         completion_thread.join()
+    assert len(context.completions) == len(context.completion_threads)
     for completion in context.completions:
         assert_n_tokens_predicted(completion)
 
@@ -249,7 +250,6 @@ def request_completion(context, prompt, n_predict=None, user_api_key=None):
         context.completions.append(response.json())
     else:
         assert response.status_code == 401
-
 
 
 def oai_chat_completions(context, user_prompt, api_error=None):
