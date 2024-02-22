@@ -10498,7 +10498,10 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         return std::make_pair(i_layer, n_layer);
     };
 
-    if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
+    // for arches that share the same tensor between the token embeddings and the output, we quantize the token embeddings
+    // with the quantization of the output tensor
+    if (name == tn(LLM_TENSOR_OUTPUT, "weight") ||
+        (LLM_TENSOR_NAMES.at(arch).find(LLM_TENSOR_OUTPUT) == LLM_TENSOR_NAMES.at(arch).end() && name == "token_embd.weight")) {
         int nx = tensor->ne[0];
         if (arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
             new_type = GGML_TYPE_Q8_0;
