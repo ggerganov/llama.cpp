@@ -12782,6 +12782,28 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<s>assistant\n";
         }
+    } else if (tmpl.find("<start_of_turn>") != std::string::npos) {
+        // google/gemma-7b-it
+        std::string system_prompt = "";
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                // there is no system message for gemma, but we will merge it with user prompt, so nothing is broken
+                system_prompt = trim(message->content);
+                continue;
+            }
+            // in gemma, "assistant" is "model"
+            role = role == "assistant" ? "model" : message->role;
+            ss << "<start_of_turn>" << role << "\n";
+            if (!system_prompt.empty() && role != "model") {
+                ss << system_prompt << "\n\n";
+                system_prompt = "";
+            }
+            ss << trim(message->content) << "<end_of_turn>\n";
+        }
+        if (add_ass) {
+            ss << "<start_of_turn>model\n";
+        }
     } else {
         // template not supported
         return -1;
