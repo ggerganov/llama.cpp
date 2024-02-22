@@ -500,8 +500,8 @@ struct llama_server_context
             const int ga_w = params.grp_attn_w;
 
             if (ga_n != 1) {
-                GGML_ASSERT(ga_n > 0                    && "ga_n must be positive");                     // NOLINT
-                GGML_ASSERT(ga_w % ga_n == 0            && "ga_w must be a multiple of ga_n");     // NOLINT
+                GGML_ASSERT(ga_n > 0                    && "ga_n must be positive");                       // NOLINT
+                GGML_ASSERT(ga_w % ga_n == 0            && "ga_w must be a multiple of ga_n");             // NOLINT
                 //GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of ga_w");    // NOLINT
                 //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * ga_n"); // NOLINT
                 LOG_TEE(" -> Slot %i - self-extend: ga_n = %d, ga_w = %d\n", slot.id, ga_n, ga_w);
@@ -589,7 +589,7 @@ struct llama_server_context
 
             if (slot.id == id && slot.available())
             {
-                LOG_TEE("Using id-based available slot called by id: %d", slot.id);
+                LOG_TEE("Using id-based available slot called by id: %d\n", slot.id);
                 return &slot;
             }
 
@@ -2014,7 +2014,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
-    printf("  -skvg, --show-graphics    enable graphics displaying kvcache occupancy (default: false)");
+    printf("  -skvg, --show-graphics    enable graphics displaying kvcache occupancy (default: false)\n");
     printf("  -skvi, --show-interactive-graphics\n");
     printf("                            enable graphics displaying kvcache occupancy with user pause (default: false)\n");
     printf("\n");
@@ -2022,8 +2022,10 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                            advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
-    printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`");
-    printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`");
+    printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled),\n");
+    printf("                            used together with group attention width `--grp-attn-w`\n");
+    printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512),\n");
+    printf("                            used together with group attention factor `--grp-attn-n`\n");
     printf("  --chat-template JINJA_TEMPLATE\n");
     printf("                            set custom jinja chat template (default: template taken from model's metadata)\n");
     printf("                            Note: only commonly used templates are accepted, since we don't have jinja parser\n");

@@ -504,7 +504,7 @@ After running the API server, you can use it in Python by setting the API base U
 openai.api_base = "http://<Your api-server IP>:port"
 ```
 
-Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
+Then you can utilize llama.cpp as an OpenAI **chat.completion** or **text_completion** API
 
 ### Extending or building alternative Web Front End
 

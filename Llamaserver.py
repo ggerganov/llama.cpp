@@ -47,13 +47,13 @@ def make_progress_bar(bar, count, num_requests):
             print(f"Bar is now {bar}\n")
             return bar
 
-def send_request(q, system, question, event, count, num_requests):
+def send_request(q, question, event, count, num_requests):
 
     delay = 0.1
 
     global bar
 
-    data = {'system prompt': system, 'prompt': question}
+    data = {'prompt': question}
     
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -106,11 +106,6 @@ if __name__ == "__main__":
         'User-Agent': 'Llamaserver.py'
         }
 
-    system = "You are a helpful and cheerful \
-assistant who answers questions briefly, \
-clearly and without undue repetition \
-paying very close attention to the requirements of the task set."
-
     country_list = ["France", "Germany", "China", "USA", "Italy", "India",
                     "Ukraine", "Japan", "Australia", "New Zealand", "Indonesia", "Nigeria", "Saudi Arabia",
                     "Israel", "Egypt", "Kenya", "Chile", "Mexico", "Canada",
@@ -123,7 +118,7 @@ paying very close attention to the requirements of the task set."
         # NOTE: don't pass the parameter as a function call; pass in args
         print(f"Processing request {i} / {num_requests}: {question}\n")
         event = threading.Event()
-        t = threading.Thread(target=send_request, args=(q, system, question, event, i, num_requests)) 
+        t = threading.Thread(target=send_request, args=(q, question, event, i, num_requests)) 
         t.start()
         threads.append(t)
 
@@ -134,8 +129,3 @@ paying very close attention to the requirements of the task set."
     while not q.empty():
         text = q.get()  
         print_dict(json.loads(text))
-
-
-    
-
-
