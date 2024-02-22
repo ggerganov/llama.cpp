@@ -1555,7 +1555,7 @@ static bool ggml_metal_graph_compute(
                                 [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src0t == GGML_TYPE_IQ3_XXS || src0t == GGML_TYPE_IQ3_XS) {
-                                const int mem_size = src0t == GGML_TYPE_IQ3_XXS ? 256*4+128 : 512*4+128;
+                                const int mem_size = src0t == GGML_TYPE_IQ3_XXS ? 256*4+128 : 512*4;
                                 [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
                                 [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
@@ -1874,7 +1874,7 @@ static bool ggml_metal_graph_compute(
                                 [encoder dispatchThreadgroups:MTLSizeMake((ne21 + 7)/8, _ne1, ne01*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src2t == GGML_TYPE_IQ3_XXS || src2t == GGML_TYPE_IQ3_XS) {
-                                const int mem_size = src2t == GGML_TYPE_IQ3_XXS ? 256*4+128 : 512*4+128;
+                                const int mem_size = src2t == GGML_TYPE_IQ3_XXS ? 256*4+128 : 512*4;
                                 [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
                                 [encoder dispatchThreadgroups:MTLSizeMake((ne21 + 7)/8, _ne1, ne01*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
