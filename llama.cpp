@@ -6192,7 +6192,7 @@ struct llm_build_context {
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
                 cb(cur, "wqkv", il);
-                
+
                 if (model.layers[il].bqkv){
                     cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
                     cb(cur, "bqkv", il);
