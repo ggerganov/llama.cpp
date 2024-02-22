@@ -279,7 +279,7 @@ class Model:
             return gguf.MODEL_ARCH.BERT
         if arch == "NomicBertModel":
             return gguf.MODEL_ARCH.NOMIC_BERT
-        if arch in "GemmaForCausalLM":
+        if arch == "GemmaForCausalLM":
             return gguf.MODEL_ARCH.GEMMA
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
