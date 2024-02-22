@@ -655,6 +655,8 @@ class OrionModel(Model):
         self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
         self.gguf_writer.add_head_count(head_count)
         self.gguf_writer.add_head_count_kv(head_count_kv)
+        # note: config provides rms norm but it is actually layer norm
+        # ref:  https://huggingface.co/OrionStarAI/Orion-14B-Chat/blob/276a17221ce42beb45f66fac657a41540e71f4f5/modeling_orion.py#L570-L571
         self.gguf_writer.add_layer_norm_eps(self.hparams["rms_norm_eps"])
 
     def write_tensors(self):
@@ -1031,7 +1033,6 @@ class PersimmonModel(Model):
         self.gguf_writer.add_head_count_kv(head_count_kv)
         self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
-        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()
