@@ -48,3 +48,4 @@ Feature: Security
       | origin          | Access-Control-Allow-Credentials | true              |
       | web.mydomain.fr | Access-Control-Allow-Methods     | POST              |
       | web.mydomain.fr | Access-Control-Allow-Headers     | *                 |
+
