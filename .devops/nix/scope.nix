@@ -10,6 +10,7 @@
 
 lib.makeScope newScope (self: {
   inherit llamaVersion;
+  gguf-py = self.callPackage ./package-gguf-py.nix { };
   llama-cpp = self.callPackage ./package.nix { };
   docker = self.callPackage ./docker.nix { };
   docker-min = self.callPackage ./docker.nix { interactive = false; };
