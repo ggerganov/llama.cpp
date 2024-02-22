@@ -438,6 +438,30 @@ inline static ggml_int8x16x4_t ggml_vld1q_s8_x4(const int8_t * ptr) {
     return res;
 }
 
+// NOTE: not tested
+inline static int8x16_t ggml_vqtbl1q_s8(int8x16_t a, uint8x16_t b) {
+    int8x16_t res;
+
+    res[ 0] = a[b[ 0]];
+    res[ 1] = a[b[ 1]];
+    res[ 2] = a[b[ 2]];
+    res[ 3] = a[b[ 3]];
+    res[ 4] = a[b[ 4]];
+    res[ 5] = a[b[ 5]];
+    res[ 6] = a[b[ 6]];
+    res[ 7] = a[b[ 7]];
+    res[ 8] = a[b[ 8]];
+    res[ 9] = a[b[ 9]];
+    res[10] = a[b[10]];
+    res[11] = a[b[11]];
+    res[12] = a[b[12]];
+    res[13] = a[b[13]];
+    res[14] = a[b[14]];
+    res[15] = a[b[15]];
+
+    return res;
+}
+
 #else
 
 #define ggml_int16x8x2_t  int16x8x2_t
@@ -451,6 +475,7 @@ inline static ggml_int8x16x4_t ggml_vld1q_s8_x4(const int8_t * ptr) {
 #define ggml_vld1q_u8_x4  vld1q_u8_x4
 #define ggml_vld1q_s8_x2  vld1q_s8_x2
 #define ggml_vld1q_s8_x4  vld1q_s8_x4
+#define ggml_vqtbl1q_s8   vqtbl1q_s8
 
 #endif
 
@@ -9333,7 +9358,7 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * GGML_RESTRICT s, size_t bs, const 
     uint16_t gindex[8];
     uint16x8x2_t vindex;
     int8x16x4_t q1b;
-    int8x16x4_t q8b;
+    ggml_int8x16x4_t q8b;
     uint16x8x4_t scales;
     int32x4x2_t sumi;
     int32x4x2_t dotq;
@@ -9506,10 +9531,10 @@ void ggml_vec_dot_iq4_nl_q8_0(int n, float * restrict s, size_t bs, const void *
         q8b.val[2]    = vld1q_s8(y[ib+1].qs);
         q8b.val[3]    = vld1q_s8(y[ib+1].qs + 16);
 
-        q4b.val[0] = vqtbl1q_s8(values, vandq_u8(q4bits.val[0], m4b));
-        q4b.val[1] = vqtbl1q_s8(values, vshrq_n_u8(q4bits.val[0], 4));
-        q4b.val[2] = vqtbl1q_s8(values, vandq_u8(q4bits.val[1], m4b));
-        q4b.val[3] = vqtbl1q_s8(values, vshrq_n_u8(q4bits.val[1], 4));
+        q4b.val[0] = ggml_vqtbl1q_s8(values, vandq_u8  (q4bits.val[0], m4b));
+        q4b.val[1] = ggml_vqtbl1q_s8(values, vshrq_n_u8(q4bits.val[0], 4));
+        q4b.val[2] = ggml_vqtbl1q_s8(values, vandq_u8  (q4bits.val[1], m4b));
+        q4b.val[3] = ggml_vqtbl1q_s8(values, vshrq_n_u8(q4bits.val[1], 4));
 
         prod_1 = ggml_vdotq_s32(ggml_vdotq_s32(vdupq_n_s32(0), q4b.val[0], q8b.val[0]), q4b.val[1], q8b.val[1]);
         prod_2 = ggml_vdotq_s32(ggml_vdotq_s32(vdupq_n_s32(0), q4b.val[2], q8b.val[2]), q4b.val[3], q8b.val[3]);
