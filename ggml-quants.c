@@ -8508,7 +8508,7 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int i = 0; i < nb; ++i) {
 
-        const float d_all = (float)x[i].d;
+        const float d_all = GGML_FP16_TO_FP32(x[i].d);
 
         const uint8_t * restrict q6 = x[i].ql;
         const uint8_t * restrict qh = x[i].qh;
