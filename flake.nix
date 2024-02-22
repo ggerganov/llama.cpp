@@ -145,7 +145,9 @@
             # the same path you would with an overlay.
             legacyPackages = {
               llamaPackages = pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
-              llamaPackagesWindows = pkgs.pkgsCross.mingwW64.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesWindows = pkgs.pkgsCross.mingwW64.callPackage .devops/nix/scope.nix {
+                inherit llamaVersion;
+              };
               llamaPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
               llamaPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
             };
