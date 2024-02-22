@@ -2791,13 +2791,7 @@ struct llama_model_loader {
 
         std::vector<no_init<uint8_t>> read_buf;
 
-        for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
-            struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
-            if (!cur) {
-                // some tensors may be allocated in a different context
-                continue;
-            }
-
+        for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             if (progress_callback) {
                 if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
                     return false;
@@ -3722,7 +3716,7 @@ static bool llm_load_tensors(
     }
 
     // create one context per buffer type
-    size_t ctx_size = ggml_tensor_overhead()*ml.n_tensors;
+    size_t ctx_size = ggml_tensor_overhead()*(ml.n_tensors + 1); // +1 for models where tok_embd is duplicated as output
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
     for (auto & it : buft_layer_count) {
         struct ggml_init_params params = {
@@ -3860,6 +3854,7 @@ static bool llm_load_tensors(
                         } else {
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}); // needs to be on GPU
                             ml.n_created--; // artificial tensor
+                            ml.size_data += ggml_nbytes(model.output);
                         }
                     }
 
@@ -4059,6 +4054,8 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm   = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+                        model.output_norm_b = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd}, false);
+
                         model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab});
                     }
 
@@ -4068,14 +4065,23 @@ static bool llm_load_tensors(
 
                         auto & layer = model.layers[i];
 
-                        layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
+                        layer.attn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
+                        layer.attn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd}, false);
 
                         layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa});
-                        layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
+                        layer.bqkv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa}, false);
 
-                        layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
-                        layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
-                        layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
+                        layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
+                        layer.bo   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd}, false);
+
+                        layer.ffn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
+                        layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, false);
+
+                        layer.ffn_down   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
+                        layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd}, false);
+
+                        layer.ffn_up     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
+                        layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff}, false);
 
                         // AWQ ScaleActivation layer
                         layer.ffn_act = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, false);
@@ -4394,6 +4400,9 @@ static bool llm_load_tensors(
 
                     // output
                     model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+                    model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}); // same as tok_embd, duplicated to allow offloading
+                    ml.n_created--; // artificial tensor
+                    ml.size_data += ggml_nbytes(model.output);
 
                     const int64_t n_ff          = hparams.n_ff;
                     const int64_t n_embd_head_k = hparams.n_embd_head_k;
@@ -6173,7 +6182,7 @@ struct llm_build_context {
 
             attn_norm = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm,
-                    NULL,
+                    model.layers[il].attn_norm_b,
                     LLM_NORM, cb, il);
             cb(attn_norm, "attn_norm", il);
 
@@ -6183,6 +6192,11 @@ struct llm_build_context {
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
                 cb(cur, "wqkv", il);
+
+                if (model.layers[il].bqkv){
+                    cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
+                    cb(cur, "bqkv", il);
+                }
 
                 if (hparams.f_clamp_kqv > 0.0f) {
                     cur = ggml_clamp(ctx0, cur, -hparams.f_clamp_kqv, hparams.f_clamp_kqv);
@@ -6200,7 +6214,7 @@ struct llm_build_context {
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
-                        model.layers[il].wo, NULL,
+                        model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, KQ_pos, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
@@ -6213,13 +6227,13 @@ struct llm_build_context {
             {
                 cur = llm_build_norm(ctx0, ffn_inp, hparams,
                         model.layers[il].ffn_norm,
-                        NULL,
+                        model.layers[il].ffn_norm_b,
                         LLM_NORM, cb, il);
                 cb(cur, "ffn_norm", il);
                 cur = llm_build_ffn(ctx0, cur,
-                        model.layers[il].ffn_up,   NULL,
+                        model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
-                        model.layers[il].ffn_down, NULL,
+                        model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                         model.layers[il].ffn_act,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
@@ -6236,7 +6250,7 @@ struct llm_build_context {
 
         cur = llm_build_norm(ctx0, cur, hparams,
                 model.output_norm,
-                NULL,
+                model.output_norm_b,
                 LLM_NORM, cb, -1);
         cb(cur, "result_norm", -1);
 
@@ -7525,7 +7539,7 @@ struct llm_build_context {
         cb(cur, "result_norm", -1);
 
         // lm_head
-        cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
+        cur = ggml_mul_mat(ctx0, model.output, cur);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
@@ -12174,18 +12188,19 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
         data_ctx->write(&kv_used,     sizeof(kv_used));
 
         if (kv_buf_size) {
-            const size_t elt_size = ggml_element_size(kv_self.k_l[0]);
-
             std::vector<uint8_t> tmp_buf;
             for (int il = 0; il < (int) n_layer; ++il) {
-                tmp_buf.resize(elt_size*n_embd_k_gqa*kv_head);
+                size_t k_size = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*kv_head);
+                tmp_buf.resize(k_size);
                 ggml_backend_tensor_get(kv_self.k_l[il], tmp_buf.data(), 0, tmp_buf.size());
                 data_ctx->write(tmp_buf.data(), tmp_buf.size());
 
                 // v is not contiguous, copy row by row
-                tmp_buf.resize(elt_size*kv_head);
+                size_t v_row_size = ggml_row_size(kv_self.v_l[il]->type, kv_head);
+                size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, n_ctx);
+                tmp_buf.resize(v_row_size);
                 for (int ir = 0; ir < (int) n_embd_v_gqa; ++ir) {
-                    ggml_backend_tensor_get(kv_self.v_l[il], tmp_buf.data(), ir*elt_size*n_ctx, tmp_buf.size());
+                    ggml_backend_tensor_get(kv_self.v_l[il], tmp_buf.data(), ir*v_row_stride, tmp_buf.size());
                     data_ctx->write(tmp_buf.data(), tmp_buf.size());
                 }
             }
@@ -12287,17 +12302,16 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         if (kv_buf_size) {
             GGML_ASSERT(kv_self.total_size() == kv_buf_size);
 
-            const size_t elt_size = ggml_element_size(kv_self.k_l[0]);
-
             for (int il = 0; il < (int) n_layer; ++il) {
-                size_t k_size = elt_size*n_embd_k_gqa*kv_head;
+                size_t k_size = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*kv_head);
                 ggml_backend_tensor_set(kv_self.k_l[il], inp, 0, k_size);
                 inp += k_size;
 
                 // v is not contiguous, copy row by row
-                size_t v_row_size = elt_size*kv_head;
+                size_t v_row_size = ggml_row_size(kv_self.v_l[il]->type, kv_head);
+                size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, n_ctx);
                 for (int ir = 0; ir < (int) n_embd_v_gqa; ++ir) {
-                    ggml_backend_tensor_set(kv_self.v_l[il], inp, ir*elt_size*n_ctx, v_row_size);
+                    ggml_backend_tensor_set(kv_self.v_l[il], inp, ir*v_row_stride, v_row_size);
                     inp += v_row_size;
                 }
             }
@@ -12758,6 +12772,37 @@ static int32_t llama_chat_apply_template_internal(
         }
         if (add_ass) {
             ss << "<|assistant|>\n";
+        }
+    } else if (tmpl.find("bos_token + message['role']") != std::string::npos) {
+        // mlabonne/AlphaMonarch-7B template (the <s> is included inside history)
+        for (auto message : chat) {
+            std::string bos = (message == chat.front()) ? "" : "<s>"; // skip BOS for first message
+            ss << bos << message->role << "\n" << message->content << "</s>\n";
+        }
+        if (add_ass) {
+            ss << "<s>assistant\n";
+        }
+    } else if (tmpl.find("<start_of_turn>") != std::string::npos) {
+        // google/gemma-7b-it
+        std::string system_prompt = "";
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                // there is no system message for gemma, but we will merge it with user prompt, so nothing is broken
+                system_prompt = trim(message->content);
+                continue;
+            }
+            // in gemma, "assistant" is "model"
+            role = role == "assistant" ? "model" : message->role;
+            ss << "<start_of_turn>" << role << "\n";
+            if (!system_prompt.empty() && role != "model") {
+                ss << system_prompt << "\n\n";
+                system_prompt = "";
+            }
+            ss << trim(message->content) << "<end_of_turn>\n";
+        }
+        if (add_ass) {
+            ss << "<start_of_turn>model\n";
         }
     } else {
         // template not supported
