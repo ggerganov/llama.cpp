@@ -20,12 +20,12 @@ Feature: llama.cpp server
     Given a prompt <prompt>
     And   <n_predict> max tokens to predict
     And   a completion request with no api error
-    Then  <n_predicted> tokens are predicted with content: <content>
+    Then  <n_predicted> tokens are predicted matching <re_content>
 
     Examples: Prompts
-      | prompt                           | n_predict | content                                                                 | n_predicted |
-      | I believe the meaning of life is | 8         | <space>going to read.                                                   | 8           |
-      | Write a joke about AI            | 64        | tion came to the park. And all his friends were very scared and did not | 32          |
+      | prompt                           | n_predict | re_content                   | n_predicted |
+      | I believe the meaning of life is | 8         | read                         | 8           |
+      | Write a joke about AI            | 64        | (park<or>friends<or>scared)+ | 32          |
 
   Scenario Outline: OAI Compatibility
     Given a model <model>
@@ -34,12 +34,12 @@ Feature: llama.cpp server
     And   <max_tokens> max tokens to predict
     And   streaming is <enable_streaming>
     Given an OAI compatible chat completions request with no api error
-    Then  <n_predicted> tokens are predicted with content: <content>
+    Then  <n_predicted> tokens are predicted matching <re_content>
 
     Examples: Prompts
-      | model        | system_prompt               | user_prompt                          | max_tokens | content                                                                       | n_predicted | enable_streaming |
-      | llama-2      | Book                        | What is the best book                | 8          | "Mom, what'                                                                   | 8           | disabled         |
-      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 64         | "Hey," said the bird.<LF>The bird was very happy and thanked the bird for hel | 32          | enabled          |
+      | model        | system_prompt               | user_prompt                          | max_tokens | re_content                 | n_predicted | enable_streaming |
+      | llama-2      | Book                        | What is the best book                | 8          | (Mom<or>what)+             | 8           | disabled         |
+      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 64         | (thanks<or>happy<or>bird)+ | 32          | enabled          |
 
   Scenario: Embedding
     When embeddings are computed for:

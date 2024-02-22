@@ -3,4 +3,4 @@
 set -eu
 
 # Start @llama.cpp scenario
-behave --summary --stop --tags llama.cpp
+behave --summary --stop --no-capture --tags llama.cpp
