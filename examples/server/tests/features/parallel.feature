@@ -52,3 +52,33 @@ Feature: Parallel
       | streaming | n_predict |
       | disabled  | 512       |
       #| enabled   | 512       | FIXME: phymbert: need to investigate why in aiohttp with streaming only one token is generated
+
+  Scenario:  Multi users with total number of tokens to predict exceeds the KV Cache size #3969
+    Given a server listening on localhost:8080
+    And   a model file stories260K.gguf
+    And   42 as server seed
+    And   2 slots
+    And   1024 KV cache size
+    Then  the server is starting
+    Then  the server is healthy
+    Given a prompt:
+      """
+      Write a very long story about AI.
+      """
+    And a prompt:
+      """
+      Write another very long music lyrics.
+      """
+    And a prompt:
+      """
+      Write a very long poem.
+      """
+    And a prompt:
+      """
+      Write a very long joke.
+      """
+    And 2048 max tokens to predict
+    Given concurrent completion requests
+    Then the server is busy
+    Then the server is idle
+    Then all prompts are predicted
