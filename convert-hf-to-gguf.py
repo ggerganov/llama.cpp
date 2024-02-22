@@ -218,6 +218,8 @@ class Model:
             return BertModel
         if model_architecture == "NomicBertModel":
             return NomicBertModel
+        if model_architecture == "GemmaForCausalLM":
+            return GemmaModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -277,6 +279,8 @@ class Model:
             return gguf.MODEL_ARCH.BERT
         if arch == "NomicBertModel":
             return gguf.MODEL_ARCH.NOMIC_BERT
+        if arch == "GemmaForCausalLM":
+            return gguf.MODEL_ARCH.GEMMA
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -1784,6 +1788,62 @@ class NomicBertModel(BertModel):
                 assert data.shape == (rounded_vocab_size, self.hparams["n_embd"])
                 data = data[:self.vocab_size, :]
             yield name, data
+
+
+class GemmaModel(Model):
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+        block_count = hparams["num_hidden_layers"]
+
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+        self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"] if "num_key_value_heads" in hparams else hparams["num_attention_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_key_length(hparams["head_dim"])
+        self.gguf_writer.add_value_length(hparams["head_dim"])
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+
+        for name, data_torch in self.get_tensors():
+            # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
+            if name.endswith("norm.weight"):
+                data_torch = data_torch + 1
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
 
 
 ###### CONVERSION LOGIC ######
