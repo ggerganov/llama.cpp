@@ -400,6 +400,16 @@ struct llama_server_context
         return true;
     }
 
+    void validate_model_chat_template(server_params & sparams) {
+        llama_chat_message chat[] = {{"user", "test"}};
+        std::vector<char> buf(1);
+        int res = llama_chat_apply_template(model, nullptr, chat, 1, true, buf.data(), buf.size());
+        if (res < 0) {
+            LOG_ERROR("The chat template comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
+            sparams.chat_template = "<|im_start|>"; // llama_chat_apply_template only checks if <|im_start|> exist in the template
+        }
+    }
+
     void initialize() {
         // create slots
         all_slots_are_idle = true;
@@ -2750,6 +2760,11 @@ int main(int argc, char **argv)
         llama.initialize();
         state.store(SERVER_STATE_READY);
         LOG_INFO("model loaded", {});
+    }
+
+    if (sparams.chat_template.empty()) { // custom chat template is not supplied
+        // check if the template comes with the model is supported by us
+        llama.validate_model_chat_template(sparams);
     }
 
     // Middleware for API key validation
