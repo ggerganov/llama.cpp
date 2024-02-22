@@ -522,10 +522,12 @@ static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong 
 #define QI3_XS (QK_K / (4*QR3_XS))
 typedef struct {
     half d;
-    uint8_t qs[3*(QK_K/8)];
+    uint8_t qs[QK_K/4];
     uint8_t qh[QK_K/32];
+    uint8_t signs[QK_K/8];
+    uint8_t scales[QK_K/64];
 } block_iq3_xs;
-static_assert(sizeof(block_iq3_xs) == sizeof(ggml_fp16_t) + 3*(QK_K/8) + QK_K/32, "wrong iq3_xs block size/padding");
+static_assert(sizeof(block_iq3_xs) == sizeof(ggml_fp16_t) + 27*(QK_K/64), "wrong iq3_xs block size/padding");
 
 #define QR1_S 8
 #define QI1_S (QK_K / (4*QR1_S))
@@ -2054,20 +2056,18 @@ template<typename dst_t>
 static __global__ void dequantize_block_iq3_xs(const void * __restrict__ vx, dst_t * __restrict__ yy) {
 
     const int i   = blockIdx.x;
-    const block_iq3_xs * x = (const block_iq3_xs  *) vx;
+    const block_iq3_xs * x = (const block_iq3_xs *) vx;
 
     const int tid = threadIdx.x;
 #if QK_K == 256
     const int il = tid/8; // 0...3
     const int ib = tid%8; // 0...7
     dst_t * y = yy + i*QK_K + 32*ib + 8*il;
-    const uint8_t  * q3 = x[i].qs + 8*ib;
-    const uint16_t * gas = (const uint16_t *)(x[i].qs + QK_K/4) + 2*ib;
-    const uint8_t  * grid1 = (const uint8_t *)(iq3xs_grid + (q3[2*il+0] | ((x[i].qh[ib] << (8-2*il)) & 256)));
-    const uint8_t  * grid2 = (const uint8_t *)(iq3xs_grid + (q3[2*il+1] | ((x[i].qh[ib] << (7-2*il)) & 256)));
-    const uint32_t aux32 = gas[0] | (gas[1] << 16);
-    const float d = (float)x[i].d * (0.5f + (aux32 >> 28)) * 0.5f;
-    const uint8_t signs = ksigns_iq2xs[(aux32 >> 7*il) & 127];
+    const uint8_t * qs = x[i].qs + 8*ib;
+    const uint8_t * grid1 = (const uint8_t *)(iq3xs_grid + (qs[2*il+0] | ((x[i].qh[ib] << (8-2*il)) & 256)));
+    const uint8_t * grid2 = (const uint8_t *)(iq3xs_grid + (qs[2*il+1] | ((x[i].qh[ib] << (7-2*il)) & 256)));
+    const float d = (float)x[i].d * (0.5f + ((x[i].scales[ib/2] >> 4*(ib%2)) & 0xf)) * 0.5f;
+    const uint8_t signs = x[i].signs[4*ib + il];
     for (int j = 0; j < 4; ++j) {
         y[j+0] = d * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
         y[j+4] = d * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
