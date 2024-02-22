@@ -56,6 +56,8 @@ extern "C" {
 #define GGML_COMPUTE_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
 #define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
 
+#define GGML_FP16_TO_FP32(x) ((float)(*(const __fp16 *)&(x)))
+
 static inline float ggml_compute_fp16_to_fp32(ggml_fp16_t h) {
     __fp16 tmp;
     memcpy(&tmp, &h, sizeof(ggml_fp16_t));
@@ -224,8 +226,7 @@ extern float ggml_table_f32_f16[1 << 16];
 // On ARM NEON, it's quicker to directly convert x -> x instead of calling into ggml_lookup_fp16_to_fp32,
 // so we define GGML_FP16_TO_FP32 and GGML_FP32_TO_FP16 elsewhere for NEON.
 // This is also true for POWER9.
-#if !defined(GGML_FP16_TO_FP32) || !defined(GGML_FP32_TO_FP16)
-
+#if !defined(GGML_FP16_TO_FP32)
 inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
     uint16_t s;
     memcpy(&s, &f, sizeof(uint16_t));
@@ -233,8 +234,10 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 }
 
 #define GGML_FP16_TO_FP32(x) ggml_lookup_fp16_to_fp32(x)
-#define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
+#endif
 
+#if !defined(GGML_FP32_TO_FP16)
+#define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
 #endif
 
 #define GGML_HASHTABLE_FULL ((size_t)-1)
