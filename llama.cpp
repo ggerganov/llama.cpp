@@ -12795,7 +12795,7 @@ static int32_t llama_chat_apply_template_internal(
             // in gemma, "assistant" is "model"
             role = role == "assistant" ? "model" : message->role;
             ss << "<start_of_turn>" << role << "\n";
-            if (!system_prompt.empty()) {
+            if (!system_prompt.empty() && role != "model") {
                 ss << system_prompt << "\n\n";
                 system_prompt = "";
             }
