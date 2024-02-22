@@ -151,7 +151,7 @@ node index.js
 
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
 
-    `dynatemp_range`: Dynamic temperature range (default: 0.0, 0.0 = disabled).
+    `dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` (default: 0.0, 0.0 = disabled).
 
     `dynatemp_exponent`: Dynamic temperature exponent (default: 1.0).
 
@@ -209,7 +209,7 @@ node index.js
 
     `slot_id`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
 
-    `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
+    `cache_prompt`: Re-use previously cached prompt from the last request if possible. This may prevent re-caching the prompt from scratch. (default: false)
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
@@ -242,7 +242,7 @@ Notice that each `probs` is an array of length `n_probs`.
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
-- `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
+- `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`. These options may differ from the original ones in some way (e.g. bad values filtered out, strings converted to tokens, etc.).
 - `model`: The path to the model loaded with `-m`
 - `prompt`: The provided `prompt`
 - `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
