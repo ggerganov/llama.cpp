@@ -70,6 +70,24 @@ let
   ) ", accelerated with ${strings.concatStringsSep ", " suffices}";
 
   executableSuffix = effectiveStdenv.hostPlatform.extensions.executable;
+  
+  gguf-py = python3.pkgs.buildPythonPackage rec {
+    pname = "gguf";
+    version = "0.0.0";
+    pyproject = true;
+    nativeBuildInputs = with python3.pkgs; [ poetry-core ];
+    # buildInputs = [
+    #   python3.pkgs.poetry-core
+    # ];
+    propagatedBuildInputs = with python3.pkgs; [ numpy ];
+    src = lib.cleanSource ../../gguf-py;
+    doCheck = false;
+    meta = with lib; {
+      description = "Python package for writing binary files in the GGU format";
+      license = licenses.mit;
+      maintainers = [ maintainers.philiptaron ];
+    };
+  };
 
   # TODO: package the Python in this repository in a Nix-like way.
   # It'd be nice to migrate to buildPythonPackage, as well as ensure this repo
@@ -81,6 +99,7 @@ let
   llama-python = python3.withPackages (ps: [
     ps.numpy
     ps.sentencepiece
+    gguf-py
   ]);
 
   # TODO(Green-Sky): find a better way to opt-into the heavy ml python runtime
