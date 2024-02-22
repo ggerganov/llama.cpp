@@ -1,3 +1,7 @@
+#include "ggml-cuda.h"
+#include "ggml.h"
+#include "ggml-backend-impl.h"
+
 #include <algorithm>
 #include <assert.h>
 #include <atomic>
@@ -120,11 +124,6 @@
 #endif // CUDART_VERSION < 11020
 
 #endif // defined(GGML_USE_HIPBLAS)
-
-// ggml-cuda need half type so keep ggml headers include at last
-#include "ggml-cuda.h"
-#include "ggml.h"
-#include "ggml-backend-impl.h"
 
 #define CUDART_HMAX     11070 // CUDA 11.7, min. ver. for which __hmax and __hmax2 are known to work (may be higher than needed)
 
