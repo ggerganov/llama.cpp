@@ -3805,7 +3805,7 @@ void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y
 
 // ====================== 3.3125 bpw (de)-quantization
 
-void dequantize_row_iq3_xs(const block_iq3_xs * restrict x, float * restrict y, int k) {
+void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -9437,7 +9437,7 @@ void ggml_vec_dot_iq3_xxs_q8_K(int n, float * restrict s, size_t bs, const void 
 #endif
 }
 
-void ggml_vec_dot_iq3_xs_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     assert(n % QK_K == 0);
     assert(nrc == 1);
     UNUSED(nrc);
@@ -9445,8 +9445,8 @@ void ggml_vec_dot_iq3_xs_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const 
     UNUSED(by);
     UNUSED(bs);
 
-    const block_iq3_xs * restrict x = vx;
-    const block_q8_K   * restrict y = vy;
+    const block_iq3_s * restrict x = vx;
+    const block_q8_K  * restrict y = vy;
 
     const int nb = n / QK_K;
 
@@ -10781,10 +10781,10 @@ static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, v
         qs = y->qs;
         block_size = sizeof(block_iq3_xxs);
     } else {
-        block_iq3_xs * y = vy;
+        block_iq3_s * y = vy;
         dh = &y->d;
         qs = y->qs;
-        block_size = sizeof(block_iq3_xs);
+        block_size = sizeof(block_iq3_s);
     }
     int quant_size = block_size - sizeof(ggml_fp16_t);
 
@@ -10990,7 +10990,7 @@ void quantize_row_iq3_xxs_reference(const float * restrict x, block_iq3_xxs * re
     quantize_row_iq3_xxs_impl(256, x, y, k, NULL);
 }
 
-static void quantize_row_iq3_xs_impl(int block_size, const float * restrict x, void * restrict vy, int n,
+static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, void * restrict vy, int n,
         const float * restrict quant_weights) {
 
     const int gindex = iq3_data_index(512);
@@ -11009,7 +11009,7 @@ static void quantize_row_iq3_xs_impl(int block_size, const float * restrict x, v
 
     const int nbl = n/256;
 
-    block_iq3_xs * y = vy;
+    block_iq3_s * y = vy;
 
     float scales[QK_K/block_size];
     float weight[block_size];
@@ -11026,7 +11026,7 @@ static void quantize_row_iq3_xs_impl(int block_size, const float * restrict x, v
 
     for (int ibl = 0; ibl < nbl; ++ibl) {
 
-        memset(&y[ibl], 0, sizeof(block_iq3_xs));
+        memset(&y[ibl], 0, sizeof(block_iq3_s));
         y[ibl].d = GGML_FP32_TO_FP16(0.f);
 
         uint8_t * qs = y[ibl].qs;
@@ -11172,28 +11172,28 @@ static void quantize_row_iq3_xs_impl(int block_size, const float * restrict x, v
     }
 }
 
-size_t quantize_iq3_xs(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
+size_t quantize_iq3_s(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
     GGML_ASSERT(n_per_row%QK_K == 0);
     int nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
-        quantize_row_iq3_xs_impl(32, src, qrow, n_per_row, quant_weights);
+        quantize_row_iq3_s_impl(32, src, qrow, n_per_row, quant_weights);
         src += n_per_row;
-        qrow += nblock*sizeof(block_iq3_xs);
+        qrow += nblock*sizeof(block_iq3_s);
     }
-    return nrow * nblock * sizeof(block_iq3_xs);
+    return nrow * nblock * sizeof(block_iq3_s);
 }
 
-void quantize_row_iq3_xs(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_iq3_s(const float * restrict x, void * restrict vy, int k) {
     assert(k % QK_K == 0);
-    block_iq3_xs * restrict y = vy;
-    quantize_row_iq3_xs_reference(x, y, k);
+    block_iq3_s * restrict y = vy;
+    quantize_row_iq3_s_reference(x, y, k);
 }
 
-void quantize_row_iq3_xs_reference(const float * restrict x, block_iq3_xs * restrict y, int k) {
+void quantize_row_iq3_s_reference(const float * restrict x, block_iq3_s * restrict y, int k) {
     assert(k % QK_K == 0);
-    quantize_row_iq3_xs_impl(32, x, y, k, NULL);
+    quantize_row_iq3_s_impl(32, x, y, k, NULL);
 }
 
 
