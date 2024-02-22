@@ -5629,8 +5629,8 @@ void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int i = 0; i < nb; ++i) {
 
-        const float d = y[i].d * (float)x[i].d;
-        const float dmin = -y[i].d * (float)x[i].dmin;
+        const float d    =  y[i].d * GGML_FP16_TO_FP32(x[i].d);
+        const float dmin = -y[i].d * GGML_FP16_TO_FP32(x[i].dmin);
 
         const uint8_t * restrict q2 = x[i].qs;
         const int8_t  * restrict q8 = y[i].qs;
@@ -5779,8 +5779,8 @@ void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int i = 0; i < nb; ++i) {
 
-        const float d = y[i].d * (float)x[i].d;
-        const float dmin = -y[i].d * (float)x[i].dmin;
+        const float d    =  y[i].d * GGML_FP16_TO_FP32(x[i].d);
+        const float dmin = -y[i].d * GGML_FP16_TO_FP32(x[i].dmin);
 
         const uint8_t * restrict q2 = x[i].qs;
         const int8_t  * restrict q8 = y[i].qs;
@@ -6433,7 +6433,7 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
         int32_t isum = -4*(scales[0] * y[i].bsums[0] + scales[2] * y[i].bsums[1] + scales[1] * y[i].bsums[2] + scales[3] * y[i].bsums[3]);
 
-        const float d = y[i].d * (float)x[i].d;
+        const float d = y[i].d * GGML_FP16_TO_FP32(x[i].d);
 
         const uint8x16_t htmp = vcombine_u8(hbits, vshr_n_u8(hbits, 1));
         q3h.val[0] = vandq_u8(mh, vshlq_n_u8(htmp, 2));
@@ -6635,7 +6635,7 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
         int32_t isum = -4*(scales[0] * y[i].bsums[0] + scales[2] * y[i].bsums[1] + scales[1] * y[i].bsums[2] + scales[3] * y[i].bsums[3]);
 
-        const float d = y[i].d * (float)x[i].d;
+        const float d = y[i].d * GGML_FP16_TO_FP32(x[i].d);
 
         vint32m1_t vzero = __riscv_vmv_v_x_i32m1(0, 1);
 
@@ -7138,9 +7138,9 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         aux16[1] = (a[0] >> 4) & 0x0f0f;
 
         const int32_t summi = scales[2] * (y[i].bsums[0] + y[i].bsums[1]) + scales[3] * (y[i].bsums[2] + y[i].bsums[3]);
-        sum_mins += y[i].d * (float)x[i].d[1] * summi;
+        sum_mins += y[i].d * GGML_FP16_TO_FP32(x[i].d[1]) * summi;
 
-        const float d = y[i].d * (float)x[i].d[0];
+        const float d = y[i].d * GGML_FP16_TO_FP32(x[i].d[0]);
 
         const ggml_uint8x16x2_t q4bits = ggml_vld1q_u8_x2(q4);
 
@@ -7798,7 +7798,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int i = 0; i < nb; ++i) {
 
-        const float d = y[i].d * (float)x[i].d;
+        const float d = y[i].d * GGML_FP16_TO_FP32(x[i].d);
         const int8_t * sc = x[i].scales;
 
         const uint8_t * restrict q5 = x[i].qs;
@@ -7940,7 +7940,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int i = 0; i < nb; ++i) {
 
-        const float d = y[i].d * (float)x[i].d;
+        const float d = y[i].d * GGML_FP16_TO_FP32(x[i].d);
         const int8_t * sc = x[i].scales;
 
         const uint8_t * restrict q5 = x[i].qs;
@@ -8679,7 +8679,7 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int i = 0; i < nb; ++i) {
 
-        const float d_all = (float)x[i].d;
+        const float d_all = GGML_FP16_TO_FP32(x[i].d);
 
         const uint8_t * restrict q6 = x[i].ql;
         const uint8_t * restrict qh = x[i].qh;
