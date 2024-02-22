@@ -218,7 +218,7 @@ class Model:
             return BertModel
         if model_architecture == "NomicBertModel":
             return NomicBertModel
-        if model_architecture in "GemmaForCausalLM":
+        if model_architecture == "GemmaForCausalLM":
             return GemmaModel
         return Model
 
