@@ -1814,7 +1814,7 @@ class GemmaModel(Model):
 
         for name, data_torch in self.get_tensors():
             # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
-            if name.endswith(("norm.weight")):
+            if name.endswith("norm.weight"):
                 data_torch = data_torch + 1
 
             old_dtype = data_torch.dtype
