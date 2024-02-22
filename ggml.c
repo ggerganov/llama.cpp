@@ -841,7 +841,7 @@ inline static float vaddvq_f32(float32x4_t v) {
     #define GGML_F32Cx4              float32x4_t
     #define GGML_F32Cx4_ZERO         vdupq_n_f32(0.0f)
     #define GGML_F32Cx4_SET1(x)      vdupq_n_f32(x)
-    #define GGML_F32Cx4_LOAD(x)      vcvt_f32_f16(vld1_f16(x))
+    #define GGML_F32Cx4_LOAD(x)      vcvt_f32_f16(vld1_f16((const __fp16 *)(x)))
     #define GGML_F32Cx4_STORE(x, y)  vst1_f16(x, vcvt_f16_f32(y))
     #define GGML_F32Cx4_FMA(a, b, c) vfmaq_f32(a, b, c)
     #define GGML_F32Cx4_ADD          vaddq_f32
