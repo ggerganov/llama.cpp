@@ -17,11 +17,12 @@ def before_scenario(context, scenario):
 
 def after_scenario(context, scenario):
     if scenario.status == "failed":
-        print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n\n")
-        if os.path.isfile('llama.log'):
-            with closing(open('llama.log', 'r')) as f:
-                for line in f:
-                    print(line)
+        if 'GITHUB_ACTIONS' in os.environ:
+            print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n\n")
+            if os.path.isfile('llama.log'):
+                with closing(open('llama.log', 'r')) as f:
+                    for line in f:
+                        print(line)
 
     if not pid_exists(context.server_process.pid):
         assert False, f"Server not running pid={context.server_process.pid} ..."
