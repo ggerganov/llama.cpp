@@ -51,7 +51,7 @@ Feature: Parallel
     Examples:
       | streaming | n_predict |
       | disabled  | 128       |
-      #| enabled   | 64       | FIXME: phymbert: need to investigate why in aiohttp with streaming only one token is generated
+      | enabled   | 64        |
 
   Scenario:  Multi users with total number of tokens to predict exceeds the KV Cache size #3969
     Given a prompt:

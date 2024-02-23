@@ -485,20 +485,25 @@ async def oai_chat_completions(user_prompt,
                     assert response.status == 200
                     assert response.headers['Access-Control-Allow-Origin'] == origin
                     assert response.headers['Content-Type'] == "text/event-stream"
+                    event_received = True
+                    while event_received:
+                        event_received = False
+                        async for line_in_bytes in response.content:
+                            line = line_in_bytes.decode('utf8')
+                            line = line.rstrip('\n').rstrip('\r')
+                            if line == '':
+                                continue
+                            event_data = line.split(': ', 1)
+                            assert event_data[0] == 'data', f'Bad event code received: ```{event_data}```'
+                            chunk_raw = event_data[1]
 
-                    async for line_in_bytes in response.content:
-                        line = line_in_bytes.decode('utf8')
-                        event_data = line.split(': ', 1)
-                        assert event_data[0] == 'data', f'{event_data}'
-                        chunk_raw = event_data[1]
-
-                        chunk = json.loads(chunk_raw)
-                        assert len(chunk['choices']) == 1
-                        delta = chunk['choices'][0]['delta']
-                        if 'content' in delta:
-                            completion_response['content'] += delta['content']
-                            completion_response['timings']['predicted_n'] += 1
-                        print(f"DEBUG completion_response: {completion_response}")
+                            chunk = json.loads(chunk_raw)
+                            assert len(chunk['choices']) == 1, f"no choices provided, line ```{line}```"
+                            delta = chunk['choices'][0]['delta']
+                            if 'content' in delta:
+                                completion_response['content'] += delta['content']
+                                completion_response['timings']['predicted_n'] += 1
+                            print(f"DEBUG completion_response: {completion_response}")
                 else:
                     if expect_api_error is None or not expect_api_error:
                         assert response.status == 200
