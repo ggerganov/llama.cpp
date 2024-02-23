@@ -172,7 +172,7 @@
 #endif
 
 typedef int8_t int8x4_t __attribute__((ext_vector_type(4)));
-typedef uint8_t int8x4_t __attribute__((ext_vector_type(4)));
+typedef uint8_t uint8x4_t __attribute__((ext_vector_type(4)));
 static __device__ __forceinline__ int __vsubss4(const int a, const int b) {
     const int8x4_t va = reinterpret_cast<const int8x4_t&>(a);
     const int8x4_t vb = reinterpret_cast<const int8x4_t&>(b);
