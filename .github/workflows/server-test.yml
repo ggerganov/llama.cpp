@@ -13,42 +13,52 @@ on:
     paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
 
 jobs:
-  ubuntu:
+  server:
     runs-on: ubuntu-latest
-    container:
-      image: ubuntu:latest
-      ports:
-        - 8888
-      options: --cpus 4
 
     strategy:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
         build_type: [Debug, Release]
-        build: [noavx, avx2, avx, avx512, clblast, openblas, kompute, vulkan, cublas]
+        build: [noavx, avx2, avx, avx512, cublas, clblast, openblas, kompute, vulkan]
         include:
           - build: 'noavx'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
+            image: ubuntu:latest
           - build: 'avx2'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON'
+            image: ubuntu:latest
           - build: 'avx'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
+            image: ubuntu:latest
           - build: 'avx512'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON'
+            image: ubuntu:latest
             experimental: true
+          - build: 'cublas'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON'
+            image: nvidia/cuda:12.3.1-devel-ubuntu22.04
           - build: 'clblast'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON'
+            image: ubuntu:latest
             arch_not_available: true
           - build: 'openblas'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
+            image: ubuntu:latest
           - build: 'kompute'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON'
+            image: ubuntu:latest
             arch_not_available: true
           - build: 'vulkan'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_VULKAN=ON'
+            image: ubuntu:latest
             arch_not_available: true
-          - build: 'cublas'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DCUDAToolkit_ROOT=/usr/local/cuda -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc'
+
+    container:
+      image: ${{ matrix.image }}
+      ports:
+        - 8888
+      options: --cpus 4
 
     steps:
       - name: Clone
@@ -89,16 +99,6 @@ jobs:
           apt-get update
           apt-get -y install vulkan-sdk
 
-      - name: Install CUDA
-        id: get_cuda
-        if: ${{ matrix.build == 'cublas' }}
-        run: |
-          wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
-          dpkg -i cuda-keyring_1.1-1_all.deb
-          apt-get update
-          apt-get -y install cuda-toolkit nvidia-gds
-          find / -type f -name "*cuda*so*"
-
       - name: Build
         id: cmake_build
         run: |
@@ -106,7 +106,6 @@ jobs:
           cd build
           cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.defines }}
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
-          ldd bin/server
 
       - name: Tests dependencies
         id: test_dependencies
@@ -123,6 +122,5 @@ jobs:
         id: server_integration_test
         continue-on-error: ${{ matrix.experimental || matrix.arch_not_available }}
         run: |
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/:/usr/local/cuda/lib64:/usr/local/cuda/targets/x86_64-linux/lib/"
           cd examples/server/tests
           PORT=8888 ./tests.sh
