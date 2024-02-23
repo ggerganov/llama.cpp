@@ -15,6 +15,10 @@ on:
 jobs:
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:latest
+      ports:
+        - 8888
 
     steps:
       - name: Clone
@@ -24,8 +28,8 @@ jobs:
       - name: Dependencies
         id: depends
         run: |
-          sudo apt-get update
-          sudo apt-get install build-essential
+          apt-get update
+          apt-get -y install build-essential
 
       - name: Build
         id: cmake_build
