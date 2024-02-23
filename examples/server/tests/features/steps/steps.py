@@ -90,7 +90,7 @@ def step_start_server(context):
             attempts += 1
             if attempts > 20:
                 assert False, "server not started"
-            print("waiting for server to start...")
+            print(f"waiting for server to start, connect error code = {result}...")
             time.sleep(0.1)
 
 
