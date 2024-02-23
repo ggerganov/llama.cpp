@@ -183,7 +183,7 @@ effectiveStdenv.mkDerivation (
       [
         (cmakeBool "LLAMA_NATIVE" false)
         (cmakeBool "LLAMA_BUILD_SERVER" true)
-        (cmakeBool "BUILD_SHARED_LIBS" true)
+        (cmakeBool "BUILD_SHARED_LIBS" false)
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
         (cmakeBool "LLAMA_BLAS" useBlas)
         (cmakeBool "LLAMA_CLBLAST" useOpenCL)
@@ -192,6 +192,7 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_METAL" useMetalKit)
         (cmakeBool "LLAMA_MPI" useMpi)
         (cmakeBool "LLAMA_VULKAN" useVulkan)
+        (cmakeBool "LLAMA_STATIC" true)
       ]
       ++ optionals useCuda [
         (
