@@ -59,6 +59,7 @@ jobs:
           apt-get update
           apt-get -y install \
             build-essential \
+            pkg-config \
             git \
             cmake \
             python3-pip \
