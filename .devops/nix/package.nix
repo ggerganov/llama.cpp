@@ -72,6 +72,7 @@ let
   ) ", accelerated with ${strings.concatStringsSep ", " suffices}";
 
   executableSuffix = effectiveStdenv.hostPlatform.extensions.executable;
+  mapToPythonPackages = ps: packages: map (package: ps.${package}) packages;
 
   # TODO: package the Python in this repository in a Nix-like way.
   # It'd be nice to migrate to buildPythonPackage, as well as ensure this repo
@@ -266,7 +267,10 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     shell = mkShell {
       name = "shell-${finalAttrs.finalPackage.name}";
       description = "contains numpy and sentencepiece";
-      buildInputs = [ llama-python ];
+      buildInputs = [
+        python3.withPackages
+        (ps: mapToPythonPackages ps llama-python-base-deps)
+      ];
       inputsFrom = [ finalAttrs.finalPackage ];
       shellHook = ''
         addToSearchPath "LD_LIBRARY_PATH" "${lib.getLib effectiveStdenv.cc.cc}/lib"
@@ -276,7 +280,10 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     shell-extra = mkShell {
       name = "shell-extra-${finalAttrs.finalPackage.name}";
       description = "contains numpy, sentencepiece, torchWithoutCuda, and transformers";
-      buildInputs = [ llama-python-extra ];
+      buildInputs = [
+        python3.withPackages
+        (ps: mapToPythonPackages ps llama-python-full-deps)
+      ];
       inputsFrom = [ finalAttrs.finalPackage ];
     };
   };
