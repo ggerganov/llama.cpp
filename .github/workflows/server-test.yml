@@ -56,7 +56,7 @@ jobs:
             build-essential \
             cmake \
             python3-pip \
-            curl \
+            wget \
             psmisc
 
       - name: Download CLBlast
