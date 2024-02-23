@@ -35,15 +35,18 @@ jobs:
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
           - build: 'avx512'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON'
-            experimental: true # aiohttp.client_exceptions.ClientOSError: [Errno 104] Connection reset by peer
+            arch_not_available: true
           - build: 'clblast'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON'
+            arch_not_available: true
           - build: 'openblas'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
           - build: 'kompute'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON'
+            arch_not_available: true
           - build: 'vulkan'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_VULKAN=ON'
+            arch_not_available: true
           - build: 'cublas'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DCUDAToolkit_ROOT=/usr/local/cuda -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc'
 
@@ -116,7 +119,7 @@ jobs:
 
       - name: Server Integration Tests
         id: server_integration_test
-        continue-on-error: ${{ matrix.experimental }}
+        continue-on-error: ${{ matrix.experimental || matrix.arch_not_available }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh
