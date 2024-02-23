@@ -121,5 +121,6 @@ jobs:
         id: server_integration_test
         continue-on-error: ${{ matrix.experimental || matrix.arch_not_available }}
         run: |
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/:/usr/local/cuda/targets/x86_64-linux/lib/"
           cd examples/server/tests
           PORT=8888 ./tests.sh
