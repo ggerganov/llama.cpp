@@ -41,8 +41,8 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
 - `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load "a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
-- '-skvg' or '--show-graphics': display a dynamic graphic of kvcache occupancy per slot.
-- '-skvi' or '--show-interactive-graphics': display a dynamic graphic of kvcache that requires user intervention to move on after each request
+- `-skvg` or `--show-graphics`: display a dynamic graphic of kvcache occupancy per slot.
+- `-skvi` or `--show-interactive-graphics`: display a dynamic graphic of kvcache that requires user intervention to move on after each request
 - `--grp-attn-n`: Set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
 - `-n, --n-predict`: Set the maximum tokens to predict (default: -1)
