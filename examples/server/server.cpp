@@ -1281,7 +1281,7 @@ struct llama_server_context
                 }
 
                 const int n_embd = llama_n_embd(model);
-                llama_batch batch_img = { n_eval, nullptr, (img.image_embedding + i * n_embd), nullptr, nullptr, nullptr, nullptr, slot.n_past, 1, 0, };
+                llama_batch batch_img = { n_eval, nullptr, (img.image_embedding + i * n_embd), nullptr, nullptr, nullptr, nullptr, (float) slot.n_past, 1, 0, };
                 if (llama_decode(ctx, batch_img))
                 {
                     LOG_TEE("%s : failed to eval image\n", __func__);

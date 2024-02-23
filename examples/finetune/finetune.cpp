@@ -554,7 +554,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     };
 
     // KQ_pos - contains the positions
-    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, N);
+    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, N);
     ggml_set_input(KQ_pos);
 
     // rope has so much parameters that we make a custom function for it
@@ -743,7 +743,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
 
         // set KQ_pos
         {
-            int * data = (int *) KQ_pos->data;
+            float * data = (float *) KQ_pos->data;
             for (int i = 0; i < N; ++i) {
                 data[i] = n_past + i;
             }

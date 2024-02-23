@@ -146,14 +146,14 @@ int main(int /*argc*/, const char ** /*argv*/) {
         const int n_past_0 = 100;
         const int n_past_2 = 33;
 
-        struct ggml_tensor * p0 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2]);
-        struct ggml_tensor * p1 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2]);
-        struct ggml_tensor * p2 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2]);
+        struct ggml_tensor * p0 = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, ne[2]);
+        struct ggml_tensor * p1 = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, ne[2]);
+        struct ggml_tensor * p2 = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, ne[2]);
 
         for (int i = 0; i < ne[2]; ++i) {
-            ((int32_t *) p0->data)[i] = n_past_0 + i;
-            ((int32_t *) p1->data)[i] = n_past_2 - n_past_0;
-            ((int32_t *) p2->data)[i] = n_past_2 + i;
+            ((float *) p0->data)[i] = n_past_0 + i;
+            ((float *) p1->data)[i] = n_past_2 - n_past_0;
+            ((float *) p2->data)[i] = n_past_2 + i;
         }
 
         // test mode 0, 2, 4 (standard, GPT-NeoX, GLM)

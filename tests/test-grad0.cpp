@@ -1449,9 +1449,9 @@ int main(int argc, const char ** argv) {
                     for (int n_past = 1; n_past < ne2[2]; ++n_past) {
                         x[0] = get_random_tensor_f32(ctx0, ndims, ne2, -1.0f, 1.0f);
 
-                        struct ggml_tensor * p = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne2[2]);
+                        struct ggml_tensor * p = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, ne2[2]);
                         for (int i = 0; i < ne2[2]; ++i) {
-                            ((int32_t *) p->data)[i] = n_past + i;
+                            ((float *) p->data)[i] = n_past + i;
                         }
 
                         ggml_set_param(ctx0, x[0]);
@@ -1489,9 +1489,9 @@ int main(int argc, const char ** argv) {
                     for (int n_past = 1; n_past < ne2[2]; ++n_past) {
                         x[0] = get_random_tensor_f16(ctx0, ndims, ne2, -1.0f, 1.0f);
 
-                        struct ggml_tensor * p = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne2[2]);
+                        struct ggml_tensor * p = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, ne2[2]);
                         for (int i = 0; i < ne2[2]; ++i) {
-                            ((int32_t *) p->data)[i] = n_past + i;
+                            ((float *) p->data)[i] = n_past + i;
                         }
 
                         ggml_set_param(ctx0, x[0]);

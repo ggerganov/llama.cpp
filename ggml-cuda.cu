@@ -6040,7 +6040,7 @@ static __device__ void rope_yarn(
 // rope == RoPE == rotary positional embedding
 template<typename T, bool has_pos>
 static __global__ void rope(
-    const T * x, T * dst, int ncols, const int32_t * pos, float freq_scale, int p_delta_rows, float freq_base,
+    const T * x, T * dst, int ncols, const float * pos, float freq_scale, int p_delta_rows, float freq_base,
     float ext_factor, float attn_factor, rope_corr_dims corr_dims
 ) {
     const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
@@ -6053,7 +6053,7 @@ static __global__ void rope(
     const int i = row*ncols + col;
     const int i2 = row/p_delta_rows;
 
-    const int p = has_pos ? pos[i2] : 0;
+    const float p = has_pos ? pos[i2] : 0.0f;
     const float theta_base = p*powf(freq_base, -float(col)/ncols);
 
     float cos_theta, sin_theta;
@@ -6068,7 +6068,7 @@ static __global__ void rope(
 
 template<typename T, bool has_pos>
 static __global__ void rope_neox(
-    const T * x, T * dst, int ncols, int n_dims, const int32_t * pos, float freq_scale, int p_delta_rows,
+    const T * x, T * dst, int ncols, int n_dims, const float * pos, float freq_scale, int p_delta_rows,
     float ext_factor, float attn_factor, rope_corr_dims corr_dims, float theta_scale, float inv_ndims
 ) {
     const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
@@ -6095,7 +6095,7 @@ static __global__ void rope_neox(
 
     float cur_rot = inv_ndims * ic - ib;
 
-    const int p = has_pos ? pos[i2] : 0;
+    const float p = has_pos ? pos[i2] : 0.0f;
     const float theta_base = p*freq_scale*powf(theta_scale, col/2.0f);
 
     float cos_theta, sin_theta;
@@ -6109,7 +6109,7 @@ static __global__ void rope_neox(
 }
 
 static __global__ void rope_glm_f32(
-    const float * x, float * dst, int ncols, const int32_t * pos, float freq_scale, int p_delta_rows, float freq_base,
+    const float * x, float * dst, int ncols, const float * pos, float freq_scale, int p_delta_rows, float freq_base,
     int n_ctx
 ) {
     const int col = blockDim.x*blockIdx.x + threadIdx.x;
@@ -6124,10 +6124,10 @@ static __global__ void rope_glm_f32(
     const int i2 = row/p_delta_rows;
 
     const float col_theta_scale = powf(freq_base, -2.0f*col/ncols);
-     // FIXME: this is likely wrong
-    const int p = pos != nullptr ? pos[i2] : 0;
 
-    const float theta = min(p, n_ctx - 2)*freq_scale*col_theta_scale;
+    const float p = pos != nullptr ? pos[i2] : 0.0f;
+
+    const float theta = min(p, (float) n_ctx - 2)*freq_scale*col_theta_scale;
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
 
@@ -6137,7 +6137,7 @@ static __global__ void rope_glm_f32(
     dst[i + 0]           = x0*cos_theta - x1*sin_theta;
     dst[i + half_n_dims] = x0*sin_theta + x1*cos_theta;
 
-    const float block_theta = ((float)max(p - n_ctx - 2, 0))*col_theta_scale;
+    const float block_theta = max(p - n_ctx - 2, 0.0f)*col_theta_scale;
     const float sin_block_theta = sinf(block_theta);
     const float cos_block_theta = cosf(block_theta);
 
@@ -7688,7 +7688,7 @@ static void clamp_f32_cuda(const float * x, float * dst, const float min, const 
 
 template<typename T>
 static void rope_cuda(
-    const T * x, T * dst, int ncols, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
+    const T * x, T * dst, int ncols, int nrows, const float * pos, float freq_scale, int p_delta_rows,
     float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 2 == 0);
@@ -7708,7 +7708,7 @@ static void rope_cuda(
 
 template<typename T>
 static void rope_neox_cuda(
-    const T * x, T * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
+    const T * x, T * dst, int ncols, int n_dims, int nrows, const float * pos, float freq_scale, int p_delta_rows,
     float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 2 == 0);
@@ -7733,7 +7733,7 @@ static void rope_neox_cuda(
 }
 
 static void rope_glm_f32_cuda(
-    const float * x, float * dst, int ncols, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
+    const float * x, float * dst, int ncols, int nrows, const float * pos, float freq_scale, int p_delta_rows,
     float freq_base, int n_ctx, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 4 == 0);
@@ -9035,11 +9035,11 @@ static void ggml_cuda_op_rope(
     memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
     memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
-    const int32_t * pos = nullptr;
+    const float * pos = nullptr;
     if ((mode & 1) == 0) {
-        GGML_ASSERT(src1->type == GGML_TYPE_I32);
+        GGML_ASSERT(src1->type == GGML_TYPE_F32);
         GGML_ASSERT(src1->ne[0] == ne2);
-        pos = (const int32_t *) src1_dd;
+        pos = (const float *) src1_dd;
     }
 
     const bool is_neox = mode & 2;
