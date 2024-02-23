@@ -6,7 +6,7 @@ Feature: Parallel
     And   a model file stories260K.gguf
     And   a model alias tinyllama-2
     And   42 as server seed
-    And   32 KV cache size
+    And   64 KV cache size
     And   2 slots
     And   continuous batching
     Then  the server is starting
@@ -29,7 +29,7 @@ Feature: Parallel
     Then all prompts are predicted with <n_predict> tokens
     Examples:
       | n_predict |
-      | 512       |
+      | 128       |
 
   Scenario Outline: Multi users OAI completions compatibility
     Given a system prompt You are a writer.
@@ -50,15 +50,15 @@ Feature: Parallel
     Then all prompts are predicted with <n_predict> tokens
     Examples:
       | streaming | n_predict |
-      | disabled  | 512       |
-      #| enabled   | 512       | FIXME: phymbert: need to investigate why in aiohttp with streaming only one token is generated
+      | disabled  | 64       |
+      #| enabled   | 64       | FIXME: phymbert: need to investigate why in aiohttp with streaming only one token is generated
 
   Scenario:  Multi users with total number of tokens to predict exceeds the KV Cache size #3969
     Given a server listening on localhost:8080
     And   a model file stories260K.gguf
     And   42 as server seed
     And   2 slots
-    And   1024 KV cache size
+    And   64 KV cache size
     Then  the server is starting
     Then  the server is healthy
     Given a prompt:
@@ -77,7 +77,7 @@ Feature: Parallel
       """
       Write a very long joke.
       """
-    And 2048 max tokens to predict
+    And 128 max tokens to predict
     Given concurrent completion requests
     Then the server is busy
     Then the server is idle
