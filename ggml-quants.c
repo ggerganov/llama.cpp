@@ -11173,20 +11173,20 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
     }
 }
 
+#define IQ3S_BLOCK_SIZE 32
 size_t quantize_iq3_s(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
     GGML_ASSERT(n_per_row%QK_K == 0);
     int nblock = n_per_row/QK_K;
-    const int block_size = 32;
-    float scales[QK_K/block_size];
-    float weight[block_size];
-    float xval[block_size];
-    int8_t L[block_size];
-    int8_t Laux[block_size];
-    float  waux[block_size];
-    bool   is_on_grid[block_size/4];
-    bool   is_on_grid_aux[block_size/4];
-    uint8_t block_signs[block_size/8];
+    float scales[QK_K/IQ3S_BLOCK_SIZE];
+    float weight[IQ3S_BLOCK_SIZE];
+    float xval[IQ3S_BLOCK_SIZE];
+    int8_t L[IQ3S_BLOCK_SIZE];
+    int8_t Laux[IQ3S_BLOCK_SIZE];
+    float  waux[IQ3S_BLOCK_SIZE];
+    bool   is_on_grid[IQ3S_BLOCK_SIZE/4];
+    bool   is_on_grid_aux[IQ3S_BLOCK_SIZE/4];
+    uint8_t block_signs[IQ3S_BLOCK_SIZE/8];
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
         quantize_row_iq3_s_impl(32, src, qrow, n_per_row, quant_weights,
