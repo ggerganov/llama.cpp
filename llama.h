@@ -533,6 +533,8 @@ extern "C" {
                        llama_pos   p1,
                              int   d);
 
+    LLAMA_API void llama_kv_cache_apply_k_shift(struct llama_context * ctx);
+
     //
     // State / sessions
     //
