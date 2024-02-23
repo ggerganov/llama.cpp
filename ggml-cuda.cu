@@ -172,6 +172,7 @@
 #endif
 
 typedef int8_t int8x4_t __attribute__((ext_vector_type(4)));
+typedef uint8_t int8x4_t __attribute__((ext_vector_type(4)));
 static __device__ __forceinline__ int __vsubss4(const int a, const int b) {
     const int8x4_t va = reinterpret_cast<const int8x4_t&>(a);
     const int8x4_t vb = reinterpret_cast<const int8x4_t&>(b);
@@ -201,6 +202,7 @@ static __device__ __forceinline__ unsigned int __vcmpeq4(unsigned int a, unsigne
     const uint8x4_t& vb = reinterpret_cast<const uint8x4_t&>(b);
     unsigned int c;
     uint8x4_t& vc = reinterpret_cast<uint8x4_t&>(c);
+#pragma unroll
     for (int i = 0; i < 4; ++i) {
         vc[i] = va[i] == vb[i] ? 0xff : 0x00;
     }
