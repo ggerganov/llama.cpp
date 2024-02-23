@@ -191,15 +191,20 @@ typedef struct {
 } block_iq3_xxs;
 static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong iq3_xxs block size/padding");
 
-// 3.3125 bpw
+// 3.4375 bpw
+#if QK_K == 64
+#define IQ3S_N_SCALE 2
+#else
+#define IQ3S_N_SCALE QK_K/64
+#endif
 typedef struct {
     ggml_fp16_t d;
     uint8_t qs[QK_K/4];
     uint8_t qh[QK_K/32];
     uint8_t signs[QK_K/8];
-    uint8_t scales[QK_K/64];
+    uint8_t scales[IQ3S_N_SCALE];
 } block_iq3_s;
-static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 27*(QK_K/64), "wrong iq3_s block size/padding");
+static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + IQ3S_N_SCALE, "wrong iq3_s block size/padding");
 
 typedef struct {
     ggml_fp16_t d;

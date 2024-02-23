@@ -2526,12 +2526,17 @@ typedef struct {
 // 98 bytes / block for QK_K = 256, so 3.0625 bpw
 
 // 3.4375 bpw
+#if QK_K == 64
+#define IQ3S_N_SCALE 2
+#else
+#define IQ3S_N_SCALE QK_K/64
+#endif
 typedef struct {
     half d;
     uint8_t qs[QK_K/4];
     uint8_t qh[QK_K/32];
     uint8_t signs[QK_K/8];
-    uint8_t scales[QK_K/64];
+    uint8_t scales[IQ3S_N_SCALE];
 } block_iq3_s;
 
 typedef struct {

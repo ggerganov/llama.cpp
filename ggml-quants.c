@@ -10772,7 +10772,7 @@ static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, v
 
     const int kMaxQ = 8;
 
-    const int nbl = n/256;
+    const int nbl = n/QK_K;
 
     ggml_fp16_t * dh;
     uint8_t * qs;
@@ -11018,7 +11018,7 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
 
     const int kMaxQ = 8;
 
-    const int nbl = n/256;
+    const int nbl = n/QK_K;
 
     block_iq3_s * y = vy;
 
@@ -11189,7 +11189,7 @@ size_t quantize_iq3_s(const float * src, void * dst, int nrow, int n_per_row, in
     uint8_t block_signs[IQ3S_BLOCK_SIZE/8];
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
-        quantize_row_iq3_s_impl(32, src, qrow, n_per_row, quant_weights,
+        quantize_row_iq3_s_impl(IQ3S_BLOCK_SIZE, src, qrow, n_per_row, quant_weights,
                 scales, weight, xval, L, Laux, waux, is_on_grid, is_on_grid_aux, block_signs);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq3_s);
