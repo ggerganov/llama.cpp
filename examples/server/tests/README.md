@@ -15,9 +15,12 @@ It's possible to override some scenario steps values with environment variables:
  -  `$PORT` -> `context.server_port` to set the listening port of the server during scenario, default: `8080`
  -  `$LLAMA_SERVER_BIN_PATH` -> to change the server binary path, default: `../../../build/bin/server`
 
-To change the server path, use `LLAMA_SERVER_BIN_PATH` environment variable.
+### Run @bug, @wip or @wrong_usage annotated scenario
 
-### Skipped scenario
+Feature or Scenario must be annotated with `@llama.cpp` to be included in the default scope.
+- `@bug` annotation aims to link a scenario with a GitHub issue.
+- `@wrong_usage` are meant to show user issue that are actually an expected behavior
+- `@wip` to focus on a scenario working in progress
 
-Feature or Scenario must be annotated with `@llama.cpp` to be included in the scope.
-`@bug` annotation aims to link a scenario with a GitHub issue.
+To run a scenario annotated with `@bug`, start:
+`./tests.sh --tags bug`
