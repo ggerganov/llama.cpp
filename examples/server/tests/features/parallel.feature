@@ -50,17 +50,10 @@ Feature: Parallel
     Then all prompts are predicted with <n_predict> tokens
     Examples:
       | streaming | n_predict |
-      | disabled  | 64       |
+      | disabled  | 128       |
       #| enabled   | 64       | FIXME: phymbert: need to investigate why in aiohttp with streaming only one token is generated
 
   Scenario:  Multi users with total number of tokens to predict exceeds the KV Cache size #3969
-    Given a server listening on localhost:8080
-    And   a model file stories260K.gguf
-    And   42 as server seed
-    And   2 slots
-    And   64 KV cache size
-    Then  the server is starting
-    Then  the server is healthy
     Given a prompt:
       """
       Write a very long story about AI.

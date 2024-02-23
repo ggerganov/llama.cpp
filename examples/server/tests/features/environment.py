@@ -8,6 +8,7 @@ from signal import SIGKILL
 
 
 def before_scenario(context, scenario):
+    print(f"\x1b[33;42mStarting new scenario: {scenario.name}!\x1b[0m")
     port = 8080
     if 'PORT' in os.environ:
         port = int(os.environ['PORT'])
