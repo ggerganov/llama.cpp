@@ -37,7 +37,7 @@ using json = nlohmann::json;
 
 struct server_params
 {
-    std::string hostname = "127.0.0.1";
+    std::string hostname = "0.0.0.0"; // 127.0.0.1 restricts to localhost only; use 0.0.0.0 for local network.
     std::vector<std::string> api_keys;
     std::string public_path = "examples/server/public";
     std::string chat_template = "";
