@@ -29,7 +29,7 @@ jobs:
         id: depends
         run: |
           apt-get update
-          apt-get -y install build-essential
+          apt-get -y install build-essential cmake
 
       - name: Build
         id: cmake_build
