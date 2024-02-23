@@ -79,7 +79,7 @@ batch.n_tokens = Int32(tokens.count)
 
 for (i, token) in tokens.enumerated() {
     batch.token[i] = token
-    batch.pos[i] = Float(i)
+    batch.pos[i] = llama_pos(i)
     batch.n_seq_id[i] = 1
     // batch.seq_id[i][0] = 0
     // TODO: is this the proper way to do this?
@@ -98,7 +98,7 @@ if llama_decode(context, batch) != 0 {
 }
 
 for i in 1 ..< n_parallel {
-    llama_kv_cache_seq_cp(context, 0, Int32(i), 0, Float(batch.n_tokens))
+    llama_kv_cache_seq_cp(context, 0, Int32(i), 0, llama_pos(batch.n_tokens))
 }
 
 if n_parallel > 1 {
@@ -173,7 +173,7 @@ while n_cur <= n_len {
 
         // push this new token for next evaluation
         batch.token[Int(batch.n_tokens)] = new_token_id
-        batch.pos[Int(batch.n_tokens)] = Float(n_cur)
+        batch.pos[Int(batch.n_tokens)] = llama_pos(n_cur)
         batch.n_seq_id[Int(batch.n_tokens)] = 1
         if let seq_id = batch.seq_id[Int(batch.n_tokens)] {
             seq_id[0] = Int32(i)
