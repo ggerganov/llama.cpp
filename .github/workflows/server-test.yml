@@ -44,8 +44,8 @@ jobs:
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON'
           - build: 'vulkan'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_VULKAN=ON'
-          - build: 'cuda'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON'
+          - build: 'cublas'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DCUDAToolkit_ROOT=/usr/local/cuda'
 
     steps:
       - name: Clone
@@ -87,7 +87,7 @@ jobs:
 
       - name: Install CUDA
         id: get_cuda
-        if: ${{ matrix.build == 'cuda' }}
+        if: ${{ matrix.build == 'cublas' }}
         run: |
           wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
           dpkg -i cuda-keyring_1.1-1_all.deb
