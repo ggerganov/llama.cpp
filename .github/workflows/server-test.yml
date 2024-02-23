@@ -27,6 +27,7 @@ jobs:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
         build_type: [Debug, Release]
+        build: [noavx, avx2, avx, avx512, clblast, openblas, kompute, cublas, cublas]
         include:
           - build: 'noavx'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
