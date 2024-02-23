@@ -86,7 +86,7 @@ jobs:
           apt-get -y install vulkan-sdk
 
       - name: Install CUDA
-        id: get_vulkan
+        id: get_cuda
         if: ${{ matrix.build == 'cuda' }}
         run: |
           wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
