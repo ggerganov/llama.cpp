@@ -21,8 +21,6 @@ jobs:
         - 8888
       options: --cpus 4
 
-    continue-on-error: true
-
     strategy:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
@@ -37,6 +35,7 @@ jobs:
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
           - build: 'avx512'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON'
+            experimental: true # aiohttp.client_exceptions.ClientOSError: [Errno 104] Connection reset by peer
           - build: 'clblast'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON'
           - build: 'openblas'
@@ -117,6 +116,7 @@ jobs:
 
       - name: Server Integration Tests
         id: server_integration_test
+        continue-on-error: ${{ matrix.experimental }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh
