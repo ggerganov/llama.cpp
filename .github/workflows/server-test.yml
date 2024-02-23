@@ -96,7 +96,7 @@ jobs:
           wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
           dpkg -i cuda-keyring_1.1-1_all.deb
           apt-get update
-          apt-get -y install cuda-toolkit
+          apt-get -y install cuda-toolkit nvidia-gds
           find / -type f -name "*cuda*so*"
 
       - name: Build
@@ -123,6 +123,6 @@ jobs:
         id: server_integration_test
         continue-on-error: ${{ matrix.experimental || matrix.arch_not_available }}
         run: |
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/:/usr/local/cuda/targets/x86_64-linux/lib/"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/:/usr/local/cuda/lib64:/usr/local/cuda/targets/x86_64-linux/lib/"
           cd examples/server/tests
           PORT=8888 ./tests.sh
