@@ -8916,6 +8916,7 @@ void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
 #endif
 
+#if defined (__AVX2__) || defined (__ARM_NEON)
 static const int8_t keven_signs_q2xs[1024] = {
      1,  1,  1,  1,  1,  1,  1,  1, -1,  1,  1,  1,  1,  1,  1, -1,  1, -1,  1,  1,  1,  1,  1, -1, -1, -1,  1,  1,  1,  1,  1,  1,
      1,  1, -1,  1,  1,  1,  1, -1, -1,  1, -1,  1,  1,  1,  1,  1,  1, -1, -1,  1,  1,  1,  1,  1, -1, -1, -1,  1,  1,  1,  1, -1,
@@ -8950,6 +8951,7 @@ static const int8_t keven_signs_q2xs[1024] = {
      1,  1,  1, -1, -1, -1, -1,  1, -1,  1,  1, -1, -1, -1, -1, -1,  1, -1,  1, -1, -1, -1, -1, -1, -1, -1,  1, -1, -1, -1, -1,  1,
      1,  1, -1, -1, -1, -1, -1, -1, -1,  1, -1, -1, -1, -1, -1,  1,  1, -1, -1, -1, -1, -1, -1,  1, -1, -1, -1, -1, -1, -1, -1, -1,
 };
+#endif
 
 void ggml_vec_dot_iq2_xxs_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     assert(n % QK_K == 0);
@@ -10991,7 +10993,16 @@ void quantize_row_iq3_xxs_reference(const float * restrict x, block_iq3_xxs * re
 }
 
 static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, void * restrict vy, int n,
-        const float * restrict quant_weights) {
+        const float * restrict quant_weights,
+        float   * scales,
+        float   * weight,
+        float   * xval,
+        int8_t  * L,
+        int8_t  * Laux,
+        float   * waux,
+        bool    * is_on_grid,
+        bool    * is_on_grid_aux,
+        uint8_t * block_signs) {
 
     const int gindex = iq3_data_index(512);
 
@@ -11010,16 +11021,6 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
     const int nbl = n/256;
 
     block_iq3_s * y = vy;
-
-    float scales[QK_K/block_size];
-    float weight[block_size];
-    float xval[block_size];
-    int8_t L[block_size];
-    int8_t Laux[block_size];
-    float  waux[block_size];
-    bool   is_on_grid[block_size/4];
-    bool   is_on_grid_aux[block_size/4];
-    uint8_t block_signs[block_size/8];
 
     const int bs4 = block_size/4;
     const int bs8 = block_size/8;
@@ -11176,9 +11177,20 @@ size_t quantize_iq3_s(const float * src, void * dst, int nrow, int n_per_row, in
     (void)hist;
     GGML_ASSERT(n_per_row%QK_K == 0);
     int nblock = n_per_row/QK_K;
+    const int block_size = 32;
+    float scales[QK_K/block_size];
+    float weight[block_size];
+    float xval[block_size];
+    int8_t L[block_size];
+    int8_t Laux[block_size];
+    float  waux[block_size];
+    bool   is_on_grid[block_size/4];
+    bool   is_on_grid_aux[block_size/4];
+    uint8_t block_signs[block_size/8];
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
-        quantize_row_iq3_s_impl(32, src, qrow, n_per_row, quant_weights);
+        quantize_row_iq3_s_impl(32, src, qrow, n_per_row, quant_weights,
+                scales, weight, xval, L, Laux, waux, is_on_grid, is_on_grid_aux, block_signs);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq3_s);
     }
@@ -11193,7 +11205,7 @@ void quantize_row_iq3_s(const float * restrict x, void * restrict vy, int k) {
 
 void quantize_row_iq3_s_reference(const float * restrict x, block_iq3_s * restrict y, int k) {
     assert(k % QK_K == 0);
-    quantize_row_iq3_s_impl(32, x, y, k, NULL);
+    quantize_iq3_s(x, y, 1, k, NULL, NULL);
 }
 
 
