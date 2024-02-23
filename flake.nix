@@ -18,6 +18,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    nixfmt = {
+        url = "github:piegamesde/nixfmt/rfc101-style";
+        inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   # There's an optional binary cache available. The details are below, but they're commented out.
@@ -131,6 +135,11 @@
             ...
           }:
           {
+            # For standardised reproducible formatting with `nix fmt`
+            # HELP: why does the per system formatter not work?
+            # formatter = inputs.nixfmt.packages.${system}.nixfmt;
+            formatter = if (system == "x86_64-linux") then inputs.nixfmt.packages.${system}.nixfmt else null;
+
             # Unlike `.#packages`, legacyPackages may contain values of
             # arbitrary types (including nested attrsets) and may even throw
             # exceptions. This attribute isn't recursed into by `nix flake
