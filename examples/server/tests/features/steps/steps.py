@@ -19,6 +19,9 @@ from behave.api.async_step import async_run_until_complete
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
+    if 'PORT' in os.environ:
+        context.server_port = int(os.environ['PORT'])
+        print(f"$PORT set, overriding server port with to {context.server_port}")
 
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 

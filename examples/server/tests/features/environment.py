@@ -8,7 +8,10 @@ from signal import SIGKILL
 
 
 def before_scenario(context, scenario):
-    if is_server_listening("localhost", 8080):
+    port = 8080
+    if 'PORT' in os.environ:
+        port = int(os.environ['PORT'])
+    if is_server_listening("localhost", port):
         assert False, "Server already started"
 
 

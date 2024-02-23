@@ -11,6 +11,10 @@ Server tests scenario using [BDD](https://en.wikipedia.org/wiki/Behavior-driven_
    1. `../../../scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf`
 3. Start the test: `./tests.sh`
 
+It's possible to override some scenario steps values with environment variables:
+ -  `$PORT` -> `context.server_port` to set the listening port of the server during scenario, default: `8080`
+ -  `$LLAMA_SERVER_BIN_PATH` -> to change the server binary path, default: `../../../build/bin/server`
+
 To change the server path, use `LLAMA_SERVER_BIN_PATH` environment variable.
 
 ### Skipped scenario

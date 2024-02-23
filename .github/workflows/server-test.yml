@@ -50,4 +50,4 @@ jobs:
         id: server_integration_test
         run: |
           cd examples/server/tests
-          ./tests.sh
+          PORT=8888 ./tests.sh
