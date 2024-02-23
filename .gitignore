@@ -92,3 +92,4 @@ examples/jeopardy/results.txt
 poetry.lock
 poetry.toml
 nppBackup
+functionary-test

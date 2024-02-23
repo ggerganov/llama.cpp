@@ -43,6 +43,7 @@ struct server_params
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
     bool slots_endpoint = true;
+    bool enable_tool_calls = false;
 };
 
 bool server_verbose = false;
@@ -2777,6 +2778,12 @@ int main(int argc, char **argv)
         llama.validate_model_chat_template(sparams);
     }
 
+    // Check tool_call ability
+    sparams.enable_tool_calls = check_model_support_tool_calls(llama.model);
+    if (sparams.enable_tool_calls) {
+        LOG_VERBOSE("Current model supports functionary tool_calls", {});
+    }
+
     // Middleware for API key validation
     auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
         // If API key is not set, skip validation
@@ -2948,7 +2955,9 @@ int main(int argc, char **argv)
                 if (!validate_api_key(req, res)) {
                     return;
                 }
-                json data = oaicompat_completion_params_parse(llama.model, json::parse(req.body), sparams.chat_template);
+                json data = oaicompat_completion_params_parse(llama.model, json::parse(req.body), sparams.chat_template, sparams.enable_tool_calls);
+
+                // TODO: "enable_tool_calls" cannot be used with "stream" mode
 
                 const int task_id = llama.queue_tasks.get_new_id();
                 llama.queue_results.add_waiting_task_id(task_id);
@@ -2959,7 +2968,7 @@ int main(int argc, char **argv)
                     task_result result = llama.queue_results.recv(task_id);
 
                     if (!result.error && result.stop) {
-                        json oaicompat_result = format_final_response_oaicompat(data, result);
+                        json oaicompat_result = format_final_response_oaicompat(data, result, false, sparams.enable_tool_calls);
 
                         res.set_content(oaicompat_result.dump(-1, ' ', false,
                                             json::error_handler_t::replace),

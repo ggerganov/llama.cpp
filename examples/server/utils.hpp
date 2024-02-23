@@ -211,6 +211,19 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     return formatted_chat;
 }
 
+// Detect if the model supports tool_calls
+inline bool check_model_support_tool_calls(const struct llama_model * model) {
+    std::vector<char> model_template(2048, 0);
+    std::string template_key = "tokenizer.chat_template";
+    int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+    if (res < 0) {
+        return false; // no template in model
+    } else {
+        std::string tmpl(model_template.data(), model_template.size());
+        return tmpl.find("<|recipient|>") != std::string::npos;
+    }
+}
+
 //
 // work queue utils
 //

@@ -17,7 +17,8 @@ using json = nlohmann::json;
 inline static json oaicompat_completion_params_parse(
     const struct llama_model * model,
     const json &body, /* openai api json semantics */
-    const std::string &chat_template)
+    const std::string &chat_template,
+    bool enable_tool_calls)
 {
     json llama_params;
 
@@ -32,7 +33,9 @@ inline static json oaicompat_completion_params_parse(
     // https://platform.openai.com/docs/api-reference/chat/create
     llama_sampling_params default_sparams;
     llama_params["model"]             = json_value(body, "model", std::string("unknown"));
-    llama_params["prompt"]            = format_chat(model, chat_template, body["messages"]);
+    llama_params["prompt"]            = enable_tool_calls
+        ? llama_functionary::convert_oai_to_prompt(body)
+        : format_chat(model, chat_template, body["messages"]);
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
     llama_params["temperature"]       = json_value(body, "temperature", 0.0);
     llama_params["top_k"]             = json_value(body, "top_k", default_sparams.top_k);
@@ -69,7 +72,11 @@ inline static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-inline static json format_final_response_oaicompat(const json &request, const task_result &response, bool streaming = false)
+inline static json format_final_response_oaicompat(
+    const json &request,
+    const task_result &response,
+    bool streaming,
+    bool enable_tool_calls)
 {
     json result = response.result_json;
 
@@ -84,14 +91,20 @@ inline static json format_final_response_oaicompat(const json &request, const ta
         finish_reason = "stop";
     }
 
-    json choices =
-        streaming ? json::array({json{{"finish_reason", finish_reason},
-                                        {"index", 0},
-                                        {"delta", json::object()}}})
-                  : json::array({json{{"finish_reason", finish_reason},
-                                        {"index", 0},
-                                        {"message", json{{"content", content},
-                                                         {"role", "assistant"}}}}});
+    json choices;
+
+    if (enable_tool_calls) {
+        choices = llama_functionary::convert_response_to_oai_choices(content);
+    } else {
+        choices = streaming
+            ? json::array({json{{"finish_reason", finish_reason},
+                                {"index", 0},
+                                {"delta", json::object()}}})
+            : json::array({json{{"finish_reason", finish_reason},
+                                {"index", 0},
+                                {"message", json{{"content", content},
+                                                    {"role", "assistant"}}}}});
+    }
 
     std::time_t t = std::time(0);
 
