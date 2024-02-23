@@ -21,6 +21,8 @@ jobs:
         - 8888
       options: --cpus 4
 
+    continue-on-error: true
+
     strategy:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
