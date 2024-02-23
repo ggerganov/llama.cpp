@@ -143,10 +143,10 @@ int main(int argc, char * argv[]) {
             continue;
         }
 
-        printf("Testing %s\n", ggml_type_name((ggml_type) i));
-        ggml_quantize_init(ei);
+        if (qfns.from_float && qfns.to_float && qfns.vec_dot) {
+            printf("Testing %s\n", ggml_type_name((ggml_type) i));
+            ggml_quantize_init(ei);
 
-        if (qfns.from_float && qfns.to_float) {
             const float total_error = total_quantization_error(qfns, test_size, test_data.data());
             const float max_quantization_error =
                 type == GGML_TYPE_Q2_K    ? MAX_QUANTIZATION_TOTAL_ERROR_2BITS :

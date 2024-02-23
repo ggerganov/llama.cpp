@@ -275,7 +275,7 @@ int main(int argc, char * argv[]) {
             continue;
         }
 
-        if (qfns.from_float && qfns.to_float) {
+        if (qfns.from_float && qfns.to_float && qfns.vec_dot) {
             printf("%s\n", ggml_type_name(type));
 
             ggml_quantize_init(type);
