@@ -1948,6 +1948,10 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
     printf("  -spf FNAME, --system-prompt-file FNAME\n");
     printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
+    printf("  -ctk TYPE, --cache-type-k TYPE\n");
+    printf("                            KV cache data type for K (default: f16)\n");
+    printf("  -ctv TYPE, --cache-type-v TYPE\n");
+    printf("                            KV cache data type for V (default: f16)\n");
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
@@ -2385,6 +2389,12 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 std::back_inserter(systm_content)
             );
             llama.process_system_prompt_data(json::parse(systm_content));
+        }
+        else if (arg == "-ctk" || arg == "--cache-type-k") {
+            params.cache_type_k = argv[++i];
+        }
+        else if (arg == "-ctv" || arg == "--cache-type-v") {
+            params.cache_type_v = argv[++i];
         }
         else if(arg == "--mmproj")
         {
