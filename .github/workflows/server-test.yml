@@ -97,6 +97,7 @@ jobs:
           dpkg -i cuda-keyring_1.1-1_all.deb
           apt-get update
           apt-get -y install cuda-toolkit
+          find / -type f -name "*cuda*so*"
 
       - name: Build
         id: cmake_build
@@ -105,6 +106,7 @@ jobs:
           cd build
           cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.defines }}
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
+          ldd bin/server
 
       - name: Tests dependencies
         id: test_dependencies
