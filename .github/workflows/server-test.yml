@@ -32,7 +32,8 @@ jobs:
           apt-get -y install \
             build-essential \
             cmake \
-            python3-pip
+            python3-pip \
+            curl
 
       - name: Build
         id: cmake_build
