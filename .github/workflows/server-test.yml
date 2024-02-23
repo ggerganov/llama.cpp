@@ -69,7 +69,7 @@ jobs:
         id: get_clblast
         if: ${{ matrix.build == 'clblast' }}
         run: |
-          apt install libclblast-dev
+          apt install -y libclblast-dev
 
       - name: Download OpenBLAS
         id: get_openblas
