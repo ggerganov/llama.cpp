@@ -272,11 +272,14 @@ struct llama_server_queue {
     // Call when the state of one slot is changed
     void notify_slot_changed() {
         // move deferred tasks back to main loop
+        // does this mean when ONE slot finished we move ALL deferred tasks back to the main queue? Why?
+        // it seems that we move everything back to the main queue but we don't allocate a task to the slot just released
+        // lock so nothing gets added while we are clearing the deferred queue
         std::unique_lock<std::mutex> lock(mutex_tasks);
         for (auto & task : queue_tasks_deferred) {
             queue_tasks.push_back(std::move(task));
         }
-        queue_tasks_deferred.clear();
+        queue_tasks_deferred.clear();   // and clear the deferred tasks completely?
     }
 
     // end the start_loop routine
@@ -387,12 +390,14 @@ struct llama_server_response {
     void add_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
+        printf("\033[21;0H");
         LOG_TEE("Waiting task list size after addition: %zu.\n", waiting_task_ids.size());
     }
 
     void remove_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
+        printf("\033[21;0H");
         LOG_TEE("Waiting task list size after removal: %zu.\n", waiting_task_ids.size());
     }
 

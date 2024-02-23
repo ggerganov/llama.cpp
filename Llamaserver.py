@@ -94,7 +94,7 @@ if __name__ == "__main__":
     
     url = "http://localhost:8080/completion"
 
-    num_requests = 40
+    num_requests = 20
     q = Queue(maxsize = 64)
     threads = []
 

@@ -1589,7 +1589,7 @@ struct llama_server_context
                 slot.t_last_used = ggml_time_us();
 
                 LOG_TEE("slot %d released (%d tokens in cache)\n", slot.id, (int) slot.cache_tokens.size());
-                queue_tasks.notify_slot_changed();
+                queue_tasks.notify_slot_changed();  // why don't we immediately reallocate the released slot without waiting? Is this what -cb does?
 
                 continue;
             }
@@ -2254,22 +2254,12 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
         else if (arg == "-skvg" || arg == "--show-graphics")
         {
-            if (i >= argc)
-            {
-                invalid_param = true;
-                break;
-            }
-            llama.skvgraphics = true;
+            llama.skvgraphics = true;       // -skvg takes no parameter so we don't test ++i >= argc
             llama.skvinteract = false;
         }
         else if (arg == "-skvi" || arg == "--show-interactive-graphics")
         {
-            if (i >= argc)
-            {
-                invalid_param = true;
-                break;
-            }
-            llama.skvgraphics = true;
+            llama.skvgraphics = true;       // -skvi takes no parameter so we don't test ++i >= argc
             llama.skvinteract = true;
         }
         else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers")
