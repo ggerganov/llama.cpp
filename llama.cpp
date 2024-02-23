@@ -10663,13 +10663,17 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
     }
     else if (name.find("ffn_gate") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {
+        auto info = layer_info(qs.i_ffn_gate, qs.n_ffn_gate, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && (i_layer >= n_layer/8 && i_layer < 7*n_layer/8)) {
             new_type = GGML_TYPE_IQ3_XXS;
         }
         ++qs.i_ffn_gate;
     }
     else if (name.find("ffn_up") != std::string::npos) {
-        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS) {
+        auto info = layer_info(qs.i_ffn_up, qs.n_ffn_up, name.c_str());
+        int i_layer = info.first, n_layer = info.second;
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_XS && (i_layer >= n_layer/8 && i_layer < 7*n_layer/8)) {
             new_type = GGML_TYPE_IQ3_XXS;
         }
         ++qs.i_ffn_up;
