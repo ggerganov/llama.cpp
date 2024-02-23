@@ -360,6 +360,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             sparams.min_p = std::stof(argv[i]);
+        } else if (arg == "--p-step") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.p_step = std::stof(argv[i]);
         } else if (arg == "--temp") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -970,6 +976,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", sparams.top_k);
     printf("  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)sparams.top_p);
     printf("  --min-p N             min-p sampling (default: %.1f, 0.0 = disabled)\n", (double)sparams.min_p);
+    printf("  --p-step N            p-step sampling (default: %.1f, 0.0 = disabled)\n", (double)sparams.p_step);
     printf("  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)sparams.tfs_z);
     printf("  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)sparams.typical_p);
     printf("  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", sparams.penalty_last_n);
@@ -1140,6 +1147,7 @@ std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::
         {"top_p",       llama_sampler_type::TOP_P},
         {"typical_p",   llama_sampler_type::TYPICAL_P},
         {"min_p",       llama_sampler_type::MIN_P},
+        {"p_step",      llama_sampler_type::P_STEP},
         {"tfs_z",       llama_sampler_type::TFS_Z},
         {"temperature", llama_sampler_type::TEMPERATURE}
     };
@@ -1153,6 +1161,7 @@ std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::
         {"typical-p",   llama_sampler_type::TYPICAL_P},
         {"typical",     llama_sampler_type::TYPICAL_P},
         {"min-p",       llama_sampler_type::MIN_P},
+        {"p-step",      llama_sampler_type::P_STEP},
         {"tfs-z",       llama_sampler_type::TFS_Z},
         {"tfs",         llama_sampler_type::TFS_Z},
         {"temp",        llama_sampler_type::TEMPERATURE}
@@ -1188,6 +1197,7 @@ std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & nam
         {'p', llama_sampler_type::TOP_P},
         {'y', llama_sampler_type::TYPICAL_P},
         {'m', llama_sampler_type::MIN_P},
+        {'s', llama_sampler_type::P_STEP},
         {'f', llama_sampler_type::TFS_Z},
         {'t', llama_sampler_type::TEMPERATURE}
     };
@@ -1210,6 +1220,7 @@ std::string sampler_type_to_name_string(llama_sampler_type sampler_type) {
         case llama_sampler_type::TYPICAL_P:   return "typical_p";
         case llama_sampler_type::TOP_P:       return "top_p";
         case llama_sampler_type::MIN_P:       return "min_p";
+        case llama_sampler_type::P_STEP:      return "p_step";
         case llama_sampler_type::TEMPERATURE: return "temperature";
         default : return "";
     }
@@ -1755,6 +1766,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
+    fprintf(stream, "p_step: %f # default: 0.0\n", sparams.p_step);
     fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
     fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");

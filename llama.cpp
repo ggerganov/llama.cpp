@@ -9593,6 +9593,34 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
     }
 }
 
+void llama_sample_p_step(struct llama_context * ctx, llama_token_data_array * candidates, float step, size_t min_keep) {
+    if (step <= 0.0f || candidates->size <= 1) {
+        return;
+    }
+
+    llama_sample_softmax(nullptr, candidates);
+
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    bool step_found = false;
+
+    for (size_t i = 1; i < candidates->size; ++i) {
+        if (!step_found && candidates->data[i].p < step * candidates->data[i - 1].p) {
+            step_found = true;
+        }
+
+        if (step_found && i >= min_keep) {
+            // Resize the output vector to keep only the tokens before the step
+            candidates->size = i;
+            break;
+        }
+    }
+
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
+}
+
 void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep) {
     if (z >= 1.0f || candidates->size <= 2) {
         return;

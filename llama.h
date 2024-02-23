@@ -799,6 +799,13 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
+    /// @details P-Step sampling as described in [THIS PR]
+    LLAMA_API void llama_sample_p_step(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+                           float   step,
+                          size_t   min_keep);
+
     /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
     LLAMA_API void llama_sample_tail_free(
             struct llama_context * ctx,

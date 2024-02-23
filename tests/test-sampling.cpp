@@ -101,6 +101,27 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
     }
 }
 
+static void test_p_step(const std::vector<float> & probs, const std::vector<float> & expected_probs, float step) {
+    const size_t n_vocab = probs.size();
+    std::vector<llama_token_data> candidates;
+    candidates.reserve(n_vocab);
+    for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
+        const float logit = logf(probs[token_id]);
+        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+    }
+
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+    DUMP(&candidates_p);
+    llama_sample_p_step(nullptr, &candidates_p, step, 1);
+    DUMP(&candidates_p);
+    llama_sample_softmax(nullptr, &candidates_p);
+
+    GGML_ASSERT(candidates_p.size == expected_probs.size());
+    for (size_t i = 0; i < candidates_p.size; i++) {
+        GGML_ASSERT(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-3);
+    }
+}
+
 static void test_typical(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
@@ -149,7 +170,7 @@ static void test_repetition_penalties(
 }
 
 static void test_sampler_queue(
-    const size_t n_vocab, const std::string samplers_sequence, const int top_k, const float top_p, const float min_p
+    const size_t n_vocab, const std::string samplers_sequence, const int top_k, const float top_p, const float min_p, const float p_step
 ) {
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -164,14 +185,15 @@ static void test_sampler_queue(
     const llama_token max_token_id = n_vocab-1;
 
     for (auto s : samplers_sequence) {
-        switch (s){
-            case 'k': llama_sample_top_k    (nullptr, &candidates_p, top_k, 1); break;
-            case 'f': GGML_ASSERT(false && "tail_free test not implemented");   break;
-            case 'y': GGML_ASSERT(false && "typical test not implemented");     break;
-            case 'p': llama_sample_top_p    (nullptr, &candidates_p, top_p, 1); break;
-            case 'm': llama_sample_min_p    (nullptr, &candidates_p, min_p, 1); break;
-            case 't': GGML_ASSERT(false && "temperature test not implemented"); break;
-            default : GGML_ASSERT(false && "Unknown sampler");                  break;
+        switch (s) {
+            case 'k': llama_sample_top_k    (nullptr, &candidates_p, top_k, 1);  break;
+            case 'f': GGML_ASSERT(false && "tail_free test not implemented");    break;
+            case 'y': GGML_ASSERT(false && "typical test not implemented");      break;
+            case 'p': llama_sample_top_p    (nullptr, &candidates_p, top_p, 1);  break;
+            case 'm': llama_sample_min_p    (nullptr, &candidates_p, min_p, 1);  break;
+            case 's': llama_sample_p_step   (nullptr, &candidates_p, p_step, 1); break;
+            case 't': GGML_ASSERT(false && "temperature test not implemented");  break;
+            default : GGML_ASSERT(false && "Unknown sampler");                   break;
         }
 
         llama_sample_softmax(nullptr, &candidates_p); // make sure tokens are sorted for tests
@@ -221,13 +243,25 @@ static void test_sampler_queue(
             GGML_ASSERT(size == expected_size);
             GGML_ASSERT(candidates_p.data[0].id == max_token_id);
             GGML_ASSERT(candidates_p.data[expected_size-1].id == min_token_id);
+        } else if (s == 's') {
+                min_token_id  = n_vocab;
+            int expected_size = 0;
+
+            do { // do-while because always at least one token is sampled
+                min_token_id--;
+                expected_size++;
+            } while (candidates_p.data[expected_size].p >= p_step * candidates_p.data[expected_size - 1].p);
+
+            GGML_ASSERT(size == expected_size);
+            GGML_ASSERT(candidates_p.data[0].id == max_token_id);
+            GGML_ASSERT(candidates_p.data[expected_size-1].id == min_token_id);
         } else {
             GGML_ASSERT(false);
         }
     }
 
-    printf("Sampler queue %3s OK with n_vocab=%05ld top_k=%05d top_p=%f min_p=%f\n",
-           samplers_sequence.c_str(), n_vocab, top_k, top_p, min_p);
+    printf("Sampler queue %3s OK with n_vocab=%05ld top_k=%05d top_p=%f min_p=%f p_step=%f\n",
+           samplers_sequence.c_str(), n_vocab, top_k, top_p, min_p, p_step);
 }
 
 int main(void) {
@@ -252,6 +286,17 @@ int main(void) {
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  0.76f);
     test_min_p({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  1.00f);
 
+    test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/1.0f, 0.3f/1.0f, 0.2f/1.0f, 0.1f/1.0f}, 0.0f);
+    test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/1.0f, 0.3f/1.0f, 0.2f/1.0f, 0.1f/1.0f}, 0.5f);
+    test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.9f, 0.3f/0.9f, 0.2f/0.9f},            0.6f);
+    test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.7f, 0.3f/0.7f},                       0.7f);
+    test_p_step({0.2f, 0.2f, 0.3f, 0.4f}, {0.4f/0.7f, 0.3f/0.7f},                       0.7f);
+    test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.7f, 0.3f/0.7f},                       0.74f);
+    // Disabled because of floating point nonsense: 0.3f < 0.75f * 0.4f is true!
+    //test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.7f, 0.3f/0.7f},                       0.75f);
+    test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  0.76f);
+    test_p_step({0.1f, 0.2f, 0.3f, 0.4f}, {0.4f/0.4f},                                  1.00f);
+
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f}, 0.25f);
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f, 0.25f}, 0.75f);
     test_tfs({0.1f, 0.15f, 0.2f, 0.25f, 0.3f}, {0.3f, 0.25f}, 0.99f);
@@ -267,33 +312,44 @@ int main(void) {
     test_repetition_penalties({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2},       {0.499966f, 0.499966f, 0.000023f, 0.000023f, 0.000023f}, 1.0f, 5.0f, 5.0f);
     test_repetition_penalties({0.2f, 0.2f, 0.2f, 0.2f, 0.2f}, {0, 1, 2, 0, 0}, {0.499977f, 0.499977f, 0.000023f, 0.000023f, 0.000000f}, 1.0f, 5.0f, 5.0f);
 
-    test_sampler_queue(10000, "k", 10000, 1.0f, 1.0f);
-    test_sampler_queue(10000, "k",     1, 1.0f, 1.0f);
-    test_sampler_queue(10000, "p", 10000, 1.0f, 1.0f);
-    test_sampler_queue(10000, "p", 10000, 0.0f, 1.0f);
-    test_sampler_queue(10000, "m", 10000, 1.0f, 1.0f);
-    test_sampler_queue(10000, "m", 10000, 1.0f, 1e-12);
+    test_sampler_queue(10000, "k", 10000, 1.0f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "k",     1, 1.0f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "p", 10000, 1.0f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "p", 10000, 0.0f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "m", 10000, 1.0f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "m", 10000, 1.0f, 1e-12, 1.0f);
+    test_sampler_queue(10000, "s", 10000, 1.0f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "s", 10000, 1.0f, 1.0f, 1e-12);
 
-    test_sampler_queue(10000, "k",   100, 1.0000f, 1.0f);
-    test_sampler_queue(10000, "p", 10000, 0.0002f, 1.0f);
-    test_sampler_queue(10000, "p", 10000, 0.8000f, 1.0f);
-    test_sampler_queue(10000, "m", 10000, 1.0000f, 9997.9f/9999.0f);
-    test_sampler_queue(10000, "m", 10000, 1.0000f, 0.1f);
+    test_sampler_queue(10000, "k",   100, 1.0000f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "p", 10000, 0.0002f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "p", 10000, 0.8000f, 1.0f, 1.0f);
+    test_sampler_queue(10000, "m", 10000, 1.0000f, 9997.9f/9999.0f, 1.0f);
+    test_sampler_queue(10000, "m", 10000, 1.0000f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "s", 10000, 1.0000f, 1.0f, 9997.9f/9999.0f);
+    test_sampler_queue(10000, "s", 10000, 1.0000f, 1.0f, 0.1f);
 
-    test_sampler_queue(10000, "kp", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "km", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "pk", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "pm", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "mk", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "mp", 100, 0.8f, 9997.9f/9999.0f);
-    test_sampler_queue(10000, "mp", 100, 0.8f, 0.1f);
+    test_sampler_queue(10000, "kp", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "km", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "pk", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "pm", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "mk", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "mp", 100, 0.8f, 9997.9f/9999.0f, 1.0f);
+    test_sampler_queue(10000, "mp", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "ks", 100, 0.8f, 1.0f, 0.1f);
+    test_sampler_queue(10000, "sk", 100, 0.8f, 1.0f, 0.1f);
+    test_sampler_queue(10000, "sp", 100, 0.8f, 1.0f, 9997.9f/9999.0f);
+    test_sampler_queue(10000, "sp", 100, 0.8f, 1.0f, 0.1f);
 
-    test_sampler_queue(10000, "kpm", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "kmp", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "pkm", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "pmk", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "mkp", 100, 0.8f, 0.1f);
-    test_sampler_queue(10000, "mpk", 100, 0.8f, 0.1f);
+    test_sampler_queue(10000, "kpm", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "kmp", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "pkm", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "pmk", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "mkp", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "mpk", 100, 0.8f, 0.1f, 1.0f);
+    test_sampler_queue(10000, "ksp", 100, 0.8f, 1.0f, 0.1f);
+    test_sampler_queue(10000, "skp", 100, 0.8f, 1.0f, 0.1f);
+    test_sampler_queue(10000, "spk", 100, 0.8f, 1.0f, 0.1f);
 
     printf("OK\n");
 
