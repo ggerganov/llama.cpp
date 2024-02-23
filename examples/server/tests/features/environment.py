@@ -23,6 +23,8 @@ def after_scenario(context, scenario):
                 with closing(open('llama.log', 'r')) as f:
                     for line in f:
                         print(line)
+        if not is_server_listening(context.server_fqdn, context.server_port):
+            print("ERROR: Server has crashed")
 
     if not pid_exists(context.server_process.pid):
         assert False, f"Server not running pid={context.server_process.pid} ..."
