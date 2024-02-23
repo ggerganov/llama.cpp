@@ -1,5 +1,5 @@
-# Server test scenario
-name: Server Integration Tests
+# Server build and tests
+name: Server
 
 on:
   workflow_dispatch: # allows manual triggering
