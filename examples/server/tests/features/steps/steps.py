@@ -10,7 +10,6 @@ from re import RegexFlag
 
 import aiohttp
 import openai
-import requests
 from behave import step
 from behave.api.async_step import async_run_until_complete
 
@@ -74,6 +73,7 @@ def step_server_n_predict(context, n_predict):
 @step(u'continuous batching')
 def step_server_continuous_batching(context):
     context.server_continuous_batching = True
+
 
 @step(u'embeddings extraction')
 def step_server_embeddings(context):
@@ -306,12 +306,16 @@ async def all_prompts_are_predicted(context, expected_predicted_n=None):
 
 
 @step(u'embeddings are computed for')
-def step_compute_embedding(context):
-    response = requests.post(f'{context.base_url}/embedding', json={
-        "content": context.text,
-    })
-    assert response.status_code == 200
-    context.embeddings = response.json()['embedding']
+@async_run_until_complete
+async def step_compute_embedding(context):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/embedding',
+                                json={
+                                    "content": context.text,
+                                }) as response:
+            assert response.status == 200
+            response_json = await response.json()
+            context.embeddings = response_json['embedding']
 
 
 @step(u'embeddings are generated')
@@ -338,32 +342,42 @@ def step_oai_compute_embedding(context):
 
 
 @step(u'tokenizing')
-def step_tokenize(context):
+@async_run_until_complete
+async def step_tokenize(context):
     context.tokenized_text = context.text
-    response = requests.post(f'{context.base_url}/tokenize', json={
-        "content": context.tokenized_text,
-    })
-    assert response.status_code == 200
-    context.tokens = response.json()['tokens']
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/tokenize',
+                                json={
+                                    "content": context.tokenized_text,
+                                }) as response:
+            assert response.status == 200
+            tokenize_json = await response.json()
+            context.tokens = tokenize_json['tokens']
 
 
 @step(u'tokens can be detokenize')
-def step_detokenize(context):
+@async_run_until_complete
+async def step_detokenize(context):
     assert len(context.tokens) > 0
-    response = requests.post(f'{context.base_url}/detokenize', json={
-        "tokens": context.tokens,
-    })
-    assert response.status_code == 200
-    # SPM tokenizer adds a whitespace prefix: https://github.com/google/sentencepiece/issues/15
-    assert context.tokenized_text == response.json()['content'].strip()
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/detokenize',
+                                json={
+                                    "tokens": context.tokens,
+                                }) as response:
+            assert response.status == 200
+            detokenize_json = await response.json()
+            # SPM tokenizer adds a whitespace prefix: https://github.com/google/sentencepiece/issues/15
+            assert context.tokenized_text == detokenize_json['content'].strip()
 
 
 @step(u'an OPTIONS request is sent from {origin}')
-def step_options_request(context, origin):
-    options_response = requests.options(f'{context.base_url}/v1/chat/completions',
-                                        headers={"Origin": origin})
-    assert options_response.status_code == 200
-    context.options_response = options_response
+@async_run_until_complete
+async def step_options_request(context, origin):
+    async with aiohttp.ClientSession() as session:
+        async with session.options(f'{context.base_url}/v1/chat/completions',
+                                   headers={"Origin": origin}) as response:
+            assert response.status == 200
+            context.options_response = response
 
 
 @step(u'CORS header {cors_header} is set to {cors_header_value}')
