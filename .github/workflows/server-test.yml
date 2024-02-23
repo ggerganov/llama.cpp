@@ -33,7 +33,8 @@ jobs:
             build-essential \
             cmake \
             python3-pip \
-            curl
+            curl \
+            psmisc
 
       - name: Build
         id: cmake_build
