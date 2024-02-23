@@ -589,8 +589,8 @@ async def wait_for_health_status(context,
                 # Sometimes health requests are triggered after completions are predicted
                 if expected_http_status_code == 503:
                     if len(context.completions) == 0:
-                        print("\x1b[5;37;43WARNING: forcing concurrents completions tasks,"
-                              " busy health check missed\x1b[0m")
+                        print("\x1b[5;37;43mWARNING: forcing concurrents completions tasks,"
+                              " busy health check missed, probably too fast inference\x1b[0m")
                         n_completions = await gather_concurrent_completions_tasks(context)
                         if n_completions > 0:
                             return
