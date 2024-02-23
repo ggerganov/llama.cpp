@@ -1,21 +1,20 @@
-// Compatible with Zig Version 0.11.0
+// Compatible with Zig Version 0.12.0-dev.xxxx
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const Compile = std.Build.Step.Compile;
 const ConfigHeader = std.Build.Step.ConfigHeader;
-const Mode = std.builtin.Mode;
-const CrossTarget = std.zig.CrossTarget;
+const Mode = std.builtin.OptimizeMode;
+const Target = std.Build.ResolvedTarget;
 
 const Maker = struct {
-    builder: *std.build.Builder,
-    target: CrossTarget,
+    builder: *std.Build,
+    target: Target,
     optimize: Mode,
     enable_lto: bool,
 
     include_dirs: ArrayList([]const u8),
     cflags: ArrayList([]const u8),
     cxxflags: ArrayList([]const u8),
-    objs: ArrayList(*Compile),
 
     fn addInclude(m: *Maker, dir: []const u8) !void {
         try m.include_dirs.append(dir);
@@ -34,10 +33,10 @@ const Maker = struct {
         try m.addCxxFlag(flag);
     }
 
-    fn init(builder: *std.build.Builder) !Maker {
+    fn init(builder: *std.Build) !Maker {
         const target = builder.standardTargetOptions(.{});
         const zig_version = @import("builtin").zig_version_string;
-        const commit_hash = try std.ChildProcess.exec(
+        const commit_hash = try std.ChildProcess.run(
             .{ .allocator = builder.allocator, .argv = &.{ "git", "rev-parse", "HEAD" } },
         );
         try std.fs.cwd().writeFile("common/build-info.cpp", builder.fmt(
@@ -46,7 +45,8 @@ const Maker = struct {
             \\char const *LLAMA_COMPILER = "Zig {s}";
             \\char const *LLAMA_BUILD_TARGET = "{s}";
             \\
-        , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.allocDescription(builder.allocator) }));
+        , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.query.zigTriple(builder.allocator) }));
+
         var m = Maker{
             .builder = builder,
             .target = target,
@@ -55,11 +55,19 @@ const Maker = struct {
             .include_dirs = ArrayList([]const u8).init(builder.allocator),
             .cflags = ArrayList([]const u8).init(builder.allocator),
             .cxxflags = ArrayList([]const u8).init(builder.allocator),
-            .objs = ArrayList(*Compile).init(builder.allocator),
         };
 
         try m.addCFlag("-std=c11");
         try m.addCxxFlag("-std=c++11");
+
+        if (m.target.result.abi == .gnu) {
+            try m.addFlag("-D_GNU_SOURCE");
+        }
+        if (m.target.result.os.tag == .macos) {
+            try m.addFlag("-D_DARWIN_C_SOURCE");
+        }
+        try m.addFlag("-D_XOPEN_SOURCE=600");
+
         try m.addProjectInclude(&.{});
         try m.addProjectInclude(&.{"common"});
         return m;
@@ -67,15 +75,13 @@ const Maker = struct {
 
     fn obj(m: *const Maker, name: []const u8, src: []const u8) *Compile {
         const o = m.builder.addObject(.{ .name = name, .target = m.target, .optimize = m.optimize });
-        if (o.target.getAbi() != .msvc)
-            o.defineCMacro("_GNU_SOURCE", null);
 
-        if (std.mem.endsWith(u8, src, ".c")) {
-            o.addCSourceFiles(&.{src}, m.cflags.items);
+        if (std.mem.endsWith(u8, src, ".c") or std.mem.endsWith(u8, src, ".m")) {
+            o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cflags.items });
             o.linkLibC();
         } else {
-            o.addCSourceFiles(&.{src}, m.cxxflags.items);
-            if (o.target.getAbi() == .msvc) {
+            o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
+            if (m.target.result.abi == .msvc) {
                 o.linkLibC(); // need winsdk + crt
             } else {
                 // linkLibCpp already add (libc++ + libunwind + libc)
@@ -89,13 +95,12 @@ const Maker = struct {
 
     fn exe(m: *const Maker, name: []const u8, src: []const u8, deps: []const *Compile) *Compile {
         const e = m.builder.addExecutable(.{ .name = name, .target = m.target, .optimize = m.optimize });
-        e.addCSourceFiles(&.{src}, m.cxxflags.items);
+        e.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
         for (deps) |d| e.addObject(d);
-        for (m.objs.items) |o| e.addObject(o);
         for (m.include_dirs.items) |i| e.addIncludePath(.{ .path = i });
 
         // https://github.com/ziglang/zig/issues/15448
-        if (e.target.getAbi() == .msvc) {
+        if (m.target.result.abi == .msvc) {
             e.linkLibC(); // need winsdk + crt
         } else {
             // linkLibCpp already add (libc++ + libunwind + libc)
@@ -103,13 +108,49 @@ const Maker = struct {
         }
         m.builder.installArtifact(e);
         e.want_lto = m.enable_lto;
+
+        const run = m.builder.addRunArtifact(e);
+        if (m.builder.args) |args| {
+            run.addArgs(args);
+        }
+        const step = m.builder.step(name, std.fmt.allocPrint(m.builder.allocator, "Run the {s} example", .{name}) catch @panic("OOM"));
+        step.dependOn(&run.step);
+
         return e;
     }
 };
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     var make = try Maker.init(b);
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
+
+    // Options
+    const llama_vulkan = b.option(bool, "llama-vulkan", "Enable Vulkan backend for Llama, (default: false)") orelse false;
+    const llama_metal = b.option(bool, "llama-metal", "Enable Metal backend for Llama, (default: false, true for macos)") orelse (make.target.result.os.tag == .macos);
+    const llama_no_accelerate = b.option(bool, "llama-no-accelerate", "Disable Accelerate framework for Llama, (default: false)") orelse false;
+    const llama_accelerate = !llama_no_accelerate and make.target.result.os.tag == .macos;
+
+    // Flags
+    if (llama_accelerate) {
+        try make.addFlag("-DGGML_USE_ACCELERATE");
+        try make.addFlag("-DACCELERATE_USE_LAPACK");
+        try make.addFlag("-DACCELERATE_LAPACK_ILP64");
+    }
+
+    // Objects
+    var extras = ArrayList(*Compile).init(b.allocator);
+
+    if (llama_vulkan) {
+        try make.addFlag("-DGGML_USE_VULKAN");
+        const ggml_vulkan = make.obj("ggml-vulkan", "ggml-vulkan.cpp");
+        try extras.append(ggml_vulkan);
+    }
+
+    if (llama_metal) {
+        try make.addFlag("-DGGML_USE_METAL");
+        const ggml_metal = make.obj("ggml-metal", "ggml-metal.m");
+        try extras.append(ggml_metal);
+    }
 
     const ggml = make.obj("ggml", "ggml.c");
     const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
@@ -121,19 +162,41 @@ pub fn build(b: *std.build.Builder) !void {
     const console = make.obj("console", "common/console.cpp");
     const sampling = make.obj("sampling", "common/sampling.cpp");
     const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
-    const train = make.obj("train", "common/train.cpp");
     const clip = make.obj("clip", "examples/llava/clip.cpp");
+    const train = make.obj("train", "common/train.cpp");
     const llava = make.obj("llava", "examples/llava/llava.cpp");
 
-    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser });
-    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
-    _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
-    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
-
-    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, grammar_parser, clip, llava });
-    if (server.target.isWindows()) {
+    // Executables
+    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, clip, llava });
+    if (make.target.result.os.tag == .windows) {
         server.linkSystemLibrary("ws2_32");
+    }
+
+    const exes = [_]*Compile{
+        make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, clip }),
+        make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo }),
+        make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo }),
+        make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo }),
+        make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train }),
+        make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train }),
+        server,
+    };
+
+    for (exes) |e| {
+        for (extras.items) |o| e.addObject(o);
+
+        if (llama_vulkan) {
+            e.linkSystemLibrary("vulkan");
+        }
+
+        if (llama_metal) {
+            e.linkFramework("Foundation");
+            e.linkFramework("Metal");
+            e.linkFramework("MetalKit");
+        }
+
+        if (llama_accelerate) {
+            e.linkFramework("Accelerate");
+        }
     }
 }
