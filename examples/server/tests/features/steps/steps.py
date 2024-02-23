@@ -627,8 +627,6 @@ def start_server_background(context):
         server_args.append('--embedding')
     if context.model_alias is not None:
         server_args.extend(['--alias', context.model_alias])
-    if context.server_seed is not None:
-        server_args.extend(['--alias', context.model_alias])
     if context.n_ctx is not None:
         server_args.extend(['--ctx-size', context.n_ctx])
     if context.n_slots is not None:
