@@ -1,4 +1,3 @@
-import multiprocessing
 import os
 import socket
 import subprocess
@@ -17,6 +16,16 @@ def before_scenario(context, scenario):
 
 
 def after_scenario(context, scenario):
+    if scenario.status == "failed":
+        print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n\n")
+        if os.path.isfile('llama.log'):
+            with closing(open('llama.log', 'r')) as f:
+                for line in f:
+                    print(line)
+
+    if not pid_exists(context.server_process.pid):
+        assert False, f"Server not running pid={context.server_process.pid} ..."
+
     print(f"stopping server pid={context.server_process.pid} ...")
     context.server_process.kill()
     # Wait few for socket to free up
@@ -40,3 +49,16 @@ def is_server_listening(server_fqdn, server_port):
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         result = sock.connect_ex((server_fqdn, server_port))
         return result == 0
+
+
+def pid_exists(pid):
+    """Check whether pid exists in the current process table."""
+    import errno
+    if pid < 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError as e:
+        return e.errno == errno.EPERM
+    else:
+        return True
