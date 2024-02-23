@@ -19,6 +19,29 @@ jobs:
       image: ubuntu:latest
       ports:
         - 8888
+      options: --cpus 4
+
+    strategy:
+      matrix:
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [Debug, Release]
+        include:
+          - build: 'noavx'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
+          - build: 'avx2'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON'
+          - build: 'avx'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
+          - build: 'avx512'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON'
+          - build: 'clblast'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON'
+          - build: 'openblas'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
+          - build: 'kompute'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON'
+          - build: 'vulkan'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_VULKAN=ON'
 
     steps:
       - name: Clone
@@ -36,13 +59,34 @@ jobs:
             curl \
             psmisc
 
+      - name: Download CLBlast
+        id: get_clblast
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          apt install libclblast-dev
+
+      - name: Download OpenBLAS
+        id: get_openblas
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          apt-get -y install libopenblas-dev
+
+      - name: Install Vulkan SDK
+        id: get_vulkan
+        if: ${{ matrix.build == 'kompute' || matrix.build == 'vulkan' }}
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | tee /etc/apt/trusted.gpg.d/lunarg.asc
+          wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+          apt-get update
+          apt-get -y install vulkan-sdk
+
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release -j $(nproc) --target server
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.defines }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
 
       - name: Tests dependencies
         id: test_dependencies
