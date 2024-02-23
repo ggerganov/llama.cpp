@@ -38,6 +38,7 @@ jobs:
           - build: 'cublas'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON'
             image: nvidia/cuda:12.3.1-devel-ubuntu22.04
+            arch_not_available: true # require nvidia docker engine
           - build: 'clblast'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON'
             image: ubuntu:latest
