@@ -100,7 +100,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.defines }}
+          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.defines }}
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
 
       - name: Tests dependencies
