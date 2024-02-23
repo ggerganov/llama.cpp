@@ -4489,7 +4489,6 @@ void kernel_mul_mv_iq3_s_f32_impl(
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
 
-#if QK_K == 256
     const int ix = tiisg;
 
     device const float * y4 = y + 32 * ix;
@@ -4535,12 +4534,6 @@ void kernel_mul_mv_iq3_s_f32_impl(
 
         y4 += 32 * 32;
     }
-#else
-    (void) x;
-    (void) y;
-    (void) yl;
-    (void) nb32;
-#endif
 
     for (int row = 0; row < N_DST; ++row) {
         all_sum = simd_sum(sumf[row]);
