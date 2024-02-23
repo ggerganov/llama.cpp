@@ -29,7 +29,10 @@ jobs:
         id: depends
         run: |
           apt-get update
-          apt-get -y install build-essential cmake
+          apt-get -y install \
+            build-essential \
+            cmake \
+            python3-pip
 
       - name: Build
         id: cmake_build
