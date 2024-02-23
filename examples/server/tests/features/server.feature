@@ -8,6 +8,7 @@ Feature: llama.cpp server
     And   42 as server seed
     And   32 KV cache size
     And   1 slots
+    And   embeddings extraction
     And   32 server max tokens to predict
     Then  the server is starting
     Then  the server is healthy
