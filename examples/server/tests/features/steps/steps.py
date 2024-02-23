@@ -85,7 +85,7 @@ def step_start_server(context):
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             result = sock.connect_ex((context.server_fqdn, context.server_port))
             if result == 0:
-                print("server started!")
+                print("\x1b[33;42mserver started!\x1b[0m")
                 return
             attempts += 1
             if attempts > 20:
@@ -586,7 +586,7 @@ async def wait_for_health_status(context,
                 # Sometimes health requests are triggered after completions are predicted
                 if expected_http_status_code == 503:
                     if len(context.completions) == 0:
-                        print("\x1b[33;42mWARNING: forcing concurrents completions tasks,"
+                        print("\x1b[5;37;43WARNING: forcing concurrents completions tasks,"
                               " busy health check missed\x1b[0m")
                         n_completions = await gather_concurrent_completions_tasks(context)
                         if n_completions > 0:
