@@ -22,6 +22,7 @@ using json = nlohmann::json;
 #define FUNCTIONARY_RECIP_ALL "all"
 #define FUNCTIONARY_RECIP_NONE "no-tool-call"
 
+namespace llama_functionary {
 
 template <typename T>
 static T json_value(const json &body, const std::string &key, const T &default_value)
@@ -54,9 +55,6 @@ inline std::vector<std::string> str_split(std::string str, const std::string & d
     output.push_back(str); // the rest
     return output;
 }
-
-
-namespace llama_functionary {
 
 typedef struct message {
     std::string from; // can be "system", "user", "assistant" or name of function
@@ -273,7 +271,7 @@ inline json convert_response_to_oai_choices(const std::string & content) {
     }
     // build final response
     json choices = json::array();
-    // TODO: technically, functionary can reponse both text + tool_call in one shot. But for some reasons, the original implementation of OpenAI only return either ofthem, not both.
+    // TODO: technically, functionary can reponse both text + tool_call in one shot. But for some reasons, the original implementation of OpenAI only return only one, not both.
     if (tool_calls.size() > 0) {
         choices.push_back(json{
             {"index", 0},

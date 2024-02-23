@@ -9,6 +9,7 @@
 
 #include "json.hpp"
 #include "utils.hpp"
+#include "functionary.hpp"
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
