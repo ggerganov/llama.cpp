@@ -1,15 +1,17 @@
 {
   lib,
   llamaVersion,
-  python3,
+  numpy,
+  poetry-core,
+  buildPythonPackage,
 }@inputs:
 
-python3.pkgs.buildPythonPackage rec {
+buildPythonPackage {
   pname = "gguf";
   version = llamaVersion;
   pyproject = true;
-  nativeBuildInputs = with python3.pkgs; [ poetry-core ];
-  propagatedBuildInputs = with python3.pkgs; [ numpy ];
+  nativeBuildInputs = [ poetry-core ];
+  propagatedBuildInputs = [ numpy ];
   src = lib.cleanSource ../../gguf-py;
   doCheck = false;
   meta = with lib; {

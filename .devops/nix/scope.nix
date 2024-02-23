@@ -1,8 +1,16 @@
 {
   lib,
   newScope,
+  python3,
   llamaVersion ? "0.0.0",
 }:
+
+let
+  pythonPackages = python3.pkgs;
+  buildPythonPackage = pythonPackages.buildPythonPackage;
+  numpy = pythonPackages.numpy;
+  poetry-core = pythonPackages.poetry-core;
+in
 
 # We're using `makeScope` instead of just writing out an attrset
 # because it allows users to apply overlays later using `overrideScope'`.
@@ -10,7 +18,8 @@
 
 lib.makeScope newScope (self: {
   inherit llamaVersion;
-  gguf-py = self.callPackage ./package-gguf-py.nix { };
+  pp = python3.pkgs;
+  gguf-py = self.callPackage ./package-gguf-py.nix { inherit buildPythonPackage numpy poetry-core; };
   llama-cpp = self.callPackage ./package.nix { };
   docker = self.callPackage ./docker.nix { };
   docker-min = self.callPackage ./docker.nix { interactive = false; };
