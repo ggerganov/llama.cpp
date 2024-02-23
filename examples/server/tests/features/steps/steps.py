@@ -35,8 +35,8 @@ def step_server_config(context, server_fqdn, server_port):
     context.server_seed = None
     context.user_api_key = None
 
-    context.completions = []
-    context.concurrent_completion_tasks = []
+    context.tasks_result = []
+    context.concurrent_tasks = []
     context.prompts = []
 
 
@@ -149,7 +149,7 @@ async def step_request_completion(context, api_error):
                                           server_seed=context.server_seed,
                                           expect_api_error=expect_api_error,
                                           user_api_key=context.user_api_key)
-    context.completions.append(completion)
+    context.tasks_result.append(completion)
     print(f"Completion response: {completion}")
     if expect_api_error:
         assert completion == 401, f"completion must be an 401 status code: {completion}"
@@ -157,12 +157,12 @@ async def step_request_completion(context, api_error):
 
 @step(u'{predicted_n} tokens are predicted matching {re_content}')
 def step_n_tokens_predicted_with_content(context, predicted_n, re_content):
-    assert_n_tokens_predicted(context.completions.pop(), int(predicted_n), re_content)
+    assert_n_tokens_predicted(context.tasks_result.pop(), int(predicted_n), re_content)
 
 
 @step(u'{predicted_n} tokens are predicted')
 def step_n_tokens_predicted(context, predicted_n):
-    assert_n_tokens_predicted(context.completions.pop(), int(predicted_n))
+    assert_n_tokens_predicted(context.tasks_result.pop(), int(predicted_n))
 
 
 @step(u'a user prompt {user_prompt}')
@@ -195,13 +195,13 @@ def step_user_api_key(context, user_api_key):
     context.user_api_key = user_api_key
 
 
-@step(u'a user api key ')
+@step(u'no user api key')
 def step_no_user_api_key(context):
     context.user_api_key = None
 
 
-@step(u'no user api key')
-def step_no_user_api_key(context):
+@step(u'a user api key ')
+def step_no_user_api_key_space(context):
     context.user_api_key = None
 
 
@@ -234,7 +234,7 @@ async def step_oai_chat_completions(context, api_error):
                                             if hasattr(context, 'user_api_key') else None,
 
                                             expect_api_error=expect_api_error)
-    context.completions.append(completion)
+    context.tasks_result.append(completion)
     print(f"Completion response: {completion}")
     if expect_api_error:
         assert completion == 401, f"completion must be an 401 status code: {completion}"
@@ -285,47 +285,38 @@ async def step_oai_chat_completions(context):
                                          if hasattr(context, 'user_api_key') else None)
 
 
-@async_run_until_complete
 @step(u'all prompts are predicted')
-async def step_impl(context):
+@async_run_until_complete
+async def step_all_prompts_are_predicted(context):
     await all_prompts_are_predicted(context)
 
 
 @step(u'all prompts are predicted with {n_predict} tokens')
 @async_run_until_complete
-async def step_all_prompts_are_predicted(context, n_predict):
+async def step_all_prompts_are_predicted_with_n_tokens(context, n_predict):
     expected_predicted_n = int(n_predict)
     await all_prompts_are_predicted(context, expected_predicted_n)
 
 
 async def all_prompts_are_predicted(context, expected_predicted_n=None):
-    n_completions = await gather_concurrent_completions_tasks(context)
+    n_completions = await gather_tasks_results(context)
     assert n_completions > 0
     for i in range(n_completions):
-        assert_n_tokens_predicted(context.completions.pop(), expected_predicted_n=expected_predicted_n)
+        assert_n_tokens_predicted(context.tasks_result.pop(), expected_predicted_n=expected_predicted_n)
+    assert len(context.concurrent_tasks) == 0, f"{len(context.concurrent_tasks)} pending requests"
 
 
 @step(u'embeddings are computed for')
 @async_run_until_complete
 async def step_compute_embedding(context):
-    async with aiohttp.ClientSession() as session:
-        async with session.post(f'{context.base_url}/embedding',
-                                json={
-                                    "content": context.text,
-                                }) as response:
-            assert response.status == 200
-            response_json = await response.json()
-            context.embeddings = response_json['embedding']
+    content = context.text
+    base_url = context.base_url
+    context.embeddings = await request_embedding(content, base_url)
 
 
 @step(u'embeddings are generated')
-def step_compute_embeddings(context):
-    assert len(context.embeddings) > 0
-    embeddings_computed = False
-    for emb in context.embeddings:
-        if emb != 0:
-            embeddings_computed = True
-    assert embeddings_computed, f"Embeddings: {context.embeddings}"
+def step_assert_embeddings(context):
+    assert_embeddings(context.embeddings)
 
 
 @step(u'an OAI compatible embeddings computation request for')
@@ -339,6 +330,24 @@ def step_oai_compute_embedding(context):
         input=context.text,
     )
     context.embeddings = embeddings
+
+
+@step(u'concurrent embedding requests')
+@async_run_until_complete()
+async def step_concurrent_embedding_requests(context):
+    await concurrent_completion_requests(context,
+                                         request_embedding,
+                                         # prompt is inserted automatically
+                                         context.base_url)
+
+
+@step(u'all embeddings are generated')
+@async_run_until_complete()
+async def all_embeddings_are_generated(context):
+    n_embedding_requests = await gather_tasks_results(context)
+    assert n_embedding_requests > 0
+    for i in range(n_embedding_requests):
+        assert_embeddings(context.tasks_result.pop())
 
 
 @step(u'tokenizing')
@@ -391,7 +400,7 @@ async def concurrent_completion_requests(context, f_completion, *args, **kwargs)
     assert n_prompts > 0
     for prompt_no in range(n_prompts):
         shifted_args = [context.prompts.pop(), *args]
-        context.concurrent_completion_tasks.append(asyncio.create_task(f_completion(*shifted_args, **kwargs)))
+        context.concurrent_tasks.append(asyncio.create_task(f_completion(*shifted_args, **kwargs)))
     await asyncio.sleep(0.1)
 
 
@@ -540,6 +549,17 @@ async def oai_chat_completions(user_prompt,
     return completion_response
 
 
+async def request_embedding(content, base_url):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{base_url}/embedding',
+                                json={
+                                    "content": content,
+                                }) as response:
+            assert response.status == 200
+            response_json = await response.json()
+            return response_json['embedding']
+
+
 def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re_content=None):
     content = completion_response['content']
     n_predicted = completion_response['timings']['predicted_n']
@@ -554,12 +574,12 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
             f' ```\n{content}\n``` do not match /{re_content}/')
 
 
-async def gather_concurrent_completions_tasks(context):
-    n_completion_tasks = len(context.concurrent_completion_tasks)
-    print(f"Waiting for all {n_completion_tasks} completion responses...")
-    for task_no in range(n_completion_tasks):
-        context.completions.append(await context.concurrent_completion_tasks.pop())
-    n_completions = len(context.completions)
+async def gather_tasks_results(context):
+    n_tasks = len(context.concurrent_tasks)
+    print(f"Waiting for all {n_tasks} tasks results...")
+    for task_no in range(n_tasks):
+        context.tasks_result.append(await context.concurrent_tasks.pop())
+    n_completions = len(context.tasks_result)
     return n_completions
 
 
@@ -602,14 +622,23 @@ async def wait_for_health_status(context,
             if counter >= timeout:
                 # Sometimes health requests are triggered after completions are predicted
                 if expected_http_status_code == 503:
-                    if len(context.completions) == 0:
-                        print("\x1b[5;37;43mWARNING: forcing concurrents completions tasks,"
+                    if len(context.tasks_result) == 0:
+                        print("\x1b[5;37;43mWARNING: forcing concurrent tasks,"
                               " busy health check missed, probably too fast inference\x1b[0m")
-                        n_completions = await gather_concurrent_completions_tasks(context)
+                        n_completions = await gather_tasks_results(context)
                         if n_completions > 0:
                             return
 
                 assert False, 'timeout exceeded'
+
+
+def assert_embeddings(embeddings):
+    assert len(embeddings) > 0
+    embeddings_computed = False
+    for emb in embeddings:
+        if emb != 0:
+            embeddings_computed = True
+    assert embeddings_computed, f"Embeddings: {embeddings}"
 
 
 async def request_slots_status(context, expected_slots):
@@ -652,6 +681,8 @@ def start_server_background(context):
         server_args.extend(['--n-predict', context.n_server_predict])
     if context.server_api_key is not None:
         server_args.extend(['--api-key', context.server_api_key])
+    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+        server_args.append('--verbose')
     print(f"starting server with: {context.server_path}", *server_args)
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],

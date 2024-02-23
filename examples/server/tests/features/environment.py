@@ -24,7 +24,7 @@ def after_scenario(context, scenario):
                     for line in f:
                         print(line)
         if not is_server_listening(context.server_fqdn, context.server_port):
-            print("ERROR: Server has crashed")
+            print("\x1b[33;101mERROR: Server stopped listening\x1b[0m")
 
     if not pid_exists(context.server_process.pid):
         assert False, f"Server not running pid={context.server_process.pid} ..."
@@ -41,7 +41,7 @@ def after_scenario(context, scenario):
         time.sleep(0.1)
         attempts += 1
         if attempts > 5:
-            print(f"Server dandling exits, killing all {context.server_path} ...")
+            print(f"Server dangling exits, killing all {context.server_path} ...")
             process = subprocess.run(['killall', '-9', context.server_path],
                                      stderr=subprocess.PIPE,
                                      universal_newlines=True)
