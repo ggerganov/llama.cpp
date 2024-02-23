@@ -18,9 +18,9 @@ jobs:
 
     strategy:
       matrix:
+        build: [noavx, avx2, avx, avx512, cublas, clblast, openblas, kompute, vulkan]
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
         build_type: [Debug, Release]
-        build: [noavx, avx2, avx, avx512, cublas, clblast, openblas, kompute, vulkan]
         include:
           - build: 'noavx'
             defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
@@ -113,13 +113,13 @@ jobs:
         run: |
           pip install -r examples/server/tests/requirements.txt
 
-      - name: Download test model
-        id: download_model
+      - name: Download models
+        id: download_models
         run: |
           cd examples/server/tests
           ../../../scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf
 
-      - name: Server Integration Tests
+      - name: Tests
         id: server_integration_test
         continue-on-error: ${{ matrix.experimental || matrix.arch_not_available }}
         run: |
