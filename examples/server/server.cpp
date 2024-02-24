@@ -1968,7 +1968,7 @@ struct llama_server_context
             }
         }
 
-        LOG_VERBOSE("Slots updated", {});
+        LOG_VERBOSE("slots updated", {});
         return true;
     }
 
