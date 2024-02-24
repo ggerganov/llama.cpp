@@ -9,6 +9,7 @@ using json = nlohmann::json;
 
 /**
  * Integration with functionary model: https://github.com/MeetKai/functionary
+ * Based on my research: https://github.com/ggerganov/llama.cpp/issues/5588
  * 
  * A typical flow is:
  * - Step 1: user send request to model
@@ -201,7 +202,7 @@ inline std::string serialize_function(function_def & fn) {
 ///////////////////////////////////////////
 // Main hooks, to be called in oai.hpp
 
-inline std::string convert_oai_to_prompt(const json & body) {
+inline std::string convert_oai_to_prompt(const json & body, bool add_ass, bool allow_tool = true) {
     std::stringstream ss;
     // convert function definitions
     std::vector<json> tools = json_value(body, "tools", json::array());
@@ -224,30 +225,48 @@ inline std::string convert_oai_to_prompt(const json & body) {
     // convert history
     std::vector<json> messages = json_value(body, "messages", json::array());
     for (auto & msg_json : messages) {
+        // TODO: how to detect where to put "<|stop|>"?
         if (msg_json.count("tool_calls")) {
             // assistant request to function call, now re-passed to history
             std::vector<json> tool_calls = msg_json["tool_calls"];
-            for (auto & tc : tool_calls) {
+            for (size_t i = 0; i < tool_calls.size(); i++) {
+                auto & tc = tool_calls[i];
                 message msg;
                 msg.from = tc["function"]["name"];
                 msg.content = tc["function"]["arguments"];
+                msg.has_stop = i == tool_calls.size() - 1; // last msg
                 ss << msg.to_prompt();
             }
         } else {
             // all other types of message
             message msg(msg_json);
+            msg.has_stop = msg.from == "assistant"; // add stop if this is single text message from assistant (not contains tool_calls)
             ss << msg.to_prompt();
+        }
+    }
+    // add trailing assistant prompt
+    if (add_ass) {
+        ss << "<|from|>assistant\n<|recipient|>";
+        if (!allow_tool) {
+            ss << FUNCTIONARY_RECIP_NONE;
         }
     }
     return ss.str();
 }
 
-// be careful, the assistant output does not have "<|from|>assistant", you need to add it yourself!
 inline json convert_response_to_oai_choices(const std::string & content) {
+    std::string input_full = content;
     std::string text_response;
     json tool_calls = json::array();
     // parse all turns
-    std::vector<std::string> turns = str_split(content, "<|from|>");
+    std::vector<std::string> turns = str_split(input_full, "<|from|>");
+    if (!turns.empty()) {
+        // first turn may not have the assistant tag (because it was part of the prompt added by "add_ass"), we will put it back to parse the message
+        // the "<|from|>" will be added later
+        if (turns[0].find("<|recipient|>") == std::string::npos) {
+            turns[0] = "assistant\n<|recipient|>" + turns[0];
+        }
+    }
     for (auto & turn : turns) {
         std::string turn_full = "<|from|>" + turn;
         message msg(turn_full);

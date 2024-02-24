@@ -2773,15 +2773,16 @@ int main(int argc, char **argv)
         LOG_INFO("model loaded", {});
     }
 
-    if (sparams.chat_template.empty()) { // custom chat template is not supplied
-        // check if the template comes with the model is supported by us
-        llama.validate_model_chat_template(sparams);
-    }
-
     // Check tool_call ability
     sparams.enable_tool_calls = check_model_support_tool_calls(llama.model);
     if (sparams.enable_tool_calls) {
-        LOG_VERBOSE("Current model supports functionary tool_calls", {});
+        LOG_INFO("Current model supports functionary tool_calls", {});
+    }
+
+    // custom chat template is not supplied
+    if (sparams.chat_template.empty() && !sparams.enable_tool_calls) {
+        // check if the template comes with the model is supported by us
+        llama.validate_model_chat_template(sparams);
     }
 
     // Middleware for API key validation

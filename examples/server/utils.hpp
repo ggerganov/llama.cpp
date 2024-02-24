@@ -219,6 +219,7 @@ inline bool check_model_support_tool_calls(const struct llama_model * model) {
     if (res < 0) {
         return false; // no template in model
     } else {
+        model_template.resize(res);
         std::string tmpl(model_template.data(), model_template.size());
         return tmpl.find("<|recipient|>") != std::string::npos;
     }

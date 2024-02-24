@@ -35,7 +35,7 @@ inline static json oaicompat_completion_params_parse(
     llama_sampling_params default_sparams;
     llama_params["model"]             = json_value(body, "model", std::string("unknown"));
     llama_params["prompt"]            = enable_tool_calls
-        ? llama_functionary::convert_oai_to_prompt(body)
+        ? llama_functionary::convert_oai_to_prompt(body, true)
         : format_chat(model, chat_template, body["messages"]);
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
     llama_params["temperature"]       = json_value(body, "temperature", 0.0);
@@ -67,8 +67,10 @@ inline static json oaicompat_completion_params_parse(
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
-    // Ensure there is ChatML-specific end sequence among stop words
-    llama_params["stop"].push_back("<|im_end|>");
+    llama_params["stop"].push_back(enable_tool_calls
+        ? "<|stop|>" // functionary-specific: this model uses "<|stop|>" instead of "</s>"
+        : "<|im_end|>" // Ensure there is ChatML-specific end sequence among stop words
+    );
 
     return llama_params;
 }
@@ -104,7 +106,7 @@ inline static json format_final_response_oaicompat(
             : json::array({json{{"finish_reason", finish_reason},
                                 {"index", 0},
                                 {"message", json{{"content", content},
-                                                    {"role", "assistant"}}}}});
+                                                 {"role", "assistant"}}}}});
     }
 
     std::time_t t = std::time(0);

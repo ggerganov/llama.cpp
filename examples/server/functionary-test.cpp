@@ -93,11 +93,7 @@ std::string test_oai_input_json = R"(
 )";
 
 
-std::string test_response = R"(<|from|>assistant
-<|recipient|>all
-<|content|>I will get the price of 2 cars and compare
-<|from|>assistant
-<|recipient|>get_car_price
+std::string test_response = R"(get_car_price
 <|content|>{"car_name": "Song"}
 <|from|>assistant
 <|recipient|>get_car_price
@@ -105,7 +101,7 @@ std::string test_response = R"(<|from|>assistant
 
 int main() {
     auto test_oai_input = json::parse(test_oai_input_json);
-    auto prompt = llama_functionary::convert_oai_to_prompt(test_oai_input);
+    auto prompt = llama_functionary::convert_oai_to_prompt(test_oai_input, true);
     std::cout << "\n" << prompt << "\n";
 
     std::cout << "\n" << llama_functionary::convert_response_to_oai_choices(test_response) << "\n";
