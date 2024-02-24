@@ -32,9 +32,9 @@ extern bool server_verbose;
     } while (0)
 #endif
 
-#define LOG_ERROR(  MSG, ...) server_log("ERROR",   __func__, __LINE__, MSG, __VA_ARGS__)
-#define LOG_WARNING(MSG, ...) server_log("WARNING", __func__, __LINE__, MSG, __VA_ARGS__)
-#define LOG_INFO(   MSG, ...) server_log("INFO",    __func__, __LINE__, MSG, __VA_ARGS__)
+#define LOG_ERROR(  MSG, ...) server_log("ERR",  __func__, __LINE__, MSG, __VA_ARGS__)
+#define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
+#define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
 //
 // parallel
@@ -136,19 +136,25 @@ struct completion_token_output
 static inline void server_log(const char *level, const char *function, int line,
                        const char *message, const nlohmann::ordered_json &extra)
 {
-    nlohmann::ordered_json log
-    {
-        {"timestamp", time(nullptr)},
-        {"level",     level},
-        {"function",  function},
-        {"line",      line},
-        {"message",   message},
-    };
+    char buf[1024];
+    snprintf(buf, 1024, "%24s %4s: %-80s", function, level, message);
 
-    auto thread_id = std::this_thread::get_id();
-    std::stringstream ss_thread_id;
-    ss_thread_id << thread_id;
-    log.push_back({"thread_id", ss_thread_id.str()});
+    nlohmann::ordered_json log;
+
+    {
+        std::stringstream ss_thread_id;
+        ss_thread_id << std::this_thread::get_id();
+        log.push_back({"tid", ss_thread_id.str()});
+    }
+
+    log.merge_patch(
+    {
+        //{"timestamp", time(nullptr)},
+        //{"level",     level},
+        //{"function",  function},
+        //{"line",      line},
+        {"msg",   buf},
+    });
 
     if (!extra.empty())
     {

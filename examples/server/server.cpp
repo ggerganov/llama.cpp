@@ -2592,14 +2592,16 @@ static json format_partial_response(
 
 static json format_tokenizer_response(const std::vector<llama_token> &tokens)
 {
-    return json{
-        {"tokens", tokens}};
+    return json {
+        {"tokens", tokens}
+    };
 }
 
 static json format_detokenized_response(std::string content)
 {
-    return json{
-        {"content", content}};
+    return json {
+        {"content", content}
+    };
 }
 
 
