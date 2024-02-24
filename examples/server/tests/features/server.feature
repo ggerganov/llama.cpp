@@ -60,6 +60,19 @@ Feature: llama.cpp server
     """
     Then embeddings are generated
 
+  Scenario: OAI Embeddings compatibility with multiple inputs
+    Given a model tinyllama-2
+    Given a prompt:
+      """
+      In which country Paris is located ?
+      """
+    And a prompt:
+      """
+      Is Madrid the capital of Spain ?
+      """
+    When an OAI compatible embeddings computation request for multiple inputs
+    Then embeddings are generated
+
 
   Scenario: Tokenize / Detokenize
     When tokenizing:
