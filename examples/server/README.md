@@ -98,6 +98,12 @@ curl --request POST \
     --data '{"prompt": "Building a website can be done in 10 simple steps:","n_predict": 128}'
 ```
 
+## Advanced testing
+
+We implemented a [server test framework](./tests/README.md) using human-readable scenario.
+
+*Before submitting an issue, please try to reproduce it with this format.*
+
 ## Node JS Test
 
 You need to have [Node.js](https://nodejs.org/en) installed.
