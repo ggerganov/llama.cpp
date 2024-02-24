@@ -304,7 +304,6 @@ struct llama_server_queue {
     void start_loop() {
         running = true;
         while (true) {
-            // new task will arrive
             LOG_VERBOSE("new task may arrive", {});
             {
                 while (true)
