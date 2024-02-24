@@ -1,6 +1,10 @@
 # Server tests
 
-Python based server tests scenario using [BDD](https://en.wikipedia.org/wiki/Behavior-driven_development) and [behave](https://behave.readthedocs.io/en/latest/).
+Python based server tests scenario using [BDD](https://en.wikipedia.org/wiki/Behavior-driven_development) and [behave](https://behave.readthedocs.io/en/latest/):
+ * [issues.feature](./features/issues.feature) Pending issues scenario
+ * [parallel.feature](./features/parallel.feature) Scenario involving multi slots and concurrent requests
+ * [security.feature](./features/security.feature) Security, CORS and API Key
+ * [server.feature](./features/server.feature) Server base scenario: completion, embedding, tokenization, etc...
 
 Tests target GitHub workflows job runners with 4 vCPU.
 
