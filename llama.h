@@ -64,6 +64,13 @@ extern "C" {
         LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
     };
 
+    enum llama_rope_type {
+        LLAMA_ROPE_TYPE_NONE = -1,
+        LLAMA_ROPE_TYPE      =  0,
+        LLAMA_ROPE_TYPE_NEOX =  2,
+        LLAMA_ROPE_TYPE_GLM  =  4,
+    };
+
     enum llama_token_type {
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
@@ -107,23 +114,23 @@ extern "C" {
     };
 
     enum llama_rope_scaling_type {
-        LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
-        LLAMA_ROPE_SCALING_NONE        = 0,
-        LLAMA_ROPE_SCALING_LINEAR      = 1,
-        LLAMA_ROPE_SCALING_YARN        = 2,
-        LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+        LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED = -1,
+        LLAMA_ROPE_SCALING_TYPE_NONE        = 0,
+        LLAMA_ROPE_SCALING_TYPE_LINEAR      = 1,
+        LLAMA_ROPE_SCALING_TYPE_YARN        = 2,
+        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_YARN,
     };
 
     enum llama_pooling_type {
-        LLAMA_POOLING_NONE = 0,
-        LLAMA_POOLING_MEAN = 1,
-        LLAMA_POOLING_CLS  = 2,
+        LLAMA_POOLING_TYPE_NONE = 0,
+        LLAMA_POOLING_TYPE_MEAN = 1,
+        LLAMA_POOLING_TYPE_CLS  = 2,
     };
 
     enum llama_split_mode {
-        LLAMA_SPLIT_NONE    = 0, // single GPU
-        LLAMA_SPLIT_LAYER   = 1, // split layers and KV across GPUs
-        LLAMA_SPLIT_ROW     = 2, // split rows across GPUs
+        LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
+        LLAMA_SPLIT_MODE_LAYER   = 1, // split layers and KV across GPUs
+        LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
     };
 
     typedef struct llama_token_data {
@@ -358,6 +365,7 @@ extern "C" {
     LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
+    LLAMA_API enum llama_rope_type  llama_rope_type (const struct llama_model * model);
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
@@ -512,7 +520,9 @@ extern "C" {
                     llama_seq_id   seq_id);
 
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
-    // If the KV cache is RoPEd, the KV data is updated accordingly
+    // If the KV cache is RoPEd, the KV data is updated accordingly:
+    //   - lazily on next llama_decode()
+    //   - explicitly with llama_kv_cache_apply()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_add(
@@ -523,7 +533,9 @@ extern "C" {
                        llama_pos   delta);
 
     // Integer division of the positions by factor of `d > 1`
-    // If the KV cache is RoPEd, the KV data is updated accordingly
+    // If the KV cache is RoPEd, the KV data is updated accordingly:
+    //   - lazily on next llama_decode()
+    //   - explicitly with llama_kv_cache_apply()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_div(
@@ -533,7 +545,8 @@ extern "C" {
                        llama_pos   p1,
                              int   d);
 
-    LLAMA_API void llama_kv_cache_apply_k_shift(struct llama_context * ctx);
+    // Apply the KV cache updates (such as K-shifts) to the KV data
+    LLAMA_API void llama_kv_cache_apply(struct llama_context * ctx);
 
     //
     // State / sessions
