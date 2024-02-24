@@ -24,6 +24,7 @@ def step_server_config(context, server_fqdn, server_port):
 
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
+    context.debug = 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON'
     context.model_alias = None
     context.n_ctx = None
     context.n_predict = None
@@ -593,7 +594,8 @@ async def wait_for_health_status(context,
                                  slots_idle=None,
                                  slots_processing=None,
                                  expected_slots=None):
-    print(f"Starting checking for health for expected_health_status={expected_health_status}")
+    if context.debug:
+        print(f"Starting checking for health for expected_health_status={expected_health_status}")
     timeout = 3  # seconds
     interval = 0.5
     counter = 0
@@ -602,8 +604,9 @@ async def wait_for_health_status(context,
             async with await session.get(f'{base_url}/health', params=params) as health_response:
                 status_code = health_response.status
                 health = await health_response.json()
-                print(f"HEALTH - response for expected health status='{expected_health_status}' on "
-                      f"'{base_url}/health'?{params} is {health}")
+                if context.debug:
+                    print(f"HEALTH - response for expected health status='{expected_health_status}' on "
+                          f"'{base_url}/health'?{params} is {health}")
                 if (status_code == expected_http_status_code
                         and health['status'] == expected_health_status
                         and (slots_idle is None or health['slots_idle'] == slots_idle)
@@ -683,7 +686,7 @@ def start_server_background(context):
         server_args.extend(['--n-predict', context.n_server_predict])
     if context.server_api_key is not None:
         server_args.extend(['--api-key', context.server_api_key])
-    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+    if context.debug:
         server_args.append('--verbose')
     print(f"starting server with: {context.server_path}", *server_args)
     context.server_process = subprocess.Popen(
