@@ -15162,6 +15162,11 @@ static ggml_backend_i ggml_backend_sycl_interface = {
     /* .supports_op             = */ ggml_backend_sycl_supports_op,
 };
 
+static ggml_guid_t ggml_backend_sycl_guid() {
+    static ggml_guid guid = { 0x58, 0x05, 0x13, 0x8f, 0xcd, 0x3a, 0x61, 0x9d, 0xe7, 0xcd, 0x98, 0xa9, 0x03, 0xfd, 0x7c, 0x53 };
+    return &guid;
+}
+
 ggml_backend_t ggml_backend_sycl_init(int device) {
     ggml_init_sycl(); // TODO: remove from ggml.c
 
@@ -15179,6 +15184,7 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
     };
 
     ggml_backend_t sycl_backend = new ggml_backend {
+        /* .guid      = */ ggml_backend_sycl_guid(),
         /* .interface = */ ggml_backend_sycl_interface,
         /* .context   = */ ctx
     };
@@ -15187,7 +15193,7 @@ ggml_backend_t ggml_backend_sycl_init(int device) {
 }
 
 bool ggml_backend_is_sycl(ggml_backend_t backend) {
-    return backend->iface.get_name == ggml_backend_sycl_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_sycl_guid());
 }
 
 static ggml_backend_t ggml_backend_reg_sycl_init(const char * params, void * user_data) {

@@ -355,6 +355,10 @@ void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int n) {
     }
 }
 
+bool ggml_guid_matches(ggml_guid_t guid_a, ggml_guid_t guid_b) {
+    return memcmp(guid_a, guid_b, sizeof(ggml_guid)) == 0;
+}
+
 //
 // timing
 //

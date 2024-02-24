@@ -12277,6 +12277,11 @@ static ggml_backend_i ggml_backend_cuda_interface = {
     /* .supports_op             = */ ggml_backend_cuda_supports_op,
 };
 
+static ggml_guid_t ggml_backend_cuda_guid() {
+    static ggml_guid guid = { 0x2c, 0xdd, 0xe8, 0x1c, 0x65, 0xb3, 0x65, 0x73, 0x6a, 0x12, 0x88, 0x61, 0x1c, 0xc9, 0xdc, 0x25 };
+    return &guid;
+}
+
 GGML_CALL ggml_backend_t ggml_backend_cuda_init(int device) {
     ggml_init_cublas(); // TODO: remove from ggml.c
 
@@ -12294,6 +12299,7 @@ GGML_CALL ggml_backend_t ggml_backend_cuda_init(int device) {
     };
 
     ggml_backend_t cuda_backend = new ggml_backend {
+        /* .guid      = */ ggml_backend_cuda_guid(),
         /* .interface = */ ggml_backend_cuda_interface,
         /* .context   = */ ctx
     };
@@ -12302,7 +12308,7 @@ GGML_CALL ggml_backend_t ggml_backend_cuda_init(int device) {
 }
 
 GGML_CALL bool ggml_backend_is_cuda(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_cuda_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_cuda_guid());
 }
 
 GGML_CALL int ggml_backend_cuda_get_device_count() {
