@@ -1077,7 +1077,7 @@ class StableLMModel(Model):
         self.gguf_writer.add_rope_dimension_count(int(hparams["partial_rotary_factor"] * (hparams["hidden_size"] // hparams["num_attention_heads"])))
         self.gguf_writer.add_head_count(hparams["num_attention_heads"])
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
-        self.gguf_writer.add_layer_norm_eps(1e-5)
+        self.gguf_writer.add_layer_norm_eps(hparams["layer_norm_eps"])
 
 
 class MixtralModel(Model):
