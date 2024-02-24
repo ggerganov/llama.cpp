@@ -145,6 +145,11 @@ static inline void server_log(const char *level, const char *function, int line,
         {"message",   message},
     };
 
+    auto thread_id = std::this_thread::get_id();
+    std::stringstream ss_thread_id;
+    ss_thread_id << thread_id;
+    log.push_back({"thread_id", ss_thread_id.str()});
+
     if (!extra.empty())
     {
         log.merge_patch(extra);
@@ -234,6 +239,7 @@ struct llama_server_queue {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         if (task.id == -1) {
             task.id = id++;
+            LOG_VERBOSE("new task id", {{"new_id", task.id}});
         }
         queue_tasks.push_back(std::move(task));
         condition_tasks.notify_one();
@@ -249,7 +255,9 @@ struct llama_server_queue {
     // Get the next id for creating anew task
     int get_new_id() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
-        return id++;
+        int new_id = id++;
+        LOG_VERBOSE("new task id", {{"new_id", new_id}});
+        return new_id;
     }
 
     // Register function to process a new task
@@ -290,8 +298,8 @@ struct llama_server_queue {
     void start_loop() {
         running = true;
         while (true) {
-            // new task arrived
-            LOG_VERBOSE("have new task", {});
+            // new task will arrive
+            LOG_VERBOSE("new task may arrive", {});
             {
                 while (true)
                 {
@@ -303,7 +311,7 @@ struct llama_server_queue {
                     task_server task = queue_tasks.front();
                     queue_tasks.erase(queue_tasks.begin());
                     lock.unlock();
-                    LOG_VERBOSE("callback_new_task", {});
+                    LOG_VERBOSE("callback_new_task", {{"task_id", task.id}});
                     callback_new_task(task);
                 }
                 LOG_VERBOSE("callback_all_task_finished", {});
@@ -384,11 +392,13 @@ struct llama_server_response {
     std::condition_variable condition_results;
 
     void add_waiting_task_id(int task_id) {
+        LOG_VERBOSE("waiting for task id", {{"task_id", task_id}});
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
     }
 
     void remove_waiting_task_id(int task_id) {
+        LOG_VERBOSE("remove waiting for task id", {{"task_id", task_id}});
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
     }
@@ -401,7 +411,7 @@ struct llama_server_response {
             condition_results.wait(lock, [&]{
                 return !queue_results.empty();
             });
-            LOG_VERBOSE("condition_results unblock", {});
+            LOG_VERBOSE("condition_results unblock", {{"task_id", task_id}});
 
             for (int i = 0; i < (int) queue_results.size(); i++)
             {
@@ -426,20 +436,20 @@ struct llama_server_response {
     // Send a new result to a waiting task_id
     void send(task_result result) {
         std::unique_lock<std::mutex> lock(mutex_results);
-        LOG_VERBOSE("send new result", {});
+        LOG_VERBOSE("send new result", {{"task_id", result.id}});
         for (auto& task_id : waiting_task_ids) {
             // LOG_TEE("waiting task id %i \n", task_id);
             // for now, tasks that have associated parent multitasks just get erased once multitask picks up the result
             if (result.multitask_id == task_id)
             {
-                LOG_VERBOSE("callback_update_multitask", {});
+                LOG_VERBOSE("callback_update_multitask", {{"task_id", task_id}});
                 callback_update_multitask(task_id, result.id, result);
                 continue;
             }
 
             if (result.id == task_id)
             {
-                LOG_VERBOSE("queue_results.push_back", {});
+                LOG_VERBOSE("queue_results.push_back", {{"task_id", task_id}});
                 queue_results.push_back(result);
                 condition_results.notify_one();
                 return;
