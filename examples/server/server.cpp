@@ -2086,9 +2086,9 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             std::string value(argv[i]);
-            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_NONE; }
-            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_LINEAR; }
-            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_YARN; }
+            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_NONE; }
+            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_LINEAR; }
+            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
             else { invalid_param = true; break; }
         }
         else if (arg == "--rope-freq-base")
@@ -2212,15 +2212,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             std::string arg_next = argv[i];
             if (arg_next == "none")
             {
-                params.split_mode = LLAMA_SPLIT_NONE;
+                params.split_mode = LLAMA_SPLIT_MODE_NONE;
             }
             else if (arg_next == "layer")
             {
-                params.split_mode = LLAMA_SPLIT_LAYER;
+                params.split_mode = LLAMA_SPLIT_MODE_LAYER;
             }
             else if (arg_next == "row")
             {
-                params.split_mode = LLAMA_SPLIT_ROW;
+                params.split_mode = LLAMA_SPLIT_MODE_ROW;
             }
             else {
                 invalid_param = true;
@@ -2447,15 +2447,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             sep++;
             if (strncmp(sep, "int:", 4) == 0) {
                 sep += 4;
-                kvo.tag = LLAMA_KV_OVERRIDE_INT;
+                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
                 kvo.int_value = std::atol(sep);
             } else if (strncmp(sep, "float:", 6) == 0) {
                 sep += 6;
-                kvo.tag = LLAMA_KV_OVERRIDE_FLOAT;
+                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
                 kvo.float_value = std::atof(sep);
             } else if (strncmp(sep, "bool:", 5) == 0) {
                 sep += 5;
-                kvo.tag = LLAMA_KV_OVERRIDE_BOOL;
+                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
                 if (std::strcmp(sep, "true") == 0) {
                     kvo.bool_value = true;
                 } else if (std::strcmp(sep, "false") == 0) {
