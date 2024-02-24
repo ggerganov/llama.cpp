@@ -524,7 +524,7 @@ extern "C" {
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
     // If the KV cache is RoPEd, the KV data is updated accordingly:
     //   - lazily on next llama_decode()
-    //   - explicitly with llama_kv_cache_apply()
+    //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_add(
@@ -537,7 +537,7 @@ extern "C" {
     // Integer division of the positions by factor of `d > 1`
     // If the KV cache is RoPEd, the KV data is updated accordingly:
     //   - lazily on next llama_decode()
-    //   - explicitly with llama_kv_cache_apply()
+    //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_div(
@@ -548,7 +548,7 @@ extern "C" {
                              int   d);
 
     // Apply the KV cache updates (such as K-shifts) to the KV data
-    LLAMA_API void llama_kv_cache_apply(struct llama_context * ctx);
+    LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
     //
     // State / sessions

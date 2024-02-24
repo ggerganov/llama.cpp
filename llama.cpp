@@ -7851,7 +7851,7 @@ static int llama_decode_internal(
 
     //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
-    llama_kv_cache_apply(&lctx);
+    llama_kv_cache_update(&lctx);
 
     ggml_backend_sched_reset(lctx.sched);
     ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
@@ -7989,7 +7989,7 @@ static int llama_decode_internal(
     return 0;
 }
 
-static void llama_kv_cache_apply_internal(struct llama_context & lctx) {
+static void llama_kv_cache_update_internal(struct llama_context & lctx) {
     // apply K-shift if needed
     if (lctx.model.hparams.rope_type != LLAMA_ROPE_TYPE_NONE && lctx.kv_self.has_shift) {
         llama_set_k_shift(lctx);
@@ -12056,8 +12056,8 @@ void llama_kv_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, lla
     llama_kv_cache_seq_div(ctx->kv_self, seq_id, p0, p1, d);
 }
 
-void llama_kv_cache_apply(struct llama_context * ctx) {
-    llama_kv_cache_apply_internal(*ctx);
+void llama_kv_cache_update(struct llama_context * ctx) {
+    llama_kv_cache_update_internal(*ctx);
 }
 
 
