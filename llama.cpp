@@ -7733,7 +7733,7 @@ static void llama_graph_compute(
           ggml_cgraph * gf,
                   int   n_threads) {
 #ifdef GGML_USE_MPI
-    const int64_t n_layer = lctx.hparams.n_layer;
+    const int64_t n_layer = lctx.model.hparams.n_layer;
     ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
 #endif
 
