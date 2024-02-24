@@ -547,6 +547,11 @@ extern "C" {
                        llama_pos   p1,
                              int   d);
 
+    // Returns the largest position present in the KV cache for the specified sequence
+    LLAMA_API llama_pos llama_kv_cache_seq_pos_max(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id);
+
     // Apply the KV cache updates (such as K-shifts) to the KV data
     LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 

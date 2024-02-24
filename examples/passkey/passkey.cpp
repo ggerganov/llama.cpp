@@ -150,7 +150,7 @@ int main(int argc, char ** argv) {
             llama_kv_cache_seq_div(ctx, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
             llama_kv_cache_update (ctx);
 
-            n_past -= bd;
+            n_past = llama_kv_cache_seq_pos_max(ctx, 0);
         }
 
         llama_batch_clear(batch);
@@ -184,7 +184,7 @@ int main(int argc, char ** argv) {
         llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
         llama_kv_cache_update (ctx);
 
-        n_past -= n_discard;
+        n_past = llama_kv_cache_seq_pos_max(ctx, 0);
 
         llama_batch_clear(batch);
 
@@ -214,7 +214,7 @@ int main(int argc, char ** argv) {
             llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
             llama_kv_cache_update (ctx);
 
-            n_past -= n_discard;
+            n_past = llama_kv_cache_seq_pos_max(ctx, 0);
         }
     }
 
