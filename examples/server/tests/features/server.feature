@@ -6,6 +6,9 @@ Feature: llama.cpp server
     And   a model file stories260K.gguf
     And   a model alias tinyllama-2
     And   42 as server seed
+      # KV Cache corresponds to the total amount of tokens
+      # that can be stored across all independent sequences: #4130
+      # see --ctx-size and #5568
     And   32 KV cache size
     And   1 slots
     And   embeddings extraction
