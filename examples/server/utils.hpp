@@ -169,7 +169,8 @@ static void server_log(const char *level, const char *function, int line, const 
         ss << buf;
         for (const auto& el : log.items())
         {
-            snprintf(buf, 1024, " %s=%s", el.key().c_str(), el.value().dump().c_str());
+            const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
+            snprintf(buf, 1024, " %s=%s", el.key().c_str(), value.c_str());
             ss << buf;
         }
 
