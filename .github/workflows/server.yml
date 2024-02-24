@@ -1,0 +1,127 @@
+# Server build and tests
+name: Server
+
+on:
+  workflow_dispatch: # allows manual triggering
+  push:
+    branches:
+      - master
+      - test/server-add-ci-test # FIXME remove
+    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        build: [noavx, avx2, avx, avx512, cublas, clblast, openblas, kompute, vulkan]
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [Debug, Release]
+        include:
+          - build: 'noavx'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
+            image: ubuntu:latest
+          - build: 'avx2'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON'
+            image: ubuntu:latest
+          - build: 'avx'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
+            image: ubuntu:latest
+          - build: 'avx512'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON'
+            image: ubuntu:latest
+            experimental: true
+          - build: 'cublas'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON'
+            image: nvidia/cuda:12.3.1-devel-ubuntu22.04
+            arch_not_available: true # require nvidia docker engine
+          - build: 'clblast'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON'
+            image: ubuntu:latest
+            arch_not_available: true
+          - build: 'openblas'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS'
+            image: ubuntu:latest
+          - build: 'kompute'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON'
+            image: ubuntu:latest
+            arch_not_available: true
+          - build: 'vulkan'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_VULKAN=ON'
+            image: ubuntu:latest
+            arch_not_available: true
+
+    container:
+      image: ${{ matrix.image }}
+      ports:
+        - 8888
+      options: --cpus 4
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        run: |
+          apt-get update
+          apt-get -y install \
+            build-essential \
+            pkg-config \
+            git \
+            cmake \
+            python3-pip \
+            wget \
+            psmisc
+
+      - name: Download CLBlast
+        id: get_clblast
+        if: ${{ matrix.build == 'clblast' }}
+        run: |
+          apt install -y libclblast-dev
+
+      - name: Download OpenBLAS
+        id: get_openblas
+        if: ${{ matrix.build == 'openblas' }}
+        run: |
+          apt-get -y install libopenblas-dev
+
+      - name: Install Vulkan SDK
+        id: get_vulkan
+        if: ${{ matrix.build == 'kompute' || matrix.build == 'vulkan' }}
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | tee /etc/apt/trusted.gpg.d/lunarg.asc
+          wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+          apt-get update
+          apt-get -y install vulkan-sdk
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ${{ matrix.defines }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
+
+      - name: Tests dependencies
+        id: test_dependencies
+        run: |
+          pip install -r examples/server/tests/requirements.txt
+
+      - name: Download models
+        id: download_models
+        run: |
+          cd examples/server/tests
+          ../../../scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf
+
+      - name: Tests
+        id: server_integration_test
+        continue-on-error: ${{ matrix.experimental || matrix.arch_not_available }}
+        run: |
+          cd examples/server/tests
+          PORT=8888 ./tests.sh

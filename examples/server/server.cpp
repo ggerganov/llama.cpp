@@ -1410,11 +1410,6 @@ struct llama_server_context
                 int n_processing_slots = 0;
 
                 for (llama_client_slot &slot: slots) {
-                    if (slot.available()) {
-                        n_idle_slots++;
-                    } else {
-                        n_processing_slots++;
-                    }
                     json slot_data = get_formated_generation(slot);
                     slot_data["id"] = slot.id;
                     slot_data["task_id"] = slot.task_id;
@@ -1429,6 +1424,11 @@ struct llama_server_context
                             {"stopped_limit", slot.stopped_limit},
                             {"stopping_word", slot.stopping_word},
                     };
+                    if (slot_data["state"] == IDLE) {
+                        n_idle_slots++;
+                    } else {
+                        n_processing_slots++;
+                    }
                     slots_data.push_back(slot_data);
                 }
                 LOG_TEE("task %i - slots data: idle=%i processing=%i\n", task.id, n_idle_slots, n_processing_slots);
@@ -2748,19 +2748,6 @@ int main(int argc, char **argv)
         log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
     }
 
-    LOG_INFO("HTTP server listening", log_data);
-    // run the HTTP server in a thread - see comment below
-    std::thread t([&]()
-            {
-                if (!svr.listen_after_bind())
-                {
-                    state.store(SERVER_STATE_ERROR);
-                    return 1;
-                }
-
-                return 0;
-            });
-
     // load the model
     if (!llama.load_model(params))
     {
@@ -3227,6 +3214,19 @@ int main(int argc, char **argv)
         }
     }*/
     //);
+
+    LOG_INFO("HTTP server listening", log_data);
+    // run the HTTP server in a thread - see comment below
+    std::thread t([&]()
+            {
+                if (!svr.listen_after_bind())
+                {
+                    state.store(SERVER_STATE_ERROR);
+                    return 1;
+                }
+
+                return 0;
+            });
 
     llama.queue_tasks.on_new_task(std::bind(
         &llama_server_context::process_single_task, &llama, std::placeholders::_1));
