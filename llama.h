@@ -64,6 +64,8 @@ extern "C" {
         LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
     };
 
+    // note: these values should be synchronized with ggml_rope
+    // TODO: maybe move this enum to ggml.h (ggml_rope_type)
     enum llama_rope_type {
         LLAMA_ROPE_TYPE_NONE = -1,
         LLAMA_ROPE_TYPE_NORM =  0,
