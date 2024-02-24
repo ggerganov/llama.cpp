@@ -13,6 +13,13 @@ Note: If the host architecture inference speed is faster than GitHub runners one
 
 ### Run tests
 1. Build the server
+```shell
+cd ../../..
+mkdir build
+cd build
+cmake ../
+cmake --build . --target server
+```
 2. download required models:
    1. `../../../scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf`
 3. Start the test: `./tests.sh`
@@ -20,7 +27,7 @@ Note: If the host architecture inference speed is faster than GitHub runners one
 It's possible to override some scenario steps values with environment variables:
  - `PORT` -> `context.server_port` to set the listening port of the server during scenario, default: `8080`
  - `LLAMA_SERVER_BIN_PATH` -> to change the server binary path, default: `../../../build/bin/server`
- - `DEBUG` -> "ON" to enable server verbose mode `--verbose`
+ - `DEBUG` -> "ON" to enable steps and server verbose mode `--verbose`
 
 ### Run @bug, @wip or @wrong_usage annotated scenario
 
@@ -31,3 +38,5 @@ Feature or Scenario must be annotated with `@llama.cpp` to be included in the de
 
 To run a scenario annotated with `@bug`, start:
 `DEBUG=ON ./tests.sh --no-skipped --tags bug`
+
+After changing logic in `steps.py`, ensure that `@bug` and `@wrong_usage` scenario are updated.
