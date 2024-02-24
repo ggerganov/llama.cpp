@@ -312,6 +312,13 @@ extern "C" {
         const char * content;
     } llama_chat_message;
 
+    struct llama_merge_config {
+        const int i_layer;
+        const float scale1;
+        const float scale2;
+        // TODO add support for embeding and output layers
+    };
+
     // Helpers for getting default parameters
     LLAMA_API struct llama_model_params llama_model_default_params(void);
     LLAMA_API struct llama_context_params llama_context_default_params(void);
@@ -400,6 +407,13 @@ extern "C" {
             const char * fname_inp,
             const char * fname_out,
             const llama_model_quantize_params * params);
+
+    LLAMA_API int32_t llama_merge_models(
+            const char * fname_inp1,
+            const char * fname_inp2,
+            const struct llama_merge_config * configs,
+            const int n_configs,
+            const char * fname_out);
 
     // Apply a LoRA adapter to a loaded model
     // path_base_model is the path to a higher quality model to use as a base for
