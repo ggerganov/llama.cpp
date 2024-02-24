@@ -2605,19 +2605,27 @@ static json format_detokenized_response(std::string content)
 
 static void log_server_request(const httplib::Request &req, const httplib::Response &res)
 {
-    LOG_INFO("request", {
-                            {"remote_addr", req.remote_addr},
-                            {"remote_port", req.remote_port},
-                            {"status", res.status},
-                            {"method", req.method},
-                            {"path", req.path},
-                            {"params", req.params},
-                        });
+    // skip GH copilot requests when using default port
+    if (req.path == "/v1/health" || req.path == "/v1/completions")
+    {
+        return;
+    }
 
-    LOG_VERBOSE("request", {
-                               {"request", req.body},
-                               {"response", res.body},
-                           });
+    LOG_INFO("request",
+            {
+                {"remote_addr", req.remote_addr},
+                {"remote_port", req.remote_port},
+                {"status",      res.status},
+                {"method",      req.method},
+                {"path",        req.path},
+                {"params",      req.params},
+            });
+
+    LOG_VERBOSE("request",
+            {
+                {"request",  req.body},
+                {"response", res.body},
+            });
 }
 
 struct token_translator
