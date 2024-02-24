@@ -46,6 +46,7 @@ struct server_params
 };
 
 bool server_verbose = false;
+bool server_log_json = true;
 
 static size_t common_part(const std::vector<llama_token> &a, const std::vector<llama_token> &b)
 {
@@ -2037,6 +2038,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -ctv TYPE, --cache-type-v TYPE\n");
     printf("                            KV cache data type for V (default: f16)\n");
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
+    printf("  --log-format              log output format: json or text (default: json)\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
     printf("\n");
@@ -2488,6 +2490,27 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.mmproj = argv[i];
+        }
+        else if (arg == "--log-format")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            if (std::strcmp(argv[i], "json") == 0)
+            {
+                server_log_json = true;
+            }
+            else if (std::strcmp(argv[i], "text") == 0)
+            {
+                server_log_json = false;
+            }
+            else
+            {
+                invalid_param = true;
+                break;
+            }
         }
         else if (arg == "--log-disable")
         {

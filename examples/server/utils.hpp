@@ -14,6 +14,7 @@
 using json = nlohmann::json;
 
 extern bool server_verbose;
+extern bool server_log_json;
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -133,36 +134,49 @@ struct completion_token_output
     std::string text_to_send;
 };
 
-static inline void server_log(const char *level, const char *function, int /*line*/, const char *message, const nlohmann::ordered_json &extra)
+static void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
 {
-    char buf[1024];
-    snprintf(buf, 1024, "%24s %4s: %-80s", function, level, message);
+    std::stringstream ss_tid;
+    ss_tid << std::this_thread::get_id();
+    json log = nlohmann::ordered_json{
+        {"tid", ss_tid.str()},
+        {"timestamp", time(nullptr)},
+    };
 
-    nlohmann::ordered_json log;
+    if (server_log_json) {
+        log.merge_patch(
+                {
+                        {"level",     level},
+                        {"function",  function},
+                        {"line",      line},
+                        {"msg",       message},
+                });
+        if (!extra.empty()) {
+            log.merge_patch(extra);
+        }
 
-    {
-        std::stringstream ss_thread_id;
-        ss_thread_id << std::this_thread::get_id();
-        log.push_back({"tid", ss_thread_id.str()});
+        const std::string str = log.dump(-1, ' ', false, json::error_handler_t::replace);
+        printf("%.*s\n", (int)str.size(), str.data());
+        fflush(stdout);
+    } else {
+        char buf[1024];
+        snprintf(buf, 1024, "%24s %4s: %-80s", function, level, message);
+
+        if (!extra.empty()) {
+            log.merge_patch(extra);
+        }
+        std::stringstream ss;
+        ss << buf;
+        for (const auto& el : log.items())
+        {
+            snprintf(buf, 1024, " %s=%s", el.key().c_str(), el.value().dump().c_str());
+            ss << buf;
+        }
+
+        const std::string str = ss.str();
+        printf("%.*s\n", (int)str.size(), str.data());
+        fflush(stdout);
     }
-
-    log.merge_patch(
-    {
-        //{"timestamp", time(nullptr)},
-        //{"level",     level},
-        //{"function",  function},
-        //{"line",      line},
-        {"msg",   buf},
-    });
-
-    if (!extra.empty())
-    {
-        log.merge_patch(extra);
-    }
-
-    const std::string str = log.dump(-1, ' ', false, json::error_handler_t::replace);
-    printf("%.*s\n", (int)str.size(), str.data());
-    fflush(stdout);
 }
 
 //
