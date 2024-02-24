@@ -133,8 +133,7 @@ struct completion_token_output
     std::string text_to_send;
 };
 
-static inline void server_log(const char *level, const char *function, int line,
-                       const char *message, const nlohmann::ordered_json &extra)
+static inline void server_log(const char *level, const char *function, int /*line*/, const char *message, const nlohmann::ordered_json &extra)
 {
     char buf[1024];
     snprintf(buf, 1024, "%24s %4s: %-80s", function, level, message);
