@@ -28,7 +28,7 @@ extern bool server_log_json;
     {                                                                    \
         if (server_verbose)                                              \
         {                                                                \
-            server_log("VERBOSE", __func__, __LINE__, MSG, __VA_ARGS__); \
+            server_log("VERB", __func__, __LINE__, MSG, __VA_ARGS__); \
         }                                                                \
     } while (0)
 #endif
