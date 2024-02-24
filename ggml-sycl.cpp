@@ -14366,7 +14366,7 @@ bool ggml_sycl_compute_forward(struct ggml_compute_params * params, struct ggml_
     if (params->ith != 0) {
         return true;
     }
-    if (params->type == GGML_TASK_TYPE_TYPE_INIT || params->type == GGML_TASK_TYPE_TYPE_FINALIZE) {
+    if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
         return true;
     }
     func(tensor->src[0], tensor->src[1], tensor);
