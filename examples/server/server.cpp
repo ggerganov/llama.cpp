@@ -760,7 +760,7 @@ struct llama_server_context
                     img_sl.img_data = clip_image_u8_init();
                     if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
                     {
-                        LOG_WARNING("failed to load image", {
+                        LOG_ERROR("failed to load image", {
                             {"slot_id",   slot->id},
                             {"img_sl_id", img_sl.id}
                         });
@@ -1812,7 +1812,13 @@ struct llama_server_context
 
                     if (has_images && !ingest_images(slot, n_batch))
                     {
-                        LOG_WARNING("failed processing images", {});
+                        LOG_ERROR("failed processing images", {
+                            "slot_id", slot.id,
+                            "task_id", slot.task_id,
+                        });
+                        // FIXME @phymbert: to be properly tested
+                        //  early returning without changing the slot state will block the slot for ever
+                        // no one at the moment is checking the return value
                         return false;
                     }
 
