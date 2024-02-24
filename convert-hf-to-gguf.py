@@ -192,7 +192,7 @@ class Model:
             return RefactModel
         if model_architecture == "PersimmonForCausalLM":
             return PersimmonModel
-        if model_architecture in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
+        if model_architecture in ("StableLmForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return StableLMModel
         if model_architecture == "QWenLMHeadModel":
             return QwenModel
@@ -253,7 +253,7 @@ class Model:
             return gguf.MODEL_ARCH.REFACT
         if arch == "PersimmonForCausalLM":
             return gguf.MODEL_ARCH.PERSIMMON
-        if arch in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
+        if arch in ("StableLmForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return gguf.MODEL_ARCH.STABLELM
         if arch == "QWenLMHeadModel":
             return gguf.MODEL_ARCH.QWEN
@@ -1074,7 +1074,7 @@ class StableLMModel(Model):
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
-        self.gguf_writer.add_rope_dimension_count(int(hparams["rope_pct"] * (hparams["hidden_size"] // hparams["num_attention_heads"])))
+        self.gguf_writer.add_rope_dimension_count(int(hparams["partial_rotary_factor"] * (hparams["hidden_size"] // hparams["num_attention_heads"])))
         self.gguf_writer.add_head_count(hparams["num_attention_heads"])
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(1e-5)
