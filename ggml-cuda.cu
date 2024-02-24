@@ -10804,7 +10804,7 @@ GGML_CALL bool ggml_cuda_compute_forward(struct ggml_compute_params * params, st
     if (params->ith != 0) {
         return true;
     }
-    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
+    if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
         return true;
     }
     func(tensor->src[0], tensor->src[1], tensor);
@@ -11475,7 +11475,7 @@ GGML_CALL static bool ggml_backend_cuda_graph_compute(ggml_backend_t backend, gg
     ggml_cuda_set_main_device(cuda_ctx->device);
 
     ggml_compute_params params = {};
-    params.type = GGML_TASK_COMPUTE;
+    params.type = GGML_TASK_TYPE_COMPUTE;
     params.ith = 0;
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_tensor * node = cgraph->nodes[i];
