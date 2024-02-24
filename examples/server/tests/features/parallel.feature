@@ -8,6 +8,7 @@ Feature: Parallel
     And   42 as server seed
     And   64 KV cache size
     And   2 slots
+    And   embeddings extraction
     And   continuous batching
     Then  the server is starting
     Then  the server is healthy
@@ -75,3 +76,48 @@ Feature: Parallel
     Then the server is busy
     Then the server is idle
     Then all prompts are predicted
+
+  Scenario: Multi users embeddings
+    Given a prompt:
+      """
+      Write a very long story about AI.
+      """
+    And a prompt:
+      """
+      Write another very long music lyrics.
+      """
+    And a prompt:
+      """
+      Write a very long poem.
+      """
+    And a prompt:
+      """
+      Write a very long joke.
+      """
+    Given concurrent embedding requests
+    Then the server is busy
+    Then the server is idle
+    Then all embeddings are generated
+
+  Scenario: Multi users OAI compatibility embeddings
+    Given a prompt:
+      """
+      In which country Paris is located ?
+      """
+    And a prompt:
+      """
+      Is Madrid the capital of Spain ?
+      """
+    And a prompt:
+      """
+      What is the biggest US city ?
+      """
+    And a prompt:
+      """
+      What is the capital of Bulgaria ?
+      """
+    And   a model tinyllama-2
+    Given concurrent OAI embedding requests
+    Then the server is busy
+    Then the server is idle
+    Then all embeddings are generated
