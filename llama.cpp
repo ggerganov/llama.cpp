@@ -11792,8 +11792,10 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         // all model arches should be listed explicitly here
         case LLM_ARCH_UNKNOWN:
             GGML_ASSERT(false && "unknown architecture");
-            return LLAMA_ROPE_TYPE_NONE;
+            break;
     }
+
+    return LLAMA_ROPE_TYPE_NONE;
 }
 
 int32_t llama_n_vocab(const struct llama_model * model) {
