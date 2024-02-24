@@ -295,9 +295,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             std::string value(argv[i]);
-            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_NONE; }
-            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_LINEAR; }
-            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
+            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_NONE; }
+            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_LINEAR; }
+            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_YARN; }
             else { invalid_param = true; break; }
         } else if (arg == "--rope-scale") {
             if (++i >= argc) {
@@ -630,11 +630,11 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             }
             std::string arg_next = argv[i];
             if (arg_next == "none") {
-                params.split_mode = LLAMA_SPLIT_MODE_NONE;
+                params.split_mode = LLAMA_SPLIT_NONE;
             } else if (arg_next == "layer") {
-                params.split_mode = LLAMA_SPLIT_MODE_LAYER;
+                params.split_mode = LLAMA_SPLIT_LAYER;
             } else if (arg_next == "row") {
-                params.split_mode = LLAMA_SPLIT_MODE_ROW;
+                params.split_mode = LLAMA_SPLIT_ROW;
             } else {
                 invalid_param = true;
                 break;

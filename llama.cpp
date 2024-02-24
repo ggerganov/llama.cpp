@@ -850,9 +850,9 @@ struct LLM_TN {
 //
 
 static std::map<int32_t, const char *> LLAMA_ROPE_SCALING_TYPES = {
-    { LLAMA_ROPE_SCALING_TYPE_NONE,   "none"   },
-    { LLAMA_ROPE_SCALING_TYPE_LINEAR, "linear" },
-    { LLAMA_ROPE_SCALING_TYPE_YARN,   "yarn"   },
+    { LLAMA_ROPE_SCALING_NONE,   "none"   },
+    { LLAMA_ROPE_SCALING_LINEAR, "linear" },
+    { LLAMA_ROPE_SCALING_YARN,   "yarn"   },
 };
 
 static int32_t llama_rope_scaling_type_from_string(const std::string & name) {
@@ -862,7 +862,7 @@ static int32_t llama_rope_scaling_type_from_string(const std::string & name) {
         }
     }
 
-    return LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
+    return LLAMA_ROPE_SCALING_UNSPECIFIED;
 }
 
 static std::string gguf_data_to_str(enum gguf_type type, const void * data, int i) {
@@ -1581,7 +1581,7 @@ struct llama_hparams {
     bool causal_attn = true;
     bool need_kq_pos = false;
 
-    enum llama_pooling_type pooling_type = LLAMA_POOLING_TYPE_NONE;
+    enum llama_pooling_type pooling_type = LLAMA_POOLING_NONE;
     enum llama_rope_type    rope_type    = LLAMA_ROPE_TYPE_NONE;
 
     bool operator!=(const llama_hparams & other) const {
@@ -3007,7 +3007,7 @@ static void llm_load_hparams(
     std::string rope_scaling("linear");
     ml.get_key(LLM_KV_ROPE_SCALING_TYPE, rope_scaling, false);
     hparams.rope_scaling_type_train = llama_rope_scaling_type_from_string(rope_scaling);
-    GGML_ASSERT(hparams.rope_scaling_type_train != LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED);
+    GGML_ASSERT(hparams.rope_scaling_type_train != LLAMA_ROPE_SCALING_UNSPECIFIED);
 
     // rope_freq_scale (inverse of the kv) is optional
     float ropescale = 0.0f;
@@ -3655,7 +3655,7 @@ static bool llm_load_tensors(
         model.buft_layer[i] = llama_default_buffer_type_cpu(true);
     }
 
-    if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
+    if (split_mode == LLAMA_SPLIT_LAYER) {
         // calculate the split points
         int device_count = llama_get_device_count();
         bool all_zero = tensor_split == nullptr || std::all_of(tensor_split, tensor_split + device_count, [](float x) { return x == 0.0f; });
@@ -3694,10 +3694,10 @@ static bool llm_load_tensors(
         }
     } else {
         ggml_backend_buffer_type_t split_buft;
-        if (split_mode == LLAMA_SPLIT_MODE_ROW) {
+        if (split_mode == LLAMA_SPLIT_ROW) {
             split_buft = llama_default_buffer_type_split(main_gpu, tensor_split);
         } else {
-            // LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_LAYER in backends where it is not supported
+            // LLAMA_SPLIT_NONE or LLAMA_SPLIT_LAYER in backends where it is not supported
             split_buft = llama_default_buffer_type_offload(main_gpu);
         }
         // assign the repeating layers
@@ -5028,7 +5028,7 @@ struct llm_build_context {
         n_kv             (worst_case ? n_ctx            : kv_self.n),
         kv_head          (worst_case ? n_ctx - n_tokens : kv_self.head),
         n_orig_ctx       (cparams.n_yarn_orig_ctx),
-        pooling_type     (cparams.do_pooling ? hparams.pooling_type : LLAMA_POOLING_TYPE_NONE),
+        pooling_type     (cparams.do_pooling ? hparams.pooling_type : LLAMA_POOLING_NONE),
         rope_type        (hparams.rope_type),
         cb               (cb),
         buf_compute_meta (lctx.buf_compute_meta) {
@@ -6011,12 +6011,12 @@ struct llm_build_context {
         cur = inpL;
 
         // pooling layer
-        if (pooling_type == LLAMA_POOLING_TYPE_MEAN) {
+        if (pooling_type == LLAMA_POOLING_MEAN) {
             cur = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), inp_mean);
-        } else if (pooling_type == LLAMA_POOLING_TYPE_CLS) {
+        } else if (pooling_type == LLAMA_POOLING_CLS) {
             cur = ggml_get_rows(ctx0, cur, inp_cls);
         } else {
-            GGML_ASSERT(pooling_type == LLAMA_POOLING_TYPE_NONE && "Invalid pooling type");
+            GGML_ASSERT(pooling_type == LLAMA_POOLING_NONE && "Invalid pooling type");
         }
         cb(cur, "result_embd", -1);
 
@@ -7684,7 +7684,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_TYPE_MEAN) {
+    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_MEAN) {
         const int64_t n_tokens = batch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_mean->buffer));
@@ -7712,7 +7712,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_TYPE_CLS) {
+    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_CLS) {
         const int64_t n_tokens = batch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_cls->buffer));
@@ -11286,7 +11286,7 @@ static int llama_apply_lora_from_file_internal(
 struct llama_model_params llama_model_default_params() {
     struct llama_model_params result = {
         /*.n_gpu_layers                =*/ 0,
-        /*.split_mode                  =*/ LLAMA_SPLIT_MODE_LAYER,
+        /*.split_mode                  =*/ LLAMA_SPLIT_LAYER,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
         /*.progress_callback           =*/ nullptr,
@@ -11312,7 +11312,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_batch                     =*/ 512,
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
-        /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
+        /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_UNSPECIFIED,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
         /*.yarn_ext_factor             =*/ -1.0f,
@@ -11500,16 +11500,16 @@ struct llama_context * llama_new_context_with_model(
     cparams.cb_eval_user_data = params.cb_eval_user_data;
 
     auto rope_scaling_type = params.rope_scaling_type;
-    if (rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED) {
+    if (rope_scaling_type == LLAMA_ROPE_SCALING_UNSPECIFIED) {
         rope_scaling_type = hparams.rope_scaling_type_train;
     }
 
-    if (rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_NONE) {
+    if (rope_scaling_type == LLAMA_ROPE_SCALING_NONE) {
         cparams.rope_freq_scale = 1.0f; // never scale if scaling type is none
     }
 
     if (cparams.yarn_ext_factor < 0.0f) { // negative indicates 'not set'
-        cparams.yarn_ext_factor = rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_YARN ? 1.0f : 0.0f;
+        cparams.yarn_ext_factor = rope_scaling_type == LLAMA_ROPE_SCALING_YARN ? 1.0f : 0.0f;
     }
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
@@ -11543,8 +11543,8 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_CUBLAS)
         if (model->n_gpu_layers > 0) {
-            // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
-            if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            // with split_mode LLAMA_SPLIT_NONE or LLAMA_SPLIT_ROW, only the main GPU backend is used
+            if (model->split_mode == LLAMA_SPLIT_NONE || model->split_mode == LLAMA_SPLIT_ROW) {
                 ggml_backend_t backend = ggml_backend_cuda_init(model->main_gpu);
                 if (backend == nullptr) {
                     LLAMA_LOG_ERROR("%s: failed to initialize CUDA%d backend\n", __func__, model->main_gpu);
@@ -11553,7 +11553,7 @@ struct llama_context * llama_new_context_with_model(
                 }
                 ctx->backends.push_back(backend);
             } else {
-                // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
+                // LLAMA_SPLIT_LAYER requires a backend for each GPU
                 for (int device = 0; device < ggml_backend_cuda_get_device_count(); ++device) {
                     ggml_backend_t backend = ggml_backend_cuda_init(device);
                     if (backend == nullptr) {
