@@ -480,8 +480,6 @@ async def oai_chat_completions(user_prompt,
                                     json=payload,
                                     headers=headers) as response:
                 if enable_streaming:
-                    # FIXME: does not work; the server is generating only one token
-                    print("DEBUG payload", payload)
                     assert response.status == 200
                     assert response.headers['Access-Control-Allow-Origin'] == origin
                     assert response.headers['Content-Type'] == "text/event-stream"
@@ -503,7 +501,6 @@ async def oai_chat_completions(user_prompt,
                             if 'content' in delta:
                                 completion_response['content'] += delta['content']
                                 completion_response['timings']['predicted_n'] += 1
-                            print(f"DEBUG completion_response: {completion_response}")
                 else:
                     if expect_api_error is None or not expect_api_error:
                         assert response.status == 200
