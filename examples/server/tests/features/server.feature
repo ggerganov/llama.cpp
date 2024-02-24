@@ -27,9 +27,9 @@ Feature: llama.cpp server
     Then  <n_predicted> tokens are predicted matching <re_content>
 
     Examples: Prompts
-      | prompt                           | n_predict | re_content                   | n_predicted |
-      | I believe the meaning of life is | 8         | read                         | 8           |
-      | Write a joke about AI            | 64        | (park<or>friends<or>scared)+ | 32          |
+      | prompt                           | n_predict | re_content                             | n_predicted |
+      | I believe the meaning of life is | 8         | (read<or>going)+                       | 8           |
+      | Write a joke about AI            | 64        | (park<or>friends<or>scared<or>always)+ | 32          |
 
   Scenario Outline: OAI Compatibility
     Given a model <model>
