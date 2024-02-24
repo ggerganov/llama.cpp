@@ -11757,31 +11757,40 @@ enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
 
 enum llama_rope_type llama_rope_type(const struct llama_model * model) {
     switch (model->arch) {
-        case LLM_ARCH_LLAMA:      return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_FALCON:     return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_BAICHUAN:   return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_GPT2:       return LLAMA_ROPE_TYPE_NONE;
-        case LLM_ARCH_GPTJ:       return LLAMA_ROPE_TYPE_NONE;
-        case LLM_ARCH_GPTNEOX:    return LLAMA_ROPE_TYPE_NONE;
-        case LLM_ARCH_MPT:        return LLAMA_ROPE_TYPE_NONE;
-        case LLM_ARCH_STARCODER:  return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_PERSIMMON:  return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_REFACT:     return LLAMA_ROPE_TYPE_NONE;
-        case LLM_ARCH_BERT:       return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_NOMIC_BERT: return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_BLOOM:      return LLAMA_ROPE_TYPE_NONE;
-        case LLM_ARCH_STABLELM:   return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_QWEN:       return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_QWEN2:      return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_PHI2:       return LLAMA_ROPE_TYPE_NEOX;
-        case LLM_ARCH_PLAMO:      return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_CODESHELL:  return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_ORION:      return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_INTERNLM2:  return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_MINICPM:    return LLAMA_ROPE_TYPE;
-        case LLM_ARCH_GEMMA:      return LLAMA_ROPE_TYPE;
+        // these models do not use RoPE
+        case LLM_ARCH_GPT2:
+        case LLM_ARCH_GPTJ:
+        case LLM_ARCH_GPTNEOX:
+        case LLM_ARCH_MPT:
+        case LLM_ARCH_REFACT:
+        case LLM_ARCH_BLOOM:
+            return LLAMA_ROPE_TYPE_NONE;
+
+        // use what we call a normal RoPE, operating on pairs of consecutive head values
+        case LLM_ARCH_LLAMA:
+        case LLM_ARCH_BAICHUAN:
+        case LLM_ARCH_STARCODER:
+        case LLM_ARCH_PLAMO:
+        case LLM_ARCH_CODESHELL:
+        case LLM_ARCH_ORION:
+        case LLM_ARCH_INTERNLM2:
+        case LLM_ARCH_MINICPM:
+        case LLM_ARCH_GEMMA:
+            return LLAMA_ROPE_TYPE_NORM;
+
+        // the pairs of head values are offset by n_rot/2
+        case LLM_ARCH_FALCON:
+        case LLM_ARCH_PERSIMMON:
+        case LLM_ARCH_BERT:
+        case LLM_ARCH_NOMIC_BERT:
+        case LLM_ARCH_STABLELM:
+        case LLM_ARCH_QWEN:
+        case LLM_ARCH_QWEN2:
+        case LLM_ARCH_PHI2:
+            return LLAMA_ROPE_TYPE_NEOX;
+
+        // all model arches should be listed explicitly here
         case LLM_ARCH_UNKNOWN:
-        default:
             GGML_ASSERT(false && "unknown architecture");
             return LLAMA_ROPE_TYPE_NONE;
     }
