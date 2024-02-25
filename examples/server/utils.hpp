@@ -390,14 +390,24 @@ struct llama_server_response {
     std::mutex mutex_results;
     std::condition_variable condition_results;
 
+    // add the task_id to the list of tasks waiting for response
     void add_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
     }
 
+    // when thr request is finished, we can remove task associated with it
     void remove_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
+        // also clear pending results, just in case
+        for (int i = 0; i < (int) queue_results.size(); i++)
+        {
+            if (queue_results[i].id == task_id)
+            {
+                queue_results.erase(queue_results.begin() + i);
+            }
+        }
     }
 
     // This function blocks the thread until there is a response for this task_id
@@ -416,10 +426,7 @@ struct llama_server_response {
                 {
                     assert(queue_results[i].multitask_id == -1);
                     task_result res = queue_results[i];
-                    LOG_VERBOSE("got task result", {
-                        {"task_id", res.id},
-                        {"data", res.result_json},
-                    });
+                    LOG_VERBOSE("got task result", {{"task_id", res.id}});
                     queue_results.erase(queue_results.begin() + i);
                     return res;
                 }
