@@ -311,6 +311,39 @@ struct llama_client_slot
     }
 };
 
+struct llama_metrics {
+    uint64_t n_prompt_tokens_processed_total = 0;
+    uint64_t n_tokens_predicted_total        = 0;
+
+    uint64_t n_prompt_tokens_processed = 0;
+    uint64_t t_prompt_processing       = 0;
+
+    uint64_t n_tokens_predicted       = 0;
+    uint64_t t_tokens_generation      = 0;
+
+
+    void on_prompt_eval(const llama_client_slot &slot) {
+        n_prompt_tokens_processed_total += slot.num_prompt_tokens_processed;
+
+        n_prompt_tokens_processed += slot.num_prompt_tokens_processed;
+        t_prompt_processing       += slot.t_prompt_processing;
+    }
+
+    void on_prediction(const llama_client_slot &slot) {
+        n_tokens_predicted_total += slot.n_decoded;
+
+        n_tokens_predicted  += slot.n_decoded;
+        t_tokens_generation += slot.t_token_generation;
+    }
+
+    void reset_bucket() {
+        n_prompt_tokens_processed = 0;
+        t_prompt_processing       = 0;
+        n_tokens_predicted        = 0;
+        t_tokens_generation       = 0;
+    }
+};
+
 struct llama_server_context
 {
     llama_model *model = nullptr;
@@ -345,15 +378,7 @@ struct llama_server_context
     llama_server_queue queue_tasks;
     llama_server_response queue_results;
 
-    // metrics
-    uint64_t n_prompt_tokens_processed_total = 0;
-    uint64_t n_tokens_predicted_total        = 0;
-
-    uint64_t n_prompt_tokens_processed = 0;
-    uint64_t t_prompt_processing       = 0;
-
-    uint64_t n_tokens_predicted       = 0;
-    uint64_t t_tokens_generation      = 0;
+    llama_metrics metrics;
 
     ~llama_server_context()
     {
@@ -1453,24 +1478,20 @@ struct llama_server_context
                         { "processing",                      n_processing_slots },
                         { "deferred",                        queue_tasks.queue_tasks_deferred.size() },
 
-                        { "n_prompt_tokens_processed_total", n_prompt_tokens_processed_total},
-                        { "n_tokens_predicted_total",        n_tokens_predicted_total},
+                        { "n_prompt_tokens_processed_total", metrics.n_prompt_tokens_processed_total},
+                        { "n_tokens_predicted_total",        metrics.n_tokens_predicted_total},
 
-                        { "n_prompt_tokens_processed",       n_prompt_tokens_processed},
-                        { "t_prompt_processing",             t_prompt_processing},
-                        { "n_tokens_predicted",              n_tokens_predicted},
-                        { "t_tokens_generation",             t_tokens_generation},
+                        { "n_prompt_tokens_processed",       metrics.n_prompt_tokens_processed},
+                        { "t_prompt_processing",             metrics.t_prompt_processing},
+                        { "n_tokens_predicted",              metrics.n_tokens_predicted},
+                        { "t_tokens_generation",             metrics.t_tokens_generation},
 
                         { "kv_cache_tokens_count",          llama_get_kv_cache_token_count(ctx)},
                         { "kv_cache_used_cells",            llama_get_kv_cache_used_cells(ctx)},
 
                         { "slots",                          slots_data },
                 };
-                // reset metrics for the next bucket
-                n_prompt_tokens_processed = 0;
-                t_prompt_processing      = 0;
-                n_tokens_predicted       = 0;
-                t_tokens_generation      = 0;
+                metrics.reset_bucket();
                 queue_results.send(res);
             } break;
         }
@@ -1878,7 +1899,7 @@ struct llama_server_context
                 {
                     slot.t_start_genereration = ggml_time_us();
                     slot.t_prompt_processing = (slot.t_start_genereration - slot.t_start_process_prompt) / 1e3;
-                    update_metrics_prompt_eval(slot);
+                    metrics.on_prompt_eval(slot);
                 }
 
                 llama_token_data_array cur_p = { slot.ctx_sampling->cur.data(), slot.ctx_sampling->cur.size(), false };
@@ -1901,7 +1922,7 @@ struct llama_server_context
                     slot.release();
                     slot.print_timings();
                     send_final_response(slot);
-                    update_metrics_prediction(slot);
+                    metrics.on_prediction(slot);
                 }
 
                 slot.i_batch = -1;
@@ -1912,20 +1933,6 @@ struct llama_server_context
 
     void run_on_all_tasks_finished() {
         update_slots();
-    }
-
-    void update_metrics_prompt_eval(const llama_client_slot &slot) {
-        n_prompt_tokens_processed_total += slot.num_prompt_tokens_processed;
-
-        n_prompt_tokens_processed += slot.num_prompt_tokens_processed;
-        t_prompt_processing       += slot.t_prompt_processing;
-    }
-
-    void update_metrics_prediction(const llama_client_slot &slot) {
-        n_tokens_predicted_total += slot.n_decoded;
-
-        n_tokens_predicted  += slot.n_decoded;
-        t_tokens_generation += slot.t_token_generation;
     }
 };
 
