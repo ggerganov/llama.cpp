@@ -116,9 +116,7 @@ Typically finetunes of the base models below are supported as well.
 
 **HTTP server**
 
-We offer a fast, lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server.
-
-[LLaMA.cpp web server](./examples/server) can be used to serve local models and easily connect them to existing clients.
+[llama.cpp web server](./examples/server) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
 **Bindings:**
 
