@@ -2082,7 +2082,13 @@ static bool ggml_metal_graph_compute(
                         // skip 3, n_ctx, used in GLM RoPE, unimplemented in metal
                         const int n_orig_ctx = ((int32_t *) dst->op_params)[4];
 
-                        float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
+                        float freq_base;
+                        float freq_scale;
+                        float ext_factor;
+                        float attn_factor;
+                        float beta_fast;
+                        float beta_slow;
+
                         memcpy(&freq_base,   (int32_t *) dst->op_params +  5, sizeof(float));
                         memcpy(&freq_scale,  (int32_t *) dst->op_params +  6, sizeof(float));
                         memcpy(&ext_factor,  (int32_t *) dst->op_params +  7, sizeof(float));

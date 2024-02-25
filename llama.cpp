@@ -1699,8 +1699,8 @@ struct llama_layer {
 };
 
 struct llama_kv_cell {
-    llama_pos pos   = -1;
-    llama_pos delta = 0;
+    float pos   = -1.0f;
+    float delta =  0.0f;
 
     std::set<llama_seq_id> seq_id;
 
@@ -1939,10 +1939,10 @@ struct llama_context {
     ggml_context * ctx_input = nullptr;
     struct ggml_tensor * inp_tokens;    // I32 [n_batch]
     struct ggml_tensor * inp_embd;      // F32 [n_embd, n_batch]
-    struct ggml_tensor * inp_pos;       // I32 [n_batch]
+    struct ggml_tensor * inp_pos;       // F32 [n_batch]
     struct ggml_tensor * inp_KQ_mask;   // F32 [n_ctx, n_batch]
     struct ggml_tensor * inp_KQ_pos;    // F32 [n_ctx]
-    struct ggml_tensor * inp_K_shift;   // I32 [n_ctx]
+    struct ggml_tensor * inp_K_shift;   // F32 [n_ctx]
     struct ggml_tensor * inp_mean;      // F32 [n_batch, n_batch]
     struct ggml_tensor * inp_cls;       // I32 [n_batch]
 
@@ -2222,7 +2222,7 @@ static void llama_kv_cache_seq_div(
                  llama_seq_id   seq_id,
                     llama_pos   p0,
                     llama_pos   p1,
-                          int   d) {
+                        float   d) {
     if (p0 < 0) p0 = 0;
     if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
 
@@ -5931,9 +5931,10 @@ struct llm_build_context {
 
         // get input vectors with right size
         const size_t stride1 = n_tokens * ggml_type_size(lctx.inp_tokens->type);
-        struct ggml_tensor * inp_pos = ggml_view_1d(ctx0, lctx.inp_pos, n_tokens, 0);
+
+        struct ggml_tensor * inp_pos  = ggml_view_1d(ctx0, lctx.inp_pos,  n_tokens, 0);
         struct ggml_tensor * inp_mean = ggml_view_2d(ctx0, lctx.inp_mean, n_tokens, n_tokens, stride1, 0);
-        struct ggml_tensor * inp_cls = ggml_view_1d(ctx0, lctx.inp_cls, n_tokens, 0);
+        struct ggml_tensor * inp_cls  = ggml_view_1d(ctx0, lctx.inp_cls,  n_tokens, 0);
 
         // construct input embeddings (token, type, position)
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
@@ -5941,8 +5942,9 @@ struct llm_build_context {
         // token types are hardcoded to zero ("Sentence A")
         struct ggml_tensor * type_row0 = ggml_view_1d(ctx0, model.type_embd, n_embd, 0);
         inpL = ggml_add(ctx0, inpL, type_row0);
+
         if (model.arch == LLM_ARCH_BERT) {
-            inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.pos_embd, inp_pos), inpL);
+            inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.pos_embd, ggml_cast(ctx0, inp_pos, GGML_TYPE_I32)), inpL);
         }
         cb(inpL, "inp_embd", -1);
 
@@ -7747,7 +7749,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
         assert(ggml_backend_buffer_is_host(lctx.inp_K_shift->buffer));
 
-        int32_t * data = (int32_t *) lctx.inp_K_shift->data;
+        float * data = (float *) lctx.inp_K_shift->data;
 
         for (int i = 0; i < n_ctx; ++i) {
             data[i] = lctx.kv_self.cells[i].delta;
@@ -11714,10 +11716,10 @@ struct llama_context * llama_new_context_with_model(
 
             ctx->inp_tokens  = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
             ctx->inp_embd    = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, hparams.n_embd, cparams.n_batch);
-            ctx->inp_pos     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
+            ctx->inp_pos     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch);
             ctx->inp_KQ_mask = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx, cparams.n_batch);
             ctx->inp_KQ_pos  = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx);
-            ctx->inp_K_shift = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_ctx);
+            ctx->inp_K_shift = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx);
             ctx->inp_mean    = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch, cparams.n_batch);
             ctx->inp_cls     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
 
@@ -12070,7 +12072,7 @@ void llama_kv_cache_seq_shift(struct llama_context * ctx, llama_seq_id seq_id, l
     llama_kv_cache_seq_shift(ctx->kv_self, seq_id, p0, p1, delta);
 }
 
-void llama_kv_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
+void llama_kv_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, float d) {
     if (d == 1) {
         return;
     }
@@ -12485,7 +12487,7 @@ int llama_eval_embd(
                          int32_t   n_past) {
     llama_kv_cache_seq_rm(ctx->kv_self, -1, n_past, -1);
 
-    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, nullptr, n_past, 1, 0, };
+    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, nullptr, (float) n_past, 1, 0, };
 
     const int ret = llama_decode_internal(*ctx, batch);
     if (ret < 0) {

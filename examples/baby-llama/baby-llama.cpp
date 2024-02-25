@@ -1015,9 +1015,9 @@ static struct ggml_tensor * forward_lora(
     struct ggml_tensor * kc = kv_self.k;
     struct ggml_tensor * vc = kv_self.v;
 
-    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, N);
     {
-        int * data = (int *) KQ_pos->data;
+        float * data = (float *) KQ_pos->data;
         for (int i = 0; i < N; ++i) {
             data[i] = n_past + i;
         }

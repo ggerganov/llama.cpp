@@ -54,7 +54,7 @@ extern "C" {
     struct llama_model;
     struct llama_context;
 
-    typedef int32_t llama_pos;
+    typedef float   llama_pos;
     typedef int32_t llama_token;
     typedef int32_t llama_seq_id;
 
@@ -533,7 +533,7 @@ extern "C" {
                     llama_seq_id   seq_id,
                        llama_pos   p0,
                        llama_pos   p1,
-                             int   d);
+                           float   d);
 
     //
     // State / sessions

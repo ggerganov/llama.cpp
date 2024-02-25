@@ -129,7 +129,7 @@ actor LlamaContext {
 
         for i1 in 0..<tokens_list.count {
             let i = Int(i1)
-            llama_batch_add(&batch, tokens_list[i], Int32(i), [0], false)
+            llama_batch_add(&batch, tokens_list[i], llama_pos(i), [0], false)
         }
         batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
@@ -183,7 +183,7 @@ actor LlamaContext {
         // tokens_list.append(new_token_id)
 
         llama_batch_clear(&batch)
-        llama_batch_add(&batch, new_token_id, n_cur, [0], true)
+        llama_batch_add(&batch, new_token_id, llama_pos(n_cur), [0], true)
 
         n_decode += 1
         n_cur    += 1
@@ -210,7 +210,7 @@ actor LlamaContext {
             let n_tokens = pp
 
             for i in 0..<n_tokens {
-                llama_batch_add(&batch, 0, Int32(i), [0], false)
+                llama_batch_add(&batch, 0, llama_pos(i), [0], false)
             }
             batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
@@ -234,7 +234,7 @@ actor LlamaContext {
                 llama_batch_clear(&batch)
 
                 for j in 0..<pl {
-                    llama_batch_add(&batch, 0, Int32(i), [Int32(j)], true)
+                    llama_batch_add(&batch, 0, llama_pos(i), [Int32(j)], true)
                 }
 
                 if llama_decode(context, batch) != 0 {

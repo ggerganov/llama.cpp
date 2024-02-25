@@ -355,6 +355,18 @@ void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int n) {
     }
 }
 
+static void ggml_i32_to_f32_row(const int32_t * x, float * y, int n) {
+    for (int i = 0; i < n; i++) {
+        y[i] = (float) x[i];
+    }
+}
+
+static void ggml_f32_to_i32_row(const float * x, int32_t * y, int n) {
+    for (int i = 0; i < n; i++) {
+        y[i] = (int32_t) x[i];
+    }
+}
+
 //
 // timing
 //
@@ -454,6 +466,9 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = 1,
         .type_size                = sizeof(int32_t),
         .is_quantized             = false,
+        .to_float                 = (ggml_to_float_t)   ggml_i32_to_f32_row,
+        .from_float               = (ggml_from_float_t) ggml_f32_to_i32_row,
+        .from_float_reference     = (ggml_from_float_t) ggml_f32_to_i32_row,
     },
     [GGML_TYPE_F32] = {
         .type_name                = "f32",
@@ -469,10 +484,10 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = 1,
         .type_size                = sizeof(ggml_fp16_t),
         .is_quantized             = false,
-        .to_float                 = (ggml_to_float_t) ggml_fp16_to_fp32_row,
+        .to_float                 = (ggml_to_float_t)   ggml_fp16_to_fp32_row,
         .from_float               = (ggml_from_float_t) ggml_fp32_to_fp16_row,
         .from_float_reference     = (ggml_from_float_t) ggml_fp32_to_fp16_row,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f16,
+        .vec_dot                  = (ggml_vec_dot_t)    ggml_vec_dot_f16,
         .vec_dot_type             = GGML_TYPE_F16,
         .nrows                    = 1,
     },
@@ -481,8 +496,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK4_0,
         .type_size                = sizeof(block_q4_0),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q4_0,
-        .from_float               = quantize_row_q4_0,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q4_0,
+        .from_float               = (ggml_from_float_t) quantize_row_q4_0,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q4_0_reference,
         .vec_dot                  = ggml_vec_dot_q4_0_q8_0,
         .vec_dot_type             = GGML_TYPE_Q8_0,
@@ -497,8 +512,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK4_1,
         .type_size                = sizeof(block_q4_1),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q4_1,
-        .from_float               = quantize_row_q4_1,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q4_1,
+        .from_float               = (ggml_from_float_t) quantize_row_q4_1,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q4_1_reference,
         .vec_dot                  = ggml_vec_dot_q4_1_q8_1,
         .vec_dot_type             = GGML_TYPE_Q8_1,
@@ -537,8 +552,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK5_0,
         .type_size                = sizeof(block_q5_0),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q5_0,
-        .from_float               = quantize_row_q5_0,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q5_0,
+        .from_float               = (ggml_from_float_t) quantize_row_q5_0,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q5_0_reference,
         .vec_dot                  = ggml_vec_dot_q5_0_q8_0,
         .vec_dot_type             = GGML_TYPE_Q8_0,
@@ -549,8 +564,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK5_1,
         .type_size                = sizeof(block_q5_1),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q5_1,
-        .from_float               = quantize_row_q5_1,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q5_1,
+        .from_float               = (ggml_from_float_t) quantize_row_q5_1,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q5_1_reference,
         .vec_dot                  = ggml_vec_dot_q5_1_q8_1,
         .vec_dot_type             = GGML_TYPE_Q8_1,
@@ -561,8 +576,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK8_0,
         .type_size                = sizeof(block_q8_0),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q8_0,
-        .from_float               = quantize_row_q8_0,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q8_0,
+        .from_float               = (ggml_from_float_t) quantize_row_q8_0,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q8_0_reference,
         .vec_dot                  = ggml_vec_dot_q8_0_q8_0,
         .vec_dot_type             = GGML_TYPE_Q8_0,
@@ -577,7 +592,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK8_1,
         .type_size                = sizeof(block_q8_1),
         .is_quantized             = true,
-        .from_float               = quantize_row_q8_1,
+        .from_float               = (ggml_from_float_t) quantize_row_q8_1,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q8_1_reference,
         .vec_dot_type             = GGML_TYPE_Q8_1,
         .nrows                    = 1,
@@ -587,8 +602,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK_K,
         .type_size                = sizeof(block_q2_K),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q2_K,
-        .from_float               = quantize_row_q2_K,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q2_K,
+        .from_float               = (ggml_from_float_t) quantize_row_q2_K,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q2_K_reference,
         .vec_dot                  = ggml_vec_dot_q2_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
@@ -599,8 +614,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK_K,
         .type_size                = sizeof(block_q3_K),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q3_K,
-        .from_float               = quantize_row_q3_K,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q3_K,
+        .from_float               = (ggml_from_float_t) quantize_row_q3_K,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q3_K_reference,
         .vec_dot                  = ggml_vec_dot_q3_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
@@ -611,8 +626,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK_K,
         .type_size                = sizeof(block_q4_K),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q4_K,
-        .from_float               = quantize_row_q4_K,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q4_K,
+        .from_float               = (ggml_from_float_t) quantize_row_q4_K,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q4_K_reference,
         .vec_dot                  = ggml_vec_dot_q4_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
@@ -623,8 +638,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK_K,
         .type_size                = sizeof(block_q5_K),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q5_K,
-        .from_float               = quantize_row_q5_K,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q5_K,
+        .from_float               = (ggml_from_float_t) quantize_row_q5_K,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q5_K_reference,
         .vec_dot                  = ggml_vec_dot_q5_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
@@ -635,8 +650,8 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK_K,
         .type_size                = sizeof(block_q6_K),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q6_K,
-        .from_float               = quantize_row_q6_K,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_q6_K,
+        .from_float               = (ggml_from_float_t) quantize_row_q6_K,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q6_K_reference,
         .vec_dot                  = ggml_vec_dot_q6_K_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
@@ -671,9 +686,9 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK_K,
         .type_size                = sizeof(block_iq3_xxs),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_iq3_xxs,
-        .from_float               = quantize_row_iq3_xxs,
-        .from_float_reference     = (ggml_from_float_t)quantize_row_iq3_xxs_reference,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_iq3_xxs,
+        .from_float               = (ggml_from_float_t) quantize_row_iq3_xxs,
+        .from_float_reference     = (ggml_from_float_t) quantize_row_iq3_xxs_reference,
         .vec_dot                  = ggml_vec_dot_iq3_xxs_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
         .nrows                    = 1,
@@ -707,9 +722,9 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = QK4_NL,
         .type_size                = sizeof(block_iq4_nl),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_iq4_nl,
-        .from_float               = quantize_row_iq4_nl,
-        .from_float_reference     = (ggml_from_float_t)quantize_row_iq4_nl_reference,
+        .to_float                 = (ggml_to_float_t)   dequantize_row_iq4_nl,
+        .from_float               = (ggml_from_float_t) quantize_row_iq4_nl,
+        .from_float_reference     = (ggml_from_float_t) quantize_row_iq4_nl_reference,
         .vec_dot                  = ggml_vec_dot_iq4_nl_q8_0,
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
@@ -5267,7 +5282,7 @@ static struct ggml_tensor * ggml_rope_impl(
         bool                  xpos_down,
         bool                  inplace) {
     GGML_ASSERT(ggml_is_vector(b));
-    GGML_ASSERT(b->type == GGML_TYPE_I32);
+    GGML_ASSERT(b->type == GGML_TYPE_F32);
     GGML_ASSERT(a->ne[2] == b->ne[0]);
 
     bool is_node = false;
@@ -5390,7 +5405,7 @@ struct ggml_tensor * ggml_rope_back(
         float                 xpos_base,
         bool                  xpos_down) {
     GGML_ASSERT(ggml_is_vector(b));
-    GGML_ASSERT(b->type == GGML_TYPE_I32);
+    GGML_ASSERT(b->type == GGML_TYPE_F32);
     GGML_ASSERT(a->ne[2] == b->ne[0]);
 
     GGML_ASSERT((mode & 4) == 0 && "ggml_rope_back() for ChatGLM not implemented yet");
@@ -12373,11 +12388,11 @@ static void ggml_compute_forward_rope_f32(
     // this essentially just switches the sign of sin.
     const float sin_sign = forward ? 1.0f : -1.0f;
 
-    const int32_t * pos = (const int32_t *) src1->data;
+    const float * pos = (const float *) src1->data;
 
     for (int64_t i3 = 0; i3 < ne3; i3++) {
         for (int64_t i2 = 0; i2 < ne2; i2++) {
-            const int64_t p = pos[i2];
+            const float p = pos[i2];
 
             float * cache = (float *) params->wdata + (ne0 + CACHE_LINE_SIZE_F32)*ith;
             if (!is_glm && !is_neox) { // TODO: cache sin/cos for glm, neox
@@ -12544,11 +12559,11 @@ static void ggml_compute_forward_rope_f16(
     // this essentially just switches the sign of sin.
     const float sin_sign = forward ? 1.0f : -1.0f;
 
-    const int32_t * pos = (const int32_t *) src1->data;
+    const float * pos = (const float *) src1->data;
 
     for (int64_t i3 = 0; i3 < ne3; i3++) {
         for (int64_t i2 = 0; i2 < ne2; i2++) {
-            const int64_t p = pos[i2];
+            const float p = pos[i2];
 
             float * cache = (float *) params->wdata + (ne0 + CACHE_LINE_SIZE_F32)*ith;
             if (!is_glm && !is_neox) { // TODO: cache sin/cos for glm, neox
