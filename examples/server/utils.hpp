@@ -134,7 +134,7 @@ struct completion_token_output
     std::string text_to_send;
 };
 
-static void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
+static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
 {
     std::stringstream ss_tid;
     ss_tid << std::this_thread::get_id();
@@ -155,18 +155,16 @@ static void server_log(const char *level, const char *function, int line, const 
             log.merge_patch(extra);
         }
 
-        const std::string str = log.dump(-1, ' ', false, json::error_handler_t::replace);
-        printf("%.*s\n", (int)str.size(), str.data());
-        fflush(stdout);
+        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
     } else {
         char buf[1024];
-        snprintf(buf, 1024, "%24s %4s: %-80s", function, level, message);
+        snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
 
         if (!extra.empty()) {
             log.merge_patch(extra);
         }
         std::stringstream ss;
-        ss << buf;
+        ss << buf << " |";
         for (const auto& el : log.items())
         {
             const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
@@ -430,7 +428,6 @@ struct llama_server_response {
             condition_results.wait(lock, [&]{
                 return !queue_results.empty();
             });
-            LOG_VERBOSE("condition_results unblock", {{"task_id", task_id}});
 
             for (int i = 0; i < (int) queue_results.size(); i++)
             {
