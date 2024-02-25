@@ -37,50 +37,6 @@ extern bool server_log_json;
 #define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
-static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
-{
-    std::stringstream ss_tid;
-    ss_tid << std::this_thread::get_id();
-    json log = nlohmann::ordered_json{
-        {"tid", ss_tid.str()},
-        {"timestamp", time(nullptr)},
-    };
-
-    if (server_log_json) {
-        log.merge_patch(
-                {
-                        {"level",     level},
-                        {"function",  function},
-                        {"line",      line},
-                        {"msg",       message},
-                });
-        if (!extra.empty()) {
-            log.merge_patch(extra);
-        }
-
-        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
-    } else {
-        char buf[1024];
-        snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
-
-        if (!extra.empty()) {
-            log.merge_patch(extra);
-        }
-        std::stringstream ss;
-        ss << buf << " |";
-        for (const auto& el : log.items())
-        {
-            const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
-            snprintf(buf, 1024, " %s=%s", el.key().c_str(), value.c_str());
-            ss << buf;
-        }
-
-        const std::string str = ss.str();
-        printf("%.*s\n", (int)str.size(), str.data());
-        fflush(stdout);
-    }
-}
-
 enum server_state {
     SERVER_STATE_LOADING_MODEL,  // Server is starting up, model not fully loaded yet
     SERVER_STATE_READY,          // Server is ready and model is loaded
@@ -173,6 +129,50 @@ struct completion_token_output
     llama_token tok;
     std::string text_to_send;
 };
+
+static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
+{
+    std::stringstream ss_tid;
+    ss_tid << std::this_thread::get_id();
+    json log = nlohmann::ordered_json{
+        {"tid", ss_tid.str()},
+        {"timestamp", time(nullptr)},
+    };
+
+    if (server_log_json) {
+        log.merge_patch(
+                {
+                        {"level",     level},
+                        {"function",  function},
+                        {"line",      line},
+                        {"msg",       message},
+                });
+        if (!extra.empty()) {
+            log.merge_patch(extra);
+        }
+
+        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
+    } else {
+        char buf[1024];
+        snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
+
+        if (!extra.empty()) {
+            log.merge_patch(extra);
+        }
+        std::stringstream ss;
+        ss << buf << " |";
+        for (const auto& el : log.items())
+        {
+            const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
+            snprintf(buf, 1024, " %s=%s", el.key().c_str(), value.c_str());
+            ss << buf;
+        }
+
+        const std::string str = ss.str();
+        printf("%.*s\n", (int)str.size(), str.data());
+        fflush(stdout);
+    }
+}
 
 //
 // server utils
