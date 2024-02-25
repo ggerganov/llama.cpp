@@ -5111,6 +5111,53 @@ struct llm_build_context {
         return gf;
     }
 
+    struct ggml_cgraph * build_defrag(const std::vector<uint32_t> & ids) {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
+
+        for (int il = 0; il < n_layer; ++il) {
+            for (int i = 0; i < n_kv; ++i) {
+                const int id = ids[i];
+
+                if (i == id || id == n_kv) {
+                    continue;
+                }
+
+                int nm = 1;
+
+                while (i + nm < n_kv && (int) ids[i + nm] == id + nm) {
+                    nm++;
+                }
+
+                ggml_tensor * view_k_src = ggml_view_2d(ctx0, kv_self.k_l[il],
+                        n_embd_k_gqa, nm,
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*i));
+
+                ggml_tensor * view_k_dst = ggml_view_2d(ctx0, kv_self.k_l[il],
+                        n_embd_k_gqa, nm,
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
+                        ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*id));
+
+                ggml_tensor * view_v_src = ggml_view_2d(ctx0, kv_self.v_l[il],
+                        nm, n_embd_v_gqa,
+                        ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
+                        ggml_row_size(kv_self.v_l[il]->type, i));
+
+                ggml_tensor * view_v_dst = ggml_view_2d(ctx0, kv_self.v_l[il],
+                        nm, n_embd_v_gqa,
+                        ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
+                        ggml_row_size(kv_self.v_l[il]->type, id));
+
+                ggml_build_forward_expand(gf, ggml_cpy(ctx0, view_k_src, view_k_dst));
+                ggml_build_forward_expand(gf, ggml_cpy(ctx0, view_v_src, view_v_dst));
+
+                i += nm - 1;
+            }
+        }
+
+        return gf;
+    }
+
     struct ggml_cgraph * build_llama() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
@@ -7505,6 +7552,23 @@ struct llm_build_context {
     }
 };
 
+static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const std::vector<uint32_t> & ids) {
+    llama_batch dummy;
+    dummy.n_tokens = 0;
+
+    llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
+
+    struct llm_build_context llm(lctx, dummy, cb, false);
+
+    llm.init();
+
+    struct ggml_cgraph * result = llm.build_defrag(ids);
+
+    llm.free();
+
+    return result;
+}
+
 static struct ggml_cgraph * llama_build_graph_k_shift(llama_context & lctx) {
     llama_batch dummy;
     dummy.n_tokens = 0;
@@ -8030,31 +8094,15 @@ static int llama_decode_internal(
 // copy the KV cache to the host memory and reshuffle the cells to the beginning of the cache
 // this way we eliminate any empty holes that may have been left by previous KV cache operations
 //
-// TODO: optimizations are possible:
-//       - multiple threads
-//       - avoid copying to the host memory when already there
-//
-// TODO: can we do all this on-device?
-//
 static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     auto & kv_self = lctx.kv_self;
 
-    const auto & hparams = lctx.model.hparams;
-
-    const uint32_t n_layer      = hparams.n_layer;
-    const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa();
-    const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa();
-    const uint32_t n_kv         = llama_kv_cache_cell_max(kv_self);
-    const uint32_t n_used       = kv_self.used;
-
-    const uint32_t kv_size = kv_self.size;
+    const uint32_t n_kv   = llama_kv_cache_cell_max(kv_self);
+    const uint32_t n_used = kv_self.used;
 
     assert(n_used <= n_kv);
 
     const int64_t t_start = ggml_time_us();
-
-    std::vector<uint8_t> buf_k;
-    std::vector<uint8_t> buf_v;
 
     // number of cells moved
     uint32_t n_moves = 0;
@@ -8136,6 +8184,27 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
         kv_self.cells[i] = llama_kv_cell();
     }
 
+#if 0
+    // CPU defrag
+    //
+    // TODO: optimizations are possible:
+    //       - multiple threads
+    //       - avoid copying to the host memory when already there
+    //
+    // likely not worth the effort, as we have ggml_graph based defrag
+    //
+
+    const auto & hparams = lctx.model.hparams;
+
+    const uint32_t n_layer      = hparams.n_layer;
+    const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa();
+    const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa();
+
+    const uint32_t kv_size = kv_self.size;
+
+    std::vector<uint8_t> buf_k;
+    std::vector<uint8_t> buf_v;
+
     for (uint32_t il = 0; il < n_layer; ++il) {
         const size_t k_size_row = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa);
         const size_t k_size     = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*kv_size);
@@ -8188,6 +8257,13 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
         ggml_backend_tensor_set(kv_self.k_l[il], buf_k.data(), 0, buf_k.size());
         ggml_backend_tensor_set(kv_self.v_l[il], buf_v.data(), 0, buf_v.size());
     }
+#else
+    // ggml_graph defrag
+
+    ggml_cgraph * gf = llama_build_graph_defrag(lctx, ids);
+
+    llama_graph_compute(lctx, gf, lctx.cparams.n_threads);
+#endif
 
     const int64_t t_end = ggml_time_us();
 
