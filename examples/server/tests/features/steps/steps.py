@@ -700,7 +700,7 @@ async def wait_for_health_status(context,
         print(f"Starting checking for health for expected_health_status={expected_health_status}")
     timeout = 3  # seconds
     if expected_health_status == 'idle':
-        timeout = 10 # CI slow inference
+        timeout = 180 # CI slow inference
     interval = 0.5
     counter = 0
     async with aiohttp.ClientSession() as session:
