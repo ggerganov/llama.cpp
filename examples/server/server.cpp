@@ -43,6 +43,7 @@ struct server_params
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
     bool slots_endpoint = true;
+    bool metrics_endpoint = false;
 };
 
 bool server_verbose = false;
@@ -310,6 +311,39 @@ struct llama_client_slot
     }
 };
 
+struct llama_metrics {
+    uint64_t n_prompt_tokens_processed_total = 0;
+    uint64_t n_tokens_predicted_total        = 0;
+
+    uint64_t n_prompt_tokens_processed = 0;
+    uint64_t t_prompt_processing       = 0;
+
+    uint64_t n_tokens_predicted       = 0;
+    uint64_t t_tokens_generation      = 0;
+
+
+    void on_prompt_eval(const llama_client_slot &slot) {
+        n_prompt_tokens_processed_total += slot.num_prompt_tokens_processed;
+
+        n_prompt_tokens_processed += slot.num_prompt_tokens_processed;
+        t_prompt_processing       += slot.t_prompt_processing;
+    }
+
+    void on_prediction(const llama_client_slot &slot) {
+        n_tokens_predicted_total += slot.n_decoded;
+
+        n_tokens_predicted  += slot.n_decoded;
+        t_tokens_generation += slot.t_token_generation;
+    }
+
+    void reset_bucket() {
+        n_prompt_tokens_processed = 0;
+        t_prompt_processing       = 0;
+        n_tokens_predicted        = 0;
+        t_tokens_generation       = 0;
+    }
+};
+
 struct llama_server_context
 {
     llama_model *model = nullptr;
@@ -343,6 +377,8 @@ struct llama_server_context
 
     llama_server_queue queue_tasks;
     llama_server_response queue_results;
+
+    llama_metrics metrics;
 
     ~llama_server_context()
     {
@@ -1404,7 +1440,7 @@ struct llama_server_context
             case TASK_TYPE_NEXT_RESPONSE: {
                 // do nothing
             } break;
-            case TASK_TYPE_SLOTS_DATA: {
+            case TASK_TYPE_METRICS: {
                 json slots_data        = json::array();
                 int n_idle_slots       = 0;
                 int n_processing_slots = 0;
@@ -1438,10 +1474,24 @@ struct llama_server_context
                 res.stop = true;
                 res.error = false;
                 res.result_json = {
-                        { "idle",       n_idle_slots       },
-                        { "processing", n_processing_slots },
-                        { "slots",      slots_data         }
+                        { "idle",                            n_idle_slots       },
+                        { "processing",                      n_processing_slots },
+                        { "deferred",                        queue_tasks.queue_tasks_deferred.size() },
+
+                        { "n_prompt_tokens_processed_total", metrics.n_prompt_tokens_processed_total},
+                        { "n_tokens_predicted_total",        metrics.n_tokens_predicted_total},
+
+                        { "n_prompt_tokens_processed",       metrics.n_prompt_tokens_processed},
+                        { "t_prompt_processing",             metrics.t_prompt_processing},
+                        { "n_tokens_predicted",              metrics.n_tokens_predicted},
+                        { "t_tokens_generation",             metrics.t_tokens_generation},
+
+                        { "kv_cache_tokens_count",          llama_get_kv_cache_token_count(ctx)},
+                        { "kv_cache_used_cells",            llama_get_kv_cache_used_cells(ctx)},
+
+                        { "slots",                          slots_data },
                 };
+                metrics.reset_bucket();
                 queue_results.send(res);
             } break;
         }
@@ -1849,6 +1899,7 @@ struct llama_server_context
                 {
                     slot.t_start_genereration = ggml_time_us();
                     slot.t_prompt_processing = (slot.t_start_genereration - slot.t_start_process_prompt) / 1e3;
+                    metrics.on_prompt_eval(slot);
                 }
 
                 llama_token_data_array cur_p = { slot.ctx_sampling->cur.data(), slot.ctx_sampling->cur.size(), false };
@@ -1871,6 +1922,7 @@ struct llama_server_context
                     slot.release();
                     slot.print_timings();
                     send_final_response(slot);
+                    metrics.on_prediction(slot);
                 }
 
                 slot.i_batch = -1;
@@ -1955,6 +2007,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
+    printf("  --metrics                 enable prometheus compatible metrics endpoint (default: %s).\n", sparams.metrics_endpoint ? "enabled" : "disabled");
     printf("\n");
     printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
@@ -2414,6 +2467,10 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         {
             sparams.slots_endpoint = false;
         }
+        else if (arg == "--metrics")
+        {
+            sparams.metrics_endpoint = true;
+        }
         else if (arg == "--chat-template")
         {
             if (++i >= argc)
@@ -2621,7 +2678,7 @@ int main(int argc, char **argv)
                 // request slots data using task queue
                 task_server task;
                 task.id   = llama.queue_tasks.get_new_id();
-                task.type = TASK_TYPE_SLOTS_DATA;
+                task.type = TASK_TYPE_METRICS;
                 task.target_id = -1;
 
                 llama.queue_results.add_waiting_task_id(task.id);
@@ -2668,7 +2725,7 @@ int main(int argc, char **argv)
             // request slots data using task queue
             task_server task;
             task.id = llama.queue_tasks.get_new_id();
-            task.type = TASK_TYPE_SLOTS_DATA;
+            task.type = TASK_TYPE_METRICS;
             task.target_id = -1;
 
             llama.queue_results.add_waiting_task_id(task.id);
@@ -2679,6 +2736,87 @@ int main(int argc, char **argv)
             llama.queue_results.remove_waiting_task_id(task.id);
 
             res.set_content(result.result_json["slots"].dump(), "application/json");
+            res.status = 200; // HTTP OK
+        });
+    }
+
+    if (sparams.metrics_endpoint) {
+        svr.Get("/metrics", [&](const httplib::Request&, httplib::Response& res) {
+            // request slots data using task queue
+            task_server task;
+            task.id = llama.queue_tasks.get_new_id();
+            task.type = TASK_TYPE_METRICS;
+            task.target_id = -1;
+
+            llama.queue_results.add_waiting_task_id(task.id);
+            llama.queue_tasks.post(task);
+
+            // get the result
+            task_result result = llama.queue_results.recv(task.id);
+            llama.queue_results.remove_waiting_task_id(task.id);
+
+            json data = result.result_json;
+
+            uint64_t n_prompt_tokens_processed = data["n_prompt_tokens_processed"];
+            uint64_t t_prompt_processing       = data["t_prompt_processing"];
+
+            uint64_t n_tokens_predicted       = data["n_tokens_predicted"];
+            uint64_t t_tokens_generation      = data["t_tokens_generation"];
+
+            int32_t kv_cache_used_cells = data["kv_cache_used_cells"];
+
+            // metrics definition: https://prometheus.io/docs/practices/naming/#metric-names
+            json all_metrics_def = json {
+                    {"counter", {{
+                            {"name",  "prompt_tokens_total"},
+                            {"help",  "Number of prompt tokens processed."},
+                            {"value",  data["n_prompt_tokens_processed_total"]}
+                    }, {
+                            {"name",  "tokens_predicted_total"},
+                            {"help",  "Number of generation tokens processed."},
+                            {"value",  data["n_tokens_predicted_total"]}
+                    }}},
+                    {"gauge", {{
+                            {"name",  "prompt_tokens_seconds"},
+                            {"help",  "Average prompt throughput in tokens/s."},
+                            {"value",  n_prompt_tokens_processed ? 1e3 / t_prompt_processing * n_prompt_tokens_processed : 0}
+                    },{
+                            {"name",  "predicted_tokens_seconds"},
+                            {"help",  "Average generation throughput in tokens/s."},
+                            {"value",  n_tokens_predicted ? 1e3 / t_tokens_generation * n_tokens_predicted : 0}
+                     },{
+                            {"name",  "kv_cache_usage_ratio"},
+                            {"help",  "KV-cache usage. 1 means 100 percent usage."},
+                            {"value",  1. * kv_cache_used_cells / params.n_ctx}
+                     },{
+                            {"name",  "kv_cache_tokens"},
+                            {"help",  "KV-cache tokens."},
+                            {"value",  data["kv_cache_tokens_count"]}
+                    },{
+                            {"name",  "requests_processing"},
+                            {"help",  "Number of request processing."},
+                            {"value",  data["processing"]}
+                  },{
+                            {"name",  "requests_deferred"},
+                            {"help",  "Number of request deferred."},
+                            {"value",  data["deferred"]}
+                  }}}
+            };
+
+            std::stringstream prometheus;
+            for (const auto& el : all_metrics_def.items()) {
+                const auto& type = el.key();
+                const auto& metrics_def = el.value();
+                for (const auto& metric_def : metrics_def) {
+                    std::string name = metric_def["name"];
+                    std::string help = metric_def["help"];
+                    prometheus << "# HELP llamacpp:" << name << " " << help                << "\n"
+                               << "# TYPE llamacpp:" << name << " " << type                << "\n"
+                               << "llamacpp:"        << name << " " << metric_def["value"] << "\n";
+                }
+            }
+
+            res.set_content(prometheus.str(), "text/plain; version=0.0.4");
             res.status = 200; // HTTP OK
         });
     }

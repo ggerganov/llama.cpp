@@ -41,6 +41,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
 - `-n, --n-predict`: Set the maximum tokens to predict (default: -1)
 - `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
+- `--metrics`: enable prometheus `/metrics` compatible endpoint (default: disabled)
 - `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name (default: template taken from model's metadata). We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
 
 ## Build
@@ -456,6 +457,18 @@ Notice that each `probs` is an array of length `n_probs`.
     }
 ]
 ```
+
+- **GET** `/metrics`: [Prometheus](https://prometheus.io/) compatible metrics exporter endpoint if `--metrics` is enabled:
+
+Available metrics:
+- `llamacpp:prompt_tokens_total`: Number of prompt tokens processed.
+- `llamacpp:tokens_predicted_total`: Number of generation tokens processed.
+- `llamacpp:prompt_tokens_seconds`: Average prompt throughput in tokens/s.
+- `llamacpp:predicted_tokens_seconds`: Average generation throughput in tokens/s.
+- `llamacpp:kv_cache_usage_ratio`: KV-cache usage. 1 means 100 percent usage.
+- `llamacpp:kv_cache_tokens`: KV-cache tokens.
+- `llamacpp:requests_processing`: Number of request processing.
+- `llamacpp:requests_deferred`: Number of request deferred.
 
 ## More examples
 

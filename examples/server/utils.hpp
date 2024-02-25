@@ -50,7 +50,7 @@ enum task_type {
     TASK_TYPE_COMPLETION,
     TASK_TYPE_CANCEL,
     TASK_TYPE_NEXT_RESPONSE,
-    TASK_TYPE_SLOTS_DATA
+    TASK_TYPE_METRICS
 };
 
 struct task_server {
@@ -441,7 +441,7 @@ struct llama_server_response {
             {
                 LOG_VERBOSE("queue_results.push_back", {});
                 queue_results.push_back(result);
-                condition_results.notify_one();
+                condition_results.notify_all();
                 return;
             }
         }

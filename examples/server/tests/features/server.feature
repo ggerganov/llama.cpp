@@ -13,6 +13,7 @@ Feature: llama.cpp server
     And   1 slots
     And   embeddings extraction
     And   32 server max tokens to predict
+    And   prometheus compatible metrics exposed
     Then  the server is starting
     Then  the server is healthy
 
@@ -25,6 +26,7 @@ Feature: llama.cpp server
     And   <n_predict> max tokens to predict
     And   a completion request with no api error
     Then  <n_predicted> tokens are predicted matching <re_content>
+    And   prometheus metrics are exposed
 
     Examples: Prompts
       | prompt                           | n_predict | re_content                   | n_predicted |
