@@ -5114,20 +5114,20 @@ struct llm_build_context {
     struct ggml_cgraph * build_defrag(const std::vector<uint32_t> & ids) {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
-        for (int il = 0; il < n_layer; ++il) {
-            for (int i = 0; i < n_kv; ++i) {
-                const int id = ids[i];
+        for (int i = 0; i < n_kv; ++i) {
+            const int id = ids[i];
 
-                if (i == id || id == n_kv) {
-                    continue;
-                }
+            if (i == id || id == n_kv) {
+                continue;
+            }
 
-                int nm = 1;
+            int nm = 1;
 
-                while (i + nm < n_kv && (int) ids[i + nm] == id + nm) {
-                    nm++;
-                }
+            while (i + nm < n_kv && (int) ids[i + nm] == id + nm) {
+                nm++;
+            }
 
+            for (int il = 0; il < n_layer; ++il) {
                 ggml_tensor * view_k_src = ggml_view_2d(ctx0, kv_self.k_l[il],
                         n_embd_k_gqa, nm,
                         ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
@@ -5150,9 +5150,9 @@ struct llm_build_context {
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, view_k_src, view_k_dst));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, view_v_src, view_v_dst));
-
-                i += nm - 1;
             }
+
+            i += nm - 1;
         }
 
         return gf;
