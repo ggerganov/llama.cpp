@@ -13,6 +13,7 @@ import aiohttp
 import openai
 from behave import step
 from behave.api.async_step import async_run_until_complete
+from prometheus_client import parser
 
 
 @step(u"a server listening on {server_fqdn}:{server_port}")
@@ -34,6 +35,8 @@ def step_server_config(context, server_fqdn, server_port):
     context.server_api_key = None
     context.server_continuous_batching = False
     context.server_embeddings = False
+    context.server_metrics = False
+    context.server_process = None
     context.server_seed = None
     context.user_api_key = None
 
@@ -80,6 +83,11 @@ def step_server_continuous_batching(context):
 @step(u'embeddings extraction')
 def step_server_embeddings(context):
     context.server_embeddings = True
+
+
+@step(u'prometheus compatible metrics exposed')
+def step_server_metrics(context):
+    context.server_metrics = True
 
 
 @step(u"the server is starting")
@@ -424,6 +432,23 @@ def step_check_options_header_value(context, cors_header, cors_header_value):
     assert context.options_response.headers[cors_header] == cors_header_value
 
 
+@step(u'prometheus metrics are exposed')
+@async_run_until_complete
+async def step_prometheus_metrics_exported(context):
+    async with aiohttp.ClientSession() as session:
+        async with await session.get(f'{context.base_url}/metrics') as metrics_response:
+            assert metrics_response.status == 200
+            assert metrics_response.headers['Content-Type'] == "text/plain; version=0.0.4"
+            metrics_raw = await metrics_response.text()
+            metric_exported = False
+            for metric in parser.text_string_to_metric_families(metrics_raw):
+                match metric.name:
+                    case "llamacpp:kv_cache_usage_ratio":
+                        assert len(metric.samples) > 0
+                        metric_exported = True
+            assert metric_exported, "No metrics exported"
+
+
 async def concurrent_requests(context, f_completion, *args, **kwargs):
     n_prompts = len(context.prompts)
     if context.debug:
@@ -753,6 +778,8 @@ def start_server_background(context):
         server_args.append('--cont-batching')
     if context.server_embeddings:
         server_args.append('--embedding')
+    if context.server_metrics:
+        server_args.append('--metrics')
     if context.model_alias is not None:
         server_args.extend(['--alias', context.model_alias])
     if context.n_ctx is not None:

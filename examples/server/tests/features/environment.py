@@ -16,6 +16,8 @@ def before_scenario(context, scenario):
 
 
 def after_scenario(context, scenario):
+    if context.server_process is None:
+        return
     if scenario.status == "failed":
         if 'GITHUB_ACTIONS' in os.environ:
             print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n\n")
