@@ -441,7 +441,7 @@ struct llama_server_response {
             {
                 LOG_VERBOSE("queue_results.push_back", {});
                 queue_results.push_back(result);
-                condition_results.notify_one();
+                condition_results.notify_all();
                 return;
             }
         }
