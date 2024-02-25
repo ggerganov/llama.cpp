@@ -8040,7 +8040,7 @@ static int llama_decode_internal(
 //
 //     abs(cell[i0].pos - cell[i1].pos) <= compress_delta
 //
-//   - move the KV cache to the Host memory for easier maniiplation
+//   - move the KV cache to the host memory for easier manipulation
 //   - processing is done layer-by-layer
 //   - convert the KV data to F32
 //   - merge the KV data (different ways to merge)
@@ -8269,11 +8269,14 @@ static void llama_kv_cache_compress_internal(struct llama_context & lctx) {
 }
 
 // copy the KV cache to the host memory and reshuffle the cells to the beginning of the cache
-// removing any empty segments that may have been left by previous KV cache operations
+// this way we eliminate any empty segments that may have been left by previous KV cache operations
+//
 // TODO: optimizations are possible:
 //       - multiple threads
 //       - avoid copying to the host memory when already there
+//
 // TODO: can we do all this on-device?
+//
 static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     auto & kv_self = lctx.kv_self;
 
