@@ -253,7 +253,7 @@ class Model:
             return gguf.MODEL_ARCH.REFACT
         if arch == "PersimmonForCausalLM":
             return gguf.MODEL_ARCH.PERSIMMON
-        if arch in ("StableLmForCausalLM", "LlavaStableLMEpochForCausalLM"):
+        if arch in ("StableLmForCausalLM", "StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return gguf.MODEL_ARCH.STABLELM
         if arch == "QWenLMHeadModel":
             return gguf.MODEL_ARCH.QWEN
