@@ -2,7 +2,7 @@
 Feature: Security
 
   Background: Server startup with an api key defined
-    Given a server listening on 0.0.0.0:8080
+    Given a server listening on localhost:8080
     And   a model file stories260K.gguf
     And   a server api key llama.cpp
     Then  the server is starting
