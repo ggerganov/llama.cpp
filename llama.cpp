@@ -8091,9 +8091,7 @@ static int llama_decode_internal(
     return 0;
 }
 
-// copy the KV cache to the host memory and reshuffle the cells to the beginning of the cache
-// this way we eliminate any empty holes that may have been left by previous KV cache operations
-//
+// find holes from the beginning of the KV cache and fill them by moving data from the end of the cache
 static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     auto & kv_self = lctx.kv_self;
 
@@ -8108,6 +8106,11 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     uint32_t n_moves = 0;
 
     // determine which KV cells to move where
+    //
+    //  cell i moves to ids[i]
+    //
+    //  if ids[i] == i || ids[i] == n_kv, then cell i is not moved
+    //
     std::vector<uint32_t> ids(n_kv, n_kv);
 
     for (uint32_t i0 = 0; i0 < n_used; ++i0) {
@@ -8139,11 +8142,13 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
 
             // non-empty cell which is not yet moved
             nf++;
+
             if (nf == nh) {
                 break;
             }
         }
 
+        // this can only happen if `n_used` is not accurate, which would be a bug
         GGML_ASSERT(nf == nh && "KV defrag bug: nf != nh");
 
         nf = 0;
@@ -8156,6 +8161,7 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
                 continue;
             }
 
+            // this cell goes to (i0 + nf)
             ids[i1] = i0 + nf;
 
             // move the cell meta data
