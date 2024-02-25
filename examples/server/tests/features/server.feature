@@ -2,7 +2,7 @@
 Feature: llama.cpp server
 
   Background: Server startup
-    Given a server listening on localhost:8080
+    Given a server listening on 0.0.0.0:8080
     And   a model file stories260K.gguf
     And   a model alias tinyllama-2
     And   42 as server seed

@@ -6,7 +6,7 @@ Feature: Wrong usage of llama.cpp server
   # to cap the number of tokens any completion request can generate
   # or pass n_predict/max_tokens in the request.
   Scenario: Infinite loop
-    Given a server listening on localhost:8080
+    Given a server listening on 0.0.0.0:8080
     And   a model file stories260K.gguf
     # Uncomment below to fix the issue
     #And   64 server max tokens to predict

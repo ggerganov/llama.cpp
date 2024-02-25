@@ -37,9 +37,49 @@ extern bool server_log_json;
 #define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
-//
-// parallel
-//
+static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
+{
+    std::stringstream ss_tid;
+    ss_tid << std::this_thread::get_id();
+    json log = nlohmann::ordered_json{
+        {"tid", ss_tid.str()},
+        {"timestamp", time(nullptr)},
+    };
+
+    if (server_log_json) {
+        log.merge_patch(
+                {
+                        {"level",     level},
+                        {"function",  function},
+                        {"line",      line},
+                        {"msg",       message},
+                });
+        if (!extra.empty()) {
+            log.merge_patch(extra);
+        }
+
+        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
+    } else {
+        char buf[1024];
+        snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
+
+        if (!extra.empty()) {
+            log.merge_patch(extra);
+        }
+        std::stringstream ss;
+        ss << buf << " |";
+        for (const auto& el : log.items())
+        {
+            const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
+            snprintf(buf, 1024, " %s=%s", el.key().c_str(), value.c_str());
+            ss << buf;
+        }
+
+        const std::string str = ss.str();
+        printf("%.*s\n", (int)str.size(), str.data());
+        fflush(stdout);
+    }
+}
 
 enum server_state {
     SERVER_STATE_LOADING_MODEL,  // Server is starting up, model not fully loaded yet
@@ -134,49 +174,296 @@ struct completion_token_output
     std::string text_to_send;
 };
 
-static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
+struct llama_client_slot
 {
-    std::stringstream ss_tid;
-    ss_tid << std::this_thread::get_id();
-    json log = nlohmann::ordered_json{
-        {"tid", ss_tid.str()},
-        {"timestamp", time(nullptr)},
-    };
+    int id;
+    int task_id = -1;
 
-    if (server_log_json) {
-        log.merge_patch(
-                {
-                        {"level",     level},
-                        {"function",  function},
-                        {"line",      line},
-                        {"msg",       message},
-                });
-        if (!extra.empty()) {
-            log.merge_patch(extra);
-        }
+    struct slot_params params;
 
-        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
-    } else {
-        char buf[1024];
-        snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
+    slot_state state = IDLE;
+    slot_command command = NONE;
 
-        if (!extra.empty()) {
-            log.merge_patch(extra);
-        }
-        std::stringstream ss;
-        ss << buf << " |";
-        for (const auto& el : log.items())
+    // used to determine the slot that has been used the longest
+    int64_t t_last_used = -1;
+
+    // generation props
+    int32_t n_ctx       = 0;  // context size per slot
+    int32_t n_past      = 0;
+    int32_t n_decoded   = 0;
+    int32_t n_remaining = -1;
+    int32_t i_batch     = -1;
+    int32_t n_predict   = -1;
+
+    int32_t num_prompt_tokens           = 0;
+    int32_t num_prompt_tokens_processed = 0;
+
+    json prompt;
+    std::string generated_text;
+    llama_token sampled;
+    std::vector<llama_token> cache_tokens;
+    std::vector<completion_token_output> generated_token_probs;
+
+    bool infill = false;
+    bool embedding = false;
+    bool has_next_token = true;
+    bool truncated = false;
+    bool stopped_eos = false;
+    bool stopped_word = false;
+    bool stopped_limit = false;
+
+    bool oaicompat = false;
+    std::string oaicompat_model;
+
+    std::string stopping_word;
+
+    // sampling
+    struct llama_sampling_params sparams;
+    llama_sampling_context *ctx_sampling = nullptr;
+
+    int32_t ga_i = 0;   // group-attention state
+    int32_t ga_n = 1;   // group-attention factor
+    int32_t ga_w = 512; // group-attention width
+
+    int32_t n_past_se = 0; // self-extend
+
+    // multimodal
+    std::vector<slot_image> images;
+
+    // stats
+    size_t sent_count = 0;
+    size_t sent_token_probs_index = 0;
+
+    int64_t t_start_process_prompt;
+    int64_t t_start_genereration;
+
+    double t_prompt_processing; // ms
+    double t_token_generation; // ms
+
+    // multitasks
+    int multitask_id = -1;
+
+    void reset() {
+        num_prompt_tokens      = 0;
+        generated_text         = "";
+        truncated              = false;
+        stopped_eos            = false;
+        stopped_word           = false;
+        stopped_limit          = false;
+        stopping_word          = "";
+        n_past                 = 0;
+        sent_count             = 0;
+        sent_token_probs_index = 0;
+        infill                 = false;
+        ga_i                   = 0;
+        n_past_se              = 0;
+
+        generated_token_probs.clear();
+
+        for (slot_image & img : images)
         {
-            const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
-            snprintf(buf, 1024, " %s=%s", el.key().c_str(), value.c_str());
-            ss << buf;
+            free(img.image_embedding);
+            if (img.img_data) {
+                clip_image_u8_free(img.img_data);
+            }
+            img.prefix_prompt = "";
         }
 
-        const std::string str = ss.str();
-        printf("%.*s\n", (int)str.size(), str.data());
-        fflush(stdout);
+        images.clear();
     }
-}
+
+    bool has_budget(gpt_params &global_params) {
+        if (params.n_predict == -1 && global_params.n_predict == -1)
+        {
+            return true; // limitless
+        }
+
+        n_remaining = -1;
+
+        if (params.n_predict != -1)
+        {
+            n_remaining = params.n_predict - n_decoded;
+        }
+        else if (global_params.n_predict != -1)
+        {
+            n_remaining = global_params.n_predict - n_decoded;
+        }
+
+        return n_remaining > 0; // no budget
+    }
+
+    bool available() const {
+        return state == IDLE && command == NONE;
+    }
+
+    bool is_processing() const {
+        return (state == IDLE && command == LOAD_PROMPT) || state == PROCESSING;
+    }
+
+    void add_token_string(const completion_token_output &token) {
+        if (command == RELEASE)
+        {
+            return;
+        }
+        cache_tokens.push_back(token.tok);
+        generated_token_probs.push_back(token);
+    }
+
+    void release() {
+        if (state == PROCESSING)
+        {
+            t_token_generation = (ggml_time_us() - t_start_genereration) / 1e3;
+            command = RELEASE;
+        }
+    }
+
+    json get_formated_timings() {
+        return json
+        {
+            {"prompt_n",               num_prompt_tokens_processed},
+            {"prompt_ms",              t_prompt_processing},
+            {"prompt_per_token_ms",    t_prompt_processing / num_prompt_tokens_processed},
+            {"prompt_per_second",      1e3 / t_prompt_processing * num_prompt_tokens_processed},
+
+            {"predicted_n",            n_decoded},
+            {"predicted_ms",           t_token_generation},
+            {"predicted_per_token_ms", t_token_generation / n_decoded},
+            {"predicted_per_second",   1e3 / t_token_generation * n_decoded},
+        };
+    }
+
+    void print_timings() const {
+       char buffer[512];
+        double t_token = t_prompt_processing / num_prompt_tokens_processed;
+        double n_tokens_second = 1e3 / t_prompt_processing * num_prompt_tokens_processed;
+        sprintf(buffer, "prompt eval time     = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)",
+                t_prompt_processing, num_prompt_tokens_processed,
+                t_token, n_tokens_second);
+        LOG_INFO(buffer, {
+            {"slot_id",                     id},
+            {"task_id",                     task_id},
+            {"t_prompt_processing",         t_prompt_processing},
+            {"num_prompt_tokens_processed", num_prompt_tokens_processed},
+            {"t_token",                     t_token},
+            {"n_tokens_second",             n_tokens_second},
+        });
+
+        t_token = t_token_generation / n_decoded;
+        n_tokens_second = 1e3 / t_token_generation * n_decoded;
+        sprintf(buffer, "generation eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)",
+                t_token_generation, n_decoded,
+                t_token, n_tokens_second);
+        LOG_INFO(buffer, {
+            {"slot_id",            id},
+            {"task_id",            task_id},
+            {"t_token_generation", t_token_generation},
+            {"n_decoded",          n_decoded},
+            {"t_token",            t_token},
+            {"n_tokens_second",    n_tokens_second},
+        });
+
+        sprintf(buffer, "          total time = %10.2f ms", t_prompt_processing + t_token_generation);
+        LOG_INFO(buffer, {
+            {"slot_id",             id},
+            {"task_id",             task_id},
+            {"t_prompt_processing", t_prompt_processing},
+            {"t_token_generation",  t_token_generation},
+            {"t_total",             t_prompt_processing + t_token_generation},
+        });
+    }
+
+    // context extension via Self-Extend
+    void grp_attn_update_params() {
+        int grpa_i = 0;
+        // copy to local variables
+        int32_t grpa_n = ga_n;
+        int32_t grpa_w = ga_w;
+        int32_t slot_npast = 0;
+        for (int k = 0; k < n_past; ++k)
+        {
+            while (slot_npast >= grpa_i + grpa_w) {
+                const int bd = (grpa_w/grpa_n)*(grpa_n - 1);
+                slot_npast -= bd;
+                grpa_i += grpa_w/grpa_n;
+            }
+            slot_npast++;
+        }
+        n_past_se = slot_npast;
+        ga_i = grpa_i;
+    }
+
+    int32_t grp_attn_calc_npast() {
+        int32_t slot_npast = n_past_se > 0 ? n_past_se : n_past;
+        // copy to local variables
+        int32_t grpa_i = ga_i;
+        int32_t grpa_n = ga_n;
+        int32_t grpa_w = ga_w;
+        while (slot_npast >= grpa_i + grpa_w) {
+            const int bd = (grpa_w/grpa_n)*(grpa_n - 1);
+            slot_npast -= bd;
+            grpa_i += grpa_w/grpa_n;
+        }
+        return slot_npast;
+    }
+
+    void grp_attn_shift(llama_context * ctx, const int32_t n_tokens) {
+        while (n_past_se >= ga_i + ga_w)
+        {
+            const int ib = (ga_n * ga_i) / ga_w;
+            const int bd = (ga_w / ga_n) * (ga_n - 1);
+            const int dd = (ga_w / ga_n) - ib * bd - ga_w;
+
+            LOG_TEE("\n");
+            LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", ga_i, n_past_se, ib * bd, ga_i + ib * bd, n_past_se + ib * bd);
+            LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", ga_i + ib * bd, ga_i + ib * bd + ga_w, ga_n, (ga_i + ib * bd) / ga_n, (ga_i + ib * bd + ga_w) / ga_n);
+            LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", ga_i + ib * bd + ga_w, n_past_se + ib * bd, dd, ga_i + ib * bd + ga_w + dd, n_past_se + ib * bd + dd);
+
+            llama_kv_cache_seq_shift(ctx, id, ga_i, n_past_se, ib * bd);
+            llama_kv_cache_seq_div(ctx, id, ga_i + ib * bd, ga_i + ib * bd + ga_w,ga_n);
+            llama_kv_cache_seq_shift(ctx, id, ga_i + ib * bd + ga_w,n_past_se + ib * bd, dd);
+
+            n_past_se -= bd;
+
+            ga_i += ga_w / ga_n;
+
+            LOG_TEE("\nn_past_old = %d, n_past = %d, ga_i = %d\n\n", n_past_se + bd, n_past_se, ga_i);
+        }
+        n_past_se += n_tokens;
+    }
+};
+
+struct llama_metrics {
+    uint64_t n_prompt_tokens_processed_total = 0;
+    uint64_t n_tokens_predicted_total        = 0;
+
+    uint64_t n_prompt_tokens_processed = 0;
+    uint64_t t_prompt_processing       = 0;
+
+    uint64_t n_tokens_predicted       = 0;
+    uint64_t t_tokens_generation      = 0;
+
+
+    void on_prompt_eval(const llama_client_slot &slot) {
+        n_prompt_tokens_processed_total += slot.num_prompt_tokens_processed;
+
+        n_prompt_tokens_processed += slot.num_prompt_tokens_processed;
+        t_prompt_processing       += slot.t_prompt_processing;
+    }
+
+    void on_prediction(const llama_client_slot &slot) {
+        n_tokens_predicted_total += slot.n_decoded;
+
+        n_tokens_predicted  += slot.n_decoded;
+        t_tokens_generation += slot.t_token_generation;
+    }
+
+    void reset_bucket() {
+        n_prompt_tokens_processed = 0;
+        t_prompt_processing       = 0;
+        n_tokens_predicted        = 0;
+        t_tokens_generation       = 0;
+    }
+};
 
 //
 // server utils
