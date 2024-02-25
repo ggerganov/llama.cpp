@@ -4,6 +4,7 @@
   numpy,
   poetry-core,
   buildPythonPackage,
+  pytestCheckHook,
 }@inputs:
 
 buildPythonPackage {
@@ -13,7 +14,12 @@ buildPythonPackage {
   nativeBuildInputs = [ poetry-core ];
   propagatedBuildInputs = [ numpy ];
   src = lib.cleanSource ../../gguf-py;
-  doCheck = false;
+  pythonImportsCheck = [
+    "numpy"
+    "gguf"
+  ];
+  nativeCheckInputs = [ pytestCheckHook ];
+  doCheck = true;
   meta = with lib; {
     description = "Python package for writing binary files in the GGUF format";
     license = licenses.mit;
