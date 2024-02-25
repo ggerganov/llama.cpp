@@ -372,43 +372,45 @@ struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * c
     return result;
 }
 
-static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long *sizeOut) {
+static bool load_image_to_bytes(const char* path, unsigned char** bytesOut, long *sizeOut) {
     auto file = fopen(path, "rb");
     if (file == NULL) {
         LOG_TEE("%s: can't read file %s\n", __func__, path);
         return false;
     }
 
-    fseek(file, 0, SEEK_END);
-    auto fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    const size_t limit = 128 * 1024 * 1024; // File size should be less than this
+    // Instead of trying to get file size, let's allow reading from devices which cannot provide it (fifo, sockets)
 
-    auto buffer = (unsigned char *)malloc(fileSize); // Allocate memory to hold the file data
-    if (buffer == NULL) {
-        LOG_TEE("%s: failed to alloc %ld bytes for file %s\n", __func__, fileSize, path);
-        perror("Memory allocation error");
-        fclose(file);
-        return false;
-    }
+    auto buffer = (unsigned char*)malloc(limit); // Allocate memory to hold the file data
+
     errno = 0;
-    size_t ret = fread(buffer, 1, fileSize, file); // Read the file into the buffer
-    if (ferror(file)) {
-        die_fmt("read error: %s", strerror(errno));
-    }
-    if (ret != (size_t) fileSize) {
-        die("unexpectedly reached end of file");
+    size_t total = 0;
+    while (true) {
+        size_t ret = fread(buffer + total, 1, limit - total, file); // Read the file into the buffer
+        if (ferror(file)) {
+            die_fmt("%s: read error: %s", __func__, strerror(errno));
+        }
+        total += ret;
+        if (total >= limit) {
+            die_fmt("%s: file too big: %zu bytes or higher", __func__, limit);
+        }
+        if (feof(file)) {
+            break;
+        }
     }
     fclose(file); // Close the file
 
-    *bytesOut = buffer;
-    *sizeOut = fileSize;
+    // Fix memory allocation size
+    *bytesOut = (unsigned char*)realloc(buffer, total);
+    *sizeOut = total;
     return true;
 }
 
 struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx * ctx_clip, int n_threads, const char * image_path) {
     unsigned char* image_bytes;
     long image_bytes_length;
-    auto loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
+    auto loaded = load_image_to_bytes(image_path, &image_bytes, &image_bytes_length);
     if (!loaded) {
         LOG_TEE("%s: failed to load %s\n", __func__, image_path);
         return NULL;
