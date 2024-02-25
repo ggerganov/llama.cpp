@@ -227,7 +227,7 @@ struct llama_server_queue {
     // callback functions
     std::function<void(task_server&)> callback_new_task;
     std::function<void(task_multi&)> callback_finish_multitask;
-    std::function<void(void)> callback_all_task_finished;
+    std::function<void(void)> callback_run_slots;
 
     // Add a new task to the end of the queue
     int post(task_server task) {
@@ -257,14 +257,14 @@ struct llama_server_queue {
         callback_new_task = callback;
     }
 
-    // Register function to process a multitask
+    // Register function to process a multitask when it is finished
     void on_finish_multitask(std::function<void(task_multi&)> callback) {
         callback_finish_multitask = callback;
     }
 
-    // Register the function to be called when the batch of tasks is finished
-    void on_all_tasks_finished(std::function<void(void)> callback) {
-        callback_all_task_finished = callback;
+    // Register the function to be called when all slots data is ready to be processed
+    void on_run_slots(std::function<void(void)> callback) {
+        callback_run_slots = callback;
     }
 
     // Call when the state of one slot is changed
@@ -286,7 +286,13 @@ struct llama_server_queue {
         condition_tasks.notify_all();
     }
 
-    // Start the main loop.
+    /**
+     * Main loop consists of these steps:
+     * - Wait until a new task arrives
+     * - Process the task (i.e. maybe copy data into slot)
+     * - Check if multitask is finished
+     * - Run all slots
+     */
     void start_loop() {
         running = true;
         while (true) {
@@ -306,8 +312,8 @@ struct llama_server_queue {
                     LOG_VERBOSE("callback_new_task", {});
                     callback_new_task(task);
                 }
-                LOG_VERBOSE("callback_all_task_finished", {});
-                // process and update all the multitasks
+                LOG_VERBOSE("update_multitasks", {});
+                // check if we have any finished multitasks
                 auto queue_iterator = queue_multitasks.begin();
                 while (queue_iterator != queue_multitasks.end())
                 {
@@ -324,8 +330,9 @@ struct llama_server_queue {
                         ++queue_iterator;
                     }
                 }
-                // all tasks in the current loop is finished
-                callback_all_task_finished();
+                // all tasks in the current loop is processed, slots data is now ready
+                LOG_VERBOSE("callback_run_slots", {});
+                callback_run_slots();
             }
             LOG_VERBOSE("wait for new task", {});
             // wait for new task
@@ -401,7 +408,9 @@ struct llama_server_response {
             condition_results.wait(lock, [&]{
                 return !queue_results.empty();
             });
-            LOG_VERBOSE("condition_results unblock", {});
+            LOG_VERBOSE("condition_results unblock", {
+                {"data", queue_results[0].result_json},
+            });
 
             for (int i = 0; i < (int) queue_results.size(); i++)
             {

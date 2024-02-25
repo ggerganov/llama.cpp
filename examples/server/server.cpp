@@ -1021,13 +1021,23 @@ struct llama_server_context
         return slot.images.size() > 0;
     }
 
-    void send_error(task_server& task, const std::string &error)
+    void send_error(task_server &task, const std::string &error)
     {
-        LOG_TEE("task %i - error: %s\n", task.id, error.c_str());
+        send_error(task.id, task.multitask_id, error);
+    }
+
+    void send_error(llama_client_slot &slot, const std::string &error)
+    {
+        send_error(slot.task_id, slot.multitask_id, error);
+    }
+
+    void send_error(int task_id, int multitask_id, const std::string &error)
+    {
+        LOG_TEE("task %i - error: %s\n", task_id, error.c_str());
         task_result res;
-        res.id = task.id;
-        res.multitask_id = task.multitask_id;
-        res.stop = false;
+        res.id = task_id;
+        res.multitask_id = multitask_id;
+        res.stop = true;
         res.error = true;
         res.result_json = { { "content", error } };
         queue_results.send(res);
@@ -1466,7 +1476,9 @@ struct llama_server_context
         queue_results.send(result);
     }
 
-    bool update_slots() {
+    void run_slots() {
+        bool has_next_response = false; // whether to schedule next slot run, to generate next token
+
         if (system_need_update)
         {
             LOG_TEE("updating system prompt\n");
@@ -1482,13 +1494,8 @@ struct llama_server_context
                 LOG_TEE("all slots are idle and system prompt is empty, clear the KV cache\n");
                 kv_cache_clear();
             }
-            return true;
+            return;
         }
-
-        task_server task;
-        task.type = TASK_TYPE_NEXT_RESPONSE;
-        task.target_id = -1;
-        queue_tasks.post(task);
 
         for (llama_client_slot &slot : slots)
         {
@@ -1737,7 +1744,8 @@ struct llama_server_context
                     if (has_images && !ingest_images(slot, n_batch))
                     {
                         LOG_TEE("failed processing images\n");
-                        return false;
+                        send_error(slot, "failed processing images");
+                        continue;
                     }
 
                     // extract the logits only for the last token
@@ -1755,7 +1763,6 @@ struct llama_server_context
         if (batch.n_tokens == 0)
         {
             all_slots_are_idle = true;
-            return true;
         }
 
         for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch)
@@ -1812,7 +1819,13 @@ struct llama_server_context
                 {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
                     LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
-                    return false;
+                    for (auto & slot : slots)
+                    {
+                        send_error(slot, "Input prompt is too big compared to KV size. Please try increasing KV size.");
+                        slot.release();
+                    }
+                    has_next_response = false;
+                    break;
                 }
 
                 LOG_TEE("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
@@ -1873,14 +1886,23 @@ struct llama_server_context
                     send_final_response(slot);
                 }
 
+                // if slot is not yet finish its work, we schedule next run
+                if (slot.has_next_token)
+                {
+                    has_next_response = true;
+                }
+
                 slot.i_batch = -1;
             }
         }
-        return true;
-    }
 
-    void run_on_all_tasks_finished() {
-        update_slots();
+        if (has_next_response) {
+            LOG_VERBOSE("schedule next slot run", {});
+            task_server task;
+            task.type = TASK_TYPE_NEXT_RESPONSE;
+            task.target_id = -1;
+            queue_tasks.post(task);
+        }
     }
 };
 
@@ -3210,7 +3232,7 @@ int main(int argc, char **argv)
         bool running = true;
         while (running)
         {
-            running = llama.update_slots();
+            running = llama.run_slots();
         }
     }*/
     //);
@@ -3232,8 +3254,8 @@ int main(int argc, char **argv)
         &llama_server_context::process_single_task, &llama, std::placeholders::_1));
     llama.queue_tasks.on_finish_multitask(std::bind(
         &llama_server_context::on_finish_multitask, &llama, std::placeholders::_1));
-    llama.queue_tasks.on_all_tasks_finished(std::bind(
-        &llama_server_context::run_on_all_tasks_finished, &llama));
+    llama.queue_tasks.on_run_slots(std::bind(
+        &llama_server_context::run_slots, &llama));
     llama.queue_results.on_multitask_update(std::bind(
         &llama_server_queue::update_multitask,
         &llama.queue_tasks,
