@@ -1,6 +1,6 @@
 # LLaMA.cpp HTTP Server
 
-Fast, lightweight, production ready pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.
+Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.
 
 Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
 
