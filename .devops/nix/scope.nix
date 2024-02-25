@@ -10,6 +10,7 @@ let
   buildPythonPackage = pythonPackages.buildPythonPackage;
   numpy = pythonPackages.numpy;
   poetry-core = pythonPackages.poetry-core;
+  pytestCheckHook = pythonPackages.pytestCheckHook;
 in
 
 # We're using `makeScope` instead of just writing out an attrset
@@ -19,7 +20,14 @@ in
 lib.makeScope newScope (self: {
   inherit llamaVersion;
   pp = python3.pkgs;
-  gguf-py = self.callPackage ./package-gguf-py.nix { inherit buildPythonPackage numpy poetry-core; };
+  gguf-py = self.callPackage ./package-gguf-py.nix {
+    inherit
+      buildPythonPackage
+      numpy
+      poetry-core
+      pytestCheckHook
+      ;
+  };
   llama-cpp = self.callPackage ./package.nix { };
   docker = self.callPackage ./docker.nix { };
   docker-min = self.callPackage ./docker.nix { interactive = false; };
