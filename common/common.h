@@ -61,7 +61,7 @@ struct gpt_params {
     float   p_split               = 0.1f;  // speculative decoding split probability
     int32_t n_gpu_layers          = -1;    // number of layers to store in VRAM (-1 - use default)
     int32_t n_gpu_layers_draft    = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
-    llama_split_mode split_mode   = LLAMA_SPLIT_LAYER; // how to split the model across GPUs
+    llama_split_mode split_mode   = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     int32_t main_gpu              = 0;     // the GPU that is used for scratch and small tensors
     float   tensor_split[128]     = {0};   // how split tensors should be distributed across GPUs
     int32_t n_beams               = 0;     // if non-zero then use beam search of given width.
@@ -75,7 +75,7 @@ struct gpt_params {
     float   yarn_beta_fast        = 32.0f; // YaRN low correction dim
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
-    int32_t rope_scaling_type     = LLAMA_ROPE_SCALING_UNSPECIFIED;
+    int32_t rope_scaling_type     = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
     ggml_numa_strategy numa       = GGML_NUMA_STRATEGY_DISABLED;
 
     // // sampling parameters
