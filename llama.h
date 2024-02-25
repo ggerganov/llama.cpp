@@ -552,6 +552,11 @@ extern "C" {
             struct llama_context * ctx,
                     llama_seq_id   seq_id);
 
+    // [EXPERIMENTAL] Compress the data in the KV cache
+    LLAMA_API void llama_kv_cache_compress(
+            struct llama_context * ctx,
+                       llama_pos   delta);
+
     // Apply the KV cache updates (such as K-shifts) to the KV data
     LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
