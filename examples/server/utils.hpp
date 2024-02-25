@@ -408,9 +408,7 @@ struct llama_server_response {
             condition_results.wait(lock, [&]{
                 return !queue_results.empty();
             });
-            LOG_VERBOSE("condition_results unblock", {
-                {"data", queue_results[0].result_json},
-            });
+            LOG_VERBOSE("condition_results unblock", {});
 
             for (int i = 0; i < (int) queue_results.size(); i++)
             {
@@ -418,6 +416,10 @@ struct llama_server_response {
                 {
                     assert(queue_results[i].multitask_id == -1);
                     task_result res = queue_results[i];
+                    LOG_VERBOSE("got task result", {
+                        {"task_id", res.id},
+                        {"data", res.result_json},
+                    });
                     queue_results.erase(queue_results.begin() + i);
                     return res;
                 }
@@ -450,7 +452,7 @@ struct llama_server_response {
             {
                 LOG_VERBOSE("queue_results.push_back", {});
                 queue_results.push_back(result);
-                condition_results.notify_one();
+                condition_results.notify_all();
                 return;
             }
         }
