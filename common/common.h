@@ -61,7 +61,7 @@ struct gpt_params {
     float   p_split               = 0.1f;  // speculative decoding split probability
     int32_t n_gpu_layers          = -1;    // number of layers to store in VRAM (-1 - use default)
     int32_t n_gpu_layers_draft    = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
-    llama_split_mode split_mode   = LLAMA_SPLIT_LAYER; // how to split the model across GPUs
+    llama_split_mode split_mode   = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     int32_t main_gpu              = 0;     // the GPU that is used for scratch and small tensors
     float   tensor_split[128]     = {0};   // how split tensors should be distributed across GPUs
     int32_t n_beams               = 0;     // if non-zero then use beam search of given width.
@@ -75,7 +75,8 @@ struct gpt_params {
     float   yarn_beta_fast        = 32.0f; // YaRN low correction dim
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
-    int32_t rope_scaling_type     = LLAMA_ROPE_SCALING_UNSPECIFIED;
+    int32_t rope_scaling_type     = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
+    ggml_numa_strategy numa       = GGML_NUMA_STRATEGY_DISABLED;
 
     // // sampling parameters
     struct llama_sampling_params sparams;
@@ -134,7 +135,6 @@ struct gpt_params {
     bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
-    bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool display_prompt    = true;  // print prompt before generation
     bool infill            = false; // use infill mode
@@ -162,10 +162,13 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 void process_escapes(std::string& input);
 
 //
-// String parsing
+// String utils
 //
 
-std::string parse_samplers_input(std::string input);
+std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
+std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string);
+std::vector<std::string> string_split(std::string input, char separator);
+std::string sampler_type_to_name_string(llama_sampler_type sampler_type);
 
 //
 // Model utils

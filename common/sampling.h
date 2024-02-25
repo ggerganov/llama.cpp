@@ -8,10 +8,21 @@
 #include <vector>
 #include <unordered_map>
 
+// sampler types
+enum class llama_sampler_type : char {
+    TOP_K       = 'k',
+    TOP_P       = 'p',
+    MIN_P       = 'm',
+    TFS_Z       = 'f',
+    TYPICAL_P   = 'y',
+    TEMPERATURE = 't'
+};
+
 // sampling parameters
 typedef struct llama_sampling_params {
     int32_t     n_prev                = 64;       // number of previous tokens to remember
     int32_t     n_probs               = 0;        // if greater than 0, output the probabilities of top n_probs tokens.
+    int32_t     min_keep              = 0;        // 0 = disabled, otherwise samplers should return at least min_keep tokens
     int32_t     top_k                 = 40;       // <= 0 to use vocab size
     float       top_p                 = 0.95f;    // 1.0 = disabled
     float       min_p                 = 0.05f;    // 0.0 = disabled
@@ -28,7 +39,15 @@ typedef struct llama_sampling_params {
     float       mirostat_tau          = 5.00f;    // target entropy
     float       mirostat_eta          = 0.10f;    // learning rate
     bool        penalize_nl           = true;     // consider newlines as a repeatable token
-    std::string samplers_sequence     = "kfypmt"; // top_k, tail_free, typical_p, top_p, min_p, temp
+
+    std::vector<llama_sampler_type> samplers_sequence = {
+        llama_sampler_type::TOP_K,
+        llama_sampler_type::TFS_Z,
+        llama_sampler_type::TYPICAL_P,
+        llama_sampler_type::TOP_P,
+        llama_sampler_type::MIN_P,
+        llama_sampler_type::TEMPERATURE
+    };
 
     std::string grammar;  // optional BNF-like grammar to constrain sampling
 

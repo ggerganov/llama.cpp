@@ -88,7 +88,8 @@ def main():
     gguf_writer.add_embedding_length(hidden_size)
     gguf_writer.add_block_count(block_count)
     gguf_writer.add_feed_forward_length(hparams.ffn_hidden_size)
-    gguf_writer.add_rope_dimension_count(hidden_size // head_count)
+    # ref: https://github.com/ggerganov/llama.cpp/pull/4889/commits/eea19039fc52ea2dbd1aab45b59ab4e3e29a3443
+    gguf_writer.add_rope_dimension_count(hidden_size // head_count // 2)
     gguf_writer.add_head_count(head_count)
     gguf_writer.add_head_count_kv(head_count_kv)
     gguf_writer.add_rope_freq_base(hparams.rotary_emb_base)

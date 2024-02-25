@@ -202,7 +202,8 @@ int main(int argc, char ** argv) {
     std::mt19937 rng(params.seed);
 
     LOG("%s: llama backend init\n", __func__);
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     llama_model * model;
     llama_context * ctx;

@@ -16,6 +16,13 @@ Command line options:
 - `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
 - `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 - `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
+- `--numa STRATEGY`: Attempt one of the below optimization strategies  that help on some NUMA systems
+- `--numa distribute`: Spread execution evenly over all nodes
+- `--numa isolate`: Only spawn threads on CPUs on the node that execution started on
+- `--numa numactl`: Use the CPU map provided by numactl
+if run without this previously, it is recommended to drop the system page cache before using this
+see https://github.com/ggerganov/llama.cpp/issues/1437
+
 - `--numa`: Attempt optimizations that help on some NUMA systems.
 - `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 - `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
@@ -32,6 +39,12 @@ Command line options:
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
 - `--grp-attn-n`: Set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
+- `-n N, --n-predict N`: Set the maximum tokens to predict (default: -1)
+- `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
+- `--metrics`: enable prometheus `/metrics` compatible endpoint (default: disabled)
+- `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name (default: template taken from model's metadata). We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
+- `--log-disable`: Output logs to stdout only, default: enabled.
+- `--log-format FORMAT`: Define the log output to FORMAT: json or text (default: json)
 
 ## Build
 
@@ -88,6 +101,12 @@ curl --request POST \
     --data '{"prompt": "Building a website can be done in 10 simple steps:","n_predict": 128}'
 ```
 
+## Advanced testing
+
+We implemented a [server test framework](./tests/README.md) using human-readable scenario.
+
+*Before submitting an issue, please try to reproduce it with this format.*
+
 ## Node JS Test
 
 You need to have [Node.js](https://nodejs.org/en) installed.
@@ -125,9 +144,13 @@ node index.js
 ## API Endpoints
 
 - **GET** `/health`: Returns the current state of the server:
-  - `{"status": "loading model"}` if the model is still being loaded.
-  - `{"status": "error"}` if the model failed to load.
-  - `{"status": "ok"}` if the model is successfully loaded and the server is ready for further requests mentioned below.
+  - 503 -> `{"status": "loading model"}` if the model is still being loaded.
+  - 500 -> `{"status": "error"}` if the model failed to load.
+  - 200 -> `{"status": "ok", "slots_idle": 1, "slots_processing": 2 }` if the model is successfully loaded and the server is ready for further requests mentioned below.
+  - 200 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slot are currently available.
+  - 503 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if the query parameter `fail_on_no_slot` is provided and no slot are currently available.
+
+  If the query parameter `include_slots` is passed, `slots` field will contain internal slots data except if `--slots-endpoint-disable` is set.
 
 - **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 
@@ -137,7 +160,7 @@ node index.js
 
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
 
-    `dynatemp_range`: Dynamic temperature range (default: 0.0, 0.0 = disabled).
+    `dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` (default: 0.0, 0.0 = disabled).
 
     `dynatemp_exponent`: Dynamic temperature exponent (default: 1.0).
 
@@ -185,17 +208,21 @@ node index.js
 
     `ignore_eos`: Ignore end of stream token and continue generating (default: false).
 
-    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
+    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. (default: []).
 
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
+
+    `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum (default: 0)
 
     `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
     `slot_id`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
 
-    `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
+    `cache_prompt`: Re-use previously cached prompt from the last request if possible. This may prevent re-caching the prompt from scratch. (default: false)
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+
+    `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. (default: `["top_k", "tfs_z", "typical_p", "top_p", "min_p", "temperature"]` - these are all the available values)
 
 ### Result JSON
 
@@ -224,7 +251,7 @@ Notice that each `probs` is an array of length `n_probs`.
 
 - `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 - `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
-- `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
+- `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`. These options may differ from the original ones in some way (e.g. bad values filtered out, strings converted to tokens, etc.).
 - `model`: The path to the model loaded with `-m`
 - `prompt`: The provided `prompt`
 - `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
@@ -369,6 +396,81 @@ Notice that each `probs` is an array of length `n_probs`.
             "encoding_format": "float"
     }'
     ```
+
+- **GET** `/slots`: Returns the current slots processing state. Can be disabled with `--slots-endpoint-disable`.
+
+### Result JSON
+
+```json
+[
+    {
+        "dynatemp_exponent": 1.0,
+        "dynatemp_range": 0.0,
+        "frequency_penalty": 0.0,
+        "grammar": "",
+        "id": 0,
+        "ignore_eos": false,
+        "logit_bias": [],
+        "min_p": 0.05000000074505806,
+        "mirostat": 0,
+        "mirostat_eta": 0.10000000149011612,
+        "mirostat_tau": 5.0,
+        "model": "llama-2-7b-32k-instruct.Q2_K.gguf",
+        "n_ctx": 2048,
+        "n_keep": 0,
+        "n_predict": 100000,
+        "n_probs": 0,
+        "next_token": {
+            "has_next_token": true,
+            "n_remain": -1,
+            "num_tokens_predicted": 0,
+            "stopped_eos": false,
+            "stopped_limit": false,
+            "stopped_word": false,
+            "stopping_word": ""
+        },
+        "penalize_nl": true,
+        "penalty_prompt_tokens": [],
+        "presence_penalty": 0.0,
+        "prompt": "Say hello to llama.cpp",
+        "repeat_last_n": 64,
+        "repeat_penalty": 1.100000023841858,
+        "samplers": [
+            "top_k",
+            "tfs_z",
+            "typical_p",
+            "top_p",
+            "min_p",
+            "temperature"
+        ],
+        "seed": 42,
+        "state": 1,
+        "stop": [
+            "\n"
+        ],
+        "stream": false,
+        "task_id": 0,
+        "temperature": 0.0,
+        "tfs_z": 1.0,
+        "top_k": 40,
+        "top_p": 0.949999988079071,
+        "typical_p": 1.0,
+        "use_penalty_prompt_tokens": false
+    }
+]
+```
+
+- **GET** `/metrics`: [Prometheus](https://prometheus.io/) compatible metrics exporter endpoint if `--metrics` is enabled:
+
+Available metrics:
+- `llamacpp:prompt_tokens_total`: Number of prompt tokens processed.
+- `llamacpp:tokens_predicted_total`: Number of generation tokens processed.
+- `llamacpp:prompt_tokens_seconds`: Average prompt throughput in tokens/s.
+- `llamacpp:predicted_tokens_seconds`: Average generation throughput in tokens/s.
+- `llamacpp:kv_cache_usage_ratio`: KV-cache usage. 1 means 100 percent usage.
+- `llamacpp:kv_cache_tokens`: KV-cache tokens.
+- `llamacpp:requests_processing`: Number of request processing.
+- `llamacpp:requests_deferred`: Number of request deferred.
 
 ## More examples
 

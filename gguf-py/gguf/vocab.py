@@ -29,7 +29,7 @@ class SpecialVocab:
         if special_token_types is not None:
             self.special_token_types = special_token_types
         else:
-            self.special_token_types = ('bos', 'eos', 'unk', 'sep', 'pad')
+            self.special_token_types = ('bos', 'eos', 'unk', 'sep', 'pad', 'cls', 'mask')
         self._load(Path(path))
 
     def __repr__(self) -> str:
@@ -152,10 +152,6 @@ class SpecialVocab:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
                 self.add_special_token[typ] = add_entry
-            if not added_tokens:
-                # We will need this to get the content for the token, so if it's empty
-                # may as well just give up.
-                continue
             entry = tokenizer_config.get(f'{typ}_token')
             if isinstance(entry, str):
                 tc_content = entry
