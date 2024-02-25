@@ -792,6 +792,8 @@ def start_server_background(context):
         server_args.extend(['--api-key', context.server_api_key])
     if context.debug:
         server_args.append('--verbose')
+    if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
+        server_args.extend(['--log-format', "text"])
     print(f"starting server with: {context.server_path}", *server_args)
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],
