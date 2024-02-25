@@ -5,14 +5,13 @@ Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/
 Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
 
 **Features:**
- * SOTA LLM inference performance with GGUF quantized models on GPU and CPU
- * [OpenAI API](https://github.com/openai/openai-openapi) compatibles chat completions and embeddings routes
+ * LLM inference of F16 and quantum models on GPU and CPU
+ * [OpenAI API](https://github.com/openai/openai-openapi) compatible chat completions and embeddings routes
+ * Parallel decoding with multi-user support
  * Continuous batching
- * KV cache attention
- * Embedding
- * Multimodal
- * API Key security
- * Production ready monitoring endpoints
+ * Multimodal (wip)
+ * API key security
+ * Monitoring endpoints
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
 
