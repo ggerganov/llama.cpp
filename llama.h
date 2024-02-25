@@ -555,11 +555,20 @@ extern "C" {
                     llama_seq_id   seq_id);
 
     // [EXPERIMENTAL] Compress the data in the KV cache
+    // This will be applied:
+    //   - lazily on next llama_decode()
+    //   - explicitly with llama_kv_cache_update()
     LLAMA_API void llama_kv_cache_compress(
             struct llama_context * ctx,
                        llama_pos   delta);
 
-    // Apply the KV cache updates (such as K-shifts) to the KV data
+    // Defragment the KV cache
+    // This will be applied:
+    //   - lazily on next llama_decode()
+    //   - explicitly with llama_kv_cache_update()
+    LLAMA_API void llama_kv_cache_defrag(struct llama_context * ctx);
+
+    // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
     LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
     //
