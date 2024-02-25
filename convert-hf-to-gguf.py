@@ -192,7 +192,7 @@ class Model:
             return RefactModel
         if model_architecture == "PersimmonForCausalLM":
             return PersimmonModel
-        if model_architecture in ("StableLmForCausalLM", "LlavaStableLMEpochForCausalLM"):
+        if model_architecture in ("StableLmForCausalLM", "StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return StableLMModel
         if model_architecture == "QWenLMHeadModel":
             return QwenModel
