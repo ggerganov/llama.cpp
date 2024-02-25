@@ -114,6 +114,11 @@ Typically finetunes of the base models below are supported as well.
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
 
+**HTTP server**
+
+We offer a fast, lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server.
+
+[LLaMA.cpp web server](./examples/server) can be used to serve local models and easily connect them to existing clients.
 
 **Bindings:**
 
