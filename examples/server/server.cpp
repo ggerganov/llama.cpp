@@ -388,9 +388,9 @@ struct llama_client_slot
             LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", ga_i + ib * bd, ga_i + ib * bd + ga_w, ga_n, (ga_i + ib * bd) / ga_n, (ga_i + ib * bd + ga_w) / ga_n);
             LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", ga_i + ib * bd + ga_w, n_past_se + ib * bd, dd, ga_i + ib * bd + ga_w + dd, n_past_se + ib * bd + dd);
 
-            llama_kv_cache_seq_shift(ctx, id, ga_i, n_past_se, ib * bd);
+            llama_kv_cache_seq_add(ctx, id, ga_i, n_past_se, ib * bd);
             llama_kv_cache_seq_div(ctx, id, ga_i + ib * bd, ga_i + ib * bd + ga_w,ga_n);
-            llama_kv_cache_seq_shift(ctx, id, ga_i + ib * bd + ga_w,n_past_se + ib * bd, dd);
+            llama_kv_cache_seq_add(ctx, id, ga_i + ib * bd + ga_w,n_past_se + ib * bd, dd);
 
             n_past_se -= bd;
 
