@@ -32,6 +32,7 @@ It's possible to override some scenario steps values with environment variables:
  - `PORT` -> `context.server_port` to set the listening port of the server during scenario, default: `8080`
  - `LLAMA_SERVER_BIN_PATH` -> to change the server binary path, default: `../../../build/bin/server`
  - `DEBUG` -> "ON" to enable steps and server verbose mode `--verbose`
+ - `SERVER_LOG_FORMAT_JSON` -> if set switch server logs to json format
 
 ### Run @bug, @wip or @wrong_usage annotated scenario
 
