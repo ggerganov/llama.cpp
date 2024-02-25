@@ -157,9 +157,9 @@ static const char * output_format_str(output_formats format) {
 
 static const char * split_mode_str(llama_split_mode mode) {
     switch (mode) {
-        case LLAMA_SPLIT_NONE:  return "none";
-        case LLAMA_SPLIT_LAYER: return "layer";
-        case LLAMA_SPLIT_ROW:   return "row";
+        case LLAMA_SPLIT_MODE_NONE:  return "none";
+        case LLAMA_SPLIT_MODE_LAYER: return "layer";
+        case LLAMA_SPLIT_MODE_ROW:   return "row";
         default: GGML_ASSERT(!"invalid split mode");
     }
 }
@@ -193,7 +193,7 @@ static const cmd_params cmd_params_defaults = {
     /* type_v        */ {GGML_TYPE_F16},
     /* n_threads     */ {get_num_physical_cores()},
     /* n_gpu_layers  */ {99},
-    /* split_mode    */ {LLAMA_SPLIT_LAYER},
+    /* split_mode    */ {LLAMA_SPLIT_MODE_LAYER},
     /* main_gpu      */ {0},
     /* no_kv_offload */ {false},
     /* mul_mat_q     */ {true},
@@ -358,11 +358,11 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             for (const auto & m : p) {
                 llama_split_mode mode;
                 if (m == "none") {
-                    mode = LLAMA_SPLIT_NONE;
+                    mode = LLAMA_SPLIT_MODE_NONE;
                 } else if (m == "layer") {
-                    mode = LLAMA_SPLIT_LAYER;
+                    mode = LLAMA_SPLIT_MODE_LAYER;
                 } else if (m == "row") {
-                    mode = LLAMA_SPLIT_ROW;
+                    mode = LLAMA_SPLIT_MODE_ROW;
                 } else {
                     invalid_param = true;
                     break;

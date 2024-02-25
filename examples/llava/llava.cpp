@@ -152,7 +152,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
 
     ggml_tensor * newline_tmp = clip_get_newline_tensor(ctx_clip);
     model.newline = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, newline_tmp->ne[0]);
-    if (newline_tmp->backend != GGML_BACKEND_CPU) {
+    if (newline_tmp->backend != GGML_BACKEND_TYPE_CPU) {
         if (newline_tmp->buffer == NULL) {
             printf("newline_tmp tensor buffer is NULL\n");
         }
