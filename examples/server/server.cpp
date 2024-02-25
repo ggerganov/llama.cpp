@@ -670,10 +670,24 @@ struct llama_server_context
                 llama_batch_add(batch, system_tokens[i], i, { 0 }, false);
             }
 
-            if (llama_decode(ctx, batch) != 0)
+            for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += params.n_batch)
             {
-                LOG_TEE("%s: llama_decode() failed\n", __func__);
-                return;
+                const int32_t n_tokens = std::min(params.n_batch, (int32_t) (batch.n_tokens - i));
+                llama_batch batch_view = {
+                    n_tokens,
+                    batch.token    + i,
+                    nullptr,
+                    batch.pos      + i,
+                    batch.n_seq_id + i,
+                    batch.seq_id   + i,
+                    batch.logits   + i,
+                    0, 0, 0, // unused
+                };
+                if (llama_decode(ctx, batch_view) != 0)
+                {
+                    LOG_TEE("%s: llama_decode() failed\n", __func__);
+                    return;
+                }
             }
 
             // assign the system KV cache to all parallel sequences
@@ -1396,8 +1410,8 @@ struct llama_server_context
                         {"n_system_tokens", system_tokens.size()},
                         {"n_cache_tokens",  slot.cache_tokens.size()}
                     });
-                    llama_kv_cache_seq_rm   (ctx, slot.id, n_keep            , n_keep + n_discard);
-                    llama_kv_cache_seq_shift(ctx, slot.id, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
+                    llama_kv_cache_seq_rm (ctx, slot.id, n_keep            , n_keep + n_discard);
+                    llama_kv_cache_seq_add(ctx, slot.id, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
 
                     for (size_t i = n_keep + n_discard; i < slot.cache_tokens.size(); i++)
                     {
@@ -1559,6 +1573,14 @@ struct llama_server_context
                         }
 
                         slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
+
+                        // the last token of the cache is not in the KV cache until the next call to llama_decode
+                        // (it was sampled, pushed into the "cache_tokens", but not yet put in the context)
+                        if (slot.n_past > 0 && slot.n_past == (int32_t) slot.cache_tokens.size())
+                        {
+                            slot.n_past -= 1;
+                        }
+
                         slot.num_prompt_tokens_processed = slot.num_prompt_tokens - slot.n_past;
 
                         if (slot.ga_n != 1)
@@ -1661,9 +1683,34 @@ struct llama_server_context
                 if (slot.ga_n != 1)
                 {
                     // context extension via Self-Extend
+<<<<<<< HEAD
                     // TODO @ngxson: What happen if we're retrying with smaller n_batch?
                     //       By the second time we retry, "grp_attn_shift" has already been called
                     slot.grp_attn_shift(ctx, n_tokens);
+=======
+                    while (slot.n_past_se >= slot.ga_i + slot.ga_w)
+                    {
+                        const int ib = (slot.ga_n * slot.ga_i) / slot.ga_w;
+                        const int bd = (slot.ga_w / slot.ga_n) * (slot.ga_n - 1);
+                        const int dd = (slot.ga_w / slot.ga_n) - ib * bd - slot.ga_w;
+
+                        LOG_TEE("\n");
+                        LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i, slot.n_past_se, ib * bd, slot.ga_i + ib * bd, slot.n_past_se + ib * bd);
+                        LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
+                        LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
+
+                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i, slot.n_past_se, ib * bd);
+                        llama_kv_cache_seq_div(ctx, slot.id, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w,slot.ga_n);
+                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i + ib * bd + slot.ga_w,slot.n_past_se + ib * bd, dd);
+
+                        slot.n_past_se -= bd;
+
+                        slot.ga_i += slot.ga_w / slot.ga_n;
+
+                        LOG_TEE("\nn_past_old = %d, n_past = %d, ga_i = %d\n\n", slot.n_past_se + bd, slot.n_past_se, slot.ga_i);
+                    }
+                    slot.n_past_se += n_tokens;
+>>>>>>> master
                 }
             }
 
