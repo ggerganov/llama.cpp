@@ -305,7 +305,7 @@ struct llama_client_slot
 
     void print_timings(llama_client_slot &slot, bool flag = false) const {
         if (flag) {
-            printf("\033[21;0H");        // needs to be sensitive to the number of slots
+            printf("\033[5;0H");        // needs to be sensitive to the number of slots
         };
         LOG_TEE("Finished processing slot %d.\n", slot.id);
         LOG_TEE("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
@@ -315,7 +315,7 @@ struct llama_client_slot
         LOG_TEE("%s:       total time = %10.2f ms\n", __func__, t_prompt_processing + t_token_generation);
 
         if (flag) {
-            printf("\033[25;0HPress any key ... ");
+            printf("\033[KPress any key ... \n");
             getchar();
         }
     }
@@ -323,11 +323,11 @@ struct llama_client_slot
 
 // experimental/diagostic graphic to show kvcache status
 // requires just `slots` and `params.n_ctx` as parameters
-static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
+static void kvgraphics(std::vector<llama_client_slot>& slots) {
 
     int max_length = 128;
     int num_blocks = slots.size();
-    size_t slot_cache_size = cache_size / num_blocks;
+    size_t slot_cache_size = slots[0].n_ctx;
     bool cls_flag = true;   // this flag only prevents repeated cls inside one call
     std::string slot_symbol1 = "";
     std::string slot_symbol2 = "";
@@ -344,13 +344,16 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
 
     // Print visualization
     // Always start at the top left of the window (H means 'move cursor to this position'; 2J = cls)
+    // See eblow for a rethink because controlling log printing is such a pain in C++11
     // Only clear the screen the first time round
     if (cls_flag) {
-        printf("\033[2J");
+        // printf("\033[2J");
         cls_flag = false;
     }
     printf("\033[1;0H\033[K**************************\n\033[KKVcache occupancy by slot:\n\033[K**************************\n");
 
+    // we can know and control how many lines of output we are printing so just start below that and fix the graphics location
+    printf("\033[%d;0H", 10);
     for(int i=0; i<num_blocks; i++) {
         printf("\033[K");  // clear the current line
         for(int j=0; j < max_length; j++) {
@@ -384,7 +387,8 @@ static void kvgraphics(std::vector<llama_client_slot>& slots, int cache_size) {
         }
     printf(" %4zu/%5zu %2d %s %s %s\n", slots[i].cache_tokens.size(), slot_cache_size, slots[i].id, slot_symbol1.c_str(), slot_symbol2.c_str(), slot_symbol3.c_str());
     }
-    printf("\n\033[%dJ", num_blocks+5);     // move cursor to end of cache display
+    printf("\033[5;0H");   // just start two lines below the heading
+    //printf("\n\033[%d;0H\033[%dJ", 10, num_blocks+5);     // move cursor to end of cache display and clear thereafter
 }
 
 struct llama_server_context
@@ -494,7 +498,7 @@ struct llama_server_context
             slot.n_ctx = n_ctx_slot;
             slot.n_predict = params.n_predict;
 
-            LOG_TEE(" -> Slot %i - max context: %i\n", slot.id, n_ctx_slot);
+            LOG_TEE(" -> Slot %2i - max context: %i\n", slot.id, n_ctx_slot);
 
             const int ga_n = params.grp_attn_n;
             const int ga_w = params.grp_attn_w;
@@ -504,7 +508,7 @@ struct llama_server_context
                 GGML_ASSERT(ga_w % ga_n == 0            && "ga_w must be a multiple of ga_n");             // NOLINT
                 //GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of ga_w");    // NOLINT
                 //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * ga_n"); // NOLINT
-                LOG_TEE(" -> Slot %i - self-extend: ga_n = %d, ga_w = %d\n", slot.id, ga_n, ga_w);
+                LOG_TEE(" -> Slot %2i - self-extend: ga_n = %d, ga_w = %d\n", slot.id, ga_n, ga_w);
             }
 
             slot.ga_i = 0;
@@ -581,6 +585,7 @@ struct llama_server_context
 
         for (llama_client_slot & slot : slots)
         {
+            printf("\033[5;0H");
             if (slot.id == -1 && slot.available())
             {
                 LOG_TEE("Unallocated task now using slot %d", slot.id);
@@ -1438,6 +1443,7 @@ struct llama_server_context
                 // why should task.data already contain a slot_id key when we haven't allocated it?
                 // because if it doesnt the returned value will be -1; what makes it anything else?
                 int requested_slot = json_value(task.data, "slot_id", -1);
+                printf("\033[5;0H\033[K");
                 LOG_TEE("Task %d requesting slot %d\n", task.id, requested_slot);
 
                 // why are we suddenly using 'slot' as a pointer here - confusing?
@@ -1449,6 +1455,7 @@ struct llama_server_context
                     queue_tasks.defer(task);
                     break;
                 } else {
+                    printf("\033[5;0H\033[K");
                     LOG_TEE("Activating slot %d.\n", (*slot).id);
                 }
 
@@ -1554,6 +1561,7 @@ struct llama_server_context
                     const int n_left    = system_tokens.size() + slot.n_past - slot.params.n_keep - 1;
                     const int n_discard = n_left / 2;       // is this arbitrary?
 
+                    printf("\033[5;0H\033[K");
                     LOG_TEE("slot %d: context shift - n_keep = %d, n_left = %d, n_discard = %d\n", slot.id, slot.params.n_keep, n_left, n_discard);
                     llama_kv_cache_seq_rm   (ctx, slot.id, slot.params.n_keep + 1            , slot.params.n_keep + n_discard + 1);
                     llama_kv_cache_seq_shift(ctx, slot.id, slot.params.n_keep + 1 + n_discard, system_tokens.size() + slot.n_past, -n_discard);
@@ -1588,6 +1596,7 @@ struct llama_server_context
                 slot.command = NONE;
                 slot.t_last_used = ggml_time_us();
 
+                printf("\033[6;0H\033[K");
                 LOG_TEE("slot %d released (%d tokens in cache)\n", slot.id, (int) slot.cache_tokens.size());
                 queue_tasks.notify_slot_changed();  // why don't we immediately reallocate the released slot without waiting? Is this what -cb does?
 
@@ -1736,6 +1745,7 @@ struct llama_server_context
                             slot.ga_i = ga_i;
                         }
 
+                        printf("\033[7;0H\033[K");
                         LOG_TEE("slot %d : in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
                     }
 
@@ -1752,6 +1762,7 @@ struct llama_server_context
                         }
                     }
 
+                    printf("\033[5;0H\033[K");
                     LOG_TEE("slot %d : kv cache rm - [%d, end)\n", slot.id, (int) system_tokens.size() + slot.n_past);
 
                     llama_kv_cache_seq_rm(ctx, slot.id, system_tokens.size() + slot.n_past, -1);
@@ -1936,7 +1947,7 @@ struct llama_server_context
 
         // we are still inside llama_server_context so we can use an unqualified parameter
         if (skvgraphics) {
-            kvgraphics(slots, params.n_ctx);
+            kvgraphics(slots);
             }
 
         return true;
@@ -2916,7 +2927,8 @@ int main(int argc, char **argv)
                     return;
                 }
                 // it appears that here we first get ONE request to parse; then TEN; then ONE-by-ONE
-                printf("Request body to parse: %s", req.body.c_str());
+                printf("\033[5;0H\033[K");
+                LOG_TEE("Request body to parse: %s", req.body.c_str());
                 if (llama.skvinteract) {
                     getchar();
                 }

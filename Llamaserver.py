@@ -52,8 +52,12 @@ def send_request(q, question, event, count, num_requests):
     delay = 0.1
 
     global bar
-
-    data = {'prompt': question}
+    
+    system = "You are a helpful assistant who answers all requests \
+courteously and accurately without undue repetion. \
+you pay close attention to the nuance of a question and response accordingly."
+    
+    data = {'system': system, 'prompt': question}
     
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -114,7 +118,7 @@ if __name__ == "__main__":
     
     for i in range(num_requests):
         country = country_list[i % len(country_list)]
-        question = f"What was the total population of {country} in 2018?"
+        question = f"Tell me the political history of {country} up to 2018."
         # NOTE: don't pass the parameter as a function call; pass in args
         print(f"Processing request {i} / {num_requests}: {question}\n")
         event = threading.Event()

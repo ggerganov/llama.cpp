@@ -36,6 +36,7 @@ extern bool server_verbose;
 #define LOG_WARNING(MSG, ...) server_log("WARNING", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(   MSG, ...) server_log("INFO",    __func__, __LINE__, MSG, __VA_ARGS__)
 
+
 //
 // parallel
 //
@@ -244,7 +245,9 @@ struct llama_server_queue {
     void defer(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         queue_tasks_deferred.push_back(std::move(task));
-        LOG_TEE("Deferred task queue now has %3zu members.\n", queue_tasks_deferred.size());
+        printf("\033[1;50H*** ");
+        LOG_TEE("Deferred queue now has %3zu members.\n", queue_tasks_deferred.size());
+        printf("\033[5;0H");
     }
 
     // Get the next id for creating a new task
@@ -390,15 +393,17 @@ struct llama_server_response {
     void add_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
-        printf("\033[21;0H");
+        printf("\033[1;50H*** ");
         LOG_TEE("Waiting task list size after addition: %zu.\n", waiting_task_ids.size());
+        printf("\033[5;0H");
     }
 
     void remove_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
-        printf("\033[21;0H");
+        printf("\033[2;50H*** ");
         LOG_TEE("Waiting task list size after removal: %zu.\n", waiting_task_ids.size());
+        printf("\033[5;0H");
     }
 
     // This function blocks the thread until there is a response for this task_id
