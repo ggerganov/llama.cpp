@@ -10,7 +10,6 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
  * Parallel decoding with multi-user support
  * Continuous batching
  * Multimodal (wip)
- * API key security
  * Monitoring endpoints
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
