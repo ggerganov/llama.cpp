@@ -302,7 +302,7 @@ struct llama_client_slot
     }
 
     void print_timings() const {
-        static char buffer[512];
+       char buffer[512];
         double t_token = t_prompt_processing / num_prompt_tokens_processed;
         double n_tokens_second = 1e3 / t_prompt_processing * num_prompt_tokens_processed;
         sprintf(buffer, "prompt eval time     = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)",
