@@ -3,7 +3,7 @@
 This example demonstrates a simple HTTP API server and a simple web front end to interact with llama.cpp.
 It is set only to run on the local machine using http://127.0.0.1:8080 but it can serve a local network or a public network if the router allows port forwarding.
 To make the server accessible to other machines on the local or public network change the server username to '0.0.0.0'.
-It will then run on http://0.0.0.0:8080 and to access the server on the host machine the url must be http://<url of local machine>:8080
+It will then run on http://0.0.0.0:8080 and to access the server on the host machine the url must be http://IPaddress:8080
 So for example http://192.168.1.42:8080 will have the same effect as localhost:8080 when the servername is 127.0.0.1
 
 Command line options:
@@ -41,8 +41,8 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
 - `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load "a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
-- '-skvg' or '--show-graphics': display a dynamic graphic of kvcache occupancy per slot.
-- '-skvi' or '--show-interactive-graphics': display a dynamic graphic of kvcache that requires user intervention to move on after each request
+- `-skvg` or `--show-graphics`: display a dynamic graphic of kvcache occupancy per slot.
+- `-skvi` or `--show-interactive-graphics`: display a dynamic graphic of kvcache that requires user intervention to move on after each request
 - `--grp-attn-n`: Set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
 - `-n, --n-predict`: Set the maximum tokens to predict (default: -1)
