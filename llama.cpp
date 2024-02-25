@@ -2275,7 +2275,7 @@ static void llama_kv_cache_clear(struct llama_kv_cache & cache) {
     cache.used = 0;
 }
 
-static void llama_kv_cache_seq_rm(
+static bool llama_kv_cache_seq_rm(
         struct llama_kv_cache & cache,
                  llama_seq_id   seq_id,
                     llama_pos   p0,
@@ -2285,11 +2285,23 @@ static void llama_kv_cache_seq_rm(
     if (p0 < 0) p0 = 0;
     if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
 
+    // models like Mamba can't have a state partially erased
     if (cache.unlimited) {
-        // can only remove whole sequences for models like Mamba
-        GGML_ASSERT(p0 == 0);
-        GGML_ASSERT((uint32_t)seq_id < cache.size);
-        GGML_ASSERT(cache.cells[seq_id].pos < p1);
+        if (seq_id >= (int64_t) cache.size) {
+            // could be fatal
+            return false;
+        }
+        if (0 <= seq_id) {
+            // partial intersection is invalid
+            if ((0 < p0 && p0 <= cache.cells[seq_id].pos) || (0 < p1 && p1 <= cache.cells[seq_id].pos)) {
+                return false;
+            }
+        } else {
+            // seq_id is negative, then the range should include everything or nothing
+            if (p0 != p1 && (p0 != 0 || p1 != std::numeric_limits<llama_pos>::max())) {
+                return false;
+            }
+        }
     }
 
     for (uint32_t i = 0; i < cache.size; ++i) {
@@ -2313,6 +2325,8 @@ static void llama_kv_cache_seq_rm(
 
     // If we freed up a slot, set head to it so searching can start there.
     if (new_head != cache.size && new_head < cache.head) cache.head = new_head;
+
+    return true;
 }
 
 static void llama_kv_cache_seq_cp(
@@ -12514,13 +12528,11 @@ struct llama_context * llama_new_context_with_model(
 
     // Mamba only needs a constant number of KV cache cells per sequence
     if (model->arch == LLM_ARCH_MAMBA) {
-        // Mamba needs as many KV cells as there are sequences kept at any time
-        // The extra cell allows dedicating a sequence id to the system prompt
-        // TODO: find a better way to get the max number of parallel sequences
-        kv_size = params.n_parallel + 1;
+        // Mamba needs at least as many KV cells as there are sequences kept at any time
+        kv_size = std::max((uint32_t) 1, params.n_parallel);
         // it's probably best to keep as much precision as possible for the states
-        type_k = GGML_TYPE_F32; // required by ggml_set for Mamba's conv_state
-        type_v = GGML_TYPE_F32; // required by ggml_ssm_scan for Mamba's ssm_state
+        type_k = GGML_TYPE_F32; // required by ggml_ssm_conv for Mamba's conv_states
+        type_v = GGML_TYPE_F32; // required by ggml_ssm_scan for Mamba's ssm_states
     }
 
     GGML_ASSERT(hparams.n_embd_head_k % ggml_blck_size(type_k) == 0);
@@ -13039,8 +13051,8 @@ void llama_kv_cache_clear(struct llama_context * ctx) {
     llama_kv_cache_clear(ctx->kv_self);
 }
 
-void llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
-    llama_kv_cache_seq_rm(ctx->kv_self, seq_id, p0, p1);
+bool llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
+    return llama_kv_cache_seq_rm(ctx->kv_self, seq_id, p0, p1);
 }
 
 void llama_kv_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {

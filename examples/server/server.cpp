@@ -377,12 +377,16 @@ struct llama_server_context
                 return false;
             }
 
-            if (params.n_ctx < 2048) { // request larger context for the image embedding
+            if (params.n_ctx != 0 && params.n_ctx < 2048) { // request larger context for the image embedding
                 params.n_ctx = 2048;
             }
         }
 
+        // dedicate one sequence to the system prompt
+        params.n_parallel += 1;
+
         std::tie(model, ctx) = llama_init_from_gpt_params(params);
+        params.n_parallel -= 1; // but be sneaky about it
         if (model == nullptr)
         {
             LOG_ERROR("unable to load model", {{"model", params.model}});
@@ -862,9 +866,9 @@ struct llama_server_context
             }
 
             // assign the system KV cache to all parallel sequences
-            for (int32_t i = 1; i < params.n_parallel; ++i)
+            for (int32_t i = 1; i <= params.n_parallel; ++i)
             {
-                llama_kv_cache_seq_cp(ctx, 0, i, 0, system_tokens.size());
+                llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
             }
         }
 
@@ -1351,7 +1355,7 @@ struct llama_server_context
             std::vector<llama_token> append_tokens = tokenize(json_prompt, false); // has next image
             for (int i = 0; i < (int) append_tokens.size(); ++i)
             {
-                llama_batch_add(batch, append_tokens[i], system_tokens.size() + slot.n_past, { slot.id }, true);
+                llama_batch_add(batch, append_tokens[i], system_tokens.size() + slot.n_past, { slot.id + 1 }, true);
                 slot.n_past += 1;
             }
         }
@@ -1587,8 +1591,8 @@ struct llama_server_context
                         {"n_system_tokens", system_tokens.size()},
                         {"n_cache_tokens",  slot.cache_tokens.size()}
                     });
-                    llama_kv_cache_seq_rm (ctx, slot.id, n_keep            , n_keep + n_discard);
-                    llama_kv_cache_seq_add(ctx, slot.id, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
+                    llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
+                    llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
 
                     for (size_t i = n_keep + n_discard; i < slot.cache_tokens.size(); i++)
                     {
@@ -1640,7 +1644,7 @@ struct llama_server_context
 
             // TODO: we always have to take into account the "system_tokens"
             //       this is not great and needs to be improved somehow
-            llama_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id }, true);
+            llama_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id + 1 }, true);
             slot.n_past += 1;
         }
 
@@ -1810,13 +1814,28 @@ struct llama_server_context
                         }
                     }
 
+                    // keep only the common part
                     int p0 = (int) system_tokens.size() + slot.n_past;
                     LOG_INFO("kv cache rm [p0, end)", {
                         { "slot_id", slot.id },
                         { "task_id", slot.task_id },
                         { "p0",      p0 }
                     });
-                    llama_kv_cache_seq_rm(ctx, slot.id, p0, -1);
+                    if (!llama_kv_cache_seq_rm(ctx, slot.id + 1, p0, -1)) {
+                        // could not partially delete (likely using a non-Transformer model)
+                        // TODO: logging
+                        llama_kv_cache_seq_rm(ctx,    slot.id + 1, -1, -1);
+                        llama_kv_cache_seq_cp(ctx, 0, slot.id + 1, -1, -1);
+
+                        // there is no common part left (except for the system prompt)
+                        // TODO: maybe find a way to refactor this to reuse the !cache_prompt case above
+                        slot.n_past = 0;
+                        slot.n_past_se = 0;
+                        slot.ga_i = 0;
+                        slot.n_prompt_tokens_processed = slot.n_prompt_tokens;
+                        // TODO: is the system prompt ever in the sampling context?
+                        llama_sampling_reset(slot.ctx_sampling);
+                    }
 
                     LOG_VERBOSE("prompt ingested", {
                                                     {"n_past",  slot.n_past},
@@ -1845,7 +1864,7 @@ struct llama_server_context
                                 ga_i += ga_w/ga_n;
                             }
                         }
-                        llama_batch_add(batch, prefix_tokens[slot.n_past], system_tokens.size() + slot_npast, {slot.id }, false);
+                        llama_batch_add(batch, prefix_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id + 1 }, false);
                         slot_npast++;
                     }
 
@@ -1899,9 +1918,9 @@ struct llama_server_context
                         LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
                         LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
 
-                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i, slot.n_past_se, ib * bd);
-                        llama_kv_cache_seq_div(ctx, slot.id, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w,slot.ga_n);
-                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i + ib * bd + slot.ga_w,slot.n_past_se + ib * bd, dd);
+                        llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i, slot.n_past_se, ib * bd);
+                        llama_kv_cache_seq_div(ctx, slot.id + 1, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w,slot.ga_n);
+                        llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i + ib * bd + slot.ga_w,slot.n_past_se + ib * bd, dd);
 
                         slot.n_past_se -= bd;
 
