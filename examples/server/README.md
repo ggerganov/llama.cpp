@@ -1,8 +1,20 @@
-# llama.cpp/example/server
+# LLaMA.cpp HTTP Server
 
-This example demonstrates a simple HTTP API server and a simple web front end to interact with llama.cpp.
+Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.
 
-Command line options:
+Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
+
+**Features:**
+ * LLM inference of F16 and quantum models on GPU and CPU
+ * [OpenAI API](https://github.com/openai/openai-openapi) compatible chat completions and embeddings routes
+ * Parallel decoding with multi-user support
+ * Continuous batching
+ * Multimodal (wip)
+ * Monitoring endpoints
+
+The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
+
+**Command line options:**
 
 - `--threads N`, `-t N`: Set the number of threads to use during generation.
 - `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation.
