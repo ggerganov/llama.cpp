@@ -2,6 +2,8 @@
   lib,
   llamaVersion,
   numpy,
+  tqdm,
+  sentencepiece,
   poetry-core,
   buildPythonPackage,
   pytestCheckHook,
@@ -12,7 +14,7 @@ buildPythonPackage {
   version = llamaVersion;
   pyproject = true;
   nativeBuildInputs = [ poetry-core ];
-  propagatedBuildInputs = [ numpy ];
+  propagatedBuildInputs = [ numpy tqdm sentencepiece ];
   src = lib.cleanSource ../../gguf-py;
   pythonImportsCheck = [
     "numpy"
