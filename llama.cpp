@@ -11126,13 +11126,6 @@ static int32_t llama_merge_models_internal(
 
     // process layers
     for (int i = 0; i < ml1.n_tensors; ++i) {
-        struct ggml_init_params params = {
-            /*.mem_size   =*/ 1000u*ggml_tensor_overhead(),
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ true,
-        };
-        ggml_context * ctx_ggml = ggml_init(params);
-
         struct ggml_tensor * tensor1 = ml1.get_tensor_meta(i);
         std::vector<no_init<uint8_t>> buf1;
         const std::string name = ggml_get_name(tensor1);
@@ -11142,54 +11135,54 @@ static int32_t llama_merge_models_internal(
         std::vector<no_init<uint8_t>> buf2;
         struct ggml_tensor * tensor2 = ml2.get_tensor_meta(idx_ml2);
 
-        struct ggml_tensor * result;
+        // GGML_TYPE_F16
+        std::vector<no_init<uint8_t>> result(tensor_size);
 
         if (llama_format_tensor_shape(tensor1) != llama_format_tensor_shape(tensor2)) {
             LLAMA_LOG_ERROR("Tensor shapes are different\n");
+            return -1;
         }
 
-        int i_layer;
+        int i_layer = -1;
         if (sscanf(name.c_str(), "blk.%d.", &i_layer) != 1) {
             // non-layer, simply copy
             read_tensor_data(tensor1, ml1, buf1);
-            result = tensor1; // no change
+            memcpy(result.data(), tensor1->data, tensor_size);
         } else {
-            LLAMA_LOG_INFO("i_layer %d\n", i_layer);
+            auto conf = get_config_for_layer(i_layer);
             read_tensor_data(tensor1, ml1, buf1);
             read_tensor_data(tensor2, ml2, buf2);
-            auto conf = get_config_for_layer(i_layer);
-            struct ggml_cgraph * gf = ggml_new_graph(ctx_ggml);
-            struct ggml_tensor * t1 = ggml_dup_tensor(ctx_ggml, tensor1);
-            struct ggml_tensor * t2 = ggml_dup_tensor(ctx_ggml, tensor2);
-            t1 = ggml_cpy(ctx_ggml, tensor1, t1);
-            t2 = ggml_cpy(ctx_ggml, tensor2, t2);
-            t1 = ggml_scale(ctx_ggml, t1, conf->scale1);
-            t2 = ggml_scale(ctx_ggml, t2, conf->scale2);
-            result = ggml_add(ctx_ggml, t1, t2);
-            ggml_build_forward_expand(gf, result);
-            ggml_graph_dump_dot(gf, NULL, "/tmp/___cgraph.txt");
-            ggml_graph_compute_with_ctx(ctx_ggml, gf, 1);
-        }
+            LLAMA_LOG_INFO("Merge layer %d with scale1 = %f, scale2 = %f\n", i_layer, conf->scale1, conf->scale2);
 
-        LLAMA_LOG_INFO("i_layer %d ===\n", i_layer);
+            if (tensor1->type == GGML_TYPE_F16 && tensor2->type == GGML_TYPE_F16) {
+                for (size_t i = 0; i < result.size() / sizeof(float); i++) {
+                    float * t1 = (float *) tensor1->data;
+                    float * t2 = (float *) tensor2->data;
+                    float * dest = (float *) result.data();
+                    dest[i] = t1[i] * conf->scale1 + t2[i] * conf->scale2;
+                }
+            } else if (tensor1->type == GGML_TYPE_F32 && tensor2->type == GGML_TYPE_F32) {
+                for (size_t i = 0; i < result.size() / sizeof(double); i++) {
+                    double * t1 = (double *) tensor1->data;
+                    double * t2 = (double *) tensor2->data;
+                    double * dest = (double *) result.data();
+                    dest[i] = t1[i] * conf->scale1 + t2[i] * conf->scale2;
+                }
+            } else {
+                LLAMA_LOG_ERROR("Only GGML_TYPE_F16 or GGML_TYPE_F32 is supported, current type = %s\n", ggml_type_name(tensor1->type));
+                return -1;
+            }
+        }
 
         LLAMA_LOG_INFO("[%4d/%4d] %36s - [%s], type = %6s\n",
                i + 1, ml1.n_tensors,
-               ggml_get_name(result),
-               llama_format_tensor_shape(result).c_str(),
-               ggml_type_name(result->type));
-
-        //std::vector<no_init<uint8_t>> tensor_data(tensor_size);
-        //ggml_backend_tensor_get(tensor1, tensor_data.data(), 0, tensor_size);
+               ggml_get_name(tensor1),
+               llama_format_tensor_shape(tensor1).c_str(),
+               ggml_type_name(tensor1->type));
 
         // write tensor data + padding
-        const char * buf = (const char *) result->data;
-        printf("%d %d\n", buf[0], buf[1]);
-        fout.write((const char *) result->data, tensor_size);
+        fout.write((const char *) result.data(), tensor_size);
         zeros(fout, GGML_PAD(tensor_size, GGUF_DEFAULT_ALIGNMENT) - tensor_size);
-        ggml_free(ctx_ggml);
-
-        if (i > 3) break;
     }
 
     // go back to beginning of file and write the updated meta data
