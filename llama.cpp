@@ -12089,7 +12089,6 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_ORION:
         case LLM_ARCH_INTERNLM2:
         case LLM_ARCH_MINICPM:
-        case LLM_ARCH_GEMMA:
             return LLAMA_ROPE_TYPE_NORM;
 
         // the pairs of head values are offset by n_rot/2
@@ -12101,6 +12100,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_QWEN:
         case LLM_ARCH_QWEN2:
         case LLM_ARCH_PHI2:
+        case LLM_ARCH_GEMMA:
             return LLAMA_ROPE_TYPE_NEOX;
 
         // all model arches should be listed explicitly here
