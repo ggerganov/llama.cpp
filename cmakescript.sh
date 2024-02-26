@@ -11,3 +11,5 @@ else
   echo "Usage: $0 (Debug|Release)"
   exit 1
 fi
+
+cd build

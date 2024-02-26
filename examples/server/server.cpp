@@ -37,7 +37,7 @@ using json = nlohmann::json;
 
 struct server_params
 {
-    std::string hostname = "0.0.0.0"; // 127.0.0.1 restricts to localhost only; use 0.0.0.0 for local network.
+    std::string hostname = "127.0.0.1";   // --host switches to use 0.0.0.0 for public network.
     std::vector<std::string> api_keys;
     std::string public_path = "examples/server/public";
     std::string chat_template = "";
@@ -307,12 +307,12 @@ struct llama_client_slot
         if (flag) {
             printf("\033[5;0H");        // needs to be sensitive to the number of slots
         };
-        LOG_TEE("Finished processing slot %d.\n", slot.id);
-        LOG_TEE("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
+        LOG("Finished processing slot %d.\n", slot.id);
+        LOG("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, t_prompt_processing, num_prompt_tokens_processed, t_prompt_processing / num_prompt_tokens_processed, 1e3 / t_prompt_processing * num_prompt_tokens_processed);
-        LOG_TEE("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+        LOG("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, t_token_generation, n_decoded,t_token_generation / n_decoded, 1e3 / t_token_generation * n_decoded);
-        LOG_TEE("%s:       total time = %10.2f ms\n", __func__, t_prompt_processing + t_token_generation);
+        LOG("%s:       total time = %10.2f ms\n", __func__, t_prompt_processing + t_token_generation);
 
         if (flag) {
             printf("\033[KPress any key ... \n");
@@ -347,7 +347,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots) {
     // See eblow for a rethink because controlling log printing is such a pain in C++11
     // Only clear the screen the first time round
     if (cls_flag) {
-        // printf("\033[2J");
+        printf("\033[2J");
         cls_flag = false;
     }
     printf("\033[1;0H\033[K**************************\n\033[KKVcache occupancy by slot:\n\033[K**************************\n");
@@ -355,7 +355,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots) {
     // we can know and control how many lines of output we are printing so just start below that and fix the graphics location
     printf("\033[%d;0H", 10);
     for(int i=0; i<num_blocks; i++) {
-        printf("\033[K");  // clear the current line
+        //printf("\033[K");  // clear the current line
         for(int j=0; j < max_length; j++) {
             int used = slots[i].cache_tokens.size() * max_length / slot_cache_size;
             if((j < max_length / 2) && (j < used)) {
@@ -446,7 +446,7 @@ struct llama_server_context
         params = params_;
         if (!params.mmproj.empty()) {
             multimodal = true;
-            LOG_TEE("Multi Modal Mode Enabled");
+            LOG("Multi Modal Mode Enabled");
             clp_ctx = clip_model_load(params.mmproj.c_str(), /*verbosity=*/ 1);
             if(clp_ctx == nullptr) {
                 LOG_ERROR("unable to load clip model", {{"model", params.mmproj}});
@@ -469,7 +469,7 @@ struct llama_server_context
             const int n_embd_clip = clip_n_mmproj_embd(clp_ctx);
             const int n_embd_llm  = llama_n_embd(model);
             if (n_embd_clip != n_embd_llm) {
-                LOG_TEE("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_embd_clip, n_embd_llm);
+                LOG("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_embd_clip, n_embd_llm);
                 llama_free(ctx);
                 llama_free_model(model);
                 return false;
@@ -508,7 +508,7 @@ struct llama_server_context
                 GGML_ASSERT(ga_w % ga_n == 0            && "ga_w must be a multiple of ga_n");             // NOLINT
                 //GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of ga_w");    // NOLINT
                 //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * ga_n"); // NOLINT
-                LOG_TEE(" -> Slot %2i - self-extend: ga_n = %d, ga_w = %d\n", slot.id, ga_n, ga_w);
+                LOG(" -> Slot %2i - self-extend: ga_n = %d, ga_w = %d\n", slot.id, ga_n, ga_w);
             }
 
             slot.ga_i = 0;
@@ -588,13 +588,13 @@ struct llama_server_context
             printf("\033[5;0H");
             if (slot.id == -1 && slot.available())
             {
-                LOG_TEE("Unallocated task now using slot %d", slot.id);
+                LOG("Unallocated task now using slot %d", slot.id);
                 return &slot;
             }
 
             if (slot.id == id && slot.available())
             {
-                LOG_TEE("Using id-based available slot called by id: %d\n", slot.id);
+                LOG("Using id-based available slot called by id: %d\n", slot.id);
                 return &slot;
             }
 
@@ -816,10 +816,10 @@ struct llama_server_context
                     img_sl.img_data = clip_image_u8_init();
                     if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
                     {
-                        LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
+                        LOG("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
                         return false;
                     }
-                    LOG_TEE("slot %i - loaded image\n", slot->id);
+                    LOG("slot %i - loaded image\n", slot->id);
                     img_sl.request_encode_image = true;
                     slot->images.push_back(img_sl);
                 }
@@ -851,12 +851,12 @@ struct llama_server_context
                                     }
                                 }
                                 if (!found) {
-                                    LOG_TEE("ERROR: Image with id: %i, not found.\n", img_id);
+                                    LOG("ERROR: Image with id: %i, not found.\n", img_id);
                                     slot->images.clear();
                                     return false;
                                 }
                             } catch (const std::invalid_argument& e) {
-                                LOG_TEE("Invalid image number id in prompt\n");
+                                LOG("Invalid image number id in prompt\n");
                                 slot->images.clear();
                                 return false;
                             }
@@ -879,7 +879,7 @@ struct llama_server_context
 
         all_slots_are_idle = false;
 
-        LOG_TEE("slot %i is processing [task id: %i]\n", slot->id, slot->task_id);
+        LOG("slot %i is processing [task id: %i]\n", slot->id, slot->task_id);
 
         return true;
     }
@@ -906,7 +906,7 @@ struct llama_server_context
 
             if (llama_decode(ctx, batch) != 0)
             {
-                LOG_TEE("%s: llama_decode() failed\n", __func__);
+                LOG("%s: llama_decode() failed\n", __func__);
                 return;
             }
 
@@ -917,7 +917,7 @@ struct llama_server_context
             }
         }
 
-        LOG_TEE("system prompt updated\n");
+        LOG("system prompt updated\n");
         system_need_update = false;
     }
 
@@ -1097,7 +1097,7 @@ struct llama_server_context
             }
 
             if (!llava_image_embed_make_with_clip_img(clp_ctx, params.n_threads, img.img_data, &img.image_embedding, &img.image_tokens)) {
-                LOG_TEE("Error processing the given image");
+                LOG("Error processing the given image");
                 return false;
             }
 
@@ -1110,7 +1110,7 @@ struct llama_server_context
 
     void send_error(task_server& task, const std::string &error)
     {
-        LOG_TEE("task %i - error: %s\n", task.id, error.c_str());
+        LOG("task %i - error: %s\n", task.id, error.c_str());
         task_result res;
         res.id = task.id;
         res.multitask_id = task.multitask_id;
@@ -1353,7 +1353,7 @@ struct llama_server_context
                 };
                 if (llama_decode(ctx, batch_view))
                 {
-                    LOG_TEE("%s : failed to eval\n", __func__);
+                    LOG("%s : failed to eval\n", __func__);
                     return false;
                 }
             }
@@ -1371,7 +1371,7 @@ struct llama_server_context
                 llama_batch batch_img = { n_eval, nullptr, (img.image_embedding + i * n_embd), nullptr, nullptr, nullptr, nullptr, slot.n_past, 1, 0, };
                 if (llama_decode(ctx, batch_img))
                 {
-                    LOG_TEE("%s : failed to eval image\n", __func__);
+                    LOG("%s : failed to eval image\n", __func__);
                     return false;
                 }
                 slot.n_past += n_eval;
@@ -1444,19 +1444,19 @@ struct llama_server_context
                 // because if it doesnt the returned value will be -1; what makes it anything else?
                 int requested_slot = json_value(task.data, "slot_id", -1);
                 printf("\033[5;0H\033[K");
-                LOG_TEE("Task %d requesting slot %d\n", task.id, requested_slot);
+                LOG("Task %d requesting slot %d\n", task.id, requested_slot);
 
                 // why are we suddenly using 'slot' as a pointer here - confusing?
                 llama_client_slot *slot = get_slot(requested_slot); // returns nullptr if no slot available
                 if (slot == nullptr)
                 {
                     // if no slot is available, we defer this task for processing later
-                    LOG_TEE("no slot is available for task %d\n", task.id);
+                    LOG("no slot is available for task %d\n", task.id);
                     queue_tasks.defer(task);
                     break;
                 } else {
                     printf("\033[5;0H\033[K");
-                    LOG_TEE("Activating slot %d.\n", (*slot).id);
+                    LOG("Activating slot %d.\n", (*slot).id);
                 }
 
                 if (task.data.contains("system_prompt"))
@@ -1528,7 +1528,7 @@ struct llama_server_context
     bool update_slots() {
         if (system_need_update)
         {
-            LOG_TEE("updating system prompt\n");
+            LOG("updating system prompt\n");
             update_system_prompt();
         }
 
@@ -1538,7 +1538,7 @@ struct llama_server_context
         {
             if (system_prompt.empty() && clean_kv_cache)
             {
-                LOG_TEE("all slots are idle and system prompt is empty, clear the KV cache\n");
+                LOG("all slots are idle and system prompt is empty; clearing the KV cache\n");
                 kv_cache_clear();
             }
             return true;
@@ -1562,7 +1562,7 @@ struct llama_server_context
                     const int n_discard = n_left / 2;       // is this arbitrary?
 
                     printf("\033[5;0H\033[K");
-                    LOG_TEE("slot %d: context shift - n_keep = %d, n_left = %d, n_discard = %d\n", slot.id, slot.params.n_keep, n_left, n_discard);
+                    LOG("slot %d: context shift - n_keep = %d, n_left = %d, n_discard = %d\n", slot.id, slot.params.n_keep, n_left, n_discard);
                     llama_kv_cache_seq_rm   (ctx, slot.id, slot.params.n_keep + 1            , slot.params.n_keep + n_discard + 1);
                     llama_kv_cache_seq_shift(ctx, slot.id, slot.params.n_keep + 1 + n_discard, system_tokens.size() + slot.n_past, -n_discard);
 
@@ -1597,7 +1597,7 @@ struct llama_server_context
                 slot.t_last_used = ggml_time_us();
 
                 printf("\033[6;0H\033[K");
-                LOG_TEE("slot %d released (%d tokens in cache)\n", slot.id, (int) slot.cache_tokens.size());
+                LOG("slot %d released (%d tokens remain in cache)\n", slot.id, (int) slot.cache_tokens.size());
                 queue_tasks.notify_slot_changed();  // why don't we immediately reallocate the released slot without waiting? Is this what -cb does?
 
                 continue;
@@ -1746,7 +1746,7 @@ struct llama_server_context
                         }
 
                         printf("\033[7;0H\033[K");
-                        LOG_TEE("slot %d : in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
+                        LOG("slot %d : in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
                     }
 
                     slot.cache_tokens = prompt_tokens;
@@ -1754,7 +1754,7 @@ struct llama_server_context
                     if (slot.n_past == slot.num_prompt_tokens && slot.n_past > 0)
                     {
                         // we have to evaluate at least 1 token to generate logits.
-                        LOG_TEE("slot %d : we have to evaluate at least 1 token to generate logits\n", slot.id);
+                        LOG("slot %d : we have to evaluate at least 1 token to generate logits\n", slot.id);
                         slot.n_past--;
                         if (slot.ga_i > 0)
                         {
@@ -1763,7 +1763,7 @@ struct llama_server_context
                     }
 
                     printf("\033[5;0H\033[K");
-                    LOG_TEE("slot %d : kv cache rm - [%d, end)\n", slot.id, (int) system_tokens.size() + slot.n_past);
+                    LOG("slot %d : kv cache rm - [%d, end)\n", slot.id, (int) system_tokens.size() + slot.n_past);
 
                     llama_kv_cache_seq_rm(ctx, slot.id, system_tokens.size() + slot.n_past, -1);
 
@@ -1800,7 +1800,7 @@ struct llama_server_context
 
                     if (has_images && !ingest_images(slot, n_batch))
                     {
-                        LOG_TEE("failed processing images\n");
+                        LOG("failed processing images\n");
                         return false;
                     }
 
@@ -1837,10 +1837,10 @@ struct llama_server_context
                         const int bd = (slot.ga_w / slot.ga_n) * (slot.ga_n - 1);
                         const int dd = (slot.ga_w / slot.ga_n) - ib * bd - slot.ga_w;
 
-                        LOG_TEE("\n");
-                        LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i, slot.n_past_se, ib * bd, slot.ga_i + ib * bd, slot.n_past_se + ib * bd);
-                        LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
-                        LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
+                        LOG("\n");
+                        LOG("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i, slot.n_past_se, ib * bd, slot.ga_i + ib * bd, slot.n_past_se + ib * bd);
+                        LOG("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
+                        LOG("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
 
                         llama_kv_cache_seq_shift(ctx, slot.id, slot.ga_i, slot.n_past_se, ib * bd);
                         llama_kv_cache_seq_div(ctx, slot.id, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w,slot.ga_n);
@@ -1850,7 +1850,7 @@ struct llama_server_context
 
                         slot.ga_i += slot.ga_w / slot.ga_n;
 
-                        LOG_TEE("\nn_past_old = %d, n_past = %d, ga_i = %d\n\n", slot.n_past_se + bd, slot.n_past_se, slot.ga_i);
+                        LOG("\nn_past_old = %d, n_past = %d, ga_i = %d\n\n", slot.n_past_se + bd, slot.n_past_se, slot.ga_i);
                     }
                     slot.n_past_se += n_tokens;
                 }
@@ -1877,12 +1877,12 @@ struct llama_server_context
                 if (n_batch == 1 || ret < 0)
                 {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
-                    LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
+                    LOG("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
                     return false;
                 }
 
                 // we get here if ret = 1 and n_batch != 1
-                LOG_TEE("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
+                LOG("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
 
                 // retry with half the batch size to try to find a free slot in the KV cache
                 n_batch /= 2;
@@ -2823,10 +2823,13 @@ int main(int argc, char **argv)
     log_data["hostname"] = sparams.hostname;
     log_data["port"] = std::to_string(sparams.port);
 
-    if (sparams.api_keys.size() == 1) {
+    if (sparams.api_keys.size() == 1) {     // what happens if the size is zero?
         log_data["api_key"] = "api_key: ****" + sparams.api_keys[0].substr(sparams.api_keys[0].length() - 4);
     } else if (sparams.api_keys.size() > 1) {
         log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
+    }
+    for (int i=0; i<int(sparams.api_keys.size()); i++) {
+        LOG_TEE("Loaded api key #%d: %s\n", i, sparams.api_keys[i].c_str());
     }
 
     LOG_INFO("HTTP server listening", log_data);
@@ -2856,7 +2859,7 @@ int main(int argc, char **argv)
 
     // Middleware for API key validation
     auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
-        // If API key is not set, skip validation
+        // If API key is not set, because the file is empty, skip validation
         if (sparams.api_keys.empty()) {
             return true;
         }
@@ -2866,9 +2869,21 @@ int main(int argc, char **argv)
         std::string prefix = "Bearer ";
         if (auth_header.substr(0, prefix.size()) == prefix) {
             std::string received_api_key = auth_header.substr(prefix.size());
-            if (std::find(sparams.api_keys.begin(), sparams.api_keys.end(), received_api_key) != sparams.api_keys.end()) {
-                return true; // API key is valid
+            LOG("Received API key = %s\n", received_api_key.c_str());
+            for (int i = 0; i < int(sparams.api_keys.size()); i++) {
+                // for some reason the file apikeys are one character longer than those passed from Bearer so we shorten them
+                std::string uncut_api = sparams.api_keys[i]; // store original apikey
+                std::string cut_api = uncut_api.substr(0, uncut_api.size() - 1);    // do not shorten in-place by using erase
+                if (received_api_key != cut_api) {
+                    LOG("%s != %s and length left = %zu, length right = %zu\n", received_api_key.c_str(), cut_api.c_str(),received_api_key.size(), cut_api.size());
+                } else if (received_api_key == cut_api) {
+                    LOG("%s = %s FOUND IT!!!\n", received_api_key.c_str(), cut_api.c_str());
+                    return true;
+                }
             }
+            //if (std::find(sparams.api_keys.begin(), sparams.api_keys.end(), received_api_key) != sparams.api_keys.end()) {
+            //    return true; // API key is valid
+            //}
         }
 
         // API key is invalid or not provided
@@ -2928,14 +2943,14 @@ int main(int argc, char **argv)
                 }
                 // it appears that here we first get ONE request to parse; then TEN; then ONE-by-ONE
                 printf("\033[5;0H\033[K");
-                LOG_TEE("Request body to parse: %s", req.body.c_str());
+                LOG_TEE("Request body to parse: %s.\n", req.body.c_str());
                 if (llama.skvinteract) {
                     getchar();
                 }
                 json data = json::parse(req.body);
                 const int task_id = llama.queue_tasks.get_new_id();         // just returns a new id number
                 llama.queue_results.add_waiting_task_id(task_id);
-                LOG_TEE("Initiated new task %d.\n", task_id);
+                LOG("Initiated new task %d.\n", task_id);
                 llama.request_completion(task_id, data, false, false, -1);
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;    // is this ever used?

@@ -151,7 +151,7 @@ static inline void server_log(const char *level, const char *function, int line,
     }
 
     const std::string str = log.dump(-1, ' ', false, json::error_handler_t::replace);
-    printf("%.*s\n", (int)str.size(), str.data());
+    LOG("%.*s\n", (int)str.size(), str.data());
     fflush(stdout);
 }
 
@@ -236,7 +236,7 @@ struct llama_server_queue {
             task.id = id;   // originally id++ but this repeats get_new_id below
         }
         queue_tasks.push_back(std::move(task));
-        //LOG_TEE("Queue now has %2zu members.\n", queue_tasks.size());
+        //LOG("Queue now has %2zu members.\n", queue_tasks.size());
         condition_tasks.notify_one();
         return task.id;
     }
@@ -245,15 +245,13 @@ struct llama_server_queue {
     void defer(task_server task) {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         queue_tasks_deferred.push_back(std::move(task));
-        printf("\033[1;50H*** ");
-        LOG_TEE("Deferred queue now has %3zu members.\n", queue_tasks_deferred.size());
-        printf("\033[5;0H");
+        LOG("Deferred queue now has %3zu members.\n", queue_tasks_deferred.size());
     }
 
     // Get the next id for creating a new task
     int get_new_id() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
-        LOG_TEE("New task id returned with value %d.\n", id);
+        LOG("New task id returned with value %d.\n", id);
         return id++;
     }
 
@@ -297,10 +295,10 @@ struct llama_server_queue {
     // Start the main loop. Called from the very end of server.cpp
     void start_loop() {
         running = true;
-        //LOG_TEE("In start_loop have new task number %d.\n", id);
+        //LOG("In start_loop have new task number %d.\n", id);
         while (true) {
             // new task arrived
-            // LOG_TEE("In start_loop have new task number %d.\n", id);
+            // LOG("In start_loop have new task number %d.\n", id);
             {
                 while (true)
                 {
@@ -393,17 +391,13 @@ struct llama_server_response {
     void add_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
-        printf("\033[1;50H*** ");
-        LOG_TEE("Waiting task list size after addition: %zu.\n", waiting_task_ids.size());
-        printf("\033[5;0H");
+        LOG("Waiting task list size after addition: %2zu.\n", waiting_task_ids.size());
     }
 
     void remove_waiting_task_id(int task_id) {
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
-        printf("\033[2;50H*** ");
-        LOG_TEE("Waiting task list size after removal: %zu.\n", waiting_task_ids.size());
-        printf("\033[5;0H");
+        LOG("Waiting task list size after removal: %zu.\n", waiting_task_ids.size());
     }
 
     // This function blocks the thread until there is a response for this task_id
@@ -441,7 +435,7 @@ struct llama_server_response {
         std::unique_lock<std::mutex> lock(mutex_results);
         LOG_VERBOSE("send new result", {});
         for (auto& task_id : waiting_task_ids) {
-            // LOG_TEE("waiting task id %i \n", task_id);
+            // LOG("waiting task id %i \n", task_id);
             // for now, tasks that have associated parent multitasks just get erased once multitask picks up the result
             if (result.multitask_id == task_id)
             {

@@ -104,10 +104,13 @@ if __name__ == "__main__":
 
     bar = make_empty_bar(num_requests)
 
+    api_key = input("What is your API key? ",)
+
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',  
-        'User-Agent': 'Llamaserver.py'
+        'User-Agent': 'Llamaserver.py',
+        'Authorization': f'Bearer {api_key}'
         }
 
     country_list = ["France", "Germany", "China", "USA", "Italy", "India",

@@ -1,6 +1,7 @@
 set(TARGET server)
 option(LLAMA_SERVER_VERBOSE "Build verbose logging option for Server" ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 add_executable(${TARGET} server.cpp oai.hpp utils.hpp json.hpp httplib.h)
 install(TARGETS ${TARGET} RUNTIME)
 target_compile_definitions(${TARGET} PRIVATE
