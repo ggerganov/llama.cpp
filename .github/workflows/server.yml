@@ -62,7 +62,7 @@ jobs:
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-              -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ; 
+              -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
 
       - name: Tests dependencies
