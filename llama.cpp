@@ -1948,7 +1948,7 @@ struct llama_context {
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_t sched = nullptr;
 
-    ggml_abort_callback abort_callback = nullptr;
+    ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;
 
     // input tensors
