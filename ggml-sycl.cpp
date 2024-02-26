@@ -10876,7 +10876,7 @@ static void soft_max_f32_submitter(const float * x, const float * mask, const fl
                                    const size_t n_local_scratch, dpct::queue_ptr stream) {
     stream->submit([&](sycl::handler &cgh) {
         sycl::local_accessor<float, 1> local_buf_acc(n_local_scratch, cgh);
-        
+
         cgh.parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
