@@ -2768,7 +2768,14 @@ static void append_to_generated_text_from_generated_token_probs(llama_server_con
 }
 
 std::function<void(int)> shutdown_handler;
-inline void signal_handler(int signal) { shutdown_handler(signal); }
+static bool is_terminating = false;
+inline void signal_handler(int signal) {
+    if (is_terminating) {
+        exit(0); // force exit the process, in case it hangs
+    }
+    is_terminating = true;
+    shutdown_handler(signal);
+}
 
 int main(int argc, char **argv)
 {
