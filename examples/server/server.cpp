@@ -1610,7 +1610,7 @@ struct llama_server_context
                 int n_processing_slots = 0;
 
                 for (llama_client_slot &slot: slots) {
-                    json slot_data = get_formated_generation(slot);
+                    json slot_data = get_formatted_generation(slot);
                     slot_data["id"] = slot.id;
                     slot_data["task_id"] = slot.task_id;
                     slot_data["state"] = slot.state;
@@ -1811,7 +1811,7 @@ struct llama_server_context
                 if (slot.state == IDLE && slot.command == LOAD_PROMPT && !has_prompt && !slot.infill)
                 {
                     slot.release();
-                    slot.print_timings(slot, skvinteract);
+                    slot.print_timings();
                     send_final_response(slot);
                     continue;
                 }
@@ -2140,7 +2140,7 @@ struct llama_server_context
                 if (!process_token(result, slot))
                 {
                     slot.release();
-                    slot.print_timings(slot, skvinteract);
+                    slot.print_timings();
                     send_final_response(slot);
                     metrics.on_prediction(slot);
                 }
