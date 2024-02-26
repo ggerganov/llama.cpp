@@ -571,7 +571,7 @@ typedef struct {
 } block_iq4_nl;
 static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
 
-#define QR4_XS 2
+#define QR4_XS 4
 #define QI4_XS (QK_K / (4*QR4_XS))
 typedef struct {
     half d;
@@ -5332,40 +5332,74 @@ static __device__ __forceinline__ float vec_dot_iq4_nl_q8_1(
     return d * (sumi1 + sumi2);
 }
 
-// TODO
 static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
     const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
 
-    const block_iq4_xs * bq = (const block_iq4_xs *) vbq;
-
+#if QK_K == 256
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
-    const uint16_t * q4 = (const uint16_t *)bq->qs + 2*iqs;
-    const int32_t  * q8 = (const int32_t  *)bq8_1->qs + iqs;
 
+    const block_iq4_xs * bq4 = (const block_iq4_xs *) vbq;
     const uint8_t * values = (const uint8_t *)kvalues_iq4nl;
 
+    // iqs is 0...15
+    const int ib32 = iqs/2;
+    const int il = iqs%2;
+    const int32_t  * q8 = (const int *)bq8_1[ib32].qs + 2*il;
+    const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32 + 2*il;
+    const int8_t ls = ((bq4->scales_l[ib32/2] >> 4*(ib32%2)) & 0xf) | (((bq4->scales_h >> 2*ib32) & 3) << 4);
+    const float d = (float)bq4->d * (ls - 32) * __low2float(bq8_1[ib32].ds);
     int v1, v2;
     int sumi1 = 0, sumi2 = 0;
-    for (int l = 0; l < VDR_Q4_0_Q8_1_MMVQ; ++l) {
-        const uint32_t aux = q4[2*l] | (q4[2*l+1] << 16);
-        get_int_from_table_16(aux, values, v1, v2);
-        sumi1 = __dp4a(v1, q8[l+0], sumi1);
-        sumi2 = __dp4a(v2, q8[l+4], sumi2);
+    for (int j = 0; j < 2; ++j) {
+        get_int_from_table_16(q4[j], values, v1, v2);
+        sumi1 = __dp4a(v1, q8[j+0], sumi1);
+        sumi2 = __dp4a(v2, q8[j+4], sumi2);
     }
-
-#else
-    const uint8_t * q4 = bq->qs + 4*iqs;
-    const int8_t  * q8 = bq8_1->qs + 4*iqs;
-
-    int sumi1 = 0, sumi2 = 0;
-    for (int l = 0; l < 4*VDR_Q4_0_Q8_1_MMVQ; ++l) {
-        sumi1 += q8[l+ 0] * kvalues_iq4nl[q4[l] & 0xf];
-        sumi2 += q8[l+16] * kvalues_iq4nl[q4[l] >>  4];
-    }
-#endif
-    const float d = (float)bq->d * __low2float(bq8_1->ds);
     return d * (sumi1 + sumi2);
+#else
+    assert(false);
+    return 0.f;
+#endif
+#else
+    assert(false);
+    return 0.f;
+#endif
 }
+
+//// TODO
+//static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
+//    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
+//
+//    const block_iq4_xs * bq = (const block_iq4_xs *) vbq;
+//
+//#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+//    const uint16_t * q4 = (const uint16_t *)bq->qs + 2*iqs;
+//    const int32_t  * q8 = (const int32_t  *)bq8_1->qs + iqs;
+//
+//    const uint8_t * values = (const uint8_t *)kvalues_iq4nl;
+//
+//    int v1, v2;
+//    int sumi1 = 0, sumi2 = 0;
+//    for (int l = 0; l < VDR_Q4_0_Q8_1_MMVQ; ++l) {
+//        const uint32_t aux = q4[2*l] | (q4[2*l+1] << 16);
+//        get_int_from_table_16(aux, values, v1, v2);
+//        sumi1 = __dp4a(v1, q8[l+0], sumi1);
+//        sumi2 = __dp4a(v2, q8[l+4], sumi2);
+//    }
+//
+//#else
+//    const uint8_t * q4 = bq->qs + 4*iqs;
+//    const int8_t  * q8 = bq8_1->qs + 4*iqs;
+//
+//    int sumi1 = 0, sumi2 = 0;
+//    for (int l = 0; l < 4*VDR_Q4_0_Q8_1_MMVQ; ++l) {
+//        sumi1 += q8[l+ 0] * kvalues_iq4nl[q4[l] & 0xf];
+//        sumi2 += q8[l+16] * kvalues_iq4nl[q4[l] >>  4];
+//    }
+//#endif
+//    const float d = (float)bq->d * __low2float(bq8_1->ds);
+//    return d * (sumi1 + sumi2);
+//}
 
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x, int mmq_y, int nwarps,
               allocate_tiles_cuda_t allocate_tiles, load_tiles_cuda_t load_tiles, int vdr, vec_dot_q_mul_mat_cuda_t vec_dot>
@@ -9416,7 +9450,7 @@ static void ggml_cuda_op_mul_mat_vec_q(
                 (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
             break;
         case GGML_TYPE_IQ4_XS:
-            mul_mat_vec_q_cuda<QK_K, QI4_XS, block_iq4_xs, VDR_Q4_0_Q8_1_MMVQ, vec_dot_iq4_xs_q8_1>
+            mul_mat_vec_q_cuda<QK_K, QI4_XS, block_iq4_xs, 1, vec_dot_iq4_xs_q8_1>
                 (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
             break;
         case GGML_TYPE_IQ3_S:
