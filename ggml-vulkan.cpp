@@ -707,9 +707,21 @@ static void ggml_vk_queue_cleanup(ggml_backend_vk_context * ctx, vk_queue& q) {
     q.cmd_buffer_idx = 0;
 }
 
-static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t size, vk::MemoryPropertyFlags req_flags) {
+static uint32_t find_properties(const vk::PhysicalDeviceMemoryProperties* mem_props, vk::MemoryRequirements* mem_req, vk::MemoryPropertyFlags flags) {
+    for (uint32_t i = 0; i < mem_props->memoryTypeCount; ++i) {
+        vk::MemoryType memory_type = mem_props->memoryTypes[i];
+        if ((mem_req->memoryTypeBits & ((uint64_t)1 << i)) &&
+            (flags & memory_type.propertyFlags) == flags &&
+            mem_props->memoryHeaps[memory_type.heapIndex].size >= mem_req->size) {
+            return static_cast<int32_t>(i);
+        }
+    }
+    return UINT32_MAX;
+}
+
+static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t size, vk::MemoryPropertyFlags req_flags, vk::MemoryPropertyFlags fallback_flags = vk::MemoryPropertyFlags(0)) {
 #ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_vk_create_buffer(" << size << ", " << to_string(req_flags) << ")" << std::endl;
+    std::cerr << "ggml_vk_create_buffer(" << size << ", " << to_string(req_flags) << ", " << to_string(fallback_flags) << ")" << std::endl;
 #endif
     vk_buffer buf = std::make_shared<vk_buffer_struct>();
 
@@ -736,15 +748,15 @@ static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t siz
 
     uint32_t memory_type_index = UINT32_MAX;
 
-    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
-        vk::MemoryType memory_type = mem_props.memoryTypes[i];
-        if ((mem_req.memoryTypeBits & ((uint64_t)1 << i)) && (req_flags & memory_type.propertyFlags) == req_flags && mem_props.memoryHeaps[memory_type.heapIndex].size >= mem_req.size) {
-            memory_type_index = i;
-            break;
-        }
+    memory_type_index = find_properties(&mem_props, &mem_req, req_flags);
+    buf->memory_property_flags = req_flags;
+
+    if (memory_type_index == UINT32_MAX && fallback_flags) {
+        memory_type_index = find_properties(&mem_props, &mem_req, fallback_flags);
+        buf->memory_property_flags = fallback_flags;
     }
 
-    if (memory_type_index >= mem_props.memoryTypeCount) {
+    if (memory_type_index == UINT32_MAX) {
         ctx->device.lock()->device.destroyBuffer(buf->buffer);
         buf->size = 0;
         throw vk::OutOfDeviceMemoryError("No suitable memory type found");
@@ -758,10 +770,9 @@ static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t siz
         buf->size = 0;
         throw e;
     }
-    buf->memory_property_flags = req_flags;
     buf->ptr = nullptr;
 
-    if (req_flags & vk::MemoryPropertyFlagBits::eHostVisible) {
+    if (buf->memory_property_flags & vk::MemoryPropertyFlagBits::eHostVisible) {
         buf->ptr = ctx->device.lock()->device.mapMemory(buf->device_memory, 0, VK_WHOLE_SIZE);
     }
 
@@ -778,9 +789,9 @@ static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t siz
     return buf;
 }
 
-static vk_buffer ggml_vk_create_buffer_check(ggml_backend_vk_context * ctx, size_t size, vk::MemoryPropertyFlags req_flags) {
+static vk_buffer ggml_vk_create_buffer_check(ggml_backend_vk_context * ctx, size_t size, vk::MemoryPropertyFlags req_flags, vk::MemoryPropertyFlags fallback_flags = vk::MemoryPropertyFlags(0)) {
     try {
-        return ggml_vk_create_buffer(ctx, size, req_flags);
+        return ggml_vk_create_buffer(ctx, size, req_flags, fallback_flags);
     } catch (const vk::SystemError& e) {
         std::cerr << "ggml_vulkan: Memory allocation of size " << size << " failed." << std::endl;
         std::cerr << "ggml_vulkan: " << e.what() << std::endl;
@@ -791,16 +802,16 @@ static vk_buffer ggml_vk_create_buffer_check(ggml_backend_vk_context * ctx, size
 static vk_buffer ggml_vk_create_buffer_device(ggml_backend_vk_context * ctx, size_t size) {
     vk_buffer buf;
     try {
-        buf = ggml_vk_create_buffer(ctx, size, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    } catch (const vk::SystemError& e) {
         if (ctx->device.lock()->uma) {
             // Fall back to host memory type
-            buf = ggml_vk_create_buffer_check(ctx, size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+            buf = ggml_vk_create_buffer(ctx, size, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
         } else {
-            std::cerr << "ggml_vulkan: Device memory allocation of size " << size << " failed." << std::endl;
-            std::cerr << "ggml_vulkan: " << e.what() << std::endl;
-            throw e;
+            buf = ggml_vk_create_buffer(ctx, size, vk::MemoryPropertyFlagBits::eDeviceLocal);
         }
+    } catch (const vk::SystemError& e) {
+        std::cerr << "ggml_vulkan: Device memory allocation of size " << size << " failed." << std::endl;
+        std::cerr << "ggml_vulkan: " << e.what() << std::endl;
+        throw e;
     }
 
     return buf;
@@ -1080,6 +1091,9 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     }
 }
 
+static bool ggml_vk_instance_validation_ext_available(const std::vector<vk::ExtensionProperties>& instance_extensions);
+static bool ggml_vk_instance_portability_enumeration_ext_available(const std::vector<vk::ExtensionProperties>& instance_extensions);
+
 void ggml_vk_instance_init() {
     if (vk_instance_initialized) {
         return;
@@ -1089,28 +1103,42 @@ void ggml_vk_instance_init() {
 #endif
 
     vk::ApplicationInfo app_info{ "ggml-vulkan", 1, nullptr, 0, VK_API_VERSION };
-    const std::vector<const char*> layers = {
-#ifdef GGML_VULKAN_VALIDATE
-        "VK_LAYER_KHRONOS_validation",
-#endif
-    };
-    const std::vector<const char*> extensions = {
-#ifdef GGML_VULKAN_VALIDATE
-        "VK_EXT_validation_features",
-#endif
-    };
-    vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers, extensions);
-#ifdef GGML_VULKAN_VALIDATE
-    const std::vector<vk::ValidationFeatureEnableEXT> features_enable = { vk::ValidationFeatureEnableEXT::eBestPractices };
-    vk::ValidationFeaturesEXT validation_features = {
-        features_enable,
-        {},
-    };
-    validation_features.setPNext(nullptr);
-    instance_create_info.setPNext(&validation_features);
 
-    std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
-#endif
+    const std::vector<vk::ExtensionProperties> instance_extensions = vk::enumerateInstanceExtensionProperties();
+    const bool validation_ext = ggml_vk_instance_validation_ext_available(instance_extensions);
+    const bool portability_enumeration_ext = ggml_vk_instance_portability_enumeration_ext_available(instance_extensions);
+
+    std::vector<const char*> layers;
+
+    if (validation_ext) {
+        layers.push_back("VK_LAYER_KHRONOS_validation");
+    }
+    std::vector<const char*> extensions;
+    if (validation_ext) {
+        extensions.push_back("VK_EXT_validation_features");
+    }
+    if (portability_enumeration_ext) {
+        extensions.push_back("VK_KHR_portability_enumeration");
+    }
+    vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags{}, &app_info, layers, extensions);
+    if (portability_enumeration_ext) {
+        instance_create_info.flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+    }
+
+    std::vector<vk::ValidationFeatureEnableEXT> features_enable;
+    vk::ValidationFeaturesEXT validation_features;
+
+    if (validation_ext) {
+        features_enable = { vk::ValidationFeatureEnableEXT::eBestPractices };
+        validation_features = {
+            features_enable,
+            {},
+        };
+        validation_features.setPNext(nullptr);
+        instance_create_info.setPNext(&validation_features);
+
+        std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
+    }
     vk_instance.instance = vk::createInstance(instance_create_info);
 
     memset(vk_instance.initialized, 0, sizeof(bool) * GGML_VK_MAX_DEVICES);
@@ -1139,7 +1167,7 @@ void ggml_vk_instance_init() {
     vk_instance_initialized = true;
 }
 
-void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
+static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     GGML_ASSERT(idx < vk_instance.device_indices.size());
     size_t dev_num = vk_instance.device_indices[idx];
 #ifdef GGML_VULKAN_DEBUG
@@ -1157,12 +1185,12 @@ void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     vk_instance.devices[idx] = std::make_shared<vk_device>();
     ctx->device = vk_instance.devices[idx];
     ctx->device.lock()->physical_device = devices[dev_num];
-    std::vector<vk::ExtensionProperties> ext_props = ctx->device.lock()->physical_device.enumerateDeviceExtensionProperties();
+    const std::vector<vk::ExtensionProperties> ext_props = ctx->device.lock()->physical_device.enumerateDeviceExtensionProperties();
 
     bool maintenance4_support = false;
 
     // Check if maintenance4 is supported
-    for (auto properties : ext_props) {
+    for (const auto& properties : ext_props) {
         if (strcmp("VK_KHR_maintenance4", properties.extensionName) == 0) {
             maintenance4_support = true;
         }
@@ -1193,7 +1221,7 @@ void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     bool fp16_storage = false;
     bool fp16_compute = false;
 
-    for (auto properties : ext_props) {
+    for (const auto& properties : ext_props) {
         if (strcmp("VK_KHR_16bit_storage", properties.extensionName) == 0) {
             fp16_storage = true;
         } else if (strcmp("VK_KHR_shader_float16_int8", properties.extensionName) == 0) {
@@ -1422,7 +1450,9 @@ static void * ggml_vk_host_malloc(ggml_backend_vk_context * ctx, size_t size) {
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << "ggml_vk_host_malloc(" << size << ")" << std::endl;
 #endif
-    vk_buffer buf = ggml_vk_create_buffer(ctx, size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+    vk_buffer buf = ggml_vk_create_buffer(ctx, size,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     if(!(buf->memory_property_flags & vk::MemoryPropertyFlagBits::eHostVisible)) {
         fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory\n",
@@ -1568,7 +1598,9 @@ static void deferred_memcpy(void * dst, const void * src, size_t size, std::vect
 static void ggml_vk_ensure_sync_staging_buffer(ggml_backend_vk_context * ctx, size_t size) {
     if (ctx->sync_staging == nullptr || ctx->sync_staging->size < size) {
         ggml_vk_destroy_buffer(ctx->sync_staging);
-        ctx->sync_staging = ggml_vk_create_buffer_check(ctx, size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+        ctx->sync_staging = ggml_vk_create_buffer_check(ctx, size,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
     }
 }
 
@@ -4082,7 +4114,9 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
     std::cerr << "ggml_vk_preallocate_buffers(qx_size: " << ctx->prealloc_size_qx << " qy_size: " << ctx->prealloc_size_qy << " x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << ")" << std::endl;
 #endif
 #if defined(GGML_VULKAN_RUN_TESTS)
-    ctx->staging = ggml_vk_create_buffer_check(ctx, 100ul * 1024ul * 1024ul, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+    ctx->staging = ggml_vk_create_buffer_check(ctx, 100ul * 1024ul * 1024ul,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
     ggml_vk_test_transfer(ctx, 8192 * 1000, false);
     ggml_vk_test_transfer(ctx, 8192 * 1000, true);
 
@@ -4174,7 +4208,9 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         if (ctx->staging != nullptr) {
             ggml_vk_destroy_buffer(ctx->staging);
         }
-        ctx->staging = ggml_vk_create_buffer_check(ctx, ctx->staging_size, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+        ctx->staging = ggml_vk_create_buffer_check(ctx, ctx->staging_size,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
     }
 }
 
@@ -4537,13 +4573,13 @@ static void ggml_vk_cleanup(ggml_backend_vk_context * ctx) {
     }
 }
 
-GGML_CALL int ggml_vk_get_device_count() {
+GGML_CALL static int ggml_vk_get_device_count() {
     ggml_vk_instance_init();
 
     return vk_instance.device_indices.size();
 }
 
-GGML_CALL void ggml_vk_get_device_description(int device, char * description, size_t description_size) {
+GGML_CALL static void ggml_vk_get_device_description(int device, char * description, size_t description_size) {
     ggml_vk_instance_init();
 
     std::vector<vk::PhysicalDevice> devices = vk_instance.instance.enumeratePhysicalDevices();
@@ -4561,7 +4597,7 @@ void ggml_vk_init_cpu_assist() {
 
     std::cerr << "ggml_vulkan: Found " << ggml_vk_get_device_count() << " Vulkan devices:" << std::endl;
 
-    for (size_t i = 0; i < ggml_vk_get_device_count(); i++) {
+    for (int i = 0; i < ggml_vk_get_device_count(); i++) {
         ggml_vk_print_gpu_info(i);
     }
     // Initialize the first backend to make sure CPU matrix multiplications can be offloaded.
@@ -5248,7 +5284,7 @@ GGML_CALL void ggml_backend_vk_get_device_description(int device, char * descrip
 }
 
 GGML_CALL void ggml_backend_vk_get_device_memory(int device, size_t * free, size_t * total) {
-    GGML_ASSERT(device < vk_instance.device_indices.size());
+    GGML_ASSERT(device < (int) vk_instance.device_indices.size());
 
     vk::PhysicalDevice vkdev = vk_instance.instance.enumeratePhysicalDevices()[vk_instance.device_indices[device]];
 
@@ -5280,6 +5316,42 @@ GGML_CALL int ggml_backend_vk_reg_devices() {
         ggml_backend_register(name, ggml_backend_reg_vk_init, ggml_backend_vk_buffer_type(idx), (void *) (intptr_t) idx);
     }
     return vk_instance.device_indices.size();
+}
+
+// Extension availability
+static bool ggml_vk_instance_validation_ext_available(const std::vector<vk::ExtensionProperties>& instance_extensions) {
+#ifdef GGML_VULKAN_VALIDATE
+    bool portability_enumeration_ext = false;
+    // Check for portability enumeration extension for MoltenVK support
+    for (const auto& properties : instance_extensions) {
+        if (strcmp("VK_KHR_portability_enumeration", properties.extensionName) == 0) {
+            return true;
+        }
+    }
+    if (!portability_enumeration_ext) {
+        std::cerr << "ggml_vulkan: WARNING: Instance extension VK_KHR_portability_enumeration not found." << std::endl;
+    }
+#endif
+    return false;
+
+    UNUSED(instance_extensions);
+}
+static bool ggml_vk_instance_portability_enumeration_ext_available(const std::vector<vk::ExtensionProperties>& instance_extensions) {
+#ifdef __APPLE__
+    bool portability_enumeration_ext = false;
+    // Check for portability enumeration extension for MoltenVK support
+    for (const auto& properties : instance_extensions) {
+        if (strcmp("VK_KHR_portability_enumeration", properties.extensionName) == 0) {
+            return true;
+        }
+    }
+    if (!portability_enumeration_ext) {
+        std::cerr << "ggml_vulkan: WARNING: Instance extension VK_KHR_portability_enumeration not found." << std::endl;
+    }
+#endif
+    return false;
+
+    UNUSED(instance_extensions);
 }
 
 // checks

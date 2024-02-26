@@ -1,3 +1,7 @@
+#include "ggml-cuda.h"
+#include "ggml.h"
+#include "ggml-backend-impl.h"
+
 #include <algorithm>
 #include <assert.h>
 #include <atomic>
@@ -54,6 +58,8 @@
 #define cudaDeviceProp hipDeviceProp_t
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaError_t hipError_t
+#define cudaErrorPeerAccessAlreadyEnabled hipErrorPeerAccessAlreadyEnabled
+#define cudaErrorPeerAccessNotEnabled hipErrorPeerAccessNotEnabled
 #define cudaEventCreateWithFlags hipEventCreateWithFlags
 #define cudaEventDisableTiming hipEventDisableTiming
 #define cudaEventRecord hipEventRecord
@@ -119,11 +125,6 @@
 
 #endif // defined(GGML_USE_HIPBLAS)
 
-// ggml-cuda need half type so keep ggml headers include at last
-#include "ggml-cuda.h"
-#include "ggml.h"
-#include "ggml-backend-impl.h"
-
 #define CUDART_HMAX     11070 // CUDA 11.7, min. ver. for which __hmax and __hmax2 are known to work (may be higher than needed)
 
 #define CC_PASCAL     600
@@ -150,8 +151,8 @@
 #define CUDA_USE_TENSOR_CORES
 #endif
 
-// max batch size to use MMQ kernels when tensor cores are available
-#define MMQ_MAX_BATCH_SIZE 32
+#define MMVQ_MAX_BATCH_SIZE  8 // max batch size to use MMVQ kernels
+#define  MMQ_MAX_BATCH_SIZE 32 // max batch size to use MMQ kernels when tensor cores are available
 
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
@@ -517,6 +518,24 @@ typedef struct {
 } block_iq3_xxs;
 static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong iq3_xxs block size/padding");
 
+#define QR1_S 8
+#define QI1_S (QK_K / (4*QR1_S))
+typedef struct {
+    half d;
+    uint8_t qs[QK_K/8];
+    uint8_t scales[QK_K/16];
+} block_iq1_s;
+static_assert(sizeof(block_iq1_s) == sizeof(ggml_fp16_t) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
+
+#define QK4_NL 32
+#define QR4_NL 2
+#define QI4_NL (QK4_NL / (4*QR4_NL))
+typedef struct {
+    half d;
+    uint8_t qs[QK4_NL/2];
+} block_iq4_nl;
+static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
+
 #define WARP_SIZE 32
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
 
@@ -642,18 +661,18 @@ static __device__ __forceinline__ float2 warp_reduce_sum(float2 a) {
     return a;
 }
 
-static __device__ __forceinline__ half2 warp_reduce_sum(half2 a) {
-#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        a = __hadd2(a, __shfl_xor_sync(0xffffffff, a, mask, 32));
-    }
-    return a;
-#else
-    (void) a;
-    NO_DEVICE_CODE;
-#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
-}
+//static __device__ __forceinline__ half2 warp_reduce_sum(half2 a) {
+//#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
+//#pragma unroll
+//    for (int mask = 16; mask > 0; mask >>= 1) {
+//        a = __hadd2(a, __shfl_xor_sync(0xffffffff, a, mask, 32));
+//    }
+//    return a;
+//#else
+//    (void) a;
+//    NO_DEVICE_CODE;
+//#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL
+//}
 
 static __device__ __forceinline__ float warp_reduce_max(float x) {
 #pragma unroll
@@ -663,18 +682,18 @@ static __device__ __forceinline__ float warp_reduce_max(float x) {
     return x;
 }
 
-static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
-#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        x = __hmax2(x, __shfl_xor_sync(0xffffffff, x, mask, 32));
-    }
-    return x;
-#else
-    (void) x;
-    NO_DEVICE_CODE;
-#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
-}
+//static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
+//#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
+//#pragma unroll
+//    for (int mask = 16; mask > 0; mask >>= 1) {
+//        x = __hmax2(x, __shfl_xor_sync(0xffffffff, x, mask, 32));
+//    }
+//    return x;
+//#else
+//    (void) x;
+//    NO_DEVICE_CODE;
+//#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
+//}
 
 static __device__ __forceinline__ float op_repeat(const float a, const float b) {
     return b;
@@ -1681,6 +1700,137 @@ static const __device__ uint32_t iq3xxs_grid[256] = {
     0x3e1c1c1c, 0x3e1c3404, 0x3e24140c, 0x3e24240c, 0x3e2c0404, 0x3e2c0414, 0x3e2c1424, 0x3e341c04,
 };
 
+static const __device__ uint64_t iq1s_grid[512] = {
+    0xffffffffffff0101, 0xffffffffff01ff00, 0xffffffffff010100, 0xffffffff00000000,
+    0xffffffff01ff00ff, 0xffffffff01ff0001, 0xffffffff0101ffff, 0xffffffff0101ff01,
+    0xffffff00ff000000, 0xffffff000000ff00, 0xffffff00000000ff, 0xffffff0000000100,
+    0xffffff0000010000, 0xffffff0001000000, 0xffffff01ffff00ff, 0xffffff01ff01ff00,
+    0xffffff01ff010100, 0xffffff0100000001, 0xffffff0101ffff00, 0xffffff0101ff0101,
+    0xffffff0101010100, 0xffff00ffff00ff01, 0xffff00ffff0000ff, 0xffff00ff00ff0100,
+    0xffff00ff0100ff00, 0xffff00ff010001ff, 0xffff0000ff0101ff, 0xffff000000ffff00,
+    0xffff000000000000, 0xffff00000001ff01, 0xffff000001000101, 0xffff0000010100ff,
+    0xffff0001ffff0100, 0xffff00010000ff00, 0xffff000100010101, 0xffff000101000000,
+    0xffff01ffffff0000, 0xffff01ffff01ffff, 0xffff01ffff010100, 0xffff01ff00000000,
+    0xffff01ff01ffffff, 0xffff01ff01ff0001, 0xffff01ff0101ffff, 0xffff01ff01010001,
+    0xffff0100ffffff01, 0xffff01000000ffff, 0xffff010000000100, 0xffff010001ff01ff,
+    0xffff010001000000, 0xffff0101ff000000, 0xffff0101000101ff, 0xffff010101ffff01,
+    0xffff01010101ff00, 0xff00ffffff000000, 0xff00ffff00ffff00, 0xff00ffff00000001,
+    0xff00ffff000001ff, 0xff00ffff01010000, 0xff00ff00ffff0000, 0xff00ff00ff00ff00,
+    0xff00ff00ff0000ff, 0xff00ff00ff000100, 0xff00ff00ff010001, 0xff00ff0000ff0001,
+    0xff00ff000000ffff, 0xff00ff0000000000, 0xff00ff000001ff00, 0xff00ff0000010100,
+    0xff00ff0001ff0000, 0xff00ff000100ff00, 0xff00ff0001000100, 0xff00ff01ff000000,
+    0xff00ff0100ff0000, 0xff00ff01000001ff, 0xff00ff0101010001, 0xff0000ff00000000,
+    0xff0000ff0001ff00, 0xff0000ff00010100, 0xff000000ffff0101, 0xff000000ff000000,
+    0xff000000ff01ff00, 0xff00000000ff0000, 0xff0000000000ff00, 0xff000000000000ff,
+    0xff00000000000000, 0xff00000000000001, 0xff00000000000100, 0xff0000000001ffff,
+    0xff00000000010000, 0xff00000001000000, 0xff00000001010100, 0xff000001ff00ff01,
+    0xff000001ff0100ff, 0xff00000100000000, 0xff0000010001ff00, 0xff00000101ff0100,
+    0xff0000010100ff00, 0xff0001ff00ff00ff, 0xff0001ff00000101, 0xff0001ff000100ff,
+    0xff0001ff01000000, 0xff000100ff0001ff, 0xff0001000000ff01, 0xff00010000000000,
+    0xff00010000010001, 0xff00010000010100, 0xff00010001ffff00, 0xff00010001ff0101,
+    0xff00010001010000, 0xff000101ffffffff, 0xff000101ff000101, 0xff00010101ff00ff,
+    0xff00010101000001, 0xff000101010100ff, 0xff01ffffff000101, 0xff01ffffff01ffff,
+    0xff01ffffff01ff01, 0xff01ffffff0101ff, 0xff01ffff00000000, 0xff01ffff01ff0001,
+    0xff01ffff0101ff01, 0xff01ff00ff000000, 0xff01ff0000ff0100, 0xff01ff000000ff01,
+    0xff01ff0000010000, 0xff01ff00010000ff, 0xff01ff01ff01ff00, 0xff01ff0100000101,
+    0xff0100ffffff0000, 0xff0100ffff010000, 0xff0100ff01ff00ff, 0xff0100ff01000100,
+    0xff0100ff010100ff, 0xff010000ffffff01, 0xff01000000000000, 0xff0100000101ff00,
+    0xff010001ffff00ff, 0xff010001ff000100, 0xff01000100ffff00, 0xff01000100010001,
+    0xff01000101ff0001, 0xff010001010001ff, 0xff0101ffffffffff, 0xff0101ffff01ffff,
+    0xff0101ffff010101, 0xff0101ff0000ff00, 0xff0101ff01010001, 0xff010100ff000000,
+    0xff010100ff01ff01, 0xff01010000ff0001, 0xff01010000000100, 0xff01010001000000,
+    0xff0101010100ffff, 0x00ffffff0000ff01, 0x00ffffff000000ff, 0x00ffffff00000100,
+    0x00ffffff00010000, 0x00ffff00ffff0001, 0x00ffff00ff0000ff, 0x00ffff00ff000100,
+    0x00ffff0000000000, 0x00ffff0001000100, 0x00ffff0001010001, 0x00ffff01ff00ff01,
+    0x00ffff0100ff0100, 0x00ffff010000ff00, 0x00ffff01000100ff, 0x00ffff0101ff00ff,
+    0x00ffff010101ff00, 0x00ff00ffffffffff, 0x00ff00ffffff01ff, 0x00ff00ffff000101,
+    0x00ff00ff00000000, 0x00ff00ff000101ff, 0x00ff00ff01010101, 0x00ff0000ff000000,
+    0x00ff0000ff01ffff, 0x00ff000000ff0000, 0x00ff00000000ff00, 0x00ff0000000000ff,
+    0x00ff000000000000, 0x00ff000000000001, 0x00ff000000000100, 0x00ff000000010000,
+    0x00ff000001ffff01, 0x00ff000001000000, 0x00ff0001ff000101, 0x00ff000100ffffff,
+    0x00ff000100000000, 0x00ff0001010001ff, 0x00ff01ffff000000, 0x00ff01ff0001ff00,
+    0x00ff01ff01ff0100, 0x00ff0100ff01ff01, 0x00ff010000ff00ff, 0x00ff010000ff0101,
+    0x00ff010000000000, 0x00ff010000010101, 0x00ff01000100ff00, 0x00ff010001010000,
+    0x00ff0101ffffff00, 0x00ff01010000ff01, 0x00ff010100000100, 0x00ff010101ff0000,
+    0x0000ffffffff0100, 0x0000ffffff00ff00, 0x0000ffffff0000ff, 0x0000ffffff010000,
+    0x0000ffff00000000, 0x0000ffff00010101, 0x0000ffff01ffff01, 0x0000ffff01000100,
+    0x0000ff00ff000000, 0x0000ff00ff01ff00, 0x0000ff00ff0101ff, 0x0000ff0000ff0000,
+    0x0000ff000000ff00, 0x0000ff00000000ff, 0x0000ff0000000000, 0x0000ff0000000001,
+    0x0000ff0000000100, 0x0000ff0000010000, 0x0000ff0001ffffff, 0x0000ff0001ff01ff,
+    0x0000ff0001000000, 0x0000ff000101ffff, 0x0000ff01ffff0101, 0x0000ff01ff010000,
+    0x0000ff0100000000, 0x0000ff0101000101, 0x000000ffffff0001, 0x000000ffff000000,
+    0x000000ff00ff0000, 0x000000ff0000ff00, 0x000000ff000000ff, 0x000000ff00000000,
+    0x000000ff00000001, 0x000000ff00000100, 0x000000ff00010000, 0x000000ff01000000,
+    0x000000ff0101ff00, 0x00000000ffff0000, 0x00000000ff00ff00, 0x00000000ff0000ff,
+    0x00000000ff000000, 0x00000000ff000001, 0x00000000ff000100, 0x00000000ff010000,
+    0x0000000000ffff00, 0x0000000000ff00ff, 0x0000000000ff0000, 0x0000000000ff0001,
+    0x0000000000ff0100, 0x000000000000ffff, 0x000000000000ff00, 0x000000000000ff01,
+    0x00000000000000ff, 0x0000000000000001, 0x00000000000001ff, 0x0000000000000100,
+    0x0000000000000101, 0x000000000001ff00, 0x00000000000100ff, 0x0000000000010000,
+    0x0000000000010001, 0x0000000000010100, 0x0000000001ff0000, 0x000000000100ff00,
+    0x00000000010000ff, 0x0000000001000000, 0x0000000001000001, 0x0000000001000100,
+    0x0000000001010000, 0x00000001ffff01ff, 0x00000001ff000000, 0x0000000100ff0000,
+    0x000000010000ff00, 0x00000001000000ff, 0x0000000100000000, 0x0000000100000001,
+    0x0000000100000100, 0x0000000100010000, 0x0000000101000000, 0x000001ffff00ff00,
+    0x000001ffff010001, 0x000001ffff0101ff, 0x000001ff00ffff01, 0x000001ff0000ffff,
+    0x000001ff00000000, 0x000001ff010000ff, 0x000001ff01010100, 0x00000100ffff0100,
+    0x00000100ff000000, 0x0000010000ff0000, 0x000001000000ff00, 0x00000100000000ff,
+    0x0000010000000000, 0x0000010000000001, 0x0000010000000100, 0x0000010000010000,
+    0x0000010001000000, 0x000001000101ff01, 0x00000101ffff0001, 0x00000101ff01ffff,
+    0x0000010100000000, 0x0000010101010100, 0x0001ffffff000000, 0x0001ffff00ffffff,
+    0x0001ffff00000100, 0x0001ffff0001ff00, 0x0001ffff01000000, 0x0001ff00ffffff00,
+    0x0001ff00ffff01ff, 0x0001ff00ff010000, 0x0001ff0000000000, 0x0001ff0000010001,
+    0x0001ff0001ff0000, 0x0001ff0001010100, 0x0001ff01ff0000ff, 0x0001ff01ff000001,
+    0x0001ff0100ffffff, 0x0001ff010001ffff, 0x0001ff01000101ff, 0x0001ff010100ff01,
+    0x000100ffff00ffff, 0x000100ffff00ff01, 0x000100ffff000100, 0x000100ff00000000,
+    0x000100ff000101ff, 0x000100ff01ff0101, 0x000100ff0100ffff, 0x000100ff01010101,
+    0x00010000ff000000, 0x00010000ff010100, 0x0001000000ff0000, 0x000100000000ff00,
+    0x00010000000000ff, 0x0001000000000000, 0x0001000000000001, 0x0001000000000100,
+    0x0001000000010000, 0x0001000001ffff01, 0x0001000001000000, 0x0001000100ff0101,
+    0x0001000100000000, 0x00010001010100ff, 0x000101ffffff01ff, 0x000101ffffff0101,
+    0x000101ff00010000, 0x000101ff01ff0000, 0x000101ff0100ff01, 0x00010100ffff0000,
+    0x0001010000000000, 0x000101000001ffff, 0x0001010000010101, 0x00010100010001ff,
+    0x00010101ff00ff00, 0x00010101ff010001, 0x0001010100ffffff, 0x0001010100ff01ff,
+    0x00010101000101ff, 0x0001010101ff0000, 0x000101010100ff01, 0x0001010101000101,
+    0x01ffffffffff0101, 0x01ffffffff01ffff, 0x01ffffffff01ff01, 0x01ffffffff0101ff,
+    0x01ffffffff010101, 0x01ffffff00000000, 0x01ffffff01ff01ff, 0x01ffffff01000101,
+    0x01ffffff0101ff01, 0x01ffffff010100ff, 0x01ffff000000ff00, 0x01ffff0000000001,
+    0x01ffff00000001ff, 0x01ffff0000010000, 0x01ffff0001ff0000, 0x01ffff01ffffffff,
+    0x01ffff01ffff01ff, 0x01ffff01ff000000, 0x01ffff01ff01ffff, 0x01ffff01ff0101ff,
+    0x01ffff010100ffff, 0x01ff00ffffff0000, 0x01ff00ffff010000, 0x01ff00ff00ffff01,
+    0x01ff0000ff0000ff, 0x01ff000000000000, 0x01ff00000001ff01, 0x01ff000001ffffff,
+    0x01ff000001010100, 0x01ff0001ffffff01, 0x01ff0001ff010001, 0x01ff000101ff0100,
+    0x01ff000101000001, 0x01ff0001010100ff, 0x01ff01ffff00ffff, 0x01ff01ff00010001,
+    0x01ff01ff01000000, 0x01ff01ff010101ff, 0x01ff0100ff000001, 0x01ff010000ffff00,
+    0x01ff010000000100, 0x01ff010001ff01ff, 0x01ff01000101ffff, 0x01ff0101ffff00ff,
+    0x01ff0101ffff0101, 0x01ff0101ff0101ff, 0x01ff010100010000, 0x0100ffff00ff00ff,
+    0x0100ffff00ff0001, 0x0100ffff00000100, 0x0100ffff0100ff00, 0x0100ff00ffff0000,
+    0x0100ff00ff00ffff, 0x0100ff00ff00ff01, 0x0100ff00ff000100, 0x0100ff00ff010000,
+    0x0100ff0000000000, 0x0100ff00000100ff, 0x0100ff0001ff0101, 0x0100ff0001010101,
+    0x0100ff0100ff00ff, 0x0100ff0100ff0001, 0x0100ff0100000100, 0x0100ff0100010001,
+    0x0100ff0101000000, 0x010000ffff00ff00, 0x010000ff0000ffff, 0x010000ff00000000,
+    0x010000ff010001ff, 0x010000ff01010001, 0x01000000ffffff00, 0x01000000ffff0101,
+    0x01000000ff000000, 0x01000000ff0100ff, 0x01000000ff010101, 0x0100000000ff0000,
+    0x010000000000ff00, 0x01000000000000ff, 0x0100000000000000, 0x0100000000000001,
+    0x0100000000000100, 0x0100000000010000, 0x0100000001000000, 0x0100000100000000,
+    0x01000001000101ff, 0x0100000101ffff01, 0x010001ffff000101, 0x010001ff00ff0100,
+    0x010001ff0000ff00, 0x010001ff000100ff, 0x010001ff01ffffff, 0x01000100ffff0000,
+    0x01000100ff0001ff, 0x0100010000000000, 0x010001000001ff00, 0x0100010001ff0000,
+    0x01000100010000ff, 0x0100010001000101, 0x01000101ff00ff01, 0x0100010100ff0100,
+    0x010001010000ffff, 0x0100010101010001, 0x0101ffffffff0101, 0x0101ffffff0001ff,
+    0x0101ffffff01ffff, 0x0101ffffff010101, 0x0101ffff00000000, 0x0101ffff0101ffff,
+    0x0101ffff010101ff, 0x0101ff00ff000000, 0x0101ff0000ff0100, 0x0101ff000000ff00,
+    0x0101ff0000010000, 0x0101ff00010000ff, 0x0101ff0001000001, 0x0101ff01ff010101,
+    0x0101ff0100000000, 0x0101ff010101ff00, 0x010100ffffff0000, 0x010100ffff010000,
+    0x010100ff00ff01ff, 0x010100ff000000ff, 0x010100ff00000101, 0x010100ff01ffff00,
+    0x01010000ffffff01, 0x01010000ff000100, 0x01010000ff01ff01, 0x0101000000000000,
+    0x01010000000100ff, 0x010100000101ff01, 0x01010001ffff0000, 0x01010001ff00ffff,
+    0x01010001ff010000, 0x0101000101ffffff, 0x0101000101ff01ff, 0x0101000101010101,
+    0x010101ffff01ffff, 0x010101ff00000000, 0x010101ff0001ff01, 0x010101ff0101ffff,
+    0x010101ff010101ff, 0x01010100ffffffff, 0x01010100ff000001, 0x010101000000ff00,
+    0x0101010001010000, 0x0101010100ff0001, 0x010101010001ff01, 0x010101010101ffff,
+};
+
 static const __device__ uint8_t ksigns_iq2xs[128] = {
       0, 129, 130,   3, 132,   5,   6, 135, 136,   9,  10, 139,  12, 141, 142,  15,
     144,  17,  18, 147,  20, 149, 150,  23,  24, 153, 154,  27, 156,  29,  30, 159,
@@ -1820,6 +1970,49 @@ static __global__ void dequantize_block_iq3_xxs(const void * __restrict__ vx, ds
 #else
     assert(false);
 #endif
+
+}
+
+template<typename dst_t>
+static __global__ void dequantize_block_iq1_s(const void * __restrict__ vx, dst_t * __restrict__ yy) {
+
+    const int i   = blockIdx.x;
+    const block_iq1_s * x = (const block_iq1_s  *) vx;
+
+    const int tid = threadIdx.x;
+#if QK_K == 256
+    const int il = tid/8; // 0...3
+    const int ib = tid%8; // 0...7
+    dst_t * y = yy + i*QK_K + 32*ib + 8*il;
+    const int i8 = 4*ib+il;
+    uint8_t h = x[i].scales[i8/2] >> 4*(i8%2);
+    const int8_t * grid = (const int8_t *)(iq1s_grid + (x[i].qs[i8] | ((h & 8) << 5)));
+    const float d = (float)x[i].d * (2*(h & 7) + 1);
+    for (int j = 0; j < 8; ++j) y[j] = d * grid[j];
+#else
+    assert(false);
+#endif
+
+}
+
+static const __device__ int8_t kvalues_iq4nl[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
+
+template<typename dst_t>
+static __global__ void dequantize_block_iq4_nl(const void * __restrict__ vx, dst_t * __restrict__ yy) {
+
+    const int i   = blockIdx.x;
+    const block_iq4_nl * x = (const block_iq4_nl *) vx + i*(QK_K/QK4_NL);
+
+    const int tid = threadIdx.x;
+    const int il = tid/8; // 0...3
+    const int ib = tid%8; // 0...7
+    dst_t * y = yy + i*QK_K + 32*ib + 4*il;
+    const uint8_t  * q4 = x[ib].qs + 4*il;
+    const float d = (float)x[ib].d;
+    for (int j = 0; j < 4; ++j) {
+        y[j+ 0] = d * kvalues_iq4nl[q4[j] & 0xf];
+        y[j+16] = d * kvalues_iq4nl[q4[j] >>  4];
+    }
 
 }
 
@@ -4478,10 +4671,12 @@ static __device__ __forceinline__ float vec_dot_iq2_xs_q8_1(
     const float d = (float)bq2->d * __low2float(bq8_1[ib32].ds) * 0.25f;
     return d * ((0.5f + ls1) * sumi1 + (0.5f + ls2) * sumi2);
 #else
+    (void) ksigns64;
     assert(false);
     return 0.f;
 #endif
 #else
+    (void) ksigns64;
     assert(false);
     return 0.f;
 #endif
@@ -4520,6 +4715,99 @@ static __device__ __forceinline__ float vec_dot_iq3_xxs_q8_1(
     assert(false);
     return 0.f;
 #endif
+}
+
+static __device__ __forceinline__ float vec_dot_iq1_s_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
+#if QK_K == 256
+    const block_iq1_s * bq1 = (const block_iq1_s *) vbq;
+
+    const int ib32 = iqs;
+    int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
+    const uint8_t h1 = bq1->scales[2*ib32+0];
+    const uint8_t h2 = bq1->scales[2*ib32+1];
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    const int * q8 = (const int *)bq8_1[ib32].qs;
+    const int * grid1 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+0] | ((h1 & 0x08) << 5)));
+    const int * grid2 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+1] | ((h1 & 0x80) << 1)));
+    const int * grid3 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+2] | ((h2 & 0x08) << 5)));
+    const int * grid4 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+3] | ((h2 & 0x80) << 1)));
+    for (int j = 0; j < 2; ++j) {
+        sumi1 = __dp4a(q8[j+0], grid1[j], sumi1);
+        sumi2 = __dp4a(q8[j+2], grid2[j], sumi2);
+        sumi3 = __dp4a(q8[j+4], grid3[j], sumi3);
+        sumi4 = __dp4a(q8[j+6], grid4[j], sumi4);
+    }
+#else
+    const int8_t   * q8 = bq8_1[ib32].qs;
+    const int8_t * grid1 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+0] | ((h1 & 0x08) << 5)));
+    const int8_t * grid2 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+1] | ((h1 & 0x80) << 1)));
+    const int8_t * grid3 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+2] | ((h2 & 0x08) << 5)));
+    const int8_t * grid4 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+3] | ((h2 & 0x80) << 1)));
+    for (int j = 0; j < 8; ++j) {
+        sumi1 += q8[j+ 0] * grid1[j];
+        sumi2 += q8[j+ 8] * grid2[j];
+        sumi3 += q8[j+16] * grid3[j];
+        sumi4 += q8[j+24] * grid4[j];
+    }
+#endif
+    const float d = (float)bq1->d * __low2float(bq8_1[ib32].ds);
+    return d * (sumi1 * (2*(h1 & 7) + 1) + sumi2 * (2*((h1 >> 4) & 7) + 1) +
+                sumi3 * (2*(h2 & 7) + 1) + sumi4 * (2*((h2 >> 4) & 7) + 1));
+#else
+    assert(false);
+    return 0.f;
+#endif
+}
+
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+static __device__ __forceinline__ void get_int_from_table_16(const uint32_t & q4, const uint8_t * values,
+        int & val1, int & val2) {
+
+    uint32_t aux32; const uint8_t * q8 = (const uint8_t *)&aux32;
+    aux32 = q4 & 0x0f0f0f0f;
+    uint16_t v1 = values[q8[0]] | (values[q8[1]] << 8);
+    uint16_t v2 = values[q8[2]] | (values[q8[3]] << 8);
+    val1 = v1 | (v2 << 16);
+    aux32 = (q4 >> 4) & 0x0f0f0f0f;
+    v1 = values[q8[0]] | (values[q8[1]] << 8);
+    v2 = values[q8[2]] | (values[q8[3]] << 8);
+    val2 = v1 | (v2 << 16);
+}
+#endif
+
+static __device__ __forceinline__ float vec_dot_iq4_nl_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
+
+    const block_iq4_nl * bq = (const block_iq4_nl *) vbq;
+
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    const uint16_t * q4 = (const uint16_t *)bq->qs + 2*iqs;
+    const int32_t  * q8 = (const int32_t  *)bq8_1->qs + iqs;
+
+    const uint8_t * values = (const uint8_t *)kvalues_iq4nl;
+
+    int v1, v2;
+    int sumi1 = 0, sumi2 = 0;
+    for (int l = 0; l < VDR_Q4_0_Q8_1_MMVQ; ++l) {
+        const uint32_t aux = q4[2*l] | (q4[2*l+1] << 16);
+        get_int_from_table_16(aux, values, v1, v2);
+        sumi1 = __dp4a(v1, q8[l+0], sumi1);
+        sumi2 = __dp4a(v2, q8[l+4], sumi2);
+    }
+
+#else
+    const uint8_t * q4 = bq->qs + 4*iqs;
+    const int8_t  * q8 = bq8_1->qs + 4*iqs;
+
+    int sumi1 = 0, sumi2 = 0;
+    for (int l = 0; l < 4*VDR_Q4_0_Q8_1_MMVQ; ++l) {
+        sumi1 += q8[l+ 0] * kvalues_iq4nl[q4[l] & 0xf];
+        sumi2 += q8[l+16] * kvalues_iq4nl[q4[l] >>  4];
+    }
+#endif
+    const float d = (float)bq->d * __low2float(bq8_1->ds);
+    return d * (sumi1 + sumi2);
 }
 
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x, int mmq_y, int nwarps,
@@ -5310,51 +5598,59 @@ template <bool need_check> static __global__ void
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
-#define MMVQ_NWARPS_NVIDIA    4
-#define MMVQ_NWARPS_AMD_RDNA2 1
-#define MMVQ_NWARPS_AMD_OLD   4
-
-template <int nwarps, int ncols_y_template, int qk, int qi, typename block_q_t, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda>
+template <int ncols_y, int qk, int qi, typename block_q_t, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda>
 #if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
-__launch_bounds__(nwarps*WARP_SIZE, 1) // tells the compiler to use as many registers as it wants
+// tell the compiler to use as many registers as it wants, see nwarps definition below
+__launch_bounds__((ncols_y <= 4 ? 4 : 2)*WARP_SIZE, 1)
 #endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
 static __global__ void mul_mat_vec_q(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
-    const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y_par, const int nrows_dst) {
+    const int ncols_x, const int nrows_x, const int nrows_y, const int nrows_dst) {
 
-    const int ncols_y = ncols_y_template != 0 ? ncols_y_template : ncols_y_par;
+#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__) && (defined(RDNA2) || defined(RDNA3))
+    constexpr int nwarps              = 1;
+    constexpr int rows_per_cuda_block = 1;
+#else
+    constexpr int nwarps              = ncols_y <= 4 ? 4 : 2;
+    constexpr int rows_per_cuda_block = ncols_y == 1 ? 1 : 2;
+#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__) && !defined(RDNA2) && !defined(RDNA3)
 
-    const int tid = WARP_SIZE*threadIdx.y + threadIdx.x;
-    const int row = blockIdx.x;
-
-    const int blocks_per_row_x = ncols_x / qk;
-    const int blocks_per_col_y = nrows_y / QK8_1;
-    const int blocks_per_iter = vdr * nwarps*WARP_SIZE / qi;
+    const     int tid = WARP_SIZE*threadIdx.y + threadIdx.x;
+    const     int row0 = rows_per_cuda_block*blockIdx.x;
+    const     int blocks_per_row_x = ncols_x / qk;
+    const     int blocks_per_col_y = nrows_y / QK8_1;
+    constexpr int blocks_per_iter = vdr * nwarps*WARP_SIZE / qi;
 
 // partial sum for each thread
-    float tmp[ncols_y_template != 0 ? ncols_y_template : 8] = {0.0f};
+    float tmp[ncols_y][rows_per_cuda_block] = {0.0f};
 
     const block_q_t  * x = (const block_q_t  *) vx;
     const block_q8_1 * y = (const block_q8_1 *) vy;
 
-    for (int i = tid / (qi/vdr); i < blocks_per_row_x; i += blocks_per_iter) {
-        const int ibx = row*blocks_per_row_x + i; // x block index
+    for (int kbx = tid / (qi/vdr); kbx < blocks_per_row_x; kbx += blocks_per_iter) {
+        const int kby = kbx * (qk/QK8_1); // y block index that aligns with kbx
 
-        const int iby = i * (qk/QK8_1); // y block index that aligns with ibx
-
-        const int iqs  = vdr * (tid % (qi/vdr)); // x block quant index when casting the quants to int
+        // x block quant index when casting the quants to int
+        const int kqs = vdr * (tid % (qi/vdr));
 
 #pragma unroll
         for (int j = 0; j < ncols_y; ++j) {
-            tmp[j] += vec_dot_q_cuda(&x[ibx], &y[j*blocks_per_col_y + iby], iqs);
+#pragma unroll
+            for (int i = 0; i < rows_per_cuda_block; ++i) {
+                tmp[j][i] += vec_dot_q_cuda(
+                    &x[kbx + (row0 + i)*blocks_per_row_x], &y[j*blocks_per_col_y + kby], kqs);
+            }
         }
     }
 
-    __shared__ float tmp_shared[nwarps-1 > 0 ? nwarps-1 : 1][ncols_y_template != 0 ? ncols_y_template : 8][WARP_SIZE];
+    __shared__ float tmp_shared[nwarps-1 > 0 ? nwarps-1 : 1][ncols_y][rows_per_cuda_block][WARP_SIZE];
     if (threadIdx.y > 0) {
 #pragma unroll
         for (int j = 0; j < ncols_y; ++j) {
-            tmp_shared[threadIdx.y-1][j][threadIdx.x] = tmp[j];
+#pragma unroll
+            for (int i = 0; i < rows_per_cuda_block; ++i) {
+                tmp_shared[threadIdx.y-1][j][i][threadIdx.x] = tmp[j][i];
+            }
         }
     }
     __syncthreads();
@@ -5366,13 +5662,16 @@ static __global__ void mul_mat_vec_q(
 #pragma unroll
     for (int j = 0; j < ncols_y; ++j) {
 #pragma unroll
-        for (int i = 0; i < nwarps-1; ++i) {
-            tmp[j] += tmp_shared[i][j][threadIdx.x];
+        for (int i = 0; i < rows_per_cuda_block; ++i) {
+#pragma unroll
+            for (int l = 0; l < nwarps-1; ++l) {
+                tmp[j][i] += tmp_shared[l][j][i][threadIdx.x];
+            }
+            tmp[j][i] = warp_reduce_sum(tmp[j][i]);
         }
-        tmp[j] = warp_reduce_sum(tmp[j]);
 
-        if (threadIdx.x == 0) {
-            dst[j*nrows_dst + row] = tmp[j];
+        if (threadIdx.x < rows_per_cuda_block) {
+            dst[j*nrows_dst + row0 + threadIdx.x] = tmp[j][threadIdx.x];
         }
     }
 }
@@ -5945,148 +6244,30 @@ static __global__ void diag_mask_inf_f32(const float * x, float * dst, const int
     dst[i] = x[i] - (col > n_past + row % rows_per_channel) * FLT_MAX;
 }
 
-template <bool vals_smem, int ncols_template, int block_size_template, bool need_check>
-static __global__ void soft_max_f16(const float * x, const float * y, float * dst, const int ncols_par, const int nrows_y, const float scale) {
-#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
-    const int ncols_data = ncols_template == 0 ? ncols_par : ncols_template;
-    const int ncols_smem = GGML_PAD(ncols_data, 2*WARP_SIZE)/2;
-
-    const int tid  = threadIdx.x;
-    const int rowx = blockIdx.x;
-    const int rowy = rowx % nrows_y; // broadcast the mask (y) in the row dimension
-
-    const int block_size = block_size_template == 0 ? blockDim.x : block_size_template;
-
-    const int warp_id = threadIdx.x / WARP_SIZE;
-    const int lane_id = threadIdx.x % WARP_SIZE;
-
-    extern __shared__ half data_soft_max_f16[];
-    half  * buf_iw = data_soft_max_f16 + 0; // shared memory buffer for inter-warp communication
-    // (shared memory) buffer to cache values between iterations:
-    half2 * vals = vals_smem ? (half2 *) (buf_iw + WARP_SIZE) : (half2 *) (dst + rowx*ncols_data);
-    // if the buffer is larger than max. shared memory per block, use dst as temp. buffer instead
-    // in that case col_smem == col_data must be enforced to avoid race conditions
-
-    half2 max_val = make_half2(-INFINITY, -INFINITY);
-
-#pragma unroll
-    for (int col0 = 0; col0 < ncols_smem; col0 += block_size) {
-        const int col_data = 2*col0 + 2*WARP_SIZE*warp_id + lane_id;
-        const int col_smem = vals_smem ? col0 + tid : col_data;
-
-        const int ix = rowx*ncols_data + col_data;
-        const int iy = rowy*ncols_data + col_data;
-
-        half2 val;
-        if (need_check && col_data + 0 >= ncols_data) {
-            val.x = -INFINITY;
-        } else {
-            val.x = x[ix + 0]*scale + (y ? y[iy + 0] : 0.0f);
-        }
-        if (need_check && col_data + WARP_SIZE >= ncols_data) {
-            val.y = -INFINITY;
-        } else {
-            val.y = x[ix + WARP_SIZE]*scale + (y ? y[iy + WARP_SIZE] : 0.0f);
-        }
-        if (!need_check || col_smem < (vals_smem ? ncols_smem : ncols_data)) {
-            vals[col_smem] = val;
-        }
-        max_val = __hmax2(max_val, val);
-    }
-
-    // find the max value in the block
-    max_val = warp_reduce_max(max_val);
-    if (block_size > WARP_SIZE) {
-        if (warp_id == 0) {
-            buf_iw[lane_id] = -INFINITY;
-        }
-        __syncthreads();
-
-        if (lane_id == 0) {
-            buf_iw[warp_id] = __hmax(max_val.x, max_val.y);
-        }
-        __syncthreads();
-
-        max_val = __half2half2(buf_iw[lane_id]);
-        max_val = warp_reduce_max(max_val);
-    } else {
-        max_val = __half2half2(__hmax(max_val.x, max_val.y));
-    }
-
-    half2 tmp = make_half2(0.0f, 0.0f); // partial sums
-
-#pragma unroll
-    for (int col0 = 0; col0 < ncols_smem; col0 += block_size) {
-        const int col_smem = vals_smem ? col0 + tid : 2*col0 + 2*warp_id*WARP_SIZE + lane_id;
-
-        if (ncols_template == 0 && col_smem >= (vals_smem ? ncols_smem : ncols_data)) {
-            break;
-        }
-
-        const half2 val = h2exp(vals[col_smem] - max_val);
-
-        tmp += val;
-        vals[col_smem] = val;
-    }
-
-    // find the sum of exps in the block
-    tmp = warp_reduce_sum(tmp);
-    if (block_size > WARP_SIZE) {
-        if (warp_id == 0) {
-            buf_iw[lane_id] = 0.0f;
-        }
-        __syncthreads();
-
-        if (lane_id == 0) {
-            buf_iw[warp_id] = tmp.x + tmp.y;
-        }
-        __syncthreads();
-
-        tmp = __half2half2(buf_iw[lane_id]);
-        tmp = warp_reduce_sum(tmp);
-    } else {
-        tmp = __half2half2(tmp.x + tmp.y);
-    }
-
-    const half2 inv_sum = make_half2(1.0f, 1.0f) / tmp;
-
-#pragma unroll
-    for (int col0 = 0; col0 < ncols_smem; col0 += block_size) {
-        const int col_data = 2*col0 + 2*WARP_SIZE*warp_id + lane_id;
-        const int col_smem = vals_smem ? col0 + tid : col_data;
-
-        const int idst = rowx*ncols_data + col_data;
-        const half2 result = vals[col_smem] * inv_sum;
-
-        if (need_check && col_data + 0 >= ncols_data) {
-            return;
-        }
-        dst[idst] = result.x;
-
-        if (need_check && col_data + WARP_SIZE >= ncols_data) {
-            return;
-        }
-
-        dst[idst + WARP_SIZE] = result.y;
-    }
-#else
-    (void) x; (void) y; (void) dst; (void) ncols_par; (void) nrows_y; (void) scale;
-    NO_DEVICE_CODE;
-#endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
-}
-
 template <bool vals_smem, int ncols_template, int block_size_template>
-static __global__ void soft_max_f32(const float * x, const float * y, float * dst, const int ncols_par, const int nrows_y, const float scale) {
+static __global__ void soft_max_f32(const float * x, const float * mask, const float * pos, float * dst, const int ncols_par, const int nrows_y, const float scale, const float max_bias, const float m0, const float m1, uint32_t n_head_log2) {
     const int ncols = ncols_template == 0 ? ncols_par : ncols_template;
 
     const int tid  = threadIdx.x;
     const int rowx = blockIdx.x;
-    const int rowy = rowx % nrows_y; // broadcast the mask (y) in the row dimension
+    const int rowy = rowx % nrows_y; // broadcast the mask in the row dimension
 
     const int block_size = block_size_template == 0 ? blockDim.x : block_size_template;
 
     const int warp_id = threadIdx.x / WARP_SIZE;
     const int lane_id = threadIdx.x % WARP_SIZE;
+
+    float slope = 0.0f;
+
+    // ALiBi
+    if (max_bias > 0.0f) {
+        const int h = rowx/nrows_y; // head index
+
+        const float base = h < n_head_log2 ? m0 : m1;
+        const int   exp  = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
+
+        slope = powf(base, exp);
+    }
 
     extern __shared__ float data_soft_max_f32[];
     float * buf_iw = data_soft_max_f32; // shared memory buffer for inter-warp communication
@@ -6106,7 +6287,8 @@ static __global__ void soft_max_f32(const float * x, const float * y, float * ds
         const int ix = rowx*ncols + col;
         const int iy = rowy*ncols + col;
 
-        const float val = x[ix]*scale + (y ? y[iy] : 0.0f);
+        const float val = x[ix]*scale + (mask ? mask[iy] : 0.0f) + (pos ? slope*pos[col] : 0.0f);
+
         vals[col] = val;
         max_val = max(max_val, val);
     }
@@ -6667,6 +6849,18 @@ static void dequantize_row_iq3_xxs_cuda(const void * vx, dst_t * y, const int k,
     dequantize_block_iq3_xxs<<<nb, 32, 0, stream>>>(vx, y);
 }
 
+template<typename dst_t>
+static void dequantize_row_iq1_s_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
+    const int nb = k / QK_K;
+    dequantize_block_iq1_s<<<nb, 32, 0, stream>>>(vx, y);
+}
+
+template<typename dst_t>
+static void dequantize_row_iq4_nl_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
+    const int nb = (k + QK_K - 1) / QK_K;
+    dequantize_block_iq4_nl<<<nb, 32, 0, stream>>>(vx, y);
+}
+
 template <typename src_t, typename dst_t>
 static void convert_unary_cuda(const void * __restrict__ vx, dst_t * __restrict__ y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
@@ -6706,6 +6900,10 @@ static to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
             return dequantize_row_iq2_xs_cuda;
         case GGML_TYPE_IQ3_XXS:
             return dequantize_row_iq3_xxs_cuda;
+        case GGML_TYPE_IQ1_S:
+            return dequantize_row_iq1_s_cuda;
+        case GGML_TYPE_IQ4_NL:
+            return dequantize_row_iq4_nl_cuda;
         case GGML_TYPE_F32:
             return convert_unary_cuda<float>;
         default:
@@ -6741,6 +6939,10 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
             return dequantize_row_iq2_xs_cuda;
         case GGML_TYPE_IQ3_XXS:
             return dequantize_row_iq3_xxs_cuda;
+        case GGML_TYPE_IQ1_S:
+            return dequantize_row_iq1_s_cuda;
+        case GGML_TYPE_IQ4_NL:
+            return dequantize_row_iq4_nl_cuda;
         case GGML_TYPE_F16:
             return convert_unary_cuda<half>;
         default:
@@ -6851,65 +7053,75 @@ static void mul_mat_vec_q_cuda(
     const int ncols_x, const int nrows_x, const int nrows_y, const int ncols_y, const int nrows_dst, cudaStream_t stream) {
 
     GGML_ASSERT(ncols_x % qk == 0);
-    GGML_ASSERT(ncols_y <= 4);
+    GGML_ASSERT(ncols_y <= MMVQ_MAX_BATCH_SIZE);
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
 
-    int nwarps;
-    if (g_device_caps[id].cc >= CC_OFFSET_AMD) {
-        nwarps = g_device_caps[id].cc >= CC_RDNA2 ? MMVQ_NWARPS_AMD_RDNA2 : MMVQ_NWARPS_AMD_OLD;
-    } else {
-        nwarps = MMVQ_NWARPS_NVIDIA;
-    }
+    int64_t nwarps = 1;
+    int64_t rows_per_cuda_block = 1;
 
-    const dim3 block_nums(nrows_x, 1, 1);
+    if (g_device_caps[id].cc < CC_RDNA2) { // NVIDIA and AMD older than RDNA2
+        switch(ncols_y) {
+            case 1:
+                nwarps = 4;
+                rows_per_cuda_block = 1;
+                break;
+            case 2:
+            case 3:
+            case 4:
+                nwarps = 4;
+                rows_per_cuda_block = 2;
+                break;
+            case 5:
+            case 6:
+            case 7:
+            case 8:
+                nwarps = 2;
+                rows_per_cuda_block = 2;
+                break;
+            default:
+                GGML_ASSERT(false);
+                break;
+        }
+    }
+    const int64_t nblocks = (nrows_x + rows_per_cuda_block - 1) / rows_per_cuda_block;
+    const dim3 block_nums(nblocks, 1, 1);
     const dim3 block_dims(WARP_SIZE, nwarps, 1);
 
-    switch (nwarps) {
-        case 1: switch(ncols_y) {
-            case 1:
-                mul_mat_vec_q<1, 1, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            case 2:
-                mul_mat_vec_q<1, 2, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            case 3:
-                mul_mat_vec_q<1, 3, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            case 4:
-                mul_mat_vec_q<1, 4, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            default:
-                GGML_ASSERT(false);
-                break;
-        } break;
-        case 4: switch(ncols_y) {
-            case 1:
-                mul_mat_vec_q<4, 1, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            case 2:
-                mul_mat_vec_q<4, 2, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            case 3:
-                mul_mat_vec_q<4, 3, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            case 4:
-                mul_mat_vec_q<4, 4, qk, qi, block_q_t, vdr, vec_dot>
-                    <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, ncols_y, nrows_dst);
-                break;
-            default:
-                GGML_ASSERT(false);
-                break;
-        } break;
-
+    switch (ncols_y) {
+        case 1:
+            mul_mat_vec_q<1, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
+        case 2:
+            mul_mat_vec_q<2, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
+        case 3:
+            mul_mat_vec_q<3, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
+        case 4:
+            mul_mat_vec_q<4, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
+        case 5:
+            mul_mat_vec_q<5, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
+        case 6:
+            mul_mat_vec_q<6, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
+        case 7:
+            mul_mat_vec_q<7, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
+        case 8:
+            mul_mat_vec_q<8, qk, qi, block_q_t, vdr, vec_dot>
+                <<<block_nums, block_dims, 0, stream>>>(vx, vy, dst, ncols_x, nrows_x, nrows_y, nrows_dst);
+            break;
         default:
             GGML_ASSERT(false);
             break;
@@ -7568,89 +7780,53 @@ static void diag_mask_inf_f32_cuda(const float * x, float * dst, const int ncols
     diag_mask_inf_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols_x, rows_per_channel, n_past);
 }
 
-static void soft_max_f16_cuda(const float * x, const float * y, float * dst, const int ncols_x, const int nrows_x, const int nrows_y, const float scale, cudaStream_t stream) {
-    int nth = WARP_SIZE;
-    while (nth < ncols_x/2 && nth < CUDA_SOFT_MAX_BLOCK_SIZE) nth *= 2;
-    const dim3 block_dims(nth,     1, 1);
-    const dim3 block_nums(nrows_x, 1, 1);
-    const size_t shmem = (GGML_PAD(ncols_x, 2*WARP_SIZE) + WARP_SIZE)*sizeof(half);
-    static_assert(CUDA_SOFT_MAX_BLOCK_SIZE == 1024, "These values need to be adjusted.");
-    if (shmem <= g_device_caps[g_main_device].smpb) {
-        switch (ncols_x) {
-            case 32:
-                soft_max_f16<true, 32, 32, true><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            case 64:
-                soft_max_f16<true, 64, 32, false><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            case 128:
-                soft_max_f16<true, 128, 64, false><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            case 256:
-                soft_max_f16<true, 256, 128, false><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            case 512:
-                soft_max_f16<true, 512, 256, false><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            case 1024:
-                soft_max_f16<true, 1024, 512, false><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            case 2048:
-                soft_max_f16<true, 2048, 1024, false><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            case 4096:
-                soft_max_f16<true, 4096, 1024, false><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-            default:
-                soft_max_f16<true, 0, 0, true><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-                break;
-        }
-    } else {
-        const size_t shmem_low = WARP_SIZE*sizeof(half);
-        soft_max_f16<false, 0, 0, true><<<block_nums, block_dims, shmem_low, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
-    }
-}
-
-static void soft_max_f32_cuda(const float * x, const float * y, float * dst, const int ncols_x, const int nrows_x, const int nrows_y, const float scale, cudaStream_t stream) {
+static void soft_max_f32_cuda(const float * x, const float * mask, const float * pos, float * dst, const int ncols_x, const int nrows_x, const int nrows_y, const float scale, const float max_bias, cudaStream_t stream) {
     int nth = WARP_SIZE;
     while (nth < ncols_x && nth < CUDA_SOFT_MAX_BLOCK_SIZE) nth *= 2;
     const dim3 block_dims(nth,     1, 1);
     const dim3 block_nums(nrows_x, 1, 1);
     const size_t shmem = (GGML_PAD(ncols_x, WARP_SIZE) + WARP_SIZE)*sizeof(float);
     static_assert(CUDA_SOFT_MAX_BLOCK_SIZE == 1024, "These values need to be adjusted.");
+
+    const uint32_t n_head_kv   = nrows_x/nrows_y;
+    const uint32_t n_head_log2 = 1u << (uint32_t) floorf(log2f((float) n_head_kv));
+
+    const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
+    const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
+
     if (shmem < g_device_caps[g_main_device].smpb) {
         switch (ncols_x) {
             case 32:
-                soft_max_f32<true, 32, 32><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 32, 32><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             case 64:
-                soft_max_f32<true, 64, 64><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 64, 64><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             case 128:
-                soft_max_f32<true, 128, 128><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 128, 128><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             case 256:
-                soft_max_f32<true, 256, 256><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 256, 256><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             case 512:
-                soft_max_f32<true, 512, 512><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 512, 512><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             case 1024:
-                soft_max_f32<true, 1024, 1024><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 1024, 1024><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             case 2048:
-                soft_max_f32<true, 2048, 1024><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 2048, 1024><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             case 4096:
-                soft_max_f32<true, 4096, 1024><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 4096, 1024><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
             default:
-                soft_max_f32<true, 0, 0><<<block_nums, block_dims, shmem, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+                soft_max_f32<true, 0, 0><<<block_nums, block_dims, shmem, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
                 break;
         }
     } else {
         const size_t shmem_low = WARP_SIZE*sizeof(float);
-        soft_max_f32<false, 0, 0><<<block_nums, block_dims, shmem_low, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
+        soft_max_f32<false, 0, 0><<<block_nums, block_dims, shmem_low, stream>>>(x, mask, pos, dst, ncols_x, nrows_y, scale, max_bias, m0, m1, n_head_log2);
     }
 }
 
@@ -7922,6 +8098,7 @@ GGML_CALL void ggml_init_cublas() {
         if (cudaGetDeviceCount(&g_device_count) != cudaSuccess) {
             initialized = true;
             g_cublas_loaded = false;
+            fprintf(stderr, "%s: no " GGML_CUDA_NAME " devices found, " GGML_CUDA_NAME " will be disabled\n", __func__);
             return;
         }
 
@@ -8509,6 +8686,8 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_CUD
         case GGML_TYPE_IQ2_XXS:
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
+        case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ4_NL:
             return max_compute_capability >= CC_RDNA2 ? 128 : 64;
         default:
             GGML_ASSERT(false);
@@ -8532,6 +8711,8 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_CUD
         case GGML_TYPE_IQ2_XXS:
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
+        case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ4_NL:
             return max_compute_capability >= CC_VOLTA ? 128 : 64;
         case GGML_TYPE_Q6_K:
             return 64;
@@ -8627,6 +8808,14 @@ static void ggml_cuda_op_mul_mat_vec_q(
             break;
         case GGML_TYPE_IQ3_XXS:
             mul_mat_vec_q_cuda<QK_K, QI3_XXS, block_iq3_xxs, 1, vec_dot_iq3_xxs_q8_1>
+                (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
+            break;
+        case GGML_TYPE_IQ1_S:
+            mul_mat_vec_q_cuda<QK_K, QI1_S, block_iq1_s, 1, vec_dot_iq1_s_q8_1>
+                (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
+            break;
+        case GGML_TYPE_IQ4_NL:
+            mul_mat_vec_q_cuda<QK4_NL, QI4_NL, block_iq4_nl, VDR_Q4_0_Q8_1_MMVQ, vec_dot_iq4_nl_q8_1>
                 (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
             break;
         default:
@@ -9068,30 +9257,36 @@ static void ggml_cuda_op_soft_max(
 
     GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32); // src1 contains mask and it is optional
 
-    const int64_t ne00 = src0->ne[0];
+    const int64_t ne00    = src0->ne[0];
     const int64_t nrows_x = ggml_nrows(src0);
-    const int64_t nrows_y = src1 ? ggml_nrows(src1) : 1;
+    const int64_t nrows_y = src0->ne[1];
 
-    float scale = 1.0f;
-    memcpy(&scale, dst->op_params, sizeof(float));
+    float scale    = 1.0f;
+    float max_bias = 0.0f;
 
-#if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && CUDART_VERSION >= CUDART_HMAX
-#ifdef GGML_CUDA_F16
-    const bool use_f16_soft_max = true;
-#else
-    const bool use_f16_soft_max = false;
-#endif // GGML_CUDA_F16
-#else
-    const bool use_f16_soft_max = false;
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__) && CUDART_VERSION >= CUDART_HMAX
+    memcpy(&scale,    (float *) dst->op_params + 0, sizeof(float));
+    memcpy(&max_bias, (float *) dst->op_params + 1, sizeof(float));
 
-    if (use_f16_soft_max) {
-        soft_max_f16_cuda(src0_dd, src1 ? src1_dd : nullptr, dst_dd, ne00, nrows_x, nrows_y, scale, main_stream);
-    } else {
-        soft_max_f32_cuda(src0_dd, src1 ? src1_dd : nullptr, dst_dd, ne00, nrows_x, nrows_y, scale, main_stream);
+    // positions tensor
+    float * src2_dd = nullptr;
+    cuda_pool_alloc<float> src2_f;
+
+    ggml_tensor * src2 = dst->src[2];
+    const bool use_src2 = src2 != nullptr;
+
+    if (use_src2) {
+        const bool src2_on_device = src2->backend == GGML_BACKEND_GPU;
+
+        if (src2_on_device) {
+            ggml_tensor_extra_gpu * src2_extra = (ggml_tensor_extra_gpu *) src2->extra;
+            src2_dd = (float *) src2_extra->data_device[g_main_device];
+        } else {
+            src2_dd = src2_f.alloc(ggml_nelements(src2));
+            CUDA_CHECK(ggml_cuda_cpy_tensor_2d(src2_dd, src2, 0, 0, 0, 1, main_stream));
+        }
     }
 
-    (void) dst;
+    soft_max_f32_cuda(src0_dd, src1 ? src1_dd : nullptr, src2_dd, dst_dd, ne00, nrows_x, nrows_y, scale, max_bias, main_stream);
 }
 
 static void ggml_cuda_op_scale(
@@ -9226,9 +9421,15 @@ static void ggml_cuda_set_peer_access(const int n_tokens) {
             CUDA_CHECK(cudaDeviceCanAccessPeer(&can_access_peer, id, id_other));
             if (can_access_peer) {
                 if (enable_peer_access) {
-                    CUDA_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
+                    cudaError_t err = cudaDeviceEnablePeerAccess(id_other, 0);
+                    if (err != cudaErrorPeerAccessAlreadyEnabled) {
+                        CUDA_CHECK(err);
+                    }
                 } else {
-                    CUDA_CHECK(cudaDeviceDisablePeerAccess(id_other));
+                    cudaError_t err = cudaDeviceDisablePeerAccess(id_other);
+                    if (err != cudaErrorPeerAccessNotEnabled) {
+                        CUDA_CHECK(err);
+                    }
                 }
             }
         }
@@ -9735,7 +9936,7 @@ static __global__ void k_compute_batched_ptrs(
     ptrs_dst[0*ne23 + i12 + i13*ne12] = (      char *)         dst + i12*nbd2 + i13*nbd3;
 }
 
-static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_mul_mat_batched_cublas(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_ASSERT(!ggml_is_transposed(src0));
     GGML_ASSERT(!ggml_is_transposed(src1));
 
@@ -9893,39 +10094,69 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 
     int64_t min_compute_capability = INT_MAX;
 
+    bool any_pascal_with_slow_fp16 = false;
     if (split) {
         ggml_backend_cuda_split_buffer_type_context * buft_ctx = (ggml_backend_cuda_split_buffer_type_context *) src0->buffer->buft->context;
         auto & tensor_split = buft_ctx->tensor_split;
         for (int id = 0; id < g_device_count; ++id) {
-            if (min_compute_capability > g_device_caps[id].cc && tensor_split[id] < (id + 1 < g_device_count ? tensor_split[id + 1] : 1.0f)) {
+            // skip devices that are not going to do any work:
+            if (tensor_split[id] >= (id + 1 < g_device_count ? tensor_split[id + 1] : 1.0f)) {
+                continue;
+            }
+
+            if (min_compute_capability > g_device_caps[id].cc) {
                 min_compute_capability = g_device_caps[id].cc;
+            }
+            if (g_device_caps[id].cc == 610) {
+                any_pascal_with_slow_fp16 = true;
             }
         }
     } else {
-        min_compute_capability = g_device_caps[g_main_device].cc;
+        min_compute_capability    = g_device_caps[g_main_device].cc;
+        any_pascal_with_slow_fp16 = g_device_caps[g_main_device].cc == 610;
     }
+
+    // check data types and tensor shapes for custom matrix multiplication kernels:
+    bool use_dequantize_mul_mat_vec = (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16)
+        && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
+        && src0->ne[0] % GGML_CUDA_DMMV_X == 0 && src1->ne[1] == 1;
+
+    bool          use_mul_mat_vec_q =  ggml_is_quantized(src0->type)
+        && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
+        && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
+
+    bool              use_mul_mat_q =  ggml_cuda_supports_mmq(src0->type)
+        && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 
     const bool fp16_performance_good = min_compute_capability >= CC_RDNA1;
-    bool               use_mul_mat_q = ggml_is_quantized(src0->type);
+
 #ifdef CUDA_USE_TENSOR_CORES
     use_mul_mat_q = use_mul_mat_q && min_compute_capability < CC_RDNA3;
 #endif // CUDA_USE_TENSOR_CORES
 
 #else
 
-    const bool fp16_performance_good = min_compute_capability >= CC_VOLTA;
-    bool               use_mul_mat_q = min_compute_capability >= MIN_CC_DP4A && ggml_is_quantized(src0->type);
+    // fp16 performance is good on Volta or newer and on P100 (compute capability 6.0)
+    const bool fp16_performance_good = min_compute_capability >= CC_PASCAL && !any_pascal_with_slow_fp16;
+
+    // mmvq and mmq need the __dp4a instruction which on NVIDIA is only available for CC >= 6.1
+    use_mul_mat_vec_q = use_mul_mat_vec_q && min_compute_capability >= MIN_CC_DP4A;
+    use_mul_mat_q     = use_mul_mat_q     && min_compute_capability >= MIN_CC_DP4A;
+
 #ifdef CUDA_USE_TENSOR_CORES
     // when tensor cores are available, use them for large batch size
     // ref: https://github.com/ggerganov/llama.cpp/pull/3776
-    use_mul_mat_q = use_mul_mat_q && !(fp16_performance_good && src1->ne[1] > MMQ_MAX_BATCH_SIZE);
+    use_mul_mat_q     = use_mul_mat_q     && (!fp16_performance_good || src1->ne[1] <= MMQ_MAX_BATCH_SIZE);
 #endif // CUDA_USE_TENSOR_CORES
 
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 
-    use_mul_mat_q = use_mul_mat_q && ggml_cuda_supports_mmq(src0->type);
+    // if mmvq is available it's a better choice than dmmv:
+#ifndef GGML_CUDA_FORCE_DMMV
+    use_dequantize_mul_mat_vec = use_dequantize_mul_mat_vec && !use_mul_mat_vec_q;
+#endif // GGML_CUDA_FORCE_DMMV
 
     // debug helpers
     //printf("src0: %8d %8d %8d %8d\n", src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3]);
@@ -9943,33 +10174,15 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
         ggml_cuda_mul_mat_vec_nc(src0, src1, dst);
     } else if (!split && all_on_device && fp16_performance_good && src0->type == GGML_TYPE_F16 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
         // KQ + KQV multi-batch
-        ggml_cuda_mul_mat_mat_batched_cublas(src0, src1, dst);
-    } else if (src0->type == GGML_TYPE_F32) {
-        ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
-    } else if (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16) {
-        if (src1->ne[1] == 1 && src0->ne[0] % GGML_CUDA_DMMV_X == 0 && src1->type == GGML_TYPE_F32) {
-#ifdef GGML_CUDA_FORCE_DMMV
-            const bool use_mul_mat_vec_q = false;
-#else
-            const bool use_mul_mat_vec_q = min_compute_capability >= MIN_CC_DP4A && ggml_is_quantized(src0->type);
-#endif // GGML_CUDA_FORCE_DMMV
-
-            if (use_mul_mat_vec_q) {
-                ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, true);
-            } else {
-                ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_dequantize_mul_mat_vec, false);
-            }
-        } else {
-            if (src1->ne[1] <= 4 && min_compute_capability >= MIN_CC_DP4A && ggml_is_quantized(src0->type) && src1->type == GGML_TYPE_F32) {
-                ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, true);
-            } else if (use_mul_mat_q) {
-                ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_q, true);
-            } else {
-                ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
-            }
-        }
+        ggml_cuda_mul_mat_batched_cublas(src0, src1, dst);
+    } else if (use_dequantize_mul_mat_vec) {
+        ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_dequantize_mul_mat_vec, false);
+    } else if (use_mul_mat_vec_q) {
+        ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, true);
+    } else if (use_mul_mat_q) {
+        ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_q, true);
     } else {
-        GGML_ASSERT(false);
+        ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
     }
 }
 
@@ -10888,10 +11101,10 @@ GGML_CALL static const char * ggml_backend_cuda_split_buffer_get_name(ggml_backe
     UNUSED(buffer);
 }
 
-// unused at the moment
-//static bool ggml_backend_buffer_is_cuda_split(ggml_backend_buffer_t buffer) {
-//    return buffer->iface.get_name == ggml_backend_cuda_split_buffer_get_name;
-//}
+static bool ggml_backend_buffer_is_cuda_split(ggml_backend_buffer_t buffer) {
+    return buffer->iface.get_name == ggml_backend_cuda_split_buffer_get_name;
+    UNUSED(ggml_backend_buffer_is_cuda_split); // only used in debug builds currently, avoid unused function warning in release builds
+}
 
 GGML_CALL static void ggml_backend_cuda_split_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_cuda_split_buffer_context * ctx = (ggml_backend_cuda_split_buffer_context *)buffer->context;
@@ -11279,7 +11492,7 @@ GGML_CALL static bool ggml_backend_cuda_graph_compute(ggml_backend_t backend, gg
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             if (node->src[j] != nullptr) {
                 assert(node->src[j]->backend == GGML_BACKEND_GPU || node->src[j]->backend == GGML_BACKEND_GPU_SPLIT);
-                assert(node->src[j]->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device));
+                assert(node->src[j]->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) || ggml_backend_buffer_is_cuda_split(node->src[j]->buffer));
                 assert(node->src[j]->extra != nullptr);
             }
         }
@@ -11327,7 +11540,8 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                     return false;
                 }
                 ggml_type a_type = a->type;
-                if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ3_XXS) {
+                if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ3_XXS ||
+                    a_type == GGML_TYPE_IQ1_S   || a_type == GGML_TYPE_IQ4_NL) {
                     if (b->ne[1] == 1 && ggml_nrows(b) > 1) {
                         return false;
                     }

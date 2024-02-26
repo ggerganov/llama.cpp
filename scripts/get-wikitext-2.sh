@@ -1,6 +1,6 @@
 #!/bin/bash
 
-wget https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
+wget https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
 
 echo "Usage:"
 echo ""

@@ -76,6 +76,7 @@ struct gpt_params {
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     int32_t rope_scaling_type     = LLAMA_ROPE_SCALING_UNSPECIFIED;
+    ggml_numa_strategy numa       = GGML_NUMA_STRATEGY_DISABLED;
 
     // // sampling parameters
     struct llama_sampling_params sparams;
@@ -134,7 +135,6 @@ struct gpt_params {
     bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
-    bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool display_prompt    = true;  // print prompt before generation
     bool infill            = false; // use infill mode
@@ -165,7 +165,7 @@ void process_escapes(std::string& input);
 // String utils
 //
 
-std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names);
+std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
 std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string);
 std::vector<std::string> string_split(std::string input, char separator);
 std::string sampler_type_to_name_string(llama_sampler_type sampler_type);

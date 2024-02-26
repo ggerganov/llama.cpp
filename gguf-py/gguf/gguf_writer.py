@@ -19,6 +19,7 @@ from .constants import (
     GGUFValueType,
     Keys,
     RopeScalingType,
+    PoolingType,
     TokenType,
 )
 
@@ -357,6 +358,12 @@ class GGUFWriter:
     def add_layer_norm_rms_eps(self, value: float) -> None:
         self.add_float32(Keys.Attention.LAYERNORM_RMS_EPS.format(arch=self.arch), value)
 
+    def add_causal_attention(self, value: bool) -> None:
+        self.add_bool(Keys.Attention.CAUSAL.format(arch=self.arch), value)
+
+    def add_pooling_type(self, value: PoolingType) -> None:
+        self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value)
+
     def add_rope_dimension_count(self, count: int) -> None:
         self.add_uint32(Keys.Rope.DIMENSION_COUNT.format(arch=self.arch), count)
 
@@ -387,6 +394,9 @@ class GGUFWriter:
     def add_token_types(self, types: Sequence[TokenType] | Sequence[int]) -> None:
         self.add_array(Keys.Tokenizer.TOKEN_TYPE, types)
 
+    def add_token_type_count(self, value: int) -> None:
+        self.add_uint32(Keys.Tokenizer.TOKEN_TYPE_COUNT, value)
+
     def add_token_scores(self, scores: Sequence[float]) -> None:
         self.add_array(Keys.Tokenizer.SCORES, scores)
 
@@ -404,6 +414,12 @@ class GGUFWriter:
 
     def add_pad_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.PAD_ID, id)
+
+    def add_cls_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.CLS_ID, id)
+
+    def add_mask_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.MASK_ID, id)
 
     def add_add_bos_token(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.ADD_BOS, value)

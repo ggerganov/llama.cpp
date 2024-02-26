@@ -28,6 +28,7 @@ endfunction()
 llama_build_and_test_executable(test-quantize-fns.cpp)
 llama_build_and_test_executable(test-quantize-perf.cpp)
 llama_build_and_test_executable(test-sampling.cpp)
+llama_build_and_test_executable(test-chat-template.cpp)
 
 llama_build_executable(test-tokenizer-0-llama.cpp)
 llama_test_executable (test-tokenizer-0-llama test-tokenizer-0-llama.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)

@@ -1151,8 +1151,7 @@ int main(int argc, char ** argv) {
     if (!params.verbose) {
         llama_log_set(llama_null_log_callback, NULL);
     }
-    bool numa = false;
-    llama_backend_init(numa);
+    llama_backend_init();
 
     // initialize printer
     std::unique_ptr<printer> p;

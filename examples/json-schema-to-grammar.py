@@ -87,7 +87,21 @@ class SchemaConverter:
         elif schema_type == 'array' and 'items' in schema:
             # TODO `prefixItems` keyword
             item_rule_name = self.visit(schema['items'], f'{name}{"-" if name else ""}item')
-            rule = f'"[" space ({item_rule_name} ("," space {item_rule_name})*)? "]" space'
+            list_item_operator = f'("," space {item_rule_name})'
+            successive_items = ""
+            min_items = schema.get("minItems", 0)
+            if min_items > 0:
+               first_item = f"({item_rule_name})"
+               successive_items = list_item_operator * (min_items - 1)
+               min_items -= 1
+            else:
+               first_item = f"({item_rule_name})?"
+            max_items = schema.get("maxItems")
+            if max_items is not None and max_items > min_items:
+                successive_items += (list_item_operator + "?") * (max_items - min_items - 1)
+            else:
+                successive_items += list_item_operator + "*"
+            rule = f'"[" space {first_item} {successive_items} "]" space'
             return self._add_rule(rule_name, rule)
 
         else:
