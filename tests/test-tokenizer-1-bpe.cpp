@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = llama_detokenize_bpe(ctx, std::vector<int>(1, i));
         try {
-            auto cps = codepoints_from_utf8(str);
+            auto cps = (str);
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
             std::string check = llama_detokenize_bpe(ctx, tokens);
             if (check != str) {
@@ -80,6 +80,7 @@ int main(int argc, char **argv) {
 
     // unicode
     {
+        static UNICODE unicode_engine;
         const int nthread = std::thread::hardware_concurrency();
 
         std::vector<std::thread> threads(nthread);
@@ -97,7 +98,7 @@ int main(int argc, char **argv) {
                         continue;
                     }
 
-                    std::string str = codepoint_to_utf8(cp);
+                    std::string str = unicode_engine.to_string(cp);
                     std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
                     std::string check = llama_detokenize_bpe(ctx, tokens);
                     if (cp != 9601 && str != check) {

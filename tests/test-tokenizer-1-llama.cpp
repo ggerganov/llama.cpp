@@ -74,6 +74,7 @@ int main(int argc, char **argv) {
 
     // unicode
     {
+        static UNICODE unicode_engine;
         const int nthread = std::thread::hardware_concurrency();
 
         std::vector<std::thread> threads(nthread);
@@ -85,7 +86,7 @@ int main(int argc, char **argv) {
                         continue;
                     }
 
-                    std::string str = codepoint_to_utf8(cp);
+                    std::string str = unicode_engine.to_string(cp);
                     std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
                     std::string check = llama_detokenize_spm(ctx, tokens);
                     if (cp != 9601 && str != check) {
