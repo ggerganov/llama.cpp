@@ -5,12 +5,8 @@ const Compile = std.Build.Step.Compile;
 const ConfigHeader = std.Build.Step.ConfigHeader;
 const Mode = std.builtin.OptimizeMode;
 const Target = std.Build.ResolvedTarget;
-const Mode = std.builtin.OptimizeMode;
-const Target = std.Build.ResolvedTarget;
 
 const Maker = struct {
-    builder: *std.Build,
-    target: Target,
     builder: *std.Build,
     target: Target,
     optimize: Mode,
@@ -40,10 +36,8 @@ const Maker = struct {
     }
 
     fn init(builder: *std.Build) !Maker {
-    fn init(builder: *std.Build) !Maker {
         const target = builder.standardTargetOptions(.{});
         const zig_version = @import("builtin").zig_version_string;
-        const commit_hash = try std.ChildProcess.run(
         const commit_hash = try std.ChildProcess.run(
             .{ .allocator = builder.allocator, .argv = &.{ "git", "rev-parse", "HEAD" } },
         );
@@ -53,8 +47,6 @@ const Maker = struct {
             \\char const *LLAMA_COMPILER = "Zig {s}";
             \\char const *LLAMA_BUILD_TARGET = "{s}";
             \\
-        , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.query.zigTriple(builder.allocator) }));
-
         , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.query.zigTriple(builder.allocator) }));
 
         var m = Maker{
@@ -80,7 +72,6 @@ const Maker = struct {
         }
         try m.addFlag("-D_XOPEN_SOURCE=600");
 
-
         if (m.target.result.abi == .gnu) {
             try m.addFlag("-D_GNU_SOURCE");
         }
@@ -103,12 +94,13 @@ const Maker = struct {
         } else {
             o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
             if (m.target.result.abi == .msvc) {
-            o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
-            if (m.target.result.abi == .msvc) {
-                o.linkLibC(); // need winsdk + crt
-            } else {
-                // linkLibCpp already add (libc++ + libunwind + libc)
-                o.linkLibCpp();
+                o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
+                if (m.target.result.abi == .msvc) {
+                    o.linkLibC(); // need winsdk + crt
+                } else {
+                    // linkLibCpp already add (libc++ + libunwind + libc)
+                    o.linkLibCpp();
+                }
             }
         }
         for (m.include_dirs.items) |i| o.addIncludePath(.{ .path = i });
@@ -128,27 +120,27 @@ const Maker = struct {
 
         // https://github.com/ziglang/zig/issues/15448
         if (m.target.result.abi == .msvc) {
-        if (m.target.result.abi == .msvc) {
-            e.linkLibC(); // need winsdk + crt
-        } else {
-            // linkLibCpp already add (libc++ + libunwind + libc)
-            e.linkLibCpp();
-        }
-        m.builder.installArtifact(e);
-        e.want_lto = m.enable_lto;
+            if (m.target.result.abi == .msvc) {
+                e.linkLibC(); // need winsdk + crt
+            } else {
+                // linkLibCpp already add (libc++ + libunwind + libc)
+                e.linkLibCpp();
+            }
+            m.builder.installArtifact(e);
+            e.want_lto = m.enable_lto;
 
-        const run = m.builder.addRunArtifact(e);
-        if (m.builder.args) |args| {
-            run.addArgs(args);
-        }
-        const step = m.builder.step(name, std.fmt.allocPrint(m.builder.allocator, "Run the {s} example", .{name}) catch @panic("OOM"));
-        step.dependOn(&run.step);
+            const run = m.builder.addRunArtifact(e);
+            if (m.builder.args) |args| {
+                run.addArgs(args);
+            }
+            const step = m.builder.step(name, std.fmt.allocPrint(m.builder.allocator, "Run the {s} example", .{name}) catch @panic("OOM"));
+            step.dependOn(&run.step);
 
-        return e;
+            return e;
+        }
     }
 };
 
-pub fn build(b: *std.Build) !void {
 pub fn build(b: *std.Build) !void {
     var make = try Maker.init(b);
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
