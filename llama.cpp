@@ -5114,16 +5114,16 @@ struct llm_build_context {
     struct ggml_cgraph * build_defrag(const std::vector<uint32_t> & ids) {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
-        for (int i = 0; i < n_kv; ++i) {
-            const int id = ids[i];
+        for (uint32_t i = 0; i < ids.size(); ++i) {
+            const uint32_t id = ids[i];
 
-            if (i == id || id == n_kv) {
+            if (i == id || id == ids.size()) {
                 continue;
             }
 
-            int nm = 1;
+            uint32_t nm = 1;
 
-            while (i + nm < n_kv && (int) ids[i + nm] == id + nm) {
+            while (i + nm < ids.size() && ids[i + nm] == id + nm) {
                 nm++;
             }
 
@@ -5154,6 +5154,8 @@ struct llm_build_context {
 
             i += nm - 1;
         }
+
+        //LLAMA_LOG_INFO("gf->n_nodes = %d\n", gf->n_nodes);
 
         return gf;
     }
@@ -7935,6 +7937,8 @@ static int llama_decode_internal(
         batch.seq_id = seq_id_arr.data();
     }
 
+    llama_kv_cache_update(&lctx);
+
     // if we have enough unused cells before the current head ->
     //   better to start searching from the beginning of the cache, hoping to fill it
     if (kv_self.head > kv_self.used + 2*n_tokens) {
@@ -7952,8 +7956,6 @@ static int llama_decode_internal(
     //kv_self.n = llama_kv_cache_cell_max(kv_self);
 
     //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
-
-    llama_kv_cache_update(&lctx);
 
     ggml_backend_sched_reset(lctx.sched);
     ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
@@ -8001,6 +8003,19 @@ static int llama_decode_internal(
         // Ensure kv cache head points to a valid index.
         if (kv_self.head >= kv_self.size) {
             kv_self.head = 0;
+        }
+    }
+
+    // decide if we need to defrag the kv cache
+    // TODO: should become configurable
+    {
+        const float fragmentation = kv_self.n >= 512 ? 1.0f - float(kv_self.used + n_tokens)/float(kv_self.n) : 0.0f;
+
+        // queue defragmentation for next llama_kv_cache_update
+        if (fragmentation > 0.1f) {
+            LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
+
+            llama_kv_cache_defrag(kv_self);
         }
     }
 
@@ -8095,12 +8110,16 @@ static int llama_decode_internal(
 static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     auto & kv_self = lctx.kv_self;
 
+    const auto & hparams = lctx.model.hparams;
+
+    const uint32_t n_layer = hparams.n_layer;
+
     const uint32_t n_kv   = llama_kv_cache_cell_max(kv_self);
     const uint32_t n_used = kv_self.used;
 
     assert(n_used <= n_kv);
 
-    const int64_t t_start = ggml_time_us();
+    //const int64_t t_start = ggml_time_us();
 
     // number of cells moved
     uint32_t n_moves = 0;
@@ -8124,15 +8143,29 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
 
         // found a hole - fill it with data from the end of the cache
 
-        // determine the size of the hole
         uint32_t nh = 1;
+
+        // determine the size of the hole
         while (i0 + nh < n_used && kv_self.cells[i0 + nh].is_empty()) {
             nh++;
         }
 
-        // starting from the end, find nh non-empty cells
+        // in the worst case each move requires 6*n_layer tensors
+        //
+        // TODO: ideally this should be:
+        //
+        //         if (6*(n_moves + nh)*n_layer > LLAMA_MAX_NODES) {
+        //
+        //       but when I do that, the defrag graph can not fit due to not enough memory - not sure why
+        //
+        if (6*(n_moves + nh)*n_layer > LLAMA_MAX_NODES/2) {
+            break;
+        }
+
         uint32_t nf = 0;
         uint32_t is = n_kv - 1;
+
+        // starting from the end, find nh non-empty cells
         for (; is > i0; --is) {
             const auto & cell1 = kv_self.cells[is];
 
@@ -8153,11 +8186,17 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
 
         nf = 0;
 
+        uint32_t i1 = is;
+
+        // are we moving a continuous block of memory?
+        bool cont = false;
+
         // go back and move the nf cells to the hole
-        for (uint32_t i1 = is; i1 < n_kv; ++i1) {
-            const auto & cell1 = kv_self.cells[i1];
+        for (; i1 < n_kv; ++i1) {
+            auto & cell1 = kv_self.cells[i1];
 
             if (cell1.is_empty() || ids[i1] != n_kv) {
+                cont = false;
                 continue;
             }
 
@@ -8167,11 +8206,23 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
             // move the cell meta data
             kv_self.cells[i0 + nf] = cell1;
 
-            n_moves++;
+            // clear the old cell and move the head there
+            cell1 = llama_kv_cell();
+            kv_self.head = n_used;
+
+            if (!cont) {
+                n_moves++;
+                cont = true;
+            }
+
             nf++;
+
+            if (nf == nh) {
+                break;
+            }
         }
 
-        LLAMA_LOG_INFO("(tmp log) KV defrag: move [%u, %u) to [%u, %u)\n", is, n_kv, i0, i0 + nh);
+        //LLAMA_LOG_INFO("(tmp log) KV defrag: move [%u, %u) to [%u, %u)\n", is, i1 + 1, i0, i0 + nh);
 
         i0 += nh - 1;
     }
@@ -8180,15 +8231,9 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
         return;
     }
 
-    LLAMA_LOG_INFO("(tmp log) KV defrag cell moves: %u\n", n_moves);
+    //LLAMA_LOG_INFO("(tmp log) KV defrag cell moves: %u\n", n_moves);
 
-    kv_self.head = n_used;
-    kv_self.used = n_used;
-
-    // zero the rest of the cells
-    for (uint32_t i = n_used; i < n_kv; ++i) {
-        kv_self.cells[i] = llama_kv_cell();
-    }
+    //LLAMA_LOG_INFO("expected gf nodes: %u\n", 6*n_moves*n_layer);
 
 #if 0
     // CPU defrag
@@ -8200,9 +8245,6 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     // likely not worth the effort, as we have ggml_graph based defrag
     //
 
-    const auto & hparams = lctx.model.hparams;
-
-    const uint32_t n_layer      = hparams.n_layer;
     const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa();
     const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa();
 
@@ -8271,9 +8313,9 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
     llama_graph_compute(lctx, gf, lctx.cparams.n_threads);
 #endif
 
-    const int64_t t_end = ggml_time_us();
+    //const int64_t t_end = ggml_time_us();
 
-    LLAMA_LOG_INFO("(tmp log) KV defrag time: %.3f ms\n", (t_end - t_start)/1000.0);
+    //LLAMA_LOG_INFO("(tmp log) KV defrag time: %.3f ms\n", (t_end - t_start)/1000.0);
 }
 
 static void llama_kv_cache_update_internal(struct llama_context & lctx) {
