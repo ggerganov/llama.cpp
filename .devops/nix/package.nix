@@ -6,6 +6,7 @@
   mkShell,
   runCommand,
   cmake,
+  gcc,
   ninja,
   pkg-config,
   git,
@@ -73,44 +74,6 @@ let
 
   executableSuffix = effectiveStdenv.hostPlatform.extensions.executable;
   mapToPythonPackages = ps: packages: map (package: ps.${package}) packages;
-
-  # TODO: package the Python in this repository in a Nix-like way.
-  # It'd be nice to migrate to buildPythonPackage, as well as ensure this repo
-  # is PEP 517-compatible, and ensure the correct .dist-info is generated.
-  # https://peps.python.org/pep-0517/
-  #
-  # TODO: Package up each Python script or service appropriately, by making
-  # them into "entrypoints"
-  llama-python = python3.withPackages (ps: [
-    ps.numpy
-    ps.sentencepiece
-    gguf-py
-  ]);
-
-  # TODO(Green-Sky): find a better way to opt-into the heavy ml python runtime
-  llama-python-extra = python3.withPackages (ps: [
-    ps.numpy
-    ps.sentencepiece
-    ps.tiktoken
-    ps.torchWithoutCuda
-    ps.transformers
-
-    # server bench
-    ps.matplotlib
-
-    # server tests
-    ps.openai
-    ps.behave
-    ps.prometheus-client
-
-    # for examples/pydantic-models-to-grammar-examples.py
-    ps.docstring-parser
-    ps.pydantic
-
-    # for scripts/compare-llama-bench.py
-    ps.gitpython
-    ps.tabulate
-  ]);
 
   xcrunHost = runCommand "xcrunHost" { } ''
     mkdir -p $out/bin
@@ -268,21 +231,8 @@ effectiveStdenv.mkDerivation (finalAttrs: {
       name = "shell-${finalAttrs.finalPackage.name}";
       description = "contains numpy and sentencepiece";
       buildInputs = [
-        python3.withPackages
-        (ps: mapToPythonPackages ps llama-python-base-deps)
-      ];
-      inputsFrom = [ finalAttrs.finalPackage ];
-      shellHook = ''
-        addToSearchPath "LD_LIBRARY_PATH" "${lib.getLib effectiveStdenv.cc.cc}/lib"
-      '';
-    };
-
-    shell-extra = mkShell {
-      name = "shell-extra-${finalAttrs.finalPackage.name}";
-      description = "contains numpy, sentencepiece, torchWithoutCuda, and transformers";
-      buildInputs = [
-        python3.withPackages
-        (ps: mapToPythonPackages ps llama-python-full-deps)
+        cmake
+        gcc
       ];
       inputsFrom = [ finalAttrs.finalPackage ];
     };
