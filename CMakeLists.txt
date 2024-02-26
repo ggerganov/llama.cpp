@@ -553,7 +553,7 @@ if (LLAMA_SYCL)
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib -fsycl-device-code-split=per_kernel")
 
     set(GGML_HEADERS_SYCL ggml-sycl.h)
     set(GGML_SOURCES_SYCL ggml-sycl.cpp)
