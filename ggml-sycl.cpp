@@ -12514,7 +12514,7 @@ inline void ggml_sycl_op_soft_max(const ggml_tensor *src0,
     const bool use_src2 = src2 != nullptr;
 
     if (use_src2) {
-        const bool src2_on_device = src2->backend == GGML_BACKEND_GPU;
+        const bool src2_on_device = src2->backend == GGML_BACKEND_TYPE_GPU;
 
         if (src2_on_device) {
             ggml_tensor_extra_gpu * src2_extra = (ggml_tensor_extra_gpu *) src2->extra;
