@@ -73,6 +73,29 @@ For iGPU, please make sure the shared memory from host memory is enough. For lla
 
 For dGPU, please make sure the device memory is enough. For llama-2-7b.Q4_0, recommend the device memory is 4GB+.
 
+## Nvidia GPU
+
+### Verified
+
+|Intel GPU| Status | Verified Model|
+|-|-|-|
+|Ampere Series| Support| A100|
+
+### oneMKL
+
+The current oneMKL release does not contain the oneMKL cuBlas backend.
+As a result for Nvidia GPU's oneMKL must be built from source.
+
+```
+git clone https://github.com/oneapi-src/oneMKL
+cd oneMKL
+mkdir build
+cd build
+cmake -G Ninja .. -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DENABLE_MKLGPU_BACKEND=OFF -DENABLE_MKLCPU_BACKEND=OFF -DENABLE_CUBLAS_BACKEND=ON
+ninja
+// Add paths as necessary
+```
+
 ## Docker
 
 Note:
@@ -185,6 +208,9 @@ source /opt/intel/oneapi/setvars.sh
 
 # Or, for FP32:
 cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+
+# For Nvidia GPUs
+cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 
 # Build example/main only
 #cmake --build . --config Release --target main
