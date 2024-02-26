@@ -8013,7 +8013,7 @@ static int llama_decode_internal(
 
         // queue defragmentation for next llama_kv_cache_update
         if (fragmentation > cparams.defrag_thold) {
-            LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
+            //LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
 
             llama_kv_cache_defrag(kv_self);
         }
