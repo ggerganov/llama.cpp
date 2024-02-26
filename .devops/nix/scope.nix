@@ -28,6 +28,7 @@ lib.makeScope newScope (self: {
       pytestCheckHook
       ;
   };
+  python-scripts = self.callPackage ./python-scripts.nix { inherit buildPythonPackage poetry-core; };
   llama-cpp = self.callPackage ./package.nix { };
   docker = self.callPackage ./docker.nix { };
   docker-min = self.callPackage ./docker.nix { interactive = false; };
