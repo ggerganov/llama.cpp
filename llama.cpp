@@ -8008,7 +8008,7 @@ static int llama_decode_internal(
     }
 
     // decide if we need to defrag the kv cache
-    {
+    if (cparams.defrag_thold >= 0.0f) {
         const float fragmentation = kv_self.n >= 128 ? 1.0f - float(kv_self.used + n_tokens)/float(kv_self.n) : 0.0f;
 
         // queue defragmentation for next llama_kv_cache_update
