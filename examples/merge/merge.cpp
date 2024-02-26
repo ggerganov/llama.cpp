@@ -16,7 +16,7 @@
 //
 [[noreturn]]
 static void usage(const char * executable) {
-    printf("usage: %s ./path/model_1 CONFIG1 ./path/model_2 CONFIG2\n\n", executable);
+    printf("usage: %s ./path/model_1 CONFIG1 ./path/model_2 CONFIG2 ./path/output\n\n", executable);
     printf("  CONFIG must be in format: p0-p1,p2-p3,p4,... Example: 0-5,7,8-12\n");
     printf("  Optionally, you can specify the scaling for a range of layers, for example: 0-5*0.5,6-7*1. By default, scale will be 0.5. The number of layer start counting from 0.\n");
     printf("  The embedding layer of the first model will be used\n");
