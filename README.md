@@ -10,13 +10,9 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- Remove LLAMA_MAX_DEVICES and LLAMA_SUPPORTS_GPU_OFFLOAD: https://github.com/ggerganov/llama.cpp/pull/5240
-- Incoming backends: https://github.com/ggerganov/llama.cpp/discussions/5138
-  - [SYCL backend](README-sycl.md) is ready (1/28/2024), support Linux/Windows in Intel GPUs (iGPU, Arc/Flex/Max series)
-- New SOTA quantized models, including pure 2-bits: https://huggingface.co/ikawrakow
-- Collecting Apple Silicon performance stats:
-  - M-series: https://github.com/ggerganov/llama.cpp/discussions/4167
-  - A-series: https://github.com/ggerganov/llama.cpp/discussions/4508
+- Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
+- Support for Gemma models: https://github.com/ggerganov/llama.cpp/pull/5631
+- Non-linear quantization IQ4_NL: https://github.com/ggerganov/llama.cpp/pull/5590
 - Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
 
 ----
@@ -118,6 +114,9 @@ Typically finetunes of the base models below are supported as well.
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
 
+**HTTP server**
+
+[llama.cpp web server](./examples/server) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
 **Bindings:**
 
@@ -146,6 +145,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [Faraday](https://faraday.dev/) (proprietary)
 - [LMStudio](https://lmstudio.ai/) (proprietary)
+- [LocalAI](https://github.com/mudler/LocalAI) (MIT)
 - [LostRuins/koboldcpp](https://github.com/LostRuins/koboldcpp) (AGPL)
 - [Mozilla-Ocho/llamafile](https://github.com/Mozilla-Ocho/llamafile)
 - [nomic-ai/gpt4all](https://github.com/nomic-ai/gpt4all)
@@ -158,6 +158,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
+- [Msty](https://msty.app) (proprietary)
 
 ---
 

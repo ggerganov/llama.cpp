@@ -118,7 +118,7 @@ int main(void) {
     const float fe = ggml_get_f32_1d(e, 0);
     printf("%s: e = %.4f\n", __func__, fe);
 
-    struct ggml_opt_params opt_params = ggml_opt_default_params(GGML_OPT_ADAM);
+    struct ggml_opt_params opt_params = ggml_opt_default_params(GGML_OPT_TYPE_ADAM);
 
     ggml_opt(ctx, opt_params, e);
 

@@ -64,6 +64,15 @@ extern "C" {
         LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
     };
 
+    // note: these values should be synchronized with ggml_rope
+    // TODO: maybe move this enum to ggml.h (ggml_rope_type)
+    enum llama_rope_type {
+        LLAMA_ROPE_TYPE_NONE = -1,
+        LLAMA_ROPE_TYPE_NORM =  0,
+        LLAMA_ROPE_TYPE_NEOX =  2,
+        LLAMA_ROPE_TYPE_GLM  =  4,
+    };
+
     enum llama_token_type {
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
@@ -102,28 +111,30 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ3_XXS       = 23, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ1_S         = 24, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ4_NL        = 25, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ3_S         = 26, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ3_M         = 27, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
 
     enum llama_rope_scaling_type {
-        LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
-        LLAMA_ROPE_SCALING_NONE        = 0,
-        LLAMA_ROPE_SCALING_LINEAR      = 1,
-        LLAMA_ROPE_SCALING_YARN        = 2,
-        LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+        LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED = -1,
+        LLAMA_ROPE_SCALING_TYPE_NONE        = 0,
+        LLAMA_ROPE_SCALING_TYPE_LINEAR      = 1,
+        LLAMA_ROPE_SCALING_TYPE_YARN        = 2,
+        LLAMA_ROPE_SCALING_TYPE_MAX_VALUE   = LLAMA_ROPE_SCALING_TYPE_YARN,
     };
 
     enum llama_pooling_type {
-        LLAMA_POOLING_NONE = 0,
-        LLAMA_POOLING_MEAN = 1,
-        LLAMA_POOLING_CLS  = 2,
+        LLAMA_POOLING_TYPE_NONE = 0,
+        LLAMA_POOLING_TYPE_MEAN = 1,
+        LLAMA_POOLING_TYPE_CLS  = 2,
     };
 
     enum llama_split_mode {
-        LLAMA_SPLIT_NONE    = 0, // single GPU
-        LLAMA_SPLIT_LAYER   = 1, // split layers and KV across GPUs
-        LLAMA_SPLIT_ROW     = 2, // split rows across GPUs
+        LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
+        LLAMA_SPLIT_MODE_LAYER   = 1, // split layers and KV across GPUs
+        LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
     };
 
     typedef struct llama_token_data {
@@ -171,9 +182,9 @@ extern "C" {
     } llama_batch;
 
     enum llama_model_kv_override_type {
-        LLAMA_KV_OVERRIDE_INT,
-        LLAMA_KV_OVERRIDE_FLOAT,
-        LLAMA_KV_OVERRIDE_BOOL,
+        LLAMA_KV_OVERRIDE_TYPE_INT,
+        LLAMA_KV_OVERRIDE_TYPE_FLOAT,
+        LLAMA_KV_OVERRIDE_TYPE_BOOL,
     };
 
     struct llama_model_kv_override {
@@ -358,6 +369,7 @@ extern "C" {
     LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
+    LLAMA_API enum llama_rope_type  llama_rope_type (const struct llama_model * model);
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
@@ -512,10 +524,12 @@ extern "C" {
                     llama_seq_id   seq_id);
 
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
-    // If the KV cache is RoPEd, the KV data is updated accordingly
+    // If the KV cache is RoPEd, the KV data is updated accordingly:
+    //   - lazily on next llama_decode()
+    //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
-    LLAMA_API void llama_kv_cache_seq_shift(
+    LLAMA_API void llama_kv_cache_seq_add(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
                        llama_pos   p0,
@@ -523,7 +537,9 @@ extern "C" {
                        llama_pos   delta);
 
     // Integer division of the positions by factor of `d > 1`
-    // If the KV cache is RoPEd, the KV data is updated accordingly
+    // If the KV cache is RoPEd, the KV data is updated accordingly:
+    //   - lazily on next llama_decode()
+    //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_div(
@@ -532,6 +548,20 @@ extern "C" {
                        llama_pos   p0,
                        llama_pos   p1,
                              int   d);
+
+    // Returns the largest position present in the KV cache for the specified sequence
+    LLAMA_API llama_pos llama_kv_cache_seq_pos_max(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id);
+
+    // Defragment the KV cache
+    // This will be applied:
+    //   - lazily on next llama_decode()
+    //   - explicitly with llama_kv_cache_update()
+    LLAMA_API void llama_kv_cache_defrag(struct llama_context * ctx);
+
+    // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
+    LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
     //
     // State / sessions
@@ -708,7 +738,7 @@ extern "C" {
 
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
-    /// NOTE: This function only support some known jinja templates. It is not a jinja parser.
+    /// NOTE: This function does not use a jinja parser. It only support a pre-defined list of template. See more: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
     /// @param tmpl A Jinja template to use for this chat. If this is nullptr, the model’s default chat template will be used instead.
     /// @param chat Pointer to a list of multiple llama_chat_message
     /// @param n_msg Number of llama_chat_message in this chat
