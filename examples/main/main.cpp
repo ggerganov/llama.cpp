@@ -725,7 +725,9 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo && display) {
             for (auto id : embd) {
-                const std::string token_str = llama_token_to_piece(ctx, id);
+                std::string token_str = llama_token_to_piece(ctx, id);
+                if (params.chatml && token_str == "<|im_end|>")
+                    token_str.clear();
                 printf("%s", token_str.c_str());
 
                 if (embd.size() > 1) {
