@@ -571,7 +571,8 @@ typedef struct {
 } block_iq4_nl;
 static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
 
-#define QR4_XS 4
+// QR4_XS = 8 is very slightly faster than QR4_XS = 4
+#define QR4_XS 8
 #define QI4_XS (QK_K / (4*QR4_XS))
 typedef struct {
     half d;
@@ -5341,21 +5342,57 @@ static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
     const block_iq4_xs * bq4 = (const block_iq4_xs *) vbq;
     const uint8_t * values = (const uint8_t *)kvalues_iq4nl;
 
-    // iqs is 0...15
-    const int ib32 = iqs/2;
-    const int il = iqs%2;
-    const int32_t  * q8 = (const int *)bq8_1[ib32].qs + 2*il;
-    const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32 + 2*il;
+    //// iqs is 0...7
+    //const int ib64 = iqs/2;
+    //const int il = iqs%2;
+    //const int32_t  * q8_1 = (const int *)bq8_1[2*ib64+0].qs + 2*il;
+    //const int32_t  * q8_2 = (const int *)bq8_1[2*ib64+1].qs + 2*il;
+    //const uint32_t * q4_1 = (const uint32_t *)bq4->qs + 8*ib64 + 2*il;
+    //const uint32_t * q4_2 = q4_1 + 4;
+    //const int8_t ls1 = (bq4->scales_l[ib64] & 0xf) | (((bq4->scales_h >> (4*ib64+0)) & 3) << 4);
+    //const int8_t ls2 = (bq4->scales_l[ib64] >>  4) | (((bq4->scales_h >> (4*ib64+2)) & 3) << 4);
+    //const float d1 = (float)bq4->d * (ls1 - 32) * __low2float(bq8_1[2*ib64+0].ds);
+    //const float d2 = (float)bq4->d * (ls2 - 32) * __low2float(bq8_1[2*ib64+1].ds);
+    //int v1, v2;
+    //int sumi1 = 0, sumi2 = 0;
+    //for (int j = 0; j < 2; ++j) {
+    //    get_int_from_table_16(q4_1[j], values, v1, v2);
+    //    sumi1 = __dp4a(v2, q8_1[j+4], __dp4a(v1, q8_1[j+0], sumi1));
+    //    get_int_from_table_16(q4_2[j], values, v1, v2);
+    //    sumi2 = __dp4a(v2, q8_2[j+4], __dp4a(v1, q8_2[j+0], sumi2));
+    //}
+    //return d1 * sumi1 + d2 * sumi2;
+
+    // iqs is 0...7
+    const int ib32 = iqs;
+    const int32_t  * q8 = (const int *)bq8_1[ib32].qs;
+    const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32;
     const int8_t ls = ((bq4->scales_l[ib32/2] >> 4*(ib32%2)) & 0xf) | (((bq4->scales_h >> 2*ib32) & 3) << 4);
     const float d = (float)bq4->d * (ls - 32) * __low2float(bq8_1[ib32].ds);
     int v1, v2;
     int sumi1 = 0, sumi2 = 0;
-    for (int j = 0; j < 2; ++j) {
+    for (int j = 0; j < 4; ++j) {
         get_int_from_table_16(q4[j], values, v1, v2);
         sumi1 = __dp4a(v1, q8[j+0], sumi1);
         sumi2 = __dp4a(v2, q8[j+4], sumi2);
     }
     return d * (sumi1 + sumi2);
+
+    //// iqs is 0...15
+    //const int ib32 = iqs/2;
+    //const int il = iqs%2;
+    //const int32_t  * q8 = (const int *)bq8_1[ib32].qs + 2*il;
+    //const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32 + 2*il;
+    //const int8_t ls = ((bq4->scales_l[ib32/2] >> 4*(ib32%2)) & 0xf) | (((bq4->scales_h >> 2*ib32) & 3) << 4);
+    //const float d = (float)bq4->d * (ls - 32) * __low2float(bq8_1[ib32].ds);
+    //int v1, v2;
+    //int sumi1 = 0, sumi2 = 0;
+    //for (int j = 0; j < 2; ++j) {
+    //    get_int_from_table_16(q4[j], values, v1, v2);
+    //    sumi1 = __dp4a(v1, q8[j+0], sumi1);
+    //    sumi2 = __dp4a(v2, q8[j+4], sumi2);
+    //}
+    //return d * (sumi1 + sumi2);
 #else
     assert(false);
     return 0.f;
@@ -5365,41 +5402,6 @@ static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
     return 0.f;
 #endif
 }
-
-//// TODO
-//static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
-//    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
-//
-//    const block_iq4_xs * bq = (const block_iq4_xs *) vbq;
-//
-//#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
-//    const uint16_t * q4 = (const uint16_t *)bq->qs + 2*iqs;
-//    const int32_t  * q8 = (const int32_t  *)bq8_1->qs + iqs;
-//
-//    const uint8_t * values = (const uint8_t *)kvalues_iq4nl;
-//
-//    int v1, v2;
-//    int sumi1 = 0, sumi2 = 0;
-//    for (int l = 0; l < VDR_Q4_0_Q8_1_MMVQ; ++l) {
-//        const uint32_t aux = q4[2*l] | (q4[2*l+1] << 16);
-//        get_int_from_table_16(aux, values, v1, v2);
-//        sumi1 = __dp4a(v1, q8[l+0], sumi1);
-//        sumi2 = __dp4a(v2, q8[l+4], sumi2);
-//    }
-//
-//#else
-//    const uint8_t * q4 = bq->qs + 4*iqs;
-//    const int8_t  * q8 = bq8_1->qs + 4*iqs;
-//
-//    int sumi1 = 0, sumi2 = 0;
-//    for (int l = 0; l < 4*VDR_Q4_0_Q8_1_MMVQ; ++l) {
-//        sumi1 += q8[l+ 0] * kvalues_iq4nl[q4[l] & 0xf];
-//        sumi2 += q8[l+16] * kvalues_iq4nl[q4[l] >>  4];
-//    }
-//#endif
-//    const float d = (float)bq->d * __low2float(bq8_1->ds);
-//    return d * (sumi1 + sumi2);
-//}
 
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x, int mmq_y, int nwarps,
               allocate_tiles_cuda_t allocate_tiles, load_tiles_cuda_t load_tiles, int vdr, vec_dot_q_mul_mat_cuda_t vec_dot>

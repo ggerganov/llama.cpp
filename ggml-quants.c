@@ -10444,21 +10444,20 @@ void ggml_vec_dot_iq4_nl_q8_0(int n, float * restrict s, size_t bs, const void *
 #endif
 }
 
-void ggml_vec_dot_iq4_xs_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+void ggml_vec_dot_iq4_xs_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
     UNUSED(bx);
     UNUSED(by);
     UNUSED(bs);
     assert(n % QK_K == 0);
-    static_assert(QK8_0 == 32, "QK8_0 must be 32");
 
     const block_iq4_xs * restrict x = vx;
-    const block_q8_0   * restrict y = vy;
+    const block_q8_K   * restrict y = vy;
 
     const int nb = n / QK_K;
 
-#if defined z__ARM_NEON
+#if defined __ARM_NEON
     const int8x16_t values = vld1q_s8(kvalues_iq4nl);
     const uint8x16_t m4b = vdupq_n_u8(0x0f);
     uint8x16x2_t q4bits;
@@ -10492,65 +10491,72 @@ void ggml_vec_dot_iq4_xs_q8_0(int n, float * restrict s, size_t bs, const void *
 
     *s = sumf;
 
-#elif defined z__AVX2__
+#elif defined __AVX2__
 
     const __m128i values128 = _mm_loadu_si128((const __m128i*)kvalues_iq4nl);
     const __m128i m4b  = _mm_set1_epi8(0x0f);
-    const __m256i mone = _mm256_set1_epi16(1);
 
-    __m256 accum1 = _mm256_setzero_ps();
-    __m256 accum2 = _mm256_setzero_ps();
-    for (int ib = 0; ib < nb; ib += 2) {
-        const __m128i q4bits_1 = _mm_loadu_si128((const __m128i*)x[0].qs);
-        const __m128i q4bits_2 = _mm_loadu_si128((const __m128i*)x[1].qs);
-        const __m256i q8b_1 = _mm256_loadu_si256((const __m256i *)y[0].qs);
-        const __m256i q8b_2 = _mm256_loadu_si256((const __m256i *)y[1].qs);
-        const __m256i q4b_1 = _mm256_set_m128i(_mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_1, 4), m4b)),
-                                               _mm_shuffle_epi8(values128, _mm_and_si128(q4bits_1, m4b)));
-        const __m256i q4b_2 = _mm256_set_m128i(_mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_2, 4), m4b)),
-                                               _mm_shuffle_epi8(values128, _mm_and_si128(q4bits_2, m4b)));
-        const __m256i p16_1 = mul_add_epi8(q4b_1, q8b_1);
-        const __m256i p16_2 = mul_add_epi8(q4b_2, q8b_2);
-        const __m256i p_1 = _mm256_madd_epi16(p16_1, mone);
-        const __m256i p_2 = _mm256_madd_epi16(p16_2, mone);
-        accum1 = _mm256_fmadd_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(y[0].d)*GGML_FP16_TO_FP32(x[0].d)),
-                _mm256_cvtepi32_ps(p_1), accum1);
-        accum2 = _mm256_fmadd_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(y[1].d)*GGML_FP16_TO_FP32(x[1].d)),
-                _mm256_cvtepi32_ps(p_2), accum2);
-
-        y += 2;
-        x += 2;
+    __m256 accum = _mm256_setzero_ps();
+    for (int ibl = 0; ibl < nb; ++ibl) {
+        const uint8_t * qs = x[ibl].qs;
+        const int8_t  * q8 = y[ibl].qs;
+        uint16_t sh = x[ibl].scales_h;
+        __m256i sumi1 = _mm256_setzero_si256();
+        __m256i sumi2 = _mm256_setzero_si256();
+        for (int ib = 0; ib < QK_K/32; ib += 2) {
+            const __m128i q4bits_1 = _mm_loadu_si128((const __m128i*)qs);  qs += 16;
+            const __m128i q4bits_2 = _mm_loadu_si128((const __m128i*)qs);  qs += 16;
+            const __m256i q8b_1 = _mm256_loadu_si256((const __m256i *)q8); q8 += 32;
+            const __m256i q8b_2 = _mm256_loadu_si256((const __m256i *)q8); q8 += 32;
+            const __m256i q4b_1 = _mm256_set_m128i(_mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_1, 4), m4b)),
+                                                   _mm_shuffle_epi8(values128, _mm_and_si128(q4bits_1, m4b)));
+            const __m256i q4b_2 = _mm256_set_m128i(_mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_2, 4), m4b)),
+                                                   _mm_shuffle_epi8(values128, _mm_and_si128(q4bits_2, m4b)));
+            const __m256i p16_1 = mul_add_epi8(q4b_1, q8b_1);
+            const __m256i p16_2 = mul_add_epi8(q4b_2, q8b_2);
+            const int16_t ls1 = ((x[ibl].scales_l[ib/2] & 0xf) | ((sh << 4) & 0x30)) - 32;
+            const int16_t ls2 = ((x[ibl].scales_l[ib/2] >>  4) | ((sh << 2) & 0x30)) - 32;
+            sh >>= 4;
+            const __m256i p_1 = _mm256_madd_epi16(p16_1, _mm256_set1_epi16(ls1));
+            const __m256i p_2 = _mm256_madd_epi16(p16_2, _mm256_set1_epi16(ls2));
+            sumi1 = _mm256_add_epi32(p_1, sumi1);
+            sumi2 = _mm256_add_epi32(p_2, sumi2);
+        }
+        accum = _mm256_fmadd_ps(_mm256_set1_ps(GGML_FP16_TO_FP32(x[ibl].d)*y[ibl].d),
+                _mm256_cvtepi32_ps(_mm256_add_epi32(sumi1, sumi2)), accum);
     }
 
-    *s = hsum_float_8(_mm256_add_ps(accum1, accum2));
+    *s = hsum_float_8(accum);
 
 #else
     float sumf = 0;
     for (int ibl = 0; ibl < nb; ++ibl) {
-        const float d4 = GGML_FP16_TO_FP32(x[ibl].d);
+        const float d4d8 = GGML_FP16_TO_FP32(x[ibl].d) * y[ibl].d;
         uint16_t h = x[ibl].scales_h;
         const uint8_t * qs = x[ibl].qs;
+        const int8_t  * q8 = y[ibl].qs;
         for (int ib = 0; ib < QK_K/32; ib += 2) {
             const uint8_t ls1 = (x[ibl].scales_l[ib/2] & 0xf) | ((h << 4) & 0x30);
             const uint8_t ls2 = (x[ibl].scales_l[ib/2] >>  4) | ((h << 2) & 0x30);
             h >>= 4;
-            const float d1 = GGML_FP16_TO_FP32(y[0].d)*d4*(ls1 - 32);
-            const float d2 = GGML_FP16_TO_FP32(y[1].d)*d4*(ls2 - 32);
+            const float d1 = d4d8*(ls1 - 32);
+            const float d2 = d4d8*(ls2 - 32);
             int sumi1 = 0, sumi2 = 0;
             for (int j = 0; j < 16; ++j) {
-                sumi1 += y[0].qs[j+ 0] * kvalues_iq4nl[qs[j] & 0xf];
-                sumi2 += y[0].qs[j+16] * kvalues_iq4nl[qs[j] >>  4];
+                sumi1 += q8[j+ 0] * kvalues_iq4nl[qs[j] & 0xf];
+                sumi2 += q8[j+16] * kvalues_iq4nl[qs[j] >>  4];
             }
             sumf += d1 * (sumi1 + sumi2);
             qs += 16;
+            q8 += 32;
             sumi1 = sumi2 = 0;
             for (int j = 0; j < 16; ++j) {
-                sumi1 += y[1].qs[j+ 0] * kvalues_iq4nl[qs[j] & 0xf];
-                sumi2 += y[1].qs[j+16] * kvalues_iq4nl[qs[j] >>  4];
+                sumi1 += q8[j+ 0] * kvalues_iq4nl[qs[j] & 0xf];
+                sumi2 += q8[j+16] * kvalues_iq4nl[qs[j] >>  4];
             }
             sumf += d2 * (sumi1 + sumi2);
             qs += 16;
-            y  += 2;
+            q8 += 32;
         }
     }
     *s = sumf;
