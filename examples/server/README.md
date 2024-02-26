@@ -1,12 +1,15 @@
 # llama.cpp/example/server
 
 This example demonstrates a simple HTTP API server and a simple web front end to interact with llama.cpp.
-It is set only to run on the local machine using http://127.0.0.1:8080 but it can serve a local network or a public network if the router allows port forwarding.
-To make the server accessible to other machines on the local or public network change the server username to '0.0.0.0'.
+
+It is set by default to run only on the local machine using http://127.0.0.1:8080 but it can serve a local network by using **--host "0.0.0.0".
 It will then run on http://0.0.0.0:8080 and to access the server on the host machine the url must be http://IPaddress:8080
 So for example http://192.168.1.42:8080 will have the same effect as localhost:8080 when the servername is 127.0.0.1
 
-Command line options:
+**Server Graceful Shut Down**
+
+To ensure that all processes terminate gracefully with memory deallocation, always shut the server down with **Ctrl+C** and wait for the message **ggml-metal-free: deallocating**.
+
 # LLaMA.cpp HTTP Server
 
 Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/yhirose/cpp-httplib), [nlohmann::json](https://github.com/nlohmann/json) and **llama.cpp**.

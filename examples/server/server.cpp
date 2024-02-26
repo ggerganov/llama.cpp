@@ -386,7 +386,7 @@ struct llama_metrics {
 // requires just `slots` and `params.n_ctx` as parameters
 static void kvgraphics(std::vector<llama_client_slot>& slots) {
 
-    int max_length = 128;
+    int max_length = 144;
     int num_blocks = slots.size();
     size_t slot_cache_size = slots[0].n_ctx;
     bool cls_flag = true;   // this flag only prevents repeated cls inside one call
@@ -411,7 +411,7 @@ static void kvgraphics(std::vector<llama_client_slot>& slots) {
         printf("\033[2J");
         cls_flag = false;
     }
-    printf("\033[1;0H\033[K**************************\n\033[KKVcache occupancy by slot:\n\033[K**************************\n");
+    printf("\033[1;0H\033[K***************************************\n\033[KLLAMA SERVER KVcache occupancy by slot:\n\033[K***************************************\n");
 
     // we can know and control how many lines of output we are printing so just start below that and fix the graphics location
     printf("\033[%d;0H", 5);
@@ -3198,7 +3198,7 @@ int main(int argc, char **argv)
                 if (received_api_key != cut_api) {
                     LOG("%s != %s and length left = %zu, length right = %zu\n", received_api_key.c_str(), cut_api.c_str(),received_api_key.size(), cut_api.size());
                 } else if (received_api_key == cut_api) {
-                    LOG("%s = %s FOUND IT!!!\n", received_api_key.c_str(), cut_api.c_str());
+                    LOG("%s = %s Found matching api key.\n", received_api_key.c_str(), cut_api.c_str());
                     return true;
                 }
             }
