@@ -158,7 +158,7 @@ static inline void server_log(const char *level, const char *function, int line,
         std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
     } else {
         char buf[1024];
-        snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
+        snprintf(buf, 1024, "\033[72;0H%4s [%24s] %s", level, function, message);
 
         if (!extra.empty()) {
             log.merge_patch(extra);
@@ -168,12 +168,12 @@ static inline void server_log(const char *level, const char *function, int line,
         for (const auto& el : log.items())
         {
             const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
-            snprintf(buf, 1024, " %s=%s", el.key().c_str(), value.c_str());
+            snprintf(buf, 1024, "\033[72;0H %s=%s", el.key().c_str(), value.c_str());
             ss << buf;
         }
 
         const std::string str = ss.str();
-        printf("%.*s\n", (int)str.size(), str.data());
+        printf("\033[72;0H%.*s\n", (int)str.size(), str.data());
         fflush(stdout);
     }
 }
