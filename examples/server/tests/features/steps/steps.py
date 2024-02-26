@@ -289,6 +289,7 @@ async def step_oai_chat_completions(context):
                               # user_prompt is inserted automatically
                               context.system_prompt,
                               context.base_url,
+                              '/v1/chat/completions',
                               True,  # async_client
                               model=context.model
                               if hasattr(context, 'model') else None,
