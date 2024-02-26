@@ -9,6 +9,8 @@ let
   pythonPackages = python3.pkgs;
   buildPythonPackage = pythonPackages.buildPythonPackage;
   numpy = pythonPackages.numpy;
+  tqdm = pythonPackages.tqdm;
+  sentencepiece = pythonPackages.sentencepiece;
   poetry-core = pythonPackages.poetry-core;
   pytestCheckHook = pythonPackages.pytestCheckHook;
 in
@@ -24,6 +26,8 @@ lib.makeScope newScope (self: {
     inherit
       buildPythonPackage
       numpy
+      tqdm
+      sentencepiece
       poetry-core
       pytestCheckHook
       ;

@@ -17,6 +17,7 @@ let
     protobuf
     torchWithoutCuda
     gguf-py
+    tqdm
   ];
 in
 
