@@ -364,9 +364,9 @@ extern "C" {
     };
 
     enum ggml_backend_type {
-        GGML_BACKEND_CPU = 0,
-        GGML_BACKEND_GPU = 10,
-        GGML_BACKEND_GPU_SPLIT = 20,
+        GGML_BACKEND_TYPE_CPU = 0,
+        GGML_BACKEND_TYPE_GPU = 10,
+        GGML_BACKEND_TYPE_GPU_SPLIT = 20,
     };
 
     // model file types
@@ -498,9 +498,9 @@ extern "C" {
     };
 
     enum ggml_object_type {
-        GGML_OBJECT_TENSOR,
-        GGML_OBJECT_GRAPH,
-        GGML_OBJECT_WORK_BUFFER
+        GGML_OBJECT_TYPE_TENSOR,
+        GGML_OBJECT_TYPE_GRAPH,
+        GGML_OBJECT_TYPE_WORK_BUFFER
     };
 
     enum ggml_log_level {
@@ -642,9 +642,9 @@ extern "C" {
     // NOTE: the INIT or FINALIZE pass is not scheduled unless explicitly enabled.
     // This behavior was changed since https://github.com/ggerganov/llama.cpp/pull/1995.
     enum ggml_task_type {
-        GGML_TASK_INIT = 0,
-        GGML_TASK_COMPUTE,
-        GGML_TASK_FINALIZE,
+        GGML_TASK_TYPE_INIT = 0,
+        GGML_TASK_TYPE_COMPUTE,
+        GGML_TASK_TYPE_FINALIZE,
     };
 
     struct ggml_compute_params {
@@ -1649,8 +1649,8 @@ extern "C" {
 
     // sort rows
     enum ggml_sort_order {
-        GGML_SORT_ASC,
-        GGML_SORT_DESC,
+        GGML_SORT_ORDER_ASC,
+        GGML_SORT_ORDER_DESC,
     };
 
     GGML_API struct ggml_tensor * ggml_argsort(
@@ -1943,8 +1943,8 @@ extern "C" {
 
     // optimization methods
     enum ggml_opt_type {
-        GGML_OPT_ADAM,
-        GGML_OPT_LBFGS,
+        GGML_OPT_TYPE_ADAM,
+        GGML_OPT_TYPE_LBFGS,
     };
 
     // linesearch methods
@@ -1958,12 +1958,12 @@ extern "C" {
 
     // optimization return values
     enum ggml_opt_result {
-        GGML_OPT_OK = 0,
-        GGML_OPT_DID_NOT_CONVERGE,
-        GGML_OPT_NO_CONTEXT,
-        GGML_OPT_INVALID_WOLFE,
-        GGML_OPT_FAIL,
-        GGML_OPT_CANCEL,
+        GGML_OPT_RESULT_OK = 0,
+        GGML_OPT_RESULT_DID_NOT_CONVERGE,
+        GGML_OPT_RESULT_NO_CONTEXT,
+        GGML_OPT_RESULT_INVALID_WOLFE,
+        GGML_OPT_RESULT_FAIL,
+        GGML_OPT_RESULT_CANCEL,
 
         GGML_LINESEARCH_FAIL = -128,
         GGML_LINESEARCH_MINIMUM_STEP,

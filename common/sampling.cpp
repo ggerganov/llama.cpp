@@ -266,7 +266,7 @@ static llama_token llama_sampling_sample_impl(
             //    }
             //}
 
-            LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx_main, id).c_str());
+            //LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx_main, id).c_str());
         }
     }
 

@@ -669,8 +669,7 @@ jobs:
         run: |
           cd examples/llama.android
 
-          # Skip armeabi-v7a for now (https://github.com/llvm/llvm-project/issues/65820).
-          ./gradlew build --no-daemon -Pskip-armeabi-v7a
+          ./gradlew build --no-daemon
 
 #  freeBSD-latest:
 #    runs-on: macos-12

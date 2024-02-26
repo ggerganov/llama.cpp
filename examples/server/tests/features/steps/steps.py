@@ -1,4 +1,5 @@
 import asyncio
+import collections
 import json
 import os
 import re
@@ -12,6 +13,7 @@ import aiohttp
 import openai
 from behave import step
 from behave.api.async_step import async_run_until_complete
+from prometheus_client import parser
 
 
 @step(u"a server listening on {server_fqdn}:{server_port}")
@@ -33,6 +35,8 @@ def step_server_config(context, server_fqdn, server_port):
     context.server_api_key = None
     context.server_continuous_batching = False
     context.server_embeddings = False
+    context.server_metrics = False
+    context.server_process = None
     context.server_seed = None
     context.user_api_key = None
 
@@ -79,6 +83,11 @@ def step_server_continuous_batching(context):
 @step(u'embeddings extraction')
 def step_server_embeddings(context):
     context.server_embeddings = True
+
+
+@step(u'prometheus compatible metrics exposed')
+def step_server_metrics(context):
+    context.server_metrics = True
 
 
 @step(u"the server is starting")
@@ -262,57 +271,56 @@ def step_a_prompt_prompt(context, prompt):
 @step(u'concurrent completion requests')
 @async_run_until_complete()
 async def step_concurrent_completion_requests(context):
-    await concurrent_completion_requests(context,
-                                         request_completion,
-                                         # prompt is inserted automatically
-                                         context.base_url,
-                                         debug=context.debug,
-                                         n_predict=context.n_predict if hasattr(context, 'n_predict') else None,
-                                         server_seed=context.server_seed if hasattr(context, 'server_seed') else None,
-                                         user_api_key=context.user_api_key if hasattr(context,
-                                                                                      'user_api_key') else None)
+    await concurrent_requests(context,
+                              request_completion,
+                              # prompt is inserted automatically
+                              context.base_url,
+                              debug=context.debug,
+                              n_predict=context.n_predict if hasattr(context, 'n_predict') else None,
+                              server_seed=context.server_seed if hasattr(context, 'server_seed') else None,
+                              user_api_key=context.user_api_key if hasattr(context,
+                                                                           'user_api_key') else None)
 
 
 @step(u'concurrent OAI completions requests')
 @async_run_until_complete
 async def step_oai_chat_completions(context):
-    await concurrent_completion_requests(context, oai_chat_completions,
-                                         # user_prompt is inserted automatically
-                                         context.system_prompt,
-                                         context.base_url,
-                                         '/v1/chat/completions',
-                                         True,  # async_client
-                                         model=context.model
-                                         if hasattr(context, 'model') else None,
-                                         n_predict=context.n_predict
-                                         if hasattr(context, 'n_predict') else None,
-                                         enable_streaming=context.enable_streaming
-                                         if hasattr(context, 'enable_streaming') else None,
-                                         server_seed=context.server_seed
-                                         if hasattr(context, 'server_seed') else None,
-                                         user_api_key=context.user_api_key
-                                         if hasattr(context, 'user_api_key') else None)
+    await concurrent_requests(context, oai_chat_completions,
+                              # user_prompt is inserted automatically
+                              context.system_prompt,
+                              context.base_url,
+                              True,  # async_client
+                              model=context.model
+                              if hasattr(context, 'model') else None,
+                              n_predict=context.n_predict
+                              if hasattr(context, 'n_predict') else None,
+                              enable_streaming=context.enable_streaming
+                              if hasattr(context, 'enable_streaming') else None,
+                              server_seed=context.server_seed
+                              if hasattr(context, 'server_seed') else None,
+                              user_api_key=context.user_api_key
+                              if hasattr(context, 'user_api_key') else None)
 
 
 @step(u'concurrent OAI completions requests no v1')
 @async_run_until_complete
 async def step_oai_chat_completions(context):
-    await concurrent_completion_requests(context, oai_chat_completions,
-                                         # user_prompt is inserted automatically
-                                         context.system_prompt,
-                                         context.base_url,
-                                         '/chat/completions',
-                                         True,  # async_client
-                                         model=context.model
-                                         if hasattr(context, 'model') else None,
-                                         n_predict=context.n_predict
-                                         if hasattr(context, 'n_predict') else None,
-                                         enable_streaming=context.enable_streaming
-                                         if hasattr(context, 'enable_streaming') else None,
-                                         server_seed=context.server_seed
-                                         if hasattr(context, 'server_seed') else None,
-                                         user_api_key=context.user_api_key
-                                         if hasattr(context, 'user_api_key') else None)
+    await concurrent_requests(context, oai_chat_completions,
+                              # user_prompt is inserted automatically
+                              context.system_prompt,
+                              context.base_url,
+                              '/chat/completions',
+                              True,  # async_client
+                              model=context.model
+                              if hasattr(context, 'model') else None,
+                              n_predict=context.n_predict
+                              if hasattr(context, 'n_predict') else None,
+                              enable_streaming=context.enable_streaming
+                              if hasattr(context, 'enable_streaming') else None,
+                              server_seed=context.server_seed
+                              if hasattr(context, 'server_seed') else None,
+                              user_api_key=context.user_api_key
+                              if hasattr(context, 'user_api_key') else None)
 
 
 @step(u'all prompts are predicted')
@@ -339,36 +347,58 @@ async def all_prompts_are_predicted(context, expected_predicted_n=None):
 @step(u'embeddings are computed for')
 @async_run_until_complete
 async def step_compute_embedding(context):
-    content = context.text
-    base_url = context.base_url
-    context.embeddings = await request_embedding(content, base_url)
+    context.embeddings = await request_embedding(context.text, base_url=context.base_url)
 
 
 @step(u'embeddings are generated')
 def step_assert_embeddings(context):
-    assert_embeddings(context.embeddings)
+    if len(context.prompts) == 0:
+        assert_embeddings(context.embeddings)
+    else:
+        assert len(context.embeddings) == len(context.prompts), (f"unexpected response:\n"
+                                                                 f"context.prompts={context.prompts}\n"
+                                                                 f"context.embeddings={context.embeddings}")
+        for embedding in context.embeddings:
+            context.prompts.pop()
+            assert_embeddings(embedding)
 
 
 @step(u'an OAI compatible embeddings computation request for')
-def step_oai_compute_embedding(context):
-    openai.api_key = 'nope'  # openai client always expects an api_keu
-    if context.user_api_key is not None:
-        openai.api_key = context.user_api_key
-    openai.api_base = f'{context.base_url}/v1'
-    embeddings = openai.Embedding.create(
-        model=context.model,
-        input=context.text,
-    )
-    context.embeddings = embeddings
+@async_run_until_complete
+async def step_oai_compute_embeddings(context):
+    context.embeddings = await request_oai_embeddings(context.text,
+                                                      base_url=context.base_url,
+                                                      user_api_key=context.user_api_key,
+                                                      model=context.model)
+
+
+@step(u'an OAI compatible embeddings computation request for multiple inputs')
+@async_run_until_complete
+async def step_oai_compute_embeddings_multiple_inputs(context):
+    context.embeddings = await request_oai_embeddings(context.prompts,
+                                                      base_url=context.base_url,
+                                                      user_api_key=context.user_api_key,
+                                                      model=context.model)
 
 
 @step(u'concurrent embedding requests')
 @async_run_until_complete()
 async def step_concurrent_embedding_requests(context):
-    await concurrent_completion_requests(context,
-                                         request_embedding,
-                                         # prompt is inserted automatically
-                                         context.base_url)
+    await concurrent_requests(context,
+                              request_embedding,
+                              # prompt is inserted automatically
+                              base_url=context.base_url)
+
+
+@step(u'concurrent OAI embedding requests')
+@async_run_until_complete()
+async def step_concurrent_oai_embedding_requests(context):
+    await concurrent_requests(context,
+                              request_oai_embeddings,
+                              # prompt is inserted automatically
+                              base_url=context.base_url,
+                              async_client=True,
+                              model=context.model)
 
 
 @step(u'all embeddings are generated')
@@ -424,7 +454,24 @@ def step_check_options_header_value(context, cors_header, cors_header_value):
     assert context.options_response.headers[cors_header] == cors_header_value
 
 
-async def concurrent_completion_requests(context, f_completion, *args, **kwargs):
+@step(u'prometheus metrics are exposed')
+@async_run_until_complete
+async def step_prometheus_metrics_exported(context):
+    async with aiohttp.ClientSession() as session:
+        async with await session.get(f'{context.base_url}/metrics') as metrics_response:
+            assert metrics_response.status == 200
+            assert metrics_response.headers['Content-Type'] == "text/plain; version=0.0.4"
+            metrics_raw = await metrics_response.text()
+            metric_exported = False
+            for metric in parser.text_string_to_metric_families(metrics_raw):
+                match metric.name:
+                    case "llamacpp:kv_cache_usage_ratio":
+                        assert len(metric.samples) > 0
+                        metric_exported = True
+            assert metric_exported, "No metrics exported"
+
+
+async def concurrent_requests(context, f_completion, *args, **kwargs):
     n_prompts = len(context.prompts)
     if context.debug:
         print(f"starting {n_prompts} concurrent completion requests...")
@@ -589,7 +636,7 @@ async def oai_chat_completions(user_prompt,
     return completion_response
 
 
-async def request_embedding(content, base_url):
+async def request_embedding(content, base_url=None):
     async with aiohttp.ClientSession() as session:
         async with session.post(f'{base_url}/embedding',
                                 json={
@@ -598,6 +645,46 @@ async def request_embedding(content, base_url):
             assert response.status == 200
             response_json = await response.json()
             return response_json['embedding']
+
+
+async def request_oai_embeddings(input,
+                                 base_url=None, user_api_key=None,
+                                 model=None, async_client=False):
+    # openai client always expects an api_key
+    user_api_key = user_api_key if user_api_key is not None else 'nope'
+    if async_client:
+        origin = 'llama.cpp'
+        if user_api_key is not None:
+            headers = {'Authorization': f'Bearer {user_api_key}', 'Origin': origin}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f'{base_url}/v1/embeddings',
+                                    json={
+                                        "input": input,
+                                        "model": model,
+                                    },
+                                    headers=headers) as response:
+                assert response.status == 200, f"received status code not expected: {response.status}"
+                assert response.headers['Access-Control-Allow-Origin'] == origin
+                assert response.headers['Content-Type'] == "application/json; charset=utf-8"
+                response_json = await response.json()
+                assert response_json['model'] == model, f"invalid model received: {response_json['model']}"
+                assert response_json['object'] == 'list'
+                return response_json['data']
+    else:
+        openai.api_key = user_api_key
+        openai.api_base = f'{base_url}/v1'
+        oai_embeddings = openai.Embedding.create(
+            model=model,
+            input=input,
+        )
+
+        if isinstance(input, collections.abc.Sequence):
+            embeddings = []
+            for an_oai_embeddings in oai_embeddings.data:
+                embeddings.append(an_oai_embeddings.embedding)
+        else:
+            embeddings = oai_embeddings.data.embedding
+        return embeddings
 
 
 def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re_content=None):
@@ -635,6 +722,8 @@ async def wait_for_health_status(context,
     if context.debug:
         print(f"Starting checking for health for expected_health_status={expected_health_status}")
     timeout = 3  # seconds
+    if expected_health_status == 'ok':
+        timeout = 10 # CI slow inference
     interval = 0.5
     counter = 0
     async with aiohttp.ClientSession() as session:
@@ -672,7 +761,7 @@ async def wait_for_health_status(context,
                         if n_completions > 0:
                             return
 
-                assert False, 'timeout exceeded'
+                assert False, f'{expected_health_status} timeout exceeded {counter}s>={timeout}'
 
 
 def assert_embeddings(embeddings):
@@ -714,6 +803,8 @@ def start_server_background(context):
         server_args.append('--cont-batching')
     if context.server_embeddings:
         server_args.append('--embedding')
+    if context.server_metrics:
+        server_args.append('--metrics')
     if context.model_alias is not None:
         server_args.extend(['--alias', context.model_alias])
     if context.n_ctx is not None:
@@ -726,6 +817,8 @@ def start_server_background(context):
         server_args.extend(['--api-key', context.server_api_key])
     if context.debug:
         server_args.append('--verbose')
+    if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
+        server_args.extend(['--log-format', "text"])
     print(f"starting server with: {context.server_path}", *server_args)
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],

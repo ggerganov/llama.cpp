@@ -13,6 +13,7 @@ Feature: llama.cpp server
     And   1 slots
     And   embeddings extraction
     And   32 server max tokens to predict
+    And   prometheus compatible metrics exposed
     Then  the server is starting
     Then  the server is healthy
 
@@ -25,11 +26,12 @@ Feature: llama.cpp server
     And   <n_predict> max tokens to predict
     And   a completion request with no api error
     Then  <n_predicted> tokens are predicted matching <re_content>
+    And   prometheus metrics are exposed
 
     Examples: Prompts
-      | prompt                           | n_predict | re_content                   | n_predicted |
-      | I believe the meaning of life is | 8         | read                         | 8           |
-      | Write a joke about AI            | 64        | (park<or>friends<or>scared)+ | 32          |
+      | prompt                           | n_predict | re_content                             | n_predicted |
+      | I believe the meaning of life is | 8         | (read<or>going)+                       | 8           |
+      | Write a joke about AI            | 64        | (park<or>friends<or>scared<or>always)+ | 32          |
 
   Scenario Outline: OAI Compatibility
     Given a model <model>
@@ -58,6 +60,19 @@ Feature: llama.cpp server
     """
     What is the capital of Spain ?
     """
+    Then embeddings are generated
+
+  Scenario: OAI Embeddings compatibility with multiple inputs
+    Given a model tinyllama-2
+    Given a prompt:
+      """
+      In which country Paris is located ?
+      """
+    And a prompt:
+      """
+      Is Madrid the capital of Spain ?
+      """
+    When an OAI compatible embeddings computation request for multiple inputs
     Then embeddings are generated
 
 
