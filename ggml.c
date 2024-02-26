@@ -728,7 +728,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
     },
     [GGML_TYPE_IQ4_XS] = {
         .type_name                = "iq4_xs",
-        .blck_size                = QK4_XS,
+        .blck_size                = QK_K,
         .type_size                = sizeof(block_iq4_xs),
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_iq4_xs,

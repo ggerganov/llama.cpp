@@ -571,14 +571,15 @@ typedef struct {
 } block_iq4_nl;
 static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
 
-#define QK4_XS 64
 #define QR4_XS 2
-#define QI4_XS (QK4_XS / (4*QR4_XS))
+#define QI4_XS (QK_K / (4*QR4_XS))
 typedef struct {
     half d;
-    uint8_t qs[QK4_XS/2];
+    uint16_t scales_h;
+    uint8_t  scales_l[QK_K/64];
+    uint8_t  qs[QK_K/2];
 } block_iq4_xs;
-static_assert(sizeof(block_iq4_xs) == sizeof(ggml_fp16_t) + QK4_XS/2, "wrong iq4_xs block size/padding");
+static_assert(sizeof(block_iq4_xs) == sizeof(ggml_fp16_t) + sizeof(uint16_t) + QK_K/64 + QK_K/2, "wrong iq4_xs block size/padding");
 
 
 #define WARP_SIZE 32
@@ -2439,19 +2440,14 @@ template<typename dst_t>
 static __global__ void dequantize_block_iq4_xs(const void * __restrict__ vx, dst_t * __restrict__ yy) {
 
     const int i   = blockIdx.x;
-    //const block_iq4_xs * x = (const block_iq4_xs *) vx + i*(QK_K/QK4_XS);
     const block_iq4_xs * x = (const block_iq4_xs *)vx;
 
     const int tid = threadIdx.x;
     const int il = tid/8; // 0...3
     const int ib = tid%8; // 0...7
-    const int ib32 = i*(QK_K/32) + ib;
-    dst_t * y = yy + 32*ib32 + 4*il;
-    const uint8_t  * q4 = x[ib32/(QK4_XS/32)].qs + 16*(ib32%(QK4_XS/32)) + 4*il;
-    const float d = (float)x[ib32/(QK4_XS/32)].d;
-    //dst_t * y = yy + i*QK_K + 32*ib + 4*il;
-    //const uint8_t  * q4 = x->qs + 16*(ib%(QK4_XS/32)) + 4*il;
-    //const float d = (float)x->d;
+    dst_t * y = yy + i*QK_K + 32*ib + 4*il;
+    const uint8_t  * q4 = x[i].qs + 16*ib + 4*il;
+    const float d = (float)x[i].d * ((((x[i].scales_l[ib/2] >> 4*(ib%2)) & 0xf) | (((x[i].scales_h >> 2*ib) & 3) << 4)) - 32);
     for (int j = 0; j < 4; ++j) {
         y[j+ 0] = d * kvalues_iq4nl[q4[j] & 0xf];
         y[j+16] = d * kvalues_iq4nl[q4[j] >>  4];
@@ -9420,7 +9416,7 @@ static void ggml_cuda_op_mul_mat_vec_q(
                 (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
             break;
         case GGML_TYPE_IQ4_XS:
-            mul_mat_vec_q_cuda<QK4_XS, QI4_XS, block_iq4_xs, VDR_Q4_0_Q8_1_MMVQ, vec_dot_iq4_xs_q8_1>
+            mul_mat_vec_q_cuda<QK_K, QI4_XS, block_iq4_xs, VDR_Q4_0_Q8_1_MMVQ, vec_dot_iq4_xs_q8_1>
                 (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
             break;
         case GGML_TYPE_IQ3_S:

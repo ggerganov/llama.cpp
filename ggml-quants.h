@@ -230,13 +230,13 @@ typedef struct {
 } block_iq4_nl;
 static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
 
-#define QK4_XS 64
 typedef struct {
     ggml_fp16_t d;
-    uint8_t qs[QK4_XS/2];
+    uint16_t scales_h;
+    uint8_t  scales_l[QK_K/64];
+    uint8_t  qs[QK_K/2];
 } block_iq4_xs;
-static_assert(sizeof(block_iq4_xs) == sizeof(ggml_fp16_t) + QK4_XS/2, "wrong iq4_xs block size/padding");
-static_assert(QK4_XS%32 == 0, "QK4_XS must be a multiple of 32");
+static_assert(sizeof(block_iq4_xs) == sizeof(ggml_fp16_t) + sizeof(uint16_t) + QK_K/64 + QK_K/2, "wrong iq4_xs block size/padding");
 
 #ifdef __cplusplus
 extern "C" {
