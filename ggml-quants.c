@@ -12240,7 +12240,7 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
 
     if (super_block_size/block_size > 1) {
         int nb = super_block_size/block_size;
-        memset(scales_h, 0, ((nb+3)/4)*sizeof(uint16_t));
+        memset(scales_h, 0, ((nb+7)/8)*sizeof(uint16_t));
         float d = -max_scale/32;
         dh[0] = GGML_FP32_TO_FP16(d);
         float id = d ? 1/d : 0.f;
