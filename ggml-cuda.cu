@@ -544,14 +544,19 @@ static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong 
 
 #define QR3_XS 8
 #define QI3_XS (QK_K / (4*QR3_XS))
+#if QK_K == 64
+#define IQ3S_N_SCALE 2
+#else
+#define IQ3S_N_SCALE QK_K/64
+#endif
 typedef struct {
     half d;
     uint8_t qs[QK_K/4];
     uint8_t qh[QK_K/32];
     uint8_t signs[QK_K/8];
-    uint8_t scales[QK_K/64];
+    uint8_t scales[IQ3S_N_SCALE];
 } block_iq3_s;
-static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 27*(QK_K/64), "wrong iq3_s block size/padding");
+static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + IQ3S_N_SCALE, "wrong iq3_s block size/padding");
 
 #define QR1_S 8
 #define QI1_S (QK_K / (4*QR1_S))
@@ -571,6 +576,11 @@ typedef struct {
 } block_iq4_nl;
 static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
 
+#if QK_K == 64
+#define block_iq4_xs block_iq4_nl
+#define QR4_XS QR4_NL
+#define QI4_XS QI4_NL
+#else
 // QR4_XS = 8 is very slightly faster than QR4_XS = 4
 #define QR4_XS 8
 #define QI4_XS (QK_K / (4*QR4_XS))
@@ -581,7 +591,7 @@ typedef struct {
     uint8_t  qs[QK_K/2];
 } block_iq4_xs;
 static_assert(sizeof(block_iq4_xs) == sizeof(ggml_fp16_t) + sizeof(uint16_t) + QK_K/64 + QK_K/2, "wrong iq4_xs block size/padding");
-
+#endif
 
 #define WARP_SIZE 32
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
@@ -2439,9 +2449,9 @@ static __global__ void dequantize_block_iq4_nl(const void * __restrict__ vx, dst
 
 }
 
+#if QK_K != 64
 template<typename dst_t>
 static __global__ void dequantize_block_iq4_xs(const void * __restrict__ vx, dst_t * __restrict__ yy) {
-
     const int i   = blockIdx.x;
     const block_iq4_xs * x = (const block_iq4_xs *)vx;
 
@@ -2455,8 +2465,8 @@ static __global__ void dequantize_block_iq4_xs(const void * __restrict__ vx, dst
         y[j+ 0] = d * kvalues_iq4nl[q4[j] & 0xf];
         y[j+16] = d * kvalues_iq4nl[q4[j] >>  4];
     }
-
 }
+#endif
 
 static __global__ void dequantize_mul_mat_vec_q2_k(const void * __restrict__ vx, const float * __restrict__ yy, float * __restrict__ dst, const int ncols, int nrows) {
 
@@ -5382,8 +5392,7 @@ static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
     return 0.f;
 #endif
 #else
-    assert(false);
-    return 0.f;
+    return vec_dot_iq4_xs_q8_1(vbq, bq8_1, iqs);
 #endif
 }
 
@@ -7444,7 +7453,11 @@ static void dequantize_row_iq4_nl_cuda(const void * vx, dst_t * y, const int k, 
 template<typename dst_t>
 static void dequantize_row_iq4_xs_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int nb = (k + QK_K - 1) / QK_K;
+#if QK_K == 64
+    dequantize_block_iq4_nl<<<nb, 32, 0, stream>>>(vx, y);
+#else
     dequantize_block_iq4_xs<<<nb, 32, 0, stream>>>(vx, y);
+#endif
 }
 
 template <typename src_t, typename dst_t>
