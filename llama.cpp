@@ -12844,6 +12844,10 @@ uint32_t llama_n_batch(const struct llama_context * ctx) {
     return ctx->cparams.n_batch;
 }
 
+uint32_t llama_n_max_seq(const struct llama_context * ctx) {
+    return ctx->kv_self.size;
+}
+
 enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
     return model->vocab.type;
 }
