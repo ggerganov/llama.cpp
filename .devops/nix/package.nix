@@ -236,9 +236,8 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     shell = mkShell {
       name = "shell-${finalAttrs.finalPackage.name}";
       description = "contains numpy and sentencepiece";
-      buildInputs = [
+      nativeBuildInputs = [
         cmake
-        gcc
       ];
       inputsFrom = [ finalAttrs.finalPackage ];
     };
