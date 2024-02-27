@@ -381,8 +381,13 @@ ifdef LLAMA_BLIS
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
-	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include -I/usr/local/cuda/targets/aarch64-linux/include
-	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib -L/usr/local/cuda/targets/aarch64-linux/lib -L/usr/lib/wsl/lib
+	ifneq ('', '$(wildcard /opt/cuda)')
+		CUDA_PATH ?= /opt/cuda
+	else
+		CUDA_PATH ?= /usr/local/cuda
+	endif
+	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include
+	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
 	MK_NVCCFLAGS += -use_fast_math
 ifdef LLAMA_FATAL_WARNINGS
