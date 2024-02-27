@@ -1,7 +1,9 @@
-john123456
-susan987654
-guestabcdef
-fred123123
-george890890
-sandra234234
-tilly567567
+{
+"john":["john123456","john0001"],
+"susan":["susan987654","susan0001"],
+"guest":["guestabcdef","guest0001"],
+"fred": ["fred123123","fred0001"],
+"george":["george890890","george0001"],
+"sandra":["sandra234234","sandra0001"],
+"tilly":["tilly567567","tilly0001"]
+}

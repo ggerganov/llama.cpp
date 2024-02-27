@@ -143,6 +143,9 @@ static inline void server_log(const char *level, const char *function, int line,
         {"timestamp", time(nullptr)},
     };
 
+    // freopen("/dev/null", "w", stdout);
+    freopen("/dev/null", "w", stderr);
+
     if (server_log_json) {
         log.merge_patch(
                 {
@@ -155,10 +158,10 @@ static inline void server_log(const char *level, const char *function, int line,
             log.merge_patch(extra);
         }
 
-        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
+        std::cerr << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
     } else {
         char buf[1024];
-        snprintf(buf, 1024, "\033[72;0H%4s [%24s] %s", level, function, message);
+        snprintf(buf, 1024, "\033[85;0H%4s [%24s] %s", level, function, message);
 
         if (!extra.empty()) {
             log.merge_patch(extra);
@@ -168,13 +171,16 @@ static inline void server_log(const char *level, const char *function, int line,
         for (const auto& el : log.items())
         {
             const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
-            snprintf(buf, 1024, "\033[72;0H %s=%s", el.key().c_str(), value.c_str());
+            snprintf(buf, 1024, "\033[85;0H %s=%s", el.key().c_str(), value.c_str());
             ss << buf;
         }
 
         const std::string str = ss.str();
-        printf("\033[72;0H%.*s\n", (int)str.size(), str.data());
-        fflush(stdout);
+        printf("\033[85;0H%.*s\n", (int)str.size(), str.data());
+        fflush(stderr);
+
+        // freopen("/dev/tty", "a", stdout);
+        // freopen("/dev/tty", "a", stderr);
     }
 }
 
