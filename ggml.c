@@ -728,14 +728,22 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
     },
     [GGML_TYPE_IQ4_XS] = {
         .type_name                = "iq4_xs",
+#if QK_K == 64
+        .blck_size                = QK4_NL,
+#else
         .blck_size                = QK_K,
+#endif
         .type_size                = sizeof(block_iq4_xs),
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_iq4_xs,
         .from_float               = quantize_row_iq4_xs,
         .from_float_reference     = (ggml_from_float_t)quantize_row_iq4_xs_reference,
         .vec_dot                  = ggml_vec_dot_iq4_xs_q8_K,
+#if QK_K == 64
+        .vec_dot_type             = GGML_TYPE_Q8_0,
+#else
         .vec_dot_type             = GGML_TYPE_Q8_K,
+#endif
         .nrows                    = 1,
     },
     [GGML_TYPE_Q8_K] = {
@@ -19830,6 +19838,9 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 GGML_ASSERT(result == row_size * nrows);
             } break;
         case GGML_TYPE_IQ4_NL:
+#if QK_K == 64
+        case GGML_TYPE_IQ4_XS:
+#endif
             {
                 GGML_ASSERT(start % QK4_NL == 0);
                 GGML_ASSERT(start % n_per_row == 0);
@@ -19838,15 +19849,17 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
                 result = quantize_iq4_nl(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, hist, imatrix);
                 GGML_ASSERT(result == row_size * nrows);
             } break;
+#if QK_K != 64
         case GGML_TYPE_IQ4_XS:
             {
-                GGML_ASSERT(start % QK4_NL == 0);
+                GGML_ASSERT(start % QK_K == 0);
                 GGML_ASSERT(start % n_per_row == 0);
                 size_t start_row = start / n_per_row;
                 size_t row_size = ggml_row_size(type, n_per_row);
                 result = quantize_iq4_xs(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, hist, imatrix);
                 GGML_ASSERT(result == row_size * nrows);
             } break;
+#endif
         case GGML_TYPE_F16:
             {
                 size_t elemsize = sizeof(ggml_fp16_t);
