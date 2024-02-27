@@ -161,6 +161,16 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [Msty](https://msty.app) (proprietary)
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
 
+**Feature matrix**
+
+|                      | **CPU (AVX2)** | **CPU (ARM NEON)** | **Metal** | **cuBLAS** |    **rocBLAS**   | **SYCL** | **CLBlast** | **Vulkan** | **Kompute** |
+|:--------------------:|:--------------:|--------------------|:---------:|:----------:|:----------------:|----------|:-----------:|:----------:|:-----------:|
+| **K-quants**         | ✅              | ✅                  | ✅         | ✅          | ✅                | ❓        | ✅           | ✅          | 🚫           |
+| **I-quants**         | ✅ (SLOW)       | ✅                  | ✅ (SLOW)  | ✅          | ✅                | 🚫        | 🚫           | 🚫          | 🚫           |
+| **Multi-GPU**        | N/A            | N/A                | N/A       | ✅          | ❓                | 🚫        | ❓           | ✅          | ❓           |
+|  **K cache quants**  | ✅              | ❓                  | ❓         | ✅          | Only q8_0 (SLOW) | ❓        | ✅           | 🚫          | 🚫           |
+| **MoE architecture** | ✅              | ❓                  | ✅         | ✅          | ✅                | ❓        | Only -ngl 0 | 🚫          | 🚫           |
+
 ---
 
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
