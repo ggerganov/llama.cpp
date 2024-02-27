@@ -107,12 +107,15 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ2_XXS       = 19, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ2_XS        = 20, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q2_K_S        = 21, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q3_K_XS       = 22, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ3_XS        = 22, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ3_XXS       = 23, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ1_S         = 24, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ4_NL        = 25, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ3_S         = 26, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ3_M         = 27, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ2_S         = 28, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -243,6 +246,7 @@ extern "C" {
         float    yarn_beta_fast;   // YaRN low correction dim
         float    yarn_beta_slow;   // YaRN high correction dim
         uint32_t yarn_orig_ctx;    // YaRN original context size
+        float    defrag_thold;     // defragment the KV cache if holes/size > thold, < 0 disabled (default)
 
         ggml_backend_sched_eval_callback cb_eval;
         void * cb_eval_user_data;

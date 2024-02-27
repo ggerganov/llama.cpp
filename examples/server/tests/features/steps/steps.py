@@ -699,6 +699,8 @@ async def wait_for_health_status(context,
     if context.debug:
         print(f"Starting checking for health for expected_health_status={expected_health_status}")
     timeout = 3  # seconds
+    if expected_health_status == 'ok':
+        timeout = 10 # CI slow inference
     interval = 0.5
     counter = 0
     async with aiohttp.ClientSession() as session:
@@ -736,7 +738,7 @@ async def wait_for_health_status(context,
                         if n_completions > 0:
                             return
 
-                assert False, 'timeout exceeded'
+                assert False, f'{expected_health_status} timeout exceeded {counter}s>={timeout}'
 
 
 def assert_embeddings(embeddings):

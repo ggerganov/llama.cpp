@@ -114,6 +114,9 @@ Typically finetunes of the base models below are supported as well.
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
 
+**HTTP server**
+
+[llama.cpp web server](./examples/server) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
 **Bindings:**
 
@@ -156,6 +159,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
 - [Msty](https://msty.app) (proprietary)
+- [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
 
 ---
 
