@@ -41,6 +41,12 @@ int main(int argc, char ** argv) {
     // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
     const float p_split  = params.p_split;
 
+    if (params.seed >= 0) {
+        srand(params.seed);
+    } else {
+        srand(time(NULL));
+    }
+
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("speculative", "log"));
     LOG_TEE("Log start\n");
