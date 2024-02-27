@@ -210,7 +210,7 @@ struct ggml_mpi_device {
 #define MPI_BACKEND_NAME "MPI"
 GGML_CALL int ggml_backend_mpi_reg_devices();
 
-GGML_CALL ggml_backend_t ggml_backend_mpi_init(ggml_backend_t wrapped_backend);
+GGML_CALL ggml_backend_t ggml_backend_mpi_init(ggml_backend_t * wrapped_backends, size_t num_backends);
 
 #ifdef __cplusplus
 }

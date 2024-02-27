@@ -1472,6 +1472,10 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer
     if (buft == nullptr) {
         buft = ggml_backend_cpu_buffer_type();
     }
+
+#if defined(GGML_USE_MPI)
+    buft = ggml_backend_mpi_wrap_buffer(buft);
+#endif
     return buft;
 
     GGML_UNUSED(host_buffer);
@@ -1523,6 +1527,11 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(int fallback_g
     if (buft == nullptr) {
         buft = llama_default_buffer_type_offload(fallback_gpu);
     }
+
+#if defined(GGML_USE_MPI)
+    buft = ggml_backend_mpi_wrap_buffer(buft);
+#endif
+
     return buft;
 
     GGML_UNUSED(tensor_split);
@@ -4978,11 +4987,6 @@ static bool llm_load_tensors(
             }
         }
 
-#ifdef GGML_USE_MPI
-        if (buf == nullptr) {
-            continue;
-        }
-#endif
         if (buf == nullptr) {
             throw std::runtime_error("failed to allocate buffer");
         }
@@ -13004,12 +13008,13 @@ struct llama_context * llama_new_context_with_model(
 
 #ifdef GGML_USE_MPI
 
-        for(auto & backend : ctx->backends) {
-            backend = ggml_backend_mpi_init(backend);
+        ctx->backends = {ggml_backend_mpi_init(ctx->backends.data(), ctx->backends.size())};
 
-        }
 
-        ctx->backend_cpu = ctx->backends.back();
+
+//        ctx->backend_cpu = ctx->backends.back();
+        ctx->backends.push_back(ctx->backend_cpu);
+
 #endif
 
         if (!llama_kv_cache_init(ctx->kv_self, ctx->model, type_k, type_v, kv_size, cparams.offload_kqv)) {

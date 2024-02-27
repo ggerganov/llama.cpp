@@ -23,6 +23,8 @@ struct ggml_mpi_context {
     struct ggml_tensor *inp0;
     std::string name;
     struct ggml_backend * wrapped_backend;
+    std::vector<ggml_backend_t> backends;
+    ggml_backend_sched_t scheduler;
 };
 
 void ggml_mpi_backend_init(void) {
@@ -35,7 +37,7 @@ void ggml_mpi_backend_free(void) {
 }
 
 struct ggml_mpi_context * ggml_mpi_init(void) {
-    auto * ctx = static_cast<ggml_mpi_context *>(calloc(1, sizeof(struct ggml_mpi_context)));
+    auto * ctx = new ggml_mpi_context;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &ctx->rank);
     MPI_Comm_size(MPI_COMM_WORLD, &ctx->size);
@@ -300,7 +302,7 @@ void ggml_mpi_graph_compute_pre(
         return;
     }
 
-    struct ggml_tensor * inp0 = ggml_graph_get_tensor(gf, "layer_inp_0");
+    struct ggml_tensor * inp0 = gf->nodes[0];
     if (inp0 == NULL) {
         fprintf(stderr, "%s: tensor 'inp0' not found\n", __func__);
         return;
@@ -342,24 +344,108 @@ void ggml_mpi_graph_compute_post(
 
 // BACKEND V2
 
+struct ggml_backend_mpi_buffer_type_context {
+    std::string name;
+    ggml_backend_buffer_type_t wrapped_buffer;
+};
+
+GGML_CALL static const char * ggml_backend_mpi_buffer_type_name(ggml_backend_buffer_type_t buft);
+
 GGML_CALL static bool ggml_backend_mpi_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
 
     struct ggml_mpi_context * ctx = (ggml_mpi_context *) backend->context;
 
     ggml_mpi_graph_compute_pre(ctx, cgraph);
 
-    ggml_backend_t wrapped_backend = ctx->wrapped_backend;
-    bool ret = ggml_backend_graph_compute(wrapped_backend, cgraph);
+    std::vector<ggml_backend_buffer_type_t> backend_buft;
+    for (auto *curr_backend : ctx->backends) {
+        if (ggml_backend_is_cpu(curr_backend)) {
+            // use host buffers for the CPU backend compute buffer
+            backend_buft.push_back(ggml_backend_cpu_buffer_type());
+        } else {
+            backend_buft.push_back(ggml_backend_get_default_buffer_type(curr_backend));
+        }
+    }
+
+//    ggml_backend_t wrapped_backend = ctx->wrapped_backend;
+//    bool ret = ggml_backend_graph_compute(wrapped_backend, cgraph);
+    printf("Running MPI backend\n");
+
+    std::vector<std::pair<ggml_backend_buffer_type_t, std::vector<ggml_backend_buffer_type_t>> > old_buffs(cgraph->n_nodes);
+    std::vector<ggml_backend_buffer_type_t> old_view_buffs(cgraph->n_nodes);
+    for (int i = 0; i < cgraph->n_nodes; i++) {
+        old_buffs.push_back({cgraph->nodes[i]->buffer->buft,{}});
+        if (cgraph->nodes[i]->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+            cgraph->nodes[i]->buffer->buft = ((ggml_backend_mpi_buffer_type_context *) cgraph->nodes[i]->buffer->buft->context)->wrapped_buffer;
+            printf("Unwrapped buffer: %s\n", cgraph->nodes[i]->buffer->buft->iface.get_name(cgraph->nodes[i]->buffer->buft));
+        }
+
+        for (auto & src : cgraph->nodes[i]->src) {
+            if (src == nullptr) {
+                break;
+            }
+            old_buffs[i].second.push_back(src->buffer->buft);
+            if (src->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+                src->buffer->buft = ((ggml_backend_mpi_buffer_type_context *) src->buffer->buft->context)->wrapped_buffer;
+                printf("Unwrapped buffer src: %s\n", src->buffer->buft->iface.get_name(src->buffer->buft));
+            }
+        }
+
+        auto *src = cgraph->nodes[i]->view_src;
+        if(src != nullptr && src->buffer->buft != nullptr){
+            old_view_buffs[i] = src->buffer->buft;
+            if (src->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+                src->buffer->buft = ((ggml_backend_mpi_buffer_type_context *) src->buffer->buft->context)->wrapped_buffer;
+                printf("Unwrapped view buffer src: %s\n", src->buffer->buft->iface.get_name(src->buffer->buft));
+            }
+        }
+    }
+
+
+    std::vector<ggml_backend_buffer_type_t > old_buffs_leaves;
+    for (int i = 0; i < cgraph->n_leafs; i++) {
+        old_buffs_leaves.push_back(cgraph->leafs[i]->buffer->buft);
+        if (cgraph->leafs[i]->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+            cgraph->leafs[i]->buffer->buft = ((ggml_backend_mpi_buffer_type_context *) cgraph->leafs[i]->buffer->buft->context)->wrapped_buffer;
+            printf("Unwrapped buffer: %s\n", cgraph->leafs[i]->buffer->buft->iface.get_name(cgraph->leafs[i]->buffer->buft));
+        }
+    }
+
+    ggml_backend_sched_t sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(), ctx->backends.size(), cgraph->n_nodes);
+
+
+    printf("Created new scheduler\n");
+    ggml_backend_sched_init_measure(sched, cgraph);
+    printf("Beginning sched graph compute\n");
+    ggml_backend_sched_graph_compute(sched, cgraph);
+
+    for (int i = 0; i < cgraph->n_nodes; i++) {
+        cgraph->nodes[i]->buffer->buft = old_buffs[i].first;
+        for (int j = 0; j < GGML_MAX_SRC; j++) {
+            if (cgraph->nodes[i]->src[j] == nullptr) {
+                break;
+            }
+            cgraph->nodes[i]->src[j]->buffer->buft = old_buffs[i].second[j];
+        }
+        if(cgraph->nodes[i]->view_src != nullptr && cgraph->nodes[i]->view_src->buffer->buft != nullptr) {
+            cgraph->nodes[i]->view_src->buffer->buft = old_view_buffs[i];
+        }
+
+    }
+
+    for (int i = 0; i < cgraph->n_leafs; i++) {
+        cgraph->leafs[i]->buffer->buft = old_buffs_leaves[i];
+    }
+
 
     ggml_mpi_graph_compute_post(ctx, cgraph);
 
-    return ret;
+    return true;
 }
 
 
 static const char * ggml_backend_mpi_name(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
-    return ctx->wrapped_backend->iface.get_name(backend);
+    return "MPI";
 }
 
 static void ggml_backend_mpi_free(ggml_backend_t backend) {
@@ -372,7 +458,9 @@ static void ggml_backend_mpi_free(ggml_backend_t backend) {
 }
 
 static ggml_backend_buffer_type_t ggml_backend_mpi_get_default_buffer_type(ggml_backend_t backend) {
-    return ggml_backend_cpu_buffer_type();
+    auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
+
+    return ggml_backend_mpi_wrap_buffer(ctx->backends.back()->iface.get_default_buffer_type(ctx->backends.back()));
 }
 
 GGML_CALL static bool ggml_backend_mpi_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
@@ -411,19 +499,98 @@ std::vector<ggml_mpi_device> ggml_mpi_available_devices_internal() {
     return devices;
 }
 
-ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_type_t buft) {
-    auto* ggml_backend_wrapped_buffer_type = new ggml_backend_buffer_type{
-            /* .iface    = */ buft->iface,
-            /* .context  = */ buft->context,
+
+
+GGML_CALL bool ggml_backend_is_mpi(ggml_backend_t backend) {
+    return backend && backend->iface.get_name == ggml_backend_mpi_name;
+}
+
+
+GGML_CALL static const char * ggml_backend_mpi_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    auto * ctx = (ggml_backend_mpi_buffer_type_context *) buft->context;
+
+    return strdup(((ctx->name + ":") + std::string(ctx->wrapped_buffer->iface.get_name(ctx->wrapped_buffer))).c_str());
+}
+
+GGML_CALL static ggml_backend_buffer_t ggml_backend_mpi_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    auto * ctx = (ggml_backend_mpi_buffer_type_context *) buft->context;
+    ggml_backend_buffer_t buf = ctx->wrapped_buffer->iface.alloc_buffer(ctx->wrapped_buffer, size);
+    buf->buft = ggml_backend_mpi_wrap_buffer(buf->buft);
+    return buf;
+}
+
+GGML_CALL static size_t ggml_backend_mpi_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
+    auto * ctx = (ggml_backend_mpi_buffer_type_context *) buft->context;
+    return ctx->wrapped_buffer->iface.get_alignment(ctx->wrapped_buffer);
+}
+
+GGML_CALL static size_t ggml_backend_mpi_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
+    auto * ctx = (ggml_backend_mpi_buffer_type_context *) buft->context;
+    return ctx->wrapped_buffer->iface.get_max_size(ctx->wrapped_buffer);
+}
+
+GGML_CALL static size_t ggml_backend_mpi_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const struct ggml_tensor * tensor) {
+    auto * ctx = (ggml_backend_mpi_buffer_type_context *) buft->context;
+    return ctx->wrapped_buffer->iface.get_alloc_size(ctx->wrapped_buffer, tensor);
+}
+
+GGML_CALL static bool ggml_backend_mpi_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
+    return backend != nullptr && ggml_backend_is_mpi(backend);
+}
+
+GGML_CALL static bool ggml_backend_mpi_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
+    auto * ctx = (ggml_backend_mpi_buffer_type_context *) buft->context;
+
+    return ctx->wrapped_buffer->iface.is_host(ctx->wrapped_buffer);
+}
+
+
+static std::map<ggml_backend_buffer_type_t, ggml_backend_buffer_type_t> cached_wrappers;
+
+static std::map<ggml_backend_t *, ggml_backend_t> cached_backends;
+
+
+GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_type_t buft) {
+
+    if (cached_wrappers.find(buft) != cached_wrappers.end()) {
+        return cached_wrappers[buft];
+    }
+
+    ggml_backend_buffer_type_i ggml_backend_mpi_buffer_type_interface = {
+            /* .get_name         = */ ggml_backend_mpi_buffer_type_name,
+            /* .alloc_buffer     = */ ggml_backend_mpi_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_mpi_buffer_type_get_alignment,
+            /* .get_max_size     = */ (buft->iface.get_max_size != nullptr ) ? ggml_backend_mpi_buffer_type_get_max_size : nullptr,
+            /* .get_alloc_size   = */ (buft->iface.get_alloc_size != nullptr ) ? ggml_backend_mpi_buffer_type_get_alloc_size : nullptr,
+            /* .supports_backend = */ ggml_backend_mpi_buffer_type_supports_backend,
+            /* .is_host          = */ (buft->iface.is_host != nullptr ) ? ggml_backend_mpi_buffer_type_is_host : nullptr,
     };
+
+    auto* ggml_backend_wrapped_buffer_type = new ggml_backend_buffer_type{
+            /* .iface    = */ ggml_backend_mpi_buffer_type_interface,
+            /* .context  = */ new ggml_backend_mpi_buffer_type_context{"MPI",buft},
+    };
+
+    cached_wrappers[buft] = ggml_backend_wrapped_buffer_type;
 
     return ggml_backend_wrapped_buffer_type;
 }
 
-ggml_backend_t ggml_backend_mpi_init(ggml_backend_t wrapped_backend) {
+ggml_backend_t ggml_backend_mpi_init(ggml_backend_t * wrapped_backends, size_t num_backends) {
+
+    if (cached_backends.find(wrapped_backends) != cached_backends.end()) {
+        return cached_backends[wrapped_backends];
+    }
+
+    ggml_mpi_context * ctx = ggml_mpi_init();
+    std::vector<ggml_backend_t> wrapped_backends_v;
+    for (size_t i = 0; i < num_backends; i++) {
+        wrapped_backends_v.push_back(wrapped_backends[i]);
+    }
+    ctx->backends = wrapped_backends_v;
 
     struct ggml_backend_i mpi_backend_i = {
-            /* .get_name                = */ wrapped_backend->iface.get_name,
+            /* .get_name                = */ ggml_backend_mpi_name,
             /* .free                    = */ ggml_backend_mpi_free,
             /* .get_default_buffer_type = */ ggml_backend_mpi_get_default_buffer_type,
             /* .set_tensor_async        = */ NULL,
@@ -437,12 +604,12 @@ ggml_backend_t ggml_backend_mpi_init(ggml_backend_t wrapped_backend) {
             /* .supports_op             = */ ggml_backend_mpi_supports_op,
     };
 
-    ggml_mpi_context * ctx = ggml_mpi_init();
-    ctx->wrapped_backend = wrapped_backend;
     auto *mpi_backend = new ggml_backend {
             /* .interface = */ mpi_backend_i,
             /* .context   = */ ctx,
     };
+
+    cached_backends[wrapped_backends] = mpi_backend;
 
     return mpi_backend;
 }
@@ -450,14 +617,13 @@ ggml_backend_t ggml_backend_mpi_init(ggml_backend_t wrapped_backend) {
 static ggml_backend_t ggml_backend_reg_mpi_init(const char * params, void * user_data) {
     // TODO check what the parameters are for. Could use it to setup the MPI comms and routes?
     GGML_UNUSED(params);
-    return ggml_backend_mpi_init(ggml_backend_cpu_init());
+    auto * v = new std::vector<ggml_backend_t>();
+    v->push_back(ggml_backend_cpu_init());
+    return ggml_backend_mpi_init(v->data(), 1);
 }
 
 
 
-ggml_backend_buffer_type_t ggml_backend_mpi_buffer_type() {
-    return ggml_backend_cpu_buffer_type();
-}
 
 extern "C" GGML_CALL int ggml_backend_mpi_reg_devices();
 
@@ -467,7 +633,7 @@ int ggml_backend_mpi_reg_devices() {
         ggml_backend_register(
                 device.name,
                 ggml_backend_reg_mpi_init,
-                ggml_backend_mpi_buffer_type(),
+                ggml_backend_mpi_wrap_buffer(ggml_backend_cpu_buffer_type()),
                 reinterpret_cast<void *>(intptr_t(device.index))
         );
     }
