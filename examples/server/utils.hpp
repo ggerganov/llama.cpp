@@ -144,7 +144,7 @@ static inline void server_log(const char *level, const char *function, int line,
     };
 
     // freopen("/dev/null", "w", stdout);
-    freopen("/dev/null", "w", stderr);
+    freopen("/dev/null", "w", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
 
     if (server_log_json) {
         log.merge_patch(
@@ -157,9 +157,9 @@ static inline void server_log(const char *level, const char *function, int line,
         if (!extra.empty()) {
             log.merge_patch(extra);
         }
+        std::cerr << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;    // was originally std:cout
 
-        std::cerr << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
-    } else {
+    } else {                // store the logs in (because not json) text format
         char buf[1024];
         snprintf(buf, 1024, "\033[85;0H%4s [%24s] %s", level, function, message);
 
@@ -177,10 +177,10 @@ static inline void server_log(const char *level, const char *function, int line,
 
         const std::string str = ss.str();
         printf("\033[85;0H%.*s\n", (int)str.size(), str.data());
-        fflush(stderr);
+        fflush(stderr);                                             // was originally fflush(stdout)
 
-        // freopen("/dev/tty", "a", stdout);
-        // freopen("/dev/tty", "a", stderr);
+        // freopen("/dev/tty", "a", stdout);                        // decide whether to restore stdout
+        // freopen("/dev/tty", "a", stderr);                        // decide whether to restore stderr both need automating
     }
 }
 
