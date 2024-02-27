@@ -977,6 +977,7 @@ class OutputFile:
             name = str(params.path_model.parent).split('/')[-1]
 
         self.gguf.add_name                (name)
+        self.gguf.add_vocab_size          (params.n_vocab)
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)

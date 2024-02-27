@@ -256,6 +256,7 @@ enum llm_kv {
     LLM_KV_GENERAL_SOURCE_URL,
     LLM_KV_GENERAL_SOURCE_HF_REPO,
 
+    LLM_KV_VOCAB_SIZE,
     LLM_KV_CONTEXT_LENGTH,
     LLM_KV_EMBEDDING_LENGTH,
     LLM_KV_BLOCK_COUNT,
@@ -314,6 +315,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_GENERAL_SOURCE_URL,            "general.source.url"                    },
     { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source.huggingface.repository" },
 
+    { LLM_KV_VOCAB_SIZE,                    "%s.vocab_size"            },
     { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"        },
     { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"      },
     { LLM_KV_BLOCK_COUNT,                   "%s.block_count"           },
@@ -12485,7 +12487,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
 }
 
 int32_t llama_n_vocab(const struct llama_model * model) {
-    return model->vocab.id_to_token.size();
+    return model->hparams.n_vocab;
 }
 
 int32_t llama_n_ctx_train(const struct llama_model * model) {
