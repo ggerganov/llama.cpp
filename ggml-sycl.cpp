@@ -12724,8 +12724,8 @@ static void ggml_sycl_op_mul_mat(const ggml_tensor *src0,
     const int nb2 = dst->nb[2];
     const int nb3 = dst->nb[3];
 
-    GGML_ASSERT(dst->backend != GGML_BACKEND_GPU_SPLIT);
-    GGML_ASSERT(src1->backend != GGML_BACKEND_GPU_SPLIT);
+    GGML_ASSERT(dst->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
+    GGML_ASSERT(src1->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
     GGML_ASSERT(src1->type == GGML_TYPE_F32 || (src1->ne[2] == 1 && src1->ne[3] == 1));
 
     GGML_ASSERT(ne12 >= ne02 && ne12 % ne02 == 0);
