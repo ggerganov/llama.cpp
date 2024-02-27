@@ -13401,8 +13401,8 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
             main_stream->submit([&](sycl::handler &cgh) {
                 const void **ptrs_src_get = ptrs_src.get();
                 void **ptrs_dst_get = ptrs_dst.get();
-                auto nb12_scaled = src1->type == GGML_TYPE_F16 ? nb12 : nb12 / 2;
-                auto nb13_scaled = src1->type == GGML_TYPE_F16 ? nb13 : nb13 / 2;
+                size_t nb12_scaled = src1->type == GGML_TYPE_F16 ? nb12 : nb12 / 2;
+                size_t nb13_scaled = src1->type == GGML_TYPE_F16 ? nb13 : nb13 / 2;
                 cgh.parallel_for(sycl::nd_range<3>(block_dims, block_dims),
                                  [=](sycl::nd_item<3> item_ct1) {
                                      k_compute_batched_ptrs(
