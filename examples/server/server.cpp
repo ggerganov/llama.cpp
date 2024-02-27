@@ -1336,6 +1336,10 @@ struct llama_server_context
                 split_multiprompt_task(task_id, task);
             }
         } else {
+            // an empty prompt can make slot become buggy
+            if (task.data.contains("prompt") && task.data["prompt"].is_string() && task.data["prompt"].get<std::string>().empty()) {
+                task.data["prompt"] = " "; // add a space so that we have one token
+            }
             queue_tasks.post(task);
         }
     }
