@@ -73,6 +73,7 @@
 #include <fstream>
 #include <functional>
 #include <initializer_list>
+#include <locale>
 #include <map>
 #include <memory>
 #include <mutex>
