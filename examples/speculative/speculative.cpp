@@ -38,9 +38,6 @@ int main(int argc, char ** argv) {
     // max number of parallel drafting sequences (i.e. tree branches)
     const int n_seq_dft = params.n_parallel;
 
-    // probability threshold for accepting a token from the draft model
-    const float p_accept = params.p_accept;
-
     // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
     const float p_split  = params.p_split;
 
@@ -444,12 +441,6 @@ int main(int argc, char ** argv) {
                 for (int k = 0; k < std::min(n_seq_dft + 3, (int) cur_p.size()); ++k) {
                     LOG(" - draft candidate %3d for seq %3d, pos %3d: %6d (%8.3f) '%s'\n",
                             k, s, i, cur_p[k].id, cur_p[k].p, llama_token_to_piece(ctx_dft, cur_p[k].id).c_str());
-                }
-
-                if (cur_p[0].p < p_accept) {
-                    LOG("stopping drafting for seq %3d, probability too low: %.3f < %.3f\n", s, cur_p[0].p, p_accept);
-                    drafts[s].drafting = false;
-                    continue;
                 }
 
                 std::vector<int> sa(1, s);
