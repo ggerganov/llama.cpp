@@ -68,6 +68,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cwctype>
 #include <forward_list>
 #include <fstream>
 #include <functional>
@@ -8955,14 +8956,14 @@ struct llm_tokenizer_wpm {
     }
 
     uint32_t to_lower(uint32_t code) {
-        if (
-            (code >= 0x041 && code <= 0x05A) || // latin
-            (code >= 0x391 && code <= 0x3A9) || // greek
-            (code >= 0x410 && code <= 0x42F)    // cyrillic
-        ) {
-            return code + 32;
+#if defined(_WIN32)
+        if (code > 0xFFFF) {
+            return code;
         }
-        return code;
+        return std::tolower(static_cast<wchar_t>(code), std::locale("en_US.UTF-8"));
+#else
+        return std::tolower((wchar_t)code, std::locale("en_US.UTF-8"));
+#endif
     }
 
     bool is_ascii_punct(uint32_t code) {
