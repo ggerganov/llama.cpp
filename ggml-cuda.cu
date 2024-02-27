@@ -571,6 +571,18 @@ typedef struct {
 } block_iq4_nl;
 static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
 
+// QR4_XS = 8 is very slightly faster than QR4_XS = 4
+#define QR4_XS 8
+#define QI4_XS (QK_K / (4*QR4_XS))
+typedef struct {
+    half d;
+    uint16_t scales_h;
+    uint8_t  scales_l[QK_K/64];
+    uint8_t  qs[QK_K/2];
+} block_iq4_xs;
+static_assert(sizeof(block_iq4_xs) == sizeof(ggml_fp16_t) + sizeof(uint16_t) + QK_K/64 + QK_K/2, "wrong iq4_xs block size/padding");
+
+
 #define WARP_SIZE 32
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
 
@@ -2420,6 +2432,25 @@ static __global__ void dequantize_block_iq4_nl(const void * __restrict__ vx, dst
     dst_t * y = yy + i*QK_K + 32*ib + 4*il;
     const uint8_t  * q4 = x[ib].qs + 4*il;
     const float d = (float)x[ib].d;
+    for (int j = 0; j < 4; ++j) {
+        y[j+ 0] = d * kvalues_iq4nl[q4[j] & 0xf];
+        y[j+16] = d * kvalues_iq4nl[q4[j] >>  4];
+    }
+
+}
+
+template<typename dst_t>
+static __global__ void dequantize_block_iq4_xs(const void * __restrict__ vx, dst_t * __restrict__ yy) {
+
+    const int i   = blockIdx.x;
+    const block_iq4_xs * x = (const block_iq4_xs *)vx;
+
+    const int tid = threadIdx.x;
+    const int il = tid/8; // 0...3
+    const int ib = tid%8; // 0...7
+    dst_t * y = yy + i*QK_K + 32*ib + 4*il;
+    const uint8_t  * q4 = x[i].qs + 16*ib + 4*il;
+    const float d = (float)x[i].d * ((((x[i].scales_l[ib/2] >> 4*(ib%2)) & 0xf) | (((x[i].scales_h >> 2*ib) & 3) << 4)) - 32);
     for (int j = 0; j < 4; ++j) {
         y[j+ 0] = d * kvalues_iq4nl[q4[j] & 0xf];
         y[j+16] = d * kvalues_iq4nl[q4[j] >>  4];
@@ -5286,6 +5317,76 @@ static __device__ __forceinline__ float vec_dot_iq4_nl_q8_1(
     return d * (sumi1 + sumi2);
 }
 
+static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
+
+#if QK_K == 256
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+
+    const block_iq4_xs * bq4 = (const block_iq4_xs *) vbq;
+    const uint8_t * values = (const uint8_t *)kvalues_iq4nl;
+
+    //// iqs is 0...7
+    //const int ib64 = iqs/2;
+    //const int il = iqs%2;
+    //const int32_t  * q8_1 = (const int *)bq8_1[2*ib64+0].qs + 2*il;
+    //const int32_t  * q8_2 = (const int *)bq8_1[2*ib64+1].qs + 2*il;
+    //const uint32_t * q4_1 = (const uint32_t *)bq4->qs + 8*ib64 + 2*il;
+    //const uint32_t * q4_2 = q4_1 + 4;
+    //const int8_t ls1 = (bq4->scales_l[ib64] & 0xf) | (((bq4->scales_h >> (4*ib64+0)) & 3) << 4);
+    //const int8_t ls2 = (bq4->scales_l[ib64] >>  4) | (((bq4->scales_h >> (4*ib64+2)) & 3) << 4);
+    //const float d1 = (float)bq4->d * (ls1 - 32) * __low2float(bq8_1[2*ib64+0].ds);
+    //const float d2 = (float)bq4->d * (ls2 - 32) * __low2float(bq8_1[2*ib64+1].ds);
+    //int v1, v2;
+    //int sumi1 = 0, sumi2 = 0;
+    //for (int j = 0; j < 2; ++j) {
+    //    get_int_from_table_16(q4_1[j], values, v1, v2);
+    //    sumi1 = __dp4a(v2, q8_1[j+4], __dp4a(v1, q8_1[j+0], sumi1));
+    //    get_int_from_table_16(q4_2[j], values, v1, v2);
+    //    sumi2 = __dp4a(v2, q8_2[j+4], __dp4a(v1, q8_2[j+0], sumi2));
+    //}
+    //return d1 * sumi1 + d2 * sumi2;
+
+    // iqs is 0...7
+    const int ib32 = iqs;
+    const int32_t  * q8 = (const int *)bq8_1[ib32].qs;
+    const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32;
+    const int8_t ls = ((bq4->scales_l[ib32/2] >> 4*(ib32%2)) & 0xf) | (((bq4->scales_h >> 2*ib32) & 3) << 4);
+    const float d = (float)bq4->d * (ls - 32) * __low2float(bq8_1[ib32].ds);
+    int v1, v2;
+    int sumi1 = 0, sumi2 = 0;
+    for (int j = 0; j < 4; ++j) {
+        get_int_from_table_16(q4[j], values, v1, v2);
+        sumi1 = __dp4a(v1, q8[j+0], sumi1);
+        sumi2 = __dp4a(v2, q8[j+4], sumi2);
+    }
+    return d * (sumi1 + sumi2);
+
+    //// iqs is 0...15
+    //const int ib32 = iqs/2;
+    //const int il = iqs%2;
+    //const int32_t  * q8 = (const int *)bq8_1[ib32].qs + 2*il;
+    //const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32 + 2*il;
+    //const int8_t ls = ((bq4->scales_l[ib32/2] >> 4*(ib32%2)) & 0xf) | (((bq4->scales_h >> 2*ib32) & 3) << 4);
+    //const float d = (float)bq4->d * (ls - 32) * __low2float(bq8_1[ib32].ds);
+    //int v1, v2;
+    //int sumi1 = 0, sumi2 = 0;
+    //for (int j = 0; j < 2; ++j) {
+    //    get_int_from_table_16(q4[j], values, v1, v2);
+    //    sumi1 = __dp4a(v1, q8[j+0], sumi1);
+    //    sumi2 = __dp4a(v2, q8[j+4], sumi2);
+    //}
+    //return d * (sumi1 + sumi2);
+#else
+    assert(false);
+    return 0.f;
+#endif
+#else
+    assert(false);
+    return 0.f;
+#endif
+}
+
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x, int mmq_y, int nwarps,
               allocate_tiles_cuda_t allocate_tiles, load_tiles_cuda_t load_tiles, int vdr, vec_dot_q_mul_mat_cuda_t vec_dot>
 static __device__ __forceinline__ void mul_mat_q(
@@ -7340,6 +7441,12 @@ static void dequantize_row_iq4_nl_cuda(const void * vx, dst_t * y, const int k, 
     dequantize_block_iq4_nl<<<nb, 32, 0, stream>>>(vx, y);
 }
 
+template<typename dst_t>
+static void dequantize_row_iq4_xs_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
+    const int nb = (k + QK_K - 1) / QK_K;
+    dequantize_block_iq4_xs<<<nb, 32, 0, stream>>>(vx, y);
+}
+
 template <typename src_t, typename dst_t>
 static void convert_unary_cuda(const void * __restrict__ vx, dst_t * __restrict__ y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
@@ -7385,6 +7492,8 @@ static to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
             return dequantize_row_iq1_s_cuda;
         case GGML_TYPE_IQ4_NL:
             return dequantize_row_iq4_nl_cuda;
+        case GGML_TYPE_IQ4_XS:
+            return dequantize_row_iq4_xs_cuda;
         case GGML_TYPE_IQ3_S:
             return dequantize_row_iq3_s_cuda;
         case GGML_TYPE_F32:
@@ -7428,6 +7537,8 @@ static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
             return dequantize_row_iq1_s_cuda;
         case GGML_TYPE_IQ4_NL:
             return dequantize_row_iq4_nl_cuda;
+        case GGML_TYPE_IQ4_XS:
+            return dequantize_row_iq4_xs_cuda;
         case GGML_TYPE_IQ3_S:
             return dequantize_row_iq3_s_cuda;
         case GGML_TYPE_F16:
@@ -9176,6 +9287,7 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_CUD
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
         case GGML_TYPE_IQ4_NL:
+        case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
             return max_compute_capability >= CC_RDNA2 ? 128 : 64;
         default:
@@ -9203,6 +9315,7 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_CUD
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
         case GGML_TYPE_IQ4_NL:
+        case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
             return max_compute_capability >= CC_VOLTA ? 128 : 64;
         case GGML_TYPE_Q6_K:
@@ -9311,6 +9424,10 @@ static void ggml_cuda_op_mul_mat_vec_q(
             break;
         case GGML_TYPE_IQ4_NL:
             mul_mat_vec_q_cuda<QK4_NL, QI4_NL, block_iq4_nl, VDR_Q4_0_Q8_1_MMVQ, vec_dot_iq4_nl_q8_1>
+                (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
+            break;
+        case GGML_TYPE_IQ4_XS:
+            mul_mat_vec_q_cuda<QK_K, QI4_XS, block_iq4_xs, 1, vec_dot_iq4_xs_q8_1>
                 (src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_padded_row_size, src1_ncols, nrows_dst, stream);
             break;
         case GGML_TYPE_IQ3_S:
@@ -12041,7 +12158,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                 ggml_type a_type = a->type;
                 if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ3_XXS ||
                     a_type == GGML_TYPE_IQ1_S   || a_type == GGML_TYPE_IQ4_NL || a_type == GGML_TYPE_IQ3_S   ||
-                    a_type == GGML_TYPE_IQ2_S) {
+                    a_type == GGML_TYPE_IQ2_S   || a_type == GGML_TYPE_IQ4_XS) {
                     if (b->ne[1] == 1 && ggml_nrows(b) > 1) {
                         return false;
                     }
