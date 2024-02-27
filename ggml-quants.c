@@ -10464,9 +10464,9 @@ void ggml_vec_dot_iq4_xs_q8_K(int n, float * restrict s, size_t bs, const void *
 #if defined __ARM_NEON
     const int8x16_t values = vld1q_s8(kvalues_iq4nl);
     const uint8x16_t m4b = vdupq_n_u8(0x0f);
-    uint8x16x2_t q4bits;
-    int8x16x4_t q4b;
-    int8x16x4_t q8b;
+    ggml_uint8x16x2_t q4bits;
+    ggml_int8x16x4_t q4b;
+    ggml_int8x16x4_t q8b;
     int32x4_t prod_1, prod_2;
 
     float sumf = 0;
