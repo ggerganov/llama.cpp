@@ -8150,15 +8150,12 @@ static void llama_kv_cache_defrag_internal(struct llama_context & lctx) {
             nh++;
         }
 
-        // in the worst case each move requires 6*n_layer tensors
+        // each move requires 6*n_layer tensors (see build_defrag)
+        //   - source view, destination view, copy operation
+        //   - x2 for keys and values
         //
-        // TODO: ideally this should be:
-        //
-        //         if (6*(n_moves + nh)*n_layer > LLAMA_MAX_NODES) {
-        //
-        //       but when I do that, the defrag graph can not fit due to not enough memory - not sure why
-        //
-        if (6*(n_moves + nh)*n_layer > LLAMA_MAX_NODES/2) {
+        if (6*(n_moves + nh)*n_layer >= LLAMA_MAX_NODES) {
+            // the graph is too big, we cannot move more cells
             break;
         }
 
@@ -12044,7 +12041,7 @@ struct llama_context * llama_new_context_with_model(
             }
 
             // buffer used to store the computation graph and the tensor meta data
-            ctx->buf_compute_meta.resize(ggml_tensor_overhead()*LLAMA_MAX_NODES + ggml_graph_overhead());
+            ctx->buf_compute_meta.resize(ggml_tensor_overhead()*LLAMA_MAX_NODES + ggml_graph_overhead_custom(LLAMA_MAX_NODES, false));
 
             ctx->sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(), ctx->backends.size(), LLAMA_MAX_NODES);
 
