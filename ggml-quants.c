@@ -10262,7 +10262,7 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * GGML_RESTRICT s, size_t bs, const 
 
     const int nb = n / QK_K;
 
-#if defined __ARM_NEON
+#if defined __ARM_NEON && QK_K != 64
 
     const uint8x16_t m8 = vdupq_n_u8(0x08);
     const uint8x16_t m7 = vdupq_n_u8(0x07);
