@@ -9698,8 +9698,8 @@ void ggml_vec_dot_iq2_s_q8_K(int n, float * restrict s, size_t bs, const void * 
             qs += 8;
 
             vs.val[0] = vreinterpretq_u8_u32(vdupq_n_u32(signs[0] | (signs[1] << 16)));
-            vs.val[1] = vandq_u8(vqtbl1q_u8(vs.val[0], mask1.val[1]), mask2);
-            vs.val[0] = vandq_u8(vqtbl1q_u8(vs.val[0], mask1.val[0]), mask2);
+            vs.val[1] = vandq_u8(ggml_vqtbl1q_u8(vs.val[0], mask1.val[1]), mask2);
+            vs.val[0] = vandq_u8(ggml_vqtbl1q_u8(vs.val[0], mask1.val[0]), mask2);
             vs.val[0] = vceqq_u8(vs.val[0], mask2);
             vs.val[1] = vceqq_u8(vs.val[1], mask2);
 
@@ -9707,8 +9707,8 @@ void ggml_vec_dot_iq2_s_q8_K(int n, float * restrict s, size_t bs, const void * 
             q2s.val[1] = vmulq_s8(vreinterpretq_s8_u8(vorrq_u8(vs.val[1], m1)), q2s.val[1]);
 
             vs.val[0] = vreinterpretq_u8_u32(vdupq_n_u32(signs[2] | (signs[3] << 16)));
-            vs.val[1] = vandq_u8(vqtbl1q_u8(vs.val[0], mask1.val[1]), mask2);
-            vs.val[0] = vandq_u8(vqtbl1q_u8(vs.val[0], mask1.val[0]), mask2);
+            vs.val[1] = vandq_u8(ggml_vqtbl1q_u8(vs.val[0], mask1.val[1]), mask2);
+            vs.val[0] = vandq_u8(ggml_vqtbl1q_u8(vs.val[0], mask1.val[0]), mask2);
             vs.val[0] = vceqq_u8(vs.val[0], mask2);
             vs.val[1] = vceqq_u8(vs.val[1], mask2);
 
@@ -12332,13 +12332,13 @@ size_t quantize_iq4_xs(const float * src, void * dst, int nrow, int n_per_row, i
 }
 
 void quantize_row_iq4_xs(const float * restrict x, void * restrict vy, int k) {
-    assert(k % QK4_XS == 0);
+    assert(k % QK_K == 0);
     block_iq4_xs * restrict y = vy;
     quantize_row_iq4_xs_reference(x, y, k);
 }
 
 void quantize_row_iq4_xs_reference(const float * restrict x, block_iq4_xs * restrict y, int k) {
-    assert(k % QK4_XS == 0);
+    assert(k % QK_K == 0);
     quantize_iq4_xs(x, y, 1, k, NULL, NULL);
 }
 
