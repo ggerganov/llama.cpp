@@ -306,7 +306,11 @@ struct llama_client_slot
     }
 
     void print_timings() const {
-       char buffer[512];
+        char buffer[512];
+        std::string stdout_target;
+        std::string stdout_reset;
+        std::string stderr_target;
+        std::string stderr_reset;
         double t_token = t_prompt_processing / num_prompt_tokens_processed;
         double n_tokens_second = 1e3 / t_prompt_processing * num_prompt_tokens_processed;
         printf("\033[72;0H]");
@@ -319,7 +323,7 @@ struct llama_client_slot
             {"t_prompt_processing",         t_prompt_processing},
             {"num_prompt_tokens_processed", num_prompt_tokens_processed},
             {"t_token",                     t_token},
-            {"n_tokens_second",             n_tokens_second},
+            {"n_tokens_second",             n_tokens_second}
         });
 
         t_token = t_token_generation / n_decoded;
@@ -334,7 +338,7 @@ struct llama_client_slot
             {"t_token_generation", t_token_generation},
             {"n_decoded",          n_decoded},
             {"t_token",            t_token},
-            {"n_tokens_second",    n_tokens_second},
+            {"n_tokens_second",    n_tokens_second}
         });
 
         printf("\033[5;0H]");
@@ -344,7 +348,7 @@ struct llama_client_slot
             {"task_id",             task_id},
             {"t_prompt_processing", t_prompt_processing},
             {"t_token_generation",  t_token_generation},
-            {"t_total",             t_prompt_processing + t_token_generation},
+            {"t_total",             t_prompt_processing + t_token_generation}
         });
     }
 };
@@ -968,7 +972,7 @@ struct llama_server_context
 
         LOG_INFO("slot is processing task", {
             {"slot_id", slot->id},
-            {"task_id", slot->task_id},
+            {"task_id", slot->task_id}
         });
 
         return true;
@@ -2894,7 +2898,7 @@ static void log_server_request(const httplib::Request &req, const httplib::Respo
         {"status",      res.status},
         {"method",      req.method},
         {"path",        req.path},
-        {"params",      req.params},
+        {"params",      req.params}
     });
 
     LOG_VERBOSE("request", {
@@ -2959,7 +2963,7 @@ int main(int argc, char **argv)
                                 {"n_threads", params.n_threads},
                                 {"n_threads_batch", params.n_threads_batch},
                                 {"total_threads", std::thread::hardware_concurrency()},
-                                {"system_info", llama_print_system_info()},
+                                {"system_info", llama_print_system_info()}
                             });
 
     httplib::Server svr;

@@ -33,9 +33,66 @@ extern bool server_log_json;
     } while (0)
 #endif
 
-#define LOG_ERROR(  MSG, ...) server_log("ERR",  __func__, __LINE__, MSG, __VA_ARGS__)
-#define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
-#define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
+// ATTEMPT TO REFACTOR THE LOGGING BEHAVIOUR AND ALLOW REDIRECTION OF STDOUT, STDERR
+
+struct LogRedirection {
+  // Set default values for redirection targets and reset strings
+  std::string stdout_target = "stdout_log.log";
+  std::string stdout_reset = "dev/tty";
+  std::string stderr_target = "stderr_log.log";
+  std::string stderr_reset = "dev/tty";
+};
+
+LogRedirection log_settings;
+
+#define LOG_ERROR(MSG, ...) \
+    server_log("ERR", __func__, __LINE__, MSG, __VA_ARGS__, \
+               log_settings.stdout_target, log_settings.stdout_reset, \
+               log_settings.stderr_target, log_settings.stderr_reset)
+
+#define LOG_WARNING(MSG, ...) \
+    server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__, \
+               log_settings.stdout_target, log_settings.stdout_reset, \
+               log_settings.stderr_target, log_settings.stderr_reset)
+
+#define LOG_INFO(MSG, ...) \
+    server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__, \
+               log_settings.stdout_target, log_settings.stdout_reset, \
+               log_settings.stderr_target, log_settings.stderr_reset)
+
+/*
+// Example usage:
+LogRedirection default_settings;  // Use defaults
+LogRedirection custom_settings;
+
+// Modify values for custom settings if needed
+custom_settings.stdout_target = "/tmp/custom.log";
+
+LOG_ERROR("Default error", "Details", default_settings);
+LOG_ERROR("Custom error", "More info", custom_settings);
+
+
+Yes, using the LogRedirection struct approach eliminates the need to explicitly declare the extra variables for redirection targets and reset strings each time you call LOG_ERROR. Here's how it works:
+
+1. Redirection Settings Encapsulated: The LogRedirection struct holds these settings, making them reusable and adaptable.
+2. Default Values: The struct's members have default values defined, serving as fallbacks.
+3. Macro Handles Settings: The LOG_ERROR macro takes a LogRedirection object and passes its members to the server_log function.
+
+Example:
+
+LOG_ERROR("Default error", {});  // Uses defaults from an empty LogRedirection object
+
+This compact usage is possible because:
+
+{} creates a temporary LogRedirection object with its members implicitly initialized to the default values.
+The macro passes those defaults to server_log, achieving the desired behavior without requiring explicit variable declarations at every call.
+Customization:
+
+When needed, you can create a LogRedirection object with specific values and pass it to LOG_ERROR for tailored logging behaviour:
+
+LogRedirection custom_settings = {.stdout_target = "/tmp/my_log.out"};
+LOG_ERROR("Custom error", "Details", custom_settings);
+*/
 
 //
 // parallel
@@ -78,7 +135,7 @@ struct task_multi {
     std::vector<task_result> results{};
 };
 
-// TODO: can become bool if we can't find use of more states
+// TODO: can become bool if we can't find use of more states; MAYBE there is a case for RESERVED to keep slots dedicated to chats?
 enum slot_state
 {
     IDLE,
@@ -134,7 +191,20 @@ struct completion_token_output
     std::string text_to_send;
 };
 
-static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
+static inline void server_log(
+    const char *level,
+    const char *function,
+    int line,
+    const char *message,
+    const nlohmann::ordered_json &extra,
+    // specify targets and resets for stdout and stderr;
+    // this allows different behaviour for LOG_ERROR, LOG_WARNING and LOG_INFO
+                 // destination for stdout redirection e.g. a file or "dev/null"
+    std::string stdout_target = "dev/stdout",
+    std::string stderr_target = "dev/tty",                // destination for stderr redirection
+    std::string stdout_reset = "dev/stderr",              // reset for stdout e.g. "dev/tty"
+    std::string stderr_reset = "dev/tty"
+)
 {
     std::stringstream ss_tid;
     ss_tid << std::this_thread::get_id();
@@ -143,8 +213,8 @@ static inline void server_log(const char *level, const char *function, int line,
         {"timestamp", time(nullptr)},
     };
 
-    // freopen("/dev/null", "w", stdout);
-    freopen("/dev/null", "w", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
+    freopen(stdout_target.c_str(), "a", stdout);
+    freopen(stderr_target.c_str(), "w", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
 
     if (server_log_json) {
         log.merge_patch(
@@ -177,10 +247,10 @@ static inline void server_log(const char *level, const char *function, int line,
 
         const std::string str = ss.str();
         printf("\033[85;0H%.*s\n", (int)str.size(), str.data());
-        fflush(stderr);                                             // was originally fflush(stdout)
+        fflush(stderr);                                                // was originally fflush(stdout)
 
-        // freopen("/dev/tty", "a", stdout);                        // decide whether to restore stdout
-        // freopen("/dev/tty", "a", stderr);                        // decide whether to restore stderr both need automating
+        freopen(stdout_reset.c_str(), "a", stdout);                    // decide whether to restore stdout
+        freopen(stderr_reset.c_str(), "a", stderr);                    // decide whether to restore stderr (both need automating)
     }
 }
 
