@@ -8961,10 +8961,8 @@ struct llm_tokenizer_wpm {
         if (code > 0xFFFF) {
             return code;
         }
-        return std::tolower(static_cast<wchar_t>(code), std::locale("en_US.UTF-8"));
-#else
-        return std::tolower((wchar_t)code, std::locale("en_US.UTF-8"));
 #endif
+        return std::tolower(wchar_t(code), std::locale("en_US.UTF-8"));
     }
 
     bool is_ascii_punct(uint32_t code) {
