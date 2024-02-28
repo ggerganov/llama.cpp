@@ -10291,7 +10291,8 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * GGML_RESTRICT s, size_t bs, const 
 
     const int nb = n / QK_K;
 
-#if defined __ARM_NEON && QK_K != 64
+    // TODO: implement for QK_K = 64
+#if defined __ARM_NEON && QK_K == 256
 
     const uint8x16_t m8 = vdupq_n_u8(0x08);
     const uint8x16_t m7 = vdupq_n_u8(0x07);
@@ -10348,7 +10349,8 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * GGML_RESTRICT s, size_t bs, const 
 
     *s = sumf;
 
-#elif defined __AVX2__
+    // TODO: implement for QK_K = 64
+#elif defined __AVX2__ && QK_K == 256
 
     const __m128i m8 = _mm_set1_epi8(0x08);
     const __m128i m7 = _mm_set1_epi8(0x07);
