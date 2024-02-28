@@ -8,10 +8,11 @@ import json
 import os
 import re
 import sys
+import transformers
 from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ContextManager, Iterator, Sequence, cast
-
+from transformers import GemmaModel
 import numpy as np
 import torch
 
