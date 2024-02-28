@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: Copyright 2024 Arm Ltd.
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
@@ -4357,6 +4358,32 @@ struct llama_model_loader {
                     }
                 }
             }
+
+#if defined(__ARM_NEON) || defined(__ARM_FEATURE_SVE) || defined(__ARM_FEATURE_MATMUL_INT8)
+            if ((cur->type == GGML_TYPE_Q4_0) && (cur->ne[1] % 4 == 0)) {
+                cur->weight_rearranged = true;
+#if defined(__ARM_NEON) || defined(__ARM_FEATURE_SVE)
+                rearrange_q4_0_weights_for_gemv(cur); // rearrange weights for Arm Neon/SVE GEMV kernels
+#endif
+#if defined(__ARM_FEATURE_MATMUL_INT8)
+                rearrange_q4_0_weights_for_gemm(cur); // rearrange weights for GEMM MMLA kernels
+#endif
+            }
+            else if ((cur->type == GGML_TYPE_Q8_0) && (cur->ne[1] % 4 == 0)) {
+                cur->weight_rearranged = true;
+#if defined(__ARM_NEON) || defined(__ARM_FEATURE_SVE)
+                rearrange_q8_0_weights_for_gemv(cur); // rearrange weights for Arm Neon/SVE GEMV kernels
+#endif
+#if defined(__ARM_FEATURE_MATMUL_INT8)
+                rearrange_q8_0_weights_for_gemm(cur); // rearrange weights for GEMM MMLA kernels
+#endif
+            }
+            else {
+                cur->weight_rearranged = false;
+            }
+#else
+            cur->weight_rearranged = false;
+#endif
 
             size_done += n_size;
         }

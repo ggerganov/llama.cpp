@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: Copyright 2024 Arm Ltd.
 #pragma once
 
 #include "ggml.h"
@@ -608,6 +609,10 @@ static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
 #endif // __F16C__
 
 #endif // defined(__ARM_NEON) && (!defined(__MSC_VER)
+
+#ifdef __ARM_FEATURE_SVE
+#include <arm_sve.h>
+#endif // __ARM_FEATURE_SVE
 
 // precomputed f32 table for f16 (256 KB)
 // defined in ggml.c, initialized in ggml_init()

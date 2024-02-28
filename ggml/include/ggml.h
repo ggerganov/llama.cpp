@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: Copyright 2024 Arm Ltd.
 #pragma once
 
 //
@@ -602,6 +603,11 @@ extern "C" {
         void * extra; // extra things e.g. for ggml-cuda.cu
 
         // char padding[4];
+        char padding[9];
+
+        void * rearranged_weight_gemv;
+        void * rearranged_weight_gemm;
+        bool weight_rearranged;
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
@@ -2421,6 +2427,15 @@ extern "C" {
     } ggml_type_traits_t;
 
     GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
+
+    GGML_API void rearrange_q4_0_weights_blocked8_neon(struct ggml_tensor * cur);
+    GGML_API void rearrange_q4_0_weights_blocked8_sve(struct ggml_tensor * cur);
+    GGML_API void rearrange_q4_0_weights_for_gemv(struct ggml_tensor * cur);
+    GGML_API void rearrange_q4_0_weights_for_gemm(struct ggml_tensor * cur);
+    GGML_API void rearrange_q8_0_weights_blocked8_neon(struct ggml_tensor * cur);
+    GGML_API void rearrange_q8_0_weights_blocked8_sve(struct ggml_tensor * cur);
+    GGML_API void rearrange_q8_0_weights_for_gemv(struct ggml_tensor * cur);
+    GGML_API void rearrange_q8_0_weights_for_gemm(struct ggml_tensor * cur);
 
 #ifdef  __cplusplus
 }
