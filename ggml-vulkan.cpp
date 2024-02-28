@@ -1106,7 +1106,9 @@ void ggml_vk_instance_init() {
 
     const std::vector<vk::ExtensionProperties> instance_extensions = vk::enumerateInstanceExtensionProperties();
     const bool validation_ext = ggml_vk_instance_validation_ext_available(instance_extensions);
+#ifdef __APPLE__
     const bool portability_enumeration_ext = ggml_vk_instance_portability_enumeration_ext_available(instance_extensions);
+#endif
 
     std::vector<const char*> layers;
 
@@ -1117,13 +1119,17 @@ void ggml_vk_instance_init() {
     if (validation_ext) {
         extensions.push_back("VK_EXT_validation_features");
     }
+#ifdef __APPLE__
     if (portability_enumeration_ext) {
         extensions.push_back("VK_KHR_portability_enumeration");
     }
+#endif
     vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags{}, &app_info, layers, extensions);
+#ifdef __APPLE__
     if (portability_enumeration_ext) {
         instance_create_info.flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
     }
+#endif
 
     std::vector<vk::ValidationFeatureEnableEXT> features_enable;
     vk::ValidationFeaturesEXT validation_features;
