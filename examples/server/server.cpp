@@ -608,7 +608,7 @@ struct llama_server_context
         default_generation_settings_for_props = get_formatted_generation(slots.front());
         default_generation_settings_for_props["seed"] = -1;
 
-        batch = llama_batch_init(n_ctx_slot, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
+        batch = llama_batch_init(n_ctx, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
@@ -1563,7 +1563,7 @@ struct llama_server_context
                 if (slot == nullptr)
                 {
                     // if no slot is available, we defer this task for processing later
-                    LOG_VERBOSE("no slot is available", {{"task_id", task.id}});
+                    LOG_VERBOSE("no slot is available", {"task_id", task.id});
                     queue_tasks.defer(task);
                     break;
                 } else {
@@ -3222,24 +3222,13 @@ int main(int argc, char **argv)
             return true;
         }
 
-        // Check for API key in the header
+        // Check for API key in the header (TODO: need to add username eventually but ...)
         auto auth_header = req.get_header_value("Authorization");
         std::string prefix = "Bearer ";
         if (auth_header.substr(0, prefix.size()) == prefix) {
             std::string received_api_key = auth_header.substr(prefix.size());
             LOG("Received API key = %s\n", received_api_key.c_str());
-            /*
-            for (int i = 0; i < int(sparams.api_keys.size()); i++) {
-                // for some reason the file apikeys are one character longer than those passed from Bearer so we shorten them
-                std::string uncut_api = sparams.api_keys[i]; // store original apikey
-                std::string cut_api = uncut_api.substr(0, uncut_api.size() - 1);    // do not shorten in-place by using erase
-                if (received_api_key != cut_api) {
-                    LOG("%s != %s and length left = %zu, length right = %zu\n", received_api_key.c_str(), cut_api.c_str(),received_api_key.size(), cut_api.size());
-                } else if (received_api_key == cut_api) {
-                    LOG("%s = %s Found matching api key.\n", received_api_key.c_str(), cut_api.c_str());
-                    return true;
-                }
-                */
+
             for (auto& item : sparams.api_keys) {
                 std::string username = item.first;
                 std::string apikey = item.second[0];
@@ -3250,9 +3239,6 @@ int main(int argc, char **argv)
                     }
                 }
             }
-            //if (std::find(sparams.api_keys.begin(), sparams.api_keys.end(), received_api_key) != sparams.api_keys.end()) {
-            //    return true; // API key is valid
-            //}
 
         // API key is invalid or not provided
         res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");

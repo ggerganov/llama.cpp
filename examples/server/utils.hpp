@@ -16,21 +16,23 @@ using json = nlohmann::json;
 extern bool server_verbose;
 extern bool server_log_json;
 
-#ifndef SERVER_VERBOSE
+#ifndef SERVER_VERBOSE          // if not defined externally above, make it true and enable verbose logging
 #define SERVER_VERBOSE 1
 #endif
 
 #if SERVER_VERBOSE != 1
-#define LOG_VERBOSE(MSG, ...)
+#define LOG_VERBOSE(MSG, ...)   // if not verbose logging just return empty
 #else
 #define LOG_VERBOSE(MSG, ...)                                            \
     do                                                                   \
     {                                                                    \
         if (server_verbose)                                              \
         {                                                                \
-            server_log("VERB", __func__, __LINE__, MSG, __VA_ARGS__); \
+            server_log("VERB", __func__, __LINE__, MSG, __VA_ARGS__,     \
+               log_settings.stdout_target, log_settings.stdout_reset,    \
+               log_settings.stderr_target, log_settings.stderr_reset);   \
         }                                                                \
-    } while (0)
+    } while (0)     // this is always false so the loop only compiles once but is treated as a single statement
 #endif
 
 // ATTEMPT TO REFACTOR THE LOGGING BEHAVIOUR AND ALLOW REDIRECTION OF STDOUT, STDERR
@@ -38,9 +40,9 @@ extern bool server_log_json;
 struct LogRedirection {
   // Set default values for redirection targets and reset strings
   std::string stdout_target = "stdout_log.log";
-  std::string stdout_reset = "dev/tty";
+  std::string stdout_reset = "stdout";
   std::string stderr_target = "stderr_log.log";
-  std::string stderr_reset = "dev/tty";
+  std::string stderr_reset = "stderr";
 };
 
 LogRedirection log_settings;
@@ -61,14 +63,14 @@ LogRedirection log_settings;
                log_settings.stderr_target, log_settings.stderr_reset)
 
 /*
-// Example usage:
-LogRedirection default_settings;  // Use defaults
+// Example usage (WIP):
+LogRedirection default_settings;  // Use defaults but not necessary to say so
 LogRedirection custom_settings;
 
 // Modify values for custom settings if needed
-custom_settings.stdout_target = "/tmp/custom.log";
+log_settings.stdout_target = "/tmp/custom.log";
 
-LOG_ERROR("Default error", "Details", default_settings);
+LOG_ERROR("Default error", "Details", default_settings);    // can omit default_settings because it will default to log_settings unmodified
 LOG_ERROR("Custom error", "More info", custom_settings);
 
 
@@ -197,13 +199,12 @@ static inline void server_log(
     int line,
     const char *message,
     const nlohmann::ordered_json &extra,
-    // specify targets and resets for stdout and stderr;
+    // targets and resets for stdout and stderr are specified in LogRedirection above;
     // this allows different behaviour for LOG_ERROR, LOG_WARNING and LOG_INFO
-                 // destination for stdout redirection e.g. a file or "dev/null"
-    std::string stdout_target = "dev/stdout",
-    std::string stderr_target = "dev/tty",                // destination for stderr redirection
-    std::string stdout_reset = "dev/stderr",              // reset for stdout e.g. "dev/tty"
-    std::string stderr_reset = "dev/tty"
+    std::string stdout_target,
+    std::string stderr_target,
+    std::string stdout_reset,
+    std::string stderr_reset
 )
 {
     std::stringstream ss_tid;
@@ -214,7 +215,7 @@ static inline void server_log(
     };
 
     freopen(stdout_target.c_str(), "a", stdout);
-    freopen(stderr_target.c_str(), "w", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
+    freopen(stderr_target.c_str(), "a", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
 
     if (server_log_json) {
         log.merge_patch(
@@ -227,7 +228,7 @@ static inline void server_log(
         if (!extra.empty()) {
             log.merge_patch(extra);
         }
-        std::cerr << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;    // was originally std:cout
+        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;    // was originally std:cout
 
     } else {                // store the logs in (because not json) text format
         char buf[1024];
@@ -276,8 +277,7 @@ inline bool verify_custom_template(const std::string & tmpl) {
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages)
-{
+inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
     size_t alloc_size = 0;
     // vector holding all allocated string to be passed to llama_chat_apply_template
     std::vector<std::string> str(messages.size() * 2);
@@ -305,7 +305,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     }
 
     std::string formatted_chat(buf.data(), res);
-    LOG_VERBOSE("formatted_chat", {{"text", formatted_chat.c_str()}});
+    LOG_VERBOSE("formatted_chat", {"text", formatted_chat.c_str()});
 
     return formatted_chat;
 }
@@ -333,7 +333,7 @@ struct llama_server_queue {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         if (task.id == -1) {
             task.id = id++;
-            LOG_VERBOSE("new task id", {{"new_id", task.id}});
+            LOG_VERBOSE("new task id", {"new_id", task.id});
         }
         queue_tasks.push_back(std::move(task));
         //LOG("Queue now has %2zu members.\n", queue_tasks.size());
@@ -352,7 +352,7 @@ struct llama_server_queue {
     int get_new_id() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         int new_id = id++;
-        LOG_VERBOSE("new task id", {{"new_id", new_id}});
+        LOG_VERBOSE("new task id", {"new_id", new_id});
         return new_id;
     }
 
@@ -410,7 +410,7 @@ struct llama_server_queue {
                     task_server task = queue_tasks.front();
                     queue_tasks.erase(queue_tasks.begin());
                     lock.unlock();
-                    LOG_VERBOSE("callback_new_task", {{"task_id", task.id}});
+                    LOG_VERBOSE("callback_new_task", {"task_id", task.id});
                     callback_new_task(task);
                 }
                 // process and update all the multitasks
@@ -490,14 +490,14 @@ struct llama_server_response {
     std::condition_variable condition_results;
 
     void add_waiting_task_id(int task_id) {
-        LOG_VERBOSE("waiting for task id", {{"task_id", task_id}});
+        LOG_VERBOSE("waiting for task id", {"task_id", task_id});
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
         LOG("Waiting task list size after addition: %2zu.\n", waiting_task_ids.size());
     }
 
     void remove_waiting_task_id(int task_id) {
-        LOG_VERBOSE("remove waiting for task id", {{"task_id", task_id}});
+        LOG_VERBOSE("remove waiting for task id", {"task_id", task_id});
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(task_id);
         LOG("Waiting task list size after removal: %zu.\n", waiting_task_ids.size());
@@ -535,20 +535,20 @@ struct llama_server_response {
     // Send a new result to a waiting task_id
     void send(task_result result) {
         std::unique_lock<std::mutex> lock(mutex_results);
-        LOG_VERBOSE("send new result", {{"task_id", result.id}});
+        LOG_VERBOSE("send new result", {"task_id", result.id});
         for (auto& task_id : waiting_task_ids) {
             // LOG("waiting task id %i \n", task_id);
             // for now, tasks that have associated parent multitasks just get erased once multitask picks up the result
             if (result.multitask_id == task_id)
             {
-                LOG_VERBOSE("callback_update_multitask", {{"task_id", task_id}});
+                LOG_VERBOSE("callback_update_multitask", {"task_id", task_id});
                 callback_update_multitask(task_id, result.id, result);
                 continue;
             }
 
             if (result.id == task_id)
             {
-                LOG_VERBOSE("queue_results.push_back", {{"task_id", task_id}});
+                LOG_VERBOSE("queue_results.push_back", {"task_id", task_id});
                 queue_results.push_back(result);
                 condition_results.notify_all();
                 return;
