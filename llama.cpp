@@ -102,6 +102,10 @@
 #define LLAMA_MAX_NODES   8192
 #define LLAMA_MAX_EXPERTS 8
 
+#if (defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL))
+#define GGML_USE_CUBLAS_SYCL
+#endif
+
 //
 // logging
 //
@@ -1461,6 +1465,12 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(int fallback_g
     }
 #endif
 
+#ifdef GGML_USE_SYCL
+    if (ggml_backend_sycl_get_device_count() > 1) {
+        buft = ggml_backend_sycl_split_buffer_type(tensor_split);
+    }
+#endif
+
     if (buft == nullptr) {
         buft = llama_default_buffer_type_offload(fallback_gpu);
     }
@@ -1472,6 +1482,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(int fallback_g
 static size_t llama_get_device_count() {
 #if defined(GGML_USE_CUBLAS)
     return ggml_backend_cuda_get_device_count();
+#elif defined(GGML_USE_SYCL)
+    return ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
     return ggml_backend_vk_get_device_count();
 #else
@@ -1484,6 +1496,11 @@ static size_t llama_get_device_memory(int device) {
     size_t total;
     size_t free;
     ggml_backend_cuda_get_device_memory(device, &total, &free);
+    return free;
+#elif defined(GGML_USE_SYCL)
+    size_t total;
+    size_t free;
+    ggml_backend_sycl_get_device_memory(device, &total, &free);
     return free;
 #elif defined(GGML_USE_VULKAN)
     size_t total;
@@ -11974,13 +11991,31 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_SYCL)
         if (model->n_gpu_layers > 0) {
-            ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
-                llama_free(ctx);
-                return nullptr;
+            // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
+            if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+                int main_gpu_index = ggml_backend_sycl_get_device_index(model->main_gpu);
+                ggml_backend_t backend = ggml_backend_sycl_init(main_gpu_index);
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d)backend\n", __func__, model->main_gpu, main_gpu_index);
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            } else {
+                // LLAMA_SPLIT_LAYER requires a backend for each GPU
+                int id_list[GGML_SYCL_MAX_DEVICES];
+                ggml_sycl_get_gpu_list(id_list, GGML_SYCL_MAX_DEVICES);
+                for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
+                    int device_id = id_list[i];
+                    ggml_backend_t backend = ggml_backend_sycl_init(i);
+                    if (backend == nullptr) {
+                        LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d)backend\n", __func__, device_id, i);
+                        llama_free(ctx);
+                        return nullptr;
+                    }
+                    ctx->backends.push_back(backend);
+                }
             }
-            ctx->backends.push_back(backend);
         }
 #elif defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {

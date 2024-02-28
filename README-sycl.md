@@ -1,6 +1,7 @@
 # llama.cpp for SYCL
 
 - [Background](#background)
+- [News](#news)
 - [OS](#os)
 - [Intel GPU](#intel-gpu)
 - [Docker](#docker)
@@ -24,6 +25,16 @@ To avoid to re-invent the wheel, this code refer other code paths in llama.cpp (
 The llama.cpp for SYCL is used to support Intel GPUs.
 
 For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
+
+## News
+
+- 2024.3
+  - Support multiple cards: **--split-mode**: none|layer|row
+  - Support to assign main GPU by **--main-gpu**
+
+- 2024.1
+  - Create SYCL backend for Intel GPU.
+  - Support Windows build
 
 ## OS
 
@@ -449,6 +460,7 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 |-|-|-|
 |GGML_SYCL_DEVICE|0 (default) or 1|Set the device id used. Check the device ids by default running output|
 |GGML_SYCL_DEBUG|0 (default) or 1|Enable log function by macro: GGML_SYCL_DEBUG|
+|ZES_ENABLE_SYSMAN| 0 (default) or 1|Support to get free memory of GPU by sycl::aspect::ext_intel_free_memory.<br>Recommended to use when --split-mode = layer|
 
 ## Known Issue
 
@@ -457,6 +469,10 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
   llama.cpp use mmap as default way to read model file and copy to GPU. In some system, memcpy will be abnormal and block.
 
   Solution: add **--no-mmap** or **--mmap 0**.
+
+- Run with split-mode: row is slow
+
+  It's limited by the missed function: memory copy from device to device. We use dirty solution. It will be fixed in the future.
 
 ## Q&A
 
