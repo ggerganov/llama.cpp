@@ -662,7 +662,7 @@ namespace dpct
         void get_memory_info(size_t &free_memory, size_t &total_memory)
         {
             total_memory = get_device_info().get_global_mem_size();
-            char *warning_info = "get_memory_info: [warning] ext_intel_free_memory is not "
+            const char *warning_info = "get_memory_info: [warning] ext_intel_free_memory is not "
                                  "supported (export/set ZES_ENABLE_SYSMAN=1 to support), "
                                  "use total memory as free memory";
 #if (defined(__SYCL_COMPILER_VERSION) && __SYCL_COMPILER_VERSION >= 20221105)
@@ -3291,7 +3291,7 @@ class sycl_gpu_mgr {
 
         void get_allow_gpus() {
             gpus_list = "";
-            for (int i = 0; i < gpus.size(); ++i) {
+            for (size_t i = 0; i < gpus.size(); ++i) {
                 gpus_list += std::to_string(gpus[i]);
                 gpus_list += ",";
             }
@@ -3345,6 +3345,7 @@ class sycl_gpu_mgr {
                     return i;
             }
             assert(false);
+            return -1;
         }
 
         int get_next_index(int id) {
@@ -3354,6 +3355,7 @@ class sycl_gpu_mgr {
                     return i;
             }
             assert(false);
+            return -1;
         }
 };
 
