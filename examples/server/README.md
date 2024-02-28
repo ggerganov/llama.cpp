@@ -275,6 +275,20 @@ Notice that each `probs` is an array of length `n_probs`.
 - `tokens_evaluated`: Number of tokens evaluated in total from the prompt
 - `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
 
+In case of an error the error details will be returned as follows:
+```json
+{
+  "error": {
+    "description": "parse: error parsing grammar: expecting name at (",
+    "id": "grammar.invalid"
+  }
+}
+```
+where:
+- `description` - human-readable description
+- `id` - unique ID for this error type
+
+
 - **POST** `/tokenize`: Tokenize a given text.
 
     *Options:*

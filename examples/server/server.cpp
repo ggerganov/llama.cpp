@@ -23,6 +23,7 @@
 #include "index.js.hpp"
 #include "completion.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
+#include "error.h"
 
 #include <cstddef>
 #include <thread>
@@ -674,6 +675,15 @@ struct llama_server_context
             slot->prompt = "";
         }
 
+        if (
+            (slot->prompt.is_string() && slot->prompt.get<std::string>().empty())
+            ||
+            (slot->prompt.is_array() && slot->prompt.empty())
+        )
+        {
+            throw llama_error("prompt.empty", "The prompt must not be empty");
+        }
+
         slot->sparams.penalty_prompt_tokens.clear();
         slot->sparams.use_penalty_prompt_tokens = false;
         const auto &penalty_prompt = data.find("penalty_prompt");
@@ -1132,6 +1142,28 @@ struct llama_server_context
         queue_results.send(res);
     }
 
+    static json error_to_json(const llama_error& error)
+    {
+        return {
+            { "error", {
+                { "id", error.id() },
+                { "description", error.description() }
+            } }
+        };
+    }
+
+    void send_error(task_server& task, const llama_error& error)
+    {
+        LOG_TEE("task %i - error: %s - %s\n", task.id, error.id().c_str(), error.description().c_str());
+        task_result res;
+        res.id = task.id;
+        res.multitask_id = task.multitask_id;
+        res.stop = false;
+        res.error = true;
+        res.result_json = { { "content", error_to_json(error).dump() } };
+        queue_results.send(res);
+    }
+
     json get_formated_generation(llama_client_slot &slot)
     {
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
@@ -1336,10 +1368,6 @@ struct llama_server_context
                 split_multiprompt_task(task_id, task);
             }
         } else {
-            // an empty prompt can make slot become buggy
-            if (task.data.contains("prompt") && task.data["prompt"].is_string() && task.data["prompt"].get<std::string>().empty()) {
-                task.data["prompt"] = " "; // add a space so that we have one token
-            }
             queue_tasks.post(task);
         }
     }
@@ -1487,11 +1515,15 @@ struct llama_server_context
                 slot->task_id      = task.id;
                 slot->multitask_id = task.multitask_id;
 
-                if (!launch_slot_with_data(slot, task.data))
-                {
-                    // send error result
-                    send_error(task, "internal_error");
-                    break;
+                try {
+                    if (!launch_slot_with_data(slot, task.data))
+                    {
+                        // send error result
+                        send_error(task, "internal_error");
+                        break;
+                    }
+                } catch (const llama_error & err) {
+                    send_error(task, err);
                 }
             } break;
             case TASK_TYPE_CANCEL: { // release slot linked with the task id
@@ -3129,7 +3161,15 @@ int main(int argc, char **argv)
                 if (!validate_api_key(req, res)) {
                     return;
                 }
-                json data = json::parse(req.body);
+                json data;
+                try {
+                    data = json::parse(req.body);
+                } catch(const json::exception & json_err) {
+                    const auto err = llama_error("request.invalid_json", std::string("Invalid JSON: ") + json_err.what());
+                    const auto err_json = llama_server_context::error_to_json(err).dump();
+                    res.set_content(err_json, "text/plain; charset=utf-8");
+                    return;
+                }
                 const int task_id = llama.queue_tasks.get_new_id();
                 llama.queue_results.add_waiting_task_id(task_id);
                 llama.request_completion(task_id, data, false, false, -1);
@@ -3141,7 +3181,6 @@ int main(int argc, char **argv)
                     }
                     else
                     {
-                        res.status = 404;
                         res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                     }
                     llama.queue_results.remove_waiting_task_id(task_id);

@@ -1,4 +1,6 @@
 #include "grammar-parser.h"
+#include "error.h"
+
 #include <cstdint>
 #include <cwchar>
 #include <string>
@@ -280,8 +282,7 @@ namespace grammar_parser {
             }
             return state;
         } catch (const std::exception & err) {
-            fprintf(stderr, "%s: error parsing grammar: %s\n", __func__, err.what());
-            return parse_state();
+            throw llama_error("grammar.invalid", std::string(__func__) + ": error parsing grammar: " + err.what());
         }
     }
 

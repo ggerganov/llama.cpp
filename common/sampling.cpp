@@ -1,4 +1,5 @@
 #include "sampling.h"
+#include "error.h"
 
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
     struct llama_sampling_context * result = new llama_sampling_context();
@@ -8,13 +9,17 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 
     // if there is a grammar, parse it
     if (!params.grammar.empty()) {
-        result->parsed_grammar = grammar_parser::parse(params.grammar.c_str());
+        try {
+            result->parsed_grammar = grammar_parser::parse(params.grammar.c_str());
+        } catch (const llama_error & err) {
+            delete result;
+            throw err;
+        }
 
         // will be empty (default) if there are parse errors
         if (result->parsed_grammar.rules.empty()) {
-            fprintf(stderr, "%s: failed to parse grammar\n", __func__);
             delete result;
-            return nullptr;
+            throw llama_error("grammar.empty", std::string(__func__) + ": empty grammar");
         }
 
         std::vector<const llama_grammar_element *> grammar_rules(result->parsed_grammar.c_rules());
