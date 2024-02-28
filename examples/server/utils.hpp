@@ -228,7 +228,7 @@ static inline void server_log(
         if (!extra.empty()) {
             log.merge_patch(extra);
         }
-        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;    // was originally std:cout
+        std::cerr << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;    // was originally std:cout
 
     } else {                // store the logs in (because not json) text format
         char buf[1024];
