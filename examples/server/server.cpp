@@ -3289,7 +3289,7 @@ int main(int argc, char **argv)
 
     svr.Post("/chat/completions", chat_completions);
     svr.Post("/v1/chat/completions", chat_completions);
- 
+
     svr.Post("/infill", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
             {
                 res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
