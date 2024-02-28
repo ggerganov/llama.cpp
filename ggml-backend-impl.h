@@ -104,6 +104,8 @@ extern "C" {
     };
 
     struct ggml_backend {
+        ggml_guid_t guid;
+
         struct ggml_backend_i iface;
 
         ggml_backend_context_t context;

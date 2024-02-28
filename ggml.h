@@ -672,6 +672,16 @@ extern "C" {
         GGML_NUMA_STRATEGY_COUNT
     };
 
+    //
+    // GUID
+    //
+
+    // GUID types
+    typedef uint8_t ggml_guid[16];
+    typedef ggml_guid * ggml_guid_t;
+
+    GGML_API bool ggml_guid_matches(ggml_guid_t guid_a, ggml_guid_t guid_b);
+
     // misc
 
     GGML_API void    ggml_time_init(void); // call this once at the beginning of the program

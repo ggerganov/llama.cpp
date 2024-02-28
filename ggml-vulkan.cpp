@@ -5244,6 +5244,11 @@ static ggml_backend_i ggml_backend_vk_interface = {
     /* .supports_op             = */ ggml_backend_vk_supports_op,
 };
 
+static ggml_guid_t ggml_backend_vk_guid() {
+    static ggml_guid guid = { 0xb8, 0xf7, 0x4f, 0x86, 0x40, 0x3c, 0xe1, 0x02, 0x91, 0xc8, 0xdd, 0xe9, 0x02, 0x3f, 0xc0, 0x2b };
+    return &guid;
+}
+
 GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t idx) {
     if (vk_instance.initialized[idx]) {
         return vk_instance.backends[idx];
@@ -5262,6 +5267,7 @@ GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t idx) {
     vk_instance.initialized[idx] = true;
 
     ggml_backend_t vk_backend = new ggml_backend {
+        /* .guid      = */ ggml_backend_vk_guid(),
         /* .interface = */ ggml_backend_vk_interface,
         /* .context   = */ &vk_instance.contexts[ctx->idx],
     };
@@ -5272,7 +5278,7 @@ GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t idx) {
 }
 
 GGML_CALL bool ggml_backend_is_vk(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_vk_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_vk_guid());
 }
 
 GGML_CALL int ggml_backend_vk_get_device_count() {

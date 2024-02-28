@@ -2771,6 +2771,11 @@ void ggml_backend_metal_log_set_callback(ggml_log_callback log_callback, void * 
     ggml_metal_log_user_data = user_data;
 }
 
+static ggml_guid_t ggml_backend_metal_guid(void) {
+    static ggml_guid guid = { 0x81, 0xa1, 0x8b, 0x1e, 0x71, 0xec, 0x79, 0xed, 0x2b, 0x85, 0xdc, 0x8a, 0x61, 0x98, 0x30, 0xe6 };
+    return &guid;
+}
+
 ggml_backend_t ggml_backend_metal_init(void) {
     struct ggml_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
 
@@ -2781,6 +2786,7 @@ ggml_backend_t ggml_backend_metal_init(void) {
     ggml_backend_t metal_backend = malloc(sizeof(struct ggml_backend));
 
     *metal_backend = (struct ggml_backend) {
+        /* .guid      = */ ggml_backend_metal_guid(),
         /* .interface = */ ggml_backend_metal_i,
         /* .context   = */ ctx,
     };
@@ -2789,7 +2795,7 @@ ggml_backend_t ggml_backend_metal_init(void) {
 }
 
 bool ggml_backend_is_metal(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_metal_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_metal_guid());
 }
 
 void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
