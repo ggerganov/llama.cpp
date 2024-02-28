@@ -41,7 +41,6 @@ int main(int argc, char ** argv) {
     int n_kv_max     = 2048;
     int is_pp_shared = 0;
     int n_gpu_layers = 0;
-    int mmq          = 0;
 
     std::vector<int> n_pp = { 128, 256, 512, 1024, 2048, 3584, 7680, };
     std::vector<int> n_tg = { 128, 256, };
@@ -65,19 +64,15 @@ int main(int argc, char ** argv) {
     }
 
     if (argc >= 6) {
-        mmq = std::atoi(argv[5]);
+        n_pp = parse_list(argv[5]);
     }
 
     if (argc >= 7) {
-        n_pp = parse_list(argv[6]);
+        n_tg = parse_list(argv[6]);
     }
 
     if (argc >= 8) {
-        n_tg = parse_list(argv[7]);
-    }
-
-    if (argc >= 9) {
-        n_pl = parse_list(argv[8]);
+        n_pl = parse_list(argv[7]);
     }
 
     // init LLM
@@ -106,7 +101,6 @@ int main(int argc, char ** argv) {
     ctx_params.seed      = 1234;
     ctx_params.n_ctx     = n_kv_max;
     ctx_params.n_batch   = 512;
-    ctx_params.mul_mat_q = mmq;
 
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
@@ -159,7 +153,7 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("\n");
-    LOG_TEE("%s: n_kv_max = %d, is_pp_shared = %d, n_gpu_layers = %d, mmq = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, is_pp_shared, n_gpu_layers, mmq, ctx_params.n_threads, ctx_params.n_threads_batch);
+    LOG_TEE("%s: n_kv_max = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, is_pp_shared, n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch);
     LOG_TEE("\n");
 
     LOG_TEE("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP",     "TG",     "B",    "N_KV",     "T_PP s",   "S_PP t/s", "T_TG s",   "S_TG t/s", "T s",      "S t/s");
