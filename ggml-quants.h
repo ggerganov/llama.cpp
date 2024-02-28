@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: Copyright 2024 Arm Ltd.
 #pragma once
 
 #include "ggml-impl.h"
@@ -53,6 +54,48 @@ typedef struct {
     int8_t  qs[QK8_1];     // quants
 } block_q8_1;
 static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block size/padding");
+
+typedef struct {
+    ggml_fp16_t d[4];      // deltas for 4 q4_0 blocks
+    uint8_t qs[QK4_0 * 2]; // nibbles / quants for 4 q4_0 blocks
+} block_q4_0x4;
+static_assert(sizeof(block_q4_0x4) == 4 * sizeof(ggml_fp16_t) + QK4_0 * 2, "wrong q4_0x4 block size/padding");
+
+typedef struct {
+    ggml_fp16_t d[8];      // deltas for 8 q4_0 blocks
+    uint8_t qs[QK4_0 * 4]; // nibbles / quants for 8 q4_0 blocks
+} block_q4_0x8;
+static_assert(sizeof(block_q4_0x8) == 8 * sizeof(ggml_fp16_t) + QK4_0 * 4, "wrong q4_0x8 block size/padding");
+
+typedef struct {
+    ggml_fp16_t d[16];     // deltas for 16 q4_0 blocks
+    uint8_t qs[QK4_0 * 8]; // nibbles / quants for 16 q4_0 blocks
+} block_q4_0x16;
+static_assert(sizeof(block_q4_0x16) == 16 * sizeof(ggml_fp16_t) + QK4_0 * 8, "wrong q4_0x16 block size/padding");
+
+typedef struct {
+    ggml_fp16_t d[64];     // deltas for 64 q4_0 blocks
+    uint8_t qs[QK4_0 * 32];// nibbles / quants for 64 q4_0 blocks
+} block_q4_0x64;
+static_assert(sizeof(block_q4_0x64) == 64 * sizeof(ggml_fp16_t) + QK4_0 * 32, "wrong q4_0x64 block size/padding");
+
+typedef struct {
+    ggml_fp16_t d[2];      // deltas for 2 q8_0 blocks
+    int8_t qs[QK8_0 * 2];  // quants for 2 q8_0 blocks
+} block_q8_0x2;
+static_assert(sizeof(block_q8_0x2) == 2 * sizeof(ggml_fp16_t) + QK8_0 * 2, "wrong q8_0x2 block size/padding");
+
+typedef struct {
+    ggml_fp16_t d[4];      // deltas for 4 q8_0 blocks
+    int8_t qs[QK8_0 * 4];  // quants for 4 q8_0 blocks
+} block_q8_0x4;
+static_assert(sizeof(block_q8_0x4) == 4 * sizeof(ggml_fp16_t) + QK8_0 * 4, "wrong q8_0x4 block size/padding");
+
+typedef struct {
+    ggml_fp16_t d[8];      // deltas for 8 q8_0 blocks
+    int8_t qs[QK8_0 * 8];  // quants for 8 q8_0 blocks
+} block_q8_0x8;
+static_assert(sizeof(block_q8_0x8) == 8 * sizeof(ggml_fp16_t) + QK8_0 * 8, "wrong q8_0x8 block size/padding");
 
 //
 // Super-block quantization structures
@@ -303,6 +346,25 @@ void iq2xs_init_impl(enum ggml_type type);
 void iq2xs_free_impl(enum ggml_type type);
 void iq3xs_init_impl(int grid_size);
 void iq3xs_free_impl(int grid_size);
+
+block_q4_0x4 make_block_q4_0x4(const block_q4_0 * const in[4], unsigned int block_len);
+block_q4_0x8 make_block_q4_0x8(const block_q4_0 * const in[8], unsigned int block_len);
+block_q8_0x4 make_block_q8_0x4(const block_q8_0 * const in[4], unsigned int block_len);
+block_q8_0x8 make_block_q8_0x8(const block_q8_0 * const in[8], unsigned int block_len);
+void quantize_row_q8_0_and_make_block_q8_0x2(const float * restrict x, void * restrict vy, int k, int rows_interleaved);
+void quantize_row_q8_0_and_make_block_q8_0x4(const float * restrict x, void * restrict vy, int k, int rows_interleaved);
+
+// GEMV
+void ggml_gemv_q4_0_q8_0_blocked8_neon(const int n, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
+void ggml_gemv_q4_0_q8_0_blocked8_sve(const int n, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
+void ggml_gemv_q8_0_q8_0_blocked8_neon(const int n, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
+void ggml_gemv_q8_0_q8_0_blocked8_sve(const int n, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
+
+// GEMM
+void ggml_gemm_q4_0_q8_0(const int n, int rows, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
+void ggml_gemm_q4_0_q8_0_2x4blocked_mmla(const int n, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
+void ggml_gemm_q8_0_q8_0(const int n, int rows, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
+void ggml_gemm_q8_0_q8_0_2x4blocked_mmla(const int n, int output_channels, int input_width, float * restrict s, const void * restrict vx, const void * restrict vy, int ith, int nth);
 
 #ifdef __cplusplus
 }
