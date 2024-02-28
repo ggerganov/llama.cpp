@@ -11156,16 +11156,19 @@ static int32_t llama_merge_models_internal(
 
             if (tensor1->type == GGML_TYPE_F16 && tensor2->type == GGML_TYPE_F16) {
                 for (size_t i = 0; i < result.size() / sizeof(float); i++) {
-                    float * t1 = (float *) tensor1->data;
-                    float * t2 = (float *) tensor2->data;
-                    float * dest = (float *) result.data();
-                    dest[i] = t1[i] * conf->scale1 + t2[i] * conf->scale2;
+                    ggml_fp16_t * t1 = (ggml_fp16_t *) tensor1->data;
+                    ggml_fp16_t * t2 = (ggml_fp16_t *) tensor2->data;
+                    ggml_fp16_t * dest = (ggml_fp16_t *) result.data();
+                    float dequant1 = ggml_fp16_to_fp32(t1[i]);
+                    float dequant2 = ggml_fp16_to_fp32(t2[2]);
+                    float res = dequant1 * conf->scale1 + dequant2 * conf->scale2;
+                    dest[i] = ggml_fp32_to_fp16(res);
                 }
             } else if (tensor1->type == GGML_TYPE_F32 && tensor2->type == GGML_TYPE_F32) {
                 for (size_t i = 0; i < result.size() / sizeof(double); i++) {
-                    double * t1 = (double *) tensor1->data;
-                    double * t2 = (double *) tensor2->data;
-                    double * dest = (double *) result.data();
+                    float * t1 = (float *) tensor1->data;
+                    float * t2 = (float *) tensor2->data;
+                    float * dest = (float *) result.data();
                     dest[i] = t1[i] * conf->scale1 + t2[i] * conf->scale2;
                 }
             } else {
