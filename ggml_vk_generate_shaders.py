@@ -309,20 +309,22 @@ void main() {
 mulmat_load_scalar = """
 #if LOAD_VEC_A == 8
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 0] = FLOAT_TYPE(data_a[idx][0].x);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 1] = FLOAT_TYPE(data_a[idx][0].y);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 2] = FLOAT_TYPE(data_a[idx][0].z);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 3] = FLOAT_TYPE(data_a[idx][0].w);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 4] = FLOAT_TYPE(data_a[idx][1].x);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 5] = FLOAT_TYPE(data_a[idx][1].y);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 6] = FLOAT_TYPE(data_a[idx][1].z);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 7] = FLOAT_TYPE(data_a[idx][1].w);
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+            buf_a[buf_idx    ] = FLOAT_TYPE(data_a[idx][0].x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(data_a[idx][0].y);
+            buf_a[buf_idx + 2] = FLOAT_TYPE(data_a[idx][0].z);
+            buf_a[buf_idx + 3] = FLOAT_TYPE(data_a[idx][0].w);
+            buf_a[buf_idx + 4] = FLOAT_TYPE(data_a[idx][1].x);
+            buf_a[buf_idx + 5] = FLOAT_TYPE(data_a[idx][1].y);
+            buf_a[buf_idx + 6] = FLOAT_TYPE(data_a[idx][1].z);
+            buf_a[buf_idx + 7] = FLOAT_TYPE(data_a[idx][1].w);
 #elif LOAD_VEC_A == 4
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 0] = FLOAT_TYPE(data_a[idx].x);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 1] = FLOAT_TYPE(data_a[idx].y);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 2] = FLOAT_TYPE(data_a[idx].z);
-            buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + 3] = FLOAT_TYPE(data_a[idx].w);
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+            buf_a[buf_idx    ] = FLOAT_TYPE(data_a[idx].x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(data_a[idx].y);
+            buf_a[buf_idx + 2] = FLOAT_TYPE(data_a[idx].z);
+            buf_a[buf_idx + 3] = FLOAT_TYPE(data_a[idx].w);
 #else
             if (ir * BM + loadc_a + l < p.M && block + loadr_a < end_k) {
                 buf_a[(loadc_a + l) * (BK+1) + loadr_a] = FLOAT_TYPE(data_a[pos_a + (loadc_a + l) * p.stride_a + loadr_a]);
@@ -334,34 +336,39 @@ mulmat_load_scalar = """
 
 mulmat_load_q4_0 = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
-            [[unroll]] for (uint iqs = 0; iqs < 16; iqs++) {
-                const float d = float(data_a[idx].d);
-                const uint vui = uint(data_a[idx].qs[iqs]);
-                const vec2 v = (vec2(vui & 0xF, vui >> 4) - 8.0f) * d;
 
-                buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + iqs + 0 ] = FLOAT_TYPE(v.x);
-                buf_a[(loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A + iqs + 16] = FLOAT_TYPE(v.y);
-            }"""
+            const uint ib = idx / 16;
+            const uint iqs = idx & 0xF;
+
+            const float d = float(data_a[ib].d);
+            const uint vui = uint(data_a[ib].qs[iqs]);
+            const vec2 v = (vec2(vui & 0xF, vui >> 4) - 8.0f) * d;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a;
+
+            buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
+            buf_a[buf_idx + 16] = FLOAT_TYPE(v.y);"""
 
 mulmat_body2 = """
         }
         [[unroll]] for (uint l = 0; l < BN; l += loadstride_b) {
 #if LOAD_VEC_B == 8
             const uint idx = pos_b + (loadc_b + l) * p.stride_b / LOAD_VEC_B + loadr_b;
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 0] = FLOAT_TYPE(data_b[idx][0].x);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 1] = FLOAT_TYPE(data_b[idx][0].y);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 2] = FLOAT_TYPE(data_b[idx][0].z);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 3] = FLOAT_TYPE(data_b[idx][0].w);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 4] = FLOAT_TYPE(data_b[idx][1].x);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 5] = FLOAT_TYPE(data_b[idx][1].y);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 6] = FLOAT_TYPE(data_b[idx][1].z);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 7] = FLOAT_TYPE(data_b[idx][1].w);
+            const uint buf_idx = (loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B;
+            buf_b[buf_idx + 0] = FLOAT_TYPE(data_b[idx][0].x);
+            buf_b[buf_idx + 1] = FLOAT_TYPE(data_b[idx][0].y);
+            buf_b[buf_idx + 2] = FLOAT_TYPE(data_b[idx][0].z);
+            buf_b[buf_idx + 3] = FLOAT_TYPE(data_b[idx][0].w);
+            buf_b[buf_idx + 4] = FLOAT_TYPE(data_b[idx][1].x);
+            buf_b[buf_idx + 5] = FLOAT_TYPE(data_b[idx][1].y);
+            buf_b[buf_idx + 6] = FLOAT_TYPE(data_b[idx][1].z);
+            buf_b[buf_idx + 7] = FLOAT_TYPE(data_b[idx][1].w);
 #elif LOAD_VEC_B == 4
             const uint idx = pos_b + (loadc_b + l) * p.stride_b / LOAD_VEC_B + loadr_b;
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 0] = FLOAT_TYPE(data_b[idx].x);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 1] = FLOAT_TYPE(data_b[idx].y);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 2] = FLOAT_TYPE(data_b[idx].z);
-            buf_b[(loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B + 3] = FLOAT_TYPE(data_b[idx].w);
+            const uint buf_idx = (loadc_b + l) * (BK+1) + loadr_b * LOAD_VEC_B;
+            buf_b[buf_idx + 0] = FLOAT_TYPE(data_b[idx].x);
+            buf_b[buf_idx + 1] = FLOAT_TYPE(data_b[idx].y);
+            buf_b[buf_idx + 2] = FLOAT_TYPE(data_b[idx].z);
+            buf_b[buf_idx + 3] = FLOAT_TYPE(data_b[idx].w);
 #else
             if (ic * BN + loadc_b + l < p.N && block + loadr_b < end_k) {
                 buf_b[(loadc_b + l) * (BK+1) + loadr_b] = FLOAT_TYPE(data_b[pos_b + (loadc_b + l) * p.stride_b + loadr_b]);
@@ -2295,7 +2302,7 @@ async def main():
 
         stream.clear()
         stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q4_0_defines, mulmat_body1, mulmat_load_q4_0, mulmat_body2))
-        tasks.append(string_to_spv("matmul_q4_0_f32_aligned", "".join(stream), {"LOAD_VEC_A": 32, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q4_0_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
     # Shaders where precision is needed, so no fp16 version
 
