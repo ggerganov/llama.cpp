@@ -46,5 +46,5 @@ Feature: Security
       | localhost       | Access-Control-Allow-Origin      | localhost         |
       | web.mydomain.fr | Access-Control-Allow-Origin      | web.mydomain.fr   |
       | origin          | Access-Control-Allow-Credentials | true              |
-      | web.mydomain.fr | Access-Control-Allow-Methods     | POST              |
+      | web.mydomain.fr | Access-Control-Allow-Methods     | *                 |
       | web.mydomain.fr | Access-Control-Allow-Headers     | *                 |
