@@ -107,7 +107,7 @@ Typically finetunes of the base models below are supported as well.
 
 **Multimodal models:**
 
-- [x] [LLaVA 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e)
+- [x] [LLaVA 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e), [LLaVA 1.6 models](https://huggingface.co/collections/liuhaotian/llava-16-65b9e40155f60fd046a5ccf2)
 - [x] [BakLLaVA](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
 - [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)

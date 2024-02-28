@@ -12,7 +12,6 @@
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-
 // backend buffer type
 
 const char * ggml_backend_buft_name(ggml_backend_buffer_type_t buft) {
@@ -158,6 +157,13 @@ bool ggml_backend_buffer_copy_tensor(const struct ggml_tensor * src, struct ggml
 }
 
 // backend
+
+ggml_guid_t ggml_backend_guid(ggml_backend_t backend) {
+    if (backend == NULL) {
+        return NULL;
+    }
+    return backend->guid;
+}
 
 const char * ggml_backend_name(ggml_backend_t backend) {
     if (backend == NULL) {
@@ -781,6 +787,11 @@ static struct ggml_backend_i cpu_backend_i = {
     /* .supports_op             = */ ggml_backend_cpu_supports_op,
 };
 
+static ggml_guid_t ggml_backend_cpu_guid(void) {
+    static ggml_guid guid = { 0xaa, 0x67, 0xc7, 0x43, 0x96, 0xe6, 0xa3, 0x8a, 0xe3, 0xaf, 0xea, 0x92, 0x36, 0xbc, 0xfc, 0x89 };
+    return &guid;
+}
+
 ggml_backend_t ggml_backend_cpu_init(void) {
     struct ggml_backend_cpu_context * ctx = malloc(sizeof(struct ggml_backend_cpu_context));
     if (ctx == NULL) {
@@ -800,6 +811,7 @@ ggml_backend_t ggml_backend_cpu_init(void) {
     }
 
     *cpu_backend = (struct ggml_backend) {
+        /* .guid      = */ ggml_backend_cpu_guid(),
         /* .interface = */ cpu_backend_i,
         /* .context   = */ ctx
     };
@@ -807,7 +819,7 @@ ggml_backend_t ggml_backend_cpu_init(void) {
 }
 
 GGML_CALL bool ggml_backend_is_cpu(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_cpu_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_cpu_guid());
 }
 
 void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads) {
