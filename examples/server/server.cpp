@@ -2772,7 +2772,16 @@ static void append_to_generated_text_from_generated_token_probs(llama_server_con
 }
 
 std::function<void(int)> shutdown_handler;
-inline void signal_handler(int signal) { shutdown_handler(signal); }
+std::atomic_flag is_terminating = ATOMIC_FLAG_INIT;
+inline void signal_handler(int signal) {
+    if (is_terminating.test_and_set()) {
+        // in case it hangs, we can force terminate the server by hitting Ctrl+C twice
+        // this is for better developer experience, we can remove when the server is stable enough
+        fprintf(stderr, "Received second interrupt, terminating immediately.\n");
+        exit(1);
+    }
+    shutdown_handler(signal);
+}
 
 int main(int argc, char **argv)
 {
