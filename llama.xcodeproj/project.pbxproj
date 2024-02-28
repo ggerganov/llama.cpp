@@ -1,0 +1,535 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		972079C42AFAACEF008A9E53 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 972079C32AFAACEF008A9E53 /* Accelerate.framework */; };
+		975AAE542B5F600F0079F713 /* ggml-backend.h in Headers */ = {isa = PBXBuildFile; fileRef = 975AAE532B5F600F0079F713 /* ggml-backend.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		9789E9FC2B0D49BA00EB6AD2 /* sampling.h in Sources */ = {isa = PBXBuildFile; fileRef = 97FFE3072B056DD100B12DEC /* sampling.h */; };
+		9789E9FD2B0D49BD00EB6AD2 /* grammar-parser.h in Sources */ = {isa = PBXBuildFile; fileRef = 97FFE3062B056DD100B12DEC /* grammar-parser.h */; };
+		9789E9FE2B0D49BF00EB6AD2 /* log.h in Sources */ = {isa = PBXBuildFile; fileRef = 97FFE3052B056DD100B12DEC /* log.h */; };
+		979E9D0B2B60388300B5F255 /* ggml-alloc.h in Headers */ = {isa = PBXBuildFile; fileRef = 979E9D0A2B60388300B5F255 /* ggml-alloc.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97B76BF72B199E890019D706 /* tokenize.h in Headers */ = {isa = PBXBuildFile; fileRef = 97B76BF32B199E890019D706 /* tokenize.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97B76BF82B199E890019D706 /* vector.h in Headers */ = {isa = PBXBuildFile; fileRef = 97B76BF42B199E890019D706 /* vector.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97B76BF92B199E890019D706 /* vector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 97B76BF52B199E890019D706 /* vector.cpp */; };
+		97B76BFB2B199EC60019D706 /* tokenize.h in Sources */ = {isa = PBXBuildFile; fileRef = 97B76BF32B199E890019D706 /* tokenize.h */; };
+		97B76BFC2B199EC60019D706 /* vector.h in Sources */ = {isa = PBXBuildFile; fileRef = 97B76BF42B199E890019D706 /* vector.h */; };
+		97B76BFD2B199EC60019D706 /* tokenize.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 97B76BF62B199E890019D706 /* tokenize.cpp */; };
+		97F217F92B044111008B81FE /* common.h in Headers */ = {isa = PBXBuildFile; fileRef = 97F217F82B044111008B81FE /* common.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97F217FB2B044120008B81FE /* common.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 97F217FA2B044120008B81FE /* common.cpp */; };
+		97F217FC2B04413F008B81FE /* common.h in Sources */ = {isa = PBXBuildFile; fileRef = 97F217F82B044111008B81FE /* common.h */; };
+		97F996D42AFB29C700194A6F /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 97F996CD2AFB29C600194A6F /* ggml-metal.metal */; };
+		97F996D52AFB29C700194A6F /* ggml-quants.c in Sources */ = {isa = PBXBuildFile; fileRef = 97F996CE2AFB29C600194A6F /* ggml-quants.c */; };
+		97F996D62AFB29C700194A6F /* ggml-metal.m in Sources */ = {isa = PBXBuildFile; fileRef = 97F996CF2AFB29C700194A6F /* ggml-metal.m */; settings = {COMPILER_FLAGS = "-fno-objc-arc"; }; };
+		97F996D72AFB29C700194A6F /* ggml-backend.c in Sources */ = {isa = PBXBuildFile; fileRef = 97F996D02AFB29C700194A6F /* ggml-backend.c */; };
+		97F996D82AFB29C700194A6F /* ggml.h in Headers */ = {isa = PBXBuildFile; fileRef = 97F996D12AFB29C700194A6F /* ggml.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97F996D92AFB29C700194A6F /* ggml-alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 97F996D22AFB29C700194A6F /* ggml-alloc.c */; };
+		97F996DA2AFB29C700194A6F /* llama.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 97F996D32AFB29C700194A6F /* llama.cpp */; };
+		97F996DC2AFB29F900194A6F /* llama.h in Headers */ = {isa = PBXBuildFile; fileRef = 97F996DB2AFB29F900194A6F /* llama.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97F996DE2AFB2A3F00194A6F /* ggml.c in Sources */ = {isa = PBXBuildFile; fileRef = 97F996DD2AFB2A3F00194A6F /* ggml.c */; };
+		97F996DF2AFB2AE100194A6F /* ggml.h in Sources */ = {isa = PBXBuildFile; fileRef = 97F996D12AFB29C700194A6F /* ggml.h */; };
+		97F996E02AFB2AE100194A6F /* llama.h in Sources */ = {isa = PBXBuildFile; fileRef = 97F996DB2AFB29F900194A6F /* llama.h */; };
+		97FAF1B32B0D4DA900E23209 /* grammar-parser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 97FAF1B12B0D4DA900E23209 /* grammar-parser.cpp */; };
+		97FAF1B42B0D4DA900E23209 /* sampling.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 97FAF1B22B0D4DA900E23209 /* sampling.cpp */; };
+		97FFE3082B056DD100B12DEC /* log.h in Headers */ = {isa = PBXBuildFile; fileRef = 97FFE3052B056DD100B12DEC /* log.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97FFE3092B056DD100B12DEC /* grammar-parser.h in Headers */ = {isa = PBXBuildFile; fileRef = 97FFE3062B056DD100B12DEC /* grammar-parser.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		97FFE30A2B056DD100B12DEC /* sampling.h in Headers */ = {isa = PBXBuildFile; fileRef = 97FFE3072B056DD100B12DEC /* sampling.h */; settings = {ATTRIBUTES = (Public, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		972079A62AFAA818008A9E53 /* llama.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = llama.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		972079C32AFAACEF008A9E53 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.0.sdk/System/Library/Frameworks/Accelerate.framework; sourceTree = DEVELOPER_DIR; };
+		975AAE532B5F600F0079F713 /* ggml-backend.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "ggml-backend.h"; sourceTree = "<group>"; };
+		979D479D2B081F3E00EF8149 /* llama-module.modulemap */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = "sourcecode.module-map"; path = "llama-module.modulemap"; sourceTree = "<group>"; };
+		979E9D0A2B60388300B5F255 /* ggml-alloc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "ggml-alloc.h"; sourceTree = "<group>"; };
+		97B76BF32B199E890019D706 /* tokenize.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = tokenize.h; sourceTree = "<group>"; };
+		97B76BF42B199E890019D706 /* vector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = vector.h; sourceTree = "<group>"; };
+		97B76BF52B199E890019D706 /* vector.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = vector.cpp; sourceTree = "<group>"; };
+		97B76BF62B199E890019D706 /* tokenize.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = tokenize.cpp; sourceTree = "<group>"; };
+		97F217F82B044111008B81FE /* common.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = common.h; path = common/common.h; sourceTree = "<group>"; };
+		97F217FA2B044120008B81FE /* common.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = common.cpp; path = common/common.cpp; sourceTree = "<group>"; };
+		97F996CD2AFB29C600194A6F /* ggml-metal.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; path = "ggml-metal.metal"; sourceTree = "<group>"; };
+		97F996CE2AFB29C600194A6F /* ggml-quants.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = "ggml-quants.c"; sourceTree = "<group>"; };
+		97F996CF2AFB29C700194A6F /* ggml-metal.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "ggml-metal.m"; sourceTree = "<group>"; };
+		97F996D02AFB29C700194A6F /* ggml-backend.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = "ggml-backend.c"; sourceTree = "<group>"; };
+		97F996D12AFB29C700194A6F /* ggml.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ggml.h; sourceTree = "<group>"; };
+		97F996D22AFB29C700194A6F /* ggml-alloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = "ggml-alloc.c"; sourceTree = "<group>"; };
+		97F996D32AFB29C700194A6F /* llama.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = llama.cpp; sourceTree = "<group>"; };
+		97F996DB2AFB29F900194A6F /* llama.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = llama.h; sourceTree = "<group>"; };
+		97F996DD2AFB2A3F00194A6F /* ggml.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ggml.c; sourceTree = "<group>"; };
+		97FAF1B12B0D4DA900E23209 /* grammar-parser.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = "grammar-parser.cpp"; path = "common/grammar-parser.cpp"; sourceTree = "<group>"; };
+		97FAF1B22B0D4DA900E23209 /* sampling.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = sampling.cpp; path = common/sampling.cpp; sourceTree = "<group>"; };
+		97FFE3052B056DD100B12DEC /* log.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = log.h; path = common/log.h; sourceTree = "<group>"; };
+		97FFE3062B056DD100B12DEC /* grammar-parser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "grammar-parser.h"; path = "common/grammar-parser.h"; sourceTree = "<group>"; };
+		97FFE3072B056DD100B12DEC /* sampling.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = sampling.h; path = common/sampling.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		972079A32AFAA818008A9E53 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				972079C42AFAACEF008A9E53 /* Accelerate.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		9720799C2AFAA818008A9E53 = {
+			isa = PBXGroup;
+			children = (
+				97B76BF12B199E040019D706 /* swift */,
+				979D479D2B081F3E00EF8149 /* llama-module.modulemap */,
+				97FFE3062B056DD100B12DEC /* grammar-parser.h */,
+				97FAF1B12B0D4DA900E23209 /* grammar-parser.cpp */,
+				97FFE3052B056DD100B12DEC /* log.h */,
+				97FFE3072B056DD100B12DEC /* sampling.h */,
+				97FAF1B22B0D4DA900E23209 /* sampling.cpp */,
+				97F217F82B044111008B81FE /* common.h */,
+				97F217FA2B044120008B81FE /* common.cpp */,
+				97F996D12AFB29C700194A6F /* ggml.h */,
+				97F996DD2AFB2A3F00194A6F /* ggml.c */,
+				979E9D0A2B60388300B5F255 /* ggml-alloc.h */,
+				97F996D22AFB29C700194A6F /* ggml-alloc.c */,
+				975AAE532B5F600F0079F713 /* ggml-backend.h */,
+				97F996D02AFB29C700194A6F /* ggml-backend.c */,
+				97F996CF2AFB29C700194A6F /* ggml-metal.m */,
+				97F996CD2AFB29C600194A6F /* ggml-metal.metal */,
+				97F996CE2AFB29C600194A6F /* ggml-quants.c */,
+				97F996DB2AFB29F900194A6F /* llama.h */,
+				97F996D32AFB29C700194A6F /* llama.cpp */,
+				972079A72AFAA818008A9E53 /* Products */,
+				972079C22AFAACEF008A9E53 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		972079A72AFAA818008A9E53 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				972079A62AFAA818008A9E53 /* llama.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		972079C22AFAACEF008A9E53 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				972079C32AFAACEF008A9E53 /* Accelerate.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		97B76BF12B199E040019D706 /* swift */ = {
+			isa = PBXGroup;
+			children = (
+				97B76BF22B199E890019D706 /* include */,
+				97B76BF62B199E890019D706 /* tokenize.cpp */,
+				97B76BF52B199E890019D706 /* vector.cpp */,
+			);
+			path = swift;
+			sourceTree = "<group>";
+		};
+		97B76BF22B199E890019D706 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				97B76BF32B199E890019D706 /* tokenize.h */,
+				97B76BF42B199E890019D706 /* vector.h */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		972079A12AFAA818008A9E53 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97F996DC2AFB29F900194A6F /* llama.h in Headers */,
+				97F996D82AFB29C700194A6F /* ggml.h in Headers */,
+				979E9D0B2B60388300B5F255 /* ggml-alloc.h in Headers */,
+				975AAE542B5F600F0079F713 /* ggml-backend.h in Headers */,
+				97F217F92B044111008B81FE /* common.h in Headers */,
+				97FFE30A2B056DD100B12DEC /* sampling.h in Headers */,
+				97FFE3092B056DD100B12DEC /* grammar-parser.h in Headers */,
+				97FFE3082B056DD100B12DEC /* log.h in Headers */,
+				97B76BF82B199E890019D706 /* vector.h in Headers */,
+				97B76BF72B199E890019D706 /* tokenize.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		972079A52AFAA818008A9E53 /* llama */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 972079AD2AFAA818008A9E53 /* Build configuration list for PBXNativeTarget "llama" */;
+			buildPhases = (
+				972079A12AFAA818008A9E53 /* Headers */,
+				972079A22AFAA818008A9E53 /* Sources */,
+				972079A32AFAA818008A9E53 /* Frameworks */,
+				972079A42AFAA818008A9E53 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = llama;
+			productName = llama;
+			productReference = 972079A62AFAA818008A9E53 /* llama.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9720799D2AFAA818008A9E53 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1520;
+				TargetAttributes = {
+					972079A52AFAA818008A9E53 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 972079A02AFAA818008A9E53 /* Build configuration list for PBXProject "llama" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 9720799C2AFAA818008A9E53;
+			productRefGroup = 972079A72AFAA818008A9E53 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				972079A52AFAA818008A9E53 /* llama */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		972079A42AFAA818008A9E53 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97F996D42AFB29C700194A6F /* ggml-metal.metal in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		972079A22AFAA818008A9E53 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97F996E02AFB2AE100194A6F /* llama.h in Sources */,
+				97F996DA2AFB29C700194A6F /* llama.cpp in Sources */,
+				97F996DF2AFB2AE100194A6F /* ggml.h in Sources */,
+				97F996DE2AFB2A3F00194A6F /* ggml.c in Sources */,
+				97F996D92AFB29C700194A6F /* ggml-alloc.c in Sources */,
+				97F996D72AFB29C700194A6F /* ggml-backend.c in Sources */,
+				97F996D52AFB29C700194A6F /* ggml-quants.c in Sources */,
+				97F996D62AFB29C700194A6F /* ggml-metal.m in Sources */,
+				97F217FC2B04413F008B81FE /* common.h in Sources */,
+				97F217FB2B044120008B81FE /* common.cpp in Sources */,
+				9789E9FC2B0D49BA00EB6AD2 /* sampling.h in Sources */,
+				97FAF1B42B0D4DA900E23209 /* sampling.cpp in Sources */,
+				9789E9FD2B0D49BD00EB6AD2 /* grammar-parser.h in Sources */,
+				97FAF1B32B0D4DA900E23209 /* grammar-parser.cpp in Sources */,
+				9789E9FE2B0D49BF00EB6AD2 /* log.h in Sources */,
+				97B76BFB2B199EC60019D706 /* tokenize.h in Sources */,
+				97B76BFD2B199EC60019D706 /* tokenize.cpp in Sources */,
+				97B76BFC2B199EC60019D706 /* vector.h in Sources */,
+				97B76BF92B199E890019D706 /* vector.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		972079AB2AFAA818008A9E53 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = "";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TVOS_DEPLOYMENT_TARGET = 14.0;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Debug;
+		};
+		972079AC2AFAA818008A9E53 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = "";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				TVOS_DEPLOYMENT_TARGET = 14.0;
+				VALIDATE_PRODUCT = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Release;
+		};
+		972079AE2AFAA818008A9E53 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++0x";
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"LLAMA_BUILD_NUMBER=1",
+					"LLAMA_COMMIT=\\\"development\\\"",
+					"LLAMA_COMPILER=\\\"swift-clang\\\"",
+					"LLAMA_BUILD_TARGET=\\\"iOS\\\"",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64]" = (
+					"$(inherited)",
+					"GGML_USE_ACCELERATE=1",
+					"GGML_USE_METAL=1",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = (
+					"$(inherited)",
+					"GGML_USE_ACCELERATE=1",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULEMAP_FILE = "llama-module.modulemap";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				OTHER_CFLAGS = "-DNDEBUG";
+				PRODUCT_BUNDLE_IDENTIFIER = edu.stanford.llama;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				USER_HEADER_SEARCH_PATHS = "";
+				WARNING_CFLAGS = "-Wno-shorten-64-to-32";
+			};
+			name = Debug;
+		};
+		972079AF2AFAA818008A9E53 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++0x";
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"LLAMA_BUILD_NUMBER=1",
+					"LLAMA_COMMIT=\\\"development\\\"",
+					"LLAMA_COMPILER=\\\"swift-clang\\\"",
+					"LLAMA_BUILD_TARGET=\\\"iOS\\\"",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64]" = (
+					"$(inherited)",
+					"GGML_USE_ACCELERATE=1",
+					"GGML_USE_METAL=1",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = (
+					"$(inherited)",
+					"GGML_USE_ACCELERATE=1",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULEMAP_FILE = "llama-module.modulemap";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				OTHER_CFLAGS = "-DNDEBUG";
+				PRODUCT_BUNDLE_IDENTIFIER = edu.stanford.llama;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				USER_HEADER_SEARCH_PATHS = "";
+				WARNING_CFLAGS = "-Wno-shorten-64-to-32";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		972079A02AFAA818008A9E53 /* Build configuration list for PBXProject "llama" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				972079AB2AFAA818008A9E53 /* Debug */,
+				972079AC2AFAA818008A9E53 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		972079AD2AFAA818008A9E53 /* Build configuration list for PBXNativeTarget "llama" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				972079AE2AFAA818008A9E53 /* Debug */,
+				972079AF2AFAA818008A9E53 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 9720799D2AFAA818008A9E53 /* Project object */;
+}

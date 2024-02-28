@@ -1,0 +1,3 @@
+dependencies: \
+  /Users/githubaction/runner/_work/llama.cpp/llama.cpp/ggml-metal.metal \
+  /Applications/Xcode-15.2.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/metal/ios/lib/clang/32023.98/include/metal/module.modulemap
