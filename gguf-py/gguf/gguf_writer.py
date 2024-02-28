@@ -382,6 +382,18 @@ class GGUFWriter:
     def add_rope_scaling_finetuned(self, value: bool) -> None:
         self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
 
+    def add_ssm_conv_kernel_size(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.CONV_KERNEL_SIZE.format(arch=self.arch), value)
+
+    def add_ssm_inner_length(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.INNER_LENGTH.format(arch=self.arch), value)
+
+    def add_ssm_state_length(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.STATE_LENGTH.format(arch=self.arch), value)
+
+    def add_ssm_dt_rank(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.DT_RANK.format(arch=self.arch), value)
+
     def add_tokenizer_model(self, model: str) -> None:
         self.add_string(Keys.Tokenizer.MODEL, model)
 

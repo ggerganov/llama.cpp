@@ -61,6 +61,12 @@ class Keys:
         SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
         SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
 
+    class SSM:
+        CONV_KERNEL_SIZE     = "{arch}.ssm.d_conv"
+        INNER_LENGTH         = "{arch}.ssm.d_inner"
+        STATE_LENGTH         = "{arch}.ssm.d_state"
+        DT_RANK              = "{arch}.ssm.dt_rank"
+
     class Tokenizer:
         MODEL            = "tokenizer.ggml.model"
         LIST             = "tokenizer.ggml.tokens"
@@ -762,6 +768,12 @@ KEY_ROPE_SCALING_TYPE         = Keys.Rope.SCALING_TYPE
 KEY_ROPE_SCALING_FACTOR       = Keys.Rope.SCALING_FACTOR
 KEY_ROPE_SCALING_ORIG_CTX_LEN = Keys.Rope.SCALING_ORIG_CTX_LEN
 KEY_ROPE_SCALING_FINETUNED    = Keys.Rope.SCALING_FINETUNED
+
+# SSM
+KEY_SSM_CONV_KERNEL_SIZE = Keys.SSM.CONV_KERNEL_SIZE
+KEY_SSM_INNER_LENGTH     = Keys.SSM.INNER_LENGTH
+KEY_SSM_STATE_LENGTH     = Keys.SSM.STATE_LENGTH
+KEY_SSM_DT_RANK          = Keys.SSM.DT_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
