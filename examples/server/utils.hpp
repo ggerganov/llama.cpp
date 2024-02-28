@@ -39,7 +39,7 @@ extern bool server_log_json;
 
 struct LogRedirection {
   // Set default values for redirection targets and reset strings
-  std::string stdout_target = "stdout_log.log";
+  std::string stdout_target = "stdout";
   std::string stdout_reset = "stdout";
   std::string stderr_target = "stderr_log.log";
   std::string stderr_reset = "stderr";

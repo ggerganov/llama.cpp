@@ -3243,7 +3243,7 @@ int main(int argc, char **argv)
                 std::string apikey = item.second[0];
                 std::string usercode = item.second[1];  // all three defined in anticipation of later use
                 if (received_api_key == apikey) {
-                    LOG("Apikey found for user %s\n", username.c_str());
+                    LOG("Apikey found for user %s with username %s\n", username.c_str(), usercode.c_str());
                     return true;
                     }
                 }
