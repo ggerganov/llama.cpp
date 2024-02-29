@@ -313,7 +313,7 @@ struct llama_client_slot
         std::string stderr_reset;
         double t_token = t_prompt_processing / num_prompt_tokens_processed;
         double n_tokens_second = 1e3 / t_prompt_processing * num_prompt_tokens_processed;
-        printf("\033[72;0H]");
+        //printf("\033[72;0H]");
         sprintf(buffer, "prompt eval time     = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)",
                 t_prompt_processing, num_prompt_tokens_processed,
                 t_token, n_tokens_second);
@@ -328,7 +328,7 @@ struct llama_client_slot
 
         t_token = t_token_generation / n_decoded;
         n_tokens_second = 1e3 / t_token_generation * n_decoded;
-        printf("\033[72;0H]");
+        //printf("\033[72;0H]");
         sprintf(buffer, "generation eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)",
                 t_token_generation, n_decoded,
                 t_token, n_tokens_second);
@@ -341,7 +341,7 @@ struct llama_client_slot
             {"n_tokens_second",    n_tokens_second}
         });
 
-        printf("\033[5;0H]");
+        // printf("\033[5;0H]");
         sprintf(buffer, "          total time = %10.2f ms", t_prompt_processing + t_token_generation);
         LOG_INFO(buffer, {
             {"slot_id",             id},
@@ -608,7 +608,7 @@ struct llama_server_context
         default_generation_settings_for_props = get_formatted_generation(slots.front());
         default_generation_settings_for_props["seed"] = -1;
 
-        batch = llama_batch_init(n_ctx, 0, params.n_parallel);     // this works fine with the slot context and saves VRAM
+        batch = llama_batch_init(n_ctx, 0, params.n_parallel);
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
@@ -670,7 +670,7 @@ struct llama_server_context
 
         for (llama_client_slot & slot : slots)
         {
-            printf("\033[5;0H");
+            //printf("\033[5;0H");
             if (slot.id == -1 && slot.available())
             {
                 LOG("Unallocated task now using slot %d", slot.id);
@@ -1555,7 +1555,7 @@ struct llama_server_context
                 // why should task.data already contain a slot_id key when we haven't allocated it?
                 // because if it doesnt the returned value will be -1; what makes it anything else?
                 int requested_slot = json_value(task.data, "slot_id", -1);
-                printf("\033[5;0H\033[K");
+                //printf("\033[5;0H\033[K");
                 LOG("Task %d requesting slot %d\n", task.id, requested_slot);
 
                 // why are we suddenly using 'slot' as a pointer here - confusing?
@@ -3317,7 +3317,7 @@ int main(int argc, char **argv)
                     return;
                 }
                 // it appears that here we first get ONE request to parse; then TEN; then ONE-by-ONE
-                printf("\033[5;0H\033[K");
+                //printf("\033[5;0H\033[K");
                 LOG("Request body to parse: %s.\n", req.body.c_str());
                 if (llama.skvinteract) {
                     getchar();
