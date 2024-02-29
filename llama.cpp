@@ -3072,6 +3072,7 @@ static void llm_load_hparams(
     // get general kv
     ml.get_key(LLM_KV_GENERAL_NAME, model.name, false);
 
+    // get hparams kv
     ml.get_key(LLM_KV_VOCAB_SIZE,           hparams.n_vocab,       false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, hparams.n_vocab);
     ml.get_key(LLM_KV_CONTEXT_LENGTH,       hparams.n_ctx_train);
     ml.get_key(LLM_KV_EMBEDDING_LENGTH,     hparams.n_embd);
@@ -12520,14 +12521,6 @@ int32_t llama_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
-int32_t llama_n_layers(const struct llama_model * model) {
-    return model->hparams.n_layer;
-}
-
-int32_t llama_n_heads(const struct llama_model * model) {
-    return model->hparams.n_head;
-}
-
 float llama_rope_freq_scale_train(const struct llama_model * model) {
     return model->hparams.rope_freq_scale_train;
 }
@@ -13183,13 +13176,6 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
 void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch) {
     ctx->cparams.n_threads       = n_threads;
     ctx->cparams.n_threads_batch = n_threads_batch;
-}
-
-void llama_get_n_threads(struct llama_context * ctx, uint32_t * n_threads, uint32_t * n_threads_batch) {
-    GGML_ASSERT(n_threads);
-    GGML_ASSERT(n_threads_batch);
-    *n_threads = ctx->cparams.n_threads;
-    *n_threads_batch = ctx->cparams.n_threads_batch;
 }
 
 void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
