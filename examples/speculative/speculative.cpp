@@ -47,7 +47,6 @@ int main(int argc, char ** argv) {
     }
     std::default_random_engine rng(params.seed);
     std::uniform_real_distribution<> u_dist;
-    std::uniform_int_distribution<> u_int_dist;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("speculative", "log"));
@@ -227,7 +226,8 @@ int main(int argc, char ** argv) {
 
                     while (active_seqs.size() > 0) {
                         // randomly select a sequence to verify from active sequences
-                        int s = *std::next(active_seqs.begin(), u_int_dist(rng) % active_seqs.size());
+                        std::uniform_int_distribution<u_int> u_int_dist(0, active_seqs.size() - 1);
+                        int s = *std::next(active_seqs.begin(), u_int_dist(rng));
                         if (i_dft >= (int) drafts[s].tokens.size()) {
                             drafts[s].active = false;
                             active_seqs.erase(s);
