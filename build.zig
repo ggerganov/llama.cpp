@@ -11,8 +11,6 @@ const Maker = struct {
     target: Target,
     optimize: Mode,
     enable_lto: bool,
-    build_all: bool,
-    install_libs: bool,
 
     include_dirs: ArrayList([]const u8),
     cflags: ArrayList([]const u8),
@@ -54,8 +52,6 @@ const Maker = struct {
             .target = target,
             .optimize = builder.standardOptimizeOption(.{}),
             .enable_lto = false,
-            .build_all = false,
-            .install_libs = false,
             .include_dirs = ArrayList([]const u8).init(builder.allocator),
             .cflags = ArrayList([]const u8).init(builder.allocator),
             .cxxflags = ArrayList([]const u8).init(builder.allocator),
@@ -94,25 +90,18 @@ const Maker = struct {
         } else {
             o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
             if (m.target.result.abi == .msvc) {
-                o.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
-                if (m.target.result.abi == .msvc) {
-                    o.linkLibC(); // need winsdk + crt
-                } else {
-                    // linkLibCpp already add (libc++ + libunwind + libc)
-                    o.linkLibCpp();
-                }
+                o.linkLibC(); // need winsdk + crt
+            } else {
+                // linkLibCpp already add (libc++ + libunwind + libc)
+                o.linkLibCpp();
             }
         }
         for (m.include_dirs.items) |i| o.addIncludePath(.{ .path = i });
         o.want_lto = m.enable_lto;
-        if (m.install_libs) m.builder.installArtifact(o);
         return o;
     }
 
-    fn exe(m: *const Maker, name: []const u8, src: []const u8, deps: []const *Compile) ?*Compile {
-        const opt = m.builder.option(bool, name, std.fmt.allocPrint(m.builder.allocator, "Build and install the {s} executable", .{name}) catch @panic("OOM")) orelse false;
-        if (!opt and !m.build_all) return null;
-
+    fn exe(m: *const Maker, name: []const u8, src: []const u8, deps: []const *Compile) *Compile {
         const e = m.builder.addExecutable(.{ .name = name, .target = m.target, .optimize = m.optimize });
         e.addCSourceFiles(.{ .files = &.{src}, .flags = m.cxxflags.items });
         for (deps) |d| e.addObject(d);
@@ -120,24 +109,23 @@ const Maker = struct {
 
         // https://github.com/ziglang/zig/issues/15448
         if (m.target.result.abi == .msvc) {
-            if (m.target.result.abi == .msvc) {
-                e.linkLibC(); // need winsdk + crt
-            } else {
-                // linkLibCpp already add (libc++ + libunwind + libc)
-                e.linkLibCpp();
-            }
-            m.builder.installArtifact(e);
-            e.want_lto = m.enable_lto;
-
-            const run = m.builder.addRunArtifact(e);
-            if (m.builder.args) |args| {
-                run.addArgs(args);
-            }
-            const step = m.builder.step(name, std.fmt.allocPrint(m.builder.allocator, "Run the {s} example", .{name}) catch @panic("OOM"));
-            step.dependOn(&run.step);
-
-            return e;
+            e.linkLibC(); // need winsdk + crt
+        } else {
+            // linkLibCpp already add (libc++ + libunwind + libc)
+            e.linkLibCpp();
         }
+        m.builder.installArtifact(e);
+        e.want_lto = m.enable_lto;
+
+        const run = m.builder.addRunArtifact(e);
+        run.step.dependOn(m.builder.getInstallStep());
+        if (m.builder.args) |args| {
+            run.addArgs(args);
+        }
+        const step = m.builder.step(name, m.builder.fmt("Run the {s} example", .{name}));
+        step.dependOn(&run.step);
+
+        return e;
     }
 };
 
@@ -195,6 +183,7 @@ pub fn build(b: *std.Build) !void {
 
     const exes = [_]*Compile{
         make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, clip }),
+        make.exe("simple", "examples/simple/simple.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser, clip }),
         make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo }),
         make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo }),
         make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo }),
