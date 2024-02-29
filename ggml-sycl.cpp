@@ -35,6 +35,7 @@
 #include "ggml-sycl.h"
 #include "ggml.h"
 #include "ggml-backend-impl.h"
+#include "bigdl.h"
 
 /*
 Following definition copied from DPCT head files, which are used by ggml-sycl.cpp
@@ -3020,7 +3021,7 @@ typedef void (*ggml_sycl_op_flatten_t)(const ggml_tensor *src0,
 // QR = QK / number of values before dequantization
 // QI = number of 32 bit integers before dequantization
 
-#define QK4_0 32
+#define QK4_0 64
 #define QR4_0 2
 #define QI4_0 (QK4_0 / (4 * QR4_0))
 typedef struct dpct_type_471834 {
@@ -8989,21 +8990,22 @@ static void dequantize_mul_mat_vec_q4_0_sycl(const void *vx, const dfloat *y,
                                              const int nrows,
                                              dpct::queue_ptr stream) {
     GGML_ASSERT(ncols % GGML_SYCL_DMMV_X == 0);
-    const int block_num_y = (nrows + GGML_SYCL_MMV_Y - 1) / GGML_SYCL_MMV_Y;
-    // the number of rows may exceed maximum grid size in the y or z dimensions, use the x dimension instead
-    const sycl::range<3> block_nums(1, 1, block_num_y);
-    const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
-    {
-        dpct::has_capability_or_fail(stream->get_device(),
-                                     {sycl::aspect::fp16});
+    // const int block_num_y = (nrows + GGML_SYCL_MMV_Y - 1) / GGML_SYCL_MMV_Y;
+    // // the number of rows may exceed maximum grid size in the y or z dimensions, use the x dimension instead
+    // const sycl::range<3> block_nums(1, 1, block_num_y);
+    // const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
+    // {
+    //     dpct::has_capability_or_fail(stream->get_device(),
+    //                                  {sycl::aspect::fp16});
 
-        stream->parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                dequantize_mul_mat_vec<QK4_0, QR4_0, dequantize_q4_0>(
-                    vx, y, dst, ncols, nrows, item_ct1);
-            });
-    }
+    //     stream->parallel_for(
+    //         sycl::nd_range<3>(block_nums * block_dims, block_dims),
+    //         [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+    //             dequantize_mul_mat_vec<QK4_0, QR4_0, dequantize_q4_0>(
+    //                 vx, y, dst, ncols, nrows, item_ct1);
+    //         });
+    // }
+    mul_mat_q4_0_sycl((const uint8_t*)vx, y, dst, ncols, nrows, *stream);
 }
 
 static void dequantize_mul_mat_vec_q4_1_sycl(const void *vx, const dfloat *y,

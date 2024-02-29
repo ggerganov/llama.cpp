@@ -7,12 +7,16 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define QK4_0 32
+#define QK4_0 64
 typedef struct {
     ggml_fp16_t d;          // delta
     uint8_t qs[QK4_0 / 2];  // nibbles / quants
 } block_q4_0;
 static_assert(sizeof(block_q4_0) == sizeof(ggml_fp16_t) + QK4_0 / 2, "wrong q4_0 block size/padding");
+
+typedef struct {
+    uint8_t qs[QK4_0 / 2];  // nibbles / quants
+} block_q4_0_qs;
 
 #define QK4_1 32
 typedef struct {

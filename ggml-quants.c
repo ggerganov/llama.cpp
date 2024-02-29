@@ -511,6 +511,48 @@ void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict
     }
 }
 
+// below code moves scales to be compatiable with bigdl.llm
+// void quantize_row_q4_0_reference(const float * restrict x, void * restrict y, int k) {
+//     static const int qk = QK4_0;
+
+//     assert(k % qk == 0);
+
+//     const int nb = k / qk;
+//     const int scales_offset = nb * sizeof(block_q4_0_qs);
+//     block_q4_0_qs * restrict y_qs = (block_q4_0_qs *) y;
+//     ggml_fp16_t * restrict scales = (ggml_fp16_t *) ((char*)y + scales_offset);
+
+//     for (int i = 0; i < nb; i++) {
+//         float amax = 0.0f; // absolute max
+//         float max  = 0.0f;
+
+//         for (int j = 0; j < qk; j++) {
+//             const float v = x[i*qk + j];
+//             if (amax < fabsf(v)) {
+//                 amax = fabsf(v);
+//                 max  = v;
+//             }
+//         }
+
+//         const float d  = max / -8;
+//         const float id = d ? 1.0f/d : 0.0f;
+
+//         // y_qs[i].d = GGML_FP32_TO_FP16(d);
+//         scales[i] = GGML_FP32_TO_FP16(d);
+
+//         for (int j = 0; j < qk/2; ++j) {
+//             const float x0 = x[i*qk + 0    + j]*id;
+//             const float x1 = x[i*qk + qk/2 + j]*id;
+
+//             const uint8_t xi0 = MIN(15, (int8_t)(x0 + 8.5f));
+//             const uint8_t xi1 = MIN(15, (int8_t)(x1 + 8.5f));
+
+//             y_qs[i].qs[j]  = xi0;
+//             y_qs[i].qs[j] |= xi1 << 4;
+//         }
+//     }
+// }
+
 void quantize_row_q4_0(const float * restrict x, void * restrict y, int k) {
     quantize_row_q4_0_reference(x, y, k);
 }
@@ -3042,7 +3084,7 @@ size_t quantize_q6_K(const float * src, void * dst, int nrow, int n_per_row, int
 }
 
 static void quantize_row_q4_0_impl(const float * restrict x, block_q4_0 * restrict y, int n_per_row, const float * quant_weights) {
-    static_assert(QK4_0 == 32, "QK4_0 must be 32");
+    // static_assert(QK4_0 == 32, "QK4_0 must be 32");
 
     if (!quant_weights) {
         quantize_row_q4_0_reference(x, y, n_per_row);
