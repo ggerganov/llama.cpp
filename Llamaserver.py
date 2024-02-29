@@ -63,6 +63,10 @@ you pay close attention to the nuance of a question and response accordingly."
         response = requests.post(url, headers=headers, json=data)
         if response.status_code in [200,300]:
             with lockbar:
+                #for attr in dir(response.raw):
+                    #if not attr.startswith('__'):
+                        #print(f"response.raw.{attr} has content {getattr(response.raw, attr)}\n")
+                        #input("Press any key ",)
                 print(f"Current Client Queue Size: {q.qsize()}; processing request {count} / {num_requests}\n")
                 print(f"Status Code for {question}: {response.status_code}\n")
                 print(f"Response to {question}:\n")
@@ -140,7 +144,9 @@ if __name__ == "__main__":
     for thread in threads:
         thread.join()   # wait for all threads to finish
 
+    '''
     print("FINISHED AND GETTING RESULTS")
     while not q.empty():
         text = q.get()  
         print_dict(json.loads(text))
+    '''
