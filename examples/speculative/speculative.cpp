@@ -237,8 +237,8 @@ int main(int argc, char ** argv) {
                             // if we already accepted a token, we can skip the rest
                             if (drafts[s].tokens[i_dft] != drafts[s_keep].tokens[i_dft]) {
                                 drafts[s].active = false;
+                                active_seqs.erase(s);
                             }
-                            active_seqs.erase(s);
                             continue;
                         }
                         LOG("verifying sequence #%d at pos #%d from %d active sequence(s)\n", s, i_dft, (int) active_seqs.size());
