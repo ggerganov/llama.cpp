@@ -281,6 +281,8 @@ class Model:
             return gguf.MODEL_ARCH.NOMIC_BERT
         if arch == "GemmaForCausalLM":
             return gguf.MODEL_ARCH.GEMMA
+        if arch == "Starcoder2ForCausalLM":
+            return gguf.MODEL_ARCH.STARCODER2
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
