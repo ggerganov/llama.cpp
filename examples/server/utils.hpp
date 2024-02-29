@@ -29,8 +29,8 @@ extern bool server_log_json;
         if (server_verbose)                                              \
         {                                                                \
             server_log("VERB", __func__, __LINE__, MSG, __VA_ARGS__,     \
-               log_settings.stdout_target, log_settings.stdout_reset,    \
-               log_settings.stderr_target, log_settings.stderr_reset);   \
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset);   \
         }                                                                \
     } while (0)     // this is always false so the loop only compiles once but is treated as a single statement
 #endif
@@ -39,28 +39,28 @@ extern bool server_log_json;
 
 struct LogRedirection {
   // Set default values for redirection targets and reset strings
-  std::string stdout_target = "stdout";
-  std::string stdout_reset = "stdout";
+  std::string stdout_target = "stdout_log.log";
+  std::string stdout_reset = "/dev/stdout";
   std::string stderr_target = "stderr_log.log";
-  std::string stderr_reset = "stderr";
+  std::string stderr_reset = "/dev/stderr";
 };
 
 LogRedirection log_settings;
 
 #define LOG_ERROR(MSG, ...) \
     server_log("ERR", __func__, __LINE__, MSG, __VA_ARGS__, \
-               log_settings.stdout_target, log_settings.stdout_reset, \
-               log_settings.stderr_target, log_settings.stderr_reset)
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset)
 
 #define LOG_WARNING(MSG, ...) \
     server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__, \
-               log_settings.stdout_target, log_settings.stdout_reset, \
-               log_settings.stderr_target, log_settings.stderr_reset)
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset)
 
 #define LOG_INFO(MSG, ...) \
     server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__, \
-               log_settings.stdout_target, log_settings.stdout_reset, \
-               log_settings.stderr_target, log_settings.stderr_reset)
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset)
 
 /*
 // Example usage (WIP):
@@ -214,8 +214,20 @@ static inline void server_log(
         {"timestamp", time(nullptr)},
     };
 
-    freopen(stdout_target.c_str(), "a", stdout);
-    freopen(stderr_target.c_str(), "a", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
+    /*
+    std::cerr << stdout_target.c_str() << std::endl;
+    FILE* new_stdout = freopen(stdout_target.c_str(), "a", stdout);
+    if (new_stdout == nullptr) {
+        std::cerr << "Error on redirecting stdout to " << stdout_target.c_str() << std::endl;
+    }
+    */
+
+    std::cerr << stderr_target.c_str() << std::endl;
+    FILE* new_stderr = freopen(stderr_target.c_str(), "a", stderr);
+    if (new_stderr == nullptr) {
+        std::cerr << "Error on redirecting stderr to " << stderr_target.c_str() << std::endl;
+    }
+    //freopen(stderr_target.c_str(), "a", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
 
     if (server_log_json) {
         log.merge_patch(
@@ -250,8 +262,10 @@ static inline void server_log(
         printf("\033[85;0H%.*s\n", (int)str.size(), str.data());
         fflush(stderr);                                                // was originally fflush(stdout)
 
+        /*
         freopen(stdout_reset.c_str(), "a", stdout);                    // decide whether to restore stdout
         freopen(stderr_reset.c_str(), "a", stderr);                    // decide whether to restore stderr (both need automating)
+        */
     }
 }
 

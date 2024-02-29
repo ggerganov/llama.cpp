@@ -96,7 +96,7 @@ if __name__ == "__main__":
     global bar
     lockbar = threading.Lock()
     
-    url = "http://192.168.1.31:8080/completion"
+    url = "http://192.168.1.28:8080/completion"
 
     num_requests = 76
     q = Queue(maxsize = 80)
@@ -113,15 +113,23 @@ if __name__ == "__main__":
         'Authorization': f'Bearer {api_key}'
         }
 
+    writer_list = ["Plato", "Aristotle", "Thales of Miletus", "Heraclitus", "Socrates",
+                   "The prophet Isaiah", "Jesus of Nazareth", "Plotinus", "Porphyry",
+                   "Irenaeus", "Athanasius", "Augustine of Hippo", "Thomas Aquinas", "Anselm of Canterbury",
+                   "Roget Bacon", "Fibonacci", "Duns Scotus", "William of Ockham", "Nicholas of Cusa",
+                   "Erasmus", "Thomas More", "Luther", "Calvin", "Thomas Cranmer", "Shakespeare",
+                   "Francis Bacon", "Thomas Cromwell", "Thomas Hobbes", "John Locke", "David Hume", "Berkeley", "Immanuel Kant",
+                   "Jeremy Bentham", "William Blake", "John Stuart Mill", "Peirce", "Ralph Waldo Emerson", "Emily Dickinson", "Walt Whitman", "William James", "Henry James", "Henry Sidgwick", "John Dewey"]
+    
     country_list = ["France", "Germany", "China", "USA", "Italy", "India",
                     "Ukraine", "Japan", "Australia", "New Zealand", "Indonesia", "Nigeria", "Saudi Arabia",
-                    "Israel", "Egypt", "Kenya", "Chile", "Mexico", "Canada",
+                    "Israel", "Egypt", "Kenya", "Chile", "Mexico", "Canada", "Ecuador", "Brazil", "Argentina", "Colombia",
                     "Bulgaria", "Romania", "Finland", "Sweden", "Norway", "Denmark", "Tanzania", "Israel",
                     "Latvia", "Lithuania", "Estonia", "Pakistan", "Sri Lanka", "Malawi", "Mozambique"]
     
     for i in range(num_requests):
-        country = country_list[i % len(country_list)]
-        question = f"Tell me the political history of {country} up to 2018."
+        writer = writer_list[i % len(writer_list)]
+        question = f"Tell me about the writings of {writer}."
         # NOTE: don't pass the parameter as a function call; pass in args
         print(f"Processing request {i} / {num_requests}: {question}\n")
         event = threading.Event()

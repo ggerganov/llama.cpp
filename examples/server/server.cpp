@@ -2245,6 +2245,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                            KV cache data type for V (default: f16)\n");
     printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-format              log output format: json or text (default: json)\n");
+    printf("  --stdout-log-file FNAME   redirect stdout to a log file.\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
     printf("  --metrics                 enable prometheus compatible metrics endpoint (default: %s).\n", sparams.metrics_endpoint ? "enabled" : "disabled");
@@ -2515,11 +2516,13 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         {
             llama.skvgraphics = true;       // -skvg takes no parameter so we don't test ++i >= argc
             llama.skvinteract = false;
+            log_settings.stdout_target = "/dev/null";
         }
         else if (arg == "-skvi" || arg == "--show-interactive-graphics")
         {
             llama.skvgraphics = true;       // -skvi takes no parameter so we don't test ++i >= argc
             llama.skvinteract = true;
+            log_settings.stdout_target = "/dev/null";
         }
         else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers")
         {
@@ -2758,6 +2761,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
+        }
+        else if (arg == "--stdout-log-file")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            log_settings.stdout_target = argv[i];   // have just noticed that there is a 'log_set_target()' below but says 'INTERNAL USE: DO NOT USE'
         }
         else if (arg == "--log-disable")
         {
