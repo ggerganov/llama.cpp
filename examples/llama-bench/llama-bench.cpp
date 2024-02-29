@@ -600,7 +600,6 @@ struct test {
     llama_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
-    bool mul_mat_q;
     std::vector<float> tensor_split;
     bool use_mmap;
     int n_prompt;
@@ -696,7 +695,7 @@ struct test {
             "n_batch", "n_threads", "type_k", "type_v",
             "n_gpu_layers", "split_mode",
             "main_gpu", "no_kv_offload",
-            "mul_mat_q", "tensor_split", "use_mmap",
+            "tensor_split", "use_mmap",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts"
@@ -716,7 +715,7 @@ struct test {
         }
         if (field == "cuda" || field == "opencl"  || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
-            field == "mul_mat_q" || field == "use_mmap") {
+            field == "use_mmap") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -750,7 +749,7 @@ struct test {
             std::to_string(n_batch), std::to_string(n_threads), ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
             std::to_string(main_gpu), std::to_string(no_kv_offload),
-            std::to_string(mul_mat_q), tensor_split_str, std::to_string(use_mmap),
+            tensor_split_str, std::to_string(use_mmap),
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -913,9 +912,6 @@ struct markdown_printer : public printer {
         }
         if (field == "n_threads") {
             return "threads";
-        }
-        if (field == "mul_mat_q") {
-            return "mmq";
         }
         if (field == "no_kv_offload") {
             return "nkvo";
