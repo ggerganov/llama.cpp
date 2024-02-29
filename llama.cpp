@@ -1665,7 +1665,7 @@ struct llama_hparams {
 };
 
 struct llama_cparams {
-    uint32_t n_ctx;       // context size used during inference
+    uint32_t n_ctx;           // context size used during inference
     uint32_t n_batch;
     uint32_t n_threads;       // number of threads to use for generation
     uint32_t n_threads_batch; // number of threads to use for batch processing
@@ -1682,7 +1682,9 @@ struct llama_cparams {
     float yarn_beta_slow;
     float defrag_thold;
 
+    bool embeddings;
     bool offload_kqv;
+
     enum llama_pooling_type pooling_type;
 
     ggml_backend_sched_eval_callback cb_eval;
@@ -1972,7 +1974,7 @@ struct llama_context {
     int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
     int32_t n_eval   = 0; // number of eval calls
 
-    // decode output (2-dimensional array: [n_tokens][n_vocab])
+    // logits output (2-dimensional array: [n_tokens][n_vocab])
     std::vector<float> logits;
 #ifndef NDEBUG
     // guard against access to unset logits
@@ -1980,8 +1982,8 @@ struct llama_context {
 #endif
     bool logits_all = false;
 
-    // input embedding (1-dimensional array: [n_embd])
-    std::vector<float> embedding;
+    // embeddings output (2-dimensional array: [n_tokens][n_embd])
+    std::vector<float> embeddings;
 
     // memory buffers used to evaluate the model
     std::vector<uint8_t> buf_compute_meta;
@@ -5092,6 +5094,7 @@ static struct ggml_tensor * llm_build_kv(
     llm_build_kv_store(ctx, hparams, kv, graph, k_cur, v_cur, n_ctx, n_tokens, kv_head, cb, il);
 
     struct ggml_tensor * cur;
+
     cur  = llm_build_kqv(ctx, model, hparams, kv, graph, wo, wo_b,
             q_cur, kq_mask, kq_pos, n_ctx, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
@@ -6085,6 +6088,7 @@ struct llm_build_context {
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
+
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
@@ -6092,9 +6096,10 @@ struct llm_build_context {
 
         // get input vectors with right size
         const size_t stride1 = n_tokens * ggml_type_size(lctx.inp_tokens->type);
-        struct ggml_tensor * inp_pos = ggml_view_1d(ctx0, lctx.inp_pos, n_tokens, 0);
+
+        struct ggml_tensor * inp_pos  = ggml_view_1d(ctx0, lctx.inp_pos,  n_tokens, 0);
         struct ggml_tensor * inp_mean = ggml_view_2d(ctx0, lctx.inp_mean, n_tokens, n_tokens, stride1, 0);
-        struct ggml_tensor * inp_cls = ggml_view_1d(ctx0, lctx.inp_cls, n_tokens, 0);
+        struct ggml_tensor * inp_cls  = ggml_view_1d(ctx0, lctx.inp_cls,  n_tokens, 0);
 
         // construct input embeddings (token, type, position)
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
@@ -8195,17 +8200,17 @@ static int llama_decode_internal(
     ggml_cgraph * gf = llama_build_graph(lctx, batch, false);
 
     // the output is always the last tensor in the graph
-    struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
-    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
+    struct ggml_tensor * res  = gf->nodes[gf->n_nodes - 1];
+    struct ggml_tensor * embd = gf->nodes[gf->n_nodes - 2];
 
     if (strcmp(res->name, "result_output") == 0) {
         // the embeddings could be the second to last tensor, or the third to last tensor
-        if (strcmp(embeddings->name, "result_norm") != 0) {
-            embeddings = gf->nodes[gf->n_nodes - 3];
-            GGML_ASSERT(strcmp(embeddings->name, "result_norm") == 0);
+        if (strcmp(embd->name, "result_norm") != 0) {
+            embd = gf->nodes[gf->n_nodes - 3];
+            GGML_ASSERT(strcmp(embd->name, "result_norm") == 0);
         }
     } else if (strcmp(res->name, "result_embd") == 0) {
-        embeddings = res;
+        embd = res;
         res = nullptr;
     } else {
         GGML_ASSERT(false);
@@ -8275,46 +8280,57 @@ static int llama_decode_internal(
         logits_out.clear();
 #endif
 
-        ggml_backend_t res_backend = ggml_backend_sched_get_node_backend(lctx.sched, res);
-        GGML_ASSERT(res_backend != nullptr);
+        ggml_backend_t backend_res = ggml_backend_sched_get_node_backend(lctx.sched, res);
+        GGML_ASSERT(backend_res != nullptr);
+
         if (batch.logits) {
             logits_out.resize(n_vocab * n_tokens);
             for (uint32_t i = 0; i < n_tokens; i++) {
                 if (batch.logits[i] == 0) {
                     continue;
                 }
-                ggml_backend_tensor_get_async(res_backend, res, logits_out.data() + (n_vocab*i), (n_vocab*i)*sizeof(float), n_vocab*sizeof(float));
+                ggml_backend_tensor_get_async(backend_res, res, logits_out.data() + (n_vocab*i), (n_vocab*i)*sizeof(float), n_vocab*sizeof(float));
 #ifndef NDEBUG
                 logits_valid[i] = true;
 #endif
             }
         } else if (lctx.logits_all) {
             logits_out.resize(n_vocab * n_tokens);
-            ggml_backend_tensor_get_async(res_backend, res, logits_out.data(), 0, n_vocab*n_tokens*sizeof(float));
+            ggml_backend_tensor_get_async(backend_res, res, logits_out.data(), 0, n_vocab*n_tokens*sizeof(float));
 #ifndef NDEBUG
             std::fill(logits_valid.begin(), logits_valid.end(), true);
 #endif
         } else {
             logits_out.resize(n_vocab);
-            ggml_backend_tensor_get_async(res_backend, res, logits_out.data(), (n_vocab*(n_tokens - 1))*sizeof(float), n_vocab*sizeof(float));
+            ggml_backend_tensor_get_async(backend_res, res, logits_out.data(), (n_vocab*(n_tokens - 1))*sizeof(float), n_vocab*sizeof(float));
 #ifndef NDEBUG
             logits_valid[0] = true;
 #endif
         }
-        ggml_backend_synchronize(res_backend);
+        ggml_backend_synchronize(backend_res);
     }
 
     // extract embeddings
-    if (!lctx.embedding.empty()) {
-        auto & embedding_out = lctx.embedding;
+    if (cparams.embeddings && embd) {
+        auto & embeddings_out = lctx.embeddings;
 
-        const int64_t embd_pos  = res ? n_embd * (n_tokens-1) : 0;
-        const int64_t embd_size = res ? n_embd : n_embd * n_tokens;
+        ggml_backend_t backend_embd = ggml_backend_sched_get_node_backend(lctx.sched, embd);
+        GGML_ASSERT(backend_embd != nullptr);
 
-        embedding_out.resize(embd_size);
-        ggml_backend_t embeddings_backend = ggml_backend_sched_get_node_backend(lctx.sched, embeddings);
-        ggml_backend_tensor_get_async(embeddings_backend, embeddings, embedding_out.data(), embd_pos*sizeof(float), embd_size*sizeof(float));
-        ggml_backend_synchronize(embeddings_backend);
+        if (batch.logits) {
+            embeddings_out.resize(n_embd * n_tokens);
+            for (uint32_t i = 0; i < n_tokens; i++) {
+                if (batch.logits[i] == 0) {
+                    continue;
+                }
+                if (hparams.pooling_type == LLAMA_POOLING_TYPE_CLS) {
+                    ggml_backend_tensor_get_async(backend_embd, embd, embeddings_out.data() + (n_embd*i), (n_embd*batch.seq_id[i][0])*sizeof(float), n_embd*sizeof(float));
+                } else {
+                    ggml_backend_tensor_get_async(backend_embd, embd, embeddings_out.data() + (n_embd*i), (n_embd*i)*sizeof(float), n_embd*sizeof(float));
+                }
+            }
+        }
+        ggml_backend_synchronize(backend_embd);
     }
 
     // measure the performance only for the single-token evals
@@ -11864,7 +11880,7 @@ struct llama_context_params llama_context_default_params() {
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
         /*.logits_all                  =*/ false,
-        /*.embedding                   =*/ false,
+        /*.embeddings                  =*/ false,
         /*.offload_kqv                 =*/ true,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
@@ -12015,6 +12031,7 @@ struct llama_context * llama_new_context_with_model(
     cparams.yarn_beta_fast   = params.yarn_beta_fast;
     cparams.yarn_beta_slow   = params.yarn_beta_slow;
     cparams.defrag_thold     = params.defrag_thold;
+    cparams.embeddings       = params.embeddings;
     cparams.offload_kqv      = params.offload_kqv;
     cparams.pooling_type     = params.pooling_type;
 
@@ -12192,8 +12209,8 @@ struct llama_context * llama_new_context_with_model(
         // resized during inference, reserve maximum
         ctx->logits.reserve(hparams.n_vocab*cparams.n_batch);
 
-        if (params.embedding) {
-            ctx->embedding.resize(hparams.n_embd);
+        if (params.embeddings) {
+            ctx->embeddings.reserve(hparams.n_embd*cparams.n_batch);
         }
 
         // graph inputs
@@ -12628,7 +12645,7 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     // assume worst case for logits although only currently set ones are serialized
     const size_t s_logits          = ctx->logits.capacity() * sizeof(float);
     const size_t s_embedding_size  = sizeof(size_t);
-    const size_t s_embedding       = ctx->embedding.size() * sizeof(float);
+    const size_t s_embedding       = ctx->embeddings.capacity() * sizeof(float);
     const size_t s_kv_buf_size     = sizeof(size_t);
     const size_t s_kv_head         = sizeof(uint32_t);
     const size_t s_kv_size         = sizeof(uint32_t);
@@ -12737,12 +12754,12 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
 
     // copy embeddings
     {
-        const size_t embedding_size = ctx->embedding.size();
+        const size_t embeddings_size = ctx->embeddings.size();
 
-        data_ctx->write(&embedding_size, sizeof(embedding_size));
+        data_ctx->write(&embeddings_size, sizeof(embeddings_size));
 
-        if (embedding_size) {
-            data_ctx->write(ctx->embedding.data(), embedding_size * sizeof(float));
+        if (embeddings_size) {
+            data_ctx->write(ctx->embeddings.data(), embeddings_size * sizeof(float));
         }
     }
 
@@ -12846,15 +12863,17 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
 
     // set embeddings
     {
-        size_t embedding_size;
+        size_t embeddings_size;
 
-        memcpy(&embedding_size, inp, sizeof(embedding_size)); inp += sizeof(embedding_size);
+        memcpy(&embeddings_size, inp, sizeof(embeddings_size)); inp += sizeof(embeddings_size);
 
-        GGML_ASSERT(ctx->embedding.capacity() == embedding_size);
+        GGML_ASSERT(ctx->embeddings.capacity() == embeddings_size);
 
-        if (embedding_size) {
-            memcpy(ctx->embedding.data(), inp, embedding_size * sizeof(float));
-            inp += embedding_size * sizeof(float);
+        if (embeddings_size) {
+            ctx->embeddings.resize(embeddings_size);
+
+            memcpy(ctx->embeddings.data(), inp, embeddings_size * sizeof(float));
+            inp += embeddings_size * sizeof(float);
         }
     }
 
@@ -13104,11 +13123,11 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
 }
 
 float * llama_get_embeddings(struct llama_context * ctx) {
-    return ctx->embedding.data();
+    return ctx->embeddings.data();
 }
 
 float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
-    return ctx->embedding.data() + i*ctx->model.hparams.n_embd;
+    return ctx->embeddings.data() + i*ctx->model.hparams.n_embd;
 }
 
 const char * llama_token_get_text(const struct llama_model * model, llama_token token) {
