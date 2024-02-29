@@ -31,7 +31,7 @@ struct train_state  * init_train_state() {
 
     state->opt = new struct ggml_opt_context;
     state->opt->ctx = NULL;
-    state->opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
+    state->opt->params = ggml_opt_default_params(GGML_OPT_TYPE_ADAM);
     state->opt->params.graph_size = LLAMA_TRAIN_MAX_NODES;
     state->opt->loss_after = 0.0f;
 
@@ -556,7 +556,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     std::string opt_type;
     GGUF_GET_KEY(fctx, opt_type, gguf_get_val_str, GGUF_TYPE_STRING, true, LLM_KV_OPTIMIZER_TYPE);
     if (opt_type == LLM_KV_OPTIMIZER_TYPE_ADAM) {
-        opt->params.type = GGML_OPT_ADAM;
+        opt->params.type = GGML_OPT_TYPE_ADAM;
 
         GGUF_GET_KEY(fctx, opt->adam.fx_best,          gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, LLM_KV_OPTIMIZER_ADAM_BEST_LOSS);
         GGUF_GET_KEY(fctx, opt->adam.fx_prev,          gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, LLM_KV_OPTIMIZER_ADAM_PREVIOUS_LOSS);
@@ -568,7 +568,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
         copy_tensor_by_name(opt->adam.v,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS);
         copy_tensor_by_name(opt->adam.pf, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
     } else if (opt_type == LLM_KV_OPTIMIZER_TYPE_LBFGS) {
-        opt->params.type = GGML_OPT_LBFGS;
+        opt->params.type = GGML_OPT_TYPE_LBFGS;
 
         GGUF_GET_KEY(fctx, opt->params.lbfgs.m,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, LLM_KV_OPTIMIZER_LBFGS_APPROX_HESSIAN_COUNT);
         GGUF_GET_KEY(fctx, opt->lbfgs.fx_best,          gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, LLM_KV_OPTIMIZER_LBFGS_BEST_LOSS);
@@ -603,7 +603,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
     gguf_set_val_bool(fctx, LLM_KV_OPTIMIZER_JUST_INITIALIZED, opt->just_initialized);
 
     switch (opt->params.type) {
-        case GGML_OPT_ADAM:
+        case GGML_OPT_TYPE_ADAM:
             {
                 gguf_set_val_str(fctx, LLM_KV_OPTIMIZER_TYPE, LLM_KV_OPTIMIZER_TYPE_ADAM);
                 gguf_set_val_f32(fctx, LLM_KV_OPTIMIZER_ADAM_BEST_LOSS,            opt->adam.fx_best);
@@ -622,7 +622,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
                     gguf_add_tensor(fctx, opt->adam.pf);
                 }
             } break;
-        case GGML_OPT_LBFGS:
+        case GGML_OPT_TYPE_LBFGS:
             {
                 gguf_set_val_str(fctx, LLM_KV_OPTIMIZER_TYPE, LLM_KV_OPTIMIZER_TYPE_LBFGS);
                 gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_LBFGS_APPROX_HESSIAN_COUNT, opt->params.lbfgs.m);

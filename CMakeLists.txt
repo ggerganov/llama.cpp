@@ -936,10 +936,16 @@ if (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR CMAKE_GENERATOR_PLATFORM_LWR STR
             list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv7")
-            # Raspberry Pi 2
-            list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
+            if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
+                # Android armeabi-v7a
+                list(APPEND ARCH_FLAGS -mfpu=neon-vfpv4 -mno-unaligned-access -funsafe-math-optimizations)
+            else()
+                # Raspberry Pi 2
+                list(APPEND ARCH_FLAGS -mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
+            endif()
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8")
+            # Android arm64-v8a
             # Raspberry Pi 3, 4, Zero 2 (32-bit)
             list(APPEND ARCH_FLAGS -mno-unaligned-access)
         endif()

@@ -1531,7 +1531,7 @@ int main(int argc, char ** argv) {
     lora.hparams.n_rank_output         = n_rank_output;
 
     // set opt params from command line
-    opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
+    opt->params = ggml_opt_default_params(GGML_OPT_TYPE_ADAM);
     opt->params.print_forward_graph     = false;
     opt->params.print_backward_graph    = false;
     opt->params.graph_size              = LLAMA_TRAIN_MAX_NODES;

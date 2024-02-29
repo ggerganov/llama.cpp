@@ -960,7 +960,7 @@ int main(int argc, char ** argv) {
     struct ggml_opt_context * opt   = train->opt;
 
     // set opt params from command line
-    opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
+    opt->params = ggml_opt_default_params(GGML_OPT_TYPE_ADAM);
     opt->params.print_forward_graph     = false;
     opt->params.print_backward_graph    = false;
     opt->params.graph_size              = LLAMA_TRAIN_MAX_NODES;
