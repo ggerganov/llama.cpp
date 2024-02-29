@@ -9001,12 +9001,13 @@ struct llm_tokenizer_wpm {
     }
 
     uint32_t to_lower(uint32_t code) {
+        static const std::locale locale("en_US.UTF-8");
 #if defined(_WIN32)
         if (code > 0xFFFF) {
             return code;
         }
 #endif
-        return std::tolower(wchar_t(code), std::locale("en_US.UTF-8"));
+        return std::tolower(wchar_t(code), locale);
     }
 
     bool is_ascii_punct(uint32_t code) {
