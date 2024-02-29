@@ -8947,7 +8947,7 @@ struct llm_tokenizer_wpm {
         std::vector<uint32_t> codepoints = codepoints_from_utf8(text);
         std::vector<uint32_t> nfd_codepoints;
         for (uint32_t code : codepoints) {
-            auto it = nfd_map.equal_range({code, 0});
+            auto it = nfd_map.equal_range(code);
             if (it.first != it.second) {
                 for (auto jt = it.first; jt != it.second; jt++) {
                     nfd_codepoints.push_back(jt->second);
