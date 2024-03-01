@@ -84,6 +84,18 @@ class SchemaConverter:
 
             return self._add_rule(rule_name, rule)
 
+        elif schema_type == 'object' and 'additionalProperties' in schema:
+            additional_properties = schema['additionalProperties']
+            if not isinstance(additional_properties, dict):
+                additional_properties = {}
+
+            sub_name = f'{name}{"-" if name else ""}additionalProperties'
+            value_rule = self.visit(additional_properties, f'{sub_name}-value')
+            kv_rule = self._add_rule(f'{sub_name}-kv', f'string ":" space {value_rule}')
+            return self._add_rule(
+                rule_name,
+                f'( {kv_rule} ( "," space {kv_rule} )* )*')
+
         elif schema_type == 'array' and 'items' in schema:
             # TODO `prefixItems` keyword
             items = schema['items']
