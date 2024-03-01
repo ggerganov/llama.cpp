@@ -115,7 +115,6 @@ struct gpt_params {
 
     bool   kl_divergence   = false; // compute KL-divergence
 
-    bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode

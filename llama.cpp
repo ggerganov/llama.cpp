@@ -1645,7 +1645,6 @@ struct llama_cparams {
     float yarn_beta_slow;
     float defrag_thold;
 
-    bool mul_mat_q;
     bool offload_kqv;
     bool do_pooling;
 
@@ -11633,7 +11632,6 @@ struct llama_context_params llama_context_default_params() {
         /*.cb_eval_user_data           =*/ nullptr,
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
-        /*.mul_mat_q                   =*/ true,
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
@@ -11785,7 +11783,6 @@ struct llama_context * llama_new_context_with_model(
     cparams.yarn_beta_fast   = params.yarn_beta_fast;
     cparams.yarn_beta_slow   = params.yarn_beta_slow;
     cparams.defrag_thold     = params.defrag_thold;
-    cparams.mul_mat_q        = params.mul_mat_q;
     cparams.offload_kqv      = params.offload_kqv;
     cparams.do_pooling       = params.do_pooling;
 
