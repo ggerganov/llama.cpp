@@ -1,6 +1,6 @@
 {
-  pkgs,
   lib,
+  glibc,
   config,
   stdenv,
   mkShell,
@@ -31,6 +31,7 @@
   useRocm ? config.rocmSupport,
   useVulkan ? false,
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
+  buildStatic ? false,
 }@inputs:
 
 let
@@ -161,7 +162,6 @@ effectiveStdenv.mkDerivation (
         ninja
         pkg-config
         git
-        pkgs.glibc.static
       ]
       ++ optionals useCuda [
         cudaPackages.cuda_nvcc
@@ -169,6 +169,9 @@ effectiveStdenv.mkDerivation (
         # TODO: Replace with autoAddDriverRunpath
         # once https://github.com/NixOS/nixpkgs/pull/275241 has been merged
         cudaPackages.autoAddOpenGLRunpathHook
+      ]
+      ++ optionals buildStatic [
+        glibc.static
       ];
 
     buildInputs =
@@ -183,7 +186,7 @@ effectiveStdenv.mkDerivation (
       [
         (cmakeBool "LLAMA_NATIVE" false)
         (cmakeBool "LLAMA_BUILD_SERVER" true)
-        (cmakeBool "BUILD_SHARED_LIBS" false)
+        (cmakeBool "BUILD_SHARED_LIBS" !buildStatic)
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
         (cmakeBool "LLAMA_BLAS" useBlas)
         (cmakeBool "LLAMA_CLBLAST" useOpenCL)
@@ -192,7 +195,7 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_METAL" useMetalKit)
         (cmakeBool "LLAMA_MPI" useMpi)
         (cmakeBool "LLAMA_VULKAN" useVulkan)
-        (cmakeBool "LLAMA_STATIC" true)
+        (cmakeBool "LLAMA_STATIC" buildStatic)
       ]
       ++ optionals useCuda [
         (
