@@ -326,7 +326,7 @@ Notice that each `probs` is an array of length `n_probs`.
 - `default_generation_settings` - the default generation settings for the `/completion` endpoint, has the same fields as the `generation_settings` response object from the `/completion` endpoint.
 - `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
 
-- **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint. Compared to `api_like_OAI.py` this API implementation does not require a wrapper to be served.
+- **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint.
 
     *Options:*
 
@@ -528,20 +528,7 @@ bash chat.sh
 
 ### API like OAI
 
-API example using Python Flask: [api_like_OAI.py](api_like_OAI.py)
-This example must be used with server.cpp
-
-```sh
-python api_like_OAI.py
-```
-
-After running the API server, you can use it in Python by setting the API base URL.
-
-```python
-openai.api_base = "http://<Your api-server IP>:port"
-```
-
-Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
+The HTTP server supports OAI-like API
 
 ### Extending or building alternative Web Front End
 
