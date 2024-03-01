@@ -87,6 +87,7 @@
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
+#include <queue>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -11455,7 +11456,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
     for (auto & out_tensor : output_tensors) {
         std::string name = ggml_get_name(out_tensor);
         int i_layer_out = get_i_layer(name.c_str());
-        std::vector<no_init<uint8_t>> buf(ggml_nbytes(out_tensor));
+        std::vector<no_init<uint8_t>> buf;
         if (i_layer_out >= 0) {
             continue;
         }
@@ -11469,9 +11470,10 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         read_tensor_data(in_tensor, *mls[0], buf); // read from first model
 
         // write tensor data + padding
+        const size_t write_size = ggml_nbytes(out_tensor);
+        fout.write((const char *) in_tensor->data, write_size);
+        zeros(fout, GGML_PAD(write_size, GGUF_DEFAULT_ALIGNMENT) - write_size);
         log_step(out_tensor);
-        fout.write((const char *) buf.data(), buf.size());
-        zeros(fout, GGML_PAD(buf.size(), GGUF_DEFAULT_ALIGNMENT) - buf.size());
     }
 
     const int n_threads = std::thread::hardware_concurrency();
@@ -11505,7 +11507,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         std::vector<no_init<uint8_t>> in_buf;
         std::vector<no_init<float>> f32_in_buf; // dequant it internally
         std::vector<float> f32_out_buf(n_elements, 0.0); // do not resize!
-        std::vector<no_init<uint8_t>> out_buf(ggml_nbytes(out_tensor)); // do not resize!
+        std::vector<uint8_t> out_buf(ggml_nbytes(out_tensor)); // do not resize!
 
         std::string out_name = ggml_get_name(out_tensor);
         int i_layer_out = get_i_layer(out_name.c_str());
@@ -11545,13 +11547,12 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         }
 
         // re-quantize it
-        // TODO: multi-threading it
         //LLAMA_LOG_ERROR("requant\n");
         {
             std::array<int64_t, 1 << 4> hist_cur = {};
             const int n_per_row = out_tensor->ne[0];
             const int n_rows = n_elements / n_per_row;
-            ggml_quantize_chunk(
+            size_t new_size = ggml_quantize_chunk(
                 out_tensor->type,
                 f32_out_buf.data(),
                 out_buf.data(),
@@ -11560,6 +11561,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
                 n_per_row,
                 hist_cur.data(), // unused for now
                 nullptr);
+            GGML_ASSERT(new_size == out_buf.size());
         }
 
         // wait until my turn
@@ -11602,6 +11604,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         std::vector<uint8_t> data(gguf_get_meta_size(ctx_out));
         gguf_get_meta_data(ctx_out, data.data());
         fout.write((const char *) data.data(), data.size());
+        LLAMA_LOG_INFO("===> Written metadata size = %ld bytes\n", data.size());
     }
 
     clean_up();
