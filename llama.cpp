@@ -809,6 +809,16 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
 
 static llm_arch llm_arch_from_string(const std::string & name) {
     for (const auto & kv : LLM_ARCH_NAMES) { // NOLINT
+        if (kv.second == nullptr) {
+            // LLM_ARCH_UNKNOWN does not have a name,
+            // but is somehow still in the LLM_ARCH_NAMES map.
+            if (kv.first == LLM_ARCH_UNKNOWN) {
+                // skip string comparison
+                continue;
+            }
+            // known architectures should always have a name
+            GGML_ASSERT(false && "missing architecture in LLM_ARCH_NAMES");
+        }
         if (kv.second == name) {
             return kv.first;
         }
