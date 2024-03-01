@@ -37,10 +37,6 @@ extern bool server_log_json;
 #define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
-//
-// parallel
-//
-
 enum server_state {
     SERVER_STATE_LOADING_MODEL,  // Server is starting up, model not fully loaded yet
     SERVER_STATE_READY,          // Server is ready and model is loaded
@@ -78,51 +74,8 @@ struct task_multi {
     std::vector<task_result> results{};
 };
 
-// TODO: can become bool if we can't find use of more states
-enum slot_state
-{
-    IDLE,
-    PROCESSING,
-};
-
-enum slot_command
-{
-    NONE,
-    LOAD_PROMPT,
-    RELEASE,
-};
-
-struct slot_params
-{
-    bool stream       = true;
-    bool cache_prompt = false; // remember the prompt to avoid reprocessing all prompt
-
-    uint32_t seed      = -1; // RNG seed
-    int32_t  n_keep    =  0; // number of tokens to keep from initial prompt
-    int32_t  n_predict = -1; // new tokens to predict
-
-    std::vector<std::string> antiprompt;
-
-    json input_prefix;
-    json input_suffix;
-};
-
-struct slot_image
-{
-    int32_t id;
-
-    bool request_encode_image = false;
-    float * image_embedding = nullptr;
-    int32_t image_tokens = 0;
-
-    clip_image_u8 * img_data;
-
-    std::string prefix_prompt; // before of this image
-};
-
 // completion token output with probabilities
-struct completion_token_output
-{
+struct completion_token_output {
     struct token_prob
     {
         llama_token tok;
@@ -134,8 +87,13 @@ struct completion_token_output
     std::string text_to_send;
 };
 
-static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra)
-{
+struct token_translator {
+    llama_context * ctx;
+    std::string operator()(llama_token tok)                    const { return llama_token_to_piece(ctx, tok); }
+    std::string operator()(const completion_token_output &cto) const { return (*this)(cto.tok); }
+};
+
+static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra) {
     std::stringstream ss_tid;
     ss_tid << std::this_thread::get_id();
     json log = nlohmann::ordered_json{
@@ -183,8 +141,7 @@ static inline void server_log(const char *level, const char *function, int line,
 //
 
 template <typename T>
-static T json_value(const json &body, const std::string &key, const T &default_value)
-{
+static T json_value(const json &body, const std::string &key, const T &default_value) {
     // Fallback null to default value
     return body.contains(key) && !body.at(key).is_null()
         ? body.value(key, default_value)
@@ -200,8 +157,7 @@ inline bool verify_custom_template(const std::string & tmpl) {
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages)
-{
+inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
     size_t alloc_size = 0;
     // vector holding all allocated string to be passed to llama_chat_apply_template
     std::vector<std::string> str(messages.size() * 2);
@@ -250,7 +206,7 @@ struct llama_server_queue {
     // callback functions
     std::function<void(task_server&)> callback_new_task;
     std::function<void(task_multi&)> callback_finish_multitask;
-    std::function<void(void)> callback_all_task_finished;
+    std::function<void(void)> callback_run_slots;
 
     // Add a new task to the end of the queue
     int post(task_server task) {
@@ -283,14 +239,14 @@ struct llama_server_queue {
         callback_new_task = callback;
     }
 
-    // Register function to process a multitask
+    // Register function to process a multitask when it is finished
     void on_finish_multitask(std::function<void(task_multi&)> callback) {
         callback_finish_multitask = callback;
     }
 
-    // Register the function to be called when the batch of tasks is finished
-    void on_all_tasks_finished(std::function<void(void)> callback) {
-        callback_all_task_finished = callback;
+    // Register the function to be called when all slots data is ready to be processed
+    void on_run_slots(std::function<void(void)> callback) {
+        callback_run_slots = callback;
     }
 
     // Call when the state of one slot is changed
@@ -312,7 +268,13 @@ struct llama_server_queue {
         condition_tasks.notify_all();
     }
 
-    // Start the main loop.
+    /**
+     * Main loop consists of these steps:
+     * - Wait until a new task arrives
+     * - Process the task (i.e. maybe copy data into slot)
+     * - Check if multitask is finished
+     * - Run all slots
+     */
     void start_loop() {
         running = true;
         while (true) {
@@ -331,8 +293,8 @@ struct llama_server_queue {
                     LOG_VERBOSE("callback_new_task", {{"task_id", task.id}});
                     callback_new_task(task);
                 }
-                LOG_VERBOSE("callback_all_task_finished", {});
-                // process and update all the multitasks
+                LOG_VERBOSE("update_multitasks", {});
+                // check if we have any finished multitasks
                 auto queue_iterator = queue_multitasks.begin();
                 while (queue_iterator != queue_multitasks.end())
                 {
@@ -349,8 +311,9 @@ struct llama_server_queue {
                         ++queue_iterator;
                     }
                 }
-                // all tasks in the current loop is finished
-                callback_all_task_finished();
+                // all tasks in the current loop is processed, slots data is now ready
+                LOG_VERBOSE("callback_run_slots", {});
+                callback_run_slots();
             }
             LOG_VERBOSE("wait for new task", {});
             // wait for new task
@@ -408,12 +371,14 @@ struct llama_server_response {
     std::mutex mutex_results;
     std::condition_variable condition_results;
 
+    // add the task_id to the list of tasks waiting for response
     void add_waiting_task_id(int task_id) {
         LOG_VERBOSE("waiting for task id", {{"task_id", task_id}});
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(task_id);
     }
 
+    // when the request is finished, we can remove task associated with it
     void remove_waiting_task_id(int task_id) {
         LOG_VERBOSE("remove waiting for task id", {{"task_id", task_id}});
         std::unique_lock<std::mutex> lock(mutex_results);
@@ -573,4 +538,97 @@ static std::string gen_chatcmplid()
     std::stringstream chatcmplid;
     chatcmplid << "chatcmpl-" << random_string();
     return chatcmplid.str();
+}
+
+//
+// other common utils
+//
+
+static size_t common_part(const std::vector<llama_token> &a, const std::vector<llama_token> &b)
+{
+    size_t i;
+    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++)
+    {
+    }
+    return i;
+}
+
+static bool ends_with(const std::string &str, const std::string &suffix)
+{
+    return str.size() >= suffix.size() &&
+           0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
+}
+
+static size_t find_partial_stop_string(const std::string &stop,
+                                       const std::string &text)
+{
+    if (!text.empty() && !stop.empty())
+    {
+        const char text_last_char = text.back();
+        for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--)
+        {
+            if (stop[char_index] == text_last_char)
+            {
+                const std::string current_partial = stop.substr(0, char_index + 1);
+                if (ends_with(text, current_partial))
+                {
+                    return text.size() - char_index - 1;
+                }
+            }
+        }
+    }
+    return std::string::npos;
+}
+
+// TODO: reuse llama_detokenize
+template <class Iter>
+static std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
+{
+    std::string ret;
+    for (; begin != end; ++begin)
+    {
+        ret += llama_token_to_piece(ctx, *begin);
+    }
+    return ret;
+}
+
+// format incomplete utf-8 multibyte character for output
+static std::string tokens_to_output_formatted_string(const llama_context *ctx, const llama_token token)
+{
+    std::string out = token == -1 ? "" : llama_token_to_piece(ctx, token);
+    // if the size is 1 and first bit is 1, meaning it's a partial character
+    //   (size > 1 meaning it's already a known token)
+    if (out.size() == 1 && (out[0] & 0x80) == 0x80)
+    {
+        std::stringstream ss;
+        ss << std::hex << (out[0] & 0xff);
+        std::string res(ss.str());
+        out = "byte: \\x" + res;
+    }
+    return out;
+}
+
+// convert a vector of completion_token_output to json
+static json probs_vector_to_json(const llama_context *ctx, const std::vector<completion_token_output> &probs)
+{
+    json out = json::array();
+    for (const auto &prob : probs)
+    {
+        json probs_for_token = json::array();
+        for (const auto &p : prob.probs)
+        {
+            std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
+            probs_for_token.push_back(json
+            {
+                {"tok_str", tok_str},
+                {"prob",    p.prob},
+            });
+        }
+        std::string tok_str = tokens_to_output_formatted_string(ctx, prob.tok);
+        out.push_back(json{
+            {"content", tok_str},
+            {"probs",   probs_for_token},
+        });
+    }
+    return out;
 }

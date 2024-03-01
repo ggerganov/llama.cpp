@@ -231,6 +231,7 @@ async def step_oai_chat_completions(context, api_error):
     completion = await oai_chat_completions(context.prompts.pop(),
                                             context.system_prompt,
                                             context.base_url,
+                                            '/v1/chat',
                                             False,
                                             model=context.model if hasattr(context, 'model') else None,
 
@@ -288,6 +289,28 @@ async def step_oai_chat_completions(context):
                               # user_prompt is inserted automatically
                               context.system_prompt,
                               context.base_url,
+                              '/v1/chat/completions',
+                              True,  # async_client
+                              model=context.model
+                              if hasattr(context, 'model') else None,
+                              n_predict=context.n_predict
+                              if hasattr(context, 'n_predict') else None,
+                              enable_streaming=context.enable_streaming
+                              if hasattr(context, 'enable_streaming') else None,
+                              server_seed=context.server_seed
+                              if hasattr(context, 'server_seed') else None,
+                              user_api_key=context.user_api_key
+                              if hasattr(context, 'user_api_key') else None)
+
+
+@step(u'concurrent OAI completions requests no v1')
+@async_run_until_complete
+async def step_oai_chat_completions(context):
+    await concurrent_requests(context, oai_chat_completions,
+                              # user_prompt is inserted automatically
+                              context.system_prompt,
+                              context.base_url,
+                              '/chat/completions',
                               True,  # async_client
                               model=context.model
                               if hasattr(context, 'model') else None,
@@ -497,6 +520,7 @@ async def request_completion(prompt,
 async def oai_chat_completions(user_prompt,
                                system_prompt,
                                base_url,
+                               base_path,
                                async_client,
                                debug=False,
                                model=None,
@@ -537,7 +561,7 @@ async def oai_chat_completions(user_prompt,
         origin = 'llama.cpp'
         headers = {'Authorization': f'Bearer {user_api_key}', 'Origin': origin}
         async with aiohttp.ClientSession() as session:
-            async with session.post(f'{base_url}/v1/chat/completions',
+            async with session.post(f'{base_url}{base_path}',
                                     json=payload,
                                     headers=headers) as response:
                 if enable_streaming:
@@ -579,7 +603,7 @@ async def oai_chat_completions(user_prompt,
     else:
         try:
             openai.api_key = user_api_key
-            openai.api_base = f'{base_url}/v1/chat'
+            openai.api_base = f'{base_url}{base_path}'
             chat_completion = openai.Completion.create(
                 messages=payload['messages'],
                 model=model,
