@@ -47,6 +47,20 @@ class SchemaConverter:
         self._rules[key] = rule
         return key
 
+    def _resolve_ref(self, ref):
+        # TODO: use https://github.com/APIDevTools/json-schema-ref-parser
+        try:
+            if ref is not None and ref.startswith('#/'):# and 'definitions' in schema:
+                target = self.ref_base
+                name = None
+                for sel in ref.split('/')[1:]:
+                    name = sel
+                    target = target[sel]
+                return (name, target)
+            return None
+        except KeyError as e:
+            raise Exception(f'Error resolving ref {ref}: {e}') from e
+    
     def _visit_pattern(self, pattern):
         assert pattern.startswith('^') and pattern.endswith('$'), 'Pattern must start with "^" and end with "$"'
         pattern = pattern[1:-1]
@@ -223,6 +237,17 @@ class SchemaConverter:
             
         elif schema_type in (None, 'string') and 'pattern' in schema:
             return self._add_rule(rule_name, self._visit_pattern(schema['pattern']))
+
+        elif (resolved := self._resolve_ref(ref)) is not None:
+            (ref_name, definition) = resolved
+            def_name = f'{name}-{ref_name}' if name else ''
+            return self.visit(definition, def_name)
+        
+        elif ref is not None and ref.startswith('https://'):
+            import requests
+            ref_schema = requests.get(ref).json()
+            return self.visit(ref_schema, ref)
+
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
             return self._add_rule(
@@ -255,7 +280,14 @@ def main(args_in = None):
     parser.add_argument('schema', help='file containing JSON schema ("-" for stdin)')
     args = parser.parse_args(args_in)
 
-    schema = json.load(sys.stdin if args.schema == '-' else open(args.schema))
+    if args.schema.startswith('https://'):
+        import requests
+        schema = requests.get(args.schema).json()
+    elif args.schema == '-':
+        schema = json.load(sys.stdin)
+    else:
+        with open(args.schema) as f:
+            schema = json.load(f)
     prop_order = {name: idx for idx, name in enumerate(args.prop_order)}
     converter = SchemaConverter(prop_order)
     converter.visit(schema, '')
