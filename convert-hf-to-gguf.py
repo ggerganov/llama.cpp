@@ -220,8 +220,6 @@ class Model:
             return NomicBertModel
         if model_architecture == "GemmaForCausalLM":
             return GemmaModel
-        if model_architecture == "Starcoder2ForCausalLM":
-            return StarCoderModel2
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -927,10 +925,6 @@ class StarCoderModel(Model):
         self.gguf_writer.add_head_count_kv(1)
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
-
-class StarCoderModel2(Model):
-    def set_vocab(self):
-        self._set_vocab_gpt2()
 
 
 class RefactModel(Model):
