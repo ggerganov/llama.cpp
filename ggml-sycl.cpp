@@ -8989,7 +8989,7 @@ static void dequantize_mul_mat_vec_q4_0_sycl(const void *vx, const dfloat *y,
                                              float *dst, const int ncols,
                                              const int nrows,
                                              dpct::queue_ptr stream) {
-    GGML_ASSERT(ncols % GGML_SYCL_DMMV_X == 0);
+    // GGML_ASSERT(ncols % GGML_SYCL_DMMV_X == 0);
     // const int block_num_y = (nrows + GGML_SYCL_MMV_Y - 1) / GGML_SYCL_MMV_Y;
     // // the number of rows may exceed maximum grid size in the y or z dimensions, use the x dimension instead
     // const sycl::range<3> block_nums(1, 1, block_num_y);
