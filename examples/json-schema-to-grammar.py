@@ -47,6 +47,55 @@ class SchemaConverter:
         self._rules[key] = rule
         return key
 
+    def _visit_pattern(self, pattern):
+        assert pattern.startswith('^') and pattern.endswith('$'), 'Pattern must start with "^" and end with "$"'
+        pattern = pattern[1:-1]
+        try:
+            def visit(pattern):
+                if pattern[0] == re._parser.LITERAL:
+                    return json.dumps(chr(pattern[1]))
+                elif pattern[0] == re._parser.ANY:
+                    raise ValueError('Unsupported pattern: "."')
+                elif pattern[0] == re._parser.IN:
+                    def format_range_char(c):
+                        if chr(c) in ('-', ']', '\\', '\n', '\r', '\t'):
+                            return '\\' + chr(c)
+                        else:
+                            return chr(c)
+                    def format_range_comp(c):
+                        if c[0] == re._parser.LITERAL:
+                            return format_range_char(c[1])
+                        elif c[0] == re._parser.RANGE:
+                            return f'{format_range_char(c[1][0])}-{format_range_char(c[1][1])}'
+                        else:
+                            raise ValueError(f'Unrecognized pattern: {c}')
+                    return f'[{"".join(format_range_comp(c) for c in pattern[1])}]'
+                elif pattern[0] == re._parser.BRANCH:
+                    return ' | '.join((visit(p) for p in pattern[1][1]))
+                elif pattern[0] == re._parser.SUBPATTERN:
+                    return visit(pattern[1][3])
+                elif pattern[0] == re._parser.MAX_REPEAT:
+                    min_times = pattern[1][0]
+                    max_times = pattern[1][1] if not pattern[1][1] == re._parser.MAXREPEAT else None
+                    sub_pattern = pattern[1][2]
+                    if min_times == 0 and max_times is None:
+                        return f'{visit(sub_pattern)}*'
+                    elif min_times == 0 and max_times == 1:
+                        return f'{visit(sub_pattern)}?'
+                    elif min_times == 1 and max_times is None:
+                        return f'{visit(sub_pattern)}+'
+                    else:
+                        raise ValueError(f'Unrecognized pattern: {pattern} ({type(pattern)}; min: {min_times}, max: {max_times})')
+                elif isinstance(pattern, re._parser.SubPattern):
+                    return ' '.join(visit(p) for p in pattern.data)
+                elif isinstance(pattern, list):# and (len(pattern) == 0 or isinstance(pattern[0], (tuple, list))):
+                    return ' '.join(visit(p) for p in pattern)
+                else:
+                    raise ValueError(f'Unrecognized pattern: {pattern} ({type(pattern)})')
+            return visit(re._parser.parse(pattern))
+        except BaseException as e:
+            raise Exception(f'Error processing pattern: {pattern}: {e}') from e
+
     def visit(self, schema, name):
         schema_type = schema.get('type')
         rule_name = name or 'root'
@@ -171,6 +220,9 @@ class SchemaConverter:
                 else:
                     rule = f'"[" space {item_rule_name} {successive_items} "]" space'
                 return self._add_rule(rule_name, rule)
+            
+        elif schema_type in (None, 'string') and 'pattern' in schema:
+            return self._add_rule(rule_name, self._visit_pattern(schema['pattern']))
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
             return self._add_rule(
