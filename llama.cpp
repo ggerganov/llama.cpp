@@ -61,6 +61,7 @@
 #include <cfloat>
 #include <cinttypes>
 #include <climits>
+#include <condition_variable>
 #include <cmath>
 #include <cstdarg>
 #include <cstddef>
@@ -11410,11 +11411,9 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
                 struct ggml_tensor * ref_tensor = mls[0]->get_tensor_meta(ref_name.c_str()); // get ref tensor from layer 0
                 memcpy(out_tensor, ref_tensor, GGML_TENSOR_SIZE); // copy metadata (shape, type,...)
                 ggml_set_name(out_tensor, get_name(i_layer, ref_name).c_str()); // set the correct name (with correct i_layer)
-                // if the input tensor is quantized, it will be dequant to FP16
-                out_tensor->type = ggml_is_quantized(ref_tensor->type) ? GGML_TYPE_F16 : ref_tensor->type;
                 output_tensors.push_back(out_tensor);
                 gguf_add_tensor(ctx_out, out_tensor);
-                LLAMA_LOG_INFO("%s\n", ggml_get_name(out_tensor));
+                // TODO: reject non-requantize-able type (one that requires imatrix)
             }
             // TODO: how to reuse tensor (duplicated layers)? we can play with ctx->infos[tensor_idx].offset
         }
@@ -11439,53 +11438,10 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         return ggml_nbytes(tensor);
     };
 
-    // TODO: maybe we should use ggml_add and ggml_scale? and how?
-    auto calc_output_tensor = [&](struct ggml_tensor * in_tensor, float scale, std::vector<no_init<uint8_t>> & out_buf) {
-        enum ggml_type type = in_tensor->type;
-        const size_t nelements = ggml_nelements(in_tensor);
-        std::vector<no_init<uint8_t>> tmp_buf;
-        void * in_buf = in_tensor->data;
-        // TODO: if the tensor is quantized, we dequantize to FP16 then to FP32, do the calculation and re-quant to FP16. how can we simplify?
-        if (ggml_is_quantized(type)) {
-            // dequantize it to FP32
-            std::vector<std::thread> workers;
-            int nthread = std::thread::hardware_concurrency();
-            workers.reserve(nthread);
-            std::vector<no_init<float>> f32_conv_buf;
-            llama_convert_tensor_internal(in_tensor, f32_conv_buf, workers, nelements, nthread);
-            // quantize back to FP16
-            type = GGML_TYPE_F16;
-            tmp_buf.resize(nelements * sizeof(ggml_fp16_t));
-            for (size_t i = 0; i < nelements; i++) {
-                ggml_fp16_t * dest = (ggml_fp16_t *) tmp_buf.data();
-                dest[i] = ggml_fp32_to_fp16(f32_conv_buf[i].value);
-            }
-            in_buf = tmp_buf.data();
-        }
-        // then the code block below will calculate the merged tensor
-        if (type == GGML_TYPE_F16) {
-            out_buf.resize(nelements * sizeof(ggml_fp16_t));
-            for (size_t i = 0; i < nelements; i++) {
-                ggml_fp16_t * in = (ggml_fp16_t *) in_buf;
-                ggml_fp16_t * dest = (ggml_fp16_t *) out_buf.data();
-                float in_dequant = ggml_fp16_to_fp32(in[i]);
-                float res = in_dequant * scale;
-                dest[i] = ggml_fp32_to_fp16(res);
-            }
-        } else if (type == GGML_TYPE_F32) {
-            out_buf.resize(nelements * sizeof(float));
-            for (size_t i = 0; i < nelements; i++) {
-                float * in = (float *) in_buf;
-                float * dest = (float *) out_buf.data();
-                dest[i] = in[i] * scale;
-            }
-        } else {
-            GGML_ASSERT(false); // should never reach here
-        }
-        return 0; // return of lambda, no need clean up
-    };
-
-    size_t n_done = 0;
+    std::mutex mutex;
+    std::condition_variable condition;
+    size_t n_done = 0; // protected by mutex
+    size_t n_curr = 0; // protected by mutex
     auto log_step = [&](const struct ggml_tensor * tensor) {
         n_done++;
         LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], input type = %6s\n",
@@ -11503,6 +11459,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         if (i_layer_out >= 0) {
             continue;
         }
+        n_curr++;
         struct ggml_tensor * in_tensor = mls[0]->get_tensor_meta(name.c_str());
         if (in_tensor == nullptr) {
             LLAMA_LOG_ERROR("Cannot find layer name %s from base model\n", name.c_str());
@@ -11517,42 +11474,124 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         zeros(fout, GGML_PAD(buf.size(), GGUF_DEFAULT_ALIGNMENT) - buf.size());
     }
 
-    // process layer output tensor
-    for (auto & out_tensor : output_tensors) {
+    const int n_threads = std::thread::hardware_concurrency();
+    int n_running = 0; // protected by mutex
+    auto worker_release = [&]() {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            n_running--;
+        }
+        condition.notify_all();
+    };
+    auto worker_acquire = [&]() {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [&]{
+            return n_running < n_threads;
+        });
+        n_running++;
+    };
+
+    // process function, to be run as thread
+    const size_t n_start = n_curr;
+    auto process_output_tensor = [&]() {
+        worker_acquire();
+        std::unique_lock<std::mutex> lock(mutex);
+        struct ggml_tensor * out_tensor = output_tensors[n_curr];
+        const size_t my_number = n_curr++;
+        lock.unlock();
+
+        const size_t n_elements = ggml_nelements(out_tensor);
         std::vector<no_init<uint8_t>> in_buf;
-        std::vector<no_init<uint8_t>> out_buf;
+        std::vector<no_init<float>> f32_in_buf; // dequant it internally
+        std::vector<float> f32_out_buf(n_elements, 0.0); // do not resize!
+        std::vector<no_init<uint8_t>> out_buf(ggml_nbytes(out_tensor)); // do not resize!
 
         std::string out_name = ggml_get_name(out_tensor);
         int i_layer_out = get_i_layer(out_name.c_str());
         auto layer = config->layers[i_layer_out];
-
-        if (i_layer_out < 0) {
-            continue;
-        }
 
         for (size_t i_model = 0; i_model < config->n_models; i_model++) {
             int src_layer = layer.srcs[i_model]; // source layer
             float scale = layer.scales[i_model];
             std::string src_name = get_name(src_layer, out_name); // find the correct tensor based on src_layer
             struct ggml_tensor * in_tensor = mls[i_model]->get_tensor_meta(src_name.c_str());
-            int res;
             if (in_tensor == nullptr) {
                 LLAMA_LOG_ERROR("Cannot find layer name %s from model %ld\n", src_name.c_str(), i_model + 1);
                 clean_up();
-                return -1;
+                return; // TODO: not good for multi-threading
             }
             read_tensor_data(in_tensor, *mls[i_model], in_buf);
-            res = calc_output_tensor(in_tensor, scale, out_buf);
-            if (res < 0) {
-                clean_up();
-                return res;
+            // dequant the tensor to FP32
+            if (in_tensor->type != GGML_TYPE_F32) {
+                //LLAMA_LOG_ERROR("dequant ");
+                std::vector<std::thread> workers;
+                int nthread = 4; // limit for now
+                workers.reserve(nthread);
+                llama_convert_tensor_internal(in_tensor, f32_in_buf, workers, n_elements, nthread);
+            } else {
+                // if we already have f32, just copy it
+                //LLAMA_LOG_ERROR("f32_copy ");
+                f32_in_buf.resize(n_elements);
+                memcpy((void *) f32_in_buf.data(), in_tensor->data, n_elements * sizeof(float));
+            }
+            // do the calculation
+            //LLAMA_LOG_ERROR("calc ");
+            for (size_t i = 0; i < n_elements; i++) {
+                float * in   = (float *) f32_in_buf.data();
+                float * dest = (float *) f32_out_buf.data();
+                dest[i] += in[i] * scale;
             }
         }
 
-        // write tensor data + padding
-        log_step(out_tensor);
-        fout.write((const char *) out_buf.data(), out_buf.size());
-        zeros(fout, GGML_PAD(out_buf.size(), GGUF_DEFAULT_ALIGNMENT) - out_buf.size());
+        // re-quantize it
+        // TODO: multi-threading it
+        //LLAMA_LOG_ERROR("requant\n");
+        {
+            std::array<int64_t, 1 << 4> hist_cur = {};
+            const int n_per_row = out_tensor->ne[0];
+            const int n_rows = n_elements / n_per_row;
+            ggml_quantize_chunk(
+                out_tensor->type,
+                f32_out_buf.data(),
+                out_buf.data(),
+                0, // start offset
+                n_rows,
+                n_per_row,
+                hist_cur.data(), // unused for now
+                nullptr);
+        }
+
+        // wait until my turn
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            // if I'm the first, no need to wait for other
+            if (my_number > n_start) {
+                condition.wait(lock, [&]{
+                    return n_done == my_number;
+                });
+            }
+            LLAMA_LOG_ERROR("===> %f %f %f\n", f32_out_buf[0], f32_out_buf[1], f32_out_buf[2]);
+            // my turn, write the result!
+            // write tensor data + padding
+            fout.write((const char *) out_buf.data(), out_buf.size());
+            zeros(fout, GGML_PAD(out_buf.size(), GGUF_DEFAULT_ALIGNMENT) - out_buf.size());
+            log_step(out_tensor);
+        }
+        worker_release();
+    };
+
+    // spawn all thread to process
+    std::vector<std::thread> threads;
+    for (auto & out_tensor : output_tensors) {
+        std::string out_name = ggml_get_name(out_tensor);
+        int i_layer_out = get_i_layer(out_name.c_str());
+        if (i_layer_out >= 0) {
+            // tensor belongs to a layer, start worker thread for it
+            threads.emplace_back(process_output_tensor);
+        }
+    }
+    for (auto & thread : threads) {
+        thread.join();
     }
 
     // go back to beginning of file and write the updated meta data

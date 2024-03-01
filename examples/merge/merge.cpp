@@ -13,7 +13,7 @@
 struct merge_params {
     std::string config_path = "merge.csv";
     std::vector<std::string> model_paths;
-    std::string output_path = "gguf-merged-f16.gguf";
+    std::string output_path = "ggml-merged-f16.gguf";
 };
 
 [[noreturn]]
@@ -37,7 +37,7 @@ static void usage(const char * executable, int exit_code) {
     printf("\n");
     printf("NOTE:\n");
     printf("- The embedding and output layers of the first model will be used.\n");
-    printf("- Currently, we accept both quantized and non-quantized models as input, but only output FP16 model. To re-quantize it, please use \"quantize\" tool.\n");
+    printf("- Currently, we accept both quantized and non-quantized models as input. The output model will be re-quantized into the same format of the first model.\n");
     printf("\n");
     printf("Options:\n");
     printf("  -h, --help                 Show this help message and exit\n");
@@ -96,7 +96,7 @@ static std::vector<struct llama_merge_layer> parse_config(std::string & config_p
             // debug message
             std::cout << " + model[" << i_model << "].layer[" << srcs[i_model] << "]*" << scales[i_model] << std::flush;
         }
-        layers.push_back(llama_merge_layer{srcs, scales});
+        layers.push_back(llama_merge_layer{srcs, scales, -1});
         std::cout << "\n";
     }
     return layers;
