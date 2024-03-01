@@ -11492,6 +11492,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
     };
 
     // process function, to be run as thread
+    // TODO: multi-threading here is done for each tensor (instead of each row like in llama_model_quantize_internal), this is not ideal but still better than single-thread
     const size_t n_start = n_curr;
     auto process_output_tensor = [&]() {
         worker_acquire();
@@ -11570,7 +11571,8 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
                     return n_done == my_number;
                 });
             }
-            LLAMA_LOG_ERROR("===> %f %f %f\n", f32_out_buf[0], f32_out_buf[1], f32_out_buf[2]);
+            LLAMA_LOG_ERROR("===> INPUT  [layer %d] %f %f %f\n", i_layer_out, f32_in_buf[0].value, f32_in_buf[1].value, f32_in_buf[2].value);
+            LLAMA_LOG_ERROR("===> OUTPUT [layer %d] %f %f %f\n", i_layer_out, f32_out_buf[0], f32_out_buf[1], f32_out_buf[2]);
             // my turn, write the result!
             // write tensor data + padding
             fout.write((const char *) out_buf.data(), out_buf.size());
