@@ -62,6 +62,12 @@ class SchemaConverter:
         except KeyError as e:
             raise Exception(f'Error resolving ref {ref}: {e}') from e
     
+    def _generate_union_rule(self, name, alt_schemas):
+        return ' | '.join((
+            self.visit(alt_schema, f'{name}{"-" if name else ""}{i}')
+            for i, alt_schema in enumerate(alt_schemas)
+        ))
+
     def _visit_pattern(self, pattern):
         assert pattern.startswith('^') and pattern.endswith('$'), 'Pattern must start with "^" and end with "$"'
         pattern = pattern[1:-1]
@@ -126,11 +132,10 @@ class SchemaConverter:
         rule_name = name or 'root'
 
         if 'oneOf' in schema or 'anyOf' in schema:
-            rule = ' | '.join((
-                self.visit(alt_schema, f'{name}{"-" if name else ""}{i}')
-                for i, alt_schema in enumerate(schema.get('oneOf') or schema['anyOf'])
-            ))
-            return self._add_rule(rule_name, rule)
+            return self._add_rule(rule_name, self._generate_union_rule(name, schema.get('oneOf') or schema['anyOf']))
+        
+        elif isinstance(schema_type, list):
+            return self._add_rule(rule_name, self._generate_union_rule(name, [{'type': t} for t in schema_type]))
 
         elif 'const' in schema:
             return self._add_rule(rule_name, self._format_literal(schema['const']))
