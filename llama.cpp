@@ -11345,11 +11345,6 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         return ss.str();
     };
 
-    // if the input model model is quantized, it will be dequant to FP16
-    auto get_output_type = [&](struct ggml_tensor * t) {
-        return ggml_is_quantized(t->type) ? GGML_TYPE_F16 : t->type;
-    };
-
     // remember to call before exit
     auto clean_up = [&]() {
         fout.close();
@@ -11388,12 +11383,12 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         gguf_set_val_u32(ctx_out, ss.str().c_str(), config->n_layers);
         printf("====> Set new value of %s = %ld\n", ss.str().c_str(), config->n_layers);
         
-        // read input layers
+        // read input layers, process firstly non-layer tensors (embedding, output,...)
         for (int i = 0; i < mls[0]->n_tensors; i++) {
             struct ggml_tensor * meta = mls[0]->get_tensor_meta(i);
             int i_layer = get_i_layer(ggml_get_name(meta));
             if (i_layer < 0) {
-                // populate data for non-layers tensor
+                // populate data for non-layer tensors (embedding, output,...)
                 struct ggml_tensor * out_tensor = (struct ggml_tensor *) malloc(GGML_TENSOR_SIZE);
                 memcpy(out_tensor, meta, GGML_TENSOR_SIZE); // copy metadata (shape, type,...)
                 gguf_add_tensor(ctx_out, out_tensor);
@@ -11415,7 +11410,8 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
                 struct ggml_tensor * ref_tensor = mls[0]->get_tensor_meta(ref_name.c_str()); // get ref tensor from layer 0
                 memcpy(out_tensor, ref_tensor, GGML_TENSOR_SIZE); // copy metadata (shape, type,...)
                 ggml_set_name(out_tensor, get_name(i_layer, ref_name).c_str()); // set the correct name (with correct i_layer)
-                out_tensor->type = get_output_type(ref_tensor); // maybe dequant
+                // if the input tensor is quantized, it will be dequant to FP16
+                out_tensor->type = ggml_is_quantized(ref_tensor->type) ? GGML_TYPE_F16 : ref_tensor->type;
                 output_tensors.push_back(out_tensor);
                 gguf_add_tensor(ctx_out, out_tensor);
                 LLAMA_LOG_INFO("%s\n", ggml_get_name(out_tensor));
@@ -11490,6 +11486,15 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
     };
 
     size_t n_done = 0;
+    auto log_step = [&](const struct ggml_tensor * tensor) {
+        n_done++;
+        LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], input type = %6s\n",
+            n_done, output_tensors.size(),
+            ggml_get_name(tensor),
+            llama_format_tensor_shape(tensor).c_str(),
+            ggml_type_name(tensor->type));
+    };
+
     // process non-layer output tensor
     for (auto & out_tensor : output_tensors) {
         std::string name = ggml_get_name(out_tensor);
@@ -11506,14 +11511,8 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         }
         read_tensor_data(in_tensor, *mls[0], buf); // read from first model
 
-        n_done++;
-        LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], input type = %6s\n",
-            n_done, output_tensors.size(),
-            name.c_str(),
-            llama_format_tensor_shape(out_tensor).c_str(),
-            ggml_type_name(out_tensor->type));
-
         // write tensor data + padding
+        log_step(out_tensor);
         fout.write((const char *) buf.data(), buf.size());
         zeros(fout, GGML_PAD(buf.size(), GGUF_DEFAULT_ALIGNMENT) - buf.size());
     }
@@ -11550,14 +11549,8 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
             }
         }
 
-        n_done++;
-        LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], output type = %6s\n",
-            n_done, output_tensors.size(),
-            out_name.c_str(),
-            llama_format_tensor_shape(out_tensor).c_str(),
-            ggml_type_name(out_tensor->type));
-
         // write tensor data + padding
+        log_step(out_tensor);
         fout.write((const char *) out_buf.data(), out_buf.size());
         zeros(fout, GGML_PAD(out_buf.size(), GGUF_DEFAULT_ALIGNMENT) - out_buf.size());
     }

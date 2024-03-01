@@ -329,8 +329,9 @@ extern "C" {
 
     // used to merge models
     struct llama_merge_layer {
-        const int * srcs;     // contains n_models elements
-        const float * scales; // contains n_models elements
+        const int * srcs;     // contains n_models elements, if nullptr then we reuse other layer
+        const float * scales; // contains n_models elements, if nullptr then we reuse other layer
+        const int i_layer_reuse; // if != -1, then reuse earlier layer in the model to reduce output size
     };
 
     struct llama_merge_config {

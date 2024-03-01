@@ -78,8 +78,10 @@ static std::vector<struct llama_merge_layer> parse_config(std::string & config_p
     buf_scales.resize(lines.size()*n_models);
 
     // process line by line, one line is one layer
+    std::cout << "Parsing configurations:\n";
     std::vector<struct llama_merge_layer> layers;
     for (size_t i_layer = 0; i_layer < lines.size(); i_layer++) {
+        std::cout << "- Layer " << i_layer << " =" << std::flush;
         auto columns = str_split(lines[i_layer], ",");
         if (columns.size() != n_models*2) {
             std::stringstream ss;
@@ -91,8 +93,11 @@ static std::vector<struct llama_merge_layer> parse_config(std::string & config_p
         for (size_t i_model = 0; i_model < n_models; i_model++) {
             srcs[i_model]   = std::stoi(columns[i_model*2]);
             scales[i_model] = std::stof(columns[i_model*2 + 1]);
+            // debug message
+            std::cout << " + model[" << i_model << "].layer[" << srcs[i_model] << "]*" << scales[i_model] << std::flush;
         }
         layers.push_back(llama_merge_layer{srcs, scales});
+        std::cout << "\n";
     }
     return layers;
 }
