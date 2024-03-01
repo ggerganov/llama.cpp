@@ -11955,7 +11955,8 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
             }
             float best = 0;
             float scale = max/(2*kMaxQ-1);
-            for (int is = -15; is <= 15; ++is) {
+            for (int k = 0; k < bs4; ++k) is_on_grid[k] = false;
+            for (int is = -9; is <= 9; ++is) {
                 float id = (2*kMaxQ-1+is*0.2f)/max;
                 float this_scale = 1/id;
                 for (int k = 0; k < bs4; ++k) {
@@ -11991,7 +11992,7 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
             if (n_not_ongrid > 0 && scale > 0) {
                 float id = 1/scale;
                 for (int k = 0; k < bs4; ++k) {
-                    if (is_on_grid[k]) continue;
+                    //if (is_on_grid[k]) continue;
                     uint16_t u = 0;
                     for (int i = 0; i < 4; ++i) {
                         int l = nearest_int(0.5f*(id*xval[4*k+i]-1));
@@ -12047,7 +12048,7 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
         }
 
         float d = max_scale/31;
-        y[ibl].d = GGML_FP32_TO_FP16(d);
+        y[ibl].d = GGML_FP32_TO_FP16(d * 1.033f);
         float id = 1/d;
         for (int ib = 0; ib < QK_K/block_size; ib += 2) {
             int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
