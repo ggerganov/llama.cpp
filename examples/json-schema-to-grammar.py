@@ -3,6 +3,7 @@ import argparse
 import json
 import re
 import sys
+from typing import Any, Dict, List, Set, Tuple
 
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
