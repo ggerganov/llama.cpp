@@ -2392,14 +2392,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n", {});
 #endif // GGML_USE_CUBLAS
         }
-        else if (arg == "--no-mul-mat-q" || arg == "-nommq")
-        {
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)
-            params.mul_mat_q = false;
-#else
-            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. Disabling mul_mat_q kernels has no effect.\n", {});
-#endif // GGML_USE_CUBLAS
-        }
         else if (arg == "--main-gpu" || arg == "-mg")
         {
             if (++i >= argc)
