@@ -6,7 +6,7 @@ import sys
 
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
-SPACE_RULE = '" "?'
+SPACE_RULE = '" "*'
 
 PRIMITIVE_RULES = {
     'boolean': '("true" | "false") space',
@@ -201,7 +201,7 @@ class SchemaConverter:
                     ' "]" space')
             else:
                 item_rule_name = self.visit(items, f'{name}{"-" if name else ""}item')
-                list_item_operator = f'("," space {item_rule_name})'
+                list_item_operator = f'( "," space {item_rule_name} )'
                 successive_items = ""
                 min_items = schema.get("minItems", 0)
                 max_items = schema.get("maxItems")
@@ -213,7 +213,7 @@ class SchemaConverter:
                 else:
                     successive_items += list_item_operator + "*"
                 if min_items == 0:
-                    rule = f'"[" space ({item_rule_name} {successive_items})? "]" space'
+                    rule = f'"[" space ( {item_rule_name} {successive_items} )? "]" space'
                 else:
                     rule = f'"[" space {item_rule_name} {successive_items} "]" space'
                 return self._add_rule(rule_name, rule)
