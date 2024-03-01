@@ -2370,11 +2370,9 @@ static __global__ void dequantize_block_iq3_xxs(const void * __restrict__ vx, ds
 
 }
 
-//#define IQ3S_MULTIPLIER 2469109
 //#define IQ3S_MULTIPLIER 746226
 //#define IQ3S_MULTIPLIER 717154
 #define IQ3S_MULTIPLIER 677595
-//static const __device__ uint8_t iq3s_values[16] = {1, 1, 1, 3, 3, 5, 5, 7, 7, 9, 9, 11, 11, 13, 13, 15};
 
 template<typename dst_t>
 static __global__ void dequantize_block_iq3_s(const void * __restrict__ vx, dst_t * __restrict__ yy) {
@@ -2395,8 +2393,8 @@ static __global__ void dequantize_block_iq3_s(const void * __restrict__ vx, dst_
     aux32[0] = ((qs[2*il+0] | ((x[i].qh[ib] << (8-2*il)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
     aux32[1] = ((qs[2*il+1] | ((x[i].qh[ib] << (7-2*il)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
-    aux32[0] = __vadd4(((__vadd4(aux32[0], 0x01010101) >> 1) & 0x07070707) << 1, 0x01010101);
-    aux32[1] = __vadd4(((__vadd4(aux32[1], 0x01010101) >> 1) & 0x07070707) << 1, 0x01010101);
+    aux32[0] = (((__vadd4(aux32[0], 0x01010101) >> 1) & 0x07070707) << 1) | 0x01010101;
+    aux32[1] = (((__vadd4(aux32[1], 0x01010101) >> 1) & 0x07070707) << 1) | 0x01010101;
     uint32_t signs0 = __vcmpeq4(((signs & 0xf) * 0x01010101) & 0x08040201, 0x08040201);
     uint32_t signs1 = __vcmpeq4(((signs >>  4) * 0x01010101) & 0x08040201, 0x08040201);
     aux32[0] = __vsub4(aux32[0] ^ signs0, signs0);
@@ -5227,8 +5225,8 @@ static __device__ __forceinline__ float vec_dot_iq3_s_q8_1(
     for (int l = 0; l < 4; ++l) {
         aux32[0] = ((qs[2*l+0] | ((bq2->qh[ib32] << (8 - 2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
         aux32[1] = ((qs[2*l+1] | ((bq2->qh[ib32] << (7 - 2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
-        aux32[0] = __vadd4(((__vadd4(aux32[0], 0x01010101) >> 1) & 0x07070707) << 1, 0x01010101);
-        aux32[1] = __vadd4(((__vadd4(aux32[1], 0x01010101) >> 1) & 0x07070707) << 1, 0x01010101);
+        aux32[0] = (((__vadd4(aux32[0], 0x01010101) >> 1) & 0x07070707) << 1) | 0x01010101;
+        aux32[1] = (((__vadd4(aux32[1], 0x01010101) >> 1) & 0x07070707) << 1) | 0x01010101;
         uint32_t signs0 = __vcmpeq4(((bq2->signs[4*ib32+l] & 0xf) * 0x01010101) & 0x08040201, 0x08040201);
         uint32_t signs1 = __vcmpeq4(((bq2->signs[4*ib32+l] >>  4) * 0x01010101) & 0x08040201, 0x08040201);
         const int grid_l = __vsub4(aux32[0] ^ signs0, signs0);
