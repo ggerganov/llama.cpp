@@ -10164,6 +10164,16 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
     const __m256i mask1 = _mm256_loadu_si256((const __m256i*)k_mask1);
     const __m256i mask2 = _mm256_loadu_si256((const __m256i*)k_mask2);
 
+    const __m256i idx_shift = _mm256_set_epi32(1, 2, 3, 4, 5, 6, 7, 8);
+    const __m256i idx_mask  = _mm256_set1_epi32(256);
+
+    typedef union {
+        __m256i  vec[2];
+        uint32_t index[16];
+    } index_t;
+
+    index_t idx;
+
     __m256 accumf = _mm256_setzero_ps();
     for (int i = 0; i < nb; ++i) {
         const float d = GGML_FP16_TO_FP32(x[i].d) * y[i].d;
@@ -10176,24 +10186,25 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
         for (int ib32 = 0; ib32 < QK_K/32; ib32 += 2) {
             const __m256i q8_1 = _mm256_loadu_si256((const __m256i *)q8); q8 += 32;
             const __m256i q8_2 = _mm256_loadu_si256((const __m256i *)q8); q8 += 32;
-            const __m256i q2_1 = _mm256_set_epi32(iq3xs_grid[qs[7] | ((qh[ib32+0] << 1) & 256)],
-                                                  iq3xs_grid[qs[6] | ((qh[ib32+0] << 2) & 256)],
-                                                  iq3xs_grid[qs[5] | ((qh[ib32+0] << 3) & 256)],
-                                                  iq3xs_grid[qs[4] | ((qh[ib32+0] << 4) & 256)],
-                                                  iq3xs_grid[qs[3] | ((qh[ib32+0] << 5) & 256)],
-                                                  iq3xs_grid[qs[2] | ((qh[ib32+0] << 6) & 256)],
-                                                  iq3xs_grid[qs[1] | ((qh[ib32+0] << 7) & 256)],
-                                                  iq3xs_grid[qs[0] | ((qh[ib32+0] << 8) & 256)]);
-            qs += 8;
-            const __m256i q2_2 = _mm256_set_epi32(iq3xs_grid[qs[7] | ((qh[ib32+1] << 1) & 256)],
-                                                  iq3xs_grid[qs[6] | ((qh[ib32+1] << 2) & 256)],
-                                                  iq3xs_grid[qs[5] | ((qh[ib32+1] << 3) & 256)],
-                                                  iq3xs_grid[qs[4] | ((qh[ib32+1] << 4) & 256)],
-                                                  iq3xs_grid[qs[3] | ((qh[ib32+1] << 5) & 256)],
-                                                  iq3xs_grid[qs[2] | ((qh[ib32+1] << 6) & 256)],
-                                                  iq3xs_grid[qs[1] | ((qh[ib32+1] << 7) & 256)],
-                                                  iq3xs_grid[qs[0] | ((qh[ib32+1] << 8) & 256)]);
-            qs += 8;
+            const __m256i idx_l = _mm256_cvtepu8_epi16(_mm_loadu_si128((const __m128i *)qs)); qs += 16;
+            idx.vec[0] = _mm256_set1_epi32(qh[ib32+0]);
+            idx.vec[1] = _mm256_set1_epi32(qh[ib32+1]);
+            idx.vec[0] = _mm256_and_si256(_mm256_sllv_epi32(idx.vec[0], idx_shift), idx_mask);
+            idx.vec[1] = _mm256_and_si256(_mm256_sllv_epi32(idx.vec[1], idx_shift), idx_mask);
+            idx.vec[0] = _mm256_or_si256(idx.vec[0], _mm256_cvtepi16_epi32(_mm256_castsi256_si128(idx_l)));
+            idx.vec[1] = _mm256_or_si256(idx.vec[1], _mm256_cvtepi16_epi32(_mm256_extractf128_si256(idx_l, 1)));
+
+            // At leat on my CPU (Ryzen 7950X), using _mm256_i32gather_epi32 is slower than _mm256_set_epi32. Strange.
+            //const __m256i q2_1 = _mm256_i32gather_epi32((const int *)iq3xs_grid, idx.vec[0], 4);
+            //const __m256i q2_2 = _mm256_i32gather_epi32((const int *)iq3xs_grid, idx.vec[1], 4);
+            const __m256i q2_1 = _mm256_set_epi32(
+                    iq3xs_grid[idx.index[7]], iq3xs_grid[idx.index[6]], iq3xs_grid[idx.index[5]], iq3xs_grid[idx.index[4]],
+                    iq3xs_grid[idx.index[3]], iq3xs_grid[idx.index[1]], iq3xs_grid[idx.index[1]], iq3xs_grid[idx.index[0]]
+            );
+            const __m256i q2_2 = _mm256_set_epi32(
+                    iq3xs_grid[idx.index[15]], iq3xs_grid[idx.index[14]], iq3xs_grid[idx.index[13]], iq3xs_grid[idx.index[12]],
+                    iq3xs_grid[idx.index[11]], iq3xs_grid[idx.index[10]], iq3xs_grid[idx.index[ 9]], iq3xs_grid[idx.index[ 8]]
+            );
 
             __m256i aux256 = _mm256_set1_epi32(signs[0] | (signs[1] << 16));
             aux256 = _mm256_and_si256(_mm256_shuffle_epi8(aux256,mask1), mask2);
