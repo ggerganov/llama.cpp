@@ -215,6 +215,8 @@ static inline void server_log(
     };
 
     /*
+    // to allow the graphics to print to stdout we redirect non-graphical stdout to stderr
+    // to silence the graphics we direct stdout to dev/null or just don't invoke them
     std::cerr << stdout_target.c_str() << std::endl;
     FILE* new_stdout = freopen(stdout_target.c_str(), "a", stdout);
     if (new_stdout == nullptr) {

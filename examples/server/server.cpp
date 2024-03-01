@@ -2516,13 +2516,13 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         {
             llama.skvgraphics = true;       // -skvg takes no parameter so we don't test ++i >= argc
             llama.skvinteract = false;
-            log_settings.stdout_target = "/dev/null";
+            //log_settings.stdout_target = "/dev/null";   prevent stdout from interfering with the graphics display
         }
         else if (arg == "-skvi" || arg == "--show-interactive-graphics")
         {
             llama.skvgraphics = true;       // -skvi takes no parameter so we don't test ++i >= argc
             llama.skvinteract = true;
-            log_settings.stdout_target = "/dev/null";
+            //log_settings.stdout_target = "/dev/null";
         }
         else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers")
         {
@@ -2762,14 +2762,14 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
         }
-        else if (arg == "--stdout-log-file")
+        else if (arg == "--stdout-log-file")    // redirect the stdout logging to a specified file
         {
             if (++i >= argc)
             {
                 invalid_param = true;
                 break;
             }
-            log_settings.stdout_target = argv[i];   // have just noticed that there is a 'log_set_target()' below but says 'INTERNAL USE: DO NOT USE'
+            log_settings.stdout_target = argv[i];   // there is a 'log_set_target()' below but says 'INTERNAL USE: DO NOT USE'
         }
         else if (arg == "--log-disable")
         {
