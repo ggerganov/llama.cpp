@@ -362,7 +362,7 @@ class GGUFWriter:
         self.add_bool(Keys.Attention.CAUSAL.format(arch=self.arch), value)
 
     def add_pooling_type(self, value: PoolingType) -> None:
-        self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value)
+        self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
 
     def add_rope_dimension_count(self, count: int) -> None:
         self.add_uint32(Keys.Rope.DIMENSION_COUNT.format(arch=self.arch), count)

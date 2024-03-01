@@ -1679,7 +1679,7 @@ class BertModel(Model):
             else:
                 raise NotImplementedError("Only MEAN and CLS pooling types supported")
 
-        self.gguf_writer.add_pooling_type(pooling_type.value)
+        self.gguf_writer.add_pooling_type(pooling_type)
 
     def set_vocab(self):
         path = self.dir_model
