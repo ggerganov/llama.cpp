@@ -210,6 +210,7 @@ class TensorNameMap:
             "model.layers.layers.{bid}.mlp.up_proj",                  # plamo
             "model.layers.{bid}.feed_forward.w3",                     # internlm2
             "encoder.layers.{bid}.mlp.fc11",                          # nomic-bert
+            "model.layers.{bid}.mlp.c_fc",                            # starcoder2
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -256,6 +257,7 @@ class TensorNameMap:
             "model.layers.layers.{bid}.mlp.down_proj",                # plamo
             "model.layers.{bid}.feed_forward.w2",                     # internlm2
             "encoder.layers.{bid}.mlp.fc2",                           # nomic-bert
+            "model.layers.{bid}.mlp.c_proj",                          # starcoder2
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
