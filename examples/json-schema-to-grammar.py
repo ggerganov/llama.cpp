@@ -173,7 +173,6 @@ class SchemaConverter:
                 else:
                     add_component(t, is_required=True)
 
-            return self._add_rule(rule_name, rule)
             return self._add_rule(rule_name, self._build_object_rule(properties, required, name))
 
         elif schema_type == 'object' and 'additionalProperties' in schema:
