@@ -86,24 +86,33 @@ class SchemaConverter:
 
         elif schema_type == 'array' and 'items' in schema:
             # TODO `prefixItems` keyword
-            item_rule_name = self.visit(schema['items'], f'{name}{"-" if name else ""}item')
-            list_item_operator = f'("," space {item_rule_name})'
-            successive_items = ""
-            min_items = schema.get("minItems", 0)
-            max_items = schema.get("maxItems")
-            if min_items > 0:
-                successive_items = list_item_operator * (min_items - 1)
-                min_items -= 1
-            if max_items is not None and max_items > min_items:
-                successive_items += (list_item_operator + "?") * (max_items - min_items - 1)
+            items = schema['items']
+            if isinstance(items, list):
+                return self._add_rule(
+                    rule_name,
+                    '"[" space ' +
+                    ' "," space '.join(
+                        self.visit(item, f'{name}-{i}')
+                        for i, item in enumerate(items)) +
+                    ' "]" space')
             else:
-                successive_items += list_item_operator + "*"
-            if min_items == 0:
-                rule = f'"[" space ({item_rule_name} {successive_items})? "]" space'
-            else:
-                rule = f'"[" space {item_rule_name} {successive_items} "]" space'
-            return self._add_rule(rule_name, rule)
-
+                item_rule_name = self.visit(items, f'{name}{"-" if name else ""}item')
+                list_item_operator = f'("," space {item_rule_name})'
+                successive_items = ""
+                min_items = schema.get("minItems", 0)
+                max_items = schema.get("maxItems")
+                if min_items > 0:
+                    successive_items = list_item_operator * (min_items - 1)
+                    min_items -= 1
+                if max_items is not None and max_items > min_items:
+                    successive_items += (list_item_operator + "?") * (max_items - min_items - 1)
+                else:
+                    successive_items += list_item_operator + "*"
+                if min_items == 0:
+                    rule = f'"[" space ({item_rule_name} {successive_items})? "]" space'
+                else:
+                    rule = f'"[" space {item_rule_name} {successive_items} "]" space'
+                return self._add_rule(rule_name, rule)
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
             return self._add_rule(
