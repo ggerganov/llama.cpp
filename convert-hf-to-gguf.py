@@ -96,9 +96,11 @@ class Model:
         if (n_head_kv := self.hparams.get("num_key_value_heads")) is not None:
             self.gguf_writer.add_head_count_kv(n_head_kv)
 
+        if (rope_theta := self.hparams.get("rope_theta")) is not None:
+            self.gguf_writer.add_rope_freq_base(rope_theta)
         if (f_rms_eps := self.hparams.get("rms_norm_eps")) is not None:
             self.gguf_writer.add_layer_norm_rms_eps(f_rms_eps)
-        if (f_norm_eps := self.find_hparam(["layer_norm_eps", "layer_norm_epsilon"], optional=True)) is not None:
+        if (f_norm_eps := self.find_hparam(["layer_norm_eps", "layer_norm_epsilon", "norm_epsilon"], optional=True)) is not None:
             self.gguf_writer.add_layer_norm_eps(f_norm_eps)
         if (n_experts := self.hparams.get("num_local_experts")) is not None:
             self.gguf_writer.add_expert_count(n_experts)
@@ -220,6 +222,8 @@ class Model:
             return NomicBertModel
         if model_architecture == "GemmaForCausalLM":
             return GemmaModel
+        if model_architecture == "Starcoder2ForCausalLM":
+            return Model
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -281,6 +285,8 @@ class Model:
             return gguf.MODEL_ARCH.NOMIC_BERT
         if arch == "GemmaForCausalLM":
             return gguf.MODEL_ARCH.GEMMA
+        if arch == "Starcoder2ForCausalLM":
+            return gguf.MODEL_ARCH.STARCODER2
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
