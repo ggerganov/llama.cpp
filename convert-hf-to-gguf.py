@@ -249,6 +249,8 @@ class Model:
             return gguf.MODEL_ARCH.FALCON
         if arch == "GPTBigCodeForCausalLM":
             return gguf.MODEL_ARCH.STARCODER
+        if arch == "Starcoder2ForCausalLM":
+            return gguf.MODEL_ARCH.LLAMA
         if arch == "GPTRefactForCausalLM":
             return gguf.MODEL_ARCH.REFACT
         if arch == "PersimmonForCausalLM":
