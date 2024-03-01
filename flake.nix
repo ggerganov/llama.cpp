@@ -18,10 +18,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    nixfmt = {
-        url = "github:piegamesde/nixfmt/rfc101-style";
-        inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   # There's an optional binary cache available. The details are below, but they're commented out.
@@ -111,11 +107,12 @@
         # ```
         #
         # Cf. https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html?highlight=flake#flake-format
-        flake.overlays.default =
-          (final: prev: {
+        flake.overlays.default = (
+          final: prev: {
             llamaPackages = final.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
             inherit (final.llamaPackages) llama-cpp;
-          });
+          }
+        );
 
         systems = [
           "aarch64-darwin"
@@ -136,9 +133,7 @@
           }:
           {
             # For standardised reproducible formatting with `nix fmt`
-            # HELP: why does the per system formatter not work?
-            # formatter = inputs.nixfmt.packages.${system}.nixfmt;
-            formatter = if (system == "x86_64-linux") then inputs.nixfmt.packages.${system}.nixfmt else null;
+            formatter = pkgs.nixfmt-rfc-style;
 
             # Unlike `.#packages`, legacyPackages may contain values of
             # arbitrary types (including nested attrsets) and may even throw
