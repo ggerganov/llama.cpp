@@ -13610,7 +13610,7 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
 
     ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
     void * src0_ddq = src0_extra->data_device[g_main_device];
-    sycl::half *src0_f16 = (sycl::half *)src0_ddq;
+    sycl::half *src0_as_f16 = (sycl::half *)src0_ddq;
 
     ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu *) src1->extra;
     float * src1_ddf = (float *) src1_extra->data_device[g_main_device];
