@@ -29,8 +29,13 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 ## News
 
 - 2024.3
-  - Support multiple cards: **--split-mode**: none|layer|row
-  - Support to assign main GPU by **--main-gpu**
+  - Support multiple cards: **--split-mode**: [none|layer]; not support [row], it's on developing.
+  - Support to assign main GPU by **--main-gpu**, replace $GGML_SYCL_DEVICE.
+  - Support detecting all GPUs with level-zero and same top **Max compute units**.
+  - Support OPs
+    - hardsigmoid
+    - hardswish
+    - pool2d
 
 - 2024.1
   - Create SYCL backend for Intel GPU.
@@ -470,9 +475,9 @@ Using device **0** (Intel(R) Arc(TM) A770 Graphics) as main device
 
   Solution: add **--no-mmap** or **--mmap 0**.
 
-- Run with split-mode: row is slow
+- Split-mode: [row] is not supported
 
-  It's limited by the missed function: memory copy from device to device. We use dirty solution. It will be fixed in the future.
+  It's on developing.
 
 ## Q&A
 
