@@ -28,6 +28,7 @@ class SchemaConverter:
     def __init__(self, prop_order):
         self._prop_order = prop_order
         self._rules = {'space': SPACE_RULE}
+        self.ref_base = None
 
     def _format_literal(self, literal):
         escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
@@ -111,7 +112,17 @@ class SchemaConverter:
             raise Exception(f'Error processing pattern: {pattern}: {e}') from e
 
     def visit(self, schema, name):
+        old_ref_base = self.ref_base
+        if 'definitions' in schema:
+            self.ref_base = schema
+        try:
+            return self._visit(schema, name)
+        finally:
+            self.ref_base = old_ref_base
+    
+    def _visit(self, schema, name):
         schema_type = schema.get('type')
+        ref = schema.get('$ref')
         rule_name = name or 'root'
 
         if 'oneOf' in schema or 'anyOf' in schema:
