@@ -78,7 +78,6 @@ let
     ps: [
       ps.numpy
       ps.sentencepiece
-      ps.tiktoken
       ps.torchWithoutCuda
       ps.transformers
     ]
