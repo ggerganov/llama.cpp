@@ -400,7 +400,7 @@ enum llm_tensor {
     LLM_TENSOR_LAYER_OUT_NORM,
 };
 
-static const std::map<llm_arch, const std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
+static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
     {
         LLM_ARCH_LLAMA,
         {
