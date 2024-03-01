@@ -1059,11 +1059,7 @@ class PersimmonModel(Model):
 
 class StableLMModel(Model):
     def set_vocab(self):
-        if (self.dir_model / "tokenizer.json").is_file():
-            self._set_vocab_gpt2()
-        else:
-            # StableLM 2 1.6B uses a vocab in a similar format to Qwen's vocab
-            self._set_vocab_qwen()
+        self._set_vocab_gpt2()
 
     def set_gguf_parameters(self):
         hparams = self.hparams
