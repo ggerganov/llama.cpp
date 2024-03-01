@@ -327,11 +327,18 @@ extern "C" {
         const char * content;
     } llama_chat_message;
 
+    // used to merge models
+    struct llama_merge_layer {
+        const int * srcs;     // contains n_models elements
+        const float * scales; // contains n_models elements
+    };
+
     struct llama_merge_config {
-        const int i_layer;
-        const float scale1;
-        const float scale2;
-        // TODO add support for embeding and output layers
+        const char ** model_paths;
+        const size_t n_models;
+        const struct llama_merge_layer * layers;
+        const size_t n_layers;
+        const char * output_path;
     };
 
     // Helpers for getting default parameters
@@ -422,11 +429,7 @@ extern "C" {
             const llama_model_quantize_params * params);
 
     LLAMA_API int32_t llama_merge_models(
-            const char * fname_inp1,
-            const char * fname_inp2,
-            const struct llama_merge_config * configs,
-            const int n_configs,
-            const char * fname_out);
+            const struct llama_merge_config * config);
 
     // Apply a LoRA adapter to a loaded model
     // path_base_model is the path to a higher quality model to use as a base for

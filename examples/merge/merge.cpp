@@ -10,18 +10,36 @@
 #include <cmath>
 #include <algorithm>
 
-
-// usage:
-//  ./merge ./path/model_1 CONFIG1 ./path/model_2 CONFIG2
-//
 [[noreturn]]
-static void usage(const char * executable) {
-    printf("usage: %s ./path/model_1 CONFIG1 ./path/model_2 CONFIG2 ./path/output\n\n", executable);
-    printf("  CONFIG must be in format: p0-p1,p2-p3,p4,... Example: 0-5,7,8-12\n");
-    printf("  Optionally, you can specify the scaling for a range of layers, for example: 0-5*0.5,6-7*1. By default, scale will be 0.5. The number of layer start counting from 0.\n");
-    printf("  The embedding layer of the first model will be used\n");
-    printf("  NOTE: currently, only F16 model type is supported\n");
-    exit(1);
+static void usage(const char * executable, int exit_code) {
+    printf("usage: %s -c CONFIG_FILE -o OUTPUT_FILE -m MODEL_PATH -m MODEL_PATH ...\n\n", executable);
+    printf("\n");
+    printf("Merging 2 models and change layers configuration.\n");
+    printf("Merge config format is CSV, without header, one line represents one layer of the output model, columns in the order below:\n");
+    printf("- Model A layer\n");
+    printf("- Model A scale\n");
+    printf("- Model B layer\n");
+    printf("- Model B scale\n");
+    printf("- ...\n");
+    printf("\n");
+    printf("For example:\n");
+    printf("0,1.0,0,0.0    meaning: output layer 0 = A[0]*1.0 + B[0] * 0.0\n");
+    printf("0,1.0,0,0.0    meaning: output layer 1 = A[0]*1.0 + B[0] * 0.0\n");
+    printf("1,0.0,2,0.0    meaning: output layer 2 = A[1]*0.0 + B[2] * 0.0\n");
+    printf("2,0.5,1,0.5    meaning: output layer 3 = A[2]*0.5 + B[1] * 0.5\n");
+    printf("\n");
+    printf("NOTE:\n");
+    printf("- The embedding layer of the first model will be used\n");
+    printf("- Currently, only F16 model type is supported\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -h, --help                 Show this help message and exit\n");
+    printf("  -c, --config CONFIG_FILE   Path to config file (CSV format)\n");
+    printf("  -m, --model MODEL_PATH     Path to model. This option can be repeated multiple times and must be specified in the right order.\n");
+    printf("  -o, --output OUTPUT_FILE   Path to the output model\n");
+    printf("\n");
+    printf("Example: ./merge -c config.csv -o output.gguf -m model_a.gguf -m model_b.gguf\n");
+    exit(exit_code);
 }
 
 inline std::vector<std::string> str_split(std::string str, const std::string & delimiter) {
@@ -37,82 +55,101 @@ inline std::vector<std::string> str_split(std::string str, const std::string & d
     return output;
 }
 
-static std::vector<struct llama_merge_config> parse_config(std::string & input) {
-    std::vector<struct llama_merge_config> configs;
-    auto intervals = str_split(input, ",");
-    for (auto & interval : intervals) {
-        auto components = str_split(interval, "*");
-        if (components.empty()) {
-            throw std::runtime_error("Config is incorrect");
-        }
-        float scale = components.size() == 2
-            ? std::stof(components[1])
-            : 0.5; // be default
-        auto p0p1 = str_split(components[0], "-");
-        if (p0p1.empty()) {
-            throw std::runtime_error("Layer interval is invalid");
-        }
-        int p0 = std::stoi(p0p1[0]);
-        int p1 = p0p1.size() == 2 ? std::stoi(p0p1[1]) : p0;
-        if (p0 > p1) {
-            throw std::runtime_error("Layer interval is invalid, the end layer number is bigger and start layer number (p0 > p1)");
-        }
-        for (int i = p0; i <= p1; i++) {
-            struct llama_merge_config conf{i, scale, scale};
-            configs.push_back(conf);
-        }
-        // TODO: maybe check for overlap intervals?
+static std::vector<struct llama_merge_layer> parse_config(std::string & config_path, size_t n_models, std::vector<int> & buf_srcs, std::vector<float> & buf_scales) {
+    // read file
+    std::ifstream file(config_path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Unable to open file merge config file");
     }
-    return configs;
+    std::ostringstream content;
+    content << file.rdbuf(); // Read the entire file into the stringstream
+    file.close();
+
+    // allocate memory
+    auto lines = str_split(content.str(), "\n");
+    buf_srcs.resize(lines.size()*n_models);
+    buf_scales.resize(lines.size()*n_models);
+
+    // process line by line, one line is one layer
+    std::vector<struct llama_merge_layer> layers;
+    for (size_t i_layer = 0; i_layer < lines.size(); i_layer++) {
+        auto columns = str_split(lines[i_layer], ",");
+        if (columns.size() != n_models*2) {
+            std::stringstream ss;
+            ss << "error: line " << i_layer+1 << " is malformed. Expect to have exactly " << n_models*2 << " columns, but got " << columns.size() << " columns";
+            throw std::runtime_error(ss.str());
+        }
+        int * srcs     = buf_srcs.data()   + i_layer*n_models;
+        float * scales = buf_scales.data() + i_layer*n_models;
+        for (size_t i_model = 0; i_model < n_models; i_model++) {
+            srcs[i_model]   = std::stoi(columns[i_model*2]);
+            scales[i_model] = std::stof(columns[i_model*2 + 1]);
+        }
+        layers.push_back(llama_merge_layer{srcs, scales});
+    }
+    return layers;
 }
 
 int main(int argc, char ** argv) {
-    llama_backend_init();
+    bool invalid_param = false;
+    std::string config_path;
+    std::vector<std::string> model_paths;
+    std::string output_path;
 
-    if (argc < 6) {
-        usage(argv[0]);
-    }
-
-    std::string fname_model1(argv[1]);
-    std::string config_model1(argv[2]);
-    std::string fname_model2(argv[3]);
-    std::string config_model2(argv[4]);
-    std::string fname_output(argv[5]);
-
-    // TODO: add try catch
-    auto configs1 = parse_config(config_model1);
-    auto configs2 = parse_config(config_model2);
-    std::vector<struct llama_merge_config> configs;
-
-    if (configs1.size() != configs2.size()) {
-        fprintf(stderr, "Number of layers between 2 configs does not match, config1 has %ld layers and config2 has %ld layers\n", configs1.size(), configs2.size());
-    }
-
-    // merge 2 configs
-    printf("Merge configs:\n");
-    for (auto c1 : configs1) {
-        float scale2 = -1;
-        for (auto c2 : configs2) {
-            if (c2.i_layer == c1.i_layer) {
-                scale2 = c2.scale2;
+    std::string arg;
+    for (int i = 1; i < argc; i++) {
+        arg = argv[i];
+        if (arg == "-h" || arg == "--help") {
+            usage(argv[0], 0);
+        } else if (arg == "-c" || arg == "--config") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
             }
+            config_path = argv[i];
+        } else if (arg == "-m" || arg == "--model") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            model_paths.push_back(argv[i]);
+        } else if (arg == "-o" || arg == "--output") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            output_path = argv[i];
         }
-        if (scale2 < 0) {
-            fprintf(stderr, "Cannot find config for layer %d in CONFIG2\n", c1.i_layer);
-            exit(1);
-        }
-        struct llama_merge_config conf{c1.i_layer, c1.scale1, scale2};
-        configs.push_back(conf);
-
-        printf("  Layer %d: scale1 = %f, scale2 = %f\n", conf.i_layer, conf.scale1, conf.scale2);
     }
 
-    llama_merge_models(
-        fname_model1.c_str(),
-        fname_model2.c_str(),
-        configs.data(),
-        configs.size(),
-        fname_output.c_str()
-    );
-    llama_backend_free();
+    if (invalid_param) {
+        throw std::invalid_argument("error: invalid parameter for argument: " + arg);
+    } else if (config_path.empty()) {
+        throw std::invalid_argument("error: missing config path");
+    } else if (model_paths.size() < 2) {
+        throw std::invalid_argument("error: require at least 2 models");
+    } else if (output_path.empty()) {
+        throw std::invalid_argument("error: missing output path");
+    }
+
+    // buffers to hold allocated data
+    std::vector<int> buf_srcs;
+    std::vector<float> buf_scales;
+
+    auto layers = parse_config(config_path, model_paths.size(), buf_srcs, buf_scales);
+    std::vector<const char*> p_model_paths;
+    for (auto & m : model_paths) {
+        p_model_paths.push_back(m.data());
+    }
+    const struct llama_merge_config config{
+        p_model_paths.data(),
+        p_model_paths.size(),
+        layers.data(),
+        layers.size(),
+        output_path.data(),
+    };
+
+    llama_merge_models(&config);
+
+    return 0;
 }
