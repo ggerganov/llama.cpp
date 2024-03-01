@@ -222,6 +222,8 @@ class Model:
             return NomicBertModel
         if model_architecture == "GemmaForCausalLM":
             return GemmaModel
+        if model_architecture == "Starcoder2ForCausalLM":
+            return Model
         return Model
 
     def _is_model_safetensors(self) -> bool:
