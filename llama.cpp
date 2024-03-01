@@ -11309,8 +11309,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 }
 
-int32_t llama_merge_models(const struct llama_merge_config * config)
-{
+int32_t llama_merge_models(const struct llama_merge_config * config) {
 #if defined(__linux__) || defined(_WIN32)
     constexpr bool use_mmap = true;
 #else
@@ -11346,6 +11345,11 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
         return ss.str();
     };
 
+    // if the input model model is quantized, it will be dequant to FP16
+    auto get_output_type = [&](struct ggml_tensor * t) {
+        return ggml_is_quantized(t->type) ? GGML_TYPE_F16 : t->type;
+    };
+
     // remember to call before exit
     auto clean_up = [&]() {
         fout.close();
@@ -11379,8 +11383,10 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
         gguf_set_kv(ctx_out, mls[0]->ctx_gguf);
 
         // correct layer count for output model
-        // TODO: is this key "llama.block_count" this the same for all architectures?
-        gguf_set_val_u32(ctx_out, "llama.block_count", config->n_layers);
+        std::stringstream ss;
+        ss << mls[0]->get_arch_name() << ".block_count";
+        gguf_set_val_u32(ctx_out, ss.str().c_str(), config->n_layers);
+        printf("====> Set new value of %s = %ld\n", ss.str().c_str(), config->n_layers);
         
         // read input layers
         for (int i = 0; i < mls[0]->n_tensors; i++) {
@@ -11409,10 +11415,12 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
                 struct ggml_tensor * ref_tensor = mls[0]->get_tensor_meta(ref_name.c_str()); // get ref tensor from layer 0
                 memcpy(out_tensor, ref_tensor, GGML_TENSOR_SIZE); // copy metadata (shape, type,...)
                 ggml_set_name(out_tensor, get_name(i_layer, ref_name).c_str()); // set the correct name (with correct i_layer)
+                out_tensor->type = get_output_type(ref_tensor); // maybe dequant
                 output_tensors.push_back(out_tensor);
                 gguf_add_tensor(ctx_out, out_tensor);
                 LLAMA_LOG_INFO("%s\n", ggml_get_name(out_tensor));
             }
+            // TODO: how to reuse tensor (duplicated layers)? we can play with ctx->infos[tensor_idx].offset
         }
 
         const size_t meta_size = gguf_get_meta_size(ctx_out);
@@ -11436,27 +11444,47 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
     };
 
     // TODO: maybe we should use ggml_add and ggml_scale? and how?
-    auto calc_output_tensor = [&](enum ggml_type type, std::vector<no_init<uint8_t>> & in_buf, float scale, std::vector<no_init<uint8_t>> & out_buf) {
-        GGML_ASSERT(in_buf.size() == out_buf.size());
+    auto calc_output_tensor = [&](struct ggml_tensor * in_tensor, float scale, std::vector<no_init<uint8_t>> & out_buf) {
+        enum ggml_type type = in_tensor->type;
+        const size_t nelements = ggml_nelements(in_tensor);
+        std::vector<no_init<uint8_t>> tmp_buf;
+        void * in_buf = in_tensor->data;
+        // TODO: if the tensor is quantized, we dequantize to FP16 then to FP32, do the calculation and re-quant to FP16. how can we simplify?
+        if (ggml_is_quantized(type)) {
+            // dequantize it to FP32
+            std::vector<std::thread> workers;
+            int nthread = std::thread::hardware_concurrency();
+            workers.reserve(nthread);
+            std::vector<no_init<float>> f32_conv_buf;
+            llama_convert_tensor_internal(in_tensor, f32_conv_buf, workers, nelements, nthread);
+            // quantize back to FP16
+            type = GGML_TYPE_F16;
+            tmp_buf.resize(nelements * sizeof(ggml_fp16_t));
+            for (size_t i = 0; i < nelements; i++) {
+                ggml_fp16_t * dest = (ggml_fp16_t *) tmp_buf.data();
+                dest[i] = ggml_fp32_to_fp16(f32_conv_buf[i].value);
+            }
+            in_buf = tmp_buf.data();
+        }
+        // then the code block below will calculate the merged tensor
         if (type == GGML_TYPE_F16) {
-            GGML_ASSERT(in_buf.size() % sizeof(ggml_fp16_t) == 0);
-            for (size_t i = 0; i < in_buf.size() / sizeof(ggml_fp16_t); i++) {
-                ggml_fp16_t * in = (ggml_fp16_t *) in_buf.data();
+            out_buf.resize(nelements * sizeof(ggml_fp16_t));
+            for (size_t i = 0; i < nelements; i++) {
+                ggml_fp16_t * in = (ggml_fp16_t *) in_buf;
                 ggml_fp16_t * dest = (ggml_fp16_t *) out_buf.data();
                 float in_dequant = ggml_fp16_to_fp32(in[i]);
                 float res = in_dequant * scale;
                 dest[i] = ggml_fp32_to_fp16(res);
             }
         } else if (type == GGML_TYPE_F32) {
-            GGML_ASSERT(in_buf.size() % sizeof(float) == 0);
-            for (size_t i = 0; i < in_buf.size() / sizeof(float); i++) {
-                float * in = (float *) in_buf.data();
+            out_buf.resize(nelements * sizeof(float));
+            for (size_t i = 0; i < nelements; i++) {
+                float * in = (float *) in_buf;
                 float * dest = (float *) out_buf.data();
                 dest[i] = in[i] * scale;
             }
         } else {
-            LLAMA_LOG_ERROR("Only GGML_TYPE_F16 or GGML_TYPE_F32 is supported, current type = %s\n", ggml_type_name(type));
-            return -1; // return of lambda, no need clean up
+            GGML_ASSERT(false); // should never reach here
         }
         return 0; // return of lambda, no need clean up
     };
@@ -11479,7 +11507,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
         read_tensor_data(in_tensor, *mls[0], buf); // read from first model
 
         n_done++;
-        LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], type = %6s\n",
+        LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], input type = %6s\n",
             n_done, output_tensors.size(),
             name.c_str(),
             llama_format_tensor_shape(out_tensor).c_str(),
@@ -11492,8 +11520,8 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
 
     // process layer output tensor
     for (auto & out_tensor : output_tensors) {
-        std::vector<no_init<uint8_t>> in_buf(ggml_nbytes(out_tensor));
-        std::vector<no_init<uint8_t>> out_buf(ggml_nbytes(out_tensor));
+        std::vector<no_init<uint8_t>> in_buf;
+        std::vector<no_init<uint8_t>> out_buf;
 
         std::string out_name = ggml_get_name(out_tensor);
         int i_layer_out = get_i_layer(out_name.c_str());
@@ -11515,7 +11543,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
                 return -1;
             }
             read_tensor_data(in_tensor, *mls[i_model], in_buf);
-            res = calc_output_tensor(in_tensor->type, in_buf, scale, out_buf);
+            res = calc_output_tensor(in_tensor, scale, out_buf);
             if (res < 0) {
                 clean_up();
                 return res;
@@ -11523,7 +11551,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config)
         }
 
         n_done++;
-        LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], type = %6s\n",
+        LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], output type = %6s\n",
             n_done, output_tensors.size(),
             out_name.c_str(),
             llama_format_tensor_shape(out_tensor).c_str(),
