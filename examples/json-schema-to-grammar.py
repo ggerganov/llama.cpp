@@ -34,10 +34,11 @@ class SchemaConverter:
         self.ref_base = None
 
     def _format_literal(self, literal):
-        escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
-            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), json.dumps(literal)
-        )
-        return f'"{escaped}"'
+        return json.dumps(literal)
+        # escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
+        #     lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), json.dumps(literal)
+        # )
+        # return f'"{escaped}"'
 
     def _add_rule(self, name, rule):
         esc_name = INVALID_RULE_CHARS_RE.sub('-', name)
