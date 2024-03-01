@@ -43,6 +43,7 @@ struct server_params {
     int32_t write_timeout = 600;
     bool slots_endpoint = true;
     bool metrics_endpoint = false;
+    int n_threads_http = -1;
 };
 
 bool server_verbose = false;
@@ -2012,6 +2013,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     printf("  -t N, --threads N         number of threads to use during computation (default: %d)\n", params.n_threads);
     printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
+    printf("  --threads-http N          number of threads in the http server pool to process requests (default: hardware concurrency)\n");
     printf("  -c N, --ctx-size N        size of the prompt context (default: %d)\n", params.n_ctx);
     printf("  --rope-scaling {none,linear,yarn}\n");
     printf("                            RoPE frequency scaling method, defaults to linear unless specified by the model\n");
@@ -2297,6 +2299,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.n_threads_batch = std::stoi(argv[i]);
+        }
+        else if (arg == "--threads-http")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            sparams.n_threads_http = std::stoi(argv[i]);
         }
         else if (arg == "-b" || arg == "--batch-size")
         {
@@ -3448,6 +3459,11 @@ int main(int argc, char **argv)
         }
     }*/
     //);
+
+    if (sparams.n_threads_http > 0) {
+        log_data["n_threads_http"] =  std::to_string(sparams.n_threads_http);
+        svr.new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
+    }
 
     LOG_INFO("HTTP server listening", log_data);
     // run the HTTP server in a thread - see comment below
