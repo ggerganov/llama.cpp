@@ -12,6 +12,9 @@ PRIMITIVE_RULES = {
     'boolean': '("true" | "false") space',
     'number': '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
     'integer': '("-"? ([0-9] | [1-9] [0-9]*)) space',
+    'value'  : 'object | array | string | number | boolean',
+    'object' : '"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space',
+    'array'  : '"[" space ( value ("," space value)* )? "]" space',
     'string': r''' "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
@@ -228,6 +231,12 @@ class SchemaConverter:
             ref_schema = requests.get(ref).json()
             return self.visit(ref_schema, ref)
 
+        elif schema_type == 'object' and len(schema) == 1 or schema_type is None and len(schema) == 0:
+            # return 'object'
+            for t, r in PRIMITIVE_RULES.items():
+                self._add_rule(t, r)
+            return 'object'
+        
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
             return self._add_rule(
