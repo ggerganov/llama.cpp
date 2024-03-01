@@ -123,8 +123,6 @@ static std::string get_gpu_info() {
     }
 #endif
 #ifdef GGML_USE_SYCL
-    int device_list[GGML_SYCL_MAX_DEVICES];
-    ggml_sycl_get_gpu_list(device_list, GGML_SYCL_MAX_DEVICES);
     int count = ggml_backend_sycl_get_device_count();
     for (int i = 0; i < count; i++) {
         char buf[128];

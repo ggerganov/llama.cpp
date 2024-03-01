@@ -104,9 +104,6 @@
 #define LLAMA_MAX_NODES   8192
 #define LLAMA_MAX_EXPERTS 8
 
-#if (defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL))
-#define GGML_USE_CUBLAS_SYCL
-#endif
 
 //
 // logging
