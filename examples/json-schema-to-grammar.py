@@ -144,70 +144,34 @@ class SchemaConverter:
             rule = ' | '.join((self._format_literal(v) for v in schema['enum']))
             return self._add_rule(rule_name, rule)
 
-        elif schema_type == 'object' and 'properties' in schema:
-            # TODO: `required` keyword
-            prop_order = self._prop_order
+        elif schema_type in (None, 'object') and 'properties' in schema:
             required = set(schema.get('required', []))
             properties = schema['properties']
-            # sort by position in prop_order (if specified) then by key
-            def prop_sort_key(k):
-                return (prop_order.get(k, len(prop_order)), k),
+            return self._add_rule(rule_name, self._build_object_rule(properties.items(), required, name))
 
-            prop_kv_rule_names = {}
-            for prop_name, prop_schema in properties.items():
-                prop_rule_name = self.visit(prop_schema, f'{name}{"-" if name else ""}{prop_name}')
-                prop_kv_rule_names[prop_name] = self._add_rule(
-                    f'{name}{"-" if name else ""}{prop_name}-kv',
-                    fr'{self._format_literal(prop_name)} space ":" space {prop_rule_name}'
-                )
+        elif schema_type == 'object' and 'allOf' in schema:
+            required = set()
+            properties = []
+            def add_component(comp_schema, is_required):
+                ref = comp_schema.get('$ref')
+                if ref is not None and (resolved := self._resolve_ref(ref)) is not None:
+                    comp_schema = resolved[1]
 
-            req_props = list(sorted(
-                (k for k in properties.keys() if k in required),
-                key=prop_sort_key,
-            ))
-            opt_props = list(sorted(
-                (k for k in properties.keys() if k not in required),
-                key=prop_sort_key,
-            ))
+                if 'properties' in comp_schema:
+                    for prop_name, prop_schema in comp_schema['properties'].items():
+                        properties.append((prop_name, prop_schema))
+                        if is_required:
+                            required.add(prop_name)
 
-            def format_kv(prop_name, prop_rule_name):
-                return fr'{self._format_literal(prop_name)} space ":" space {prop_rule_name}'
-            
-            rule = '"{" space '
-            rule += ' "," space '.join(
-                prop_kv_rule_names[prop_name]
-                for prop_name in req_props
-            )            
-            if opt_props:
-                rule += ' ('
-                if req_props:
-                    rule += ' "," space ( '
-
-                def get_recursive_refs(ks, first_is_optional):
-                    [prop_name, *rest] = ks
-                    kv_rule_name = prop_kv_rule_names[prop_name]
-                    if first_is_optional:
-                        res = f'( "," space {kv_rule_name} )?'
-                    else:
-                        res = kv_rule_name
-                    if len(rest) > 0:
-                        res += ' ' + self._add_rule(
-                            f'{name}{"-" if name else ""}{prop_name}-rest',
-                            get_recursive_refs(rest, first_is_optional=True)
-                        )
-                    return res
-
-                rule += ' | '.join(
-                    get_recursive_refs(opt_props[i:], first_is_optional=False)
-                    for i in range(len(opt_props))
-                )
-                if req_props:
-                    rule += ')'
-                rule += ')?'
-
-            rule += '"}" space'
+            for t in schema['allOf']:
+                if 'anyOf' in t:
+                    for tt in t['anyOf']:
+                        add_component(tt, is_required=False)
+                else:
+                    add_component(t, is_required=True)
 
             return self._add_rule(rule_name, rule)
+            return self._add_rule(rule_name, self._build_object_rule(properties, required, name))
 
         elif schema_type == 'object' and 'additionalProperties' in schema:
             additional_properties = schema['additionalProperties']
@@ -270,6 +234,58 @@ class SchemaConverter:
                 'root' if rule_name == 'root' else schema_type,
                 PRIMITIVE_RULES[schema_type]
             )
+    
+    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str):
+        # TODO: `required` keyword
+        prop_order = self._prop_order
+        print(f'# properties: {properties}', file=sys.stderr)
+        # sort by position in prop_order (if specified) then by original order
+        sorted_props = [kv[0] for _, kv in sorted(enumerate(properties), key=lambda ikv: (prop_order.get(ikv[1][0], len(prop_order)), ikv[0]))]
+
+        prop_kv_rule_names = {}
+        for prop_name, prop_schema in properties:
+            prop_rule_name = self.visit(prop_schema, f'{name}{"-" if name else ""}{prop_name}')
+            prop_kv_rule_names[prop_name] = self._add_rule(
+                f'{name}{"-" if name else ""}{prop_name}-kv',
+                fr'{self._format_literal(prop_name)} space ":" space {prop_rule_name}'
+            )
+
+        required_props = [k for k in sorted_props if k in required]
+        optional_props = [k for k in sorted_props if k not in required]
+        
+        rule = '"{" space '
+        rule += ' "," space '.join(prop_kv_rule_names[k] for k in required_props)            
+
+        if optional_props:
+            rule += ' ('
+            if required_props:
+                rule += ' "," space ( '
+
+            def get_recursive_refs(ks, first_is_optional):
+                [k, *rest] = ks
+                kv_rule_name = prop_kv_rule_names[k]
+                if first_is_optional:
+                    res = f'( "," space {kv_rule_name} )?'
+                else:
+                    res = kv_rule_name
+                if len(rest) > 0:
+                    res += ' ' + self._add_rule(
+                        f'{name}{"-" if name else ""}{k}-rest',
+                        get_recursive_refs(rest, first_is_optional=True)
+                    )
+                return res
+
+            rule += ' | '.join(
+                get_recursive_refs(optional_props[i:], first_is_optional=False)
+                for i in range(len(optional_props))
+            ) + ' '
+            if required_props:
+                rule += ' ) '
+            rule += ' )? '
+
+        rule += ' "}" space '
+
+        return rule
 
     def format_grammar(self):
         return '\n'.join((f'{name} ::= {rule}' for name, rule in self._rules.items()))
