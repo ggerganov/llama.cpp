@@ -1645,7 +1645,6 @@ struct llama_cparams {
     float yarn_beta_slow;
     float defrag_thold;
 
-    bool mul_mat_q;
     bool offload_kqv;
     bool do_pooling;
 
@@ -7894,9 +7893,9 @@ static int llama_decode_internal(
     const auto n_batch = cparams.n_batch;
 
     GGML_ASSERT(n_tokens <= n_batch);
+    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
 
     int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
-    GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -8947,10 +8946,10 @@ struct llm_tokenizer_wpm {
         std::vector<uint32_t> codepoints = codepoints_from_utf8(text);
         std::vector<uint32_t> nfd_codepoints;
         for (uint32_t code : codepoints) {
-            auto it = nfd_map.find(code);
-            if (it != nfd_map.end()) {
-                for (uint32_t c : it->second) {
-                    nfd_codepoints.push_back(c);
+            auto it = nfd_map.equal_range(code);
+            if (it.first != it.second) {
+                for (auto jt = it.first; jt != it.second; jt++) {
+                    nfd_codepoints.push_back(jt->second);
                 }
             } else {
                 nfd_codepoints.push_back(code);
@@ -9001,12 +9000,13 @@ struct llm_tokenizer_wpm {
     }
 
     uint32_t to_lower(uint32_t code) {
+        static const std::locale locale("en_US.UTF-8");
 #if defined(_WIN32)
         if (code > 0xFFFF) {
             return code;
         }
 #endif
-        return std::tolower(wchar_t(code), std::locale("en_US.UTF-8"));
+        return std::tolower(wchar_t(code), locale);
     }
 
     bool is_ascii_punct(uint32_t code) {
@@ -10062,10 +10062,6 @@ void llama_sample_temp(struct llama_context * ctx, llama_token_data_array * cand
     }
 }
 
-void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
-    llama_sample_temp(ctx, candidates_p, temp);
-}
-
 void llama_sample_repetition_penalties(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
@@ -10187,38 +10183,6 @@ void llama_sample_apply_guidance(
         const auto & g = logits_guidance[i];
 
         l = scale * (l - g) + g;
-    }
-
-    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-}
-
-void llama_sample_classifier_free_guidance(
-          struct llama_context * ctx,
-        llama_token_data_array * candidates,
-          struct llama_context * guidance_ctx,
-                         float   scale) {
-    GGML_ASSERT(ctx);
-    int64_t t_start_sample_us;
-
-    t_start_sample_us = ggml_time_us();
-    const size_t n_vocab = llama_n_vocab(llama_get_model(ctx));
-
-    GGML_ASSERT(n_vocab == candidates->size);
-    GGML_ASSERT(!candidates->sorted);
-
-    std::vector<float> logits_base(n_vocab);
-    for (size_t i = 0; i < n_vocab; ++i) {
-        logits_base[i] = candidates->data[i].logit;
-    }
-
-    float * logits_guidance = llama_get_logits(guidance_ctx);
-
-    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-    llama_sample_apply_guidance(ctx, logits_base.data(), logits_guidance, scale);
-    t_start_sample_us = ggml_time_us();
-
-    for (size_t i = 0; i < n_vocab; ++i) {
-        candidates->data[i].logit = logits_base[i];
     }
 
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
@@ -11668,7 +11632,6 @@ struct llama_context_params llama_context_default_params() {
         /*.cb_eval_user_data           =*/ nullptr,
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
-        /*.mul_mat_q                   =*/ true,
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
@@ -11722,15 +11685,6 @@ bool llama_supports_gpu_offload(void) {
 #else
     return false;
 #endif
-}
-
-// deprecated:
-bool llama_mmap_supported(void) {
-    return llama_supports_mmap();
-}
-
-bool llama_mlock_supported(void) {
-    return llama_supports_mlock();
 }
 
 void llama_backend_init(void) {
@@ -11829,7 +11783,6 @@ struct llama_context * llama_new_context_with_model(
     cparams.yarn_beta_fast   = params.yarn_beta_fast;
     cparams.yarn_beta_slow   = params.yarn_beta_slow;
     cparams.defrag_thold     = params.defrag_thold;
-    cparams.mul_mat_q        = params.mul_mat_q;
     cparams.offload_kqv      = params.offload_kqv;
     cparams.do_pooling       = params.do_pooling;
 
@@ -12244,15 +12197,6 @@ uint32_t llama_model_quantize(
     }
 }
 
-int32_t llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, float scale, const char * path_base_model, int32_t n_threads) {
-    try {
-        return llama_apply_lora_from_file_internal(ctx->model, path_lora, scale, path_base_model, n_threads);
-    } catch (const std::exception & err) {
-        LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
-        return 1;
-    }
-}
-
 int32_t llama_model_apply_lora_from_file(const struct llama_model * model, const char * path_lora, float scale, const char * path_base_model, int32_t n_threads) {
     try {
         return llama_apply_lora_from_file_internal(*model, path_lora, scale, path_base_model, n_threads);
@@ -12599,8 +12543,8 @@ size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
 }
 
 // Sets the state reading from the specified source address
-size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
-    uint8_t * inp = src;
+size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
+    const uint8_t * inp = src;
 
     // set rng
     {
@@ -12609,7 +12553,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
         GGML_ASSERT(rng_size <= LLAMA_MAX_RNG_STATE);
 
-        std::string rng_str((char *)inp, rng_size); inp += rng_size;
+        std::string rng_str((const char *)inp, rng_size); inp += rng_size;
 
         std::istringstream rng_ss(rng_str);
         rng_ss >> ctx->rng;
@@ -12800,38 +12744,6 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
     llama_copy_state_data_internal(ctx, &data_ctx);
 
     return true;
-}
-
-int llama_eval(
-        struct llama_context * ctx,
-                 llama_token * tokens,
-                     int32_t   n_tokens,
-                     int32_t   n_past) {
-    llama_kv_cache_seq_rm(ctx->kv_self, -1, n_past, -1);
-
-    const int ret = llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0));
-    if (ret < 0) {
-        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
-    }
-
-    return ret;
-}
-
-int llama_eval_embd(
-            struct llama_context * ctx,
-                           float * embd,
-                         int32_t   n_tokens,
-                         int32_t   n_past) {
-    llama_kv_cache_seq_rm(ctx->kv_self, -1, n_past, -1);
-
-    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, nullptr, n_past, 1, 0, };
-
-    const int ret = llama_decode_internal(*ctx, batch);
-    if (ret < 0) {
-        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
-    }
-
-    return ret;
 }
 
 void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch) {
