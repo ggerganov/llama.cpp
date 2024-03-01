@@ -1383,7 +1383,7 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--vocab-only",   action="store_true",    help="extract only the vocab")
     parser.add_argument("--outtype",      choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
     parser.add_argument("--vocab-dir",    type=Path,              help="directory containing tokenizer.model, if separate from model file")
-    parser.add_argument("--vocab-type",                           help="The vocabulary format used to define the tokenizer model (default: spm,hfft)", default="spm,hfft")
+    parser.add_argument("--vocab-type",                           help="vocab types to try in order, choose from 'spm', 'bpe', 'hfft' (default: spm,hfft)", default="spm,hfft")
     parser.add_argument("--outfile",      type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",          type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
     parser.add_argument("--ctx",          type=int,               help="model training context (default: based on input)")
