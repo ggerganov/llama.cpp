@@ -211,8 +211,8 @@ enum llm_arch {
     LLM_ARCH_INTERNLM2,
     LLM_ARCH_MINICPM,
     LLM_ARCH_GEMMA,
+    LLM_ARCH_STARCODER2,
     LLM_ARCH_UNKNOWN,
-    LLM_ARCH_STARCODER2
 };
 
 static std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
@@ -7735,7 +7735,7 @@ struct llm_build_context {
 
         cur = llm_build_norm(ctx0, cur, hparams,
                 model.output_norm, model.output_norm_b,
-                LLM_NORM_RMS, cb, -1);
+                LLM_NORM, cb, -1);
         cb(cur, "result_norm", -1);
 
         // lm_head
