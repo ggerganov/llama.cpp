@@ -10119,7 +10119,7 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
     const __m256i mask2 = _mm256_loadu_si256((const __m256i*)k_mask2);
 
     const __m256i idx_mask = _mm256_set1_epi16(256);
-    const __m256i idx_shift = _mm256_set_epi16(8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1);
+    const __m256i idx_shift = _mm256_set_epi16(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
     const __m256i idx_mult = _mm256_set1_epi32(IQ3S_MULTIPLIER);
     const __m256i m1 = _mm256_set1_epi32(0x01010101);
     const __m256i m7 = _mm256_set1_epi32(0x07070707);
