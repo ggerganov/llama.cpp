@@ -1,0 +1,10 @@
+- Adds support for `required` vs. optional properties, without the risk for repetitions.
+- Adds support for `additionalProperties`
+- Fixes handling of Arrays (`[ , 1]` no longer possible)
+- Fixes ordering: retain original order unless overridden (rather than alphabetical)
+- Add support for `$ref`
+
+https://github.com/vega/ts-json-schema-generator
+
+
+Before
