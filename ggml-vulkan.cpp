@@ -1225,8 +1225,8 @@ static void ggml_vk_print_gpu_info(size_t idx) {
         }
     }
 
-    const char* GGML_VULKAN_DISABLE_F16 = getenv("GGML_VULKAN_DISABLE_F16");
-    bool force_disable_f16 = GGML_VULKAN_DISABLE_F16 != nullptr;
+    const char* GGML_VK_DISABLE_F16 = getenv("GGML_VK_DISABLE_F16");
+    bool force_disable_f16 = GGML_VK_DISABLE_F16 != nullptr;
 
     bool fp16 = !force_disable_f16 && fp16_storage && fp16_compute;
 
@@ -1382,7 +1382,11 @@ static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
         ctx->device->physical_device.getProperties2(&props2);
         ctx->device->properties = props2.properties;
 
-        if (maintenance4_support) {
+        const char* GGML_VK_FORCE_MAX_ALLOCATION_SIZE = getenv("GGML_VK_FORCE_MAX_ALLOCATION_SIZE");
+
+        if (GGML_VK_FORCE_MAX_ALLOCATION_SIZE != nullptr) {
+            ctx->device->max_memory_allocation_size = std::stoi(GGML_VK_FORCE_MAX_ALLOCATION_SIZE);
+        } else if (maintenance4_support) {
             ctx->device->max_memory_allocation_size = std::min(props3.maxMemoryAllocationSize, props4.maxBufferSize);
         } else {
             ctx->device->max_memory_allocation_size = props3.maxMemoryAllocationSize;
@@ -1402,29 +1406,9 @@ static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
                 fp16_compute = true;
             }
         }
-        ctx->device->physical_device.getProperties2(&props2);
-        ctx->device->properties = props2.properties;
 
-        if (maintenance4_support) {
-            ctx->device->max_memory_allocation_size = std::min(props3.maxMemoryAllocationSize, props4.maxBufferSize);
-        } else {
-            ctx->device->max_memory_allocation_size = props3.maxMemoryAllocationSize;
-        }
-
-        ctx->device->vendor_id = ctx->device->properties.vendorID;
-        ctx->device->subgroup_size = subgroup_props.subgroupSize;
-        ctx->device->uma = ctx->device->properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
-
-        for (auto properties : ext_props) {
-            if (strcmp("VK_KHR_16bit_storage", properties.extensionName) == 0) {
-                fp16_storage = true;
-            } else if (strcmp("VK_KHR_shader_float16_int8", properties.extensionName) == 0) {
-                fp16_compute = true;
-            }
-        }
-
-        const char* GGML_VULKAN_DISABLE_F16 = getenv("GGML_VULKAN_DISABLE_F16");
-        bool force_disable_f16 = GGML_VULKAN_DISABLE_F16 != nullptr;
+        const char* GGML_VK_DISABLE_F16 = getenv("GGML_VK_DISABLE_F16");
+        const bool force_disable_f16 = GGML_VK_DISABLE_F16 != nullptr;
 
         ctx->device->fp16 = !force_disable_f16 && fp16_storage && fp16_compute;
 
