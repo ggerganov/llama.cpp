@@ -472,6 +472,27 @@ async def step_prometheus_metrics_exported(context):
             assert metric_exported, "No metrics exported"
 
 
+@step(u'available models')
+def step_available_models(context):
+    # openai client always expects an api_key
+    openai.api_key = context.user_api_key if context.user_api_key is not None else 'nope'
+    openai.api_base = f'{context.base_url}/v1'
+    context.models = openai.Model.list().data
+
+
+@step(u'{n_model} models are supported')
+def step_supported_models(context, n_model):
+    if context.debug:
+        print("server models available:", context.models)
+    assert len(context.models) == int(n_model)
+
+
+@step(u'model {i_model} is {model_alias}')
+def step_supported_models(context, i_model, model_alias):
+    model = context.models[int(i_model)]
+    assert model.id == model_alias, f"model id {model.id} == {model_alias}"
+
+
 async def concurrent_requests(context, f_completion, *args, **kwargs):
     n_prompts = len(context.prompts)
     if context.debug:
@@ -724,7 +745,7 @@ async def wait_for_health_status(context,
         print(f"Starting checking for health for expected_health_status={expected_health_status}")
     timeout = 3  # seconds
     if expected_health_status == 'ok':
-        timeout = 10 # CI slow inference
+        timeout = 10  # CI slow inference
     interval = 0.5
     counter = 0
     async with aiohttp.ClientSession() as session:

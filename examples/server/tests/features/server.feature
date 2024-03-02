@@ -75,10 +75,14 @@ Feature: llama.cpp server
     When an OAI compatible embeddings computation request for multiple inputs
     Then embeddings are generated
 
-
   Scenario: Tokenize / Detokenize
     When tokenizing:
     """
     What is the capital of France ?
     """
     Then tokens can be detokenize
+
+  Scenario: Models available
+    Given available models
+    Then  1 models are supported
+    Then  model 0 is tinyllama-2
