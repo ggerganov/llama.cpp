@@ -255,11 +255,16 @@ extern "C" {
         enum ggml_type type_v; // data type for V cache
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embedding;   // embedding mode only
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
         bool do_pooling;  // whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
+
+        // Abort callback
+        // if it returns true, execution of llama_decode() will be aborted
+        // currently works only with CPU execution
+        ggml_abort_callback abort_callback;
+        void *              abort_callback_data;
     };
 
     // model quantization parameters
@@ -575,7 +580,7 @@ extern "C" {
     // Returns the number of bytes read
     LLAMA_API size_t llama_set_state_data(
             struct llama_context * ctx,
-                         uint8_t * src);
+                   const uint8_t * src);
 
     // Save/load session file
     LLAMA_API bool llama_load_session_file(
@@ -633,7 +638,10 @@ extern "C" {
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
-    // Token logits obtained from the last call to llama_eval()
+    // Set abort callback
+    LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
+
+    // Token logits obtained from the last call to llama_decode()
     // The logits for the last token are stored in the last row
     // Logits for which llama_batch.logits[i] == 0 are undefined
     // Rows: n_tokens provided with llama_batch

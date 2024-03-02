@@ -35,7 +35,6 @@ options:
   -mg, --main-gpu <i>                 (default: 0)
   -nkvo, --no-kv-offload <0|1>        (default: 0)
   -mmp, --mmap <0|1>                  (default: 1)
-  -mmq, --mul-mat-q <0|1>             (default: 1)
   -ts, --tensor_split <ts0/ts1/..>    (default: 0)
   -r, --repetitions <n>               (default: 5)
   -o, --output <csv|json|md|sql>      (default: md)

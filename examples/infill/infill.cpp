@@ -378,10 +378,10 @@ int main(int argc, char ** argv) {
     if (params.interactive) {
         const char *control_message;
         if (params.multiline_input) {
-            control_message = " - To return control to LLaMa, end your input with '\\'.\n"
+            control_message = " - To return control to LLaMA, end your input with '\\'.\n"
                               " - To return control without starting a new line, end your input with '/'.\n";
         } else {
-            control_message = " - Press Return to return control to LLaMa.\n"
+            control_message = " - Press Return to return control to LLaMA.\n"
                               " - To return control without starting a new line, end your input with '/'.\n"
                               " - If you want to submit another line, end your input with '\\'.\n";
         }
