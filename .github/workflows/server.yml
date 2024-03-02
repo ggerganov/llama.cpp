@@ -83,4 +83,4 @@ jobs:
         if: github.event.schedule != ''
         run: |
           cd examples/server/tests
-          PORT=8888 ./tests.sh --no-skipped --no-capture --tags slow
+          PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
