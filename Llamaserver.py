@@ -108,7 +108,8 @@ if __name__ == "__main__":
 
     bar = make_empty_bar(num_requests)
 
-    api_key = input("What is your API key? ",)
+    #api_key = input("What is your API key? ",)
+    api_key = "john123456"
 
     headers = {
         'Content-Type': 'application/json',
