@@ -1,15 +1,17 @@
 @llama.cpp
+@server
 Feature: llama.cpp server
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file stories260K.gguf
+    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a model alias tinyllama-2
     And   42 as server seed
       # KV Cache corresponds to the total amount of tokens
       # that can be stored across all independent sequences: #4130
       # see --ctx-size and #5568
     And   32 KV cache size
+    And   512 as batch size
     And   1 slots
     And   embeddings extraction
     And   32 server max tokens to predict
@@ -85,4 +87,5 @@ Feature: llama.cpp server
   Scenario: Models available
     Given available models
     Then  1 models are supported
-    Then  model 0 is tinyllama-2
+    Then  model 0 is identified by tinyllama-2
+    Then  model 0 is trained on 128 tokens context

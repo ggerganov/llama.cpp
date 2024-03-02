@@ -70,12 +70,6 @@ jobs:
         run: |
           pip install -r examples/server/tests/requirements.txt
 
-      - name: Download models
-        id: download_models
-        run: |
-          cd examples/server/tests
-          ../../../scripts/hf.sh --repo ggml-org/models --file tinyllamas/stories260K.gguf
-
       - name: Tests
         id: server_integration_test
         run: |
