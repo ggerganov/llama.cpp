@@ -1282,35 +1282,32 @@ def load_some_model(path: Path) -> ModelPlus:
 
 
 class VocabFactory:
+    _FILES = {"spm": "tokenizer.model", "bpe": "vocab.json", "hfft": "tokenizer.json"}
+
     def __init__(self, path: Path):
         self.path = path
-        self.files: dict[str, Path | None] = {
-            "tokenizer.model": None,
-            "vocab.json": None,
-            "tokenizer.json": None,
-        }
-        self._detect_files()
+        self.file_paths = self._detect_files()
+        print(f"Found vocab files: {self.file_paths}")
 
-    def _detect_files(self):
-        for file in self.files.keys():
-            file_path = self.path / file
-            parent_file_path = self.path.parent / file
-            if file_path.exists():
-                self.files[file] = file_path
-            elif parent_file_path.exists():
-                self.files[file] = parent_file_path
-        print(f"Found vocab files: {self.files}")
+    def _detect_files(self) -> dict[str, Path | None]:
+        def locate(file: str) -> Path | None:
+            if (path := self.path / file).exists():
+                return path
+            if (path := self.path.parent / file).exists():
+                return path
+            return None
 
-    def _select_file(self, vocabtype: str | None) -> Path:
-        if vocabtype in ["spm", "bpe"]:
-            for file_key in self.files.keys():
-                if (file := self.files[file_key]) is not None:
-                    return file
-            raise FileNotFoundError(f"{vocabtype} vocab not found.")
-        if vocabtype == "hfft":
-            # For Hugging Face Fast Tokenizer, return the directory path instead of a specific file
-            return self.path
-        raise ValueError(f"Unsupported vocabulary type {vocabtype}")
+        return {vt: locate(f) for vt, f in self._FILES.items()}
+
+    def _select_file(self, vocab_types: list[str]) -> tuple[str, Path]:
+        for vtype in vocab_types:
+            try:
+                path = self.file_paths[vtype]
+            except KeyError:
+                raise ValueError(f"Unsupported vocabulary type {vtype}") from None
+            if path is not None:
+                return vtype, path
+        raise FileNotFoundError(f"Could not find any of {[self._FILES[vt] for vt in vocab_types]}")
 
     def _create_special_vocab(self, vocab: Vocab, vocabtype: str, model_parent_path: Path) -> gguf.SpecialVocab:
         load_merges = vocabtype == "bpe"
@@ -1322,30 +1319,30 @@ class VocabFactory:
             n_vocab=n_vocab,
         )
 
-    def load_vocab(self, vocabtype: str, model_parent_path: Path) -> tuple[Vocab, gguf.SpecialVocab]:
-        path = self._select_file(vocabtype)
-        print(f"Loading vocab file '{path}', type '{vocabtype}'")
+    def load_vocab(self, vocab_types: list[str], model_parent_path: Path) -> tuple[Vocab, gguf.SpecialVocab]:
+        vocab_type, path = self._select_file(vocab_types)
+        print(f"Loading vocab file {path!r}, type {vocab_type!r}")
 
         added_tokens_path = path.parent / "added_tokens.json"
         vocab: Vocab
-        if vocabtype == "bpe":
+        if vocab_type == "bpe":
             vocab = BpeVocab(
                 path, added_tokens_path if added_tokens_path.exists() else None
             )
-        elif vocabtype == "spm":
+        elif vocab_type == "spm":
             vocab = SentencePieceVocab(
                 path, added_tokens_path if added_tokens_path.exists() else None
             )
-        elif vocabtype == "hfft":
+        elif vocab_type == "hfft":
             vocab = HfVocab(
-                path, added_tokens_path if added_tokens_path.exists() else None
+                path.parent, added_tokens_path if added_tokens_path.exists() else None
             )
         else:
-            raise ValueError(f"Unsupported vocabulary type {vocabtype}")
+            raise ValueError(vocab_type)
         # FIXME: Respect --vocab-dir?
         special_vocab = self._create_special_vocab(
             vocab,
-            vocabtype,
+            vocab_type,
             model_parent_path,
         )
         return vocab, special_vocab
@@ -1379,15 +1376,14 @@ def main(args_in: list[str] | None = None) -> None:
     if np.uint32(1) == np.uint32(1).newbyteorder("<"):
         # We currently only support Q8_0 output on little endian systems.
         output_choices.append("q8_0")
-    vocab_types = ["spm", "bpe", "hfft"]
-    parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
+    parser = argparse.ArgumentParser(description="Convert a LLaMA model to a GGML compatible file")
     parser.add_argument("--awq-path",     type=Path,              help="Path to scale awq cache file", default=None)
     parser.add_argument("--dump",         action="store_true",    help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single",  action="store_true",    help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only",   action="store_true",    help="extract only the vocab")
     parser.add_argument("--outtype",      choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
     parser.add_argument("--vocab-dir",    type=Path,              help="directory containing tokenizer.model, if separate from model file")
-    parser.add_argument("--vocab-type",   choices=vocab_types,    help="The vocabulary format used to define the tokenizer model (default: spm)", default="spm")
+    parser.add_argument("--vocab-type",                           help="vocab types to try in order, choose from 'spm', 'bpe', 'hfft' (default: spm,hfft)", default="spm,hfft")
     parser.add_argument("--outfile",      type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",          type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
     parser.add_argument("--ctx",          type=int,               help="model training context (default: based on input)")
@@ -1448,7 +1444,7 @@ def main(args_in: list[str] | None = None) -> None:
     model_parent_path = model_plus.paths[0].parent
     vocab_path = Path(args.vocab_dir or args.model or model_parent_path)
     vocab_factory = VocabFactory(vocab_path)
-    vocab, special_vocab = vocab_factory.load_vocab(args.vocab_type, model_parent_path)
+    vocab, special_vocab = vocab_factory.load_vocab(args.vocab_type.split(","), model_parent_path)
 
     if args.vocab_only:
         if not args.outfile:
