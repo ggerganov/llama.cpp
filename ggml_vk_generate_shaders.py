@@ -1901,6 +1901,24 @@ void main() {
 """
 
 # SOFT_MAX
+soft_max_head = """
+#version 450
+
+#extension GL_EXT_shader_16bit_storage : require
+
+layout (push_constant) uniform parameter
+{
+    uint KX;
+    uint KY;
+    uint KZ;
+    float scale;
+    float max_bias;
+    float m0;
+    float m1;
+    uint n_head_log2;
+} p;
+"""
+
 soft_max_body = """
 #extension GL_EXT_control_flow_attributes : enable
 #define BLOCK_SIZE 512
@@ -1909,7 +1927,8 @@ layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
-layout (binding = 2) buffer D {D_TYPE data_d[];};
+layout (binding = 2) readonly buffer Z {C_TYPE data_c[];};
+layout (binding = 3) buffer D {D_TYPE data_d[];};
 
 shared FLOAT_TYPE vals[BLOCK_SIZE];
 
@@ -1918,11 +1937,23 @@ void main() {
     const uint rowx = gl_WorkGroupID.x;
     const uint rowy = rowx % p.KY;
 
+    float slope = 0.0f;
+
+    // ALiBi
+    if (p.max_bias > 0.0f) {
+        const uint h = rowx/p.KY; // head index
+
+        const float base = h < p.n_head_log2 ? p.m0 : p.m1;
+        const uint   exp  = h < p.n_head_log2 ? h + 1 : 2*(h - p.n_head_log2) + 1;
+
+        slope = pow(base, exp);
+    }
+
     // Find max
     vals[tid] = uintBitsToFloat(0xFF800000);
 
     [[unroll]] for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
-        vals[tid] = max(vals[tid], FLOAT_TYPE(data_a[rowx * p.KX + col]) * p.param1 + (p.KY > 0 ? FLOAT_TYPE(data_b[rowy * p.KX + col]) : FLOAT_TYPE(0.0f)));
+        vals[tid] = max(vals[tid], FLOAT_TYPE(data_a[rowx * p.KX + col]) * p.scale + (p.KY > 0 ? FLOAT_TYPE(data_b[rowy * p.KX + col]) : FLOAT_TYPE(0.0f)) + (p.KZ > 0 ? slope * data_c[col] : 0.0f));
     }
 
     barrier();
@@ -1941,7 +1972,7 @@ void main() {
 
     [[unroll]] for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
         const uint i = rowx * p.KX + col;
-        const FLOAT_TYPE val = exp(FLOAT_TYPE(data_a[i]) * p.param1 + (p.KY > 0 ? FLOAT_TYPE(data_b[rowy * p.KX + col]) : FLOAT_TYPE(0.0f)) - max_val);
+        const FLOAT_TYPE val = exp(FLOAT_TYPE(data_a[i]) * p.scale + (p.KY > 0 ? FLOAT_TYPE(data_b[rowy * p.KX + col]) : FLOAT_TYPE(0.0f)) - max_val);
         vals[tid] += val;
         data_d[i] = D_TYPE(val);
     }
@@ -2423,7 +2454,7 @@ async def main():
 
     tasks.append(string_to_spv("diag_mask_inf_f32", f"{diag_mask_inf_head}\n{shader_f32}\n{diag_mask_inf_body}", {"A_TYPE": "float", "D_TYPE": "float"}))
 
-    tasks.append(string_to_spv("soft_max_f32", f"{generic_head}\n{shader_f32}\n{soft_max_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}))
+    tasks.append(string_to_spv("soft_max_f32", f"{soft_max_head}\n{shader_f32}\n{soft_max_body}", {"A_TYPE": "float", "B_TYPE": "float", "C_TYPE": "float", "D_TYPE": "float"}))
 
     tasks.append(string_to_spv("rope_f32", rope_src, {"A_TYPE": "float", "D_TYPE": "float"}))
     tasks.append(string_to_spv("rope_f16", rope_src, {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}))
