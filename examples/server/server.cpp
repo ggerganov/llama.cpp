@@ -2800,8 +2800,8 @@ int main(int argc, char **argv)
             }
         }
 
-	// Check for API key in the params
-	auto auth_param = req.get_param_value("key");
+        // Check for API key in the params
+        auto auth_param = req.get_param_value("key");
         if (std::find(keys.begin(), keys.end(), auth_param) != keys.end()) {
             return true; // API key is valid
         }
