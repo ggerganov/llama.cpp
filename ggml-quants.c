@@ -4124,7 +4124,8 @@ void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y
 //#define IQ3S_MULTIPLIER 2469109
 //#define IQ3S_MULTIPLIER 746226
 //#define IQ3S_MULTIPLIER 717154
-#define IQ3S_MULTIPLIER 677595
+//#define IQ3S_MULTIPLIER 677595
+#define IQ3S_MULTIPLIER 190842953
 #define IQ3S_BITS 3
 
 void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, int k) {
@@ -4148,8 +4149,7 @@ void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, in
                 aux32[0] = ((qs[2*l+0] | ((qh[0] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 aux32[1] = ((qs[2*l+1] | ((qh[0] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 for (int j = 0; j < 8; ++j) {
-                    //y[j] = db1 * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
-                    y[j] = db1 * (2*(((grid[j]+1)/2) & 7) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
+                    y[j] = db1 * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
                 y += 8;
             }
@@ -4159,8 +4159,7 @@ void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, in
                 aux32[0] = ((qs[2*l+0] | ((qh[1] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 aux32[1] = ((qs[2*l+1] | ((qh[1] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 for (int j = 0; j < 8; ++j) {
-                    //y[j] = db2 * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
-                    y[j] = db2 * (2*(((grid[j]+1)/2) & 7) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
+                    y[j] = db2 * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
                 y += 8;
             }
@@ -10121,9 +10120,10 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
     const __m256i idx_mask = _mm256_set1_epi32(256);
     const __m256i idx_shift = _mm256_set_epi32(1, 2, 3, 4, 5, 6, 7, 8);
     const __m256i idx_mult = _mm256_set1_epi32(IQ3S_MULTIPLIER);
-    const __m256i m1 = _mm256_set1_epi32(0x01010101);
+    const __m256i m1 = _mm256_set1_epi8(1);
     const __m256i m7 = _mm256_set1_epi32(0x07070707);
     const __m256i m15 = _mm256_set1_epi32(0x0f0f0f0f);
+    const __m256i m0  = _mm256_setzero_si256();
 
     __m256 accumf = _mm256_setzero_ps();
     for (int i = 0; i < nb; ++i) {
@@ -10143,9 +10143,13 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
             const __m256i idx_h_h = _mm256_and_si256(_mm256_sllv_epi32(_mm256_set1_epi32(qh[ib32+1]), idx_shift), idx_mask);
             const __m256i idx_32_l = _mm256_or_si256(idx_h_l, _mm256_cvtepi16_epi32(_mm256_castsi256_si128(idx_l_16)));
             const __m256i idx_32_h = _mm256_or_si256(idx_h_h, _mm256_cvtepi16_epi32(_mm256_extractf128_si256(idx_l_16, 1)));
-            const __m256i idx_l = _mm256_add_epi32(_mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_l), m15), m1);
+
+            // v = MAX(((IQ3S_MULTIPLIER * idx) & 0x0f0f0f0f) - 1, 0)
+            const __m256i idx_l = _mm256_max_epi8(_mm256_sub_epi8(_mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_l), m15), m1), m0);
+            // v = (((v >> 1) & 0x07070707) << 1) | 0x01010101
             const __m256i q2_1  = _mm256_or_si256(_mm256_slli_epi32(_mm256_and_si256(_mm256_srli_epi32(idx_l, 1), m7), 1), m1);
-            const __m256i idx_h = _mm256_add_epi32(_mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_h), m15), m1);
+
+            const __m256i idx_h = _mm256_max_epi8(_mm256_sub_epi8(_mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_h), m15), m1), m0);
             const __m256i q2_2  = _mm256_or_si256(_mm256_slli_epi32(_mm256_and_si256(_mm256_srli_epi32(idx_h, 1), m7), 1), m1);
 
             __m256i aux256 = _mm256_set1_epi32(signs[0] | (signs[1] << 16));
@@ -11375,10 +11379,9 @@ static void iq3xs_init_grid512(void) {
     const uint8_t * q4 = (const uint8_t *)&aux32;
     for (int k = 0; k < grid_size; ++k) {
         int8_t * pos = (int8_t *)(the_grid + k);
-        aux32 = (IQ3S_MULTIPLIER * k) & 0x0f0f0f0f;
+        aux32 = ((uint64_t)IQ3S_MULTIPLIER * k) & 0x0f0f0f0f;
         for (int i = 0; i < 4; ++i) {
-            //pos[i] = 2*((q4[i]-1)/2) + 1;
-            pos[i] = 2*(((q4[i]+1)/2) & kmask) + 1;
+            pos[i] = 2*((q4[i]-1)/2) + 1;
         }
     }
 
