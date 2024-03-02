@@ -627,7 +627,8 @@ async def request_completion(prompt,
                                     "n_predict": n_predict if n_predict is not None else -1,
                                     "seed": seed if seed is not None else 42
                                 },
-                                headers=headers) as response:
+                                headers=headers,
+                                timeout=3600) as response:
             if expect_api_error is None or not expect_api_error:
                 assert response.status == 200
                 assert response.headers['Access-Control-Allow-Origin'] == origin
