@@ -10231,7 +10231,7 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
             //const __m256i q2_2 = _mm256_i32gather_epi32((const int *)iq3s_grid, idx.vec[1], 4);
             const __m256i q2_1 = _mm256_set_epi32(
                     iq3s_grid[idx.index[7]], iq3s_grid[idx.index[6]], iq3s_grid[idx.index[5]], iq3s_grid[idx.index[4]],
-                    iq3s_grid[idx.index[3]], iq3s_grid[idx.index[1]], iq3s_grid[idx.index[1]], iq3s_grid[idx.index[0]]
+                    iq3s_grid[idx.index[3]], iq3s_grid[idx.index[2]], iq3s_grid[idx.index[1]], iq3s_grid[idx.index[0]]
             );
             const __m256i q2_2 = _mm256_set_epi32(
                     iq3s_grid[idx.index[15]], iq3s_grid[idx.index[14]], iq3s_grid[idx.index[13]], iq3s_grid[idx.index[12]],
