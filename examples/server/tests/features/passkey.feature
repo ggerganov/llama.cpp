@@ -46,5 +46,8 @@ Feature: Passkey / Self-extend with context shift
     Then <n_predicted> tokens are predicted matching <re_content>
 
     Examples:
-      | hf_repo             | hf_file           | n_ctx_train | ngl | n_ctx | n_batch | n_ga | n_ga_w | n_junk | i_pos | passkey | n_predicted | re_content |
-      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 16384 | 512     | 16   | 512    | 250    | 50    | 42      | 1           | 42         |
+      | hf_repo                         | hf_file                     | n_ctx_train | ngl | n_ctx | n_batch | n_ga | n_ga_w | n_junk | i_pos | passkey | n_predicted | re_content |
+      | TheBloke/phi-2-GGUF             | phi-2.Q4_K_M.gguf           | 2048        | 5   | 8192  | 512     | 16   | 512    | 250    | 50    | 42      | 1           | 42         |
+      | TheBloke/Llama-2-7B-GGUF        | llama-2-7b.Q2_K.gguf        | 4096        | 3   | 16384 | 512     | 4    | 512    | 500    | 300   | 1234    | 5           | 1234       |
+      | TheBloke/Mixtral-8x7B-v0.1-GGUF | mixtral-8x7b-v0.1.Q2_K.gguf | 4096        | 2   | 16384 | 512     | 4    | 512    | 500    | 100   | 0987    | 5           | 0987       |
+
