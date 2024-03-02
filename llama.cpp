@@ -810,9 +810,6 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
 
 static llm_arch llm_arch_from_string(const std::string & name) {
     for (const auto & kv : LLM_ARCH_NAMES) { // NOLINT
-        if (kv.second == nullptr) {
-            GGML_ASSERT(false && "missing architecture in LLM_ARCH_NAMES");
-        }
         if (kv.second == name) {
             return kv.first;
         }
