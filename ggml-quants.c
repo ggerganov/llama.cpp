@@ -10106,7 +10106,7 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
     const uint8x16_t   mask2  = vld1q_u8(k_mask2);
     const int16x8_t    hshift = vld1q_s16(k_shift);
     const uint16x8_t   m256   = vdupq_n_u16(256);
-    const uint16x8_t   m1     = vdupq_n_u8(1);
+    const uint8x16_t   m1     = vdupq_n_u8(1);
 
     uint8x16x2_t vs;
     ggml_int8x16x4_t q3s;
