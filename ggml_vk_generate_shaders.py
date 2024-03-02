@@ -64,6 +64,7 @@ struct block_q5_0
 #define A_TYPE block_q5_0
 """
 shader_q5_1_defines = """
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
 #define QUANT_K 32
 #define QUANT_R 2
 
@@ -71,7 +72,7 @@ struct block_q5_1
 {
     float16_t d;
     float16_t m;
-    uint16_t qh[2];
+    uint qh;
     uint8_t qs[16];
 };
 
@@ -187,7 +188,7 @@ v = (v - 16.0f) * d;
 shader_q5_1_dequant_func = """
 #define DEQUANT_FUNC const float d = float(data_a[ib].d); \
 const float m = float(data_a[ib].m); \
-const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | uint(data_a[ib].qh[0]); \
+const uint uint_qh = data_a[ib].qh; \
 const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10); \
 const uint vui = uint(data_a[ib].qs[iqs]); \
 vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
@@ -336,6 +337,7 @@ mulmat_load_scalar = """
 
 mulmat_load_q4_0 = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a;
 
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
@@ -343,10 +345,70 @@ mulmat_load_q4_0 = """
             const float d = float(data_a[ib].d);
             const uint vui = uint(data_a[ib].qs[iqs]);
             const vec2 v = (vec2(vui & 0xF, vui >> 4) - 8.0f) * d;
-            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
             buf_a[buf_idx + 16] = FLOAT_TYPE(v.y);"""
+
+mulmat_load_q4_1 = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a;
+
+            const uint ib = idx / 16;
+            const uint iqs = idx & 0xF;
+
+            const float d = float(data_a[ib].d);
+            const float m = float(data_a[ib].m);
+            const uint vui = uint(data_a[ib].qs[iqs]);
+            const vec2 v = vec2(vui & 0xF, vui >> 4) * d + m;
+
+            buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
+            buf_a[buf_idx + 16] = FLOAT_TYPE(v.y);"""
+
+mulmat_load_q5_0 = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a;
+
+            const uint ib = idx / 16;
+            const uint iqs = idx & 0xF;
+
+            const float d = float(data_a[ib].d);
+            const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | data_a[ib].qh[0];
+            const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
+            const uint vui = uint(data_a[ib].qs[iqs]);
+            const vec2 v = (vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) - 16.0f) * d;
+
+            buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
+            buf_a[buf_idx + 16] = FLOAT_TYPE(v.y);"""
+
+mulmat_load_q5_1 = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a;
+
+            const uint ib = idx / 16;
+            const uint iqs = idx & 0xF;
+
+            const float d = float(data_a[ib].d);
+            const float m = float(data_a[ib].m);
+            const uint uint_qh = data_a[ib].qh;
+            const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
+            const uint vui = uint(data_a[ib].qs[iqs]);
+            const vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) * d + m;
+
+            buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
+            buf_a[buf_idx + 16] = FLOAT_TYPE(v.y);"""
+
+mulmat_load_q8_0 = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+
+            const uint ib = idx / 16;
+            const uint iqs = (idx & 0xF) * 2;
+
+            const float d = float(data_a[ib].d);
+            const vec2 v = vec2(int(data_a[ib].qs[iqs]), int(data_a[ib].qs[iqs + 1])) * d;
+
+            buf_a[buf_idx    ] = FLOAT_TYPE(v.x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(v.y);"""
 
 mulmat_body2 = """
         }
@@ -614,7 +676,7 @@ void main() {
 
     const float d = float(data_a[ib].d);
     const float m = float(data_a[ib].m);
-    const uint qh = uint(data_a[ib].qh[1]) << 16 | uint(data_a[ib].qh[0]);
+    const uint qh = data_a[ib].qh;
 
     const uint q_idx = 8*il;
 
@@ -2335,6 +2397,26 @@ async def main():
         stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q4_0_defines, mulmat_body1, mulmat_load_q4_0, mulmat_body2))
         tasks.append(string_to_spv("matmul_q4_0_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q4_0", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_q4_0_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q4_1_defines, mulmat_body1, mulmat_load_q4_1, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q4_1_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q4_1", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q4_1_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_1", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q5_0_defines, mulmat_body1, mulmat_load_q5_0, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q5_0_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q5_0", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q5_0_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q5_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q5_1_defines, mulmat_body1, mulmat_load_q5_1, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q5_1_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q5_1", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q5_1_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q5_1", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q8_0_defines, mulmat_body1, mulmat_load_q8_0, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q8_0_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q8_0", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q8_0_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q8_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
     # Shaders where precision is needed, so no fp16 version
 
