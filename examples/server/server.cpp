@@ -253,8 +253,8 @@ struct server_slot {
         std::string stdout_reset;
         std::string stderr_target;
         std::string stderr_reset;
-        double t_token = t_prompt_processing / num_prompt_tokens_processed;
-        double n_tokens_second = 1e3 / t_prompt_processing * num_prompt_tokens_processed;
+        double t_token = t_prompt_processing / n_prompt_tokens_processed;
+        double n_tokens_second = 1e3 / t_prompt_processing * n_prompt_tokens_processed;
         //printf("\033[72;0H]");
         sprintf(buffer, "prompt eval time     = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)",
                 t_prompt_processing, n_prompt_tokens_processed,
@@ -328,7 +328,7 @@ struct server_metrics {
 
 // experimental/diagostic graphic to show kvcache status
 // requires just `slots` and `params.n_ctx` as parameters
-static void kvgraphics(std::vector<llama_client_slot>& slots) {
+static void kvgraphics(std::vector<server_slot>& slots) {
 
     int max_length = 144;
     int num_blocks = slots.size();
@@ -604,7 +604,7 @@ struct llama_server_context
     // the logic seems wrong in this function
     // why should there be an id in a task matching a slot.id before a slot has been assigned?
     // most commonly id = -1 so we deal with that first rather than the specified id > 0
-    llama_client_slot* get_slot(int id) {
+    server_slot* get_slot(int id) {
         int64_t t_last = ggml_time_us();
         server_slot *last_used = nullptr;
 
@@ -1168,7 +1168,7 @@ struct llama_server_context
         queue_results.send(res);
     }
 
-    json get_formatted_generation(llama_client_slot &slot)
+    json get_formatted_generation(server_slot &slot)
     {
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
         const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() &&
@@ -1270,7 +1270,7 @@ struct llama_server_context
             {"model",               params.model_alias},
             {"tokens_predicted",    slot.n_decoded},
             {"tokens_evaluated",    slot.n_prompt_tokens},
-            {"generation_settings", get_formated_generation(slot)},
+            {"generation_settings", get_formatted_generation(slot)},
             {"prompt",              slot.prompt},
             {"truncated",           slot.truncated},
             {"stopped_eos",         slot.stopped_eos},
@@ -1559,7 +1559,7 @@ struct llama_server_context
                 int n_idle_slots       = 0;
                 int n_processing_slots = 0;
 
-                for (llama_client_slot &slot: slots) {
+                for (server_slot &slot: slots) {
                     json slot_data = get_formatted_generation(slot);
                     slot_data["id"] = slot.id;
                     slot_data["task_id"] = slot.task_id;

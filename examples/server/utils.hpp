@@ -137,48 +137,6 @@ struct task_multi {
     std::vector<task_result> results{};
 };
 
-// TODO: can become bool if we can't find use of more states; MAYBE there is a case for RESERVED to keep slots dedicated to chats?
-enum slot_state
-{
-    IDLE,
-    PROCESSING,
-};
-
-enum slot_command
-{
-    NONE,
-    LOAD_PROMPT,
-    RELEASE,
-};
-
-struct slot_params
-{
-    bool stream       = true;
-    bool cache_prompt = false; // remember the prompt to avoid reprocessing all prompt
-
-    uint32_t seed      = -1; // RNG seed
-    int32_t  n_keep    =  0; // number of tokens to keep from initial prompt
-    int32_t  n_predict = -1; // new tokens to predict
-
-    std::vector<std::string> antiprompt;
-
-    json input_prefix;
-    json input_suffix;
-};
-
-struct slot_image
-{
-    int32_t id;
-
-    bool request_encode_image = false;
-    float * image_embedding = nullptr;
-    int32_t image_tokens = 0;
-
-    clip_image_u8 * img_data;
-
-    std::string prefix_prompt; // before of this image
-};
-
 // completion token output with probabilities
 struct completion_token_output {
     struct token_prob
@@ -198,7 +156,6 @@ struct token_translator {
     std::string operator()(const completion_token_output &cto) const { return (*this)(cto.tok); }
 };
 
-static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra) {
 static inline void server_log(
     const char *level,
     const char *function,
@@ -211,8 +168,8 @@ static inline void server_log(
     std::string stderr_target,
     std::string stdout_reset,
     std::string stderr_reset
-)
-{
+    )
+    {
     std::stringstream ss_tid;
     ss_tid << std::this_thread::get_id();
     json log = nlohmann::ordered_json{
