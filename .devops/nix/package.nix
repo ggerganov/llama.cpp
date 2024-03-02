@@ -187,7 +187,7 @@ effectiveStdenv.mkDerivation (
       [
         (cmakeBool "LLAMA_NATIVE" false)
         (cmakeBool "LLAMA_BUILD_SERVER" true)
-        (cmakeBool "BUILD_SHARED_LIBS" (!buildStatic))
+        (cmakeBool "BUILD_SHARED_LIBS" (!enableStatic))
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
         (cmakeBool "LLAMA_BLAS" useBlas)
         (cmakeBool "LLAMA_CLBLAST" useOpenCL)
