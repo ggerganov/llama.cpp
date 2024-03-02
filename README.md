@@ -786,7 +786,7 @@ And after 4.45 hours, you will have the final perplexity.
 ### Interactive mode
 
 If you want a more ChatGPT-like experience, you can run in interactive mode by passing `-i` as a parameter.
-In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMa emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
+In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMA emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
 
 Here is an example of a few-shot interaction, invoked with the command
 
@@ -850,7 +850,7 @@ Sample run:
 ```
 == Running in interactive mode. ==
  - Press Ctrl+C to interject at any time.
- - Press Return to return control to LLaMa.
+ - Press Return to return control to LLaMA.
  - If you want to submit another line, end your input in '\'.
 
  Below is an instruction that describes a task. Write a response that appropriately completes the request.
