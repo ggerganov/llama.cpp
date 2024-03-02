@@ -1987,6 +1987,9 @@ struct llama_context {
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_t sched = nullptr;
 
+    ggml_abort_callback abort_callback      = nullptr;
+    void *              abort_callback_data = nullptr;
+
     // input tensors
     ggml_backend_buffer_t buf_input = nullptr;
     ggml_context * ctx_input = nullptr;
@@ -8071,6 +8074,7 @@ static void llama_graph_compute(
 
     if (lctx.backend_cpu != nullptr) {
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
+        ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
 
     ggml_backend_sched_graph_compute(lctx.sched, gf);
@@ -11856,6 +11860,8 @@ struct llama_context_params llama_context_default_params() {
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
         /*.do_pooling                  =*/ true,
+        /*.abort_callback              =*/ nullptr,
+        /*.abort_callback_data         =*/ nullptr,
     };
 
     return result;
@@ -12038,8 +12044,11 @@ struct llama_context * llama_new_context_with_model(
     LLAMA_LOG_INFO("%s: freq_base  = %.1f\n",   __func__, cparams.rope_freq_base);
     LLAMA_LOG_INFO("%s: freq_scale = %g\n",     __func__, cparams.rope_freq_scale);
 
-    ctx->rng = std::mt19937(params.seed);
-    ctx->logits_all = params.logits_all;
+    ctx->abort_callback      = params.abort_callback;
+    ctx->abort_callback_data = params.abort_callback_data;
+
+    ctx->rng                 = std::mt19937(params.seed);
+    ctx->logits_all          = params.logits_all;
 
     const ggml_type type_k = params.type_k;
     const ggml_type type_v = params.type_v;
@@ -12987,6 +12996,11 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
 void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch) {
     ctx->cparams.n_threads       = n_threads;
     ctx->cparams.n_threads_batch = n_threads_batch;
+}
+
+void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
+    ctx->abort_callback      = abort_callback;
+    ctx->abort_callback_data = abort_callback_data;
 }
 
 struct llama_batch llama_batch_get_one(
