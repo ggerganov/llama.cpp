@@ -847,7 +847,6 @@ async def wait_for_health_status(context,
                                  expected_slots=None):
     if context.debug:
         print(f"Starting checking for health for expected_health_status={expected_health_status}\n")
-    timeout = 3
     interval = 0.5
     counter = 0
     async with aiohttp.ClientSession() as session:
