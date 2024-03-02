@@ -421,7 +421,7 @@ struct llama_server_context
         // create slots
         all_slots_are_idle = true;
 
-        const int32_t n_ctx_slot = std::min(n_ctx / params.n_parallel, llama_n_ctx_train(model)); // FIXME @ggerganov @phymbert To be discussed
+        const int32_t n_ctx_slot = n_ctx / params.n_parallel;
 
         LOG_INFO("initializing slots", {{"n_slots", params.n_parallel}});
         for (int i = 0; i < params.n_parallel; i++)
