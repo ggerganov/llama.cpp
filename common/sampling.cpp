@@ -357,6 +357,11 @@ static llama_token_data_array llama_sample_probability_distribution_impl(
         }
     }
 
+    // apply grammar checks
+    if (ctx_sampling->grammar != NULL) {
+        llama_sample_grammar(ctx_main, &cur_p, ctx_sampling->grammar);
+    }
+
     llama_sample_softmax(ctx_main, &cur_p);
     return cur_p;
 }
