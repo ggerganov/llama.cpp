@@ -2001,6 +2001,17 @@ struct llama_server_context
         LOG_VERBOSE("slots updated", {});
         return true;
     }
+
+    json model_meta() {
+        return json{
+                {"vocab_type", llama_vocab_type(model)},
+                {"n_vocab", llama_n_vocab(model)},
+                {"n_ctx_train", llama_n_ctx_train(model)},
+                {"n_embd", llama_n_embd(model)},
+                {"n_params", llama_model_n_params(model)},
+                {"size", llama_model_size(model)},
+        };
+    }
 };
 
 static void server_print_usage(const char *argv0, const gpt_params &params,
@@ -2994,6 +3005,7 @@ int main(int argc, char **argv)
         state.store(SERVER_STATE_READY);
         LOG_INFO("model loaded", {});
     }
+    const auto model_meta = llama.model_meta();
 
     if (sparams.chat_template.empty()) { // custom chat template is not supplied
         // check if the template comes with the model is supported by us
@@ -3143,7 +3155,7 @@ int main(int argc, char **argv)
                 }
             });
 
-    svr.Get("/v1/models", [&params](const httplib::Request& req, httplib::Response& res)
+    svr.Get("/v1/models", [&params, &model_meta](const httplib::Request& req, httplib::Response& res)
             {
                 res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
                 std::time_t t = std::time(0);
@@ -3152,10 +3164,11 @@ int main(int argc, char **argv)
                     {"object", "list"},
                     {"data", {
                         {
-                            {"id", params.model_alias},
-                            {"object", "model"},
-                            {"created", t},
-                            {"owned_by", "llamacpp"}
+                            {"id",       params.model_alias},
+                            {"object",   "model"},
+                            {"created",  t},
+                            {"owned_by", "llamacpp"},
+                            {"meta",     model_meta}
                         },
                     }}
                 };
