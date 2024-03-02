@@ -546,6 +546,8 @@ async def step_prometheus_metrics_exported(context):
             assert metrics_response.headers['Content-Type'] == "text/plain; version=0.0.4"
             metrics_raw = await metrics_response.text()
             metric_exported = False
+            if context.debug:
+                print(f"/metrics answer:\n{metrics_raw}\n")
             for metric in parser.text_string_to_metric_families(metrics_raw):
                 match metric.name:
                     case "llamacpp:kv_cache_usage_ratio":

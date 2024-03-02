@@ -2924,9 +2924,10 @@ int main(int argc, char **argv)
                 for (const auto& metric_def : metrics_def) {
                     std::string name = metric_def["name"];
                     std::string help = metric_def["help"];
-                    prometheus << "# HELP llamacpp:" << name << " " << help                << "\n"
-                               << "# TYPE llamacpp:" << name << " " << type                << "\n"
-                               << "llamacpp:"        << name << " " << metric_def["value"] << "\n";
+                    auto value = json_value(metric_def, "value", 0);
+                    prometheus << "# HELP llamacpp:" << name << " " << help  << "\n"
+                               << "# TYPE llamacpp:" << name << " " << type  << "\n"
+                               << "llamacpp:"        << name << " " << value << "\n";
                 }
             }
 
