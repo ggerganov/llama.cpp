@@ -50,5 +50,5 @@ Feature: Passkey / Self-extend with context shift
     Then <n_predicted> tokens are predicted matching <re_content>
 
     Examples:
-      | hf_repo             | hf_file           | n_ctx_train | ngl | n_batch | n_slots | n_ga | n_ga_w | n_junk | n_grp | i_pos | seed | n_keep | passkey | n_predicted | re_content |
-      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 512     | 1       | 8    | 512   | 250    | 4     | 50    | 86   | 32     | 42      | -1          | .*42.*     |
+      | hf_repo             | hf_file           | n_ctx_train | ngl | n_batch | n_slots | n_ga | n_ga_w | n_junk | n_grp | i_pos | seed | n_keep | passkey | n_predicted | re_content          |
+      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 512     | 1       | 8    | 512    | 250    | 4     | 50    | 86   | 32     | 42      | 5           | The passkey is 42\. |
