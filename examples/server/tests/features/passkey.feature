@@ -19,7 +19,9 @@ Feature: Passkey / Self-extend with context shift
     And   a self-extend context with a factor of <n_grp>
     And   <seed> as seed
     And   a KV cache size based on the model trained context <n_ctx_train> extended by <n_grp> with additional <n_keep> tokens
-    And   1 slots
+    And   <n_slots> slots
+    And   <n_ga> group attention factor to extend context size through self-extend
+    And   <n_ga_w> group attention width to extend context size through self-extend
     # Can be override with N_GPU_LAYERS
     And   <ngl> GPU offloaded layers
     Then  the server is starting
@@ -47,5 +49,5 @@ Feature: Passkey / Self-extend with context shift
     Then <n_predicted> tokens are predicted matching <re_content>
 
     Examples:
-      | hf_repo             | hf_file           | n_ctx_train | ngl | n_batch | n_junk | n_grp | i_pos | seed | n_keep | passkey | n_predicted | re_content |
-      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 512     | 250    | 4     | 50    | 86   | 32     | 42      | 4           | .*42.*     |
+      | hf_repo             | hf_file           | n_ctx_train | ngl | n_batch | n_slots | n_ga | n_ga_w | n_junk | n_grp | i_pos | seed | n_keep | passkey | n_predicted | re_content |
+      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 512     | 1       | 4    | 2048   | 250    | 4     | 50    | 86   | 32     | 42      | -1          | .*42.*     |
