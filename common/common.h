@@ -75,6 +75,7 @@ struct gpt_params {
     float   yarn_beta_fast        = 32.0f; // YaRN low correction dim
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
+    float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
     int32_t rope_scaling_type     = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
     ggml_numa_strategy numa       = GGML_NUMA_STRATEGY_DISABLED;
 
@@ -114,7 +115,6 @@ struct gpt_params {
 
     bool   kl_divergence   = false; // compute KL-divergence
 
-    bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode

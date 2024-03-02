@@ -1953,11 +1953,17 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .supports_op             = */ ggml_backend_kompute_supports_op,
 };
 
+static ggml_guid_t ggml_backend_kompute_guid() {
+    static ggml_guid guid = { 0x7b, 0x57, 0xdc, 0xaf, 0xde, 0x12, 0x1d, 0x49, 0xfb, 0x35, 0xfa, 0x9b, 0x18, 0x31, 0x1d, 0xca };
+    return &guid;
+}
+
 ggml_backend_t ggml_backend_kompute_init(int device) {
     GGML_ASSERT(s_kompute_context == nullptr);
     s_kompute_context = new ggml_kompute_context(device);
 
     ggml_backend_t kompute_backend = new ggml_backend {
+        /* .guid      = */ ggml_backend_kompute_guid(),
         /* .interface = */ kompute_backend_i,
         /* .context   = */ s_kompute_context,
     };
@@ -1966,7 +1972,7 @@ ggml_backend_t ggml_backend_kompute_init(int device) {
 }
 
 bool ggml_backend_is_kompute(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_kompute_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_kompute_guid());
 }
 
 static ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data) {

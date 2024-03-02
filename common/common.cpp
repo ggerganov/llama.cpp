@@ -335,6 +335,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.yarn_beta_slow = std::stof(argv[i]);
+        } else if (arg == "--defrag-thold" || arg == "-dt") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.defrag_thold = std::stof(argv[i]);
         } else if (arg == "--samplers") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -634,6 +640,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             } else if (arg_next == "layer") {
                 params.split_mode = LLAMA_SPLIT_MODE_LAYER;
             } else if (arg_next == "row") {
+#ifdef GGML_USE_SYCL
+                fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
+                exit(1);
+#endif // GGML_USE_SYCL
                 params.split_mode = LLAMA_SPLIT_MODE_ROW;
             } else {
                 invalid_param = true;
@@ -1004,10 +1014,12 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --yarn-attn-factor N  YaRN: scale sqrt(t) or attention magnitude (default: 1.0)\n");
     printf("  --yarn-beta-slow N    YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
     printf("  --yarn-beta-fast N    YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
+    printf("  -dt N, --defrag-thold N\n");
+    printf("                        KV cache defragmentation threshold (default: %.1f, < 0 - disabled)\n", params.defrag_thold);
     printf("  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     printf("  --no-penalize-nl      do not penalize newline token\n");
     printf("  --temp N              temperature (default: %.1f)\n", (double)sparams.temp);
-    printf("  --logits-all          return logits for all tokens in the batch (default: disabled)\n");
+    printf("  --all-logits          return logits for all tokens in the batch (default: disabled)\n");
     printf("  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
     printf("  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
     printf("  --winogrande          compute Winogrande score over random tasks from datafile supplied with -f\n");
@@ -1273,7 +1285,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_batch           = params.n_batch;
     cparams.n_threads         = params.n_threads;
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
-    cparams.mul_mat_q         = params.mul_mat_q;
     cparams.seed              = params.seed;
     cparams.logits_all        = params.logits_all;
     cparams.embedding         = params.embedding;
@@ -1285,6 +1296,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.yarn_beta_fast    = params.yarn_beta_fast;
     cparams.yarn_beta_slow    = params.yarn_beta_slow;
     cparams.yarn_orig_ctx     = params.yarn_orig_ctx;
+    cparams.defrag_thold      = params.defrag_thold;
     cparams.offload_kqv       = !params.no_kv_offload;
 
     cparams.type_k = kv_cache_type_from_str(params.cache_type_k);
@@ -1716,7 +1728,6 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
     fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", sparams.n_probs);
     fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");
-    fprintf(stream, "no_mul_mat_q: %s # default: false\n", !params.mul_mat_q ? "true" : "false");
     fprintf(stream, "no_penalize_nl: %s # default: false\n", !sparams.penalize_nl ? "true" : "false");
     fprintf(stream, "ppl_output_type: %d # default: 0\n", params.ppl_output_type);
     fprintf(stream, "ppl_stride: %d # default: 0\n", params.ppl_stride);
