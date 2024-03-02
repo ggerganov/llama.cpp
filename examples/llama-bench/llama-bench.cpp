@@ -123,19 +123,14 @@ static std::string get_gpu_info() {
     }
 #endif
 #ifdef GGML_USE_SYCL
-    int device_list[GGML_SYCL_MAX_DEVICES];
-    ggml_sycl_get_gpu_list(device_list, GGML_SYCL_MAX_DEVICES);
-
-    for (int i = 0; i < GGML_SYCL_MAX_DEVICES; i++) {
-        if (device_list[i] >0 ){
-            char buf[128];
-            ggml_sycl_get_device_description(i, buf, sizeof(buf));
-            id += buf;
+    int count = ggml_backend_sycl_get_device_count();
+    for (int i = 0; i < count; i++) {
+        char buf[128];
+        ggml_sycl_get_device_description(i, buf, sizeof(buf));
+        id += buf;
+        if (i < count - 1) {
             id += "/";
         }
-    }
-    if (id.length() >2 ) {
-        id.pop_back();
     }
 #endif
     // TODO: other backends

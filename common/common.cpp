@@ -640,6 +640,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             } else if (arg_next == "layer") {
                 params.split_mode = LLAMA_SPLIT_MODE_LAYER;
             } else if (arg_next == "row") {
+#ifdef GGML_USE_SYCL
+                fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
+                exit(1);
+#endif // GGML_USE_SYCL
                 params.split_mode = LLAMA_SPLIT_MODE_ROW;
             } else {
                 invalid_param = true;
