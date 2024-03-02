@@ -1,11 +1,12 @@
 @llama.cpp
+@parallel
 Feature: Parallel
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file stories260K.gguf
-    And   a model alias tinyllama-2
+    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   42 as server seed
+    And   512 as batch size
     And   64 KV cache size
     And   2 slots
     And   embeddings extraction
