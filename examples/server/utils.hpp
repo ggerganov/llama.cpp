@@ -126,8 +126,7 @@ static inline void server_log(const char *level, const char *function, int line,
         for (const auto& el : log.items())
         {
             const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
-            snprintf(buf, 1024, " %s=%s", el.key().c_str(), value.c_str());
-            ss << buf;
+            ss << " " << el.key() << "=" << value;
         }
 
         const std::string str = ss.str();
