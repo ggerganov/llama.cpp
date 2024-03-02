@@ -10,6 +10,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/tests/**.*']
+  schedule:
+    -  cron: '00 0 * * *'
 
 jobs:
   server:
@@ -71,7 +73,14 @@ jobs:
           pip install -r examples/server/tests/requirements.txt
 
       - name: Tests
-        id: server_integration_test
+        id: server_integration_tests
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh
+
+      - name: Slow tests
+        id: server_integration_tests_slow
+        if: github.event.schedule != ''
+        run: |
+          cd examples/server/tests
+          PORT=8888 ./tests.sh --no-skipped --no-capture --tags slow
