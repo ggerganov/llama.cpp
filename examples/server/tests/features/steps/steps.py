@@ -298,11 +298,6 @@ def step_prompt_passkey(context, passkey, i_pos):
     context.prompts.append(prompt)
 
 
-@step(u'The passkey is found')
-def step_passkey_found(context):
-    raise NotImplementedError(u'STEP: Then The passkey is found')
-
-
 @step(u'an OAI compatible chat completions request with {api_error} api error')
 @async_run_until_complete
 async def step_oai_chat_completions(context, api_error):
