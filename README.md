@@ -10,6 +10,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
+- The `api_like_OAI.py` script has been removed - use `server` instead ([#5766](https://github.com/ggerganov/llama.cpp/issues/5766#issuecomment-1969037761))
 - Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
 - Support for Gemma models: https://github.com/ggerganov/llama.cpp/pull/5631
 - Non-linear quantization IQ4_NL: https://github.com/ggerganov/llama.cpp/pull/5590

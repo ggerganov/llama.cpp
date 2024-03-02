@@ -107,11 +107,12 @@
         # ```
         #
         # Cf. https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html?highlight=flake#flake-format
-        flake.overlays.default =
-          (final: prev: {
+        flake.overlays.default = (
+          final: prev: {
             llamaPackages = final.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
             inherit (final.llamaPackages) llama-cpp;
-          });
+          }
+        );
 
         systems = [
           "aarch64-darwin"
@@ -131,6 +132,9 @@
             ...
           }:
           {
+            # For standardised reproducible formatting with `nix fmt`
+            formatter = pkgs.nixfmt-rfc-style;
+
             # Unlike `.#packages`, legacyPackages may contain values of
             # arbitrary types (including nested attrsets) and may even throw
             # exceptions. This attribute isn't recursed into by `nix flake
