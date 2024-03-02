@@ -16,6 +16,7 @@ Feature: Passkey / Self-extend with context shift
     Given a model file <hf_file> from HF repo <hf_repo>
     And   <n_batch> as batch size
     And   <n_junk> as number of junk
+    And   <n_predicted> server max tokens to predict
     And   a self-extend context with a factor of <n_grp>
     And   <seed> as seed
     And   a KV cache size based on the model trained context <n_ctx_train> extended by <n_grp> with additional <n_keep> tokens
@@ -50,4 +51,4 @@ Feature: Passkey / Self-extend with context shift
 
     Examples:
       | hf_repo             | hf_file           | n_ctx_train | ngl | n_batch | n_slots | n_ga | n_ga_w | n_junk | n_grp | i_pos | seed | n_keep | passkey | n_predicted | re_content |
-      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 512     | 1       | 4    | 2048   | 250    | 4     | 50    | 86   | 32     | 42      | -1          | .*42.*     |
+      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 512     | 1       | 8    | 512   | 250    | 4     | 50    | 86   | 32     | 42      | -1          | .*42.*     |
