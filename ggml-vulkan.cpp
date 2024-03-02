@@ -1274,7 +1274,9 @@ void ggml_vk_instance_init() {
 
     const std::vector<vk::ExtensionProperties> instance_extensions = vk::enumerateInstanceExtensionProperties();
     const bool validation_ext = ggml_vk_instance_validation_ext_available(instance_extensions);
+#ifdef __APPLE__
     const bool portability_enumeration_ext = ggml_vk_instance_portability_enumeration_ext_available(instance_extensions);
+#endif
 
     std::vector<const char*> layers;
 
@@ -1285,13 +1287,17 @@ void ggml_vk_instance_init() {
     if (validation_ext) {
         extensions.push_back("VK_EXT_validation_features");
     }
+#ifdef __APPLE__
     if (portability_enumeration_ext) {
         extensions.push_back("VK_KHR_portability_enumeration");
     }
+#endif
     vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags{}, &app_info, layers, extensions);
+#ifdef __APPLE__
     if (portability_enumeration_ext) {
         instance_create_info.flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
     }
+#endif
 
     std::vector<vk::ValidationFeatureEnableEXT> features_enable;
     vk::ValidationFeaturesEXT validation_features;
@@ -5743,6 +5749,11 @@ static ggml_backend_i ggml_backend_vk_interface = {
     /* .supports_op             = */ ggml_backend_vk_supports_op,
 };
 
+static ggml_guid_t ggml_backend_vk_guid() {
+    static ggml_guid guid = { 0xb8, 0xf7, 0x4f, 0x86, 0x40, 0x3c, 0xe1, 0x02, 0x91, 0xc8, 0xdd, 0xe9, 0x02, 0x3f, 0xc0, 0x2b };
+    return &guid;
+}
+
 GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t idx) {
     if (vk_instance.initialized[idx]) {
         return vk_instance.backends[idx];
@@ -5761,6 +5772,7 @@ GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t idx) {
     vk_instance.initialized[idx] = true;
 
     ggml_backend_t vk_backend = new ggml_backend {
+        /* .guid      = */ ggml_backend_vk_guid(),
         /* .interface = */ ggml_backend_vk_interface,
         /* .context   = */ &vk_instance.contexts[ctx->idx],
     };
@@ -5771,7 +5783,7 @@ GGML_CALL ggml_backend_t ggml_backend_vk_init(size_t idx) {
 }
 
 GGML_CALL bool ggml_backend_is_vk(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_vk_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_vk_guid());
 }
 
 GGML_CALL int ggml_backend_vk_get_device_count() {
@@ -5914,9 +5926,9 @@ static void ggml_vk_print_tensor(ggml_backend_vk_context * ctx, const ggml_tenso
         tensor_data = malloc(tensor_size);
 
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
-        vk_buffer buf = extra->buffer_gpu.lock();
 
-        ggml_vk_buffer_read(ctx, buf, extra->offset, tensor_data, tensor_size);
+        vk_buffer buffer_gpu = extra->buffer_gpu.lock();
+        ggml_vk_buffer_read(ctx, buffer_gpu, extra->offset, tensor_data, tensor_size);
     }
 
     std::cerr << "TENSOR CHECK " << name << " (" << tensor->name << "): " << ggml_op_name(tensor->op) << std::endl;
@@ -6027,13 +6039,13 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
             memcpy(src0_clone->nb, src0->nb, sizeof(size_t) * GGML_MAX_DIMS);
         } else if (src0->backend == GGML_BACKEND_TYPE_GPU) {
             ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src0->extra;
-            vk_buffer buf = extra->buffer_gpu.lock();
+            vk_buffer buffer_gpu = extra->buffer_gpu.lock();
             uint64_t offset = extra->offset;
             if (!ggml_is_contiguous(src0) && ggml_vk_dim01_contiguous(src0)) {
                 for (int i3 = 0; i3 < src0->ne[3]; i3++) {
                     for (int i2 = 0; i2 < src0->ne[2]; i2++) {
                         const int idx = i3*src0->ne[2] + i2;
-                        ggml_vk_buffer_read(ctx, buf, offset + idx * src0->nb[2], ((char *)src0_clone->data + idx * src0_clone->nb[2]), src0->ne[1] * src0->nb[1]);
+                        ggml_vk_buffer_read(ctx, buffer_gpu, offset + idx * src0->nb[2], ((char *)src0_clone->data + idx * src0_clone->nb[2]), src0->ne[1] * src0->nb[1]);
                     }
                 }
 
@@ -6043,10 +6055,10 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
                     src0_clone->nb[i] = src0_clone->nb[i - 1]*src0_clone->ne[i - 1];
                 }
             } else {
-                if (offset + src0_size >= buf->size) {
-                    src0_size = buf->size - offset;
+                if (offset + src0_size >= buffer_gpu->size) {
+                    src0_size = buffer_gpu->size - offset;
                 }
-                ggml_vk_buffer_read(ctx, buf, offset, src0_clone->data, src0_size);
+                ggml_vk_buffer_read(ctx, buffer_gpu, offset, src0_clone->data, src0_size);
                 memcpy(src0_clone->nb, src0->nb, sizeof(size_t) * GGML_MAX_DIMS);
             }
         } else {
@@ -6071,13 +6083,13 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
             memcpy(src1_clone->nb, src1->nb, sizeof(size_t) * GGML_MAX_DIMS);
         } else if (src1->backend == GGML_BACKEND_TYPE_GPU) {
             ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src1->extra;
-            vk_buffer buf = extra->buffer_gpu.lock();
+            vk_buffer buffer_gpu = extra->buffer_gpu.lock();
             uint64_t offset = extra->offset;
             if (!ggml_is_contiguous(src1) && ggml_vk_dim01_contiguous(src1)) {
                 for (int i3 = 0; i3 < src1->ne[3]; i3++) {
                     for (int i2 = 0; i2 < src1->ne[2]; i2++) {
                         const int idx = i3*src1->ne[2] + i2;
-                        ggml_vk_buffer_read(ctx, buf, offset + idx * src1->nb[2], ((char *)src1_clone->data + idx * src1_clone->nb[2]), src1->ne[1] * src1->nb[1]);
+                        ggml_vk_buffer_read(ctx, buffer_gpu, offset + idx * src1->nb[2], ((char *)src1_clone->data + idx * src1_clone->nb[2]), src1->ne[1] * src1->nb[1]);
                     }
                 }
 
@@ -6087,10 +6099,10 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
                     src1_clone->nb[i] = src1_clone->nb[i - 1]*src1_clone->ne[i - 1];
                 }
             } else {
-                if (offset + src1_size >= buf->size) {
-                    src1_size = buf->size - offset;
+                if (offset + src1_size >= buffer_gpu->size) {
+                    src1_size = buffer_gpu->size - offset;
                 }
-                ggml_vk_buffer_read(ctx, buf, offset, src1_clone->data, src1_size);
+                ggml_vk_buffer_read(ctx, buffer_gpu, offset, src1_clone->data, src1_size);
                 memcpy(src1_clone->nb, src1->nb, sizeof(size_t) * GGML_MAX_DIMS);
             }
         } else {
@@ -6309,13 +6321,13 @@ static void ggml_vk_check_results_1(ggml_backend_vk_context * ctx, ggml_compute_
         tensor_data = malloc(tensor_size);
 
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
-        vk_buffer buf = extra->buffer_gpu.lock();
 
-        if (extra->offset + tensor_size >= buf->size) {
-            tensor_size = buf->size - (extra->offset);
+        vk_buffer buffer_gpu = extra->buffer_gpu.lock();
+        if (extra->offset + tensor_size >= buffer_gpu->size) {
+            tensor_size = buffer_gpu->size - (extra->offset);
         }
 
-        ggml_vk_buffer_read(ctx, buf, extra->offset, tensor_data, tensor_size);
+        ggml_vk_buffer_read(ctx, buffer_gpu, extra->offset, tensor_data, tensor_size);
     }
 
     float first_error_result = -1.0f;

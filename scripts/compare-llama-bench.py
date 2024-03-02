@@ -31,7 +31,7 @@ PRETTY_NAMES = {
     "model_size": "Model Size [GiB]", "model_n_params": "Num. of Parameters",
     "n_batch": "Batch size", "n_threads": "Threads", "type_k": "K type", "type_v": "V type",
     "n_gpu_layers": "GPU layers", "main_gpu": "Main GPU", "no_kv_offload": "NKVO",
-    "mul_mat_q": "MMQ", "tensor_split": "Tensor split"
+    "tensor_split": "Tensor split"
 }
 
 DEFAULT_SHOW = ["model_type"]  # Always show these properties by default.

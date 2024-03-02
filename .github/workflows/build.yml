@@ -145,6 +145,28 @@ jobs:
           cd build
           ctest -L main --verbose
 
+  ubuntu-22-cmake-vulkan:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential libvulkan-dev
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake -DLLAMA_VULKAN=ON ..
+          cmake --build . --config Release -j $(nproc)
+
   ubuntu-22-cmake-sycl:
     runs-on: ubuntu-22.04
 
@@ -669,8 +691,7 @@ jobs:
         run: |
           cd examples/llama.android
 
-          # Skip armeabi-v7a for now (https://github.com/llvm/llvm-project/issues/65820).
-          ./gradlew build --no-daemon -Pskip-armeabi-v7a
+          ./gradlew build --no-daemon
 
 #  freeBSD-latest:
 #    runs-on: macos-12
