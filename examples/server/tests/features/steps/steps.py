@@ -813,7 +813,7 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
         re_content = f'^(.*)({re_content})(.*)$'
         p = re.compile(re_content, flags=RegexFlag.IGNORECASE | RegexFlag.MULTILINE | RegexFlag.DOTALL)
         match = p.match(content)
-        assert match and len(match.groups()) == 3, f'/{re_content}/g must match ```{content}```'
+        assert match and len(match.groups()) >= 3, f'/{re_content}/g must match ```{content}```'
         if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
             highlighted = p.sub(r"\1<hi>\2</hi>\3", content).replace('<hi>', '\x1b[33m').replace('</hi>', '\x1b[0m')
             print(f"Checking completion response: {highlighted}\n")
