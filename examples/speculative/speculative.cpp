@@ -245,7 +245,7 @@ int main(int argc, char ** argv) {
                         float r = u_dist(rng);
                         llama_token_data_array dist_dft = drafts[s].dist[i_dft];
                         // acquire the token probabilities assigned by the draft and target models
-                        for (int i = 0; i < dist_tgt.size; i++) {
+                        for (size_t i = 0; i < dist_tgt.size; i++) {
                             if (dist_tgt.data[i].id == drafts[s].tokens[i_dft]) {
                                 p_tgt = dist_tgt.data[i].p;
                             }
@@ -283,11 +283,11 @@ int main(int argc, char ** argv) {
                                 return a.id < b.id;
                             });
 
-                            for (int i = 0; i < dist_tgt.size; i++) {
+                            for (size_t i = 0; i < dist_tgt.size; i++) {
                                 dist_tgt.data[i].p = std::max(0.0f, dist_tgt.data[i].p - dist_dft.data[i].p);
                                 sum_probs += dist_tgt.data[i].p;
                             }
-                            for (int i = 0; i < dist_tgt.size; i++) {
+                            for (size_t i = 0; i < dist_tgt.size; i++) {
                                 dist_tgt.data[i].p /= sum_probs;
                             }
 
@@ -399,7 +399,7 @@ int main(int argc, char ** argv) {
                 drafts[s].tokens.clear();
                 drafts[s].i_batch_tgt.clear();
                 // free dist and clear
-                for (int i = 0; i < drafts[s].dist.size(); i++) {
+                for (size_t i = 0; i < drafts[s].dist.size(); i++) {
                     if (freed_addrs.find(drafts[s].dist[i].data) != freed_addrs.end()) {
                         continue;
                     }
