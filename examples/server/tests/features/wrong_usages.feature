@@ -1,4 +1,4 @@
-# run with ./test.sh --tags wrong_usage
+# run with: ./tests.sh --no-skipped --tags wrong_usage
 @wrong_usage
 Feature: Wrong usage of llama.cpp server
 

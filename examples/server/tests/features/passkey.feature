@@ -1,8 +1,6 @@
-#@llama.cpp
+# run with: ./tests.sh --no-skipped --tags passkey
 @passkey
-@wip
 @slow
-@bug
 Feature: Passkey / Self-extend with context shift
 
   Background: Server startup
@@ -17,10 +15,8 @@ Feature: Passkey / Self-extend with context shift
     And   <n_batch> as batch size
     And   <n_junk> as number of junk
     And   <n_predicted> server max tokens to predict
-    And   a self-extend context with a factor of <n_grp>
-    And   <seed> as seed
-    And   a KV cache size based on the model trained context <n_ctx_train> extended by <n_grp> with additional <n_keep> tokens
-    And   <n_slots> slots
+    And   42 as seed
+    And   <n_ctx> KV cache size
     And   <n_ga> group attention factor to extend context size through self-extend
     And   <n_ga_w> group attention width to extend context size through self-extend
     # Can be override with N_GPU_LAYERS
@@ -50,5 +46,5 @@ Feature: Passkey / Self-extend with context shift
     Then <n_predicted> tokens are predicted matching <re_content>
 
     Examples:
-      | hf_repo             | hf_file           | n_ctx_train | ngl | n_batch | n_slots | n_ga | n_ga_w | n_junk | n_grp | i_pos | seed | n_keep | passkey | n_predicted | re_content |
-      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 512     | 1       | 8    | 512    | 250    | 4     | 50    | 86   | 32     | 42      | 32          | .*42.*     |
+      | hf_repo             | hf_file           | n_ctx_train | ngl | n_ctx | n_batch | n_ga | n_ga_w | n_junk | i_pos | passkey | n_predicted | re_content |
+      | TheBloke/phi-2-GGUF | phi-2.Q4_K_M.gguf | 2048        | 5   | 16384 | 512     | 16   | 512    | 250    | 50    | 42      | 1           | 42         |

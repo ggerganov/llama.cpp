@@ -31,9 +31,9 @@ Feature: llama.cpp server
     And   prometheus metrics are exposed
 
     Examples: Prompts
-      | prompt                           | n_predict | re_content                             | n_predicted |
-      | I believe the meaning of life is | 8         | (read<or>going)+                       | 8           |
-      | Write a joke about AI            | 64        | (park<or>friends<or>scared<or>always)+ | 32          |
+      | prompt                           | n_predict | re_content                       | n_predicted |
+      | I believe the meaning of life is | 8         | (read\|going)+                   | 8           |
+      | Write a joke about AI            | 64        | (park\|friends\|scared\|always)+ | 32          |
 
   Scenario Outline: OAI Compatibility
     Given a model <model>
@@ -45,9 +45,9 @@ Feature: llama.cpp server
     Then  <n_predicted> tokens are predicted matching <re_content>
 
     Examples: Prompts
-      | model        | system_prompt               | user_prompt                          | max_tokens | re_content                 | n_predicted | enable_streaming |
-      | llama-2      | Book                        | What is the best book                | 8          | (Mom<or>what)+             | 8           | disabled         |
-      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 64         | (thanks<or>happy<or>bird)+ | 32          | enabled          |
+      | model        | system_prompt               | user_prompt                          | max_tokens | re_content             | n_predicted | enable_streaming |
+      | llama-2      | Book                        | What is the best book                | 8          | (Mom\|what)+           | 8           | disabled         |
+      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 64         | (thanks\|happy\|bird)+ | 32          | enabled          |
 
   Scenario: Embedding
     When embeddings are computed for:

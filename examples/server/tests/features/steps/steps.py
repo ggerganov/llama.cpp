@@ -84,12 +84,6 @@ def step_n_ctx(context, n_ctx):
     context.n_ctx = n_ctx
 
 
-@step(u'a KV cache size based on the model trained context {n_ctx_train:d}'
-      u' extended by {n_grp:d} with additional {n_keep:d} tokens')
-def step_kv_cache_size_extended(context, n_ctx_train, n_grp, n_keep):
-    context.n_ctx = n_ctx_train * n_grp + n_keep
-
-
 @step(u'{n_slots:d} slots')
 def step_n_slots(context, n_slots):
     context.n_slots = n_slots
@@ -146,7 +140,8 @@ async def step_wait_for_the_server_to_be_started(context, expecting_status):
                                          slots_idle=context.n_slots,
                                          slots_processing=0,
                                          expected_slots=[{'id': slot_id, 'state': 0}
-                                                         for slot_id in range(context.n_slots if context.n_slots else 1)])
+                                                         for slot_id in
+                                                         range(context.n_slots if context.n_slots else 1)])
         case 'busy':
             await wait_for_health_status(context, context.base_url, 503,
                                          'no slot available',
@@ -154,7 +149,8 @@ async def step_wait_for_the_server_to_be_started(context, expecting_status):
                                          slots_idle=0,
                                          slots_processing=context.n_slots,
                                          expected_slots=[{'id': slot_id, 'state': 1}
-                                                         for slot_id in range(context.n_slots if context.n_slots else 1)])
+                                                         for slot_id in
+                                                         range(context.n_slots if context.n_slots else 1)])
         case _:
             assert False, "unknown status"
 
@@ -258,11 +254,6 @@ def step_n_batch(context, n_batch):
     context.n_batch = n_batch
 
 
-@step(u'a self-extend context with a factor of {n_grp:d}')
-def step_n_grp(context, n_grp):
-    context.n_grp = n_grp
-
-
 @step(u'{seed:d} as seed')
 def step_seed(context, seed):
     context.seed = seed
@@ -282,6 +273,7 @@ def step_prompt_junk_suffix(context):
 def step_prompt_suffix(context):
     context.prompt_suffix = context.text
 
+
 @step(u'{n_ga:d} group attention factor'
       u' to extend context size through self-extend')
 def step_impl(context, n_ga):
@@ -294,8 +286,8 @@ def step_impl(context, n_ga_w):
 
 
 @step(u'a passkey prompt template')
-def step_prompt_passkey_template(context):
-    context.prompt_passkey_template = context.text
+def step_prompt_passkey(context):
+    context.prompt_passkey = context.text
 
 
 @step(u'a "{passkey}" passkey challenge prompt with the passkey inserted every {i_pos:d} junk')
@@ -303,10 +295,11 @@ def step_prompt_passkey(context, passkey, i_pos):
     prompt = ""
     for i in range(context.n_junk):
         if i % context.n_junk == i_pos:
-            prompt += context.prompt_passkey_template
+            prompt += context.prompt_passkey # the passkey is already substituted
         prompt += context.prompt_junk_suffix
     if context.debug:
-        print(f"Passkey challenge:\n```\n{prompt}\n```\n")
+        passkey_highlight = "\x1b[33m" + passkey + "\x1b[0m"
+        print(f"Passkey challenge:\n```{prompt.replace(passkey, passkey_highlight)}```\n")
     context.prompts.append(context.prompt_prefix + prompt + context.prompt_suffix)
 
 
@@ -816,14 +809,18 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
     content = completion_response['content']
     n_predicted = completion_response['timings']['predicted_n']
     assert len(content) > 0, "no token predicted"
+    if re_content is not None:
+        re_content = f'^(.*)({re_content})(.*)$'
+        p = re.compile(re_content, flags=RegexFlag.IGNORECASE | RegexFlag.MULTILINE | RegexFlag.DOTALL)
+        match = p.match(content)
+        assert match and len(match.groups()) == 3, f'/{re_content}/g must match ```{content}```'
+        if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+            highlighted = p.sub(r"\1<hi>\2</hi>\3", content).replace('<hi>', '\x1b[33m').replace('</hi>', '\x1b[0m')
+            print(f"Checking completion response: {highlighted}\n")
     if expected_predicted_n and expected_predicted_n > 0:
         assert n_predicted == expected_predicted_n, (f'invalid number of tokens predicted:'
                                                      f' {n_predicted} <> {expected_predicted_n}')
-    if re_content is not None:
-        re_content = '^.*' + re_content.replace('<or>', '|') + '.*$'
-        assert re.match(re_content, content, flags=RegexFlag.IGNORECASE | RegexFlag.MULTILINE | RegexFlag.DOTALL), (
-            f'invalid tokens predicted:'
-            f' ```\n{content}\n``` do not match /{re_content}/')
+
 
 
 async def gather_tasks_results(context):
@@ -840,7 +837,7 @@ async def wait_for_health_status(context,
                                  base_url,
                                  expected_http_status_code,
                                  expected_health_status,
-                                 timeout = 3,
+                                 timeout=3,
                                  params=None,
                                  slots_idle=None,
                                  slots_processing=None,
