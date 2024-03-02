@@ -306,8 +306,8 @@ def step_prompt_passkey(context, passkey, i_pos):
             prompt += context.prompt_passkey_template
         prompt += context.prompt_junk_suffix
     if context.debug:
-        print(f"ERRRRR  Passkey challenge:\n```\n{prompt}\n```\n")
-    context.prompts.append(prompt)
+        print(f"Passkey challenge:\n```\n{prompt}\n```\n")
+    context.prompts.append(context.prompt_prefix + prompt + context.prompt_suffix)
 
 
 @step(u'an OAI compatible chat completions request with {api_error} api error')
