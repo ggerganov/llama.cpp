@@ -1,9 +1,10 @@
 @llama.cpp
+@security
 Feature: Security
 
   Background: Server startup with an api key defined
     Given a server listening on localhost:8080
-    And   a model file stories260K.gguf
+    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a server api key llama.cpp
     Then  the server is starting
     Then  the server is healthy
