@@ -760,8 +760,27 @@ int main(int argc, char ** argv) {
                         ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
                         : 0;
 
-                    auto tmp = ::llama_tokenize(ctx, antiprompt, false, true);
-                    if (last_output.find(antiprompt, search_start_pos) != std::string::npos || (tmp.size() == 1 && llama_sampling_last(ctx_sampling) == tmp[0])) {
+                    if (last_output.find(antiprompt, search_start_pos) != std::string::npos) {
+                        if (params.interactive) {
+                            is_interacting = true;
+                        }
+                        is_antiprompt = true;
+                        break;
+                    }
+                }
+
+                // tokenize reverse/antiprompt special tokens only once using static
+                static std::vector<std::vector<llama_token>> antiprompt_ids;
+                if (antiprompt_ids.empty()) {
+                    for (std::string& antiprompt : params.antiprompt) {
+                        antiprompt_ids.push_back(::llama_tokenize(ctx, antiprompt, false, true));
+                    }
+                }
+
+                // check for reverse prompt using special tokens
+                llama_token last_token = llama_sampling_last(ctx_sampling);
+                for (std::vector<llama_token> ids : antiprompt_ids) {
+                    if (ids.size() == 1 && last_token == ids[0]) {
                         if (params.interactive) {
                             is_interacting = true;
                         }
