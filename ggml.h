@@ -454,6 +454,8 @@ extern "C" {
         GGML_OP_POOL_2D,
         GGML_OP_UPSCALE, // nearest interpolate
         GGML_OP_PAD,
+        GGML_OP_ARANGE,
+        GGML_OP_TIMESTEP_EMBEDDING,
         GGML_OP_ARGSORT,
         GGML_OP_LEAKY_RELU,
 
@@ -1661,6 +1663,15 @@ extern "C" {
             int                  p2,
             int                  p3);
 
+    // Ref: https://github.com/CompVis/stable-diffusion/blob/main/ldm/modules/diffusionmodules/util.py#L151
+    // timesteps: [N,]
+    // return: [N, dim]
+    GGML_API struct ggml_tensor * ggml_timestep_embedding(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * timesteps,
+            int                   dim,
+            int                   max_period);
+
     // sort rows
     enum ggml_sort_order {
         GGML_SORT_ORDER_ASC,
@@ -1671,6 +1682,12 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             enum ggml_sort_order  order);
+
+    GGML_API struct ggml_tensor * ggml_arange(
+            struct ggml_context * ctx,
+            float                 start,
+            float                 stop,
+            float                 step);
 
     // top k elements per row
     GGML_API struct ggml_tensor * ggml_top_k(
