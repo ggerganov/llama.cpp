@@ -11986,9 +11986,10 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
                 scales[ib] = 0;
                 continue;
             }
+            for (int k = 0; k < bs4; ++k) is_on_grid[k] = false;
             float best = 0;
             float scale = max/(2*kMaxQ-1);
-            for (int is = -15; is <= 15; ++is) {
+            for (int is = -9; is <= 9; ++is) {
                 float id = (2*kMaxQ-1+is*0.2f)/max;
                 float this_scale = 1/id;
                 for (int k = 0; k < bs4; ++k) {
@@ -12024,7 +12025,7 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
             if (n_not_ongrid > 0 && scale > 0) {
                 float id = 1/scale;
                 for (int k = 0; k < bs4; ++k) {
-                    if (is_on_grid[k]) continue;
+                    //if (is_on_grid[k]) continue;
                     uint16_t u = 0;
                     for (int i = 0; i < 4; ++i) {
                         int l = nearest_int(0.5f*(id*xval[4*k+i]-1));
@@ -12074,24 +12075,14 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
             scales[ib] = scale;
             max_scale = MAX(max_scale, scale);
 
-            //for (int k = 0; k < bs8; ++k) {
-            //    for (int i = 0; i < 8; ++i) {
-            //        float diff = scale*(2*L[8*k+i] + 1) * (block_signs[k] & (1 << i) ? -1 : 1) - xb[8*k+i];
-            //        block_mse += diff*diff;
-            //    }
-            //}
-
         }
-
-        //printf("Block %d: rmse = %g\n", ibl, (double)sqrtf(block_mse/QK_K));
 
         if (!max_scale) {
             continue;
         }
 
         float d = max_scale/31;
-        //y[ibl].d = GGML_FP32_TO_FP16(d * 1.025f); //1.02f); //1.0125f);
-        y[ibl].d = GGML_FP32_TO_FP16(d * 1.033f); //1.04f); //1.02f); //1.0125f);
+        y[ibl].d = GGML_FP32_TO_FP16(d * 1.025f); //1.033f);
         float id = 1/d;
         for (int ib = 0; ib < QK_K/block_size; ib += 2) {
             int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
