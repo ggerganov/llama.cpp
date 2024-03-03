@@ -2026,7 +2026,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     printf("  -t N, --threads N         number of threads to use during computation (default: %d)\n", params.n_threads);
     printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
-    printf("  --threads-http N          number of threads in the http server pool to process requests (default: hardware concurrency)\n");
+    printf("  --threads-http N          number of threads in the http server pool to process requests (default: max(hardware concurrency - 1, --parallel N + 2))\n");
     printf("  -c N, --ctx-size N        size of the prompt context (default: %d)\n", params.n_ctx);
     printf("  --rope-scaling {none,linear,yarn}\n");
     printf("                            RoPE frequency scaling method, defaults to linear unless specified by the model\n");
@@ -3468,10 +3468,12 @@ int main(int argc, char **argv)
     }*/
     //);
 
-    if (sparams.n_threads_http > 0) {
-        log_data["n_threads_http"] =  std::to_string(sparams.n_threads_http);
-        svr.new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
+    if (sparams.n_threads_http < 1) {
+        // +2 threads for monitoring endpoints
+        sparams.n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
     }
+    log_data["n_threads_http"] =  std::to_string(sparams.n_threads_http);
+    svr.new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
 
     LOG_INFO("HTTP server listening", log_data);
     // run the HTTP server in a thread - see comment below
