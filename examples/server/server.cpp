@@ -390,7 +390,8 @@ static void kvgraphics(std::vector<server_slot>& slots) {
         } else {
             slot_symbol3 = "\u22EE";
         }
-    printf(" %4zu/%5zu %2d %s %s %s\n", slots[i].cache_tokens.size(), slot_cache_size, slots[i].id, slot_symbol1.c_str(), slot_symbol2.c_str(), slot_symbol3.c_str());
+        std::string prompt = slots[i].prompt.dump();
+    printf(" %4zu/%5zu %2d %s %s %s %s\n", slots[i].cache_tokens.size(), slot_cache_size, slots[i].id, slot_symbol1.c_str(), slot_symbol2.c_str(), slot_symbol3.c_str(), prompt.c_str());
     }
     printf("\033[5;0H");   // just start two lines below the heading
     //printf("\n\033[%d;0H\033[%dJ", 10, num_blocks+5);     // move cursor to end of cache display and clear thereafter
@@ -2284,6 +2285,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             sparams.public_path = argv[i];
         }
         /*
+        Do we really need to be able to feed a single user to the server?
         else if (arg == "--api-key")
         {
             if (++i >= argc)
@@ -2310,7 +2312,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            sparams.api_keys = get_userdata(argv[i]);
+            sparams.api_keys = get_userdata(argv[i]);   // read apikey json data
 
             key_file.close();
         }
@@ -3152,14 +3154,16 @@ int main(int argc, char **argv)
     // Set the base directory for serving static files
     svr.set_base_dir(sparams.public_path);
 
+    // set the host port to listen on
     std::unordered_map<std::string, std::string> log_data;
     log_data["hostname"] = sparams.hostname;
     log_data["port"] = std::to_string(sparams.port);
 
-    if (sparams.api_keys.size() == 1) {     // what happens if the size is zero?
+    // process api keys
+    if (sparams.api_keys.size() == 1) {     // should we trap what happens if the size is zero?
         log_data["api_key"] = "api_key: ****" + sparams.api_keys[0][0].substr(sparams.api_keys[0][0].length() - 4);
     } else if (sparams.api_keys.size() > 1) {
-        log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
+        log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded"; // diagnostic; suppress eventually
     }
     for (auto &item : sparams.api_keys) {
         std::string username = item.first;

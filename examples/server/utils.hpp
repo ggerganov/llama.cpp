@@ -20,48 +20,6 @@ extern bool server_log_json;
 #define SERVER_VERBOSE 1
 #endif
 
-#if SERVER_VERBOSE != 1
-#define LOG_VERBOSE(MSG, ...)   // if not verbose logging just return empty
-#else
-#define LOG_VERBOSE(MSG, ...)                                            \
-    do                                                                   \
-    {                                                                    \
-        if (server_verbose)                                              \
-        {                                                                \
-            server_log("VERB", __func__, __LINE__, MSG, __VA_ARGS__,     \
-               log_settings.stdout_target, log_settings.stderr_target, \
-               log_settings.stdout_reset, log_settings.stderr_reset);   \
-        }                                                                \
-    } while (0)     // this is always false so the loop only compiles once but is treated as a single statement
-#endif
-
-// ATTEMPT TO REFACTOR THE LOGGING BEHAVIOUR AND ALLOW REDIRECTION OF STDOUT, STDERR
-
-struct LogRedirection {
-  // Set default values for redirection targets and reset strings
-  std::string stdout_target = "stdout_log.log";
-  std::string stdout_reset = "/dev/stdout";
-  std::string stderr_target = "stderr_log.log";
-  std::string stderr_reset = "/dev/stderr";
-};
-
-LogRedirection log_settings;
-
-#define LOG_ERROR(MSG, ...) \
-    server_log("ERR", __func__, __LINE__, MSG, __VA_ARGS__, \
-               log_settings.stdout_target, log_settings.stderr_target, \
-               log_settings.stdout_reset, log_settings.stderr_reset)
-
-#define LOG_WARNING(MSG, ...) \
-    server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__, \
-               log_settings.stdout_target, log_settings.stderr_target, \
-               log_settings.stdout_reset, log_settings.stderr_reset)
-
-#define LOG_INFO(MSG, ...) \
-    server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__, \
-               log_settings.stdout_target, log_settings.stderr_target, \
-               log_settings.stdout_reset, log_settings.stderr_reset)
-
 /*
 // Example usage (WIP):
 LogRedirection default_settings;  // Use defaults but not necessary to say so
@@ -78,7 +36,7 @@ Yes, using the LogRedirection struct approach eliminates the need to explicitly 
 
 1. Redirection Settings Encapsulated: The LogRedirection struct holds these settings, making them reusable and adaptable.
 2. Default Values: The struct's members have default values defined, serving as fallbacks.
-3. Macro Handles Settings: The LOG_ERROR macro takes a LogRedirection object and passes its members to the server_log function.
+3. Macro Handles Settings: The LOG_ERROR (etc.) macros take a LogRedirection object and passes its members to the server_log function.
 
 Example:
 
@@ -87,14 +45,57 @@ LOG_ERROR("Default error", {});  // Uses defaults from an empty LogRedirection o
 This compact usage is possible because:
 
 {} creates a temporary LogRedirection object with its members implicitly initialized to the default values.
-The macro passes those defaults to server_log, achieving the desired behavior without requiring explicit variable declarations at every call.
+The macro passes those defaults to server_log, achieving the desired behaviour without requiring explicit variable declarations at every call.
 Customization:
 
-When needed, you can create a LogRedirection object with specific values and pass it to LOG_ERROR for tailored logging behaviour:
+When needed, you can create a LogRedirection object with specific values and pass it to LOG_ERROR (etc.) for tailored logging behaviour:
 
 LogRedirection custom_settings = {.stdout_target = "/tmp/my_log.out"};
 LOG_ERROR("Custom error", "Details", custom_settings);
 */
+
+// ATTEMPT TO REFACTOR THE LOGGING BEHAVIOUR AND ALLOW REDIRECTION OF STDOUT, STDERR
+
+struct LogRedirection {
+  // Set default values for redirection targets and reset strings
+  std::string stdout_target = "stdout.log"; // will be in ./build and eventually overwritten
+  std::string stdout_reset = "/dev/stdout";
+  std::string stderr_target = "stderr.log"; // will be in ./build and eventually overwritten
+  std::string stderr_reset = "/dev/stderr";
+};
+
+LogRedirection log_settings;    // TODO: avoid global declaration
+
+#if SERVER_VERBOSE != 1
+#define LOG_VERBOSE(MSG, ...)   // if not verbose logging just return empty
+#else
+#define LOG_VERBOSE(MSG, ...)                                            \
+    do                                                                   \
+    {                                                                    \
+        if (server_verbose)                                              \
+        {                                                                \
+            server_log("VERB", __func__, __LINE__, MSG, __VA_ARGS__,     \
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset);   \
+        }                                                                \
+    } while (0)     // this is always false so the loop only compiles once but is treated as a single statement
+#endif
+
+#define LOG_ERROR(MSG, ...) \
+    server_log("ERR", __func__, __LINE__, MSG, __VA_ARGS__, \
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset)
+
+#define LOG_WARNING(MSG, ...) \
+    server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__, \
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset)
+
+#define LOG_INFO(MSG, ...) \
+    server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__, \
+               log_settings.stdout_target, log_settings.stderr_target, \
+               log_settings.stdout_reset, log_settings.stderr_reset)
+
 
 //
 // parallel

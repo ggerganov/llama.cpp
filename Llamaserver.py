@@ -6,11 +6,21 @@ from time import sleep
 
 def print_dict(data):
     if isinstance(data, dict):
+        #for k, v in data.items():
+        #    print(f"Key: {k}; Value: {v}\n")
+        #input("",)
         for k, v in data.items():
             if isinstance(v, dict):
                 print_dict(v)
-            elif k == "content":          
-                print(f"Key: {k:>30}: {v}")
+            elif k == "content":
+                print(f"Model: {data['model']}")
+                print(f"Max tokens predicted: {data['generation_settings']['n_predict']}")
+                print(f"Prompt evaluation time = {data['timings']['prompt_ms']}")
+                print(f"Token generation time = {data['timings']['predicted_ms']}")
+                print(f"Tokens cached = {data['tokens_cached']}")
+                print(f"Tokens evaluated = {data['tokens_evaluated']}")
+                print(f"Tokens actually predicted = {data['tokens_predicted']}\n")
+                print(f"Response: {v}")
                 return
     elif isinstance(data, list):
         for entry in v:
@@ -55,7 +65,7 @@ def send_request(q, question, event, count, num_requests):
     
     system = "You are a helpful assistant who answers all requests \
 courteously and accurately without undue repetion. \
-you pay close attention to the nuance of a question and response accordingly."
+You pay close attention to the nuance of a question and respond accordingly."
     
     data = {'system': system, 'prompt': question}
     
@@ -131,9 +141,15 @@ if __name__ == "__main__":
                     "Israel", "Egypt", "Kenya", "Chile", "Mexico", "Canada", "Ecuador", "Brazil", "Argentina", "Colombia",
                     "Bulgaria", "Romania", "Finland", "Sweden", "Norway", "Denmark", "Tanzania", "Israel",
                     "Latvia", "Lithuania", "Estonia", "Pakistan", "Sri Lanka", "Malawi", "Mozambique"]
+
+    philosopher_list = ["Blaise Pascal", "Thomas Hobbes", "Georg Frederik Hegel", "Søren Kierkegaard", "Karl Marx", "Arthur Schopenhauer",
+                        "Ludwig Feuerbach", "Friedrich Nietzsche", "Max Weber", "Sigmund Freud", "Carl Jung",
+                        "Melanie Klein", "John Puddefoot"]
+
+    num_requests = len(philosopher_list)
     
     for i in range(num_requests):
-        writer = writer_list[i % len(writer_list)]
+        writer = philosopher_list[i % num_requests]
         question = f"Tell me about the writings of {writer}."
         # NOTE: don't pass the parameter as a function call; pass in args
         print(f"Processing request {i} / {num_requests}: {question}\n")
