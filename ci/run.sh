@@ -98,7 +98,7 @@ function gg_run {
 function gg_run_ctest_debug {
     cd ${SRC}
 
-    rm -rf build-ci-debug && mkdir build-ci-debug && cd build-ci-debug
+    mkdir -p build-ci-debug && cd build-ci-debug
 
     set -e
 
@@ -126,7 +126,7 @@ function gg_sum_ctest_debug {
 function gg_run_ctest_release {
     cd ${SRC}
 
-    rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
+    mkdir -p build-ci-release && cd build-ci-release
 
     set -e
 
@@ -226,7 +226,7 @@ function gg_run_open_llama_3b_v2 {
     path_models="../models-mnt/open-llama/3B-v2"
     path_wiki="../models-mnt/wikitext/wikitext-2-raw"
 
-    rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
+    mkdir -p build-ci-release && cd build-ci-release
 
     set -e
 
@@ -407,7 +407,7 @@ function gg_run_open_llama_7b_v2 {
     path_models="../models-mnt/open-llama/7B-v2"
     path_wiki="../models-mnt/wikitext/wikitext-2-raw"
 
-    rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
+    mkdir -p build-ci-release && cd build-ci-release
 
     set -e
 
@@ -587,7 +587,7 @@ function gg_run_embd_bge_small {
 
     path_models="../models-mnt/bge-small"
 
-    rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
+    mkdir -p build-ci-release && cd build-ci-release
 
     set -e
 
