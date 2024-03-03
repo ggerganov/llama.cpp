@@ -219,8 +219,7 @@ static inline void server_log(
         for (const auto& el : log.items())
         {
             const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
-            snprintf(buf, 1024, "\033[85;0H %s=%s", el.key().c_str(), value.c_str());
-            ss << buf;
+            ss << " " << el.key() << "=" << value;
         }
 
         const std::string str = ss.str();
