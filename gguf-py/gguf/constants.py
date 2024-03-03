@@ -604,20 +604,28 @@ class PoolingType(IntEnum):
 
 
 class GGMLQuantizationType(IntEnum):
-    F32  = 0
-    F16  = 1
-    Q4_0 = 2
-    Q4_1 = 3
-    Q5_0 = 6
-    Q5_1 = 7
-    Q8_0 = 8
-    Q8_1 = 9
-    Q2_K = 10
-    Q3_K = 11
-    Q4_K = 12
-    Q5_K = 13
-    Q6_K = 14
-    Q8_K = 15
+    F32     = 0
+    F16     = 1
+    Q4_0    = 2
+    Q4_1    = 3
+    Q5_0    = 6
+    Q5_1    = 7
+    Q8_0    = 8
+    Q8_1    = 9
+    Q2_K    = 10
+    Q3_K    = 11
+    Q4_K    = 12
+    Q5_K    = 13
+    Q6_K    = 14
+    Q8_K    = 15
+    IQ2_XXS = 16
+    IQ2_XS  = 17
+    IQ3_XXS = 18
+    IQ1_S   = 19
+    IQ4_NL  = 20
+    IQ3_S   = 21
+    IQ2_S   = 22
+    IQ4_XS  = 23
 
 
 class GGUFEndian(IntEnum):
@@ -662,20 +670,28 @@ class GGUFValueType(IntEnum):
 QK_K = 256
 # Items here are (block size, type size)
 GGML_QUANT_SIZES = {
-    GGMLQuantizationType.F32:  (1, 4),
-    GGMLQuantizationType.F16:  (1, 2),
-    GGMLQuantizationType.Q4_0: (32, 2 + 16),
-    GGMLQuantizationType.Q4_1: (32, 2 + 2 + 16),
-    GGMLQuantizationType.Q5_0: (32, 2 + 4 + 16),
-    GGMLQuantizationType.Q5_1: (32, 2 + 2 + 4 + 16),
-    GGMLQuantizationType.Q8_0: (32, 2 + 32),
-    GGMLQuantizationType.Q8_1: (32, 4 + 4 + 32),
-    GGMLQuantizationType.Q2_K: (256, 2 + 2 + QK_K // 16 + QK_K // 4),
-    GGMLQuantizationType.Q3_K: (256, 2 + QK_K // 4 + QK_K // 8 + 12),
-    GGMLQuantizationType.Q4_K: (256, 2 + 2 + QK_K // 2 + 12),
-    GGMLQuantizationType.Q5_K: (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
-    GGMLQuantizationType.Q6_K: (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
-    GGMLQuantizationType.Q8_K: (256, 4 + QK_K + QK_K // 8),
+    GGMLQuantizationType.F32:     (1, 4),
+    GGMLQuantizationType.F16:     (1, 2),
+    GGMLQuantizationType.Q4_0:    (32, 2 + 16),
+    GGMLQuantizationType.Q4_1:    (32, 2 + 2 + 16),
+    GGMLQuantizationType.Q5_0:    (32, 2 + 4 + 16),
+    GGMLQuantizationType.Q5_1:    (32, 2 + 2 + 4 + 16),
+    GGMLQuantizationType.Q8_0:    (32, 2 + 32),
+    GGMLQuantizationType.Q8_1:    (32, 4 + 4 + 32),
+    GGMLQuantizationType.Q2_K:    (256, 2 + 2 + QK_K // 16 + QK_K // 4),
+    GGMLQuantizationType.Q3_K:    (256, 2 + QK_K // 4 + QK_K // 8 + 12),
+    GGMLQuantizationType.Q4_K:    (256, 2 + 2 + QK_K // 2 + 12),
+    GGMLQuantizationType.Q5_K:    (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
+    GGMLQuantizationType.Q6_K:    (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
+    GGMLQuantizationType.Q8_K:    (256, 4 + QK_K + QK_K // 8),
+    GGMLQuantizationType.IQ2_XXS: (256, 2 + QK_K // 4),
+    GGMLQuantizationType.IQ2_XS:  (256, 2 + QK_K // 4 + QK_K // 32),
+    GGMLQuantizationType.IQ3_XXS: (256, 2 + QK_K // 4 + QK_K // 8),
+    GGMLQuantizationType.IQ1_S:   (256, 2 + QK_K // 8 + QK_K // 16),
+    GGMLQuantizationType.IQ4_NL:  (32, 2 + 16),
+    GGMLQuantizationType.IQ3_S:   (256, 2 + QK_K // 4 + QK_K // 8 + QK_K // 32 + 4),
+    GGMLQuantizationType.IQ2_S:   (256, 2 + QK_K // 4 + QK_K // 16),
+    GGMLQuantizationType.IQ4_XS:  (256, 2 + 2 + QK_K // 2 + QK_K // 64),
 }
 
 
