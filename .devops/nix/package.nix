@@ -255,11 +255,11 @@ effectiveStdenv.mkDerivation (
       # Configurations we don't want even the CI to evaluate. Results in the
       # "unsupported platform" messages. This is mostly a no-op, because
       # cudaPackages would've refused to evaluate anyway.
-      badPlatforms = optionals (useCuda || useOpenCL || useVulkan) lib.platforms.darwin;
+      badPlatforms = optionals (useCuda || useOpenCL) lib.platforms.darwin;
 
       # Configurations that are known to result in build failures. Can be
       # overridden by importing Nixpkgs with `allowBroken = true`.
-      broken = (useMetalKit && !effectiveStdenv.isDarwin) || (useVulkan && effectiveStdenv.isDarwin);
+      broken = (useMetalKit && !effectiveStdenv.isDarwin);
 
       description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
       homepage = "https://github.com/ggerganov/llama.cpp/";

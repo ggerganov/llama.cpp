@@ -1,0 +1,91 @@
+# Server build and tests
+name: Server
+
+on:
+  workflow_dispatch: # allows manual triggering
+    inputs:
+      slow_tests:
+        description: 'Run slow tests'
+        required: true
+        type: boolean
+  push:
+    branches:
+      - master
+    paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/tests/**.*']
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/tests/**.*']
+  schedule:
+    -  cron: '0 0 * * *'
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [Debug, Release]
+        include:
+          - build_type: Release
+            sanitizer: ""
+        exclude:
+          - build_type: Release
+            sanitizer: ADDRESS
+          - build_type: Release
+            sanitizer: THREAD
+          - build_type: Release
+            sanitizer: UNDEFINED
+
+    container:
+      image: ubuntu:latest
+      ports:
+        - 8888
+      options: --cpus 4
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        run: |
+          apt-get update
+          apt-get -y install \
+            build-essential \
+            git \
+            cmake \
+            python3-pip \
+            wget \
+            psmisc
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. \
+              -DLLAMA_NATIVE=OFF \
+              -DLLAMA_BUILD_SERVER=ON \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+              -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
+
+      - name: Tests dependencies
+        id: test_dependencies
+        run: |
+          pip install -r examples/server/tests/requirements.txt
+
+      - name: Tests
+        id: server_integration_tests
+        run: |
+          cd examples/server/tests
+          PORT=8888 ./tests.sh
+
+      - name: Slow tests
+        id: server_integration_tests_slow
+        if: ${{ github.event.schedule != '' && matrix.build_type == 'Release' || github.event.inputs.slow_tests == 'true' }}
+        run: |
+          cd examples/server/tests
+          PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow

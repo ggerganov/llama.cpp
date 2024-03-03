@@ -123,19 +123,14 @@ static std::string get_gpu_info() {
     }
 #endif
 #ifdef GGML_USE_SYCL
-    int device_list[GGML_SYCL_MAX_DEVICES];
-    ggml_sycl_get_gpu_list(device_list, GGML_SYCL_MAX_DEVICES);
-
-    for (int i = 0; i < GGML_SYCL_MAX_DEVICES; i++) {
-        if (device_list[i] >0 ){
-            char buf[128];
-            ggml_sycl_get_device_description(i, buf, sizeof(buf));
-            id += buf;
+    int count = ggml_backend_sycl_get_device_count();
+    for (int i = 0; i < count; i++) {
+        char buf[128];
+        ggml_sycl_get_device_description(i, buf, sizeof(buf));
+        id += buf;
+        if (i < count - 1) {
             id += "/";
         }
-    }
-    if (id.length() >2 ) {
-        id.pop_back();
     }
 #endif
     // TODO: other backends
@@ -157,9 +152,9 @@ static const char * output_format_str(output_formats format) {
 
 static const char * split_mode_str(llama_split_mode mode) {
     switch (mode) {
-        case LLAMA_SPLIT_NONE:  return "none";
-        case LLAMA_SPLIT_LAYER: return "layer";
-        case LLAMA_SPLIT_ROW:   return "row";
+        case LLAMA_SPLIT_MODE_NONE:  return "none";
+        case LLAMA_SPLIT_MODE_LAYER: return "layer";
+        case LLAMA_SPLIT_MODE_ROW:   return "row";
         default: GGML_ASSERT(!"invalid split mode");
     }
 }
@@ -176,7 +171,6 @@ struct cmd_params {
     std::vector<llama_split_mode> split_mode;
     std::vector<int> main_gpu;
     std::vector<bool> no_kv_offload;
-    std::vector<bool> mul_mat_q;
     std::vector<std::vector<float>> tensor_split;
     std::vector<bool> use_mmap;
     int reps;
@@ -193,10 +187,9 @@ static const cmd_params cmd_params_defaults = {
     /* type_v        */ {GGML_TYPE_F16},
     /* n_threads     */ {get_num_physical_cores()},
     /* n_gpu_layers  */ {99},
-    /* split_mode    */ {LLAMA_SPLIT_LAYER},
+    /* split_mode    */ {LLAMA_SPLIT_MODE_LAYER},
     /* main_gpu      */ {0},
     /* no_kv_offload */ {false},
-    /* mul_mat_q     */ {true},
     /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
     /* use_mmap      */ {true},
     /* reps          */ 5,
@@ -221,7 +214,6 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
     printf("  -mmp, --mmap <0|1>                  (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
-    printf("  -mmq, --mul-mat-q <0|1>             (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
     printf("  -o, --output <csv|json|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
@@ -358,11 +350,11 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             for (const auto & m : p) {
                 llama_split_mode mode;
                 if (m == "none") {
-                    mode = LLAMA_SPLIT_NONE;
+                    mode = LLAMA_SPLIT_MODE_NONE;
                 } else if (m == "layer") {
-                    mode = LLAMA_SPLIT_LAYER;
+                    mode = LLAMA_SPLIT_MODE_LAYER;
                 } else if (m == "row") {
-                    mode = LLAMA_SPLIT_ROW;
+                    mode = LLAMA_SPLIT_MODE_ROW;
                 } else {
                     invalid_param = true;
                     break;
@@ -383,13 +375,6 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<bool>(argv[i], split_delim);
             params.no_kv_offload.insert(params.no_kv_offload.end(), p.begin(), p.end());
-        } else if (arg == "-mmq" || arg == "--mul-mat-q") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            auto p = split<bool>(argv[i], split_delim);
-            params.mul_mat_q.insert(params.mul_mat_q.end(), p.begin(), p.end());
         } else if (arg == "-mmp" || arg == "--mmap") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -466,7 +451,6 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.split_mode.empty())   { params.split_mode = cmd_params_defaults.split_mode; }
     if (params.main_gpu.empty())     { params.main_gpu = cmd_params_defaults.main_gpu; }
     if (params.no_kv_offload.empty()){ params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
-    if (params.mul_mat_q.empty())    { params.mul_mat_q = cmd_params_defaults.mul_mat_q; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
     if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
@@ -486,7 +470,6 @@ struct cmd_params_instance {
     llama_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
-    bool mul_mat_q;
     std::vector<float> tensor_split;
     bool use_mmap;
 
@@ -518,7 +501,6 @@ struct cmd_params_instance {
         cparams.n_batch = n_batch;
         cparams.type_k = type_k;
         cparams.type_v = type_v;
-        cparams.mul_mat_q = mul_mat_q;
         cparams.offload_kqv = !no_kv_offload;
 
         return cparams;
@@ -538,7 +520,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & nb : params.n_batch)
     for (const auto & tk : params.type_k)
     for (const auto & tv : params.type_v)
-    for (const auto & mmq : params.mul_mat_q)
     for (const auto & nkvo : params.no_kv_offload)
     for (const auto & nt : params.n_threads) {
         for (const auto & n_prompt : params.n_prompt) {
@@ -557,7 +538,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
-                /* .mul_mat_q    = */ mmq,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
             };
@@ -580,7 +560,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
-                /* .mul_mat_q    = */ mmq,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
             };
@@ -616,7 +595,6 @@ struct test {
     llama_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
-    bool mul_mat_q;
     std::vector<float> tensor_split;
     bool use_mmap;
     int n_prompt;
@@ -639,7 +617,6 @@ struct test {
         split_mode = inst.split_mode;
         main_gpu = inst.main_gpu;
         no_kv_offload = inst.no_kv_offload;
-        mul_mat_q = inst.mul_mat_q;
         tensor_split = inst.tensor_split;
         use_mmap = inst.use_mmap;
         n_prompt = inst.n_prompt;
@@ -713,7 +690,7 @@ struct test {
             "n_batch", "n_threads", "type_k", "type_v",
             "n_gpu_layers", "split_mode",
             "main_gpu", "no_kv_offload",
-            "mul_mat_q", "tensor_split", "use_mmap",
+            "tensor_split", "use_mmap",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts"
@@ -733,7 +710,7 @@ struct test {
         }
         if (field == "cuda" || field == "opencl"  || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
-            field == "mul_mat_q" || field == "use_mmap") {
+            field == "use_mmap") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -767,7 +744,7 @@ struct test {
             std::to_string(n_batch), std::to_string(n_threads), ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
             std::to_string(main_gpu), std::to_string(no_kv_offload),
-            std::to_string(mul_mat_q), tensor_split_str, std::to_string(use_mmap),
+            tensor_split_str, std::to_string(use_mmap),
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -931,9 +908,6 @@ struct markdown_printer : public printer {
         if (field == "n_threads") {
             return "threads";
         }
-        if (field == "mul_mat_q") {
-            return "mmq";
-        }
         if (field == "no_kv_offload") {
             return "nkvo";
         }
@@ -973,9 +947,6 @@ struct markdown_printer : public printer {
         }
         if (params.split_mode.size() > 1 || params.split_mode != cmd_params_defaults.split_mode) {
             fields.emplace_back("split_mode");
-        }
-        if (params.mul_mat_q.size() > 1 || params.mul_mat_q != cmd_params_defaults.mul_mat_q) {
-            fields.emplace_back("mul_mat_q");
         }
         if (params.no_kv_offload.size() > 1 || params.no_kv_offload != cmd_params_defaults.no_kv_offload) {
             fields.emplace_back("no_kv_offload");
