@@ -43,9 +43,9 @@ Feature: Security
     Then CORS header <cors_header> is set to <cors_header_value>
 
     Examples: Headers
-      | origin          | cors_header                      | cors_header_value |
-      | localhost       | Access-Control-Allow-Origin      | localhost         |
-      | web.mydomain.fr | Access-Control-Allow-Origin      | web.mydomain.fr   |
-      | origin          | Access-Control-Allow-Credentials | true              |
-      | web.mydomain.fr | Access-Control-Allow-Methods     | *                 |
-      | web.mydomain.fr | Access-Control-Allow-Headers     | *                 |
+      | origin          | cors_header                      | cors_header_value  |
+      | localhost       | Access-Control-Allow-Origin      | localhost          |
+      | web.mydomain.fr | Access-Control-Allow-Origin      | web.mydomain.fr    |
+      | origin          | Access-Control-Allow-Credentials | true               |
+      | web.mydomain.fr | Access-Control-Allow-Methods     | GET, POST, OPTIONS |
+      | web.mydomain.fr | Access-Control-Allow-Headers     | *                  |
