@@ -201,10 +201,11 @@ typedef struct {
 static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong iq3_xxs block size/padding");
 
 // 3.4375 bpw
+#define IQ3S_BLOCK_SIZE 16
 #if QK_K == 64
 #define IQ3S_N_SCALE 2
 #else
-#define IQ3S_N_SCALE QK_K/64
+#define IQ3S_N_SCALE QK_K/(2*IQ3S_BLOCK_SIZE)
 #endif
 typedef struct {
     ggml_fp16_t d;

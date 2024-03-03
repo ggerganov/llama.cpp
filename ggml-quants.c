@@ -4138,6 +4138,8 @@ void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, in
     uint32_t aux32[2];
     const int8_t * grid = (const int8_t *)aux32;
 
+    float db[64/IQ3S_BLOCK_SIZE];
+
     for (int i = 0; i < nb; i++) {
 
         const float d = GGML_FP16_TO_FP32(x[i].d);
@@ -4146,20 +4148,28 @@ void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, in
         const uint8_t * signs = x[i].signs;
 
         for (int ib32 = 0; ib32 < QK_K/32; ib32 += 2) {
-            const float db1 = d * (1 + 2*(x[i].scales[ib32/2] & 0xf));
-            const float db2 = d * (1 + 2*(x[i].scales[ib32/2] >>  4));
+#if IQ3S_BLOCK_SIZE == 16
+            db[0] = d * (1 + 2*(x[i].scales[ib32+0] & 0xf));
+            db[1] = d * (1 + 2*(x[i].scales[ib32+0] >>  4));
+            db[2] = d * (1 + 2*(x[i].scales[ib32+1] & 0xf));
+            db[3] = d * (1 + 2*(x[i].scales[ib32+1] >>  4));
+#else
+            db[0] = d * (1 + 2*(x[i].scales[ib32/2] & 0xf));
+            db[1] = d * (1 + 2*(x[i].scales[ib32/2] >>  4));
+#endif
             for (int l = 0; l < 4; ++l) {
+                const float dl = db[8*l/IQ3S_BLOCK_SIZE];
 #ifdef IQ3S_SLOW_MULT
                 aux32[0] = ((qs[2*l+0] | ((qh[0] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 aux32[1] = ((qs[2*l+1] | ((qh[0] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 for (int j = 0; j < 8; ++j) {
-                    y[j] = db1 * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
+                    y[j] = dl * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
 #else
                 aux32[0] = (((qs[2*l+0] | ((qh[0] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
                 aux32[1] = (((qs[2*l+1] | ((qh[0] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
                 for (int j = 0; j < 8; ++j) {
-                    y[j] = db1 * grid[j] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
+                    y[j] = dl * grid[j] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
 #endif
                 y += 8;
@@ -4167,18 +4177,19 @@ void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, in
             qs += 8;
             signs += 4;
             for (int l = 0; l < 4; ++l) {
+                const float dl = db[(8*l+32)/IQ3S_BLOCK_SIZE];
 #ifdef IQ3S_SLOW_MULT
                 aux32[0] = ((qs[2*l+0] | ((qh[1] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 aux32[1] = ((qs[2*l+1] | ((qh[1] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
                 for (int j = 0; j < 8; ++j) {
-                    y[j] = db2 * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
+                    y[j] = dl * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
 #else
                 aux32[0] = (((qs[2*l+0] | ((qh[1] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
                 aux32[1] = (((qs[2*l+1] | ((qh[1] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
 #endif
                 for (int j = 0; j < 8; ++j) {
-                    y[j] = db2 * grid[j] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
+                    y[j] = dl * grid[j] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
                 y += 8;
             }
@@ -12109,7 +12120,6 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
     }
 }
 
-#define IQ3S_BLOCK_SIZE 32
 size_t quantize_iq3_s(const float * src, void * dst, int nrow, int n_per_row, int64_t * hist, const float * quant_weights) {
     (void)hist;
     GGML_ASSERT(n_per_row%QK_K == 0);

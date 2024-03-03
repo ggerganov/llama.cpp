@@ -544,14 +544,15 @@ static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong 
 
 #define QR3_XS 8
 #define QI3_XS (QK_K / (4*QR3_XS))
+#define IQ3S_BLOCK_SIZE 16
 typedef struct {
     half d;
     uint8_t qs[QK_K/4];
     uint8_t qh[QK_K/32];
     uint8_t signs[QK_K/8];
-    uint8_t scales[QK_K/64];
+    uint8_t scales[QK_K/(2*IQ3S_BLOCK_SIZE)];
 } block_iq3_s;
-static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 27*(QK_K/64), "wrong iq3_s block size/padding");
+static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + QK_K/(2*IQ3S_BLOCK_SIZE), "wrong iq3_s block size/padding");
 
 #define QR1_S 8
 #define QI1_S (QK_K / (4*QR1_S))
@@ -2392,7 +2393,8 @@ static __global__ void dequantize_block_iq3_s(const void * __restrict__ vx, dst_
     const uint8_t * qs = x[i].qs + 8*ib;
     int32_t aux32[2];
     const int8_t * grid = (const int8_t *)aux32;
-    const float d = (float)x[i].d * (1 + 2*((x[i].scales[ib/2] >> 4*(ib%2)) & 0xf));
+    const int is = (32*ib + 8*il)/IQ3S_BLOCK_SIZE;
+    const float d = (float)x[i].d * (1 + 2*((x[i].scales[is/2] >> 4*(is%2)) & 0xf));
     const uint8_t signs = x[i].signs[4*ib + il];
 #ifdef IQ3S_SLOW_MULT
     aux32[0] = ((qs[2*il+0] | ((x[i].qh[ib] << (8-2*il)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
