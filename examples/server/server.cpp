@@ -2074,7 +2074,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
     printf("  --path PUBLIC_PATH        path from which to serve static files (default %s)\n", sparams.public_path.c_str());
-    printf("  --http-cors-origin DOMAIN a domain which will allow cross origin requests. (default: %s)\n", sparams.http_cors_origin.c_str());
+    printf("  --http-cors-origin DOMAIN Set what origin (example.com) is allowed to access the API. Use * to allow all origins (insecure without --api-key).  If you are using the server as an API from a browser, this parameter is required. (default: %s)\n", sparams.http_cors_origin.c_str());
     printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
     printf("  -to N, --timeout N        server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
