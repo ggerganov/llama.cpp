@@ -413,7 +413,7 @@ struct llama_server_context
         int res = llama_chat_apply_template(model, nullptr, chat, 1, true, buf.data(), buf.size());
         if (res < 0) {
             LOG_ERROR("The chat template comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
-            sparams.chat_template = "<|im_start|>"; // llama_chat_apply_template only checks if <|im_start|> exist in the template
+            sparams.chat_template = "chatml";
         }
     }
 
