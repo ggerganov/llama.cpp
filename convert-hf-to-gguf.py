@@ -1852,8 +1852,33 @@ class MambaModel(Model):
         vocab_size = self.hparams["vocab_size"]
         # Round vocab size to next multiple of 8
         pad_vocab = self.hparams.get("pad_vocab_size_multiple", 8)
-        self.hparams["vocab_size"] = ((vocab_size + (pad_vocab - 1)) // pad_vocab) * pad_vocab
-        return self._set_vocab_gpt2()
+        # pad using ceiling division
+        # ref: https://stackoverflow.com/a/17511341/22827863
+        vocab_size = -(vocab_size // -pad_vocab) * pad_vocab
+        self.hparams["vocab_size"] = vocab_size
+
+        if (self.dir_model / "tokenizer.json").is_file():
+            self._set_vocab_gpt2()
+        else:
+            # Use the GPT-NeoX tokenizer when no tokenizer files are present
+            tokenizer_path = Path(sys.path[0]) / "models" / "ggml-vocab-gpt-neox.gguf"
+            print(f"Using tokenizer from '{os.path.relpath(tokenizer_path, os.getcwd())}'")
+            neox_reader = gguf.GGUFReader(tokenizer_path, "r")
+
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.MODEL)
+            self.gguf_writer.add_tokenizer_model(bytes(field.parts[-1]))
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.LIST)
+            self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.TOKEN_TYPE)
+            self.gguf_writer.add_token_types([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.MERGES)
+            self.gguf_writer.add_token_merges([bytes(field.parts[i]) for i in field.data])
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.BOS_ID)
+            self.gguf_writer.add_bos_token_id(field.parts[-1].tolist()[0])
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.EOS_ID)
+            self.gguf_writer.add_eos_token_id(field.parts[-1].tolist()[0])
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.UNK_ID)
+            self.gguf_writer.add_unk_token_id(field.parts[-1].tolist()[0])
 
     def set_gguf_parameters(self):
         d_model = self.hparams["d_model"]
