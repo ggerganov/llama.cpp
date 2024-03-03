@@ -7,17 +7,19 @@
 # Supported verbs:
 # - linear: merge linearly, parameters: source_layer,source_layer,t
 # - slerp: spherical linear interpolation, parameters: source_layer,source_layer,scale,scale
-# - repeat: repeat a layer in the same output model (to reduce file size)
-#
-# For example:
-#
+# - copy: copy from which model, which layer
+
+
+#########################
+# Example:
+
 # This is the first layer of output model:
 # For all tensors, we want slerp(model[0].layer[0], model[1].layer[0], 0.1)
 # Except for "attn_output" tensor that we want t=0.5 instead t=0.1
 
 output layer 0
-all slerp 0,0,0.9
-attn_output slerp 0,0,0.9
+all slerp 0,0,0.1
+attn_output slerp 0,0,0.5
 
 # For next layer, we want: model[0].layer[1]*0.6 + model[1].layer[1]*0.4
 # Except for "attn_output" tensor that we want to use slerp with t=0.9
@@ -26,13 +28,96 @@ output layer 1
 all linear 1,1,0.6,0.4
 attn_output slerp 1,1,0.9
 
-output layer 2
-all linear 2,2,1.0,0.0
+# For next layer, we want to copy from model[0].layer[2]
 
-# repeat the first layers defined earlier in this file
+output layer 2
+all copy 0,2
 
 output layer 3
-all repeat 0
+all copy 0,3
+
+# For next layer, we want to copy from model[1].layer[4]
 
 output layer 4
-all repeat 1
+all copy 1,4
+
+output layer 5
+all copy 1,5
+
+output layer 6
+all linear 6,6,0.1,0.9
+
+output layer 7
+all linear 7,7,0.1,0.9
+
+output layer 8
+all linear 8,8,0.1,0.9
+
+output layer 9
+all linear 9,9,0.1,0.9
+
+output layer 10
+all linear 10,10,0.1,0.9
+
+output layer 11
+all linear 11,11,0.1,0.9
+
+output layer 12
+all linear 12,12,0.1,0.9
+
+output layer 13
+all linear 13,13,0.3333,0.6666
+
+output layer 14
+all linear 14,14,0.3333,0.6666
+
+output layer 15
+all linear 15,15,0.3333,0.6666
+
+output layer 16
+all linear 16,16,0.3333,0.6666
+
+output layer 17
+all linear 17,17,0.3333,0.6666
+
+output layer 18
+all linear 18,18,0.3333,0.6666
+
+output layer 19
+all linear 19,19,0.3333,0.6666
+
+output layer 20
+all slerp 20,20,0.8
+
+output layer 21
+all slerp 21,21,0.8
+
+output layer 22
+all slerp 22,22,0.8
+
+output layer 23
+all slerp 23,23,0.8
+
+output layer 24
+all slerp 24,24,0.8
+
+output layer 25
+all slerp 25,25,0.8
+
+output layer 26
+all slerp 26,26,0.8
+
+output layer 27
+all slerp 27,27,0.8
+
+output layer 28
+all slerp 28,28,0.8
+
+output layer 29
+all slerp 29,29,0.8
+
+output layer 30
+all slerp 30,30,0.8
+
+output layer 31
+all slerp 31,31,0.8

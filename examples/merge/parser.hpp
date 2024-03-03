@@ -125,7 +125,8 @@ static std::vector<struct llama_merge_inst> parse_config(std::string & config_pa
             struct llama_merge_inst ins;
             ins.method = LLAMA_MERGE_COPY;
             strcpy(ins.name, name.c_str());
-            strcpy(ins.srcs[0], name.c_str());
+            strcpy(ins.srcs[0], name.c_str()); // always take the first model
+            strcpy(ins.srcs[1], "");
             instructions.push_back(ins);
         } else {
             // tensor belong to layer
@@ -177,7 +178,7 @@ static std::vector<struct llama_merge_inst> parse_config(std::string & config_pa
 
         auto parts = str_split(line, " ");
         if (parts.size() != 3) {
-            raise_err(i_line, "does not follow format: \"target (space) verb (space) arguments\"");
+            raise_err(i_line, "does not follow format: \"target (space) verb (space) parameters\"");
         }
 
         auto target = parts[0];
@@ -197,7 +198,7 @@ static std::vector<struct llama_merge_inst> parse_config(std::string & config_pa
 
         auto linear = [&](struct llama_merge_inst & ins, std::string unit) {
             if (params.size() != 4) {
-                raise_err(i_line, "verb \"linear\" requires exactly 4 params");
+                raise_err(i_line, "verb \"linear\" requires exactly 4 parameters");
             }
             ins.method = LLAMA_MERGE_LINEAR;
             int src0 = std::stoi(params[0]);
@@ -211,7 +212,7 @@ static std::vector<struct llama_merge_inst> parse_config(std::string & config_pa
 
         auto slerp = [&](struct llama_merge_inst & ins, std::string unit) {
             if (params.size() != 3) {
-                raise_err(i_line, "verb \"slerp\" requires exactly 3 params");
+                raise_err(i_line, "verb \"slerp\" requires exactly 3 parameters");
             }
             ins.method = LLAMA_MERGE_SLERP;
             int src0 = std::stoi(params[0]);
@@ -222,13 +223,32 @@ static std::vector<struct llama_merge_inst> parse_config(std::string & config_pa
             is_layer_empty = false;
         };
 
-        auto repeat = [&](struct llama_merge_inst & ins, std::string unit) {
+        /*auto repeat = [&](struct llama_merge_inst & ins, std::string unit) {
             if (params.size() != 1) {
-                raise_err(i_line, "verb \"repeat\" requires exactly 1 param");
+                raise_err(i_line, "verb \"repeat\" requires exactly 1 parameter");
             }
             ins.method = LLAMA_MERGE_REPEAT;
             int src0 = std::stoi(params[0]);
             strcpy(ins.srcs[0], get_tensor_name(src0, unit).c_str());
+            is_layer_empty = false;
+        };*/
+
+        auto copy = [&](struct llama_merge_inst & ins, std::string unit) {
+            if (params.size() != 2) {
+                raise_err(i_line, "verb \"copy\" requires exactly 2 parameters");
+            }
+            ins.method = LLAMA_MERGE_COPY;
+            int model = std::stoi(params[0]);
+            int layer = std::stoi(params[1]);
+            if (model == 0) {
+                strcpy(ins.srcs[0], get_tensor_name(layer, unit).c_str());
+                strcpy(ins.srcs[1], "");
+            } else if (model == 1) {
+                strcpy(ins.srcs[0], "");
+                strcpy(ins.srcs[1], get_tensor_name(layer, unit).c_str());
+            } else {
+                raise_err(i_line, "can only copy from model 0 or 1");
+            }
             is_layer_empty = false;
         };
 
@@ -238,12 +258,16 @@ static std::vector<struct llama_merge_inst> parse_config(std::string & config_pa
             } else if (verb == "slerp") {
                 slerp(ins, unit);
             } else if (verb == "repeat") {
-                repeat(ins, unit);
+                // repeat(ins, unit);
+                raise_err(i_line, "repeat is currently not supported");
+            } else if (verb == "copy") {
+                copy(ins, unit);
             } else {
                 raise_err(i_line, "invalid verb: " + verb);
             }
         };
 
+        // TODO: what if user does not use "all"? we may miss some tensors?
         if (target == "all") {
             for (auto & u : units) {
                 apply_verb(layer[u], u);

@@ -330,7 +330,7 @@ extern "C" {
     enum llama_merge_method {
         LLAMA_MERGE_LINEAR,
         LLAMA_MERGE_SLERP,
-        LLAMA_MERGE_REPEAT,
+        LLAMA_MERGE_REPEAT, // doesn't work for now
         LLAMA_MERGE_COPY,
     };
 
@@ -339,7 +339,7 @@ extern "C" {
         char name[GGML_MAX_NAME]; // name of output tensor
         enum llama_merge_method method;
         // we only support 2 models for now
-        char srcs[2][GGML_MAX_NAME]; // name of input tensors
+        char srcs[2][GGML_MAX_NAME]; // name of input tensors. if method == copy, only one src is non-empty
         float scales[2]; // for linear method
         float t; // for slerp method
     };

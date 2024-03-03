@@ -11358,35 +11358,18 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
 #else
     constexpr bool use_mmap = false;
 #endif
-/*
     // std::move doesn't work with llama_model and llama_model_loader, why?
     std::vector<std::unique_ptr<llama_model>> models;
     std::vector<std::unique_ptr<llama_model_loader>> mls;
     std::vector<no_init<uint8_t>> buf_in;
     std::vector<no_init<uint8_t>> buf_out;
     std::set<std::string> ref_names; // list of ref_name per layer
-    int max_input_layers = 0; // number of layers that the input model has
     std::vector<struct ggml_tensor *> output_tensors;
 
     // output file
     struct gguf_context * ctx_out = gguf_init_empty();
     std::ofstream fout(config->output_path, std::ios::binary);
     fout.exceptions(std::ofstream::failbit); // fail fast on write errors
-
-    // get layer index from tensor name, for example "blk.x.attn_norm.weight"
-    // returns -1 if it is non-layer
-    auto get_i_layer = [&](std::string tensor_name) -> int {
-        int i_layer = -1;
-        return sscanf(tensor_name.c_str(), "blk.%d.", &i_layer) == 1 ? i_layer : -1;
-    };
-
-    // get new tensor name by i_layer and ref_name, for example "blk.x.attn_norm.weight"
-    auto get_name = [&](int i_layer, std::string ref_name) -> std::string {
-        ref_name.erase(0, ref_name.find(".", 4)); // delete the "blk.x" part
-        std::stringstream ss;
-        ss << "blk." << i_layer << ref_name;
-        return ss.str();
-    };
 
     // remember to call before exit
     auto clean_up = [&]() {
@@ -11398,7 +11381,8 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
     };
 
     // load the input models
-    for (size_t i = 0; i < config->n_models; i++) {
+    static const size_t n_models = 2;
+    for (size_t i = 0; i < n_models; i++) {
         auto model = std::unique_ptr<llama_model>(new llama_model());
         auto ml = std::unique_ptr<llama_model_loader>(new llama_model_loader(config->model_paths[i], use_mmap, NULL));
         ml->init_mapping(false);
@@ -11415,6 +11399,12 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         mls.push_back(std::move(ml));
     }
 
+    // for verb copy, we want to get the source tensor
+    auto get_src_tensor_for_copy = [&](const struct llama_merge_inst ins, size_t & i_model) {
+        i_model = std::string(ins.srcs[0]).empty() ? 1 : 0;
+        return mls[i_model]->get_tensor_meta(ins.srcs[i_model]);
+    };
+
     // construct metadata
     {
         // copy the KV pairs from the input file
@@ -11424,40 +11414,58 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
         std::stringstream ss;
         ss << mls[0]->get_arch_name() << ".block_count";
         gguf_set_val_u32(ctx_out, ss.str().c_str(), config->n_layers);
-        printf("====> Set new value of %s = %ld\n", ss.str().c_str(), config->n_layers);
-        
-        // read input layers, process firstly non-layer tensors (embedding, output,...)
-        for (int i = 0; i < mls[0]->n_tensors; i++) {
-            struct ggml_tensor * meta = mls[0]->get_tensor_meta(i);
-            int i_layer = get_i_layer(ggml_get_name(meta));
-            if (i_layer < 0) {
-                // populate data for non-layer tensors (embedding, output,...)
-                struct ggml_tensor * out_tensor = (struct ggml_tensor *) malloc(GGML_TENSOR_SIZE);
-                memcpy(out_tensor, meta, GGML_TENSOR_SIZE); // copy metadata (shape, type,...)
-                gguf_add_tensor(ctx_out, out_tensor);
-                output_tensors.push_back(out_tensor);
-            } else {
-                max_input_layers = std::max(i_layer, max_input_layers);
-                if (i_layer == 0) {
-                    // only extract names of one layer, assuming all layers have the same structure
-                    ref_names.insert(ggml_get_name(meta));
-                }
-            }
-        }
+        LLAMA_LOG_INFO("====> Set new value of %s = %ld\n", ss.str().c_str(), config->n_layers);
 
-        // populate layers metadata for output model
-        for (size_t i_layer = 0; i_layer < config->n_layers; i_layer++) {
-            for (auto & ref_name : ref_names) {
-                // create new tensor, because new model may have more tensors than input model
-                struct ggml_tensor * out_tensor = (struct ggml_tensor *) malloc(GGML_TENSOR_SIZE);
-                struct ggml_tensor * ref_tensor = mls[0]->get_tensor_meta(ref_name.c_str()); // get ref tensor from layer 0
-                memcpy(out_tensor, ref_tensor, GGML_TENSOR_SIZE); // copy metadata (shape, type,...)
-                ggml_set_name(out_tensor, get_name(i_layer, ref_name).c_str()); // set the correct name (with correct i_layer)
-                output_tensors.push_back(out_tensor);
-                gguf_add_tensor(ctx_out, out_tensor);
-                // TODO: reject non-requantize-able type (one that requires imatrix)
+        // populate metadata for output tensors
+        auto push_tensor = [&](struct ggml_tensor * ref, const char * name) {
+            struct ggml_tensor * out_tensor = (struct ggml_tensor *) malloc(GGML_TENSOR_SIZE);
+            if (ref != nullptr) {
+                // copy metadata (shape, type,...)
+                memcpy(out_tensor, ref, GGML_TENSOR_SIZE);
             }
-            // TODO: how to reuse tensor (duplicated layers)? we can play with ctx->infos[tensor_idx].offset
+            ggml_set_name(out_tensor, name);
+            gguf_add_tensor(ctx_out, out_tensor);
+            output_tensors.push_back(out_tensor);
+        };
+        for (size_t i = 0; i < config->n_insts; i++) {
+            const struct llama_merge_inst ins = config->insts[i];
+            struct ggml_tensor * t0;
+            struct ggml_tensor * t1;
+            // TODO: reject non-requantize-able type (one that requires imatrix)
+            if (ins.method == LLAMA_MERGE_COPY) {
+                // simply copy from model A
+                size_t i_model;
+                t0 = get_src_tensor_for_copy(ins, i_model);
+                push_tensor(t0, ins.name);
+            } else if (ins.method == LLAMA_MERGE_LINEAR || ins.method == LLAMA_MERGE_SLERP) {
+                t0 = mls[0]->get_tensor_meta(ins.srcs[0]);
+                t1 = mls[1]->get_tensor_meta(ins.srcs[1]);
+                if (llama_format_tensor_shape(t0) != llama_format_tensor_shape(t1)) {
+                    LLAMA_LOG_ERROR("some tensors does not have the same shape");
+                    clean_up();
+                    return -1;
+                }
+                push_tensor(t0, ins.name);
+            } else if (ins.method == LLAMA_MERGE_REPEAT) {
+                // TODO: in theory, we can point 2 tensors to the same offset, but here we're unable to do that, because offset is currently managed by gguf_add_tensor()
+                GGML_ASSERT(false);
+                /*int idx = nullptr;
+                std::string search_tensor(ins.srcs[0]);
+                for (auto & tensor : output_tensors) {
+                    if (std::string(ggml_get_name(tensor)) == search_tensor) {
+                        t0 = tensor;
+                        break;
+                    }
+                }
+                if (t0 == nullptr) {
+                    LLAMA_LOG_ERROR("cannot find source tensor to repeat");
+                    clean_up();
+                    return -1;
+                }
+                push_tensor(t0, ins.name);*/
+            } else {
+                GGML_ASSERT(false); // should never happen
+            }
         }
 
         const size_t meta_size = gguf_get_meta_size(ctx_out);
@@ -11481,8 +11489,11 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
     };
 
     size_t n_done = 0;
-    size_t n_curr = 0;
-    auto log_step = [&](const struct ggml_tensor * tensor) {
+    auto write_output_tensor = [&](const struct ggml_tensor * tensor, void * data) {
+        // write tensor data + padding
+        const size_t len = ggml_nbytes(tensor);
+        fout.write((const char *) data, len);
+        zeros(fout, GGML_PAD(len, GGUF_DEFAULT_ALIGNMENT) - len);
         n_done++;
         LLAMA_LOG_INFO("[%4ld/%4ld] %36s - [%s], input type = %6s\n",
             n_done, output_tensors.size(),
@@ -11491,84 +11502,82 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
             ggml_type_name(tensor->type));
     };
 
-    // process non-layer output tensor
-    for (auto & out_tensor : output_tensors) {
-        std::string name = ggml_get_name(out_tensor);
-        int i_layer_out = get_i_layer(name.c_str());
-        std::vector<no_init<uint8_t>> buf;
-        if (i_layer_out >= 0) {
-            continue;
-        }
-        n_curr++;
-        struct ggml_tensor * in_tensor = mls[0]->get_tensor_meta(name.c_str());
-        if (in_tensor == nullptr) {
-            LLAMA_LOG_ERROR("Cannot find layer name %s from base model\n", name.c_str());
-            clean_up();
-            return -1;
-        }
-        read_tensor_data(in_tensor, *mls[0], buf); // read from first model
-
-        // write tensor data + padding
-        const size_t write_size = ggml_nbytes(out_tensor);
-        fout.write((const char *) in_tensor->data, write_size);
-        zeros(fout, GGML_PAD(write_size, GGUF_DEFAULT_ALIGNMENT) - write_size);
-        log_step(out_tensor);
-    }
-
     // TODO: allow user to set n_threads
     const int n_threads = std::thread::hardware_concurrency();
     std::vector<std::thread> workers;
     workers.reserve(n_threads);
 
-    // process tensors associated to layer
-    for (auto & out_tensor : output_tensors) {
+    // process instruction one by one
+    GGML_ASSERT(config->n_insts == output_tensors.size());
+    for (size_t i = 0; i < config->n_insts; i++) {
+        const struct llama_merge_inst ins = config->insts[i];
+        struct ggml_tensor * t0;
+        struct ggml_tensor * t1;
+        struct ggml_tensor * out_tensor = output_tensors[i];
         const size_t n_elements = ggml_nelements(out_tensor);
-        std::vector<no_init<uint8_t>> in_buf;
-        std::vector<no_init<float>> f32_in_buf; // dequant it internally
+        std::vector<no_init<uint8_t>> in_buf0;
+        std::vector<no_init<float>> f32_in_buf0; // dequant it internally
+        std::vector<no_init<uint8_t>> in_buf1;
+        std::vector<no_init<float>> f32_in_buf1; // dequant it internally
         std::vector<float> f32_out_buf(n_elements, 0.0); // do not resize!
         std::vector<uint8_t> out_buf(ggml_nbytes(out_tensor)); // do not resize!
 
-        std::string out_name = ggml_get_name(out_tensor);
-        int i_layer_out = get_i_layer(out_name.c_str());
-        auto layer = config->layers[i_layer_out];
-
-        if (i_layer_out < 0) {
-            continue; // skip non-layer tensors
+        if (ins.method == LLAMA_MERGE_COPY) {
+            LLAMA_LOG_INFO("copy\n");
+            size_t i_model;
+            t0 = get_src_tensor_for_copy(ins, i_model);
+            read_tensor_data(t0, *mls[i_model], in_buf0);
+            write_output_tensor(out_tensor, t0->data);
+            continue;
         }
 
-        for (size_t i_model = 0; i_model < config->n_models; i_model++) {
-            int src_layer = layer.srcs[i_model]; // source layer
-            float scale = layer.scales[i_model];
-            std::string src_name = get_name(src_layer, out_name); // find the correct tensor based on src_layer
-            struct ggml_tensor * in_tensor = mls[i_model]->get_tensor_meta(src_name.c_str());
-            if (in_tensor == nullptr) {
-                LLAMA_LOG_ERROR("Cannot find layer name %s from model %ld\n", src_name.c_str(), i_model + 1);
-                clean_up();
-                return -1; // stop
-            }
-            read_tensor_data(in_tensor, *mls[i_model], in_buf);
-            // dequant the tensor to FP32
+        // dequantize the tensor to FP32
+        auto dequantize = [&](struct ggml_tensor * in_tensor, std::vector<no_init<float>> & f32_in_buf) {
             if (in_tensor->type != GGML_TYPE_F32) {
-                //LLAMA_LOG_ERROR("dequant ");
+                LLAMA_LOG_INFO("dequant ");
                 llama_convert_tensor_internal(in_tensor, f32_in_buf, workers, n_elements, n_threads);
             } else {
                 // if we already have f32, just copy it
-                //LLAMA_LOG_ERROR("f32_copy ");
+                LLAMA_LOG_INFO("f32_copy ");
                 f32_in_buf.resize(n_elements);
                 memcpy((void *) f32_in_buf.data(), in_tensor->data, n_elements * sizeof(float));
             }
-            // do the calculation
-            //LLAMA_LOG_ERROR("calc ");
+        };
+
+        // load data and dequantize
+        if (ins.method == LLAMA_MERGE_LINEAR || ins.method == LLAMA_MERGE_SLERP) {
+            t0 = mls[0]->get_tensor_meta(ins.srcs[0]);
+            t1 = mls[1]->get_tensor_meta(ins.srcs[1]);
+            read_tensor_data(t0, *mls[0], in_buf0);
+            read_tensor_data(t1, *mls[1], in_buf1);
+            dequantize(t0, f32_in_buf0);
+            dequantize(t1, f32_in_buf1);
+        }
+
+        if (ins.method == LLAMA_MERGE_LINEAR) {
+            LLAMA_LOG_INFO("linear ");
+            float * in0  = (float *) f32_in_buf0.data();
+            float * in1  = (float *) f32_in_buf1.data();
+            float * dest = (float *) f32_out_buf.data();
             for (size_t i = 0; i < n_elements; i++) {
-                float * in   = (float *) f32_in_buf.data();
-                float * dest = (float *) f32_out_buf.data();
-                dest[i] += in[i] * scale;
+                dest[i] = in0[i] * ins.scales[0] + in1[i] * ins.scales[1];
+            }
+        }
+
+        if (ins.method == LLAMA_MERGE_SLERP) {
+            LLAMA_LOG_INFO("slerp ");
+            float * in0  = (float *) f32_in_buf0.data();
+            float * in1  = (float *) f32_in_buf1.data();
+            float * dest = (float *) f32_out_buf.data();
+            for (size_t i = 0; i < n_elements; i++) {
+                //dest[i] = in0[i] * ins.t + in1[i] * 0;
+                dest[i] = in0[i];
             }
         }
 
         // re-quantize it
-        //LLAMA_LOG_ERROR("requant\n");
         {
+            LLAMA_LOG_INFO("requant\n");
             std::array<int64_t, 1 << 4> hist_cur = {};
             const int n_per_row = out_tensor->ne[0];
             const int n_rows = n_elements / n_per_row;
@@ -11588,16 +11597,10 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
             GGML_ASSERT(new_size == out_buf.size());
         }
 
-        // write tensor to file
-        {
-            LLAMA_LOG_ERROR("===> INPUT  [layer %d] %f %f %f\n", i_layer_out, f32_in_buf[0].value, f32_in_buf[1].value, f32_in_buf[2].value);
-            LLAMA_LOG_ERROR("===> OUTPUT [layer %d] %f %f %f\n", i_layer_out, f32_out_buf[0], f32_out_buf[1], f32_out_buf[2]);
-            // my turn, write the result!
-            // write tensor data + padding
-            fout.write((const char *) out_buf.data(), out_buf.size());
-            zeros(fout, GGML_PAD(out_buf.size(), GGUF_DEFAULT_ALIGNMENT) - out_buf.size());
-            log_step(out_tensor);
-        }
+        LLAMA_LOG_INFO("===> INPUT  %f %f %f\n", f32_in_buf0[0].value, f32_in_buf0[1].value, f32_in_buf0[2].value);
+        LLAMA_LOG_INFO("===> OUTPUT %f %f %f\n", f32_out_buf[0], f32_out_buf[1], f32_out_buf[2]);
+
+        write_output_tensor(out_tensor, out_buf.data());
     }
 
     // go back to beginning of file and write the updated meta data
@@ -11610,7 +11613,6 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
     }
 
     clean_up();
-*/
     return 0;
 }
 
