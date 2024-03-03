@@ -122,7 +122,7 @@ def step_start_server(context):
             attempts += 1
             if attempts > 20:
                 assert False, "server not started"
-            print(f"waiting for server to start, connect error code = {result}...")
+            print(f"waiting for server to start on {context.server_fqdn}:{context.server_port}, connect error code = {result}...")
             time.sleep(0.1)
 
 
@@ -609,7 +609,7 @@ async def request_completion(prompt,
                              user_api_key=None):
     if debug:
         print(f"Sending completion request: {prompt}")
-    origin = "my.super.domain"
+    origin = "http://localhost:8080"
     headers = {
         'Origin': origin
     }
@@ -678,7 +678,7 @@ async def oai_chat_completions(user_prompt,
         }
     }
     if async_client:
-        origin = 'llama.cpp'
+        origin = "http://localhost:8080"
         headers = {'Authorization': f'Bearer {user_api_key}', 'Origin': origin}
         async with aiohttp.ClientSession() as session:
             async with session.post(f'{base_url}{base_path}',
@@ -774,7 +774,7 @@ async def request_oai_embeddings(input,
     # openai client always expects an api_key
     user_api_key = user_api_key if user_api_key is not None else 'nope'
     if async_client:
-        origin = 'llama.cpp'
+        origin = "http://localhost:8080"
         if user_api_key is not None:
             headers = {'Authorization': f'Bearer {user_api_key}', 'Origin': origin}
         async with aiohttp.ClientSession() as session:

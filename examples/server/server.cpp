@@ -34,9 +34,10 @@
 using json = nlohmann::json;
 
 struct server_params {
-    std::string hostname = "127.0.0.1";
+    std::string hostname = "localhost";
     std::vector<std::string> api_keys;
     std::string public_path = "examples/server/public";
+    std::string public_domain = "http://localhost:8080";
     std::string chat_template = "";
     int32_t port = 8080;
     int32_t read_timeout = 600;
@@ -2073,6 +2074,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
     printf("  --path PUBLIC_PATH        path from which to serve static files (default %s)\n", sparams.public_path.c_str());
+    printf("  --public-domain DOMAIN    a public domain to allow cross origin requests from (default: %s)\n", sparams.public_domain.c_str());
     printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
     printf("  -to N, --timeout N        server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
@@ -2131,6 +2133,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             sparams.hostname = argv[i];
+        }
+        else if (arg == "--public-domain")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            sparams.public_domain = argv[i];
         }
         else if (arg == "--path")
         {
@@ -2777,13 +2788,37 @@ int main(int argc, char **argv)
 
     svr.set_default_headers({{"Server", "llama.cpp"}});
 
-    // Allow CORS requests on all routes
-    svr.set_post_routing_handler([](const httplib::Request &req, httplib::Response &res) {
+    // Disallow CORS requests from any origin not specified in the --public-domain flag
+    LOG_INFO("CORS requests enabled on domain:", {{"domain", sparams.public_domain}});
+    svr.set_pre_routing_handler([&sparams](const httplib::Request &req, httplib::Response &res) {       
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         res.set_header("Access-Control-Allow-Credentials", "true");
         res.set_header("Access-Control-Allow-Methods", "*");
         res.set_header("Access-Control-Allow-Headers", "*");
+
+        // Allow options so that request will return a specific error message rather than a generic CORS error
+        if (req.method == "OPTIONS") {
+            res.status = 200;
+            return httplib::Server::HandlerResponse::Handled;
+        }
+
+        if (req.has_header("Origin") && sparams.public_domain != "*") {
+            if (req.get_header_value("Origin") != sparams.public_domain) {
+                LOG_WARNING("Request from origin not allowed.", {{"origin", req.get_header_value("Origin")}});
+                res.status = 403; // HTTP Forbidden
+                res.set_content(R"({"error": "Origin is not allowed."})", "application/json");
+                return httplib::Server::HandlerResponse::Handled;
+            }
+        }
+
+        return httplib::Server::HandlerResponse::Unhandled;
     });
+
+    if (sparams.public_domain == "*"){
+        if (sparams.api_keys.size() == 0) {
+            LOG_WARNING("Public domain is set to * without an API key specified. This is not recommended.", {});
+        }
+    }
 
     svr.Get("/health", [&](const httplib::Request& req, httplib::Response& res) {
         server_state current_state = state.load();
@@ -3069,7 +3104,7 @@ int main(int argc, char **argv)
                 return false;
             });
 
-    svr.Get("/props", [&llama](const httplib::Request & req, httplib::Response &res)
+    svr.Get("/props", [&llama](const httplib::Request &, httplib::Response &res)
             {
                 json data = {
                     { "user_name",      llama.name_user.c_str() },
@@ -3156,7 +3191,7 @@ int main(int argc, char **argv)
                 }
             });
 
-    svr.Get("/v1/models", [&params, &model_meta](const httplib::Request& req, httplib::Response& res)
+    svr.Get("/v1/models", [&params, &model_meta](const httplib::Request&, httplib::Response& res)
             {
                 std::time_t t = std::time(0);
 

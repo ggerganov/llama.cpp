@@ -3,7 +3,7 @@
 Feature: Security
 
   Background: Server startup with an api key defined
-    Given a server listening on localhost:8080
+    Given a server listening on 127.0.0.1:8080
     And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a server api key llama.cpp
     Then  the server is starting

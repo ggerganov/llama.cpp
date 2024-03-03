@@ -42,6 +42,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
 - `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 - `--port`: Set the port to listen. Default: `8080`.
+- `--public-domain`: Set a public domain which will be allowed for Cross Origin Requests. If you are using the server as an API from a browser, this is required.
 - `--path`: path from which to serve static files (default examples/server/public)
 - `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
 - `--api-key-file`: path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`'s.

@@ -3,7 +3,7 @@
 Feature: Parallel
 
   Background: Server startup
-    Given a server listening on localhost:8080
+    Given a server listening on 127.0.0.1:8080
     And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   42 as server seed
     And   512 as batch size
