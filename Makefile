@@ -705,7 +705,7 @@ quantize: examples/quantize/quantize.cpp                      build-info.o ggml.
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-merge: examples/merge/merge.cpp                               build-info.o ggml.o llama.o $(OBJS)
+merge: examples/merge/merge.cpp examples/merge/parser.hpp     build-info.o ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

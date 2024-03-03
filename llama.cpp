@@ -11358,7 +11358,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
 #else
     constexpr bool use_mmap = false;
 #endif
-
+/*
     // std::move doesn't work with llama_model and llama_model_loader, why?
     std::vector<std::unique_ptr<llama_model>> models;
     std::vector<std::unique_ptr<llama_model_loader>> mls;
@@ -11610,6 +11610,7 @@ int32_t llama_merge_models(const struct llama_merge_config * config) {
     }
 
     clean_up();
+*/
     return 0;
 }
 
@@ -12477,6 +12478,18 @@ uint64_t llama_model_n_params(const struct llama_model * model) {
         nparams += ggml_nelements(it.second);
     }
     return nparams;
+}
+
+int32_t llama_get_all_tensors_name(struct llama_model * model, const char ** name_arr, size_t arr_size) {
+    size_t i = 0;
+    for (const auto & it : model->tensors_by_name) {
+        if (i == arr_size) {
+            break;
+        }
+        name_arr[i] = it.first.c_str();
+        i++;
+    }
+    return model->tensors_by_name.size();
 }
 
 struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name) {

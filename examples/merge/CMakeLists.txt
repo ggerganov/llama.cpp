@@ -1,5 +1,5 @@
 set(TARGET merge)
-add_executable(${TARGET} merge.cpp)
+add_executable(${TARGET} merge.cpp parser.hpp)
 install(TARGETS ${TARGET} RUNTIME)
 target_link_libraries(${TARGET} PRIVATE llama build_info ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(${TARGET} PRIVATE ../../common)
