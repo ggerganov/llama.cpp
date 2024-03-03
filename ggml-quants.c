@@ -10037,6 +10037,8 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
     UNUSED(by);
     UNUSED(bs);
 
+    GGML_ASSERT(IQ3S_BLOCK_SIZE == 32 && "IQ3S_BLOCK_SIZE != 32 is not implemented");
+
     const block_iq3_s * restrict x = vx;
     const block_q8_K  * restrict y = vy;
 
