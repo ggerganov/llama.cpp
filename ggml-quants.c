@@ -12092,7 +12092,11 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
         }
 
         float d = max_scale/31;
-        y[ibl].d = GGML_FP32_TO_FP16(d * 1.025f); //1.033f);
+#ifdef IQ3S_SLOW_MULT
+        y[ibl].d = GGML_FP32_TO_FP16(d * 1.025f);
+#else
+        y[ibl].d = GGML_FP32_TO_FP16(d * 1.030f);
+#endif
         float id = 1/d;
         for (int ib = 0; ib < QK_K/block_size; ib += 2) {
             int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
