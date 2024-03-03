@@ -18,7 +18,7 @@ The project is under active development, and we are [looking for feedback and co
 
 - `--threads N`, `-t N`: Set the number of threads to use during generation.
 - `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation.
-- `--threads-http N`: number of threads in the http server pool to process requests (default: `std::thread::hardware_concurrency()`)
+- `--threads-http N`: number of threads in the http server pool to process requests (default: `max(std::thread::hardware_concurrency() - 1, --parallel N + 2)`)
 - `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 - `-a ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 - `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.

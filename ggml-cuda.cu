@@ -6904,6 +6904,7 @@ static __global__ void soft_max_f32(const float * x, const float * mask, const f
     // find the sum of exps in the block
     tmp = warp_reduce_sum(tmp);
     if (block_size > WARP_SIZE) {
+        __syncthreads();
         if (warp_id == 0) {
             buf_iw[lane_id] = 0.0f;
         }

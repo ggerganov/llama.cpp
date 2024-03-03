@@ -873,16 +873,16 @@ struct LLM_TN {
 // gguf helpers
 //
 
-static const std::map<int32_t, const char *> LLAMA_ROPE_SCALING_TYPES = {
+static const std::map<llama_rope_scaling_type, const char *> LLAMA_ROPE_SCALING_TYPES = {
     { LLAMA_ROPE_SCALING_TYPE_NONE,   "none"   },
     { LLAMA_ROPE_SCALING_TYPE_LINEAR, "linear" },
     { LLAMA_ROPE_SCALING_TYPE_YARN,   "yarn"   },
 };
 
-static int32_t llama_rope_scaling_type_from_string(const std::string & name) {
+static llama_rope_scaling_type llama_rope_scaling_type_from_string(const std::string & name) {
     for (const auto & kv : LLAMA_ROPE_SCALING_TYPES) {
         if (kv.second == name) {
-            return kv.first;
+            return (llama_rope_scaling_type) kv.first;
         }
     }
 
@@ -1612,7 +1612,6 @@ struct llama_hparams {
     float    rope_freq_base_train;
     float    rope_freq_scale_train;
     uint32_t n_yarn_orig_ctx;
-    int32_t  rope_scaling_type_train;
 
     float f_clamp_kqv      = 0.0f;
     float f_max_alibi_bias = 0.0f;
@@ -1620,8 +1619,9 @@ struct llama_hparams {
     bool causal_attn = true;
     bool need_kq_pos = false;
 
-    enum llama_pooling_type pooling_type = LLAMA_POOLING_TYPE_NONE;
-    enum llama_rope_type    rope_type    = LLAMA_ROPE_TYPE_NONE;
+    enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
+    enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
+    enum llama_rope_scaling_type rope_scaling_type_train = LLAMA_ROPE_SCALING_TYPE_NONE;
 
     bool operator!=(const llama_hparams & other) const {
         if (this->vocab_only    != other.vocab_only)    return true;
@@ -1670,8 +1670,8 @@ struct llama_cparams {
     uint32_t n_threads;       // number of threads to use for generation
     uint32_t n_threads_batch; // number of threads to use for batch processing
 
-    float    rope_freq_base;
-    float    rope_freq_scale;
+    float rope_freq_base;
+    float rope_freq_scale;
 
     uint32_t n_yarn_orig_ctx;
     // These hyperparameters are not exposed in GGUF, because all
@@ -1683,7 +1683,7 @@ struct llama_cparams {
     float defrag_thold;
 
     bool offload_kqv;
-    bool do_pooling;
+    enum llama_pooling_type pooling_type;
 
     ggml_backend_sched_eval_callback cb_eval;
     void * cb_eval_user_data;
@@ -2156,10 +2156,12 @@ static bool llama_kv_cache_find_slot(
 }
 
 // find how many cells are currently in use
-static int32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
-    for (uint32_t i = cache.size - 1; i > 0; --i) {
-        if (cache.cells[i].pos >= 0 && !cache.cells[i].is_empty()) {
-            return i + 1;
+static uint32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
+    for (uint32_t i = cache.size; i > 0; --i) {
+        const llama_kv_cell & cell = cache.cells[i - 1];
+
+        if (cell.pos >= 0 && !cell.is_empty()) {
+            return i;
         }
     }
 
@@ -2931,7 +2933,11 @@ template<>
 bool llama_model_loader::get_key(const enum llm_kv kid, enum llama_pooling_type & result, const bool required) {
     uint32_t tmp;
     const bool found = get_key(kid, tmp, required);
-    result = (enum llama_pooling_type) tmp;
+    if (found) {
+        result = (enum llama_pooling_type) tmp;
+    } else {
+        result = LLAMA_POOLING_TYPE_UNSPECIFIED;
+    }
     return found;
 }
 
@@ -3208,7 +3214,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
                 ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
-                ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type);
+                ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type, false);
 
                 switch (hparams.n_layer) {
                     case 3:
@@ -5173,7 +5179,7 @@ struct llm_build_context {
         n_kv             (worst_case ? n_ctx            : kv_self.n),
         kv_head          (worst_case ? n_ctx - n_tokens : kv_self.head),
         n_orig_ctx       (cparams.n_yarn_orig_ctx),
-        pooling_type     (cparams.do_pooling ? hparams.pooling_type : LLAMA_POOLING_TYPE_NONE),
+        pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
         cb               (cb),
         buf_compute_meta (lctx.buf_compute_meta) {
@@ -8013,7 +8019,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_TYPE_MEAN) {
+    if (cparams.pooling_type == LLAMA_POOLING_TYPE_MEAN) {
         const int64_t n_tokens = batch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_mean->buffer));
@@ -8041,7 +8047,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_TYPE_CLS) {
+    if (cparams.pooling_type == LLAMA_POOLING_TYPE_CLS) {
         const int64_t n_tokens = batch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_cls->buffer));
@@ -8178,7 +8184,7 @@ static int llama_decode_internal(
     // a heuristic, to avoid attending the full cache if it is not yet utilized
     // after enough generations, the benefit from this heuristic disappears
     // if we start defragmenting the cache, the benefit from this will be more important
-    kv_self.n = std::min((int32_t) cparams.n_ctx, std::max(32, GGML_PAD(llama_kv_cache_cell_max(kv_self), 32)));
+    kv_self.n = std::min(cparams.n_ctx, std::max(32u, GGML_PAD(llama_kv_cache_cell_max(kv_self), 32)));
     //kv_self.n = llama_kv_cache_cell_max(kv_self);
 
     //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
@@ -11844,6 +11850,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
+        /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
         /*.yarn_ext_factor             =*/ -1.0f,
@@ -11859,7 +11866,6 @@ struct llama_context_params llama_context_default_params() {
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
-        /*.do_pooling                  =*/ true,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
     };
@@ -12010,7 +12016,7 @@ struct llama_context * llama_new_context_with_model(
     cparams.yarn_beta_slow   = params.yarn_beta_slow;
     cparams.defrag_thold     = params.defrag_thold;
     cparams.offload_kqv      = params.offload_kqv;
-    cparams.do_pooling       = params.do_pooling;
+    cparams.pooling_type     = params.pooling_type;
 
     cparams.n_ctx            = params.n_ctx           == 0    ? hparams.n_ctx_train           : params.n_ctx;
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
@@ -12034,6 +12040,14 @@ struct llama_context * llama_new_context_with_model(
 
     if (cparams.yarn_ext_factor < 0.0f) { // negative indicates 'not set'
         cparams.yarn_ext_factor = rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_YARN ? 1.0f : 0.0f;
+    }
+
+    if (cparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
+        if (hparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
+            cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
+        } else {
+            cparams.pooling_type = hparams.pooling_type;
+        }
     }
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
@@ -12615,9 +12629,14 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
     const size_t s_logits          = ctx->logits.capacity() * sizeof(float);
     const size_t s_embedding_size  = sizeof(size_t);
     const size_t s_embedding       = ctx->embedding.size() * sizeof(float);
-    const size_t s_kv_size         = sizeof(size_t);
-    const size_t s_kv_ntok         = sizeof(int);
+    const size_t s_kv_buf_size     = sizeof(size_t);
+    const size_t s_kv_head         = sizeof(uint32_t);
+    const size_t s_kv_size         = sizeof(uint32_t);
+    const size_t s_kv_used         = sizeof(uint32_t);
     const size_t s_kv              = ctx->kv_self.total_size();
+    // TODO: assume the max is more than 1 seq_id per KV cell
+    const size_t s_kv_cell         = sizeof(llama_pos) + sizeof(size_t) + sizeof(llama_seq_id);
+    const size_t s_kv_cells        = ctx->kv_self.size * s_kv_cell;
 
     const size_t s_total = (
         + s_rng_size
@@ -12626,9 +12645,12 @@ size_t llama_get_state_size(const struct llama_context * ctx) {
         + s_logits
         + s_embedding_size
         + s_embedding
+        + s_kv_buf_size
+        + s_kv_head
         + s_kv_size
-        + s_kv_ntok
+        + s_kv_used
         + s_kv
+        + s_kv_cells
     );
 
     return s_total;
@@ -12728,15 +12750,13 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
     {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
-        const auto & cparams = ctx->cparams;
 
         const uint32_t n_layer      = hparams.n_layer;
         const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa();
         const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa();
-        const uint32_t n_ctx        = cparams.n_ctx;
 
         const size_t   kv_buf_size = kv_self.total_size();
-        const uint32_t kv_head     = kv_self.head;
+        const uint32_t kv_head     = llama_kv_cache_cell_max(kv_self);
         const uint32_t kv_size     = kv_self.size;
         const uint32_t kv_used     = kv_self.used;
 
@@ -12756,7 +12776,7 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
 
                 // v is not contiguous, copy row by row
                 const size_t v_row_size   = ggml_row_size(kv_self.v_l[il]->type, kv_head);
-                const size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, n_ctx);
+                const size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, kv_size);
 
                 tmp_buf.resize(v_row_size);
                 for (int ir = 0; ir < (int) n_embd_v_gqa; ++ir) {
@@ -12766,7 +12786,7 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
             }
         }
 
-        for (uint32_t i = 0; i < kv_size; ++i) {
+        for (uint32_t i = 0; i < kv_head; ++i) {
             const auto & cell = kv_self.cells[i];
 
             const llama_pos pos         = cell.pos;
@@ -12842,12 +12862,10 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     {
         const auto & kv_self = ctx->kv_self;
         const auto & hparams = ctx->model.hparams;
-        const auto & cparams = ctx->cparams;
 
         const uint32_t n_layer      = hparams.n_layer;
         const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa();
         const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa();
-        const uint32_t n_ctx        = cparams.n_ctx;
 
         size_t   kv_buf_size;
         uint32_t kv_head;
@@ -12870,7 +12888,7 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
 
                 // v is not contiguous, copy row by row
                 const size_t v_row_size   = ggml_row_size(kv_self.v_l[il]->type, kv_head);
-                const size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, n_ctx);
+                const size_t v_row_stride = ggml_row_size(kv_self.v_l[il]->type, kv_size);
 
                 for (int ir = 0; ir < (int) n_embd_v_gqa; ++ir) {
                     ggml_backend_tensor_set(kv_self.v_l[il], inp, ir*v_row_stride, v_row_size);
@@ -12879,13 +12897,15 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
             }
         }
 
+        GGML_ASSERT(kv_self.size == kv_size);
+
         ctx->kv_self.head = kv_head;
         ctx->kv_self.size = kv_size;
         ctx->kv_self.used = kv_used;
 
         ctx->kv_self.cells.resize(kv_size);
 
-        for (uint32_t i = 0; i < kv_size; ++i) {
+        for (uint32_t i = 0; i < kv_head; ++i) {
             llama_pos pos;
             size_t    seq_id_size;
 
@@ -12900,6 +12920,11 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
                 memcpy(&seq_id, inp, sizeof(seq_id)); inp += sizeof(seq_id);
                 ctx->kv_self.cells[i].seq_id.insert(seq_id);
             }
+        }
+
+        for (uint32_t i = kv_head; i < kv_size; ++i) {
+            ctx->kv_self.cells[i].pos = -1;
+            ctx->kv_self.cells[i].seq_id.clear();
         }
     }
 
