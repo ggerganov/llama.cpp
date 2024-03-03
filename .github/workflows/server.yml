@@ -3,6 +3,11 @@ name: Server
 
 on:
   workflow_dispatch: # allows manual triggering
+    inputs:
+      slow_tests:
+        description: 'Run slow tests'
+        required: true
+        type: boolean
   push:
     branches:
       - master
@@ -11,7 +16,7 @@ on:
     types: [opened, synchronize, reopened]
     paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/tests/**.*']
   schedule:
-    -  cron: '00 0 * * *'
+    -  cron: '0 0 * * *'
 
 jobs:
   server:
@@ -80,7 +85,7 @@ jobs:
 
       - name: Slow tests
         id: server_integration_tests_slow
-        if: github.event.schedule != ''
+        if: ${{ github.event.schedule != '' && matrix.build_type == 'Release' || github.event.inputs.slow_tests == 'true' }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
