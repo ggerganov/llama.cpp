@@ -873,16 +873,16 @@ struct LLM_TN {
 // gguf helpers
 //
 
-static const std::map<int32_t, const char *> LLAMA_ROPE_SCALING_TYPES = {
+static const std::map<llama_rope_scaling_type, const char *> LLAMA_ROPE_SCALING_TYPES = {
     { LLAMA_ROPE_SCALING_TYPE_NONE,   "none"   },
     { LLAMA_ROPE_SCALING_TYPE_LINEAR, "linear" },
     { LLAMA_ROPE_SCALING_TYPE_YARN,   "yarn"   },
 };
 
-static int32_t llama_rope_scaling_type_from_string(const std::string & name) {
+static llama_rope_scaling_type llama_rope_scaling_type_from_string(const std::string & name) {
     for (const auto & kv : LLAMA_ROPE_SCALING_TYPES) {
         if (kv.second == name) {
-            return kv.first;
+            return (llama_rope_scaling_type) kv.first;
         }
     }
 
@@ -1612,7 +1612,6 @@ struct llama_hparams {
     float    rope_freq_base_train;
     float    rope_freq_scale_train;
     uint32_t n_yarn_orig_ctx;
-    int32_t  rope_scaling_type_train;
 
     float f_clamp_kqv      = 0.0f;
     float f_max_alibi_bias = 0.0f;
@@ -1620,8 +1619,9 @@ struct llama_hparams {
     bool causal_attn = true;
     bool need_kq_pos = false;
 
-    enum llama_pooling_type pooling_type = LLAMA_POOLING_TYPE_NONE;
-    enum llama_rope_type    rope_type    = LLAMA_ROPE_TYPE_NONE;
+    enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
+    enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
+    enum llama_rope_scaling_type rope_scaling_type_train = LLAMA_ROPE_SCALING_TYPE_NONE;
 
     bool operator!=(const llama_hparams & other) const {
         if (this->vocab_only    != other.vocab_only)    return true;
@@ -1670,8 +1670,8 @@ struct llama_cparams {
     uint32_t n_threads;       // number of threads to use for generation
     uint32_t n_threads_batch; // number of threads to use for batch processing
 
-    float    rope_freq_base;
-    float    rope_freq_scale;
+    float rope_freq_base;
+    float rope_freq_scale;
 
     uint32_t n_yarn_orig_ctx;
     // These hyperparameters are not exposed in GGUF, because all
@@ -11848,6 +11848,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
+        /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
         /*.yarn_ext_factor             =*/ -1.0f,
@@ -11863,7 +11864,6 @@ struct llama_context_params llama_context_default_params() {
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
-        /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
     };
