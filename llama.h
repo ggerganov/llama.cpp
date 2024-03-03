@@ -129,6 +129,7 @@ extern "C" {
     };
 
     enum llama_pooling_type {
+        LLAMA_POOLING_TYPE_UNSPECIFIED = -1,
         LLAMA_POOLING_TYPE_NONE = 0,
         LLAMA_POOLING_TYPE_MEAN = 1,
         LLAMA_POOLING_TYPE_CLS  = 2,
@@ -258,7 +259,7 @@ extern "C" {
         bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embedding;   // embedding mode only
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-        bool do_pooling;  // whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
+        enum llama_pooling_type pooling_type;  // whether to pool (sum) embedding results by sequence id (ignored if no pooling layer)
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted

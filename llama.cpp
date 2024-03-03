@@ -1683,7 +1683,7 @@ struct llama_cparams {
     float defrag_thold;
 
     bool offload_kqv;
-    bool do_pooling;
+    enum llama_pooling_type pooling_type;
 
     ggml_backend_sched_eval_callback cb_eval;
     void * cb_eval_user_data;
@@ -2931,7 +2931,11 @@ template<>
 bool llama_model_loader::get_key(const enum llm_kv kid, enum llama_pooling_type & result, const bool required) {
     uint32_t tmp;
     const bool found = get_key(kid, tmp, required);
-    result = (enum llama_pooling_type) tmp;
+    if (found) {
+        result = (enum llama_pooling_type) tmp;
+    } else {
+        result = LLAMA_POOLING_TYPE_UNSPECIFIED;
+    }
     return found;
 }
 
@@ -3208,7 +3212,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
                 ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
-                ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type);
+                ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type, false);
 
                 switch (hparams.n_layer) {
                     case 3:
@@ -5173,7 +5177,7 @@ struct llm_build_context {
         n_kv             (worst_case ? n_ctx            : kv_self.n),
         kv_head          (worst_case ? n_ctx - n_tokens : kv_self.head),
         n_orig_ctx       (cparams.n_yarn_orig_ctx),
-        pooling_type     (cparams.do_pooling ? hparams.pooling_type : LLAMA_POOLING_TYPE_NONE),
+        pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
         cb               (cb),
         buf_compute_meta (lctx.buf_compute_meta) {
@@ -8013,7 +8017,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_TYPE_MEAN) {
+    if (cparams.pooling_type == LLAMA_POOLING_TYPE_MEAN) {
         const int64_t n_tokens = batch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_mean->buffer));
@@ -8041,7 +8045,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         }
     }
 
-    if (cparams.do_pooling && hparams.pooling_type == LLAMA_POOLING_TYPE_CLS) {
+    if (cparams.pooling_type == LLAMA_POOLING_TYPE_CLS) {
         const int64_t n_tokens = batch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_cls->buffer));
@@ -11859,7 +11863,7 @@ struct llama_context_params llama_context_default_params() {
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
-        /*.do_pooling                  =*/ true,
+        /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
     };
@@ -12010,7 +12014,7 @@ struct llama_context * llama_new_context_with_model(
     cparams.yarn_beta_slow   = params.yarn_beta_slow;
     cparams.defrag_thold     = params.defrag_thold;
     cparams.offload_kqv      = params.offload_kqv;
-    cparams.do_pooling       = params.do_pooling;
+    cparams.pooling_type     = params.pooling_type;
 
     cparams.n_ctx            = params.n_ctx           == 0    ? hparams.n_ctx_train           : params.n_ctx;
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
@@ -12034,6 +12038,14 @@ struct llama_context * llama_new_context_with_model(
 
     if (cparams.yarn_ext_factor < 0.0f) { // negative indicates 'not set'
         cparams.yarn_ext_factor = rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_YARN ? 1.0f : 0.0f;
+    }
+
+    if (cparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
+        if (hparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
+            cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
+        } else {
+            cparams.pooling_type = hparams.pooling_type;
+        }
     }
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
