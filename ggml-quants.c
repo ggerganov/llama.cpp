@@ -4125,8 +4125,8 @@ void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y
 // Best PPL
 #define IQ3S_MULTIPLIER 190842953
 #else
-//#define IQ3S_MULTIPLIER 898886
-#define IQ3S_MULTIPLIER 842866
+#define IQ3S_MULTIPLIER 898886
+//#define IQ3S_MULTIPLIER 842866
 #endif
 
 #define IQ3S_BITS 3

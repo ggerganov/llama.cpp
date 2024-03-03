@@ -2374,8 +2374,8 @@ static __global__ void dequantize_block_iq3_xxs(const void * __restrict__ vx, ds
 // Better (lower PPL), but requires more bit twidling, so slower
 #define IQ3S_MULTIPLIER 190842953LL
 #else
-//#define IQ3S_MULTIPLIER 898886
-#define IQ3S_MULTIPLIER 842866
+#define IQ3S_MULTIPLIER 898886
+//#define IQ3S_MULTIPLIER 842866
 #endif
 
 template<typename dst_t>
