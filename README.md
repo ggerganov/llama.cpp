@@ -8,6 +8,10 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+### Recent API changes
+
+- [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
+
 ### Hot topics
 
 - The `api_like_OAI.py` script has been removed - use `server` instead ([#5766](https://github.com/ggerganov/llama.cpp/issues/5766#issuecomment-1969037761))
