@@ -4,7 +4,7 @@
 # Build info header
 #
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../.git")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../.git/index")
     set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.git")
 
     # Is git submodule
