@@ -760,7 +760,8 @@ int main(int argc, char ** argv) {
                         ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
                         : 0;
 
-                    if (last_output.find(antiprompt, search_start_pos) != std::string::npos) {
+                    auto tmp = ::llama_tokenize(ctx, antiprompt, false, true);
+                    if (last_output.find(antiprompt, search_start_pos) != std::string::npos || (tmp.size() == 1 && llama_sampling_last(ctx_sampling) == tmp[0])) {
                         if (params.interactive) {
                             is_interacting = true;
                         }
