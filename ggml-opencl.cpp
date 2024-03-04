@@ -2231,7 +2231,7 @@ static ggml_backend_buffer_type_t ggml_backend_opencl_get_default_buffer_type(gg
     GGML_UNUSED(backend);
 }
 
-static bool ggml_backend_opencl_graph_compute(ggml_backend_t backend, ggml_cgraph * graph) {
+static ggml_status ggml_backend_opencl_graph_compute(ggml_backend_t backend, ggml_cgraph * graph) {
     for (int i = 0; i < graph->n_nodes; ++i) {
         ggml_tensor * node = graph->nodes[i];
         switch (node->op) {
@@ -2246,7 +2246,7 @@ static bool ggml_backend_opencl_graph_compute(ggml_backend_t backend, ggml_cgrap
         }
     }
 
-    return true;
+    return GGML_STATUS_SUCCESS;
 
     GGML_UNUSED(backend);
 }
