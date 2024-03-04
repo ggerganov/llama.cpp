@@ -136,7 +136,7 @@ int main(int argc, char ** argv) {
 
     // initialize batch
     const int n_prompts = prompts.size();
-    struct llama_batch batch = llama_batch_init(n_batch, 0, n_prompts);
+    struct llama_batch batch = llama_batch_init(n_batch, 0, 1);
 
     // allocate output
     const int n_embd = llama_n_embd(model);
