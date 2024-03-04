@@ -3760,7 +3760,7 @@ void log_ggml_var_device(const char*name, float *src, size_t total_elements, boo
         local_buf = (float *) ggml_sycl_host_malloc(total_size);
         ggml_sycl_set_device(g_main_device);
         dpct::queue_ptr main_stream = g_syclStreams[g_main_device][0];
-        main_stream->memcpy(local_buf, src, total_size);
+        main_stream->memcpy(local_buf, src, total_size).wait();
     }
     else {
         local_buf = (float *)src;
@@ -14585,7 +14585,7 @@ static void ggml_sycl_op_flatten(const ggml_tensor *src0,
     // copy dst to host if necessary
     if (!dst_on_device) {
         SYCL_CHECK(CHECK_TRY_ERROR(
-            main_stream->memcpy(dst->data, dst_ddf, ggml_nbytes(dst))));
+            main_stream->memcpy(dst->data, dst_ddf, ggml_nbytes(dst)).wait()));
     }
 
     if (dst->backend == GGML_BACKEND_TYPE_CPU) {
@@ -14862,7 +14862,7 @@ static void ggml_sycl_op_mul_mat(const ggml_tensor *src0,
                           SYCL_CHECK(CHECK_TRY_ERROR(stream->memcpy(
                                 src1_ddq_i, src1_ddq_i_source,
                                 src1_ncols * src1_padded_col_size * q8_1_ts /
-                                    q8_1_bs)));
+                                    q8_1_bs).wait()));
                         } else {
 
                             float * src1_ddf_i_source = (float *) src1_extra->data_device[g_main_device];
@@ -14956,7 +14956,7 @@ static void ggml_sycl_op_mul_mat(const ggml_tensor *src0,
                         dhf_dst_i += src1_col_0*ne0;
                         SYCL_CHECK(CHECK_TRY_ERROR(
                             stream->memcpy(dhf_dst_i, dst_dd_i,
-                                           src1_ncols * ne0 * sizeof(float))));
+                                           src1_ncols * ne0 * sizeof(float)).wait()));
                     }
                 }
 
@@ -15686,8 +15686,8 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
     if (ids->backend == GGML_BACKEND_TYPE_GPU) {
         const char * ids_dev = (const char *)((const ggml_tensor_extra_gpu *)ids->extra)->data_device[g_main_device];
         SYCL_CHECK(CHECK_TRY_ERROR(
-            stream->memcpy(ids_host.data(), ids_dev, ggml_nbytes(ids))));
-        SYCL_CHECK(CHECK_TRY_ERROR(stream->wait()));
+            stream->memcpy(ids_host.data(), ids_dev, ggml_nbytes(ids)).wait()));
+        // SYCL_CHECK(CHECK_TRY_ERROR(stream->wait()));
     } else {
         memcpy(ids_host.data(), ids->data, ggml_nbytes(ids));
     }
@@ -15757,7 +15757,7 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
 
                 SYCL_CHECK(CHECK_TRY_ERROR(
                     stream->memcpy(src1_contiguous.get() + num_src1_rows * nb11,
-                                   src1_original + i01 * nb11, nb11)));
+                                   src1_original + i01 * nb11, nb11).wait()));
                 num_src1_rows++;
             }
 
@@ -15790,7 +15790,7 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
 
                 SYCL_CHECK(CHECK_TRY_ERROR(stream->memcpy(
                     dst_original + i01 * nb1,
-                    dst_contiguous.get() + num_src1_rows * nb1, nb1)));
+                    dst_contiguous.get() + num_src1_rows * nb1, nb1).wait()));
                 num_src1_rows++;
             }
         }
@@ -17184,7 +17184,7 @@ GGML_CALL static void ggml_backend_sycl_set_tensor_async(ggml_backend_t backend,
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_TYPE_GPU);
     SYCL_CHECK(CHECK_TRY_ERROR(g_syclStreams[sycl_ctx->device][0]->memcpy(
-        (char *)tensor->data + offset, data, size)));
+        (char *)tensor->data + offset, data, size).wait()));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -17200,7 +17200,7 @@ GGML_CALL static void ggml_backend_sycl_get_tensor_async(ggml_backend_t backend,
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_TYPE_GPU);
     SYCL_CHECK(CHECK_TRY_ERROR(g_syclStreams[sycl_ctx->device][0]->memcpy(
-        data, (const char *)tensor->data + offset, size)));
+        data, (const char *)tensor->data + offset, size).wait()));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -17219,7 +17219,7 @@ GGML_CALL static bool ggml_backend_sycl_cpy_tensor_async(ggml_backend_t backend,
         was inserted. You need to rewrite this code.
         */
         SYCL_CHECK(CHECK_TRY_ERROR(g_syclStreams[sycl_ctx->device][0]->memcpy(
-            dst->data, src->data, ggml_nbytes(dst))));
+            dst->data, src->data, ggml_nbytes(dst)).wait()));
         return true;
     }
 
