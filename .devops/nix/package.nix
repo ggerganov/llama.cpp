@@ -31,7 +31,7 @@
   useRocm ? config.rocmSupport,
   useVulkan ? false,
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
-  effectiveStdenv = if useCuda then cudaPackages.backendStdenv else stdenv,
+  effectiveStdenv ? if useCuda then cudaPackages.backendStdenv else stdenv,
   enableStatic ? effectiveStdenv.hostPlatform.isStatic
 }@inputs:
 
