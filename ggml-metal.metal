@@ -2550,7 +2550,9 @@ typedef struct {
 #define IQ3S_MULTIPLIER 190842953
 #else
 //#define IQ3S_MULTIPLIER 898886
-#define IQ3S_MULTIPLIER 842866
+//#define IQ3S_MULTIPLIER 842866
+#define IQ3S_MULTIPLIER 72968561ULL
+constexpr constant static uint8_t iq3s_values[16] = {1, 1, 1, 3, 3, 3, 5, 5, 5, 7, 7, 9, 9, 11, 13, 15};
 #endif
 
 typedef struct {
@@ -4698,9 +4700,9 @@ void kernel_mul_mv_iq3_s_f32_impl(
     {
         int nval = 8;
         int pos  = (32*sgitg + tiisg)*nval;
-#ifdef IQ3S_SLOW_MULT
         uint32_t aux32;
         thread int8_t * q = (thread int8_t *)&aux32;
+#ifdef IQ3S_SLOW_MULT
         for (int i = 0; i < nval; ++i) {
             aux32 = (IQ3S_MULTIPLIER * (pos + i)) & 0x0f0f0f0f;
             for (int k = 0; k < 4; ++k) q[k] = 2*((q[k]-1)/2) + 1;
@@ -4708,7 +4710,9 @@ void kernel_mul_mv_iq3_s_f32_impl(
         }
 #else
         for (int i = 0; i < nval; ++i) {
-            values[pos + i] = ((IQ3S_MULTIPLIER * (pos + i)) & 0x0f0f0f0f) | 0x01010101;
+            aux32 = (IQ3S_MULTIPLIER * (pos + i)) & 0x0f0f0f0f;
+            for (int k = 0; k < 4; ++k) q[k] = iq3s_values[q[k]];
+            values[pos + i] = aux32;
         }
 #endif
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -5667,7 +5671,7 @@ void dequantize_iq3_s(device const block_iq3_s * xb, short il, thread type4x4 & 
     const float dl = d * (1 + 2*((xb->scales[ib32/2] >> 4*(ib32%2)) & 0xf));
     uint32_t aux32[2];
     thread const int8_t * grid = (thread const int8_t *)aux32;
-#ifdef IQ3S_SLOW)MULT
+#ifdef IQ3S_SLOW_MULT
     aux32[0] = (IQ3S_MULTIPLIER * (qs[4*il+0] | ((qh << 8) & 256))) & 0x0f0f0f0f;
     aux32[1] = (IQ3S_MULTIPLIER * (qs[4*il+1] | ((qh << 7) & 256))) & 0x0f0f0f0f;
     for (int i = 0; i < 4; ++i) {
@@ -5681,17 +5685,17 @@ void dequantize_iq3_s(device const block_iq3_s * xb, short il, thread type4x4 & 
         reg[3][i] = dl * (2*((grid[i+4]-1)/2)+1) * select(1, -1, signs[1] & kmask_iq2xs[i+4]);
     }
 #else
-    aux32[0] = ((IQ3S_MULTIPLIER * (qs[4*il+0] | ((qh << 8) & 256))) & 0x0f0f0f0f) | 0x01010101;
-    aux32[1] = ((IQ3S_MULTIPLIER * (qs[4*il+1] | ((qh << 7) & 256))) & 0x0f0f0f0f) | 0x01010101;
+    aux32[0] = (IQ3S_MULTIPLIER * (qs[4*il+0] | ((qh << 8) & 256))) & 0x0f0f0f0f;
+    aux32[1] = (IQ3S_MULTIPLIER * (qs[4*il+1] | ((qh << 7) & 256))) & 0x0f0f0f0f;
     for (int i = 0; i < 4; ++i) {
-        reg[0][i] = dl * grid[i+0] * select(1, -1, signs[0] & kmask_iq2xs[i+0]);
-        reg[1][i] = dl * grid[i+4] * select(1, -1, signs[0] & kmask_iq2xs[i+4]);
+        reg[0][i] = dl * iq3s_values[grid[i+0]] * select(1, -1, signs[0] & kmask_iq2xs[i+0]);
+        reg[1][i] = dl * iq3s_values[grid[i+4]] * select(1, -1, signs[0] & kmask_iq2xs[i+4]);
     }
-    aux32[0] = ((IQ3S_MULTIPLIER * (qs[4*il+2] | ((qh << 6) & 256))) & 0x0f0f0f0f) | 0x01010101;
-    aux32[1] = ((IQ3S_MULTIPLIER * (qs[4*il+3] | ((qh << 5) & 256))) & 0x0f0f0f0f) | 0x01010101;
+    aux32[0] = (IQ3S_MULTIPLIER * (qs[4*il+2] | ((qh << 6) & 256))) & 0x0f0f0f0f;
+    aux32[1] = (IQ3S_MULTIPLIER * (qs[4*il+3] | ((qh << 5) & 256))) & 0x0f0f0f0f;
     for (int i = 0; i < 4; ++i) {
-        reg[2][i] = dl * grid[i+0] * select(1, -1, signs[1] & kmask_iq2xs[i+0]);
-        reg[3][i] = dl * grid[i+4] * select(1, -1, signs[1] & kmask_iq2xs[i+4]);
+        reg[2][i] = dl * iq3s_values[grid[i+0]] * select(1, -1, signs[1] & kmask_iq2xs[i+0]);
+        reg[3][i] = dl * iq3s_values[grid[i+4]] * select(1, -1, signs[1] & kmask_iq2xs[i+4]);
     }
 #endif
 }
