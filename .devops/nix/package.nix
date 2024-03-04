@@ -33,7 +33,7 @@
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
 
   # It's necessary to consistently use backendStdenv when building with CUDA support,
-  # otherwise we get libstdc++ errors downstream.1
+  # otherwise we get libstdc++ errors downstream.
   effectiveStdenv ? if useCuda then cudaPackages.backendStdenv else stdenv,
   enableStatic ? effectiveStdenv.hostPlatform.isStatic
 }@inputs:
