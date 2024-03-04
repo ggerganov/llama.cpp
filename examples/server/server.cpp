@@ -2044,6 +2044,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --yarn-attn-factor N      YaRN: scale sqrt(t) or attention magnitude (default: 1.0)\n");
     printf("  --yarn-beta-slow N        YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
     printf("  --yarn-beta-fast N        YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
+    printf("  --pooling {none,mean,cls}\n");
+    printf("                        pooling type for embeddings, use model default if unspecified\n");
     printf("  -b N, --batch-size N      batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
@@ -2283,6 +2285,18 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.yarn_beta_slow = std::stof(argv[i]);
+        }
+        else if (arg == "--pooling")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string value(argv[i]);
+            /**/ if (value == "none") { params.pooling_type = LLAMA_POOLING_TYPE_NONE; }
+            else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
+            else if (value == "cls")  { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
+            else { invalid_param = true; break; }
         }
         else if (arg == "--threads" || arg == "-t")
         {
