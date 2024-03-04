@@ -62,13 +62,13 @@ def send_request(q, question, event, count, num_requests):
     delay = 0.1
 
     global bar
-    
+
     system = "You are a helpful assistant who answers all requests \
 courteously and accurately without undue repetion. \
 You pay close attention to the nuance of a question and respond accordingly."
-    
+
     data = {'system': system, 'prompt': question}
-    
+
     try:
         response = requests.post(url, headers=headers, json=data)
         if response.status_code in [200,300]:
@@ -109,7 +109,7 @@ if __name__ == "__main__":
 
     global bar
     lockbar = threading.Lock()
-    
+
     url = "http://192.168.1.28:8080/completion"
 
     num_requests = 76
@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     headers = {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',  
+        'Accept': 'application/json',
         'User-Agent': 'Llamaserver.py',
         'Authorization': f'Bearer {api_key}'
         }
@@ -135,7 +135,7 @@ if __name__ == "__main__":
                    "Erasmus", "Thomas More", "Luther", "Calvin", "Thomas Cranmer", "Shakespeare",
                    "Francis Bacon", "Thomas Cromwell", "Thomas Hobbes", "John Locke", "David Hume", "Berkeley", "Immanuel Kant",
                    "Jeremy Bentham", "William Blake", "John Stuart Mill", "Peirce", "Ralph Waldo Emerson", "Emily Dickinson", "Walt Whitman", "William James", "Henry James", "Henry Sidgwick", "John Dewey"]
-    
+
     country_list = ["France", "Germany", "China", "USA", "Italy", "India",
                     "Ukraine", "Japan", "Australia", "New Zealand", "Indonesia", "Nigeria", "Saudi Arabia",
                     "Israel", "Egypt", "Kenya", "Chile", "Mexico", "Canada", "Ecuador", "Brazil", "Argentina", "Colombia",
@@ -147,14 +147,14 @@ if __name__ == "__main__":
                         "Melanie Klein", "John Puddefoot"]
 
     num_requests = len(philosopher_list)
-    
+
     for i in range(num_requests):
         writer = philosopher_list[i % num_requests]
         question = f"Tell me about the writings of {writer}."
         # NOTE: don't pass the parameter as a function call; pass in args
         print(f"Processing request {i} / {num_requests}: {question}\n")
         event = threading.Event()
-        t = threading.Thread(target=send_request, args=(q, question, event, i, num_requests)) 
+        t = threading.Thread(target=send_request, args=(q, question, event, i, num_requests))
         t.start()
         threads.append(t)
 
@@ -164,6 +164,6 @@ if __name__ == "__main__":
     '''
     print("FINISHED AND GETTING RESULTS")
     while not q.empty():
-        text = q.get()  
+        text = q.get()
         print_dict(json.loads(text))
     '''
