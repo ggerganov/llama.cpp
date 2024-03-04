@@ -511,6 +511,14 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd;
     std::vector<llama_token> embd_guidance;
 
+    // tokenized antiprompts
+    std::vector<std::vector<llama_token>> antiprompt_ids;
+
+    antiprompt_ids.reserve(params.antiprompt.size());
+    for (const std::string & antiprompt : params.antiprompt) {
+        antiprompt_ids.emplace_back(::llama_tokenize(ctx, antiprompt, false, true));
+    }
+
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
 
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
@@ -766,14 +774,6 @@ int main(int argc, char ** argv) {
                         }
                         is_antiprompt = true;
                         break;
-                    }
-                }
-
-                // tokenize reverse/antiprompt special tokens only once using static
-                static std::vector<std::vector<llama_token>> antiprompt_ids;
-                if (antiprompt_ids.empty()) {
-                    for (std::string& antiprompt : params.antiprompt) {
-                        antiprompt_ids.push_back(::llama_tokenize(ctx, antiprompt, false, true));
                     }
                 }
 
