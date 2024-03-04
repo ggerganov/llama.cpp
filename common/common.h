@@ -43,7 +43,7 @@ extern char const *LLAMA_BUILD_TARGET;
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    uint32_t seed                 = -1;    // RNG seed
+    uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
     int32_t n_threads             = get_num_physical_cores();
     int32_t n_threads_draft       = -1;
