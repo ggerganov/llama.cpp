@@ -171,7 +171,7 @@ effectiveStdenv.mkDerivation (
         # once https://github.com/NixOS/nixpkgs/pull/275241 has been merged
         cudaPackages.autoAddOpenGLRunpathHook
       ]
-      ++ optionals buildStatic [
+      ++ optionals (effectiveStdenv.hostPlatform.isGnu && enableStatic) [
         glibc.static
       ];
 
