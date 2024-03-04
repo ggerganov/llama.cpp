@@ -1235,12 +1235,22 @@ struct llama_server_context
                     continue;
                 }
 
-                const float * data = llama_get_embeddings_ith(ctx, i);
-                std::vector<float> embedding(data, data + n_embd);
+                const float * embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
+                if (embd == NULL) {
+                    embd = llama_get_embeddings_ith(ctx, i);
+                    if (embd == NULL) {
+                        LOG_ERROR("failed to get embeddings for token", {{"token", batch.token[i]}, {"seq_id", batch.seq_id[i][0]}});
+                        res.result_json = json
+                        {
+                            {"embedding", std::vector<float>(n_embd, 0.0f)},
+                        };
+                        continue;
+                    }
+                }
 
                 res.result_json = json
                 {
-                    {"embedding", embedding },
+                    {"embedding", std::vector<float>(embd, embd + n_embd)},
                 };
             }
         }

@@ -23,7 +23,7 @@ static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & toke
     }
 }
 
-static void normalize(float * vec, float * out, int n) {
+static void normalize(const float * vec, float * out, int n) {
     float norm = 0;
     for (int i = 0; i < n; i++) {
         norm += vec[i] * vec[i];
@@ -50,9 +50,18 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
             continue;
         }
 
-        float * emb = llama_get_embeddings_ith(ctx, i);
+        // try to get sequence embeddings - supported only when pooling_type is not NONE
+        const float * embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
+        if (embd == NULL) {
+            embd = llama_get_embeddings_ith(ctx, i);
+            if (embd == NULL) {
+                fprintf(stderr, "%s: failed to get embeddings for token %d\n", __func__, i);
+                continue;
+            }
+        }
+
         float * out = output + batch.seq_id[i][0] * n_embd;
-        normalize(emb, out, n_embd);
+        normalize(embd, out, n_embd);
     }
 }
 

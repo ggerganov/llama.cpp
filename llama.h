@@ -655,13 +655,19 @@ extern "C" {
     // llama_get_logits(ctx) + i*n_vocab
     LLAMA_API float * llama_get_logits_ith(struct llama_context * ctx, int32_t i);
 
-    // Get the embeddings for the input
-    // shape: [n_embd] (1-dimensional)
+    // Get all output token embeddings
+    // shape: [n_tokens*n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
     // Get the embeddings for the ith token
     // llama_get_embeddings(ctx) + i*n_embd
+    // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
+
+    // Get the embeddings for a sequence id
+    // Returns NULL if pooling_type is LLAMA_POOLING_TYPE_NONE
+    // shape: [n_embd] (1-dimensional)
+    LLAMA_API float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id);
 
     //
     // Vocab
