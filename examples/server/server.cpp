@@ -2296,7 +2296,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             std::string newuser = argv[i][0];
             std::string newuserapi = argv[i][1];
             std::string newusercode = argv[i][2]
-            sparams.api_keys.emplace_back({newuser: {newuserapi, newusercode}});
+            sparams.api_keys.emplace_back({newuser: [newuserapi, newusercode]});
         }
         */
         else if (arg == "--api-key-file")
