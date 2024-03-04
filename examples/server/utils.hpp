@@ -58,7 +58,7 @@ LOG_ERROR("Custom error", "Details", custom_settings);
 
 struct LogRedirection {
   // Set default values for redirection targets and reset strings
-  std::string stdout_target = "stdout.log"; // will be in ./build and eventually overwritten
+  std::string stdout_target = "stdout.log"; // if a log it will be in ./build and eventually overwritten
   std::string stdout_reset = "/dev/stdout";
   std::string stderr_target = "stderr.log"; // will be in ./build and eventually overwritten
   std::string stderr_reset = "/dev/stderr";
@@ -178,20 +178,25 @@ static inline void server_log(
         {"timestamp", time(nullptr)},
     };
 
-    /*
+
     // to allow the graphics to print to stdout we redirect non-graphical stdout to stderr
-    // to silence the graphics we direct stdout to dev/null or just don't invoke them
-    std::cerr << stdout_target.c_str() << std::endl;
+    // to silence the graphics we direct stdout to dev/null or don't initialise them
+    /*
     FILE* new_stdout = freopen(stdout_target.c_str(), "a", stdout);
     if (new_stdout == nullptr) {
         std::cerr << "Error on redirecting stdout to " << stdout_target.c_str() << std::endl;
+    } else {
+        std::cerr << "Redirected stdout successfully to " << stdout_target.c_str() << std::endl;
     }
     */
+    stdout_target = "";     // to silence the declaration of unused variable warnings
+    stdout_reset = "";
 
-    std::cerr << stderr_target.c_str() << std::endl;
     FILE* new_stderr = freopen(stderr_target.c_str(), "a", stderr);
     if (new_stderr == nullptr) {
         std::cerr << "Error on redirecting stderr to " << stderr_target.c_str() << std::endl;
+    } else {
+        std::cerr << "Redirected stderr successfully to " << stderr_target.c_str() << std::endl;
     }
     //freopen(stderr_target.c_str(), "a", stderr);      // we assign stderr to dev/null effectively 'blackholing' the output because log.dump below is redirected too
 
@@ -226,12 +231,23 @@ static inline void server_log(
         const std::string str = ss.str();
         printf("\033[85;0H%.*s\n", (int)str.size(), str.data());
         fflush(stderr);                                                // was originally fflush(stdout)
-
-        /*
-        freopen(stdout_reset.c_str(), "a", stdout);                    // decide whether to restore stdout
-        freopen(stderr_reset.c_str(), "a", stderr);                    // decide whether to restore stderr (both need automating)
-        */
     }
+
+    new_stderr = freopen(stderr_reset.c_str(), "a", stderr);
+    if (new_stderr == nullptr) {
+        std::cerr << "Error on resetting stderr to " << stderr_reset.c_str() << std::endl;
+    }  else {
+        std::cerr << "Reset stderr successfully to " << stderr_reset.c_str() << std::endl;
+    }
+
+    /*
+    new_stdout = freopen(stdout_reset.c_str(), "a", stdout);
+    if (new_stdout == nullptr) {
+        std::cerr << "Error on resetting stdout to " << stdout_reset.c_str() << std::endl;
+    } else {
+        std::cerr << "Reset stdout successfully to " << stdout_reset.c_str() << std::endl;
+    }
+    */
 }
 
 //
