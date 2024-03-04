@@ -5092,7 +5092,7 @@ GGML_CALL static void ggml_backend_vk_synchronize(ggml_backend_t backend) {
     ctx->transfer_ctx = nullptr;
 }
 
-GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
@@ -5135,7 +5135,7 @@ GGML_CALL static bool ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml
 
     ggml_vk_graph_cleanup(ctx);
 
-    return true;
+    return GGML_STATUS_SUCCESS;
 
     UNUSED(backend);
 }

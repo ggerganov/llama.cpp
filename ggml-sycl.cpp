@@ -15581,7 +15581,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-GGML_CALL static bool ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+GGML_CALL static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_sycl_context * sycl_ctx = (ggml_backend_sycl_context *)backend->context;
     ggml_sycl_set_main_device(sycl_ctx->device);
 
@@ -15613,7 +15613,7 @@ GGML_CALL static bool ggml_backend_sycl_graph_compute(ggml_backend_t backend, gg
         GGML_ASSERT(ok);
     }
 
-    return true;
+    return GGML_STATUS_SUCCESS;
 }
 
 GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
