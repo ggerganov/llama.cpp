@@ -2002,7 +2002,6 @@ struct llama_context {
     struct ggml_tensor * inp_KQ_pos;    // F32 [n_ctx]
     struct ggml_tensor * inp_K_shift;   // I32 [n_ctx]
     struct ggml_tensor * inp_mean;      // F32 [n_batch, n_batch]
-    struct ggml_tensor * inp_cls;       // I32 [n_batch]
 
 #ifdef GGML_USE_MPI
     ggml_mpi_context * ctx_mpi = NULL;
@@ -6099,7 +6098,6 @@ struct llm_build_context {
 
         struct ggml_tensor * inp_pos  = ggml_view_1d(ctx0, lctx.inp_pos,  n_tokens, 0);
         struct ggml_tensor * inp_mean = ggml_view_2d(ctx0, lctx.inp_mean, n_tokens, n_tokens, stride1, 0);
-        struct ggml_tensor * inp_cls  = ggml_view_1d(ctx0, lctx.inp_cls,  n_tokens, 0);
 
         // construct input embeddings (token, type, position)
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, lctx.inp_tokens, lctx.inp_embd, cb);
@@ -6243,12 +6241,20 @@ struct llm_build_context {
         cur = inpL;
 
         // pooling layer
-        if (pooling_type == LLAMA_POOLING_TYPE_MEAN) {
-            cur = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), inp_mean);
-        } else if (pooling_type == LLAMA_POOLING_TYPE_CLS) {
-            cur = ggml_get_rows(ctx0, cur, inp_cls);
-        } else {
-            GGML_ASSERT(pooling_type == LLAMA_POOLING_TYPE_NONE && "Invalid pooling type");
+        switch (pooling_type) {
+            case LLAMA_POOLING_TYPE_NONE:
+            case LLAMA_POOLING_TYPE_CLS:
+                {
+                    // nop
+                } break;
+            case LLAMA_POOLING_TYPE_MEAN:
+                {
+                    cur = ggml_mul_mat(ctx0, ggml_cont(ctx0, ggml_transpose(ctx0, cur)), inp_mean);
+                } break;
+            case LLAMA_POOLING_TYPE_UNSPECIFIED:
+                {
+                    GGML_ASSERT(false && "Max pooling not supported");
+                } break;
         }
         cb(cur, "result_embd", -1);
 
@@ -8103,22 +8109,6 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
             data[seq_id*n_tokens + i] = div[seq_id];
         }
     }
-
-    if (cparams.pooling_type == LLAMA_POOLING_TYPE_CLS) {
-        const int64_t n_tokens = batch.n_tokens;
-
-        GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_cls->buffer));
-
-        uint32_t * data = (uint32_t *) lctx.inp_cls->data;
-
-        for (int i = 0; i < n_tokens; ++i) {
-            const llama_seq_id seq_id = batch.seq_id[i][0];
-            const llama_pos    pos    = batch.pos[i];
-            if (pos == 0) {
-                data[seq_id] = i;
-            }
-        }
-    }
 }
 
 static void llama_graph_compute(
@@ -8379,17 +8369,32 @@ static int llama_decode_internal(
                 if (batch.logits[i] == 0) {
                     continue;
                 }
-                switch (hparams.pooling_type) {
+
+                switch (cparams.pooling_type) {
                     case LLAMA_POOLING_TYPE_CLS:
-                        ggml_backend_tensor_get_async(backend_embd, embd, embeddings_out.data() + (n_embd*i), (n_embd*batch.seq_id[i][0])*sizeof(float), n_embd*sizeof(float));
-                        break;
-                    case LLAMA_POOLING_TYPE_MEAN:
+                        {
+                            // find the token with the same seq_id and pos == 0 and use its embeddings
+                            int i_src = -1;
+                            for (int j = 0; j < (int) n_tokens; j++) {
+                                if (batch.seq_id[i][0] == batch.seq_id[j][0] && batch.pos[j] == 0) {
+                                    i_src = j;
+                                    break;
+                                }
+                            }
+
+                            GGML_ASSERT(i_src >= 0);
+
+                            ggml_backend_tensor_get_async(backend_embd, embd, embeddings_out.data() + (n_embd*i), (n_embd*i_src)*sizeof(float), n_embd*sizeof(float));
+                        } break;
                     case LLAMA_POOLING_TYPE_NONE:
-                        ggml_backend_tensor_get_async(backend_embd, embd, embeddings_out.data() + (n_embd*i), (n_embd*i)*sizeof(float), n_embd*sizeof(float));
-                        break;
+                    case LLAMA_POOLING_TYPE_MEAN:
+                        {
+                            ggml_backend_tensor_get_async(backend_embd, embd, embeddings_out.data() + (n_embd*i), (n_embd*i)*sizeof(float), n_embd*sizeof(float));
+                        } break;
                     default:
-                        GGML_ASSERT(false && "unknown pooling type");
-                        break;
+                        {
+                            GGML_ASSERT(false && "unknown pooling type");
+                        } break;
                 }
             }
         }
@@ -12279,7 +12284,7 @@ struct llama_context * llama_new_context_with_model(
         // graph inputs
         {
             ggml_init_params init_params = {
-                /* .mem_size   */ ggml_tensor_overhead()*8,
+                /* .mem_size   */ ggml_tensor_overhead()*7,
                 /* .mem_buffer */ nullptr,
                 /* .no_alloc   */ true,
             };
@@ -12292,7 +12297,6 @@ struct llama_context * llama_new_context_with_model(
             ctx->inp_KQ_pos  = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_ctx);
             ctx->inp_K_shift = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_ctx);
             ctx->inp_mean    = ggml_new_tensor_2d(ctx->ctx_input, GGML_TYPE_F32, cparams.n_batch, cparams.n_batch);
-            ctx->inp_cls     = ggml_new_tensor_1d(ctx->ctx_input, GGML_TYPE_I32, cparams.n_batch);
 
             ggml_set_name(ctx->inp_tokens,  "inp_tokens");
             ggml_set_name(ctx->inp_embd,    "inp_embd");
@@ -12301,7 +12305,6 @@ struct llama_context * llama_new_context_with_model(
             ggml_set_name(ctx->inp_KQ_pos,  "inp_KQ_pos");
             ggml_set_name(ctx->inp_K_shift, "inp_K_shift");
             ggml_set_name(ctx->inp_mean,    "inp_mean");
-            ggml_set_name(ctx->inp_cls,     "inp_cls");
 
             ctx->buf_input = ggml_backend_alloc_ctx_tensors_from_buft(ctx->ctx_input, llama_default_buffer_type_cpu(true));
             LLAMA_LOG_INFO("%s: %10s input buffer size   = %8.2f MiB\n", __func__,

@@ -2,7 +2,7 @@ import asyncio
 import requests
 import numpy as np
 
-n = 8
+n = 1
 
 result = []
 
@@ -14,6 +14,9 @@ async def main():
     responses: list[requests.Response] = await asyncio.gather(*[requests_post_async(
         url= f"{model_url}/embedding",
         json= {"content": str(0)*32}
+        #json= {"content": str(0)*1024}
+        #json= {"content": str(i)*32}
+        #json= {"content": str(i%2)*32}
     ) for i in range(n)])
 
     for response in responses:
