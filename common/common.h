@@ -43,7 +43,7 @@ extern char const *LLAMA_BUILD_TARGET;
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    uint32_t seed                 = -1;    // RNG seed
+    uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
     int32_t n_threads             = get_num_physical_cores();
     int32_t n_threads_draft       = -1;
@@ -53,11 +53,10 @@ struct gpt_params {
     int32_t n_ctx                 = 512;   // context size
     int32_t n_batch               = 512;   // batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                = 0;     // number of tokens to keep from initial prompt
-    int32_t n_draft               = 8;     // number of tokens to draft during speculative decoding
+    int32_t n_draft               = 5;     // number of tokens to draft during speculative decoding
     int32_t n_chunks              = -1;    // max number of chunks to process (-1 = unlimited)
     int32_t n_parallel            = 1;     // number of parallel sequences to decode
     int32_t n_sequences           = 1;     // number of sequences to decode
-    float   p_accept              = 0.5f;  // speculative decoding accept probability
     float   p_split               = 0.1f;  // speculative decoding split probability
     int32_t n_gpu_layers          = -1;    // number of layers to store in VRAM (-1 - use default)
     int32_t n_gpu_layers_draft    = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
