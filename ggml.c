@@ -323,11 +323,12 @@ float ggml_table_f32_f16[1 << 16];
 const char * ggml_status_to_string(enum ggml_status status) {
     switch (status) {
         case GGML_STATUS_ALLOC_FAILED: return "GGML status: error (failed to allocate memory)";
-        case GGML_STATUS_FAILED: return "GGML status: error (operation failed)";
-        case GGML_STATUS_SUCCESS: return "GGML status: success";
-        case GGML_STATUS_ABORTED: return "GGML status: warning (operation aborted)";
-        default: GGML_ASSERT(false);
+        case GGML_STATUS_FAILED:       return "GGML status: error (operation failed)";
+        case GGML_STATUS_SUCCESS:      return "GGML status: success";
+        case GGML_STATUS_ABORTED:      return "GGML status: warning (operation aborted)";
     }
+
+    return "GGML status: unknown";
 }
 
 // note: do not use these inside ggml.c
