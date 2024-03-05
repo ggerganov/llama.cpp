@@ -1,13 +1,9 @@
-#include "common.h"
-#include "llama.h"
-#include "grammar-parser.h"
 #include "utils.hpp"
 #include "oai.hpp"
 
-#include "../llava/clip.h"
-#include "../llava/llava.h"
-
-#include "stb_image.h"
+#include "common.h"
+#include "llama.h"
+#include "grammar-parser.h"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -32,19 +28,6 @@
 #include <signal.h>
 
 using json = nlohmann::json;
-
-struct server_params {
-    std::string hostname = "127.0.0.1";
-    std::vector<std::string> api_keys;
-    std::string public_path = "examples/server/public";
-    std::string chat_template = "";
-    int32_t port = 8080;
-    int32_t read_timeout = 600;
-    int32_t write_timeout = 600;
-    bool slots_endpoint = true;
-    bool metrics_endpoint = false;
-    int n_threads_http = -1;
-};
 
 bool server_verbose = false;
 bool server_log_json = true;
@@ -80,16 +63,20 @@ struct slot_params {
     json input_suffix;
 };
 
-struct slot_image {
-    int32_t id;
+struct server_params {
+    int32_t port           = 8080;
+    int32_t read_timeout   = 600;
+    int32_t write_timeout  = 600;
+    int32_t n_threads_http = -1;
 
-    bool request_encode_image = false;
-    float * image_embedding = nullptr;
-    int32_t image_tokens = 0;
+    std::string hostname      = "127.0.0.1";
+    std::string public_path   = "examples/server/public";
+    std::string chat_template = "";
 
-    clip_image_u8 * img_data;
+    std::vector<std::string> api_keys;
 
-    std::string prefix_prompt; // before of this image
+    bool slots_endpoint   = true;
+    bool metrics_endpoint = false;
 };
 
 struct server_slot {
@@ -121,31 +108,28 @@ struct server_slot {
     std::vector<llama_token> cache_tokens;
     std::vector<completion_token_output> generated_token_probs;
 
-    bool infill = false;
-    bool embedding = false;
+    bool infill         = false;
+    bool embedding      = false;
     bool has_next_token = true;
-    bool truncated = false;
-    bool stopped_eos = false;
-    bool stopped_word = false;
-    bool stopped_limit = false;
+    bool truncated      = false;
+    bool stopped_eos    = false;
+    bool stopped_word   = false;
+    bool stopped_limit  = false;
 
     bool oaicompat = false;
-    std::string oaicompat_model;
 
+    std::string oaicompat_model;
     std::string stopping_word;
 
     // sampling
     struct llama_sampling_params sparams;
-    llama_sampling_context *ctx_sampling = nullptr;
+    llama_sampling_context * ctx_sampling = nullptr;
 
     int32_t ga_i = 0;   // group-attention state
     int32_t ga_n = 1;   // group-attention factor
     int32_t ga_w = 512; // group-attention width
 
     int32_t n_past_se = 0; // self-extend
-
-    // multimodal
-    std::vector<slot_image> images;
 
     // stats
     size_t n_sent_text = 0; // number of sent text character
@@ -176,16 +160,6 @@ struct server_slot {
         n_past_se              = 0;
 
         generated_token_probs.clear();
-
-        for (slot_image & img : images) {
-            free(img.image_embedding);
-            if (img.img_data) {
-                clip_image_u8_free(img.img_data);
-            }
-            img.prefix_prompt = "";
-        }
-
-        images.clear();
     }
 
     bool has_budget(gpt_params &global_params) {
@@ -221,16 +195,14 @@ struct server_slot {
     }
 
     void release() {
-        if (state == PROCESSING)
-        {
+        if (state == PROCESSING) {
             t_token_generation = (ggml_time_us() - t_start_genereration) / 1e3;
             command = RELEASE;
         }
     }
 
     json get_formated_timings() {
-        return json
-        {
+        return json {
             {"prompt_n",               n_prompt_tokens_processed},
             {"prompt_ms",              t_prompt_processing},
             {"prompt_per_token_ms",    t_prompt_processing / n_prompt_tokens_processed},
@@ -244,12 +216,15 @@ struct server_slot {
     }
 
     void print_timings() const {
-       char buffer[512];
+        char buffer[512];
+
         double t_token = t_prompt_processing / n_prompt_tokens_processed;
         double n_tokens_second = 1e3 / t_prompt_processing * n_prompt_tokens_processed;
-        sprintf(buffer, "prompt eval time     = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)",
+
+        snprintf(buffer, 512, "prompt eval time     = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)",
                 t_prompt_processing, n_prompt_tokens_processed,
                 t_token, n_tokens_second);
+
         LOG_INFO(buffer, {
             {"slot_id",                   id},
             {"task_id",                   task_id},
@@ -261,9 +236,11 @@ struct server_slot {
 
         t_token = t_token_generation / n_decoded;
         n_tokens_second = 1e3 / t_token_generation * n_decoded;
-        sprintf(buffer, "generation eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)",
+
+        snprintf(buffer, 512, "generation eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)",
                 t_token_generation, n_decoded,
                 t_token, n_tokens_second);
+
         LOG_INFO(buffer, {
             {"slot_id",            id},
             {"task_id",            task_id},
@@ -273,7 +250,8 @@ struct server_slot {
             {"n_tokens_second",    n_tokens_second},
         });
 
-        sprintf(buffer, "          total time = %10.2f ms", t_prompt_processing + t_token_generation);
+        snprintf(buffer, 512, "          total time = %10.2f ms", t_prompt_processing + t_token_generation);
+
         LOG_INFO(buffer, {
             {"slot_id",             id},
             {"task_id",             task_id},
@@ -315,18 +293,14 @@ struct server_metrics {
     }
 };
 
-struct llama_server_context
-{
-    llama_model *model = nullptr;
-    llama_context *ctx = nullptr;
-
-    clip_ctx *clp_ctx = nullptr;
+struct llama_server_context {
+    llama_model * model = nullptr;
+    llama_context * ctx = nullptr;
 
     gpt_params params;
 
     llama_batch batch;
 
-    bool multimodal         = false;
     bool clean_kv_cache     = true;
     bool all_slots_are_idle = false;
     bool add_bos_token      = true;
@@ -351,53 +325,26 @@ struct llama_server_context
 
     server_metrics metrics;
 
-    ~llama_server_context()
-    {
-        if (ctx)
-        {
+    ~llama_server_context() {
+        if (ctx) {
             llama_free(ctx);
             ctx = nullptr;
         }
-        if (model)
-        {
+
+        if (model) {
             llama_free_model(model);
             model = nullptr;
         }
     }
 
-    bool load_model(const gpt_params &params_)
-    {
+    bool load_model(const gpt_params & params_) {
         params = params_;
-        if (!params.mmproj.empty()) {
-            multimodal = true;
-            LOG_INFO("Multi Modal Mode Enabled", {});
-            clp_ctx = clip_model_load(params.mmproj.c_str(), /*verbosity=*/ 1);
-            if(clp_ctx == nullptr) {
-                LOG_ERROR("unable to load clip model", {{"model", params.mmproj}});
-                return false;
-            }
-
-            if (params.n_ctx < 2048) { // request larger context for the image embedding
-                params.n_ctx = 2048;
-            }
-        }
 
         std::tie(model, ctx) = llama_init_from_gpt_params(params);
         if (model == nullptr)
         {
             LOG_ERROR("unable to load model", {{"model", params.model}});
             return false;
-        }
-
-        if (multimodal) {
-            const int n_embd_clip = clip_n_mmproj_embd(clp_ctx);
-            const int n_embd_llm  = llama_n_embd(model);
-            if (n_embd_clip != n_embd_llm) {
-                LOG_TEE("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_embd_clip, n_embd_llm);
-                llama_free(ctx);
-                llama_free_model(model);
-                return false;
-            }
         }
 
         n_ctx = llama_n_ctx(ctx);
@@ -518,19 +465,16 @@ struct llama_server_context
         return prompt_tokens;
     }
 
-    server_slot* get_slot(int id) {
+    server_slot * get_slot(int id) {
         int64_t t_last = ggml_time_us();
-        server_slot *last_used = nullptr;
+        server_slot * last_used = nullptr;
 
-        for (server_slot & slot : slots)
-        {
-            if (slot.id == id && slot.available())
-            {
+        for (server_slot & slot : slots) {
+            if (slot.id == id && slot.available()) {
                 return &slot;
             }
 
-            if (slot.available() && slot.t_last_used < t_last)
-            {
+            if (slot.available() && slot.t_last_used < t_last) {
                 last_used = &slot;
                 t_last = slot.t_last_used;
             }
@@ -539,82 +483,82 @@ struct llama_server_context
         return last_used;
     }
 
-    bool launch_slot_with_data(server_slot* &slot, json data) {
+    bool launch_slot_with_data(server_slot & slot, json data) {
         slot_params default_params;
         llama_sampling_params default_sparams;
 
         if (data.count("__oaicompat") != 0) {
-            slot->oaicompat = true;
-            slot->oaicompat_model = json_value(data, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
+            slot.oaicompat = true;
+            slot.oaicompat_model = json_value(data, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
         } else {
-            slot->oaicompat = false;
-            slot->oaicompat_model = "";
+            slot.oaicompat = false;
+            slot.oaicompat_model = "";
         }
 
-        slot->params.stream             = json_value(data, "stream",            false);
-        slot->params.cache_prompt       = json_value(data, "cache_prompt",      false);
-        slot->params.n_predict          = json_value(data, "n_predict",         default_params.n_predict);
-        slot->sparams.top_k             = json_value(data, "top_k",             default_sparams.top_k);
-        slot->sparams.top_p             = json_value(data, "top_p",             default_sparams.top_p);
-        slot->sparams.min_p             = json_value(data, "min_p",             default_sparams.min_p);
-        slot->sparams.tfs_z             = json_value(data, "tfs_z",             default_sparams.tfs_z);
-        slot->sparams.typical_p         = json_value(data, "typical_p",         default_sparams.typical_p);
-        slot->sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
-        slot->sparams.dynatemp_range    = json_value(data, "dynatemp_range",    default_sparams.dynatemp_range);
-        slot->sparams.dynatemp_exponent = json_value(data, "dynatemp_exponent", default_sparams.dynatemp_exponent);
-        slot->sparams.penalty_last_n    = json_value(data, "repeat_last_n",     default_sparams.penalty_last_n);
-        slot->sparams.penalty_repeat    = json_value(data, "repeat_penalty",    default_sparams.penalty_repeat);
-        slot->sparams.penalty_freq      = json_value(data, "frequency_penalty", default_sparams.penalty_freq);
-        slot->sparams.penalty_present   = json_value(data, "presence_penalty",  default_sparams.penalty_present);
-        slot->sparams.mirostat          = json_value(data, "mirostat",          default_sparams.mirostat);
-        slot->sparams.mirostat_tau      = json_value(data, "mirostat_tau",      default_sparams.mirostat_tau);
-        slot->sparams.mirostat_eta      = json_value(data, "mirostat_eta",      default_sparams.mirostat_eta);
-        slot->sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
-        slot->params.n_keep             = json_value(data, "n_keep",            slot->params.n_keep);
-        slot->params.seed               = json_value(data, "seed",              default_params.seed);
-        slot->sparams.grammar           = json_value(data, "grammar",           default_sparams.grammar);
-        slot->sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
-        slot->sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
+        slot.params.stream             = json_value(data, "stream",            false);
+        slot.params.cache_prompt       = json_value(data, "cache_prompt",      false);
+        slot.params.n_predict          = json_value(data, "n_predict",         default_params.n_predict);
+        slot.sparams.top_k             = json_value(data, "top_k",             default_sparams.top_k);
+        slot.sparams.top_p             = json_value(data, "top_p",             default_sparams.top_p);
+        slot.sparams.min_p             = json_value(data, "min_p",             default_sparams.min_p);
+        slot.sparams.tfs_z             = json_value(data, "tfs_z",             default_sparams.tfs_z);
+        slot.sparams.typical_p         = json_value(data, "typical_p",         default_sparams.typical_p);
+        slot.sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
+        slot.sparams.dynatemp_range    = json_value(data, "dynatemp_range",    default_sparams.dynatemp_range);
+        slot.sparams.dynatemp_exponent = json_value(data, "dynatemp_exponent", default_sparams.dynatemp_exponent);
+        slot.sparams.penalty_last_n    = json_value(data, "repeat_last_n",     default_sparams.penalty_last_n);
+        slot.sparams.penalty_repeat    = json_value(data, "repeat_penalty",    default_sparams.penalty_repeat);
+        slot.sparams.penalty_freq      = json_value(data, "frequency_penalty", default_sparams.penalty_freq);
+        slot.sparams.penalty_present   = json_value(data, "presence_penalty",  default_sparams.penalty_present);
+        slot.sparams.mirostat          = json_value(data, "mirostat",          default_sparams.mirostat);
+        slot.sparams.mirostat_tau      = json_value(data, "mirostat_tau",      default_sparams.mirostat_tau);
+        slot.sparams.mirostat_eta      = json_value(data, "mirostat_eta",      default_sparams.mirostat_eta);
+        slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
+        slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
+        slot.params.seed               = json_value(data, "seed",              default_params.seed);
+        slot.sparams.grammar           = json_value(data, "grammar",           default_sparams.grammar);
+        slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
+        slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
-        if (slot->n_predict > 0 && slot->params.n_predict > slot->n_predict) {
+        if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
             // Might be better to reject the request with a 400 ?
             LOG_WARNING("Max tokens to predict exceeds server configuration", {
-                {"params.n_predict", slot->params.n_predict},
-                {"slot.n_predict", slot->n_predict},
+                {"params.n_predict", slot.params.n_predict},
+                {"slot.n_predict", slot.n_predict},
             });
-            slot->params.n_predict = slot->n_predict;
+            slot.params.n_predict = slot.n_predict;
         }
 
         // infill
         if (data.count("input_prefix") != 0)
         {
-            slot->params.input_prefix = data["input_prefix"];
+            slot.params.input_prefix = data["input_prefix"];
         }
         else
         {
-            slot->params.input_prefix = "";
+            slot.params.input_prefix = "";
         }
 
         if (data.count("input_suffix") != 0)
         {
-            slot->params.input_suffix = data["input_suffix"];
+            slot.params.input_suffix = data["input_suffix"];
         }
         else
         {
-            slot->params.input_suffix = "";
+            slot.params.input_suffix = "";
         }
 
         if (data.count("prompt") != 0)
         {
-            slot->prompt = data["prompt"];
+            slot.prompt = data["prompt"];
         }
         else
         {
-            slot->prompt = "";
+            slot.prompt = "";
         }
 
-        slot->sparams.penalty_prompt_tokens.clear();
-        slot->sparams.use_penalty_prompt_tokens = false;
+        slot.sparams.penalty_prompt_tokens.clear();
+        slot.sparams.use_penalty_prompt_tokens = false;
         const auto &penalty_prompt = data.find("penalty_prompt");
         if (penalty_prompt != data.end())
         {
@@ -622,17 +566,17 @@ struct llama_server_context
             {
                 const auto penalty_prompt_string = penalty_prompt->get<std::string>();
                 auto penalty_tokens = llama_tokenize(model, penalty_prompt_string, false);
-                slot->sparams.penalty_prompt_tokens.swap(penalty_tokens);
-                if (slot->params.n_predict > 0)
+                slot.sparams.penalty_prompt_tokens.swap(penalty_tokens);
+                if (slot.params.n_predict > 0)
                 {
-                    slot->sparams.penalty_prompt_tokens.reserve(slot->sparams.penalty_prompt_tokens.size() + slot->params.n_predict);
+                    slot.sparams.penalty_prompt_tokens.reserve(slot.sparams.penalty_prompt_tokens.size() + slot.params.n_predict);
                 }
-                slot->sparams.use_penalty_prompt_tokens = true;
+                slot.sparams.use_penalty_prompt_tokens = true;
             }
             else if (penalty_prompt->is_array())
             {
                 const auto n_tokens = penalty_prompt->size();
-                slot->sparams.penalty_prompt_tokens.reserve(n_tokens + std::max(0, slot->params.n_predict));
+                slot.sparams.penalty_prompt_tokens.reserve(n_tokens + std::max(0, slot.params.n_predict));
                 const int n_vocab = llama_n_vocab(model);
                 for (const auto &penalty_token : *penalty_prompt)
                 {
@@ -641,22 +585,22 @@ struct llama_server_context
                         const auto tok = penalty_token.get<llama_token>();
                         if (tok >= 0 && tok < n_vocab)
                         {
-                            slot->sparams.penalty_prompt_tokens.push_back(tok);
+                            slot.sparams.penalty_prompt_tokens.push_back(tok);
                         }
                     }
                 }
-                slot->sparams.use_penalty_prompt_tokens = true;
+                slot.sparams.use_penalty_prompt_tokens = true;
             }
         }
 
-        slot->sparams.logit_bias.clear();
+        slot.sparams.logit_bias.clear();
 
         if (json_value(data, "ignore_eos", false))
         {
-            slot->sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
+            slot.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
         }
 
-        const auto &logit_bias = data.find("logit_bias");
+        const auto & logit_bias = data.find("logit_bias");
         if (logit_bias != data.end() && logit_bias->is_array())
         {
             const int n_vocab = llama_n_vocab(model);
@@ -683,7 +627,7 @@ struct llama_server_context
                         llama_token tok = el[0].get<llama_token>();
                         if (tok >= 0 && tok < n_vocab)
                         {
-                            slot->sparams.logit_bias[tok] = bias;
+                            slot.sparams.logit_bias[tok] = bias;
                         }
                     }
                     else if (el[0].is_string())
@@ -691,14 +635,14 @@ struct llama_server_context
                         auto toks = llama_tokenize(model, el[0].get<std::string>(), false);
                         for (auto tok : toks)
                         {
-                            slot->sparams.logit_bias[tok] = bias;
+                            slot.sparams.logit_bias[tok] = bias;
                         }
                     }
                 }
             }
         }
 
-        slot->params.antiprompt.clear();
+        slot.params.antiprompt.clear();
 
         const auto &stop = data.find("stop");
         if (stop != data.end() && stop->is_array())
@@ -707,7 +651,7 @@ struct llama_server_context
             {
                 if (!word.empty())
                 {
-                    slot->params.antiprompt.push_back(word);
+                    slot.params.antiprompt.push_back(word);
                 }
             }
         }
@@ -723,99 +667,26 @@ struct llama_server_context
                     sampler_names.emplace_back(sampler_name);
                 }
             }
-            slot->sparams.samplers_sequence = sampler_types_from_names(sampler_names, false);
+            slot.sparams.samplers_sequence = sampler_types_from_names(sampler_names, false);
         }
         else
         {
-            slot->sparams.samplers_sequence = default_sparams.samplers_sequence;
+            slot.sparams.samplers_sequence = default_sparams.samplers_sequence;
         }
 
-        if (multimodal)
+        if (slot.ctx_sampling != nullptr)
         {
-            const auto &images_data = data.find("image_data");
-            if (images_data != data.end() && images_data->is_array())
-            {
-                for (const auto &img : *images_data)
-                {
-                    const std::vector<uint8_t> image_buffer = base64_decode(img["data"].get<std::string>());
-
-                    slot_image img_sl;
-                    img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : slot->images.size();
-                    img_sl.img_data = clip_image_u8_init();
-                    if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
-                    {
-                        LOG_ERROR("failed to load image", {
-                            {"slot_id",   slot->id},
-                            {"img_sl_id", img_sl.id}
-                        });
-                        return false;
-                    }
-                    LOG_VERBOSE("image loaded", {
-                        {"slot_id",   slot->id},
-                        {"img_sl_id", img_sl.id}
-                    });
-                    img_sl.request_encode_image = true;
-                    slot->images.push_back(img_sl);
-                }
-                // process prompt
-                // example: system prompt [img-102] user [img-103] describe [img-134] -> [{id: 102, prefix: 'system prompt '}, {id: 103, prefix: ' user '}, {id: 134, prefix: ' describe '}]}
-                if (slot->images.size() > 0 && !slot->prompt.is_array())
-                {
-                    std::string prompt = slot->prompt.get<std::string>();
-                    size_t pos = 0, begin_prefix = 0;
-                    std::string pattern = "[img-";
-                    while ((pos = prompt.find(pattern, pos)) != std::string::npos) {
-                        size_t end_prefix = pos;
-                        pos += pattern.length();
-                        size_t end_pos = prompt.find(']', pos);
-                        if (end_pos != std::string::npos)
-                        {
-                            std::string image_id = prompt.substr(pos, end_pos - pos);
-                            try
-                            {
-                                int img_id = std::stoi(image_id);
-                                bool found = false;
-                                for (slot_image &img : slot->images)
-                                {
-                                    if (img.id == img_id) {
-                                        found = true;
-                                        img.prefix_prompt = prompt.substr(begin_prefix, end_prefix - begin_prefix);
-                                        begin_prefix = end_pos + 1;
-                                        break;
-                                    }
-                                }
-                                if (!found) {
-                                    LOG_TEE("ERROR: Image with id: %i, not found.\n", img_id);
-                                    slot->images.clear();
-                                    return false;
-                                }
-                            } catch (const std::invalid_argument& e) {
-                                LOG_TEE("Invalid image number id in prompt\n");
-                                slot->images.clear();
-                                return false;
-                            }
-                        }
-                    }
-                    slot->prompt = "";
-                    slot->params.input_suffix = prompt.substr(begin_prefix);
-                    slot->params.cache_prompt = false; // multimodal doesn't support cache prompt
-                }
-            }
+            llama_sampling_free(slot.ctx_sampling);
         }
-
-        if (slot->ctx_sampling != nullptr)
-        {
-            llama_sampling_free(slot->ctx_sampling);
-        }
-        slot->ctx_sampling = llama_sampling_init(slot->sparams);
-        llama_set_rng_seed(ctx, slot->params.seed);
-        slot->command = LOAD_PROMPT;
+        slot.ctx_sampling = llama_sampling_init(slot.sparams);
+        llama_set_rng_seed(ctx, slot.params.seed);
+        slot.command = LOAD_PROMPT;
 
         all_slots_are_idle = false;
 
         LOG_INFO("slot is processing task", {
-            {"slot_id", slot->id},
-            {"task_id", slot->task_id},
+            {"slot_id", slot.id},
+            {"task_id", slot.task_id},
         });
 
         return true;
@@ -1038,27 +909,6 @@ struct llama_server_context
         return slot.has_next_token; // continue
     }
 
-    bool process_images(server_slot &slot) const
-    {
-        for (slot_image &img : slot.images)
-        {
-            if (!img.request_encode_image)
-            {
-                continue;
-            }
-
-            if (!llava_image_embed_make_with_clip_img(clp_ctx, params.n_threads, img.img_data, &img.image_embedding, &img.image_tokens)) {
-                LOG_TEE("Error processing the given image");
-                return false;
-            }
-
-
-            img.request_encode_image = false;
-        }
-
-        return slot.images.size() > 0;
-    }
-
     void send_error(task_server& task, const std::string &error)
     {
         LOG_TEE("task %i - error: %s\n", task.id, error.c_str());
@@ -1074,47 +924,46 @@ struct llama_server_context
     json get_formated_generation(server_slot &slot)
     {
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
-        const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() &&
-                                eos_bias->second < 0.0f && std::isinf(eos_bias->second);
+        const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() && eos_bias->second < 0.0f && std::isinf(eos_bias->second);
+
         std::vector<std::string> samplers_sequence;
-        for (const auto &sampler_type : slot.sparams.samplers_sequence)
-        {
+        for (const auto & sampler_type : slot.sparams.samplers_sequence) {
             samplers_sequence.emplace_back(sampler_type_to_name_string(sampler_type));
         }
 
         return json {
-            {"n_ctx",             slot.n_ctx},
-            {"n_predict",         slot.n_predict},
-            {"model",             params.model_alias},
-            {"seed",              slot.params.seed},
-            {"temperature",       slot.sparams.temp},
-            {"dynatemp_range",    slot.sparams.dynatemp_range},
-            {"dynatemp_exponent", slot.sparams.dynatemp_exponent},
-            {"top_k",             slot.sparams.top_k},
-            {"top_p",             slot.sparams.top_p},
-            {"min_p",             slot.sparams.min_p},
-            {"tfs_z",             slot.sparams.tfs_z},
-            {"typical_p",         slot.sparams.typical_p},
-            {"repeat_last_n",     slot.sparams.penalty_last_n},
-            {"repeat_penalty",    slot.sparams.penalty_repeat},
-            {"presence_penalty",  slot.sparams.penalty_present},
-            {"frequency_penalty", slot.sparams.penalty_freq},
-            {"penalty_prompt_tokens", slot.sparams.penalty_prompt_tokens},
+            {"n_ctx",                     slot.n_ctx},
+            {"n_predict",                 slot.n_predict},
+            {"model",                     params.model_alias},
+            {"seed",                      slot.params.seed},
+            {"temperature",               slot.sparams.temp},
+            {"dynatemp_range",            slot.sparams.dynatemp_range},
+            {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
+            {"top_k",                     slot.sparams.top_k},
+            {"top_p",                     slot.sparams.top_p},
+            {"min_p",                     slot.sparams.min_p},
+            {"tfs_z",                     slot.sparams.tfs_z},
+            {"typical_p",                 slot.sparams.typical_p},
+            {"repeat_last_n",             slot.sparams.penalty_last_n},
+            {"repeat_penalty",            slot.sparams.penalty_repeat},
+            {"presence_penalty",          slot.sparams.penalty_present},
+            {"frequency_penalty",         slot.sparams.penalty_freq},
+            {"penalty_prompt_tokens",     slot.sparams.penalty_prompt_tokens},
             {"use_penalty_prompt_tokens", slot.sparams.use_penalty_prompt_tokens},
-            {"mirostat",          slot.sparams.mirostat},
-            {"mirostat_tau",      slot.sparams.mirostat_tau},
-            {"mirostat_eta",      slot.sparams.mirostat_eta},
-            {"penalize_nl",       slot.sparams.penalize_nl},
-            {"stop",              slot.params.antiprompt},
-            {"n_predict",         slot.params.n_predict},
-            {"n_keep",            params.n_keep},
-            {"ignore_eos",        ignore_eos},
-            {"stream",            slot.params.stream},
-            {"logit_bias",        slot.sparams.logit_bias},
-            {"n_probs",           slot.sparams.n_probs},
-            {"min_keep",          slot.sparams.min_keep},
-            {"grammar",           slot.sparams.grammar},
-            {"samplers",          samplers_sequence}
+            {"mirostat",                  slot.sparams.mirostat},
+            {"mirostat_tau",              slot.sparams.mirostat_tau},
+            {"mirostat_eta",              slot.sparams.mirostat_eta},
+            {"penalize_nl",               slot.sparams.penalize_nl},
+            {"stop",                      slot.params.antiprompt},
+            {"n_predict",                 slot.params.n_predict},
+            {"n_keep",                    params.n_keep},
+            {"ignore_eos",                ignore_eos},
+            {"stream",                    slot.params.stream},
+            {"logit_bias",                slot.sparams.logit_bias},
+            {"n_probs",                   slot.sparams.n_probs},
+            {"min_keep",                  slot.sparams.min_keep},
+            {"grammar",                   slot.sparams.grammar},
+            {"samplers",                  samplers_sequence}
         };
     }
 
@@ -1131,7 +980,7 @@ struct llama_server_context
             {"content",    tkn.text_to_send},
             {"stop",       false},
             {"slot_id",    slot.id},
-            {"multimodal", multimodal}
+            {"multimodal", false}
         };
 
         if (slot.sparams.n_probs > 0)
@@ -1299,84 +1148,6 @@ struct llama_server_context
         }
     }
 
-    // for multiple images processing
-    bool ingest_images(server_slot &slot, int n_batch)
-    {
-        int image_idx = 0;
-
-        while (image_idx < (int) slot.images.size())
-        {
-            slot_image &img = slot.images[image_idx];
-
-            // process prefix prompt
-            for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch)
-            {
-                const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
-                llama_batch batch_view = {
-                    n_tokens,
-                    batch.token    + i,
-                    nullptr,
-                    batch.pos      + i,
-                    batch.n_seq_id + i,
-                    batch.seq_id   + i,
-                    batch.logits   + i,
-                    0, 0, 0, // unused
-                };
-                if (llama_decode(ctx, batch_view))
-                {
-                    LOG_TEE("%s : failed to eval\n", __func__);
-                    return false;
-                }
-            }
-
-            // process image with llm
-            for (int i = 0; i < img.image_tokens; i += n_batch)
-            {
-                int n_eval = img.image_tokens - i;
-                if (n_eval > n_batch)
-                {
-                    n_eval = n_batch;
-                }
-
-                const int n_embd = llama_n_embd(model);
-                llama_batch batch_img = {
-                    n_eval,
-                    nullptr,
-                    (img.image_embedding + i * n_embd),
-                    nullptr,
-                    nullptr,
-                    nullptr,
-                    nullptr,
-                    slot.n_past,
-                    1, 0
-                };
-                if (llama_decode(ctx, batch_img))
-                {
-                    LOG_TEE("%s : failed to eval image\n", __func__);
-                    return false;
-                }
-                slot.n_past += n_eval;
-            }
-            image_idx++;
-
-            llama_batch_clear(batch);
-
-            // append prefix of next image
-            const auto json_prompt = (image_idx >= (int) slot.images.size()) ?
-                slot.params.input_suffix : // no more images, then process suffix prompt
-                (json)(slot.images[image_idx].prefix_prompt);
-
-            std::vector<llama_token> append_tokens = tokenize(json_prompt, false); // has next image
-            for (int i = 0; i < (int) append_tokens.size(); ++i)
-            {
-                llama_batch_add(batch, append_tokens[i], system_tokens.size() + slot.n_past, { slot.id }, true);
-                slot.n_past += 1;
-            }
-        }
-
-        return true;
-    }
-
     void request_cancel(int task_id)
     {
         task_server task;
@@ -1419,7 +1190,7 @@ struct llama_server_context
         switch (task.type)
         {
             case TASK_TYPE_COMPLETION: {
-                server_slot *slot = get_slot(json_value(task.data, "slot_id", -1));
+                server_slot * slot = get_slot(json_value(task.data, "slot_id", -1));
                 if (slot == nullptr)
                 {
                     // if no slot is available, we defer this task for processing later
@@ -1437,7 +1208,7 @@ struct llama_server_context
                     system_prompt_process(task.data["system_prompt"]);
 
                     // reset cache_tokens for all slots
-                    for (server_slot &slot : slots)
+                    for (server_slot & slot : slots)
                     {
                         slot.cache_tokens.clear();
                         slot.n_past    = 0;
@@ -1452,7 +1223,7 @@ struct llama_server_context
                 slot->task_id      = task.id;
                 slot->multitask_id = task.multitask_id;
 
-                if (!launch_slot_with_data(slot, task.data))
+                if (!launch_slot_with_data(*slot, task.data))
                 {
                     // send error result
                     send_error(task, "internal_error");
@@ -1583,7 +1354,7 @@ struct llama_server_context
         task.target_id = -1;
         queue_tasks.post(task);
 
-        for (server_slot &slot : slots)
+        for (server_slot & slot : slots)
         {
             if (slot.ga_n == 1)
             {
@@ -1670,7 +1441,7 @@ struct llama_server_context
         {
             for (auto & slot : slots)
             {
-                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty()) || !slot.images.empty();
+                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty());
 
                 // empty prompt passed -> release the slot and send empty response
                 // note: infill mode allows empty prompt
@@ -1737,6 +1508,7 @@ struct llama_server_context
                         std::vector<llama_token> new_tokens(
                             prompt_tokens.begin(),
                             prompt_tokens.begin() + slot.params.n_keep);
+
                         new_tokens.insert(
                             new_tokens.end(),
                             prompt_tokens.begin() + slot.params.n_keep + erased_blocks * n_block_size,
@@ -1762,12 +1534,13 @@ struct llama_server_context
                         slot.n_past    = 0;
                         slot.n_past_se = 0;
                         slot.ga_i      = 0;
+
                         slot.n_prompt_tokens_processed = slot.n_prompt_tokens;
                     }
                     else
                     {
                         // push the prompt into the sampling context (do not apply grammar)
-                        for (auto &token : prompt_tokens)
+                        for (auto & token : prompt_tokens)
                         {
                             llama_sampling_accept(slot.ctx_sampling, ctx, token, false);
                         }
@@ -1803,11 +1576,11 @@ struct llama_server_context
                         }
 
                         LOG_INFO("slot progression", {
-                            { "slot_id",    slot.id },
-                            { "task_id",    slot.task_id },
-                            { "n_past",     slot.n_past },
-                            { "n_past_se",  slot.n_past_se },
-                            { "ga_i",       slot.ga_i },
+                            { "slot_id",                   slot.id },
+                            { "task_id",                   slot.task_id },
+                            { "n_past",                    slot.n_past },
+                            { "n_past_se",                 slot.n_past_se },
+                            { "ga_i",                      slot.ga_i },
                             { "n_prompt_tokens_processed", slot.n_prompt_tokens_processed }
                         });
                     }
@@ -1828,24 +1601,22 @@ struct llama_server_context
                         }
                     }
 
-                    int p0 = (int) system_tokens.size() + slot.n_past;
+                    const int p0 = (int) system_tokens.size() + slot.n_past;
+                    llama_kv_cache_seq_rm(ctx, slot.id, p0, -1);
+
                     LOG_INFO("kv cache rm [p0, end)", {
                         { "slot_id", slot.id },
                         { "task_id", slot.task_id },
                         { "p0",      p0 }
                     });
-                    llama_kv_cache_seq_rm(ctx, slot.id, p0, -1);
 
                     LOG_VERBOSE("prompt ingested", {
-                                                    {"n_past",  slot.n_past},
-                                                    {"cached",  tokens_to_str(ctx, slot.cache_tokens.cbegin(), slot.cache_tokens.cbegin() + slot.n_past)},
-                                                    {"to_eval", tokens_to_str(ctx, slot.cache_tokens.cbegin() + slot.n_past, slot.cache_tokens.cend())},
-                                                });
+                        {"n_past",  slot.n_past},
+                        {"cached",  tokens_to_str(ctx, slot.cache_tokens.cbegin(), slot.cache_tokens.cbegin() + slot.n_past)},
+                        {"to_eval", tokens_to_str(ctx, slot.cache_tokens.cbegin() + slot.n_past, slot.cache_tokens.cend())},
+                    });
 
-                    const bool has_images = process_images(slot);
-
-                    // process the prefix of first image
-                    std::vector<llama_token> prefix_tokens = has_images ? tokenize(slot.images[0].prefix_prompt, add_bos_token) : prompt_tokens;
+                    std::vector<llama_token> prefix_tokens = prompt_tokens;
 
                     int32_t slot_npast = slot.n_past_se > 0 ? slot.n_past_se : slot.n_past;
 
@@ -1865,18 +1636,6 @@ struct llama_server_context
                         }
                         llama_batch_add(batch, prefix_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id }, false);
                         slot_npast++;
-                    }
-
-                    if (has_images && !ingest_images(slot, n_batch))
-                    {
-                        LOG_ERROR("failed processing images", {
-                            {"slot_id", slot.id},
-                            {"task_id", slot.task_id},
-                        });
-                        // FIXME @phymbert: to be properly tested
-                        //  early returning without changing the slot state will block the slot for ever
-                        // no one at the moment is checking the return value
-                        return false;
                     }
 
                     // extract the logits only for the last token
@@ -1918,8 +1677,8 @@ struct llama_server_context
                         LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
 
                         llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i, slot.n_past_se, ib * bd);
-                        llama_kv_cache_seq_div(ctx, slot.id, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w,slot.ga_n);
-                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i + ib * bd + slot.ga_w,slot.n_past_se + ib * bd, dd);
+                        llama_kv_cache_seq_div(ctx, slot.id, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n);
+                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd);
 
                         slot.n_past_se -= bd;
 
@@ -1964,7 +1723,7 @@ struct llama_server_context
 
             for (auto & slot : slots)
             {
-                if (slot.i_batch < (int) i || slot.i_batch >= (int) (i + n_tokens))
+                if (slot.state != PROCESSING || slot.i_batch < (int) i || slot.i_batch >= (int) (i + n_tokens))
                 {
                     continue;
                 }
@@ -2023,13 +1782,13 @@ struct llama_server_context
     }
 
     json model_meta() {
-        return json{
-                {"vocab_type", llama_vocab_type(model)},
-                {"n_vocab", llama_n_vocab(model)},
-                {"n_ctx_train", llama_n_ctx_train(model)},
-                {"n_embd", llama_n_embd(model)},
-                {"n_params", llama_model_n_params(model)},
-                {"size", llama_model_size(model)},
+        return json {
+            {"vocab_type",  llama_vocab_type(model)},
+            {"n_vocab",     llama_n_vocab(model)},
+            {"n_ctx_train", llama_n_ctx_train(model)},
+            {"n_embd",      llama_n_embd(model)},
+            {"n_params",    llama_model_n_params(model)},
+            {"size",        llama_model_size(model)},
         };
     }
 };
@@ -2105,7 +1864,6 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                            KV cache data type for K (default: f16)\n");
     printf("  -ctv TYPE, --cache-type-v TYPE\n");
     printf("                            KV cache data type for V (default: f16)\n");
-    printf("  --mmproj MMPROJ_FILE      path to a multimodal projector file for LLaVA.\n");
     printf("  --log-format              log output format: json or text (default: json)\n");
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
@@ -2563,15 +2321,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         else if (arg == "-ctv" || arg == "--cache-type-v") {
             params.cache_type_v = argv[++i];
         }
-        else if(arg == "--mmproj")
-        {
-            if (++i >= argc)
-            {
-                invalid_param = true;
-                break;
-            }
-            params.mmproj = argv[i];
-        }
         else if (arg == "--log-format")
         {
             if (++i >= argc)
@@ -2690,10 +2439,10 @@ static json format_partial_response(
 ) {
     json res = json
     {
-        {"content",    content },
+        {"content",    content},
         {"stop",       false},
-        {"slot_id",    slot->id },
-        {"multimodal", llama.multimodal }
+        {"slot_id",    slot->id},
+        {"multimodal", false},
     };
 
     if (slot->sparams.n_probs > 0)
@@ -2929,11 +2678,11 @@ int main(int argc, char **argv)
                             {"name",  "predicted_tokens_seconds"},
                             {"help",  "Average generation throughput in tokens/s."},
                             {"value",  n_tokens_predicted ? 1e3 / t_tokens_generation * n_tokens_predicted : 0}
-                     },{
+                    },{
                             {"name",  "kv_cache_usage_ratio"},
                             {"help",  "KV-cache usage. 1 means 100 percent usage."},
                             {"value",  1. * kv_cache_used_cells / params.n_ctx}
-                     },{
+                    },{
                             {"name",  "kv_cache_tokens"},
                             {"help",  "KV-cache tokens."},
                             {"value",  data["kv_cache_tokens_count"]}
@@ -2941,11 +2690,11 @@ int main(int argc, char **argv)
                             {"name",  "requests_processing"},
                             {"help",  "Number of request processing."},
                             {"value",  data["processing"]}
-                  },{
+                    },{
                             {"name",  "requests_deferred"},
                             {"help",  "Number of request deferred."},
                             {"value",  data["deferred"]}
-                  }}}
+                    }}}
             };
 
             std::stringstream prometheus;
@@ -3405,19 +3154,10 @@ int main(int argc, char **argv)
                     prompt = "";
                 }
 
-                json image_data;
-                if (body.count("image_data") != 0) {
-                    image_data = body["image_data"];
-                }
-                else
-                {
-                    image_data = "";
-                }
-
                 // create and queue the task
                 const int task_id = llama.queue_tasks.get_new_id();
                 llama.queue_results.add_waiting_task_id(task_id);
-                llama.request_completion(task_id, { {"prompt", prompt}, { "n_predict", 0}, {"image_data", image_data} }, false, true, -1);
+                llama.request_completion(task_id, { {"prompt", prompt}, { "n_predict", 0} }, false, true, -1);
 
                 // get the result
                 task_result result = llama.queue_results.recv(task_id);
@@ -3486,18 +3226,6 @@ int main(int argc, char **argv)
                 // send the result
                 return res.set_content(root.dump(), "application/json; charset=utf-8");
             });
-
-    // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
-    //     "Bus error: 10" - this is on macOS, it does not crash on Linux
-    //std::thread t2([&]()
-    /*{
-        bool running = true;
-        while (running)
-        {
-            running = llama.update_slots();
-        }
-    }*/
-    //);
 
     if (sparams.n_threads_http < 1) {
         // +2 threads for monitoring endpoints

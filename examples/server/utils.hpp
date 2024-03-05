@@ -1,15 +1,16 @@
 #pragma once
 
+#include "llama.h"
+#include "common.h"
+
+#include "json.hpp"
+
 #include <string>
 #include <vector>
 #include <set>
 #include <mutex>
 #include <condition_variable>
 #include <unordered_map>
-
-#include "json.hpp"
-
-#include "../llava/clip.h"
 
 using json = nlohmann::json;
 
