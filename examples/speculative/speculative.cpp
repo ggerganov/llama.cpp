@@ -226,7 +226,7 @@ int main(int argc, char ** argv) {
 
                     while (active_seqs.size() > 0) {
                         // randomly select a sequence to verify from active sequences
-                        std::uniform_int_distribution<u_int> u_int_dist(0, active_seqs.size() - 1);
+                        std::uniform_int_distribution<unsigned int> u_int_dist(0, active_seqs.size() - 1);
                         int s = *std::next(active_seqs.begin(), u_int_dist(rng));
                         if (i_dft >= (int) drafts[s].tokens.size()) {
                             drafts[s].active = false;
