@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import itertools
 import json
 import re
 import sys
@@ -76,9 +77,25 @@ class SchemaConverter:
         assert pattern.startswith('^') and pattern.endswith('$'), 'Pattern must start with "^" and end with "$"'
         pattern = pattern[1:-1]
         try:
+            def visit_seq(seq):
+                out = []
+                for t, g in itertools.groupby(seq, lambda x: x[0]):
+                    g = list(g)
+                    if t == re._parser.LITERAL and len(g) > 1:
+                        out.append(self._format_literal(''.join(chr(x[1]) for x in g)))
+                    else:
+                        out.extend(visit(x) for x in g)
+                if len(out) == 1:
+                    return out[0]
+                return '(' + ' '.join(out) + ')'
+            
             def visit(pattern):
                 if pattern[0] == re._parser.LITERAL:
                     return json.dumps(chr(pattern[1]))
+                elif pattern[0] == re._parser.NOT_LITERAL:
+                    ch = chr(pattern[1])
+                    esc_ch = '\\' + ch if ch in ('-', ']', '\\') else ch
+                    return f'[^{esc_ch}]'
                 elif pattern[0] == re._parser.ANY:
                     raise ValueError('Unsupported pattern: "."')
                 elif pattern[0] == re._parser.IN:
@@ -112,9 +129,9 @@ class SchemaConverter:
                     else:
                         raise ValueError(f'Unrecognized pattern: {pattern} ({type(pattern)}; min: {min_times}, max: {max_times})')
                 elif isinstance(pattern, re._parser.SubPattern):
-                    return ' '.join(visit(p) for p in pattern.data)
-                elif isinstance(pattern, list):# and (len(pattern) == 0 or isinstance(pattern[0], (tuple, list))):
-                    return ' '.join(visit(p) for p in pattern)
+                    return visit_seq(pattern.data)
+                elif isinstance(pattern, list):
+                    return visit_seq(pattern)
                 else:
                     raise ValueError(f'Unrecognized pattern: {pattern} ({type(pattern)})')
             return visit(re._parser.parse(pattern))
