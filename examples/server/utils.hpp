@@ -51,33 +51,37 @@ enum task_type {
 };
 
 struct task_server {
-    int id = -1; // to be filled by llama_server_queue
-    int target_id;
+    int id        = -1; // to be filled by llama_server_queue
+    int id_multi  = -1;
+    int id_target = -1;
+
     task_type type;
     json data;
-    bool infill_mode = false;
+
+    bool infill_mode    = false;
     bool embedding_mode = false;
-    int multitask_id = -1;
 };
 
 struct task_result {
-    int id;
-    int multitask_id = -1;
+    int id       = -1;
+    int id_multi = -1;
+
+    json result_json;
+
     bool stop;
     bool error;
-    json result_json;
 };
 
 struct task_multi {
-    int id;
-    std::set<int> subtasks_remaining{};
-    std::vector<task_result> results{};
+    int id = -1;
+
+    std::set<int> subtasks_remaining;
+    std::vector<task_result> results;
 };
 
 // completion token output with probabilities
 struct completion_token_output {
-    struct token_prob
-    {
+    struct token_prob {
         llama_token tok;
         float prob;
     };
@@ -97,23 +101,23 @@ static inline void server_log(const char *level, const char *function, int line,
     std::stringstream ss_tid;
     ss_tid << std::this_thread::get_id();
     json log = nlohmann::ordered_json{
-        {"tid", ss_tid.str()},
+        {"tid",       ss_tid.str()},
         {"timestamp", time(nullptr)},
     };
 
     if (server_log_json) {
-        log.merge_patch(
-                {
-                        {"level",     level},
-                        {"function",  function},
-                        {"line",      line},
-                        {"msg",       message},
-                });
+        log.merge_patch( {
+            {"level",    level},
+            {"function", function},
+            {"line",     line},
+            {"msg",      message},
+        });
+
         if (!extra.empty()) {
             log.merge_patch(extra);
         }
 
-        std::cout << log.dump(-1, ' ', false, json::error_handler_t::replace) << "\n" << std::flush;
+        printf("%s\n", log.dump(-1, ' ', false, json::error_handler_t::replace).c_str());
     } else {
         char buf[1024];
         snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
@@ -163,7 +167,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     std::vector<llama_chat_message> chat(messages.size());
 
     for (size_t i = 0; i < messages.size(); ++i) {
-        auto &curr_msg = messages[i];
+        const auto & curr_msg = messages[i];
         str[i*2 + 0]    = json_value(curr_msg, "role",    std::string(""));
         str[i*2 + 1]    = json_value(curr_msg, "content", std::string(""));
         alloc_size     += str[i*2 + 1].length();
@@ -195,8 +199,10 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
 
 struct llama_server_queue {
     int id = 0;
-    std::mutex mutex_tasks;
     bool running;
+
+    std::mutex mutex_tasks;
+
     // queues
     std::vector<task_server> queue_tasks;
     std::vector<task_server> queue_tasks_deferred;
@@ -235,17 +241,17 @@ struct llama_server_queue {
 
     // Register function to process a new task
     void on_new_task(std::function<void(task_server&)> callback) {
-        callback_new_task = callback;
+        callback_new_task = std::move(callback);
     }
 
     // Register function to process a multitask when it is finished
     void on_finish_multitask(std::function<void(task_multi&)> callback) {
-        callback_finish_multitask = callback;
+        callback_finish_multitask = std::move(callback);
     }
 
     // Register the function to be called when all slots data is ready to be processed
     void on_run_slots(std::function<void(void)> callback) {
-        callback_run_slots = callback;
+        callback_run_slots = std::move(callback);
     }
 
     // Call when the state of one slot is changed
@@ -259,8 +265,7 @@ struct llama_server_queue {
     }
 
     // end the start_loop routine
-    void terminate() {
-        {
+    void terminate() { {
             std::unique_lock<std::mutex> lock(mutex_tasks);
             running = false;
         }
@@ -276,46 +281,46 @@ struct llama_server_queue {
      */
     void start_loop() {
         running = true;
+
         while (true) {
             LOG_VERBOSE("new task may arrive", {});
+
+            while (true)
             {
-                while (true)
-                {
-                    std::unique_lock<std::mutex> lock(mutex_tasks);
-                    if (queue_tasks.empty()) {
-                        lock.unlock();
-                        break;
-                    }
-                    task_server task = queue_tasks.front();
-                    queue_tasks.erase(queue_tasks.begin());
+                std::unique_lock<std::mutex> lock(mutex_tasks);
+                if (queue_tasks.empty()) {
                     lock.unlock();
-                    LOG_VERBOSE("callback_new_task", {{"task_id", task.id}});
-                    callback_new_task(task);
+                    break;
                 }
-                LOG_VERBOSE("update_multitasks", {});
-                // check if we have any finished multitasks
-                auto queue_iterator = queue_multitasks.begin();
-                while (queue_iterator != queue_multitasks.end())
-                {
-                    if (queue_iterator->subtasks_remaining.empty())
-                    {
-                        // all subtasks done == multitask is done
-                        task_multi current_multitask = *queue_iterator;
-                        callback_finish_multitask(current_multitask);
-                        // remove this multitask
-                        queue_iterator = queue_multitasks.erase(queue_iterator);
-                    }
-                    else
-                    {
-                        ++queue_iterator;
-                    }
-                }
-                // all tasks in the current loop is processed, slots data is now ready
-                LOG_VERBOSE("callback_run_slots", {});
-                callback_run_slots();
+                task_server task = queue_tasks.front();
+                queue_tasks.erase(queue_tasks.begin());
+                lock.unlock();
+                LOG_VERBOSE("callback_new_task", {{"id_task", task.id}});
+                callback_new_task(task);
             }
+
+            LOG_VERBOSE("update_multitasks", {});
+
+            // check if we have any finished multitasks
+            auto queue_iterator = queue_multitasks.begin();
+            while (queue_iterator != queue_multitasks.end()) {
+                if (queue_iterator->subtasks_remaining.empty()) {
+                    // all subtasks done == multitask is done
+                    task_multi current_multitask = *queue_iterator;
+                    callback_finish_multitask(current_multitask);
+                    // remove this multitask
+                    queue_iterator = queue_multitasks.erase(queue_iterator);
+                } else {
+                    ++queue_iterator;
+                }
+            }
+
+            // all tasks in the current loop is processed, slots data is now ready
+            LOG_VERBOSE("callback_run_slots", {});
+
+            callback_run_slots();
+
             LOG_VERBOSE("wait for new task", {});
-            // wait for new task
             {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
                 if (queue_tasks.empty()) {
@@ -336,22 +341,21 @@ struct llama_server_queue {
     //
 
     // add a multitask by specifying the id of all subtask (subtask is a task_server)
-    void add_multitask(int multitask_id, std::vector<int>& sub_ids)
-    {
+    void add_multitask(int id_multi, std::vector<int>& sub_ids) {
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_multi multi;
-        multi.id = multitask_id;
+        multi.id = id_multi;
         std::copy(sub_ids.begin(), sub_ids.end(), std::inserter(multi.subtasks_remaining, multi.subtasks_remaining.end()));
         queue_multitasks.push_back(multi);
     }
 
     // updatethe remaining subtasks, while appending results to multitask
-    void update_multitask(int multitask_id, int subtask_id, task_result& result)
+    void update_multitask(int id_multi, int subtask_id, task_result& result)
     {
         std::lock_guard<std::mutex> lock(mutex_tasks);
         for (auto& multitask : queue_multitasks)
         {
-            if (multitask.id == multitask_id)
+            if (multitask.id == id_multi)
             {
                 multitask.subtasks_remaining.erase(subtask_id);
                 multitask.results.push_back(result);
@@ -363,41 +367,43 @@ struct llama_server_queue {
 struct llama_server_response {
     typedef std::function<void(int, int, task_result&)> callback_multitask_t;
     callback_multitask_t callback_update_multitask;
+
     // for keeping track of all tasks waiting for the result
     std::set<int> waiting_task_ids;
+
     // the main result queue
     std::vector<task_result> queue_results;
+
     std::mutex mutex_results;
     std::condition_variable condition_results;
 
-    // add the task_id to the list of tasks waiting for response
-    void add_waiting_task_id(int task_id) {
-        LOG_VERBOSE("waiting for task id", {{"task_id", task_id}});
+    // add the id_task to the list of tasks waiting for response
+    void add_waiting_task_id(int id_task) {
+        LOG_VERBOSE("waiting for task id", {{"id_task", id_task}});
+
         std::unique_lock<std::mutex> lock(mutex_results);
-        waiting_task_ids.insert(task_id);
+        waiting_task_ids.insert(id_task);
     }
 
     // when the request is finished, we can remove task associated with it
-    void remove_waiting_task_id(int task_id) {
-        LOG_VERBOSE("remove waiting for task id", {{"task_id", task_id}});
+    void remove_waiting_task_id(int id_task) {
+        LOG_VERBOSE("remove waiting for task id", {{"id_task", id_task}});
+
         std::unique_lock<std::mutex> lock(mutex_results);
-        waiting_task_ids.erase(task_id);
+        waiting_task_ids.erase(id_task);
     }
 
-    // This function blocks the thread until there is a response for this task_id
-    task_result recv(int task_id) {
-        while (true)
-        {
+    // This function blocks the thread until there is a response for this id_task
+    task_result recv(int id_task) {
+        while (true) {
             std::unique_lock<std::mutex> lock(mutex_results);
             condition_results.wait(lock, [&]{
                 return !queue_results.empty();
             });
 
-            for (int i = 0; i < (int) queue_results.size(); i++)
-            {
-                if (queue_results[i].id == task_id)
-                {
-                    assert(queue_results[i].multitask_id == -1);
+            for (int i = 0; i < (int) queue_results.size(); i++) {
+                if (queue_results[i].id == id_task) {
+                    assert(queue_results[i].id_multi == -1);
                     task_result res = queue_results[i];
                     queue_results.erase(queue_results.begin() + i);
                     return res;
@@ -410,26 +416,25 @@ struct llama_server_response {
 
     // Register the function to update multitask
     void on_multitask_update(callback_multitask_t callback) {
-        callback_update_multitask = callback;
+        callback_update_multitask = std::move(callback);
     }
 
-    // Send a new result to a waiting task_id
+    // Send a new result to a waiting id_task
     void send(task_result result) {
+        LOG_VERBOSE("send new result", {{"id_task", result.id}});
+
         std::unique_lock<std::mutex> lock(mutex_results);
-        LOG_VERBOSE("send new result", {{"task_id", result.id}});
-        for (auto& task_id : waiting_task_ids) {
-            // LOG_TEE("waiting task id %i \n", task_id);
+        for (const auto & id_task : waiting_task_ids) {
+            // LOG_TEE("waiting task id %i \n", id_task);
             // for now, tasks that have associated parent multitasks just get erased once multitask picks up the result
-            if (result.multitask_id == task_id)
-            {
-                LOG_VERBOSE("callback_update_multitask", {{"task_id", task_id}});
-                callback_update_multitask(task_id, result.id, result);
+            if (result.id_multi == id_task) {
+                LOG_VERBOSE("callback_update_multitask", {{"id_task", id_task}});
+                callback_update_multitask(id_task, result.id, result);
                 continue;
             }
 
-            if (result.id == task_id)
-            {
-                LOG_VERBOSE("queue_results.push_back", {{"task_id", task_id}});
+            if (result.id == id_task) {
+                LOG_VERBOSE("queue_results.push_back", {{"id_task", id_task}});
                 queue_results.push_back(result);
                 condition_results.notify_all();
                 return;
@@ -447,13 +452,11 @@ static const std::string base64_chars =
              "abcdefghijklmnopqrstuvwxyz"
              "0123456789+/";
 
-static inline bool is_base64(uint8_t c)
-{
+static inline bool is_base64(uint8_t c) {
     return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
-static inline std::vector<uint8_t> base64_decode(const std::string & encoded_string)
-{
+static inline std::vector<uint8_t> base64_decode(const std::string & encoded_string) {
     int i = 0;
     int j = 0;
     int in_ = 0;
@@ -516,8 +519,7 @@ static inline std::vector<uint8_t> base64_decode(const std::string & encoded_str
 // random string / id
 //
 
-static std::string random_string()
-{
+static std::string random_string() {
     static const std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
     std::random_device rd;
@@ -532,10 +534,10 @@ static std::string random_string()
     return result;
 }
 
-static std::string gen_chatcmplid()
-{
+static std::string gen_chatcmplid() {
     std::stringstream chatcmplid;
     chatcmplid << "chatcmpl-" << random_string();
+
     return chatcmplid.str();
 }
 
@@ -543,91 +545,79 @@ static std::string gen_chatcmplid()
 // other common utils
 //
 
-static size_t common_part(const std::vector<llama_token> &a, const std::vector<llama_token> &b)
-{
+static size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
     size_t i;
-    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++)
-    {
-    }
+    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
+
     return i;
 }
 
-static bool ends_with(const std::string &str, const std::string &suffix)
-{
-    return str.size() >= suffix.size() &&
-           0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
+static bool ends_with(const std::string & str, const std::string & suffix) {
+    return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-static size_t find_partial_stop_string(const std::string &stop,
-                                       const std::string &text)
-{
-    if (!text.empty() && !stop.empty())
-    {
+static size_t find_partial_stop_string(const std::string &stop, const std::string &text) {
+    if (!text.empty() && !stop.empty()) {
         const char text_last_char = text.back();
-        for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--)
-        {
-            if (stop[char_index] == text_last_char)
-            {
+        for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--) {
+            if (stop[char_index] == text_last_char) {
                 const std::string current_partial = stop.substr(0, char_index + 1);
-                if (ends_with(text, current_partial))
-                {
+                if (ends_with(text, current_partial)) {
                     return text.size() - char_index - 1;
                 }
             }
         }
     }
+
     return std::string::npos;
 }
 
 // TODO: reuse llama_detokenize
 template <class Iter>
-static std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
-{
+static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
     std::string ret;
-    for (; begin != end; ++begin)
-    {
+    for (; begin != end; ++begin) {
         ret += llama_token_to_piece(ctx, *begin);
     }
+
     return ret;
 }
 
 // format incomplete utf-8 multibyte character for output
-static std::string tokens_to_output_formatted_string(const llama_context *ctx, const llama_token token)
-{
+static std::string tokens_to_output_formatted_string(const llama_context * ctx, const llama_token token) {
     std::string out = token == -1 ? "" : llama_token_to_piece(ctx, token);
     // if the size is 1 and first bit is 1, meaning it's a partial character
     //   (size > 1 meaning it's already a known token)
-    if (out.size() == 1 && (out[0] & 0x80) == 0x80)
-    {
+    if (out.size() == 1 && (out[0] & 0x80) == 0x80) {
         std::stringstream ss;
         ss << std::hex << (out[0] & 0xff);
         std::string res(ss.str());
         out = "byte: \\x" + res;
     }
+
     return out;
 }
 
 // convert a vector of completion_token_output to json
-static json probs_vector_to_json(const llama_context *ctx, const std::vector<completion_token_output> &probs)
-{
+static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs) {
     json out = json::array();
-    for (const auto &prob : probs)
-    {
+    for (const auto & prob : probs) {
         json probs_for_token = json::array();
-        for (const auto &p : prob.probs)
-        {
-            std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
-            probs_for_token.push_back(json
-            {
+
+        for (const auto & p : prob.probs) {
+            const std::string tok_str = tokens_to_output_formatted_string(ctx, p.tok);
+            probs_for_token.push_back(json {
                 {"tok_str", tok_str},
                 {"prob",    p.prob},
             });
         }
-        std::string tok_str = tokens_to_output_formatted_string(ctx, prob.tok);
-        out.push_back(json{
+
+        const std::string tok_str = tokens_to_output_formatted_string(ctx, prob.tok);
+        out.push_back(json {
             {"content", tok_str},
             {"probs",   probs_for_token},
         });
     }
+
     return out;
 }
