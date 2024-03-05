@@ -298,7 +298,6 @@ struct server_metrics {
     uint64_t n_tokens_predicted  = 0;
     uint64_t t_tokens_generation = 0;
 
-
     void on_prompt_eval(const server_slot &slot) {
         n_prompt_tokens_processed_total += slot.n_prompt_tokens_processed;
         n_prompt_tokens_processed       += slot.n_prompt_tokens_processed;
@@ -366,8 +365,7 @@ struct llama_server_context {
         params = params_;
 
         std::tie(model, ctx) = llama_init_from_gpt_params(params);
-        if (model == nullptr)
-        {
+        if (model == nullptr) {
             LOG_ERROR("unable to load model", {{"model", params.model}});
             return false;
         }
@@ -379,15 +377,12 @@ struct llama_server_context {
         return true;
     }
 
-    void validate_model_chat_template(server_params & sparams) {
+    bool validate_model_chat_template() const {
         llama_chat_message chat[] = {{"user", "test"}};
 
-        std::vector<char> buf(1);
-        int res = llama_chat_apply_template(model, nullptr, chat, 1, true, buf.data(), buf.size());
-        if (res < 0) {
-            LOG_ERROR("The chat template comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
-            sparams.chat_template = "chatml";
-        }
+        const int res = llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0);
+
+        return res > 0;
     }
 
     void initialize() {
@@ -478,9 +473,7 @@ struct llama_server_context {
                     prompt_tokens.push_back(p.template get<llama_token>());
                 }
             }
-        }
-        else
-        {
+        } else {
             auto s = json_prompt.template get<std::string>();
             prompt_tokens = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
         }
@@ -2572,7 +2565,10 @@ int main(int argc, char ** argv) {
     const auto model_meta = llama.model_meta();
 
     if (sparams.chat_template.empty()) { // custom chat template is not supplied
-        llama.validate_model_chat_template(sparams);
+        if (!llama.validate_model_chat_template()) {
+            LOG_ERROR("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
+            sparams.chat_template = "chatml";
+        }
     }
 
     // Middleware for API key validation
