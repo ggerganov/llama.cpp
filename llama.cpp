@@ -13544,7 +13544,9 @@ LLAMA_API int32_t llama_chat_apply_template(
     if (res < 0) {
         return res;
     }
-    strncpy(buf, formatted_chat.c_str(), length);
+    if (buf && length > 0) {
+        strncpy(buf, formatted_chat.c_str(), length);
+    }
     return res;
 }
 
