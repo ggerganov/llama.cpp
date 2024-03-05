@@ -3210,7 +3210,8 @@ int main(int argc, char **argv)
                 res.set_content(models.dump(), "application/json; charset=utf-8");
             });
 
-    const auto chat_completions = [&llama, &validate_api_key, &sparams](const httplib::Request &req, httplib::Response &res)
+    const std::string completion_id = gen_chatcmplid();
+    const auto chat_completions = [&llama, &validate_api_key, &sparams, &completion_id](const httplib::Request &req, httplib::Response &res)
     {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         if (!validate_api_key(req, res)) {
@@ -3227,7 +3228,7 @@ int main(int argc, char **argv)
             task_result result = llama.queue_results.recv(task_id);
 
             if (!result.error && result.stop) {
-                json oaicompat_result = format_final_response_oaicompat(data, result);
+                json oaicompat_result = format_final_response_oaicompat(data, result, completion_id);
 
                 res.set_content(oaicompat_result.dump(-1, ' ', false,
                                     json::error_handler_t::replace),
@@ -3238,11 +3239,11 @@ int main(int argc, char **argv)
             }
             llama.queue_results.remove_waiting_task_id(task_id);
         } else {
-            const auto chunked_content_provider = [task_id, &llama](size_t, httplib::DataSink &sink) {
+            const auto chunked_content_provider = [task_id, &llama, &completion_id](size_t, httplib::DataSink &sink) {
                 while (true) {
                     task_result llama_result = llama.queue_results.recv(task_id);
                     if (!llama_result.error) {
-                        std::vector<json> result_array = format_partial_response_oaicompat( llama_result);
+                        std::vector<json> result_array = format_partial_response_oaicompat(llama_result, completion_id);
 
                         for (auto it = result_array.begin(); it != result_array.end(); ++it)
                         {
