@@ -1,5 +1,4 @@
 #include "utils.hpp"
-#include "oai.hpp"
 
 #include "common.h"
 #include "llama.h"
