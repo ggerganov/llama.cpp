@@ -3317,7 +3317,7 @@ typedef void (*ggml_sycl_op_flatten_t)(const ggml_tensor *src0,
 #define QK4_0 32
 #define QR4_0 2
 #define QI4_0 (QK4_0 / (4 * QR4_0))
-typedef struct dpct_type_471834 {
+typedef struct dpct_type_block_q4_0 {
     sycl::half d;           // delta
     uint8_t qs[QK4_0 / 2];  // nibbles / quants
 } block_q4_0;
@@ -3326,7 +3326,7 @@ static_assert(sizeof(block_q4_0) == sizeof(ggml_fp16_t) + QK4_0 / 2, "wrong q4_0
 #define QK4_1 32
 #define QR4_1 2
 #define QI4_1 (QK4_1 / (4 * QR4_1))
-typedef struct dpct_type_143705 {
+typedef struct dpct_type_block_q4_1 {
     sycl::half2 dm;         // dm.x = delta, dm.y = min
     uint8_t qs[QK4_1 / 2];  // nibbles / quants
 } block_q4_1;
@@ -3335,7 +3335,7 @@ static_assert(sizeof(block_q4_1) == sizeof(ggml_fp16_t) * 2 + QK4_1 / 2, "wrong 
 #define QK5_0 32
 #define QR5_0 2
 #define QI5_0 (QK5_0 / (4 * QR5_0))
-typedef struct dpct_type_673649 {
+typedef struct dpct_type_block_q5_0 {
     sycl::half d;           // delta
     uint8_t qh[4];          // 5-th bit of quants
     uint8_t qs[QK5_0 / 2];  // nibbles / quants
@@ -3345,7 +3345,7 @@ static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5
 #define QK5_1 32
 #define QR5_1 2
 #define QI5_1 (QK5_1 / (4 * QR5_1))
-typedef struct dpct_type_135589 {
+typedef struct dpct_type_block_q5_1 {
     sycl::half2 dm;         // dm.x = delta, dm.y = min
     uint8_t qh[4];          // 5-th bit of quants
     uint8_t qs[QK5_1 / 2];  // nibbles / quants
@@ -3355,7 +3355,7 @@ static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) +
 #define QK8_0 32
 #define QR8_0 1
 #define QI8_0 (QK8_0 / (4 * QR8_0))
-typedef struct dpct_type_122878 {
+typedef struct dpct_type_block_q8_0 {
     sycl::half d;           // delta
     int8_t  qs[QK8_0];      // quants
 } block_q8_0;
@@ -3364,7 +3364,7 @@ static_assert(sizeof(block_q8_0) == sizeof(ggml_fp16_t) + QK8_0, "wrong q8_0 blo
 #define QK8_1 32
 #define QR8_1 1
 #define QI8_1 (QK8_1 / (4 * QR8_1))
-typedef struct dpct_type_143721 {
+typedef struct dpct_type_block_q8_1 {
     sycl::half2 ds;         // ds.x = delta, ds.y = sum
     int8_t  qs[QK8_0];      // quants
 } block_q8_1;
@@ -3398,7 +3398,7 @@ typedef float (*vec_dot_q_mul_mat_sycl_t)(
 
 #define QR2_K 4
 #define QI2_K (QK_K / (4*QR2_K))
-typedef struct dpct_type_619598 {
+typedef struct dpct_type_block_q2_K {
     uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
     uint8_t qs[QK_K/4];      // quants
     sycl::half2 dm;          // super-block scale for quantized scales/mins
@@ -3407,7 +3407,7 @@ static_assert(sizeof(block_q2_K) == 2*sizeof(ggml_fp16_t) + QK_K/16 + QK_K/4, "w
 
 #define QR3_K 4
 #define QI3_K (QK_K / (4*QR3_K))
-typedef struct dpct_type_138576 {
+typedef struct dpct_type_block_q3_K {
     uint8_t hmask[QK_K/8];     // quants - high bit
     uint8_t qs[QK_K/4];        // quants - low 2 bits
 #ifdef GGML_QKK_64
@@ -3429,7 +3429,7 @@ typedef struct {
 } block_q4_K;
 static_assert(sizeof(block_q4_K) == sizeof(sycl::half2) + QK_K/2 + 2, "wrong q4_K block size/padding");
 #else
-typedef struct dpct_type_154943 {
+typedef struct dpct_type_block_q4_K {
     sycl::half2 dm;            // super-block scale for quantized scales/mins
     uint8_t scales[3*QK_K/64]; // scales, quantized with 6 bits
     uint8_t qs[QK_K/2];        // 4--bit quants
@@ -3448,7 +3448,7 @@ typedef struct {
 } block_q5_K;
 static_assert(sizeof(block_q5_K) == sizeof(ggml_fp16_t) + QK_K/2 + QK_K/8 + QK_K/16, "wrong q5_K block size/padding");
 #else
-typedef struct dpct_type_866817 {
+typedef struct dpct_type_block_q5_K {
     sycl::half2 dm;               // super-block scale for quantized scales/mins
     uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
     uint8_t qh[QK_K/8];           // quants, high bit
@@ -3459,7 +3459,7 @@ static_assert(sizeof(block_q5_K) == 2*sizeof(ggml_fp16_t) + K_SCALE_SIZE + QK_K/
 
 #define QR6_K 2
 #define QI6_K (QK_K / (4*QR6_K))
-typedef struct dpct_type_107281 {
+typedef struct dpct_type_block_q6_K {
     uint8_t ql[QK_K/2];   // quants, lower 4 bits
     uint8_t qh[QK_K/4];   // quants, upper 2 bits
     int8_t  scales[QK_K/16]; // scales
@@ -3469,7 +3469,7 @@ static_assert(sizeof(block_q6_K) == sizeof(ggml_fp16_t) + 13*QK_K/16, "wrong q6_
 
 #define QR2_XXS 8
 #define QI2_XXS (QK_K / (4*QR2_XXS))
-typedef struct dpct_type_101531 {
+typedef struct dpct_type_block_iq2_xxs {
     sycl::half d;
     uint16_t qs[QK_K/8];
 } block_iq2_xxs;
@@ -3477,7 +3477,7 @@ static_assert(sizeof(block_iq2_xxs) == sizeof(ggml_fp16_t) + QK_K/8*sizeof(uint1
 
 #define QR2_XS 8
 #define QI2_XS (QK_K / (4*QR2_XS))
-typedef struct dpct_type_117772 {
+typedef struct dpct_type_block_iq2_xs {
     sycl::half d;
     uint16_t qs[QK_K/8];
     uint8_t  scales[QK_K/32];
@@ -3486,7 +3486,7 @@ static_assert(sizeof(block_iq2_xs) == sizeof(ggml_fp16_t) + QK_K/8*sizeof(uint16
 
 #define QR3_XXS 8
 #define QI3_XXS (QK_K / (4*QR3_XXS))
-typedef struct dpct_type_504194 {
+typedef struct dpct_type_block_iq3_xxs {
     sycl::half d;
     uint8_t qs[3*(QK_K/8)];
 } block_iq3_xxs;
@@ -14157,7 +14157,7 @@ inline void ggml_sycl_op_mul_mat_sycl(
             *g_sycl_handles[id], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
             dpct::get_value(&alpha, *g_sycl_handles[id]), src0_ddf_i, ne00,
-            src1_ddf_i, ne10, dpct::get_value(&beta, *g_sycl_handles[id]),
+            src1_ddf1_i, ne10, dpct::get_value(&beta, *g_sycl_handles[id]),
             dst_dd_i, ldc)));
     }
     (void) dst;
