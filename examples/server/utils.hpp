@@ -531,3 +531,14 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
     return res;
 }
 
+static json format_tokenizer_response(const std::vector<llama_token> & tokens) {
+    return json {
+        {"tokens", tokens}
+    };
+}
+
+static json format_detokenized_response(const std::string & content) {
+    return json {
+        {"content", content}
+    };
+}
