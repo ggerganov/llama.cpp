@@ -5117,7 +5117,7 @@ static dpct::global_memory<const uint32_t, 1> iq3s_grid(
         0x0f030509, 0x0f030907, 0x0f03090b, 0x0f050103, 0x0f050109, 0x0f050301, 0x0f05030d, 0x0f050503,
         0x0f050701, 0x0f050b03, 0x0f070105, 0x0f070705, 0x0f07070b, 0x0f070b07, 0x0f090103, 0x0f09010b,
         0x0f090307, 0x0f090501, 0x0f090b01, 0x0f0b0505, 0x0f0b0905, 0x0f0d0105, 0x0f0d0703, 0x0f0f0101,
-    };
+    });
 
 static dpct::global_memory<const uint64_t, 1> iq1s_grid(
     sycl::range<1>(256),
@@ -5250,7 +5250,7 @@ static dpct::global_memory<const uint64_t, 1> iq1s_grid(
         0x010101ffff01ffff, 0x010101ff00000000, 0x010101ff0001ff01, 0x010101ff0101ffff,
         0x010101ff010101ff, 0x01010100ffffffff, 0x01010100ff000001, 0x010101000000ff00,
         0x0101010001010000, 0x0101010100ff0001, 0x010101010001ff01, 0x010101010101ffff,
-    };
+    });
 static dpct::global_memory<const uint8_t, 1> ksigns_iq2xs(
     sycl::range<1>(128),
     {
