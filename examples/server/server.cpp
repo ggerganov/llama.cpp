@@ -3221,13 +3221,14 @@ int main(int argc, char **argv)
         const int task_id = llama.queue_tasks.get_new_id();
         llama.queue_results.add_waiting_task_id(task_id);
         llama.request_completion(task_id, data, false, false, -1);
+        const std::string completion_id = gen_chatcmplid();
 
         if (!json_value(data, "stream", false)) {
             std::string completion_text;
             task_result result = llama.queue_results.recv(task_id);
 
             if (!result.error && result.stop) {
-                json oaicompat_result = format_final_response_oaicompat(data, result);
+                json oaicompat_result = format_final_response_oaicompat(data, result, completion_id);
 
                 res.set_content(oaicompat_result.dump(-1, ' ', false,
                                     json::error_handler_t::replace),
@@ -3238,8 +3239,7 @@ int main(int argc, char **argv)
             }
             llama.queue_results.remove_waiting_task_id(task_id);
         } else {
-            const auto chunked_content_provider = [task_id, &llama](size_t, httplib::DataSink &sink) {
-                const std::string completion_id = gen_chatcmplid();
+            const auto chunked_content_provider = [task_id, &llama, completion_id](size_t, httplib::DataSink &sink) {
                 while (true) {
                     task_result llama_result = llama.queue_results.recv(task_id);
                     if (!llama_result.error) {
