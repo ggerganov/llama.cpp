@@ -58,8 +58,8 @@ struct task_server {
     task_type type;
     json data;
 
-    bool infill_mode    = false;
-    bool embedding_mode = false;
+    bool infill    = false;
+    bool embedding = false;
 };
 
 struct task_result {
@@ -187,7 +187,8 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), true, buf.data(), buf.size());
     }
 
-    std::string formatted_chat(buf.data(), res);
+    const std::string formatted_chat(buf.data(), res);
+
     LOG_VERBOSE("formatted_chat", {{"text", formatted_chat.c_str()}});
 
     return formatted_chat;
@@ -201,17 +202,18 @@ struct llama_server_queue {
     int id = 0;
     bool running;
 
-    std::mutex mutex_tasks;
-
     // queues
     std::vector<task_server> queue_tasks;
     std::vector<task_server> queue_tasks_deferred;
-    std::vector<task_multi> queue_multitasks;
+    std::vector<task_multi>  queue_multitasks;
+
+    std::mutex mutex_tasks;
     std::condition_variable condition_tasks;
+
     // callback functions
-    std::function<void(task_server&)> callback_new_task;
-    std::function<void(task_multi&)> callback_finish_multitask;
-    std::function<void(void)> callback_run_slots;
+    std::function<void(task_server &)> callback_new_task;
+    std::function<void(task_multi &)>  callback_finish_multitask;
+    std::function<void(void)>          callback_run_slots;
 
     // Add a new task to the end of the queue
     int post(task_server task) {
@@ -265,10 +267,9 @@ struct llama_server_queue {
     }
 
     // end the start_loop routine
-    void terminate() { {
-            std::unique_lock<std::mutex> lock(mutex_tasks);
-            running = false;
-        }
+    void terminate() {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        running = false;
         condition_tasks.notify_all();
     }
 
@@ -350,14 +351,11 @@ struct llama_server_queue {
     }
 
     // updatethe remaining subtasks, while appending results to multitask
-    void update_multitask(int id_multi, int subtask_id, task_result& result)
-    {
+    void update_multitask(int id_multi, int id_sub, task_result& result) {
         std::lock_guard<std::mutex> lock(mutex_tasks);
-        for (auto& multitask : queue_multitasks)
-        {
-            if (multitask.id == id_multi)
-            {
-                multitask.subtasks_remaining.erase(subtask_id);
+        for (auto & multitask : queue_multitasks) {
+            if (multitask.id == id_multi) {
+                multitask.subtasks_remaining.erase(id_sub);
                 multitask.results.push_back(result);
             }
         }
@@ -468,13 +466,10 @@ static inline std::vector<uint8_t> base64_decode(const std::string & encoded_str
 
     std::vector<uint8_t> ret;
 
-    while (in_len-- && (encoded_string[in_] != '=') && is_base64(encoded_string[in_]))
-    {
+    while (in_len-- && (encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
         char_array_4[i++] = encoded_string[in_]; in_++;
-        if (i == 4)
-        {
-            for (i = 0; i <4; i++)
-            {
+        if (i == 4) {
+            for (i = 0; i < 4; i++) {
                 char_array_4[i] = base64_chars.find(char_array_4[i]);
             }
 
@@ -482,23 +477,20 @@ static inline std::vector<uint8_t> base64_decode(const std::string & encoded_str
             char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
             char_array_3[2] = ((char_array_4[2] & 0x3) << 6) +   char_array_4[3];
 
-            for (i = 0; (i < 3); i++)
-            {
+            for (i = 0; (i < 3); i++) {
                 ret.push_back(char_array_3[i]);
             }
+
             i = 0;
         }
     }
 
-    if (i)
-    {
-        for (j = i; j <4; j++)
-        {
+    if (i) {
+        for (j = i; j < 4; j++) {
             char_array_4[j] = 0;
         }
 
-        for (j = 0; j <4; j++)
-        {
+        for (j = 0; j < 4; j++) {
             char_array_4[j] = base64_chars.find(char_array_4[j]);
         }
 
@@ -506,8 +498,7 @@ static inline std::vector<uint8_t> base64_decode(const std::string & encoded_str
         char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
         char_array_3[2] = ((char_array_4[2] & 0x3) << 6) +   char_array_4[3];
 
-        for (j = 0; (j < i - 1); j++)
-        {
+        for (j = 0; j < i - 1; j++) {
             ret.push_back(char_array_3[j]);
         }
     }
@@ -586,6 +577,7 @@ static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
 // format incomplete utf-8 multibyte character for output
 static std::string tokens_to_output_formatted_string(const llama_context * ctx, const llama_token token) {
     std::string out = token == -1 ? "" : llama_token_to_piece(ctx, token);
+
     // if the size is 1 and first bit is 1, meaning it's a partial character
     //   (size > 1 meaning it's already a known token)
     if (out.size() == 1 && (out[0] & 0x80) == 0x80) {
@@ -601,6 +593,7 @@ static std::string tokens_to_output_formatted_string(const llama_context * ctx, 
 // convert a vector of completion_token_output to json
 static json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs) {
     json out = json::array();
+
     for (const auto & prob : probs) {
         json probs_for_token = json::array();
 
