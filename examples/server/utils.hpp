@@ -10,7 +10,6 @@
 #include <set>
 #include <mutex>
 #include <condition_variable>
-#include <unordered_map>
 
 using json = nlohmann::json;
 

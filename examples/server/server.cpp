@@ -356,6 +356,7 @@ struct llama_server_context {
 
     void validate_model_chat_template(server_params & sparams) {
         llama_chat_message chat[] = {{"user", "test"}};
+
         std::vector<char> buf(1);
         int res = llama_chat_apply_template(model, nullptr, chat, 1, true, buf.data(), buf.size());
         if (res < 0) {
