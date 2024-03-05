@@ -24,8 +24,8 @@ PRIMITIVE_RULES = {
 }
 
 INVALID_RULE_CHARS_RE = re.compile(r'[^a-zA-Z0-9-]+')
-GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"]')
-GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"'}
+GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n]')
+GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n'}
 
 
 class SchemaConverter:
@@ -36,7 +36,7 @@ class SchemaConverter:
 
     def _format_literal(self, literal):
         escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
-            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), json.dumps(literal)
+            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), json.dumps(literal)[1:-1]
         )
         return f'"{escaped}"'
 
