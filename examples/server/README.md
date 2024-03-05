@@ -436,7 +436,7 @@ Notice that each `probs` is an array of length `n_probs`.
         "next_token": {
             "has_next_token": true,
             "n_remain": -1,
-            "num_tokens_predicted": 0,
+            "n_decoded": 0,
             "stopped_eos": false,
             "stopped_limit": false,
             "stopped_word": false,

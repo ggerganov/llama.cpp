@@ -841,15 +841,15 @@ struct llama_server_context {
         }
 
         LOG_VERBOSE("next token", {
-            {"token",                result.tok},
-            {"token_text",           tokens_to_output_formatted_string(ctx, result.tok)},
-            {"has_next_token",       slot.has_next_token},
-            {"n_remain",             slot.n_remaining},
-            {"num_tokens_predicted", slot.n_decoded},
-            {"stopped_eos",          slot.stopped_eos},
-            {"stopped_word",         slot.stopped_word},
-            {"stopped_limit",        slot.stopped_limit},
-            {"stopping_word",        slot.stopping_word},
+            {"token",          result.tok},
+            {"token_text",     tokens_to_output_formatted_string(ctx, result.tok)},
+            {"has_next_token", slot.has_next_token},
+            {"n_remain",       slot.n_remaining},
+            {"n_decoded",      slot.n_decoded},
+            {"stopped_eos",    slot.stopped_eos},
+            {"stopped_word",   slot.stopped_word},
+            {"stopped_limit",  slot.stopped_limit},
+            {"stopping_word",  slot.stopping_word},
         });
 
         return slot.has_next_token; // continue
@@ -1183,13 +1183,13 @@ struct llama_server_context {
                         slot_data["state"]      = slot.state;
                         slot_data["prompt"]     = slot.prompt;
                         slot_data["next_token"] = {
-                            {"has_next_token",       slot.has_next_token},
-                            {"n_remain",             slot.n_remaining},
-                            {"num_tokens_predicted", slot.n_decoded},
-                            {"stopped_eos",          slot.stopped_eos},
-                            {"stopped_word",         slot.stopped_word},
-                            {"stopped_limit",        slot.stopped_limit},
-                            {"stopping_word",        slot.stopping_word},
+                            {"has_next_token", slot.has_next_token},
+                            {"n_remain",       slot.n_remaining},
+                            {"n_decoded",      slot.n_decoded},
+                            {"stopped_eos",    slot.stopped_eos},
+                            {"stopped_word",   slot.stopped_word},
+                            {"stopped_limit",  slot.stopped_limit},
+                            {"stopping_word",  slot.stopping_word},
                         };
 
                         if (slot_data["state"] == IDLE) {
@@ -2083,8 +2083,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             } else {
                 std::string value(argv[i]);
                 /**/ if (value == "distribute" || value == "" ) { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
-                else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
-                else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
+                else if (value == "isolate")                    { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
+                else if (value == "numactl")                    { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
                 else { invalid_param = true; break; }
             }
         } else if (arg == "--embedding") {
@@ -2913,9 +2913,9 @@ int main(int argc, char ** argv) {
         json prompt;
         if (body.count("input") != 0) {
             prompt = body["input"];
-            // batch
             if (prompt.is_array()) {
                 json data = json::array();
+
                 int i = 0;
                 for (const json & elem : prompt) {
                     const int id_task = llama.queue_tasks.get_new_id();
