@@ -2546,7 +2546,7 @@ typedef struct {
     uint8_t signs[QK_K/8];
     uint8_t scales[IQ3S_N_SCALE];
 } block_iq3_s;
-#define IQ3S_MULTIPLIER 72968561ULL
+#define IQ3S_MULTIPLIER 518559
 constexpr constant static uint8_t iq3s_values[16] = {1, 1, 1, 3, 3, 3, 5, 5, 5, 7, 7, 9, 9, 11, 13, 15};
 
 typedef struct {

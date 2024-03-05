@@ -4054,8 +4054,7 @@ void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y
 
 // ====================== 3.3125 bpw (de)-quantization
 
-#define IQ3S_MULTIPLIER 72968561ULL
-
+#define IQ3S_MULTIPLIER 518559
 #define IQ3S_BITS 3
 
 static const uint8_t iq3s_values[16] = {1, 1, 1, 3, 3, 3, 5, 5, 5, 7, 7, 9, 9, 11, 13, 15};
