@@ -12246,7 +12246,10 @@ inline void ggml_sycl_op_mul_mat_vec_q(
     GGML_ASSERT(!(src0->type == GGML_TYPE_IQ2_XXS ||
                   src0->type == GGML_TYPE_IQ2_XS ||
                   src0->type == GGML_TYPE_IQ3_XXS ||
-                  src0->type == GGML_TYPE_IQ1_S));
+                  src0->type == GGML_TYPE_IQ1_S ||
+                  src0->type == GGML_TYPE_IQ2_S ||
+                  src0->type == GGML_TYPE_IQ3_S ||
+                  src0->type == GGML_TYPE_IQ4_NL));
 
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
@@ -15649,6 +15652,15 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
                 }
 
                 if (a->type == GGML_TYPE_IQ1_S) {
+                    return false;
+                }
+                if (a->type == GGML_TYPE_IQ2_S) {
+                    return false;
+                }
+                if (a->type == GGML_TYPE_IQ3_S) {
+                    return false;
+                }
+                if (a->type == GGML_TYPE_IQ4_NL) {
                     return false;
                 }
                 if (a->type == GGML_TYPE_IQ3_XXS) {
