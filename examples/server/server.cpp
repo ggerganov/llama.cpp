@@ -24,6 +24,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <set>
+#include <mutex>
 #include <thread>
 #include <signal.h>
 
@@ -47,6 +49,48 @@ enum slot_command {
     NONE,
     LOAD_PROMPT,
     RELEASE,
+};
+
+enum server_state {
+    SERVER_STATE_LOADING_MODEL,  // Server is starting up, model not fully loaded yet
+    SERVER_STATE_READY,          // Server is ready and model is loaded
+    SERVER_STATE_ERROR           // An error occurred, load_model failed
+};
+
+enum task_type {
+    TASK_TYPE_COMPLETION,
+    TASK_TYPE_CANCEL,
+    TASK_TYPE_NEXT_RESPONSE,
+    TASK_TYPE_METRICS
+};
+
+struct task_server {
+    int id        = -1; // to be filled by llama_server_queue
+    int id_multi  = -1;
+    int id_target = -1;
+
+    task_type type;
+    json data;
+
+    bool infill    = false;
+    bool embedding = false;
+};
+
+struct task_result {
+    int id       = -1;
+    int id_multi = -1;
+
+    json data;
+
+    bool stop;
+    bool error;
+};
+
+struct task_multi {
+    int id = -1;
+
+    std::set<int> subtasks_remaining;
+    std::vector<task_result> results;
 };
 
 struct slot_params {
@@ -184,7 +228,7 @@ struct server_slot {
         return (state == IDLE && command == LOAD_PROMPT) || state == PROCESSING;
     }
 
-    void add_token_string(const completion_token_output &token) {
+    void add_token_string(const completion_token_output & token) {
         if (command == RELEASE) {
             return;
         }
@@ -315,6 +359,249 @@ struct server_metrics {
         t_prompt_processing       = 0;
         n_tokens_predicted        = 0;
         t_tokens_generation       = 0;
+    }
+};
+
+struct llama_server_queue {
+    int id = 0;
+    bool running;
+
+    // queues
+    std::vector<task_server> queue_tasks;
+    std::vector<task_server> queue_tasks_deferred;
+    std::vector<task_multi>  queue_multitasks;
+
+    std::mutex mutex_tasks;
+    std::condition_variable condition_tasks;
+
+    // callback functions
+    std::function<void(task_server &)> callback_new_task;
+    std::function<void(task_multi &)>  callback_finish_multitask;
+    std::function<void(void)>          callback_run_slots;
+
+    // Add a new task to the end of the queue
+    int post(task_server task) {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        if (task.id == -1) {
+            task.id = id++;
+            LOG_VERBOSE("new task id", {{"new_id", task.id}});
+        }
+        queue_tasks.push_back(std::move(task));
+        condition_tasks.notify_one();
+        return task.id;
+    }
+
+    // Add a new task, but defer until one slot is available
+    void defer(task_server task) {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        queue_tasks_deferred.push_back(std::move(task));
+    }
+
+    // Get the next id for creating anew task
+    int get_new_id() {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        int new_id = id++;
+        LOG_VERBOSE("new task id", {{"new_id", new_id}});
+        return new_id;
+    }
+
+    // Register function to process a new task
+    void on_new_task(std::function<void(task_server&)> callback) {
+        callback_new_task = std::move(callback);
+    }
+
+    // Register function to process a multitask when it is finished
+    void on_finish_multitask(std::function<void(task_multi&)> callback) {
+        callback_finish_multitask = std::move(callback);
+    }
+
+    // Register the function to be called when all slots data is ready to be processed
+    void on_run_slots(std::function<void(void)> callback) {
+        callback_run_slots = std::move(callback);
+    }
+
+    // Call when the state of one slot is changed
+    void notify_slot_changed() {
+        // move deferred tasks back to main loop
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        for (auto & task : queue_tasks_deferred) {
+            queue_tasks.push_back(std::move(task));
+        }
+        queue_tasks_deferred.clear();
+    }
+
+    // end the start_loop routine
+    void terminate() {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
+        running = false;
+        condition_tasks.notify_all();
+    }
+
+    /**
+     * Main loop consists of these steps:
+     * - Wait until a new task arrives
+     * - Process the task (i.e. maybe copy data into slot)
+     * - Check if multitask is finished
+     * - Run all slots
+     */
+    void start_loop() {
+        running = true;
+
+        while (true) {
+            LOG_VERBOSE("new task may arrive", {});
+
+            while (true)
+            {
+                std::unique_lock<std::mutex> lock(mutex_tasks);
+                if (queue_tasks.empty()) {
+                    lock.unlock();
+                    break;
+                }
+                task_server task = queue_tasks.front();
+                queue_tasks.erase(queue_tasks.begin());
+                lock.unlock();
+                LOG_VERBOSE("callback_new_task", {{"id_task", task.id}});
+                callback_new_task(task);
+            }
+
+            LOG_VERBOSE("update_multitasks", {});
+
+            // check if we have any finished multitasks
+            auto queue_iterator = queue_multitasks.begin();
+            while (queue_iterator != queue_multitasks.end()) {
+                if (queue_iterator->subtasks_remaining.empty()) {
+                    // all subtasks done == multitask is done
+                    task_multi current_multitask = *queue_iterator;
+                    callback_finish_multitask(current_multitask);
+                    // remove this multitask
+                    queue_iterator = queue_multitasks.erase(queue_iterator);
+                } else {
+                    ++queue_iterator;
+                }
+            }
+
+            // all tasks in the current loop is processed, slots data is now ready
+            LOG_VERBOSE("callback_run_slots", {});
+
+            callback_run_slots();
+
+            LOG_VERBOSE("wait for new task", {});
+            {
+                std::unique_lock<std::mutex> lock(mutex_tasks);
+                if (queue_tasks.empty()) {
+                    if (!running) {
+                        LOG_VERBOSE("ending start_loop", {});
+                        return;
+                    }
+                    condition_tasks.wait(lock, [&]{
+                        return (!queue_tasks.empty() || !running);
+                    });
+                }
+            }
+        }
+    }
+
+    //
+    // functions to manage multitasks
+    //
+
+    // add a multitask by specifying the id of all subtask (subtask is a task_server)
+    void add_multitask(int id_multi, std::vector<int>& sub_ids) {
+        std::lock_guard<std::mutex> lock(mutex_tasks);
+        task_multi multi;
+        multi.id = id_multi;
+        std::copy(sub_ids.begin(), sub_ids.end(), std::inserter(multi.subtasks_remaining, multi.subtasks_remaining.end()));
+        queue_multitasks.push_back(multi);
+    }
+
+    // updatethe remaining subtasks, while appending results to multitask
+    void update_multitask(int id_multi, int id_sub, task_result& result) {
+        std::lock_guard<std::mutex> lock(mutex_tasks);
+        for (auto & multitask : queue_multitasks) {
+            if (multitask.id == id_multi) {
+                multitask.subtasks_remaining.erase(id_sub);
+                multitask.results.push_back(result);
+            }
+        }
+    }
+};
+
+struct llama_server_response {
+    typedef std::function<void(int, int, task_result&)> callback_multitask_t;
+    callback_multitask_t callback_update_multitask;
+
+    // for keeping track of all tasks waiting for the result
+    std::set<int> waiting_task_ids;
+
+    // the main result queue
+    std::vector<task_result> queue_results;
+
+    std::mutex mutex_results;
+    std::condition_variable condition_results;
+
+    // add the id_task to the list of tasks waiting for response
+    void add_waiting_task_id(int id_task) {
+        LOG_VERBOSE("waiting for task id", {{"id_task", id_task}});
+
+        std::unique_lock<std::mutex> lock(mutex_results);
+        waiting_task_ids.insert(id_task);
+    }
+
+    // when the request is finished, we can remove task associated with it
+    void remove_waiting_task_id(int id_task) {
+        LOG_VERBOSE("remove waiting for task id", {{"id_task", id_task}});
+
+        std::unique_lock<std::mutex> lock(mutex_results);
+        waiting_task_ids.erase(id_task);
+    }
+
+    // This function blocks the thread until there is a response for this id_task
+    task_result recv(int id_task) {
+        while (true) {
+            std::unique_lock<std::mutex> lock(mutex_results);
+            condition_results.wait(lock, [&]{
+                return !queue_results.empty();
+            });
+
+            for (int i = 0; i < (int) queue_results.size(); i++) {
+                if (queue_results[i].id == id_task) {
+                    assert(queue_results[i].id_multi == -1);
+                    task_result res = queue_results[i];
+                    queue_results.erase(queue_results.begin() + i);
+                    return res;
+                }
+            }
+        }
+
+        // should never reach here
+    }
+
+    // Register the function to update multitask
+    void on_multitask_update(callback_multitask_t callback) {
+        callback_update_multitask = std::move(callback);
+    }
+
+    // Send a new result to a waiting id_task
+    void send(task_result result) {
+        LOG_VERBOSE("send new result", {{"id_task", result.id}});
+
+        std::unique_lock<std::mutex> lock(mutex_results);
+        for (const auto & id_task : waiting_task_ids) {
+            // LOG_TEE("waiting task id %i \n", id_task);
+            // for now, tasks that have associated parent multitasks just get erased once multitask picks up the result
+            if (result.id_multi == id_task) {
+                LOG_VERBOSE("callback_update_multitask", {{"id_task", id_task}});
+                callback_update_multitask(id_task, result.id, result);
+                continue;
+            }
+
+            if (result.id == id_task) {
+                LOG_VERBOSE("queue_results.push_back", {{"id_task", id_task}});
+                queue_results.push_back(result);
+                condition_results.notify_all();
+                return;
+            }
+        }
     }
 };
 
@@ -913,22 +1200,22 @@ struct llama_server_context {
         LOG_TEE("task %i - error: %s\n", task.id, error.c_str());
 
         task_result res;
-        res.id          = task.id;
-        res.id_multi    = task.id_multi;
-        res.stop        = false;
-        res.error       = true;
-        res.result_json = { { "content", error } };
+        res.id       = task.id;
+        res.id_multi = task.id_multi;
+        res.stop     = false;
+        res.error    = true;
+        res.data     = { { "content", error } };
 
         queue_results.send(res);
     }
 
     void send_partial_response(server_slot & slot, completion_token_output tkn) {
         task_result res;
-        res.id          = slot.id_task;
-        res.id_multi    = slot.id_multi;
-        res.error       = false;
-        res.stop        = false;
-        res.result_json = json {
+        res.id       = slot.id_task;
+        res.id_multi = slot.id_multi;
+        res.error    = false;
+        res.stop     = false;
+        res.data     = json {
             {"content",    tkn.text_to_send},
             {"stop",       false},
             {"id_slot",    slot.id},
@@ -948,12 +1235,12 @@ struct llama_server_context {
             }
             slot.n_sent_token_probs = probs_stop_pos;
 
-            res.result_json["completion_probabilities"] = probs_vector_to_json(ctx, probs_output);
+            res.data["completion_probabilities"] = probs_vector_to_json(ctx, probs_output);
         }
 
         if (slot.oaicompat) {
-            res.result_json["oaicompat_token_ctr"] = slot.n_decoded;
-            res.result_json["model"] = slot.oaicompat_model;
+            res.data["oaicompat_token_ctr"] = slot.n_decoded;
+            res.data["model"] = slot.oaicompat_model;
         }
 
         queue_results.send(res);
@@ -961,11 +1248,11 @@ struct llama_server_context {
 
     void send_final_response(const server_slot & slot) {
         task_result res;
-        res.id          = slot.id_task;
-        res.id_multi    = slot.id_multi;
-        res.error       = false;
-        res.stop        = true;
-        res.result_json = json {
+        res.id       = slot.id_task;
+        res.id_multi = slot.id_multi;
+        res.error    = false;
+        res.stop     = true;
+        res.data     = json {
             {"content",             !slot.params.stream ? slot.generated_text : ""},
             {"id_slot",             slot.id},
             {"stop",                true},
@@ -997,12 +1284,12 @@ struct llama_server_context {
                         slot.generated_token_probs.end());
             }
 
-            res.result_json["completion_probabilities"] = probs_vector_to_json(ctx, probs);
+            res.data["completion_probabilities"] = probs_vector_to_json(ctx, probs);
         }
 
         if (slot.oaicompat) {
-            res.result_json["oaicompat_token_ctr"] = slot.n_decoded;
-            res.result_json["model"] = slot.oaicompat_model;
+            res.data["oaicompat_token_ctr"] = slot.n_decoded;
+            res.data["model"] = slot.oaicompat_model;
         }
 
         queue_results.send(res);
@@ -1033,14 +1320,14 @@ struct llama_server_context {
                         {"seq_id", batch.seq_id[i][0]}
                 });
 
-                res.result_json = json {
+                res.data = json {
                     {"embedding", std::vector<float>(n_embd, 0.0f)},
                 };
 
                 continue;
             }
 
-            res.result_json = json {
+            res.data = json {
                 {"embedding", std::vector<float>(embd, embd + n_embd)},
             };
         }
@@ -1214,11 +1501,11 @@ struct llama_server_context {
                     });
 
                     task_result res;
-                    res.id          = task.id;
-                    res.id_multi    = task.id_multi;
-                    res.stop        = true;
-                    res.error       = false;
-                    res.result_json = {
+                    res.id       = task.id;
+                    res.id_multi = task.id_multi;
+                    res.stop     = true;
+                    res.error    = false;
+                    res.data     = {
                         { "idle",                            n_idle_slots       },
                         { "processing",                      n_processing_slots },
                         { "deferred",                        queue_tasks.queue_tasks_deferred.size() },
@@ -1253,10 +1540,12 @@ struct llama_server_context {
         // collect json results into one json result
         std::vector<json> result_jsons;
         for (const auto & subres : multitask.results) {
-            result_jsons.push_back(subres.result_json);
+            result_jsons.push_back(subres.data);
             result.error = result.error && subres.error;
         }
-        result.result_json = json { { "results", result_jsons } };
+        result.data = json {
+            { "results", result_jsons }
+        };
 
         queue_results.send(result);
     }
@@ -2329,8 +2618,8 @@ int main(int argc, char ** argv) {
                     task_result result = llama.queue_results.recv(task.id);
                     llama.queue_results.remove_waiting_task_id(task.id);
 
-                    const int n_idle_slots       = result.result_json["idle"];
-                    const int n_processing_slots = result.result_json["processing"];
+                    const int n_idle_slots       = result.data["idle"];
+                    const int n_processing_slots = result.data["processing"];
 
                     json health = {
                         {"status",           "ok"},
@@ -2340,7 +2629,7 @@ int main(int argc, char ** argv) {
 
                     res.status = 200; // HTTP OK
                     if (sparams.slots_endpoint && req.has_param("include_slots")) {
-                        health["slots"] = result.result_json["slots"];
+                        health["slots"] = result.data["slots"];
                     }
 
                     if (n_idle_slots == 0) {
@@ -2382,7 +2671,7 @@ int main(int argc, char ** argv) {
             task_result result = llama.queue_results.recv(task.id);
             llama.queue_results.remove_waiting_task_id(task.id);
 
-            res.set_content(result.result_json["slots"].dump(), "application/json");
+            res.set_content(result.data["slots"].dump(), "application/json");
             res.status = 200; // HTTP OK
         });
     }
@@ -2403,7 +2692,7 @@ int main(int argc, char ** argv) {
             task_result result = llama.queue_results.recv(task.id);
             llama.queue_results.remove_waiting_task_id(task.id);
 
-            json data = result.result_json;
+            json data = result.data;
 
             const uint64_t n_prompt_tokens_processed = data["n_prompt_tokens_processed"];
             const uint64_t t_prompt_processing       = data["t_prompt_processing"];
@@ -2625,10 +2914,10 @@ int main(int argc, char ** argv) {
         if (!json_value(data, "stream", false)) {
             task_result result = llama.queue_results.recv(id_task);
             if (!result.error && result.stop) {
-                res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
+                res.set_content(result.data.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
             } else {
                 res.status = 404;
-                res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
+                res.set_content(result.data["content"], "text/plain; charset=utf-8");
             }
 
             llama.queue_results.remove_waiting_task_id(id_task);
@@ -2639,7 +2928,7 @@ int main(int argc, char ** argv) {
                     if (!result.error) {
                         const std::string str =
                             "data: " +
-                            result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
+                            result.data.dump(-1, ' ', false, json::error_handler_t::replace) +
                             "\n\n";
 
                         LOG_VERBOSE("data stream", {
@@ -2657,7 +2946,7 @@ int main(int argc, char ** argv) {
                     } else {
                         const std::string str =
                             "error: " +
-                            result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
+                            result.data.dump(-1, ' ', false, json::error_handler_t::replace) +
                             "\n\n";
 
                         LOG_VERBOSE("data stream", {
@@ -2725,23 +3014,22 @@ int main(int argc, char ** argv) {
             task_result result = llama.queue_results.recv(id_task);
 
             if (!result.error && result.stop) {
-                json oaicompat_result = format_final_response_oaicompat(data, result);
+                json result_oai = format_final_response_oaicompat(data, result.data);
 
-                res.set_content(oaicompat_result.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
+                res.set_content(result_oai.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
             } else {
                 res.status = 500;
-                res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
+                res.set_content(result.data["content"], "text/plain; charset=utf-8");
             }
             llama.queue_results.remove_waiting_task_id(id_task);
         } else {
             const auto chunked_content_provider = [id_task, &llama](size_t, httplib::DataSink & sink) {
                 while (true) {
-                    task_result llama_result = llama.queue_results.recv(id_task);
-                    if (!llama_result.error) {
-                        std::vector<json> result_array = format_partial_response_oaicompat( llama_result);
+                    task_result result = llama.queue_results.recv(id_task);
+                    if (!result.error) {
+                        std::vector<json> result_array = format_partial_response_oaicompat(result.data);
 
-                        for (auto it = result_array.begin(); it != result_array.end(); ++it)
-                        {
+                        for (auto it = result_array.begin(); it != result_array.end(); ++it) {
                             if (!it->empty()) {
                                 const std::string str =
                                     "data: " +
@@ -2754,14 +3042,13 @@ int main(int argc, char ** argv) {
                                 }
                             }
                         }
-                        if (llama_result.stop) {
+                        if (result.stop) {
                             break;
                         }
                     } else {
                         const std::string str =
                             "error: " +
-                            llama_result.result_json.dump(-1, ' ', false,
-                                    json::error_handler_t::replace) +
+                            result.data.dump(-1, ' ', false, json::error_handler_t::replace) +
                             "\n\n";
                         LOG_VERBOSE("data stream", {{"to_send", str}});
                         if (!sink.write(str.c_str(), str.size())) {
@@ -2805,10 +3092,10 @@ int main(int argc, char ** argv) {
         if (!json_value(data, "stream", false)) {
             task_result result = llama.queue_results.recv(id_task);
             if (!result.error && result.stop) {
-                res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
+                res.set_content(result.data.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
             } else {
                 res.status = 404;
-                res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
+                res.set_content(result.data["content"], "text/plain; charset=utf-8");
             }
 
             llama.queue_results.remove_waiting_task_id(id_task);
@@ -2819,7 +3106,7 @@ int main(int argc, char ** argv) {
                     if (!result.error) {
                         const std::string str =
                             "data: " +
-                            result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
+                            result.data.dump(-1, ' ', false, json::error_handler_t::replace) +
                             "\n\n";
 
                         LOG_VERBOSE("data stream", {
@@ -2910,7 +3197,7 @@ int main(int argc, char ** argv) {
         llama.queue_results.remove_waiting_task_id(id_task);
 
         // send the result
-        return res.set_content(result.result_json.dump(), "application/json; charset=utf-8");
+        return res.set_content(result.data.dump(), "application/json; charset=utf-8");
     });
 
     svr.Post("/v1/embeddings", [&params, &llama](const httplib::Request & req, httplib::Response & res) {
@@ -2940,7 +3227,7 @@ int main(int argc, char ** argv) {
                     llama.queue_results.remove_waiting_task_id(id_task);
 
                     json embedding = json{
-                        {"embedding", json_value(result.result_json, "embedding", json::array())},
+                        {"embedding", json_value(result.data, "embedding", json::array())},
                         {"index",     i++},
                         {"object",    "embedding"}
                     };
@@ -2967,7 +3254,7 @@ int main(int argc, char ** argv) {
         llama.queue_results.remove_waiting_task_id(id_task);
 
         json data = json::array({json{
-            {"embedding", json_value(result.result_json, "embedding", json::array())},
+            {"embedding", json_value(result.data, "embedding", json::array())},
             {"index",     0},
             {"object",    "embedding"}
         }}

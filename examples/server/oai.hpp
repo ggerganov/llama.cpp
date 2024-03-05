@@ -1,7 +1,8 @@
 #pragma once
 
-#include "json.hpp"
 #include "utils.hpp"
+
+#include "json.hpp"
 
 #include <string>
 #include <vector>
@@ -10,7 +11,7 @@
 
 using json = nlohmann::json;
 
-inline static json oaicompat_completion_params_parse(
+static json oaicompat_completion_params_parse(
     const struct llama_model * model,
     const json & body, /* openai api json semantics */
     const std::string & chat_template) {
@@ -64,9 +65,7 @@ inline static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-inline static json format_final_response_oaicompat(const json & request, const task_result & response, bool streaming = false) {
-    json result = response.result_json;
-
+static json format_final_response_oaicompat(const json & request, json result, bool streaming = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
@@ -115,11 +114,9 @@ inline static json format_final_response_oaicompat(const json & request, const t
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-inline static std::vector<json> format_partial_response_oaicompat(const task_result &response) {
-    json result = response.result_json;
-
+static std::vector<json> format_partial_response_oaicompat(json result) {
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
-        return std::vector<json>({response.result_json});
+        return std::vector<json>({result});
     }
 
     bool first = json_value(result, "oaicompat_token_ctr", 0) == 0;
@@ -207,7 +204,7 @@ inline static std::vector<json> format_partial_response_oaicompat(const task_res
     return std::vector<json>({ret});
 }
 
-inline static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
+static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
