@@ -5420,8 +5420,8 @@ static void dequantize_block_iq3_s(const void * __restrict__ vx, dst_t * __restr
     const int ib = tid%8; // 0...7
     dst_t * y = yy + i*QK_K + 32*ib + 8*il;
     const uint8_t  * qs = x[i].qs + 8*ib;
-    const uint8_t  * grid1 = (const uint8_t *)(iq3s_grid + q3[2*il+0]);
-    const uint8_t  * grid2 = (const uint8_t *)(iq3s_grid + q3[2*il+1]);
+    const uint8_t  * grid1 = (const uint8_t *)(iq3s_grid + qs[2*il+0]);
+    const uint8_t  * grid2 = (const uint8_t *)(iq3s_grid + qs[2*il+1]);
     const float d = (float)x[i].d * (1 + 2*((x[i].scales[ib/2] >> 4*(ib%2)) & 0xf));
     const uint8_t signs = x[i].signs[4*ib + il];
     for (int j = 0; j < 4; ++j) {
@@ -8333,9 +8333,8 @@ vec_dot_iq3_s_q8_1(const void *__restrict__ vbq,
         sumi = dpct::dp4a(grid_l, *((int *)q8 + 0), sumi);
         sumi = dpct::dp4a(grid_h, *((int *)q8 + 1), sumi);
         q8 += 8;
-        aux32 >>= 7;
     }
-    const float d = (float)bq2->d * (1 + 2*((bq2->scales[ib32/2] >> 4*(ib32%2)) & 0xf)) * (0.5f + aux32) * bq8_1[ib32].ds[0];
+    const float d = (float)bq2->d * (1 + 2*((bq2->scales[ib32/2] >> 4*(ib32%2)) & 0xf)) * bq8_1[ib32].ds[0];
     return d * sumi;
 #else
     assert(false);
@@ -11698,7 +11697,7 @@ static void mul_mat_vec_iq3_s_q8_1_sycl(const void *vx, const void *vy,
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                     [[intel::reqd_sub_group_size(32)]] {
-                        mul_mat_vec_q_iq3_s_q8_1<QK_K, QI3_S, block_iq3_s, 1>(
+                        mul_mat_vec_q_iq3_s_q8_1<QK_K, QI3_XS, block_iq3_s, 1>(
                             vx, vy, dst, ncols, nrows, item_ct1,
                             iq3s_grid_ptr_ct1, ksigns64_ptr_ct1);
                     });
