@@ -46,7 +46,7 @@ let
     strings
     versionOlder
     ;
-    
+
   stdenv = throw "Use effectiveStdenv instead";
 
   suffices =
