@@ -698,6 +698,9 @@ python convert.py models/mymodel/ --vocab-type bpe
 
 # update the gguf filetype to current version if older version is now unsupported
 ./quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
+
+# convert the hunggingface model to ggml FP16 format
+python3 convert-hf-to-gguf.py models/mymodel/
 ```
 
 ### Run the quantized model
