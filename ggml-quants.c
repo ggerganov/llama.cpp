@@ -4054,21 +4054,11 @@ void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y
 
 // ====================== 3.3125 bpw (de)-quantization
 
-#ifdef IQ3S_SLOW_MULT
-// Best PPL
-#define IQ3S_MULTIPLIER 190842953
-#else
 #define IQ3S_MULTIPLIER 72968561ULL
-//#define IQ3S_MULTIPLIER 540201
-//#define IQ3S_MULTIPLIER 1378231
-//#define IQ3S_MULTIPLIER 898886
-//#define IQ3S_MULTIPLIER 842866
-#endif
 
 #define IQ3S_BITS 3
 
 static const uint8_t iq3s_values[16] = {1, 1, 1, 3, 3, 3, 5, 5, 5, 7, 7, 9, 9, 11, 13, 15};
-//static const uint8_t iq3s_values[16] = {1, 1, 1, 3, 3, 3, 5, 5, 7, 7, 9, 9, 11, 11, 13, 15};
 
 void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
@@ -4098,48 +4088,22 @@ void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, in
 #endif
             for (int l = 0; l < 4; ++l) {
                 const float dl = db[8*l/IQ3S_BLOCK_SIZE];
-#ifdef IQ3S_SLOW_MULT
-                aux32[0] = ((qs[2*l+0] | ((qh[0] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
-                aux32[1] = ((qs[2*l+1] | ((qh[0] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
-                for (int j = 0; j < 8; ++j) {
-                    y[j] = dl * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
-                }
-#else
-                //aux32[0] = (((qs[2*l+0] | ((qh[0] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
-                //aux32[1] = (((qs[2*l+1] | ((qh[0] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
-                //for (int j = 0; j < 8; ++j) {
-                //    y[j] = dl * grid[j] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
-                //}
                 aux32[0] = (((qs[2*l+0] | ((qh[0] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f);
                 aux32[1] = (((qs[2*l+1] | ((qh[0] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f);
                 for (int j = 0; j < 8; ++j) {
                     y[j] = dl * iq3s_values[grid[j]] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
-#endif
                 y += 8;
             }
             qs += 8;
             signs += 4;
             for (int l = 0; l < 4; ++l) {
                 const float dl = db[(8*l+32)/IQ3S_BLOCK_SIZE];
-#ifdef IQ3S_SLOW_MULT
-                aux32[0] = ((qs[2*l+0] | ((qh[1] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
-                aux32[1] = ((qs[2*l+1] | ((qh[1] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f;
-                for (int j = 0; j < 8; ++j) {
-                    y[j] = dl * (2*((grid[j]-1)/2) + 1) * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
-                }
-#else
-                //aux32[0] = (((qs[2*l+0] | ((qh[1] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
-                //aux32[1] = (((qs[2*l+1] | ((qh[1] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f) | 0x01010101;
-                //for (int j = 0; j < 8; ++j) {
-                //    y[j] = dl * grid[j] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
-                //}
                 aux32[0] = (((qs[2*l+0] | ((qh[1] << (8-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f);
                 aux32[1] = (((qs[2*l+1] | ((qh[1] << (7-2*l)) & 256)) * IQ3S_MULTIPLIER) & 0x0f0f0f0f);
                 for (int j = 0; j < 8; ++j) {
                     y[j] = dl * iq3s_values[grid[j]] * (signs[l] & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
-#endif
                 y += 8;
             }
             qh += 2;
@@ -10005,14 +9969,13 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
 
     const uint8x16x2_t mask1 = vld1q_u8_x2(k_mask1);
     const uint8x16_t   mask2 = vld1q_u8(k_mask2);
-    const uint8x16_t   shuff = vld1q_u8(iq3s_values);
+    const int8x16_t    shuff = vld1q_s8((const int8_t *)iq3s_values);
 
     const uint32x4_t  idx_mult = vdupq_n_u32(IQ3S_MULTIPLIER);
     const int16x8_t   idx_shift = vld1q_s16(k_shift);
     const uint16x8_t  idx_mask1 = vdupq_n_u16(256);
     const uint32x4_t  idx_mask2 = vdupq_n_u32(0x0f0f0f0f);
     const int8x16_t   m1 = vdupq_n_s8(1);
-    const int8x16_t   m0 = vdupq_n_s8(0);
 
     uint8x16x2_t vs;
     ggml_int8x16x4_t q3s;
@@ -10033,21 +9996,10 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
                                                vmovl_u8(vget_low_u8(idx_l)));
             const uint16x8_t idx_2 = vorrq_u16(vandq_u16(vshlq_u16(vdupq_n_u16(qh[ib32+1]), idx_shift), idx_mask1),
                                                vmovl_u8(vget_high_u8(idx_l)));
-#ifdef IQ3S_SLOW_MULT
-            q3s.val[0] = vreinterpretq_s8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_low_u16 (idx_1))), idx_mask2));
-            q3s.val[1] = vreinterpretq_s8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_high_u16(idx_1))), idx_mask2));
-            q3s.val[2] = vreinterpretq_s8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_low_u16 (idx_2))), idx_mask2));
-            q3s.val[3] = vreinterpretq_s8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_high_u16(idx_2))), idx_mask2));
-            q3s.val[0] = vorrq_s8(vshlq_n_s8(vshrq_n_u8(vmaxq_s8(vsubq_s8(q3s.val[0], m1), m0), 1), 1), m1);
-            q3s.val[1] = vorrq_s8(vshlq_n_s8(vshrq_n_u8(vmaxq_s8(vsubq_s8(q3s.val[1], m1), m0), 1), 1), m1);
-            q3s.val[2] = vorrq_s8(vshlq_n_s8(vshrq_n_u8(vmaxq_s8(vsubq_s8(q3s.val[2], m1), m0), 1), 1), m1);
-            q3s.val[3] = vorrq_s8(vshlq_n_s8(vshrq_n_u8(vmaxq_s8(vsubq_s8(q3s.val[3], m1), m0), 1), 1), m1);
-#else
             q3s.val[0] = vqtbl1q_s8(shuff, vreinterpretq_u8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_low_u16 (idx_1))), idx_mask2)));
             q3s.val[1] = vqtbl1q_s8(shuff, vreinterpretq_u8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_high_u16(idx_1))), idx_mask2)));
             q3s.val[2] = vqtbl1q_s8(shuff, vreinterpretq_u8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_low_u16 (idx_2))), idx_mask2)));
             q3s.val[3] = vqtbl1q_s8(shuff, vreinterpretq_u8_u32(vandq_u32(vmulq_u32(idx_mult, vmovl_u16(vget_high_u16(idx_2))), idx_mask2)));
-#endif
 
             vs.val[0] = vreinterpretq_u8_u32(vdupq_n_u32(signs[0] | (signs[1] << 16)));
             vs.val[1] = vandq_u8(ggml_vqtbl1q_u8(vs.val[0], mask1.val[1]), mask2);
@@ -10094,13 +10046,8 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
     const __m256i shuffle = _mm256_set_m128i(shuffle128, shuffle128);
 
     const __m256i idx_mult = _mm256_set1_epi32(IQ3S_MULTIPLIER);
-    //const __m256i m1 = _mm256_set1_epi8(1);
     const __m256i m15 = _mm256_set1_epi32(0x0f0f0f0f);
     const __m256i m100 = _mm256_set1_epi32(0x0100);
-#ifdef IQ3S_SLOW_MULT
-    const __m256i m7 = _mm256_set1_epi32(0x07070707);
-    const __m256i m0  = _mm256_setzero_si256();
-#endif
 
     __m256 accumf = _mm256_setzero_ps();
     for (int i = 0; i < nb; ++i) {
@@ -10128,15 +10075,8 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
             const __m256i idx_32_l = _mm256_or_si256(_mm256_and_si256(m100, high_bits_in_low_1), q3_low_bytes_1);
             const __m256i idx_32_h = _mm256_or_si256(_mm256_and_si256(m100, high_bits_in_low_2), q3_low_bytes_2);
 
-#ifdef IQ3S_SLOW_MULT
-            const __m256i idx_l = _mm256_max_epi8(_mm256_sub_epi8(_mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_l), m15), m1), m0);
-            const __m256i q2_1  = _mm256_or_si256(_mm256_slli_epi32(_mm256_and_si256(_mm256_srli_epi32(idx_l, 1), m7), 1), m1);
-            const __m256i idx_h = _mm256_max_epi8(_mm256_sub_epi8(_mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_h), m15), m1), m0);
-            const __m256i q2_2  = _mm256_or_si256(_mm256_slli_epi32(_mm256_and_si256(_mm256_srli_epi32(idx_h, 1), m7), 1), m1);
-#else
             const __m256i q2_1 = _mm256_shuffle_epi8(shuffle, _mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_l), m15));
             const __m256i q2_2 = _mm256_shuffle_epi8(shuffle, _mm256_and_si256(_mm256_mullo_epi32(idx_mult, idx_32_h), m15));
-#endif
 
             __m256i aux256 = _mm256_set1_epi32(signs[0] | (signs[1] << 16));
             aux256 = _mm256_and_si256(_mm256_shuffle_epi8(aux256,mask1), mask2);
@@ -10184,19 +10124,11 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
             const uint32_t ls2 = 2*(x[i].scales[ib32/2] >>  4) + 1;
             int32_t sumi = 0;
             for (int l = 0; l < 4; ++l) {
-#ifdef IQ3S_SLOW_MULT
                 aux32[0] = (IQ3S_MULTIPLIER * (qs[2*l+0] | ((qh[ib32+0] << (8-2*l)) & 256))) & 0x0f0f0f0f;
                 aux32[1] = (IQ3S_MULTIPLIER * (qs[2*l+1] | ((qh[ib32+0] << (7-2*l)) & 256))) & 0x0f0f0f0f;
                 for (int j = 0; j < 8; ++j) {
-                    sumi += (2*((grid[j]-1)/2) + 1) * q8[j] * (signs[l] & kmask_iq2xs[j] ? -1 : 1);
-                }
-#else
-                aux32[0] = ((IQ3S_MULTIPLIER * (qs[2*l+0] | ((qh[ib32+0] << (8-2*l)) & 256))) & 0x0f0f0f0f) | 0x01010101;
-                aux32[1] = ((IQ3S_MULTIPLIER * (qs[2*l+1] | ((qh[ib32+0] << (7-2*l)) & 256))) & 0x0f0f0f0f) | 0x01010101;
-                for (int j = 0; j < 8; ++j) {
                     sumi += grid[j] * q8[j] * (signs[l] & kmask_iq2xs[j] ? -1 : 1);
                 }
-#endif
                 q8 += 8;
             }
             qs += 8;
@@ -10204,18 +10136,10 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * GGML_RESTRICT s, size_t bs, const v
             bsum += sumi * ls1;
             sumi = 0;
             for (int l = 0; l < 4; ++l) {
-#ifdef IQ3S_SLOW_MULT
                 aux32[0] = (IQ3S_MULTIPLIER * (qs[2*l+0] | ((qh[ib32+1] << (8-2*l)) & 256))) & 0x0f0f0f0f;
                 aux32[1] = (IQ3S_MULTIPLIER * (qs[2*l+1] | ((qh[ib32+1] << (7-2*l)) & 256))) & 0x0f0f0f0f;
                 for (int j = 0; j < 8; ++j) {
-                    sumi += (2*((grid[j]-1)/2) + 1) * q8[j] * (signs[l] & kmask_iq2xs[j] ? -1 : 1);
-                }
-#else
-                aux32[0] = ((IQ3S_MULTIPLIER * (qs[2*l+0] | ((qh[ib32+1] << (8-2*l)) & 256))) & 0x0f0f0f0f) | 0x01010101;
-                aux32[1] = ((IQ3S_MULTIPLIER * (qs[2*l+1] | ((qh[ib32+1] << (7-2*l)) & 256))) & 0x0f0f0f0f) | 0x01010101;
-#endif
-                for (int j = 0; j < 8; ++j) {
-                    sumi += grid[j] * q8[j] * (signs[l] & kmask_iq2xs[j] ? -1 : 1);
+                    sumi += q8[j] * iq3s_values[grid[j]] * (signs[l] & kmask_iq2xs[j] ? -1 : 1);
                 }
                 q8 += 8;
             }
@@ -11382,15 +11306,7 @@ static void iq3xs_init_grid512(void) {
     const uint8_t * q4 = (const uint8_t *)&aux32;
     for (int k = 0; k < grid_size; ++k) {
         int8_t * pos = (int8_t *)(the_grid + k);
-#ifdef IQ3S_SLOW_MULT
-        aux32 = ((uint64_t)IQ3S_MULTIPLIER * k) & 0x0f0f0f0f;
-#else
-        //aux32 = (((uint64_t)IQ3S_MULTIPLIER * k) & 0x0f0f0f0f) | 0x01010101;
         aux32 = ((k * IQ3S_MULTIPLIER) & 0x0f0f0f0f);
-#endif
-        //for (int i = 0; i < 4; ++i) {
-        //    pos[i] = 2*((q4[i]-1)/2) + 1;
-        //}
         for (int i = 0; i < 4; ++i) {
             pos[i] = iq3s_values[q4[i]];
         }
@@ -12080,11 +11996,7 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
         }
 
         float d = max_scale/31;
-#ifdef IQ3S_SLOW_MULT
-        y[ibl].d = GGML_FP32_TO_FP16(d * 1.025f);
-#else
         y[ibl].d = GGML_FP32_TO_FP16(d * 1.030f);
-#endif
         float id = 1/d;
         for (int ib = 0; ib < QK_K/block_size; ib += 2) {
             int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
