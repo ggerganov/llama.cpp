@@ -1,5 +1,6 @@
 {
   lib,
+  glibc,
   config,
   stdenv,
   mkShell,
@@ -30,6 +31,11 @@
   useRocm ? config.rocmSupport,
   useVulkan ? false,
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
+
+  # It's necessary to consistently use backendStdenv when building with CUDA support,
+  # otherwise we get libstdc++ errors downstream.
+  effectiveStdenv ? if useCuda then cudaPackages.backendStdenv else stdenv,
+  enableStatic ? effectiveStdenv.hostPlatform.isStatic
 }@inputs:
 
 let
@@ -41,10 +47,7 @@ let
     versionOlder
     ;
 
-  # It's necessary to consistently use backendStdenv when building with CUDA support,
-  # otherwise we get libstdc++ errors downstream.
   stdenv = throw "Use effectiveStdenv instead";
-  effectiveStdenv = if useCuda then cudaPackages.backendStdenv else inputs.stdenv;
 
   suffices =
     lib.optionals useBlas [ "BLAS" ]
@@ -167,6 +170,9 @@ effectiveStdenv.mkDerivation (
         # TODO: Replace with autoAddDriverRunpath
         # once https://github.com/NixOS/nixpkgs/pull/275241 has been merged
         cudaPackages.autoAddOpenGLRunpathHook
+      ]
+      ++ optionals (effectiveStdenv.hostPlatform.isGnu && enableStatic) [
+        glibc.static
       ];
 
     buildInputs =
@@ -181,7 +187,7 @@ effectiveStdenv.mkDerivation (
       [
         (cmakeBool "LLAMA_NATIVE" false)
         (cmakeBool "LLAMA_BUILD_SERVER" true)
-        (cmakeBool "BUILD_SHARED_LIBS" true)
+        (cmakeBool "BUILD_SHARED_LIBS" (!enableStatic))
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
         (cmakeBool "LLAMA_BLAS" useBlas)
         (cmakeBool "LLAMA_CLBLAST" useOpenCL)
@@ -190,6 +196,7 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_METAL" useMetalKit)
         (cmakeBool "LLAMA_MPI" useMpi)
         (cmakeBool "LLAMA_VULKAN" useVulkan)
+        (cmakeBool "LLAMA_STATIC" enableStatic)
       ]
       ++ optionals useCuda [
         (
