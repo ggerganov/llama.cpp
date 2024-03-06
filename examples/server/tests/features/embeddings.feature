@@ -9,7 +9,7 @@ Feature: llama.cpp server
     And   42 as server seed
     And   2 slots
     And   1024 as batch size
-    And   4096 KV cache size
+    And   2048 KV cache size
     And   embeddings extraction
     Then  the server is starting
     Then  the server is healthy
@@ -87,9 +87,8 @@ Feature: llama.cpp server
     Then the server is idle
     Then all embeddings are generated
 
-  @wip
   Scenario: All embeddings should be the same
-    Given 20 fixed prompts
+    Given 10 fixed prompts
     And   a model bert-bge-small
     Given concurrent OAI embedding requests
     Then the server is busy

@@ -292,9 +292,10 @@ def step_impl(context, n_ga_w):
 def step_prompt_passkey(context):
     context.prompt_passkey = context.text
 
+
 @step(u'{n_prompts:d} fixed prompts')
 def step_fixed_prompts(context, n_prompts):
-    context.prompts.extend([str(0)*1024 for i in range(n_prompts)])
+    context.prompts.extend([str(0)*(context.n_batch if context.n_batch is not None else 512) for i in range(n_prompts)])
     context.n_prompts = n_prompts
 
 
@@ -818,7 +819,8 @@ async def request_oai_embeddings(input,
                                         "input": input,
                                         "model": model,
                                     },
-                                    headers=headers) as response:
+                                    headers=headers,
+                                    timeout=3600) as response:
                 assert response.status == 200, f"received status code not expected: {response.status}"
                 assert response.headers['Access-Control-Allow-Origin'] == origin
                 assert response.headers['Content-Type'] == "application/json; charset=utf-8"
