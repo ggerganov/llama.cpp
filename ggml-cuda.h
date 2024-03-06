@@ -17,6 +17,9 @@ extern "C" {
 
 #define GGML_CUDA_MAX_DEVICES       16
 
+// Release CUDA resources
+GGML_API GGML_CALL void   ggml_free_cublas(void);
+
 // Always success. To check if CUDA is actually loaded, use `ggml_cublas_loaded`.
 GGML_API GGML_CALL void   ggml_init_cublas(void);
 

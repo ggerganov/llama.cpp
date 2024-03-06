@@ -8751,10 +8751,11 @@ GGML_CALL bool ggml_cublas_loaded(void) {
     return g_cublas_loaded;
 }
 
-GGML_CALL void ggml_init_cublas() {
-    static bool initialized = false;
+static bool g_cublas_initialized = false;
 
-    if (!initialized) {
+GGML_CALL void ggml_init_cublas() {
+
+    if (!g_cublas_initialized) {
 
 #ifdef __HIP_PLATFORM_AMD__
         // Workaround for a rocBLAS bug when using multiple graphics cards:
@@ -8764,7 +8765,7 @@ GGML_CALL void ggml_init_cublas() {
 #endif
 
         if (cudaGetDeviceCount(&g_device_count) != cudaSuccess) {
-            initialized = true;
+            g_cublas_initialized = true;
             g_cublas_loaded = false;
             fprintf(stderr, "%s: no " GGML_CUDA_NAME " devices found, " GGML_CUDA_NAME " will be disabled\n", __func__);
             return;
@@ -8835,7 +8836,7 @@ GGML_CALL void ggml_init_cublas() {
         // configure logging to stdout
         // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
 
-        initialized = true;
+        g_cublas_initialized = true;
         g_cublas_loaded = true;
     }
 }
@@ -12489,4 +12490,16 @@ GGML_CALL int ggml_backend_cuda_reg_devices() {
         ggml_backend_register(name, ggml_backend_reg_cuda_init, ggml_backend_cuda_buffer_type(i), (void *) (intptr_t) i);
     }
     return device_count;
+}
+
+extern "C" GGML_CALL void ggml_free_cublas(void);
+
+GGML_CALL void ggml_free_cublas(void) {
+#ifdef GGML_USE_CUBLAS
+    for (int id = 0; id < g_device_count; ++id) {
+        CUBLAS_CHECK(cublasDestroy(g_cublas_handles[id]));
+        g_cublas_handles[id] = nullptr;
+    }
+    g_cublas_initialized = false;
+#endif
 }
