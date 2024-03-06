@@ -1583,16 +1583,16 @@ struct llama_server_context {
 
         // check if all slots are idle
         {
-            bool all_slots_are_idle = true;
+            bool all_idle = true;
 
             for (auto & slot : slots) {
                 if (slot.state != IDLE || slot.command != NONE) {
-                    all_slots_are_idle = false;
+                    all_idle = false;
                     break;
                 }
             }
 
-            if (all_slots_are_idle) {
+            if (all_idle) {
                 LOG_INFO("all slots are idle", {});
                 if (system_prompt.empty() && clean_kv_cache) {
                     kv_cache_clear();
@@ -1688,8 +1688,6 @@ struct llama_server_context {
 
         // assign workload to the slots
         if (params.cont_batching || batch.n_tokens == 0) {
-            int n_available = n_batch;
-
             for (auto & slot : slots) {
                 const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty());
 
@@ -1830,7 +1828,7 @@ struct llama_server_context {
 
                     if (slot.embedding) {
                         // cannot fit the prompt in the current batch - will try next iter
-                        if (slot.n_prompt_tokens > n_available) {
+                        if (batch.n_tokens + slot.n_prompt_tokens > n_batch) {
                             continue;
                         }
                     }
@@ -1850,7 +1848,7 @@ struct llama_server_context {
                     int32_t ga_n = slot.ga_n;
                     int32_t ga_w = slot.ga_w;
 
-                    for (; slot.n_past < slot.n_prompt_tokens && n_available > 0; ++slot.n_past, --n_available) {
+                    for (; slot.n_past < slot.n_prompt_tokens && batch.n_tokens < n_batch; ++slot.n_past) {
                         if (slot.ga_n != 1) {
                             while (slot_npast >= ga_i + ga_w) {
                                 const int bd = (ga_w/ga_n)*(ga_n - 1);
@@ -1869,7 +1867,7 @@ struct llama_server_context {
                         slot_npast++;
                     }
 
-                    // entire prompt has been processed
+                    // entire prompt has been processed - start decoding new tokens
                     if (slot.n_past == slot.n_prompt_tokens) {
                         slot.state = PROCESSING;
                         slot.command = NONE;
@@ -1898,7 +1896,7 @@ struct llama_server_context {
                     }
                 }
 
-                if (n_available == 0) {
+                if (batch.n_tokens >= n_batch) {
                     break;
                 }
             }
