@@ -1369,6 +1369,7 @@ struct llama_server_context
 
             // rebuild the prompt since it was cleared earlier
             prompt += img.prefix_prompt;
+            prompt += "[img-" + std::to_string(img.id) + "]";
             prompt += json_prompt;
 
             std::vector<llama_token> append_tokens = tokenize(json_prompt, false); // has next image
