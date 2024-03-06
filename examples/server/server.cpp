@@ -2945,7 +2945,7 @@ int main(int argc, char ** argv) {
             if (!result.error && result.stop) {
                 res.set_content(result.data.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
             } else {
-                res.status = 404;
+                res.status = 400;
                 res.set_content(result.data["content"], "text/plain; charset=utf-8");
             }
 
@@ -3202,6 +3202,7 @@ int main(int argc, char ** argv) {
     svr.Post("/embedding", [&params, &llama](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         if (!params.embedding) {
+            res.status = 400;
             res.set_content("This server does not support embeddings. Start it with `--embeddings`", "text/plain; charset=utf-8");
             return;
         }
@@ -3232,6 +3233,7 @@ int main(int argc, char ** argv) {
     svr.Post("/v1/embeddings", [&params, &llama](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         if (!params.embedding) {
+            res.status = 400;
             res.set_content("This server does not support embeddings. Start it with `--embeddings`", "text/plain; charset=utf-8");
             return;
         }
