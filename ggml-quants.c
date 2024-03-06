@@ -464,8 +464,8 @@ inline static int8x16_t ggml_vqtbl1q_s8(int8x16_t a, uint8x16_t b) {
 }
 
 // NOTE: not tested
-inline static int8x16_t ggml_vqtbl1q_u8(uint8x16_t a, uint8x16_t b) {
-    int8x16_t res;
+inline static uint8x16_t ggml_vqtbl1q_u8(uint8x16_t a, uint8x16_t b) {
+    uint8x16_t res;
 
     res[ 0] = a[b[ 0]];
     res[ 1] = a[b[ 1]];
