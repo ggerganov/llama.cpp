@@ -1303,6 +1303,7 @@ struct llama_server_context
     bool ingest_images(server_slot &slot, int n_batch)
     {
         int image_idx = 0;
+        std::string prompt = "";
 
         while (image_idx < (int) slot.images.size())
         {
@@ -1366,6 +1367,10 @@ struct llama_server_context
                 slot.params.input_suffix : // no more images, then process suffix prompt
                 (json)(slot.images[image_idx].prefix_prompt);
 
+            // rebuild the prompt since it was cleared earlier
+            prompt += img.prefix_prompt;
+            prompt += json_prompt;
+
             std::vector<llama_token> append_tokens = tokenize(json_prompt, false); // has next image
             for (int i = 0; i < (int) append_tokens.size(); ++i)
             {
@@ -1373,6 +1378,13 @@ struct llama_server_context
                 slot.n_past += 1;
             }
         }
+
+        // There is no prompt caching in multimodal currently
+        slot.n_prompt_tokens = slot.n_past;
+        slot.n_prompt_tokens_processed = slot.n_past;
+
+        // prompt for multimodal is set to empty to avoid processing those tokens here
+        slot.prompt = prompt;
 
         return true;
     }
