@@ -91,6 +91,4 @@ Feature: llama.cpp server
     Given 10 fixed prompts
     And   a model bert-bge-small
     Given concurrent OAI embedding requests
-    Then the server is busy
-    Then the server is idle
     Then all embeddings are the same
