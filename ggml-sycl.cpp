@@ -17489,7 +17489,7 @@ GGML_API GGML_CALL int ggml_backend_sycl_get_device_index(int device_id) {
 GGML_API GGML_CALL void ggml_backend_sycl_set_single_device(int main_gpu_id) {
     GGML_ASSERT(main_gpu_id<g_all_sycl_device_count);
     printf("ggml_backend_sycl_set_single_device: use single device: %d\n", main_gpu_id);
-    if (!g_sycl_gpu_mgr) {
+    if (g_sycl_gpu_mgr) {
         delete g_sycl_gpu_mgr;
     }
     g_sycl_gpu_mgr = new sycl_gpu_mgr(main_gpu_id);
