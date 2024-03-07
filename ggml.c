@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <float.h>
 #include <limits.h>
+#include <locale.h>
 #include <stdarg.h>
 #include <signal.h>
 #if defined(__gnu_linux__)
@@ -42,7 +43,7 @@
 #endif
 
 #if defined(_WIN32)
-
+#include <wchar.h>
 #include <windows.h>
 
 typedef volatile LONG atomic_int;
@@ -20283,7 +20284,22 @@ struct gguf_context * gguf_init_empty(void) {
 }
 
 struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
-    FILE * file = fopen(fname, "rb");
+#ifdef _WIN32
+    setlocale(LC_ALL, "");
+    size_t size = mbstowcs(NULL, fname, 0) + 1;
+    wchar_t *wfname = malloc(size * sizeof(wchar_t));
+    if (!wfname) {
+        return NULL;
+    }
+    if (mbstowcs(wfname, fname, size) == (size_t)-1) {
+        free(wfname);
+        return NULL;
+    }
+    FILE * file = _wfopen(wfname, L"rb");
+    free(wfname);
+#else
+     FILE * file = fopen(fname, "rb");
+#endif  
     if (!file) {
         return NULL;
     }
