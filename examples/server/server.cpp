@@ -764,6 +764,7 @@ struct llama_server_context {
 
     server_slot * get_slot(int id) {
         int64_t t_last = ggml_time_us();
+
         server_slot * last_used = nullptr;
 
         for (server_slot & slot : slots) {
@@ -771,6 +772,7 @@ struct llama_server_context {
                 return &slot;
             }
 
+            // among all available slots, find the one that has been least recently used
             if (slot.available() && slot.t_last_used < t_last) {
                 last_used = &slot;
                 t_last = slot.t_last_used;
@@ -832,23 +834,9 @@ struct llama_server_context {
         }
 
         // infill
-        if (data.count("input_prefix") != 0) {
-            slot.params.input_prefix = data["input_prefix"];
-        } else {
-            slot.params.input_prefix = "";
-        }
-
-        if (data.count("input_suffix") != 0) {
-            slot.params.input_suffix = data["input_suffix"];
-        } else {
-            slot.params.input_suffix = "";
-        }
-
-        if (data.count("prompt") != 0) {
-            slot.prompt = data["prompt"];
-        } else {
-            slot.prompt = "";
-        }
+        slot.params.input_prefix = json_value(data, "input_prefix", default_params.input_prefix);
+        slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
+        slot.prompt              = json_value(data, "prompt",       std::string(""));
 
         // penalize user-provided tokens
         {
@@ -1563,8 +1551,8 @@ struct llama_server_context {
         // release slots
         for (auto & slot : slots) {
             if (slot.command == RELEASE) {
-                slot.state   = IDLE;
-                slot.command = NONE;
+                slot.state       = IDLE;
+                slot.command     = NONE;
                 slot.t_last_used = ggml_time_us();
 
                 LOG_INFO("slot released", {
