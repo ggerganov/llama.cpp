@@ -8770,7 +8770,10 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
             }
             // Try to fall back to just the byte as a string
             const char buf2[2] = { (char)ch, 0 };
-            return vocab.token_to_id.at(buf2);
+            token = vocab.token_to_id.find(buf2);
+            if (token != vocab.token_to_id.end()) {
+                return (*token).second;
+            }
         }
         case LLAMA_VOCAB_TYPE_WPM:
         case LLAMA_VOCAB_TYPE_BPE: {
