@@ -262,7 +262,6 @@ extern "C" {
         bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-        bool causal_attn; // whether to use causal attention
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
@@ -641,6 +640,10 @@ extern "C" {
     // n_threads is the number of threads used for generation (single token)
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
+
+    // Set whether to use causal attention or not
+    // If set to true, the model will only attend to the past tokens
+    LLAMA_API void llama_set_embeddings(struct llama_context * ctx, bool embeddings);
 
     // Set abort callback
     LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);

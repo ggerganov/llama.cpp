@@ -125,14 +125,13 @@ int main(int argc, char* argv[])
         return true;
     };
 
-    cparams.embeddings = true;
-    cparams.causal_attn = false;
-    cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
-
     llama_backend_init();
 
     auto mdl = llama_load_model_from_file(params.model.c_str(), mparams);
     auto ctx = llama_new_context_with_model(mdl, cparams);
+
+    // set to embedding mode
+    llama_set_embeddings(ctx, true);
 
     // ### Embedding/Representation ### taken sample from here:
     // https://github.com/ContextualAI/gritlm?tab=readme-ov-file#basic
