@@ -2923,7 +2923,7 @@ int main(int argc, char ** argv) {
         res.set_content(data.dump(), "application/json; charset=utf-8");
     });
 
-    svr.Post("/completion", [&ctx_server, &validate_api_key](const httplib::Request & req, httplib::Response & res) {
+    const auto completions = [&ctx_server, &validate_api_key](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         if (!validate_api_key(req, res)) {
             return;
@@ -3001,7 +3001,11 @@ int main(int argc, char ** argv) {
 
             res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         }
-    });
+    };
+
+    svr.Post("/completion", completions); // legacy
+    svr.Post("/completions", completions);
+    svr.Post("/v1/completions", completions);
 
     svr.Get("/v1/models", [&params, &model_meta](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
