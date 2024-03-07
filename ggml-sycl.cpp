@@ -3769,8 +3769,42 @@ void log_ggml_var_device(const char*name, float *src, size_t total_elements, boo
     std::ofstream logfile;
     logfile.open(filename);
     for(size_t i=0; i<total_elements; i++){
+        logfile << local_buf[i] <<" ";
         if((i+1)%20 ==0) logfile <<std::endl;
-        else logfile << local_buf[i] <<" ";
+    }
+    logfile <<std::endl;
+    logfile.close();
+
+    if(src_on_device) ggml_sycl_host_free(local_buf);
+}
+
+void log_ggml_var_device_fp16(const char*name, sycl::half *src, size_t total_elements, bool src_on_device){
+    if(!g_ggml_sycl_debug) return;
+    if(!src){
+        printf("GGML Tensor:%s skip to save for NULL pointer\n", name);
+        return;
+    }
+    char filename[1024];
+    sprintf(filename, "%s.txt", name);
+    printf("GGML Tensor:%s save to %s\n", name, filename);
+
+    size_t total_size = total_elements*sizeof(sycl::half);
+    sycl::half *local_buf = NULL;
+    if(src_on_device) {
+        local_buf = (sycl::half *) ggml_sycl_host_malloc(total_size);
+        ggml_sycl_set_device(g_main_device);
+        dpct::queue_ptr main_stream = g_syclStreams[g_main_device][0];
+        main_stream->memcpy(local_buf, src, total_size).wait();
+    }
+    else {
+        local_buf = (sycl::half *)src;
+    }
+
+    std::ofstream logfile;
+    logfile.open(filename);
+    for(size_t i=0; i<total_elements; i++){
+        logfile << local_buf[i] <<" ";
+        if((i+1)%20 ==0) logfile <<std::endl;
     }
     logfile <<std::endl;
     logfile.close();
@@ -14126,7 +14160,7 @@ inline void ggml_sycl_op_mul_mat_sycl(
             src1_ptr, dpct::library_data_t::real_half, ne10, &beta_f16,
             dst_f16.get(), dpct::library_data_t::real_half, ldc,
             dpct::library_data_t::real_half)));
-
+        g_sycl_handles[id]->wait();
         const to_fp32_sycl_t to_fp32_sycl = ggml_get_to_fp32_sycl(GGML_TYPE_F16);
         to_fp32_sycl(dst_f16.get(), dst_dd_i, row_diff*src1_ncols, stream);
     }
@@ -14159,6 +14193,7 @@ inline void ggml_sycl_op_mul_mat_sycl(
             dpct::get_value(&alpha, *g_sycl_handles[id]), src0_ddf_i, ne00,
             src1_ddf1_i, ne10, dpct::get_value(&beta, *g_sycl_handles[id]),
             dst_dd_i, ldc)));
+        g_sycl_handles[id]->wait();
     }
     (void) dst;
     (void) src1_ddq_i;
@@ -15295,8 +15330,8 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
     sycl_pool_alloc<sycl::half> dst_f16;
     char * dst_t;
 
-    dpct::library_data_t cu_compute_type = dpct::library_data_t::real_half;
-    dpct::library_data_t cu_data_type = dpct::library_data_t::real_half;
+    dpct::library_data_t cu_compute_type = dpct::library_data_t::real_float;
+    dpct::library_data_t cu_data_type = dpct::library_data_t::real_float;
 
     // dst strides
     size_t nbd2 = dst->nb[2];
@@ -15308,15 +15343,13 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
     const float alpha_f32 = 1.0f;
     const float beta_f32  = 0.0f;
 
-    const void * alpha = &alpha_f16;
-    const void * beta  = &beta_f16;
+    const void * alpha = &alpha_f32;
+    const void * beta  = &beta_f32;
 
     // TODO: Renable (dst->op_params[0] =! GGML_PREC_DEFAULT) pathway
-    // once oneMKL open source supports half, half, float, float: datatypes
-    dst_t = (char *) dst_f16.alloc(ne_dst);
+    // oneMKL open source supports half, half, float, float: datatypes
 
-    nbd2 /= sizeof(float) / sizeof(sycl::half);
-    nbd3 /= sizeof(float) / sizeof(sycl::half);
+    dst_t = (char *) dst_ddf;
 
     GGML_ASSERT(ne12 % ne02 == 0);
     GGML_ASSERT(ne13 % ne03 == 0);
@@ -15356,6 +15389,7 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
             nb11 / nb10, nb12 / nb10, beta,
             (char *)dst_t, cu_data_type, ne01, nb2 / nb0,
             ne12 * ne13, cu_compute_type)));
+        g_sycl_handles[g_main_device]->wait();
     } else {
         const int ne23 = ne12*ne13;
 
@@ -15386,7 +15420,7 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
                                          nb02, nb03, nb12_scaled, nb13_scaled,
                                          nbd2, nbd3, r2, r3, item_ct1);
                                  });
-            });
+            }).wait();
         }
         SYCL_CHECK(CHECK_TRY_ERROR(dpct::gemm_batch(
             *g_sycl_handles[g_main_device], oneapi::mkl::transpose::trans,
@@ -15397,11 +15431,10 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
             dpct::library_data_t::real_half, nb11 / nb10, beta,
             (void **)(ptrs_dst.get() + 0 * ne23), cu_data_type, ne01, ne23,
             cu_compute_type)));
+        g_sycl_handles[g_main_device]->wait();
     }
 #endif
 
-    const to_fp32_sycl_t to_fp32_sycl = ggml_get_to_fp32_sycl(GGML_TYPE_F16);
-    to_fp32_sycl(dst_f16.get(), dst_ddf, ne_dst, main_stream);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
