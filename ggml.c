@@ -20283,23 +20283,37 @@ struct gguf_context * gguf_init_empty(void) {
     return ctx;
 }
 
-struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
 #ifdef _WIN32
+static FILE *open_file(const char *fname) {
+    char* oldLocale = setlocale(LC_ALL, NULL);
+    if(oldLocale) {
+        oldLocale = strdup(oldLocale); // duplicate since setlocale returns a pointer to internal memory which might be altered by subsequent setlocale calls
+    }
     setlocale(LC_ALL, "");
+
+    FILE *file = NULL;
     size_t size = mbstowcs(NULL, fname, 0) + 1;
     wchar_t *wfname = malloc(size * sizeof(wchar_t));
-    if (!wfname) {
-        return NULL;
+    if (wfname && mbstowcs(wfname, fname, size) != (size_t)-1) {
+        file = _wfopen(wfname, L"rb");
     }
-    if (mbstowcs(wfname, fname, size) == (size_t)-1) {
-        free(wfname);
-        return NULL;
-    }
-    FILE * file = _wfopen(wfname, L"rb");
     free(wfname);
+
+    if (oldLocale) {
+        setlocale(LC_ALL, oldLocale);
+        free(oldLocale);
+    }
+
+    return file;
+}
 #else
-     FILE * file = fopen(fname, "rb");
+static FILE *open_file(const char *fname) {
+    return fopen(fname, "rb");
+}
 #endif
+
+struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
+    FILE *file = open_file(fname);
     if (!file) {
         return NULL;
     }
