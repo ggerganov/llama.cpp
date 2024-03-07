@@ -28,6 +28,7 @@ GGML_API GGML_CALL int   ggml_backend_sycl_get_device_count();
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * tensor_split);
 GGML_API GGML_CALL void ggml_backend_sycl_get_device_memory(int device, size_t *free, size_t *total);
 GGML_API GGML_CALL int ggml_backend_sycl_get_device_index(int device_id);
+GGML_API GGML_CALL void ggml_backend_sycl_set_single_device(int main_gpu);
 
 #ifdef  __cplusplus
 }
