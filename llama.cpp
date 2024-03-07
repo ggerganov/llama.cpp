@@ -8057,6 +8057,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
     } else {
         // non-causal attention attends only the tokens within the batch (i.e. the KV cache is not used)
         const int64_t n_tokens = batch.n_tokens;
+        const int64_t n_stride = hparams.causal_attn ? kv_self.n : n_tokens;
 
         assert(ggml_backend_buffer_is_host(lctx.inp_KQ_mask->buffer));
 
@@ -8075,7 +8076,11 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                         }
                     }
 
-                    data[h*(n_tokens*n_tokens) + j*n_tokens + i] = f;
+                    data[h*(n_tokens*n_tokens) + j*n_stride + i] = f;
+                }
+
+                for (int i = n_tokens; i < n_stride; ++i) {
+                    data[h*(n_tokens*n_tokens) + j*n_stride + i] = -INFINITY;
                 }
             }
         }

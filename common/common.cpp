@@ -1304,6 +1304,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.pooling_type      = params.pooling_type;
     cparams.defrag_thold      = params.defrag_thold;
     cparams.offload_kqv       = !params.no_kv_offload;
+    cparams.causal_attn       = !params.embedding;
 
     cparams.type_k = kv_cache_type_from_str(params.cache_type_k);
     cparams.type_v = kv_cache_type_from_str(params.cache_type_v);

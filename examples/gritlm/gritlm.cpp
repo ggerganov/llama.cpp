@@ -47,11 +47,13 @@ static std::vector<std::vector<float>> encode(llama_context* ctx, const std::vec
         auto inputs_instruct = llama_tokenize(mdl, instruction, true, false);
         uint64_t n_inst = inputs_instruct.size();
 
+        /*
         // debug tokens - these are matching as referenced in their sample so doesn't appear to be a token issue
         std::for_each(inputs.begin(), inputs.end(), [&ctx](llama_token t) {
             std::printf("[%u:%s]", t, llama_token_to_piece(ctx, t).c_str());
         });
         std::printf("\n");
+        */
 
         // add input to batch (this increments n_tokens)
         for (uint64_t j = 0; j < n_toks; j++) {
@@ -88,12 +90,14 @@ static std::vector<std::vector<float>> encode(llama_context* ctx, const std::vec
         normalize(emb_unorm, emb_norm.data());
         result.push_back(emb_norm);
 
+        /*
         // print out emb_norm
         std::printf("embedding %ld: ", i);
-        for (uint64_t j = 0; j < 20; j++) {
+        for (uint64_t j = 0; j < n_embd; j++) {
             std::printf("%.5f ", emb_norm[j]);
         }
         std::printf("\n\n");
+        */
 
         llama_batch_free(batch);
     }
@@ -120,6 +124,7 @@ int main(int argc, char* argv[])
         );
         return true;
     };
+
     cparams.embeddings = true;
     cparams.causal_attn = false;
     cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
