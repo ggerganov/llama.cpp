@@ -13308,15 +13308,22 @@ int32_t llama_tokenize(
                         bool   special) {
     auto res = llama_tokenize_internal(model->vocab, std::string(text, text_len), add_bos, special);
 
-    if (n_max_tokens < (int) res.size()) {
-        // LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
-        return -((int) res.size());
+    // add last eos
+    //TODO: control from the arguments
+    if (n_max_tokens <= (int) res.size()) {
+        for (size_t i = 0; i < static_cast<size_t>(n_max_tokens) - 1; i++) {
+            tokens[i] = res[i];
+            
+        }
+        tokens[n_max_tokens - 1] = model->vocab.special_eos_id;
+    } else {
+        for (size_t i = 0; i < res.size(); i++) {
+            tokens[i] = res[i];
+        }
+        res.resize(res.size() + 1);
+        tokens[res.size()-1] = model->vocab.special_eos_id;
     }
-
-    for (size_t i = 0; i < res.size(); i++) {
-        tokens[i] = res[i];
-    }
-
+    
     return res.size();
 }
 
