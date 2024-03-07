@@ -58,7 +58,8 @@ jobs:
             cmake \
             python3-pip \
             wget \
-            psmisc
+            psmisc \
+            language-pack-en
 
       - name: Build
         id: cmake_build
