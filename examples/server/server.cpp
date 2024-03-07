@@ -1797,9 +1797,6 @@ struct server_context {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
 
-                                // remove the non-common part from the cache
-                                slot.cache_tokens.resize(slot.n_past);
-
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
                                     llama_sampling_accept(slot.ctx_sampling, ctx, slot.cache_tokens[i], false);
@@ -1846,10 +1843,12 @@ struct server_context {
                         slot.n_past = 0;
                         slot.n_past_se = 0;
                         slot.ga_i = 0;
-                        slot.cache_tokens.clear();
                         // TODO: is the system prompt ever in the sampling context?
                         llama_sampling_reset(slot.ctx_sampling);
                     }
+
+                    // remove the non-common part from the cache
+                    slot.cache_tokens.resize(slot.n_past);
 
                     LOG_INFO("kv cache rm [p0, end)", {
                         { "id_slot", slot.id },
