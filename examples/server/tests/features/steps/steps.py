@@ -25,6 +25,9 @@ def step_server_config(context, server_fqdn, server_port):
     if 'PORT' in os.environ:
         context.server_port = int(os.environ['PORT'])
         print(f"$PORT set, overriding server port with to {context.server_port}")
+    if 'FQDN' in os.environ:
+        context.server_fqdn = os.environ['FQDN']
+        print(f"$FQDN set, overriding server fqdn with to {context.server_fqdn}")
 
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
