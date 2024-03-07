@@ -20299,7 +20299,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     free(wfname);
 #else
      FILE * file = fopen(fname, "rb");
-#endif  
+#endif
     if (!file) {
         return NULL;
     }
