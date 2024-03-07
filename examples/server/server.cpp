@@ -3003,7 +3003,7 @@ int main(int argc, char ** argv) {
         }
     };
 
-    svr.Post("/completion", completions);
+    svr.Post("/completion", completions); // legacy
     svr.Post("/completions", completions);
     svr.Post("/v1/completions", completions);
 
