@@ -1919,42 +1919,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
 
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
-            switch (new_type) {
-                case GGML_TYPE_Q4_0: {
-                    new_size = ggml_quantize_q4_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q4_1: {
-                    new_size = ggml_quantize_q4_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q5_0: {
-                    new_size = ggml_quantize_q5_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q5_1: {
-                    new_size = ggml_quantize_q5_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q8_0: {
-                    new_size = ggml_quantize_q8_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q2_K: {
-                    new_size = ggml_quantize_q2_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q3_K: {
-                    new_size = ggml_quantize_q3_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q4_K: {
-                    new_size = ggml_quantize_q4_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q5_K: {
-                    new_size = ggml_quantize_q5_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                case GGML_TYPE_Q6_K: {
-                    new_size = ggml_quantize_q6_K(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-                } break;
-                default: {
-                    fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, new_type);
-                    return false;
-                }
-            }
+            new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, n_elms/cur->ne[0], cur->ne[0], hist_cur.data(), nullptr);
 
             for (size_t j = 0; j < hist_cur.size(); ++j) {
                 hist_all[j] += hist_cur[j];
