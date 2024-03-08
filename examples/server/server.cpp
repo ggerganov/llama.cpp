@@ -1123,7 +1123,7 @@ struct server_context {
             });
         }
 
-        if (!slot.cache_tokens.empty() && result.tok == llama_token_eos(model)) {
+        if (result.tok == llama_token_eos(model)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
