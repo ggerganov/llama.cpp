@@ -6,5 +6,6 @@
 "george":["george890890","george0001"],
 "sandra":["sandra234234","sandra0001"],
 "tilly":["tilly567567","tilly0001"],
+"zebedee::["zebedee234567", "zebedee0001"],
 "owner":["sk-notarealapikey","owner0001"]
 }
