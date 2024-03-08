@@ -3,11 +3,12 @@ import threading
 import requests
 import json
 
+
 def print_dict(data):
     if isinstance(data, dict):
-        #for k, v in data.items():
-        #    print(f"Key: {k}; Value: {v}\n")
-        #input("",)
+        # for k, v in data.items():
+            # print(f"Key: {k}; Value: {v}\n")
+        # input("",)
         for k, v in data.items():
             if isinstance(v, dict):
                 print_dict(v)
@@ -30,12 +31,14 @@ def print_dict(data):
         print("No intelligible data received.\n")
     return
 
+
 def title_print(text):
 
     length = len(text)
     print("\n" + "*" * length)
     print(text)
     print("*" * length + "\n")
+
 
 def make_empty_bar(num_requests):
     bar = []
@@ -46,6 +49,7 @@ def make_empty_bar(num_requests):
     # print(f"Bar is now {bar}.\n")
     return bar
 
+
 def make_progress_bar(bar, count, num_requests):
     stride1 = len("\u2589")
     stride2 = len("\u23F1")
@@ -55,6 +59,7 @@ def make_progress_bar(bar, count, num_requests):
             bar = bar[:i*stride1] + "\u23F1" + bar[i*stride1 + stride2:]
             print(f"Bar is now {bar}\n")
             return bar
+
 
 def send_request(q, question, event, count, num_requests):
 
@@ -72,10 +77,10 @@ You pay close attention to the nuance of a question and respond accordingly."
         response = requests.post(url, headers=headers, json=data)
         if response.status_code in [200,300]:
             with lockbar:
-                #for attr in dir(response.raw):
-                    #if not attr.startswith('__'):
-                        #print(f"response.raw.{attr} has content {getattr(response.raw, attr)}\n")
-                        #input("Press any key ",)
+                # for attr in dir(response.raw):
+                    # if not attr.startswith('__'):
+                        # print(f"response.raw.{attr} has content {getattr(response.raw, attr)}\n")
+                        # input("Press any key ",)
                 print(f"Current Client Queue Size: {q.qsize()}; processing request {count} / {num_requests}\n")
                 print(f"Status Code for {question}: {response.status_code}\n")
                 print(f"Response to {question}:\n")
@@ -90,7 +95,7 @@ You pay close attention to the nuance of a question and respond accordingly."
                 # put the response text in the queue
                 q.put(response.text)
                 if not q.empty():
-                    #with lockbar:      # lock automatically releases when the update is done
+                    # with lockbar:      # lock automatically releases when the update is done
                     title_print(f"Completed task {count} / {num_requests}")
                     bar = make_progress_bar(bar, count, num_requests)
                 q.task_done()
@@ -101,6 +106,7 @@ You pay close attention to the nuance of a question and respond accordingly."
             print(f"Server responded with code {response.status_code}\n")
     except Exception as e:
         print(f"Server returned exception error {e}")
+
 
 if __name__ == "__main__":
 
@@ -115,7 +121,7 @@ if __name__ == "__main__":
 
     bar = make_empty_bar(num_requests)
 
-    #api_key = input("What is your API key? ",)
+    # api_key = input("What is your API key? ",)
     api_key = "john123456"
 
     headers = {
