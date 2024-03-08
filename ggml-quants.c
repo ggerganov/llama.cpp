@@ -11606,7 +11606,7 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
         const float * xbl = x + QK_K*ibl;
         float sumx2 = 0;
         for (int i = 0; i < QK_K; ++i) sumx2 += xbl[i]*xbl[i];
-        float sigma2 = sumx2/QK_K;
+        float sigma2 = 2*sumx2/QK_K;
 
         for (int ib = 0; ib < QK_K/IQ1S_BLOCK_SIZE; ++ib) {
             const float * xb = xbl + IQ1S_BLOCK_SIZE*ib;
