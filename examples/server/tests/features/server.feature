@@ -29,6 +29,7 @@ Feature: llama.cpp server
     And   a completion request with no api error
     Then  <n_predicted> tokens are predicted matching <re_content>
     And   prometheus metrics are exposed
+    And   metric llamacpp:tokens_predicted is <n_predicted>
 
     Examples: Prompts
       | prompt                           | n_predict | re_content                       | n_predicted |

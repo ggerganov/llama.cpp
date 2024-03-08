@@ -586,12 +586,22 @@ async def step_prometheus_metrics_exported(context):
             metric_exported = False
             if context.debug:
                 print(f"/metrics answer:\n{metrics_raw}\n")
+            context.metrics = {}
             for metric in parser.text_string_to_metric_families(metrics_raw):
                 match metric.name:
                     case "llamacpp:kv_cache_usage_ratio":
                         assert len(metric.samples) > 0
                         metric_exported = True
+                context.metrics[metric.name] = metric
+            assert int(metrics_response.headers["Process-Start-Time-Unix"]) > 0, "no header process start time"
             assert metric_exported, "No metrics exported"
+
+
+@step(u'metric {metric_name} is {metric_value:d}')
+def step_assert_metric_value(context, metric_name, metric_value):
+    if metric_name not in context.metrics:
+        assert False, f"no metric {metric_name} in {context.metrics.keys()}"
+    assert context.metrics[metric_name].samples[0].value == metric_value, f"metric: {context.metrics[metric_name]}"
 
 
 @step(u'available models')
@@ -877,7 +887,6 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
     if expected_predicted_n and expected_predicted_n > 0:
         assert n_predicted == expected_predicted_n, (f'invalid number of tokens predicted:'
                                                      f' {n_predicted} <> {expected_predicted_n}')
-
 
 
 async def gather_tasks_results(context):
