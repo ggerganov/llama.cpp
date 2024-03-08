@@ -10973,6 +10973,9 @@ struct quantize_state_internal {
 
     bool has_imatrix      = false;
 
+    // used to figure out if a model shares tok_embd with the output weight
+    bool has_output       = false;
+
     quantize_state_internal(const llama_model & model, const llama_model_quantize_params * params)
         : model(model)
         , params(params)
@@ -11070,8 +11073,7 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
 
     // for arches that share the same tensor between the token embeddings and the output, we quantize the token embeddings
     // with the quantization of the output tensor
-    if (name == tn(LLM_TENSOR_OUTPUT, "weight") ||
-        (LLM_TENSOR_NAMES.at(arch).find(LLM_TENSOR_OUTPUT) == LLM_TENSOR_NAMES.at(arch).end() && name == "token_embd.weight")) {
+    if (name == tn(LLM_TENSOR_OUTPUT, "weight") || (!qs.has_output && name == tn(LLM_TENSOR_TOKEN_EMBD, "weight"))) {
         int nx = tensor->ne[0];
         if (arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
             new_type = GGML_TYPE_Q8_0;
@@ -11459,6 +11461,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
         else if (name.find("ffn_up") != std::string::npos) {
             ++qs.n_ffn_up;
+        }
+        else if (name == LLM_TN(model.arch)(LLM_TENSOR_OUTPUT, "weight")) {
+            qs.has_output = true;
         }
     }
     if (qs.n_attention_wv != qs.n_ffn_down || (uint32_t)qs.n_attention_wv != model.hparams.n_layer) {
