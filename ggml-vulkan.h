@@ -10,6 +10,7 @@ extern "C" {
 #define GGML_VK_NAME "Vulkan"
 #define GGML_VK_MAX_DEVICES 16
 
+GGML_API void ggml_vk_instance_init(void);
 GGML_API void ggml_vk_init_cpu_assist(void);
 
 GGML_API void ggml_vk_preallocate_buffers_graph_cpu_assist(struct ggml_tensor * node);

@@ -18,6 +18,7 @@ The project is under active development, and we are [looking for feedback and co
 
 - `--threads N`, `-t N`: Set the number of threads to use during generation.
 - `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation.
+- `--threads-http N`: number of threads in the http server pool to process requests (default: `max(std::thread::hardware_concurrency() - 1, --parallel N + 2)`)
 - `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 - `-a ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 - `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
@@ -339,7 +340,7 @@ where:
 - `default_generation_settings` - the default generation settings for the `/completion` endpoint, has the same fields as the `generation_settings` response object from the `/completion` endpoint.
 - `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
 
-- **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint. Compared to `api_like_OAI.py` this API implementation does not require a wrapper to be served.
+- **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint.
 
     *Options:*
 
@@ -449,7 +450,7 @@ where:
         "next_token": {
             "has_next_token": true,
             "n_remain": -1,
-            "num_tokens_predicted": 0,
+            "n_decoded": 0,
             "stopped_eos": false,
             "stopped_limit": false,
             "stopped_word": false,
@@ -541,20 +542,7 @@ bash chat.sh
 
 ### API like OAI
 
-API example using Python Flask: [api_like_OAI.py](api_like_OAI.py)
-This example must be used with server.cpp
-
-```sh
-python api_like_OAI.py
-```
-
-After running the API server, you can use it in Python by setting the API base URL.
-
-```python
-openai.api_base = "http://<Your api-server IP>:port"
-```
-
-Then you can utilize llama.cpp as an OpenAI's **chat.completion** or **text_completion** API
+The HTTP server supports OAI-like API
 
 ### Extending or building alternative Web Front End
 
