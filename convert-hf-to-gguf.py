@@ -1913,6 +1913,11 @@ class MambaModel(Model):
     def write_tensors(self):
         block_count = self.hparams["n_layer"]
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+
+        tok_embd = None
+        tok_embd_name = gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.TOKEN_EMBD] + ".weight"
+        output_name   = gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.OUTPUT]     + ".weight"
+
         for name, data_torch in self.get_tensors():
             old_dtype = data_torch.dtype
 
@@ -1929,6 +1934,14 @@ class MambaModel(Model):
             if name.endswith(".A_log"):
                 print("A_log --> A ==> " + new_name)
                 data_torch = -torch.exp(data_torch)
+
+            # assuming token_embd.weight is seen before output.weight
+            if tok_embd is not None and new_name == output_name:
+                if torch.equal(tok_embd, data_torch):
+                    print(f"{output_name} is equivalent to {tok_embd_name}, omitting")
+                    continue
+            if new_name == tok_embd_name:
+                tok_embd = data_torch
 
             data = data_torch.squeeze().numpy()
 
