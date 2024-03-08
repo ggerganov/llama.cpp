@@ -2,12 +2,18 @@
 
 Benchmark is using [k6](https://k6.io/).
 
-##### Install k6 - ubuntu
+##### Install k6
+
+Follow instruction from: https://k6.io/docs/get-started/installation/
+
+Example for ubuntu:
 ```shell
 snap install k6
 ```
 
-#### Downloading the ShareGPT dataset
+#### Download a dataset
+
+This dataset was originally proposed in [vLLM benchmarks](https://github.com/vllm-project/vllm/blob/main/benchmarks/README.md).
 
 ```shell
 wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
@@ -21,7 +27,7 @@ Example for PHI-2
 ```
 
 #### Start the server
-The server must listen on `localhost:8080`.
+The server must answer OAI Chat completion requests on `http://localhost:8080/v1` or according to the environment variable `SERVER_BENCH_URL`.
 
 Example:
 ```shell
@@ -36,13 +42,22 @@ server --host localhost --port 8080 \
   -ngl 33
 ```
 
-#### Run the bench
+#### Run the benchmark
+
 ```shell
 k6 run script.js
 ```
 
-#### Change the number of concurrent user
-in the `script.js`, change the ramping period according to your number of slots.
+The benchmark values can be overridden with:
+- `SERVER_BENCH_URL` server url prefix for chat completions, default `http://localhost:8080/v1`
+- `SERVER_BENCH_N_PROMPTS` total prompts to randomly select in the benchmark, default `480`
+- `SERVER_BENCH_MODEL_ALIAS` model alias to pass in the completion request, default `my-model`
+
+Or with [k6 options](https://k6.io/docs/using-k6/k6-options/reference/):
+
+```shell
+SERVER_BENCH_N_PROMPTS=500 k6 run script.js --duration 10m --iterations 500 --vus 8
+```
 
 #### Metrics
 
