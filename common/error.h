@@ -7,18 +7,18 @@
 class llama_error : public std::exception
 {
 private:
-    std::string _id;
-    std::string _description;
+    std::string _type;
+    std::string _message;
 
 public:
-    llama_error(const std::string & id, const std::string & description)
+    llama_error(const std::string & type, const std::string & message)
     :
-    _id(id),
-    _description(description)
+    _type(type),
+    _message(message)
     {
-        fprintf(stderr, "ERROR [%s]: %s\n", id.c_str(), description.c_str());
+        fprintf(stderr, "ERROR [%s]: %s\n", type.c_str(), message.c_str());
     }
 
-    inline const std::string & id() const { return _id; }
-    inline const std::string & description() const { return _description; }
+    inline const std::string & type() const { return _type; }
+    inline const std::string & message() const { return _message; }
 };

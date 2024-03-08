@@ -1215,15 +1215,15 @@ struct server_context {
     {
         return {
             { "error", {
-                { "id", error.id() },
-                { "description", error.description() }
+                { "type", error.type() },
+                { "message", error.message() }
             } }
         };
     }
 
     void send_error(const server_task & task, const llama_error& error)
     {
-        LOG_TEE("task %i - error: %s - %s\n", task.id, error.id().c_str(), error.description().c_str());
+        LOG_TEE("task %i - error: %s - %s\n", task.id, error.type().c_str(), error.message().c_str());
         server_task_result res;
         res.id = task.id;
         res.id_multi = task.id_multi;
