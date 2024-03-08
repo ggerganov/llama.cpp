@@ -286,10 +286,10 @@ enum llm_kv {
     LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,
     LLM_KV_ROPE_SCALING_FINETUNED,
 
-    LLM_KV_SSM_D_INNER,
-    LLM_KV_SSM_D_CONV,
-    LLM_KV_SSM_D_STATE,
-    LLM_KV_SSM_DT_RANK,
+    LLM_KV_SSM_INNER_SIZE,
+    LLM_KV_SSM_CONV_KERNEL,
+    LLM_KV_SSM_STATE_SIZE,
+    LLM_KV_SSM_TIME_STEP_RANK,
 
     LLM_KV_TOKENIZER_MODEL,
     LLM_KV_TOKENIZER_LIST,
@@ -349,10 +349,10 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,     "%s.rope.scaling.original_context_length" },
     { LLM_KV_ROPE_SCALING_FINETUNED,        "%s.rope.scaling.finetuned"               },
 
-    { LLM_KV_SSM_D_CONV,                    "%s.ssm.d_conv" },
-    { LLM_KV_SSM_D_INNER,                   "%s.ssm.d_inner"},
-    { LLM_KV_SSM_D_STATE,                   "%s.ssm.d_state"},
-    { LLM_KV_SSM_DT_RANK,                   "%s.ssm.dt_rank"},
+    { LLM_KV_SSM_CONV_KERNEL,               "%s.ssm.conv_kernel"    },
+    { LLM_KV_SSM_INNER_SIZE,                "%s.ssm.inner_size"     },
+    { LLM_KV_SSM_STATE_SIZE,                "%s.ssm.state_size"     },
+    { LLM_KV_SSM_TIME_STEP_RANK,            "%s.ssm.time_step_rank" },
 
     { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
     { LLM_KV_TOKENIZER_LIST,                "tokenizer.ggml.tokens"             },
@@ -3599,10 +3599,10 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_MAMBA:
             {
-                ml.get_key(LLM_KV_SSM_D_CONV,  hparams.ssm_d_conv);
-                ml.get_key(LLM_KV_SSM_D_INNER, hparams.ssm_d_inner);
-                ml.get_key(LLM_KV_SSM_D_STATE, hparams.ssm_d_state);
-                ml.get_key(LLM_KV_SSM_DT_RANK, hparams.ssm_dt_rank);
+                ml.get_key(LLM_KV_SSM_CONV_KERNEL,    hparams.ssm_d_conv);
+                ml.get_key(LLM_KV_SSM_INNER_SIZE,     hparams.ssm_d_inner);
+                ml.get_key(LLM_KV_SSM_STATE_SIZE,     hparams.ssm_d_state);
+                ml.get_key(LLM_KV_SSM_TIME_STEP_RANK, hparams.ssm_dt_rank);
 
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
@@ -4864,8 +4864,15 @@ static bool llm_load_tensors(
 
                     // output
                     {
-                        model.output_norm   = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab});
+                        model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
+                        // if output is NULL, init from the input tok embed, duplicated to allow offloading
+                        if (model.output == NULL) {
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                            ml.n_created--; // artificial tensor
+                            ml.size_data += ggml_nbytes(model.output);
+                        }
                     }
 
                     for (int i = 0; i < n_layer; ++i) {

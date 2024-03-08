@@ -1903,10 +1903,10 @@ class MambaModel(Model):
         self.gguf_writer.add_feed_forward_length(0) # unused, but seemingly required when loading
         self.gguf_writer.add_head_count(0) # unused, but seemingly required when loading
         self.gguf_writer.add_block_count(self.hparams["n_layer"])
-        self.gguf_writer.add_ssm_conv_kernel_size(d_conv)
-        self.gguf_writer.add_ssm_inner_length(d_inner)
-        self.gguf_writer.add_ssm_state_length(d_state)
-        self.gguf_writer.add_ssm_dt_rank(dt_rank)
+        self.gguf_writer.add_ssm_conv_kernel(d_conv)
+        self.gguf_writer.add_ssm_inner_size(d_inner)
+        self.gguf_writer.add_ssm_state_size(d_state)
+        self.gguf_writer.add_ssm_time_step_rank(dt_rank)
         self.gguf_writer.add_layer_norm_rms_eps(rms_norm_eps)
         self.gguf_writer.add_file_type(self.ftype)
 

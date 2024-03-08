@@ -20,8 +20,9 @@ class TensorNameMap:
             "wte",                                       # gpt2
             "transformer.embd.wte",                      # phi2
             "model.tok_embeddings",                      # internlm2
-            "model.embedding",                           # mamba
+            "model.embedding",                           # mamba-qbert
             "backbone.embedding",                        # mamba
+            "backbone.embeddings",                       # mamba-hf
         ),
 
         # Token type embeddings
@@ -63,7 +64,7 @@ class TensorNameMap:
             "language_model.encoder.final_layernorm",  # persimmon
             "model.final_layernorm",                   # persimmon
             "lm_head.ln",                              # phi2
-            "model.norm_f",                            # mamba
+            "model.norm_f",                            # mamba-qbert
             "backbone.norm_f",                         # mamba
         ),
 
@@ -90,7 +91,7 @@ class TensorNameMap:
             "transformer.h.{bid}.ln",                               # phi2
             "model.layers.layers.{bid}.norm",                       # plamo
             "model.layers.{bid}.attention_norm",                    # internlm2
-            "model.layers.{bid}.norm",                              # mamba
+            "model.layers.{bid}.norm",                              # mamba-qbert
             "backbone.layers.{bid}.norm",                           # mamba
         ),
 
