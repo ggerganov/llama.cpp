@@ -7,7 +7,7 @@ import json
 def print_dict(data):
     if isinstance(data, dict):
         # for k, v in data.items():
-            # print(f"Key: {k}; Value: {v}\n")
+        # print(f"Key: {k}; Value: {v}\n")
         # input("",)
         for k, v in data.items():
             if isinstance(v, dict):
@@ -56,14 +56,14 @@ def make_progress_bar(bar, count, num_requests):
     for i in range(num_requests):
         if i == count:
             # print(f"Bar position {i} is {bar[i]}\n")
-            bar = bar[:i*stride1] + "\u23F1" + bar[i*stride1 + stride2:]
+            bar = bar[:i * stride1] + "\u23F1" + bar[i * stride1 + stride2:]
             print(f"Bar is now {bar}\n")
             return bar
 
 
 def send_request(q, question, event, count, num_requests):
 
-    delay = 0.1
+    # delay = 0.1
 
     global bar
 
@@ -78,9 +78,9 @@ You pay close attention to the nuance of a question and respond accordingly."
         if response.status_code in [200,300]:
             with lockbar:
                 # for attr in dir(response.raw):
-                    # if not attr.startswith('__'):
-                        # print(f"response.raw.{attr} has content {getattr(response.raw, attr)}\n")
-                        # input("Press any key ",)
+                # if not attr.startswith('__'):
+                # print(f"response.raw.{attr} has content {getattr(response.raw, attr)}\n")
+                # input("Press any key ",)
                 print(f"Current Client Queue Size: {q.qsize()}; processing request {count} / {num_requests}\n")
                 print(f"Status Code for {question}: {response.status_code}\n")
                 print(f"Response to {question}:\n")
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         'Accept': 'application/json',
         'User-Agent': 'Llamaserver.py',
         'Authorization': f'Bearer {api_key}'
-        }
+    }
 
     writer_list = ["Plato", "Aristotle", "Thales of Miletus", "Heraclitus", "Socrates",
                    "The prophet Isaiah", "Jesus of Nazareth", "Plotinus", "Porphyry",
