@@ -2595,8 +2595,8 @@ typedef struct {
 
 typedef struct {
     half d;
-    uint8_t qs[QK_K/8];
-    uint8_t scales[QK_K/16];
+    uint8_t  qs[QK_K/8];
+    uint16_t qh[QK_K/32];
 } block_iq1_s;
 
 // Non-linear quants
@@ -4358,25 +4358,24 @@ void kernel_mul_mv_iq1_s_f32_impl(
         const int ib  = ib32 % (QK_K / 32);
 
         device const block_iq1_s * xr = x + ibl;
-        device const uint8_t * qs = xr->qs + 4 * ib + 2 * il;
-        device const uint8_t * sc = xr->scales + 2 * ib + il;
-        device const half    * dh = &xr->d;
+        device const uint8_t  * qs = xr->qs + 4 * ib + 2 * il;
+        device const uint16_t * qh = xr->qh + ib;
+        device const half     * dh = &xr->d;
 
         for (int row = 0; row < N_DST; row++) {
 
-            constant int8_t * grid1 = (constant int8_t *)(iq1s_grid + (qs[0] | ((sc[0] & 0x08) << 5)));
-            constant int8_t * grid2 = (constant int8_t *)(iq1s_grid + (qs[1] | ((sc[0] & 0x80) << 1)));
+            constant int8_t * grid1 = (constant int8_t *)(iq1s_grid + (qs[0] | (((qh[0] >> (6*il+0)) & 7) << 8)));
+            constant int8_t * grid2 = (constant int8_t *)(iq1s_grid + (qs[1] | (((qh[0] >> (6*il+3)) & 7) << 8)));
 
-            float2 sum = {0};
+            float sum = 0;
             for (int j = 0; j < 8; ++j) {
-                sum[0] += yl[j+ 0] * grid1[j];
-                sum[1] += yl[j+ 8] * grid2[j];
+                sum += yl[j+0] * grid1[j] + yl[j+8] * grid2[j];
             }
-            sumf[row] += (float)dh[0] * (sum[0] * (2*(sc[0] & 7) + 1) + sum[1] * (2*((sc[0] >> 4) & 7) + 1));
+            sumf[row] += (float)dh[0] * sum * (2*(qh[0] >> 12) + 1);
 
             dh += nb*sizeof(block_iq1_s)/2;
             qs += nb*sizeof(block_iq1_s);
-            sc += nb*sizeof(block_iq1_s);
+            qh += nb*sizeof(block_iq1_s)/2;
         }
 
         y4 += 16 * 32;
@@ -5066,16 +5065,17 @@ void dequantize_iq2_s(device const block_iq2_s * xb, short il, thread type4x4 & 
 template <typename type4x4>
 void dequantize_iq1_s(device const block_iq1_s * xb, short il, thread type4x4 & reg) {
     // il is 0...15 for QK_K = 256 => index of block of 32 is il/2
+    const int ib32 = il/2;
+    il = il%2;
     const float d = xb->d;
-    device const uint8_t * qs = xb->qs + 2*il;
-    device const uint8_t * sc = xb->scales + il;
-    const float dl1 = d * (2*(sc[0] & 7) + 1);
-    const float dl2 = d * (2*((sc[0] >> 4) & 7) + 1);
-    constant int8_t * grid1 = (constant int8_t *)(iq1s_grid + (qs[0] | ((sc[0] & 0x08) << 5)));
-    constant int8_t * grid2 = (constant int8_t *)(iq1s_grid + (qs[1] | ((sc[0] & 0x80) << 1)));
+    device const uint8_t  * qs = xb->qs + 4*ib32 + 2*il;
+    device const uint16_t * qh = xb->qh;
+    const float dl = d * (2*(qh[ib32] >> 12) + 1);
+    constant int8_t * grid1 = (constant int8_t *)(iq1s_grid + (qs[0] | (((qh[ib32] >> (6*il+0)) & 7) << 8)));
+    constant int8_t * grid2 = (constant int8_t *)(iq1s_grid + (qs[1] | (((qh[ib32] >> (6*il+3)) & 7) << 8)));
     for (int i = 0; i < 8; ++i) {
-        reg[i/4+0][i%4] = dl1 * grid1[i];
-        reg[i/4+2][i%4] = dl2 * grid2[i];
+        reg[i/4+0][i%4] = dl * grid1[i];
+        reg[i/4+2][i%4] = dl * grid2[i];
     }
 }
 
