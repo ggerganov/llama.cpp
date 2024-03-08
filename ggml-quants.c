@@ -11635,7 +11635,7 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
         }
 
         float d = max_scale/31;
-        y[ibl].d = GGML_FP32_TO_FP16(d*1.085f); // 1.085f is another fudge factor. Don't ask me why it is needed.
+        y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.085f is another fudge factor. Don't ask me why it is needed.
         float id = 1/d;
         for (int ib = 0; ib < QK_K/IQ1S_BLOCK_SIZE; ib += 2) {
             int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
