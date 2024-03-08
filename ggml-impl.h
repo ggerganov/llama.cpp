@@ -53,25 +53,29 @@ extern "C" {
 //
 #include <arm_neon.h>
 
+typedef __fp16 ggml_fp16_internal_t;
+
 #define GGML_COMPUTE_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
 #define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
 
 #define GGML_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
 
 static inline float ggml_compute_fp16_to_fp32(ggml_fp16_t h) {
-    __fp16 tmp;
+    ggml_fp16_internal_t tmp;
     memcpy(&tmp, &h, sizeof(ggml_fp16_t));
     return (float)tmp;
 }
 
 static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
     ggml_fp16_t res;
-    __fp16 tmp = f;
+    ggml_fp16_internal_t tmp = f;
     memcpy(&res, &tmp, sizeof(ggml_fp16_t));
     return res;
 }
 
 #else
+
+typedef uint16_t ggml_fp16_internal_t;
 
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h>
