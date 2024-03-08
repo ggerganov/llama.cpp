@@ -148,6 +148,7 @@ int main(int argc, char ** argv) {
 
             llama_kv_cache_seq_add (ctx, 0, n_past - n_batch,         n_past,         ib*bd);
             llama_kv_cache_seq_div (ctx, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
+            llama_kv_cache_compress(ctx, 0);
             llama_kv_cache_update  (ctx);
 
             n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
