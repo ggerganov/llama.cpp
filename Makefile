@@ -201,6 +201,10 @@ ifdef LLAMA_SERVER_VERBOSE
 	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
+ifdef LLAMA_SERVER_SSL
+	MK_CPPFLAGS += -DCPPHTTPLIB_OPENSSL_SUPPORT
+	MK_LDFLAGS += -lssl -lcrypto
+endif
 
 ifdef LLAMA_CODE_COVERAGE
 	MK_CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
