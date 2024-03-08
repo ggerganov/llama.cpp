@@ -167,6 +167,10 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [Msty](https://msty.app) (proprietary)
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
 
+**Tools:**
+
+- [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
+
 ---
 
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
