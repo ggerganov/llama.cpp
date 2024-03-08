@@ -9598,8 +9598,8 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
 
             q8b = ggml_vld1q_s8_x4(q8); q8 += 64;
 
-            const int32x4_t p1 = ggml_vdotq_s32(q1b.val[0], q8b.val[0], ggml_vdotq_s32(q1b.val[1], q8b.val[1], vdupq_n_s32(0)));
-            const int32x4_t p2 = ggml_vdotq_s32(q1b.val[2], q8b.val[2], ggml_vdotq_s32(q1b.val[3], q8b.val[3], vdupq_n_s32(0)));
+            const int32x4_t p1 = ggml_vdotq_s32(ggml_vdotq_s32(vdupq_n_s32(0), q1b.val[0], q8b.val[0]), q1b.val[1], q8b.val[1]);
+            const int32x4_t p2 = ggml_vdotq_s32(ggml_vdotq_s32(vdupq_n_s32(0), q1b.val[2], q8b.val[2]), q1b.val[3], q8b.val[3]);
 
             sumi1 += vaddvq_s32(p1) * (2*(qh[ib+0] >> 12) + 1);
             sumi2 += vaddvq_s32(p2) * (2*(qh[ib+1] >> 12) + 1);
