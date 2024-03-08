@@ -50,6 +50,30 @@ static bool is_prime(size_t n) {
     return is_prime;
 }
 
+static bool is_carmichael_korselt(size_t n) {
+  if (n <= 1) return false;
+  if (n % 2 == 0 && n != 2) return false; // Even numbers except 2 can't be Carmichael
+
+  // Check for square-free property
+  size_t sqrt_n = sqrt(n);
+  for (size_t i = 3; i <= sqrt_n; i += 2) {
+    if (n % (i * i) == 0) return false;  // Perfect square factor found
+  }
+
+  // Check Korselt's condition for each prime factor
+  vector<size_t> factors;
+  for (size_t p = 3; p * p <= n; p += 2) {  // Check only odd primes
+    if (is_prime(p) && n % p == 0) {
+      factors.push_back(p);
+      if ((p - 1) % (n - 1) != 0) return false; // Doesn't satisfy Korselt's criterion
+    }
+  }
+
+  // All prime factors satisfy Korselt's condition - n might be Carmichael
+  // You can optionally do additional checks here or return true;
+
+  return true; // Replace with further checks or return based on your needs
+}
 
 
 // Function to check if a number is Carmichael
