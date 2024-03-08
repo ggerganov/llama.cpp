@@ -36,9 +36,6 @@
 #include "ggml.h"
 #include "ggml-backend-impl.h"
 
-#define GGML_COMMON_IMPL_SYCL
-#include "ggml-common.h"
-
 /*
 Following definition copied from DPCT head files, which are used by ggml-sycl.cpp
 */
@@ -3147,6 +3144,8 @@ namespace dpct
 
 } // COPY from DPCT head files
 
+#define GGML_COMMON_IMPL_SYCL
+#include "ggml-common.h"
 
 static int g_ggml_sycl_debug=0;
 #define GGML_SYCL_DEBUG(...) do{if(g_ggml_sycl_debug) printf(__VA_ARGS__);}while(0)
