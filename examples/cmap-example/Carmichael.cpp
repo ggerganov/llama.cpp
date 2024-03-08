@@ -38,6 +38,7 @@ static void print_factors(vector<size_t> factors) {
 
 
 static bool is_prime(size_t n) {
+
     bool is_prime = true;
         for (size_t j = 3; j * j <= n; j += 2) {
             if (n % j == 0) {
@@ -45,6 +46,7 @@ static bool is_prime(size_t n) {
                 break;
             }
         }
+
     return is_prime;
 }
 
@@ -68,7 +70,7 @@ static bool is_carmichael(size_t n) {
         }
     }
     print_factors(factors);
-    cout << " = " << n << endl;;
+    cout << " = " << n << " with " << factors.size() << " prime factors." << endl;;
     return true;
 }
 
