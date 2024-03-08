@@ -9009,8 +9009,8 @@ void ggml_vec_dot_iq2_s_q8_K(int n, float * restrict s, size_t bs, const void * 
 
     static const uint8_t k_mask2[16] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,};
 
-    const uint8x16x2_t mask1 = vld1q_u8_x2(k_mask1);
-    const uint8x16_t   mask2 = vld1q_u8(k_mask2);
+    const ggml_uint8x16x2_t mask1 = ggml_vld1q_u8_x2(k_mask1);
+    const uint8x16_t        mask2 = vld1q_u8(k_mask2);
     const uint8x16_t m1 = vdupq_n_u8(1);
     const int32x4_t vzero = vdupq_n_s32(0);
 
@@ -9354,11 +9354,12 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * restrict s, size_t bs, const void *
 
     static const int16_t k_shift[8] = {8, 7, 6, 5, 4, 3, 2, 1};
 
-    const uint8x16x2_t mask1  = vld1q_u8_x2(k_mask1);
-    const uint8x16_t   mask2  = vld1q_u8(k_mask2);
-    const int16x8_t    hshift = vld1q_s16(k_shift);
-    const uint16x8_t   m256   = vdupq_n_u16(256);
-    const uint8x16_t   m1     = vdupq_n_u8(1);
+    const ggml_uint8x16x2_t mask1 = ggml_vld1q_u8_x2(k_mask1);
+    const uint8x16_t        mask2 = vld1q_u8(k_mask2);
+
+    const int16x8_t  hshift = vld1q_s16(k_shift);
+    const uint16x8_t m256   = vdupq_n_u16(256);
+    const uint8x16_t m1     = vdupq_n_u8(1);
 
     uint8x16x2_t vs;
     ggml_int8x16x4_t q3s;
