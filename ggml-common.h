@@ -2,26 +2,41 @@
 
 #if defined(GGML_COMMON_IMPL_C)
 #include <stdint.h>
-#define GGML_ADDR_SPACE_CONST
+
+#define GGML_TABLE_BEGIN(type, name, size) static const type name[size] = {
+#define GGML_TABLE_END() };
 #elif defined(GGML_COMMON_IMPL_METAL)
 #include <metal_stdlib>
-#define GGML_ADDR_SPACE_CONST constant
+
+#define GGML_TABLE_BEGIN(type, name, size) constant static const type name[size] = {
+#define GGML_TABLE_END() };
 #elif defined(GGML_COMMON_IMPL_CUDA)
 #include <cstdint>
-#define GGML_ADDR_SPACE_CONST __device__ __constant__
+
+#define GGML_TABLE_BEGIN(type, name, size) __device__ __constant__ static const type name[size] = {
+#define GGML_TABLE_END() };
+#elif defined(GGML_COMMON_IMPL_SYCL)
+#include <cstdint>
+
+#define GGML_TABLE_BEGIN(type, name, size) static dpct::global_memory<const type, 1> name(sycl::range<1>(size), {
+#define GGML_TABLE_END() });
 #else
 #pragma message("Before including ggml-common.h you should define GGML_COMMON_IMPL_XXX")
 
 #include <stdint.h>
-#define GGML_ADDR_SPACE_CONST
+
+#define GGML_TABLE_BEGIN(type, name, size) static const type name[size] = {
+#define GGML_TABLE_END() };
 #endif
 
 // shared constants and structs across ggml backends
 // TODO: move quantum block declarations here
 
-GGML_ADDR_SPACE_CONST static const uint8_t kmask_iq2xs[8] = {1, 2, 4, 8, 16, 32, 64, 128};
+GGML_TABLE_BEGIN(uint8_t, kmask_iq2xs, 8)
+    1, 2, 4, 8, 16, 32, 64, 128
+GGML_TABLE_END()
 
-GGML_ADDR_SPACE_CONST static const uint8_t ksigns_iq2xs[128] = {
+GGML_TABLE_BEGIN(uint8_t, ksigns_iq2xs, 128)
       0, 129, 130,   3, 132,   5,   6, 135, 136,   9,  10, 139,  12, 141, 142,  15,
     144,  17,  18, 147,  20, 149, 150,  23,  24, 153, 154,  27, 156,  29,  30, 159,
     160,  33,  34, 163,  36, 165, 166,  39,  40, 169, 170,  43, 172,  45,  46, 175,
@@ -30,10 +45,10 @@ GGML_ADDR_SPACE_CONST static const uint8_t ksigns_iq2xs[128] = {
      80, 209, 210,  83, 212,  85,  86, 215, 216,  89,  90, 219,  92, 221, 222,  95,
      96, 225, 226,  99, 228, 101, 102, 231, 232, 105, 106, 235, 108, 237, 238, 111,
     240, 113, 114, 243, 116, 245, 246, 119, 120, 249, 250, 123, 252, 125, 126, 255,
-};
+GGML_TABLE_END()
 
 //#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
-GGML_ADDR_SPACE_CONST static const uint64_t ksigns64[128] = {
+GGML_TABLE_BEGIN(uint64_t, ksigns64, 128)
     0x0000000000000000, 0xff000000000000ff, 0xff0000000000ff00, 0x000000000000ffff,
     0xff00000000ff0000, 0x0000000000ff00ff, 0x0000000000ffff00, 0xff00000000ffffff,
     0xff000000ff000000, 0x00000000ff0000ff, 0x00000000ff00ff00, 0xff000000ff00ffff,
@@ -66,11 +81,11 @@ GGML_ADDR_SPACE_CONST static const uint64_t ksigns64[128] = {
     0x00ffffff00ff0000, 0xffffffff00ff00ff, 0xffffffff00ffff00, 0x00ffffff00ffffff,
     0x00ffffffff000000, 0xffffffffff0000ff, 0xffffffffff00ff00, 0x00ffffffff00ffff,
     0xffffffffffff0000, 0x00ffffffffff00ff, 0x00ffffffffffff00, 0xffffffffffffffff,
-};
+GGML_TABLE_END()
 //#endif
 
 
-GGML_ADDR_SPACE_CONST static const uint64_t iq2xxs_grid[256] = {
+GGML_TABLE_BEGIN(uint64_t, iq2xxs_grid, 256)
     0x0808080808080808, 0x080808080808082b, 0x0808080808081919, 0x0808080808082b08,
     0x0808080808082b2b, 0x0808080808190819, 0x0808080808191908, 0x08080808082b0808,
     0x08080808082b082b, 0x08080808082b2b08, 0x08080808082b2b2b, 0x0808080819080819,
@@ -135,9 +150,9 @@ GGML_ADDR_SPACE_CONST static const uint64_t iq2xxs_grid[256] = {
     0x2b19190819081908, 0x2b19191919190819, 0x2b192b082b080819, 0x2b192b19082b0808,
     0x2b2b08080808082b, 0x2b2b080819190808, 0x2b2b08082b081919, 0x2b2b081908082b19,
     0x2b2b082b08080808, 0x2b2b190808192b08, 0x2b2b2b0819190808, 0x2b2b2b1908081908,
-};
+GGML_TABLE_END()
 
-GGML_ADDR_SPACE_CONST static const uint64_t iq2xs_grid[512] = {
+GGML_TABLE_BEGIN(uint64_t, iq2xs_grid, 512)
     0x0808080808080808, 0x080808080808082b, 0x0808080808081919, 0x0808080808082b08,
     0x0808080808082b2b, 0x0808080808190819, 0x0808080808191908, 0x080808080819192b,
     0x0808080808192b19, 0x08080808082b0808, 0x08080808082b082b, 0x08080808082b1919,
@@ -266,9 +281,9 @@ GGML_ADDR_SPACE_CONST static const uint64_t iq2xs_grid[512] = {
     0x2b2b2b08082b0808, 0x2b2b2b08082b082b, 0x2b2b2b08082b2b08, 0x2b2b2b082b2b0808,
     0x2b2b2b082b2b2b08, 0x2b2b2b1908081908, 0x2b2b2b192b081908, 0x2b2b2b192b08192b,
     0x2b2b2b2b082b2b08, 0x2b2b2b2b082b2b2b, 0x2b2b2b2b2b190819, 0x2b2b2b2b2b2b2b2b,
-};
+GGML_TABLE_END()
 
-GGML_ADDR_SPACE_CONST static const uint64_t iq2s_grid[1024] = {
+GGML_TABLE_BEGIN(uint64_t, iq2s_grid, 1024)
     0x0808080808080808, 0x080808080808082b, 0x0808080808081919, 0x0808080808082b08,
     0x0808080808082b2b, 0x0808080808190819, 0x0808080808191908, 0x080808080819192b,
     0x0808080808192b19, 0x08080808082b0808, 0x08080808082b082b, 0x08080808082b1919,
@@ -525,9 +540,9 @@ GGML_ADDR_SPACE_CONST static const uint64_t iq2s_grid[1024] = {
     0x2b2b2b0808082b2b, 0x2b2b2b08082b2b08, 0x2b2b2b082b2b082b, 0x2b2b2b1919191908,
     0x2b2b2b192b08192b, 0x2b2b2b2b08082b08, 0x2b2b2b2b08082b2b, 0x2b2b2b2b082b0808,
     0x2b2b2b2b082b082b, 0x2b2b2b2b082b2b08, 0x2b2b2b2b2b082b08, 0x2b2b2b2b2b2b2b2b,
-};
+GGML_TABLE_END()
 
-GGML_ADDR_SPACE_CONST static const uint32_t iq3xxs_grid[256] = {
+GGML_TABLE_BEGIN(uint32_t, iq3xxs_grid, 256)
     0x04040404, 0x04040414, 0x04040424, 0x04040c0c, 0x04040c1c, 0x04040c3e, 0x04041404, 0x04041414,
     0x04041c0c, 0x04042414, 0x04043e1c, 0x04043e2c, 0x040c040c, 0x040c041c, 0x040c0c04, 0x040c0c14,
     0x040c140c, 0x040c142c, 0x040c1c04, 0x040c1c14, 0x040c240c, 0x040c2c24, 0x040c3e04, 0x04140404,
@@ -560,9 +575,9 @@ GGML_ADDR_SPACE_CONST static const uint32_t iq3xxs_grid[256] = {
     0x34341c1c, 0x343e041c, 0x343e140c, 0x3e04041c, 0x3e04042c, 0x3e04043e, 0x3e040c04, 0x3e041c14,
     0x3e042c14, 0x3e0c1434, 0x3e0c2404, 0x3e140c14, 0x3e14242c, 0x3e142c14, 0x3e1c0404, 0x3e1c0c2c,
     0x3e1c1c1c, 0x3e1c3404, 0x3e24140c, 0x3e24240c, 0x3e2c0404, 0x3e2c0414, 0x3e2c1424, 0x3e341c04,
-};
+GGML_TABLE_END()
 
-GGML_ADDR_SPACE_CONST static const uint32_t iq3s_grid[512] = {
+GGML_TABLE_BEGIN(uint32_t, iq3s_grid, 512)
     0x01010101, 0x01010103, 0x01010105, 0x0101010b, 0x0101010f, 0x01010301, 0x01010303, 0x01010305,
     0x01010309, 0x0101030d, 0x01010501, 0x01010503, 0x0101050b, 0x01010707, 0x01010901, 0x01010905,
     0x0101090b, 0x0101090f, 0x01010b03, 0x01010b07, 0x01010d01, 0x01010d05, 0x01010f03, 0x01010f09,
@@ -627,10 +642,10 @@ GGML_ADDR_SPACE_CONST static const uint32_t iq3s_grid[512] = {
     0x0f030509, 0x0f030907, 0x0f03090b, 0x0f050103, 0x0f050109, 0x0f050301, 0x0f05030d, 0x0f050503,
     0x0f050701, 0x0f050b03, 0x0f070105, 0x0f070705, 0x0f07070b, 0x0f070b07, 0x0f090103, 0x0f09010b,
     0x0f090307, 0x0f090501, 0x0f090b01, 0x0f0b0505, 0x0f0b0905, 0x0f0d0105, 0x0f0d0703, 0x0f0f0101,
-};
+GGML_TABLE_END()
 
 #define NGRID_IQ2XXS 512
-GGML_ADDR_SPACE_CONST static const  uint64_t iq1s_grid[NGRID_IQ2XXS] = {
+GGML_TABLE_BEGIN(uint64_t, iq1s_grid, NGRID_IQ2XXS)
     0xffffffffffff0101, 0xffffffffff01ff00, 0xffffffffff010100, 0xffffffff00000000,
     0xffffffff01ff00ff, 0xffffffff01ff0001, 0xffffffff0101ffff, 0xffffffff0101ff01,
     0xffffff00ff000000, 0xffffff000000ff00, 0xffffff00000000ff, 0xffffff0000000100,
@@ -759,5 +774,4 @@ GGML_ADDR_SPACE_CONST static const  uint64_t iq1s_grid[NGRID_IQ2XXS] = {
     0x010101ffff01ffff, 0x010101ff00000000, 0x010101ff0001ff01, 0x010101ff0101ffff,
     0x010101ff010101ff, 0x01010100ffffffff, 0x01010100ff000001, 0x010101000000ff00,
     0x0101010001010000, 0x0101010100ff0001, 0x010101010001ff01, 0x010101010101ffff,
-
-};
+GGML_TABLE_END()
