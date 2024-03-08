@@ -5,32 +5,32 @@
 
 #define GGML_TABLE_BEGIN(type, name, size) static const type name[size] = {
 #define GGML_TABLE_END() };
+
+#define GGML_COMMON_IMPL
 #elif defined(GGML_COMMON_IMPL_METAL)
 #include <metal_stdlib>
 
 #define GGML_TABLE_BEGIN(type, name, size) static const constant type name[size] = {
 #define GGML_TABLE_END() };
+
+#define GGML_COMMON_IMPL
 #elif defined(GGML_COMMON_IMPL_CUDA)
 #include <cstdint>
 
 #define GGML_TABLE_BEGIN(type, name, size) static const __device__ __constant__ type name[size] = {
 #define GGML_TABLE_END() };
+
+#define GGML_COMMON_IMPL
 #elif defined(GGML_COMMON_IMPL_SYCL)
 #include <cstdint>
 
 #define GGML_TABLE_BEGIN(type, name, size) static dpct::global_memory<const type, 1> name(sycl::range<1>(size), {
 #define GGML_TABLE_END() });
-#else
-#pragma message("Before including ggml-common.h you should define GGML_COMMON_IMPL_XXX")
 
-#include <stdint.h>
-
-#define GGML_TABLE_BEGIN(type, name, size) static const type name[size] = {
-#define GGML_TABLE_END() };
+#define GGML_COMMON_IMPL
 #endif
 
-// shared constants and structs across ggml backends
-// TODO: move quantum block declarations here
+#if defined(GGML_COMMON_IMPL)
 
 GGML_TABLE_BEGIN(uint8_t, kmask_iq2xs, 8)
     1, 2, 4, 8, 16, 32, 64, 128
@@ -775,3 +775,5 @@ GGML_TABLE_BEGIN(uint64_t, iq1s_grid, NGRID_IQ2XXS)
     0x010101ff010101ff, 0x01010100ffffffff, 0x01010100ff000001, 0x010101000000ff00,
     0x0101010001010000, 0x0101010100ff0001, 0x010101010001ff01, 0x010101010101ffff,
 GGML_TABLE_END()
+
+#endif // GGML_COMMON_IMPL
