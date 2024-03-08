@@ -2828,6 +2828,12 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_slots = [&](const httplib::Request &, httplib::Response & res) {
+        if (!sparams.slots_endpoint) {
+            res.status = 501;
+            res.set_content("This server does not support slots endpoint.", "text/plain; charset=utf-8");
+            return;
+        }
+
         // request slots data using task queue
         server_task task;
         task.id = ctx_server.queue_tasks.get_new_id();
@@ -2847,6 +2853,12 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_metrics = [&](const httplib::Request &, httplib::Response & res) {
+        if (!sparams.metrics_endpoint) {
+            res.status = 501;
+            res.set_content("This server does not support metrics endpoint.", "text/plain; charset=utf-8");
+            return;
+        }
+
         // request slots data using task queue
         server_task task;
         task.id = ctx_server.queue_tasks.get_new_id();
@@ -3209,7 +3221,7 @@ int main(int argc, char ** argv) {
         return res.set_content(data.dump(), "application/json; charset=utf-8");
     };
 
-    auto handle_embeddings = [&params, &ctx_server](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings = [&params, &ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         if (!params.embedding) {
             res.status = 501;
@@ -3220,7 +3232,7 @@ int main(int argc, char ** argv) {
         const json body = json::parse(req.body);
         bool is_openai = false;
 
-        // an input prompt can string or a list of tokens (integer) 
+        // an input prompt can string or a list of tokens (integer)
         std::vector<json> prompts;
         if (body.count("input") != 0) {
             is_openai = true;
@@ -3287,7 +3299,7 @@ int main(int argc, char ** argv) {
         svr.set_base_dir(sparams.public_path);
     }
 
-    // using embedded static files 
+    // using embedded static files
     auto handle_static_file = [](unsigned char * content, size_t len, const char * mime_type) {
         return [content, len, mime_type](const httplib::Request &, httplib::Response & res) {
             res.set_content(reinterpret_cast<const char*>(content), len, mime_type);
@@ -3307,6 +3319,8 @@ int main(int argc, char ** argv) {
 
     // register API routes
     svr.Get ("/health",              handle_health);
+    svr.Get ("/slots",               handle_slots);
+    svr.Get ("/metrics",             handle_metrics);
     svr.Get ("/props",               handle_props);
     svr.Get ("/v1/models",           handle_models);
     svr.Post("/completion",          handle_completions); // legacy
@@ -3320,12 +3334,6 @@ int main(int argc, char ** argv) {
     svr.Post("/v1/embeddings",       handle_embeddings);
     svr.Post("/tokenize",            handle_tokenize);
     svr.Post("/detokenize",          handle_detokenize);
-    if (sparams.slots_endpoint) {
-        svr.Get("/slots", handle_slots);
-    }
-    if (sparams.metrics_endpoint) {
-        svr.Get("/metrics", handle_metrics);
-    }
 
     //
     // Start the server
