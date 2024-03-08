@@ -3888,7 +3888,13 @@ static bool llm_load_tensors(
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                         if (model.arch != LLM_ARCH_MINICPM){
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab});
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
+                            // if output is NULL, init from the input tok embed
+                            if (model.output == NULL) {
+                                model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                                ml.n_created--; // artificial tensor
+                                ml.size_data += ggml_nbytes(model.output);
+                            }
                         }
                     }
 
@@ -13533,18 +13539,22 @@ LLAMA_API int32_t llama_chat_apply_template(
             curr_tmpl = std::string(model_template.data(), model_template.size());
         }
     }
+
     // format the chat to string
     std::vector<const llama_chat_message *> chat_vec;
     chat_vec.resize(n_msg);
     for (size_t i = 0; i < n_msg; i++) {
         chat_vec[i] = &chat[i];
     }
+
     std::string formatted_chat;
     int32_t res = llama_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass);
     if (res < 0) {
         return res;
     }
-    strncpy(buf, formatted_chat.c_str(), length);
+    if (buf && length > 0) {
+        strncpy(buf, formatted_chat.c_str(), length);
+    }
     return res;
 }
 

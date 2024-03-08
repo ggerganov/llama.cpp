@@ -173,6 +173,7 @@ struct cmd_params {
     std::vector<bool> no_kv_offload;
     std::vector<std::vector<float>> tensor_split;
     std::vector<bool> use_mmap;
+    std::vector<bool> embeddings;
     int reps;
     bool verbose;
     output_formats output_format;
@@ -192,6 +193,7 @@ static const cmd_params cmd_params_defaults = {
     /* no_kv_offload */ {false},
     /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
     /* use_mmap      */ {true},
+    /* embeddings    */ {false},
     /* reps          */ 5,
     /* verbose       */ false,
     /* output_format */ MARKDOWN
@@ -214,6 +216,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
     printf("  -mmp, --mmap <0|1>                  (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
+    printf("  -embd, --embeddings <0|1>           (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
     printf("  -o, --output <csv|json|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
@@ -382,6 +385,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<bool>(argv[i], split_delim);
             params.use_mmap.insert(params.use_mmap.end(), p.begin(), p.end());
+        } else if (arg == "-embd" || arg == "--embeddings") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = split<bool>(argv[i], split_delim);
+            params.embeddings.insert(params.embeddings.end(), p.begin(), p.end());
         } else if (arg == "-ts" || arg == "--tensor-split") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -453,6 +463,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.no_kv_offload.empty()){ params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
     if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
+    if (params.embeddings.empty())   { params.embeddings = cmd_params_defaults.embeddings; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
 
     return params;
@@ -472,6 +483,7 @@ struct cmd_params_instance {
     bool no_kv_offload;
     std::vector<float> tensor_split;
     bool use_mmap;
+    bool embeddings;
 
     llama_model_params to_llama_mparams() const {
         llama_model_params mparams = llama_model_default_params();
@@ -502,6 +514,7 @@ struct cmd_params_instance {
         cparams.type_k = type_k;
         cparams.type_v = type_v;
         cparams.offload_kqv = !no_kv_offload;
+        cparams.embeddings = embeddings;
 
         return cparams;
     }
@@ -517,6 +530,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & mg : params.main_gpu)
     for (const auto & ts : params.tensor_split)
     for (const auto & mmp : params.use_mmap)
+    for (const auto & embd : params.embeddings)
     for (const auto & nb : params.n_batch)
     for (const auto & tk : params.type_k)
     for (const auto & tv : params.type_v)
@@ -540,6 +554,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .no_kv_offload= */ nkvo,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
+                /* .embeddings   = */ embd,
             };
             instances.push_back(instance);
         }
@@ -562,6 +577,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .no_kv_offload= */ nkvo,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
+                /* .embeddings   = */ embd,
             };
             instances.push_back(instance);
         }
@@ -597,6 +613,7 @@ struct test {
     bool no_kv_offload;
     std::vector<float> tensor_split;
     bool use_mmap;
+    bool embeddings;
     int n_prompt;
     int n_gen;
     std::string test_time;
@@ -619,6 +636,7 @@ struct test {
         no_kv_offload = inst.no_kv_offload;
         tensor_split = inst.tensor_split;
         use_mmap = inst.use_mmap;
+        embeddings = inst.embeddings;
         n_prompt = inst.n_prompt;
         n_gen = inst.n_gen;
         // RFC 3339 date-time format
@@ -690,7 +708,7 @@ struct test {
             "n_batch", "n_threads", "type_k", "type_v",
             "n_gpu_layers", "split_mode",
             "main_gpu", "no_kv_offload",
-            "tensor_split", "use_mmap",
+            "tensor_split", "use_mmap", "embeddings",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts"
@@ -710,7 +728,7 @@ struct test {
         }
         if (field == "cuda" || field == "opencl"  || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
-            field == "use_mmap") {
+            field == "use_mmap" || field == "embeddings") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -744,7 +762,7 @@ struct test {
             std::to_string(n_batch), std::to_string(n_threads), ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
             std::to_string(main_gpu), std::to_string(no_kv_offload),
-            tensor_split_str, std::to_string(use_mmap),
+            tensor_split_str, std::to_string(use_mmap), std::to_string(embeddings),
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -914,6 +932,9 @@ struct markdown_printer : public printer {
         if (field == "use_mmap") {
             return "mmap";
         }
+        if (field == "embeddings") {
+            return "embd";
+        }
         if (field == "tensor_split") {
             return "ts";
         }
@@ -956,6 +977,9 @@ struct markdown_printer : public printer {
         }
         if (params.use_mmap.size() > 1 || params.use_mmap != cmd_params_defaults.use_mmap) {
             fields.emplace_back("use_mmap");
+        }
+        if (params.embeddings.size() > 1 || params.embeddings != cmd_params_defaults.embeddings) {
+            fields.emplace_back("embeddings");
         }
         fields.emplace_back("test");
         fields.emplace_back("t/s");

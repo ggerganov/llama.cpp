@@ -29,6 +29,7 @@ Feature: llama.cpp server
     And   a completion request with no api error
     Then  <n_predicted> tokens are predicted matching <re_content>
     And   prometheus metrics are exposed
+    And   metric llamacpp:tokens_predicted is <n_predicted>
 
     Examples: Prompts
       | prompt                           | n_predict | re_content                       | n_predicted |
@@ -48,34 +49,6 @@ Feature: llama.cpp server
       | model        | system_prompt               | user_prompt                          | max_tokens | re_content             | n_predicted | enable_streaming |
       | llama-2      | Book                        | What is the best book                | 8          | (Mom\|what)+           | 8           | disabled         |
       | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 64         | (thanks\|happy\|bird)+ | 32          | enabled          |
-
-  Scenario: Embedding
-    When embeddings are computed for:
-    """
-    What is the capital of Bulgaria ?
-    """
-    Then embeddings are generated
-
-  Scenario: OAI Embeddings compatibility
-    Given a model tinyllama-2
-    When an OAI compatible embeddings computation request for:
-    """
-    What is the capital of Spain ?
-    """
-    Then embeddings are generated
-
-  Scenario: OAI Embeddings compatibility with multiple inputs
-    Given a model tinyllama-2
-    Given a prompt:
-      """
-      In which country Paris is located ?
-      """
-    And a prompt:
-      """
-      Is Madrid the capital of Spain ?
-      """
-    When an OAI compatible embeddings computation request for multiple inputs
-    Then embeddings are generated
 
   Scenario: Tokenize / Detokenize
     When tokenizing:
