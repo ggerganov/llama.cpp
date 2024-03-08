@@ -3253,7 +3253,7 @@ int main(int argc, char ** argv) {
             // get the result
             server_task_result result = ctx_server.queue_results.recv(id_task);
             ctx_server.queue_results.remove_waiting_task_id(id_task);
-            responses.push_back(json_value(result.data, "embedding", json::array()));
+            responses.push_back(result.data);
         }
 
         // write JSON response
@@ -3263,7 +3263,7 @@ int main(int argc, char ** argv) {
             int i = 0;
             for (auto & elem : responses) {
                 res_oai.push_back(json{
-                    {"embedding", elem},
+                    {"embedding", json_value(elem, "embedding", json::array())},
                     {"index",     i++},
                     {"object",    "embedding"}
                 });
