@@ -6,8 +6,8 @@ Feature: Parallel
     Given a server listening on localhost:8080
     And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   42 as server seed
-    And   512 as batch size
-    And   64 KV cache size
+    And   128 as batch size
+    And   256 KV cache size
     And   2 slots
     And   continuous batching
     Then  the server is starting
@@ -75,6 +75,7 @@ Feature: Parallel
       | streaming | n_predict |
       | disabled  | 128       |
       | enabled   | 64        |
+
 
   Scenario:  Multi users with total number of tokens to predict exceeds the KV Cache size #3969
     Given a prompt:
