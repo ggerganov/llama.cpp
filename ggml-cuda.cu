@@ -566,7 +566,8 @@ static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + IQ3S_N
 typedef struct {
     half d;
     uint8_t qs[QK_K/8];
-    uint8_t scales[QK_K/16];
+    uint8_t qh[QK_K/32];
+    uint8_t scales[QK_K/32];
 } block_iq1_s;
 static_assert(sizeof(block_iq1_s) == sizeof(ggml_fp16_t) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
 
@@ -1723,9 +1724,8 @@ static __global__ void dequantize_block_iq1_s(const void * __restrict__ vx, dst_
     const int ib = tid%8; // 0...7
     dst_t * y = yy + i*QK_K + 32*ib + 8*il;
     const int i8 = 4*ib+il;
-    uint8_t h = x[i].scales[i8/2] >> 4*(i8%2);
-    const int8_t * grid = (const int8_t *)(iq1s_grid + (x[i].qs[i8] | ((h & 8) << 5)));
-    const float d = (float)x[i].d * (2*(h & 7) + 1);
+    const int8_t * grid = (const int8_t *)(iq1s_grid + (x[i].qs[i8] | (((x[i].qh[i8/4] >> 2*(i8%4)) & 3) << 8)));
+    const float d = (float)x[i].d * (2*((x[i].scales[ib] >> 4*(il/2)) & 0xf) + 1);
     for (int j = 0; j < 8; ++j) y[j] = d * grid[j];
 #else
     assert(false);
