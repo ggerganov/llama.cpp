@@ -5051,7 +5051,7 @@ static dpct::global_memory<const uint32_t, 1> iq3xxs_grid(
         0x3e2c0404, 0x3e2c0414, 0x3e2c1424, 0x3e341c04,
     });
 static dpct::global_memory<const uint32_t, 1> iq3s_grid(
-    sycl::range<1>(256),
+    sycl::range<1>(512),
     {
         0x01010101, 0x01010103, 0x01010105, 0x0101010b, 0x0101010f, 0x01010301, 0x01010303, 0x01010305,
         0x01010309, 0x0101030d, 0x01010501, 0x01010503, 0x0101050b, 0x01010707, 0x01010901, 0x01010905,
@@ -5120,7 +5120,7 @@ static dpct::global_memory<const uint32_t, 1> iq3s_grid(
     });
 
 static dpct::global_memory<const uint64_t, 1> iq1s_grid(
-    sycl::range<1>(256),
+    sycl::range<1>(512),
     {
         0xffffffffffff0101, 0xffffffffff01ff00, 0xffffffffff010100, 0xffffffff00000000,
         0xffffffff01ff00ff, 0xffffffff01ff0001, 0xffffffff0101ffff, 0xffffffff0101ff01,
