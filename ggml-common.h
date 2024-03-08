@@ -8,12 +8,12 @@
 #elif defined(GGML_COMMON_IMPL_METAL)
 #include <metal_stdlib>
 
-#define GGML_TABLE_BEGIN(type, name, size) constant static const type name[size] = {
+#define GGML_TABLE_BEGIN(type, name, size) static const constant type name[size] = {
 #define GGML_TABLE_END() };
 #elif defined(GGML_COMMON_IMPL_CUDA)
 #include <cstdint>
 
-#define GGML_TABLE_BEGIN(type, name, size) __device__ __constant__ static const type name[size] = {
+#define GGML_TABLE_BEGIN(type, name, size) static const __device__ __constant__ type name[size] = {
 #define GGML_TABLE_END() };
 #elif defined(GGML_COMMON_IMPL_SYCL)
 #include <cstdint>
