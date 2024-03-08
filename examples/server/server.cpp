@@ -335,8 +335,12 @@ struct server_slot {
 };
 
 struct server_metrics {
+    const int64_t t_start = ggml_time_us();
+
     uint64_t n_prompt_tokens_processed_total = 0;
+    uint64_t t_prompt_processing_total       = 0;
     uint64_t n_tokens_predicted_total        = 0;
+    uint64_t t_tokens_generation_total       = 0;
 
     uint64_t n_prompt_tokens_processed = 0;
     uint64_t t_prompt_processing       = 0;
@@ -348,12 +352,14 @@ struct server_metrics {
         n_prompt_tokens_processed_total += slot.n_prompt_tokens_processed;
         n_prompt_tokens_processed       += slot.n_prompt_tokens_processed;
         t_prompt_processing             += slot.t_prompt_processing;
+        t_prompt_processing_total       += slot.t_prompt_processing;
     }
 
     void on_prediction(const server_slot &slot) {
-        n_tokens_predicted_total += slot.n_decoded;
-        n_tokens_predicted       += slot.n_decoded;
-        t_tokens_generation      += slot.t_token_generation;
+        n_tokens_predicted_total   += slot.n_decoded;
+        n_tokens_predicted         += slot.n_decoded;
+        t_tokens_generation        += slot.t_token_generation;
+        t_tokens_generation_total  += slot.t_token_generation;
     }
 
     void reset_bucket() {
@@ -1502,9 +1508,12 @@ struct server_context {
                         { "idle",                            n_idle_slots       },
                         { "processing",                      n_processing_slots },
                         { "deferred",                        queue_tasks.queue_tasks_deferred.size() },
+                        { "t_start",                         metrics.t_start},
 
                         { "n_prompt_tokens_processed_total", metrics.n_prompt_tokens_processed_total},
+                        { "t_tokens_generation_total",       metrics.t_tokens_generation_total},
                         { "n_tokens_predicted_total",        metrics.n_tokens_predicted_total},
+                        { "t_prompt_processing_total",       metrics.t_prompt_processing_total},
 
                         { "n_prompt_tokens_processed",       metrics.n_prompt_tokens_processed},
                         { "t_prompt_processing",             metrics.t_prompt_processing},
@@ -1517,7 +1526,9 @@ struct server_context {
                         { "slots",                           slots_data },
                     };
 
-                    metrics.reset_bucket();
+                    if (json_value(task.data, "reset_bucket", false)) {
+                        metrics.reset_bucket();
+                    }
                     queue_results.send(res);
                 } break;
         }
@@ -2709,6 +2720,7 @@ int main(int argc, char ** argv) {
             task.id_multi  = -1;
             task.id_target = -1;
             task.type = SERVER_TASK_TYPE_METRICS;
+            task.data.push_back({{"reset_bucket", true}});
 
             ctx_server.queue_results.add_waiting_task_id(task.id);
             ctx_server.queue_tasks.post(task);
@@ -2732,20 +2744,28 @@ int main(int argc, char ** argv) {
                 {"counter", {{
                         {"name",  "prompt_tokens_total"},
                         {"help",  "Number of prompt tokens processed."},
-                        {"value",  data["n_prompt_tokens_processed_total"]}
+                        {"value",  (uint64_t) data["n_prompt_tokens_processed_total"]}
+                }, {
+                        {"name",  "prompt_seconds_total"},
+                        {"help",  "Prompt process time"},
+                        {"value",  (uint64_t) data["t_prompt_processing_total"] / 1.e3}
                 }, {
                         {"name",  "tokens_predicted_total"},
                         {"help",  "Number of generation tokens processed."},
-                        {"value",  data["n_tokens_predicted_total"]}
+                        {"value",  (uint64_t) data["n_tokens_predicted_total"]}
+                }, {
+                        {"name",  "tokens_predicted_seconds_total"},
+                        {"help",  "Predict process time"},
+                        {"value",  (uint64_t) data["t_tokens_generation_total"] / 1.e3}
                 }}},
                 {"gauge", {{
                         {"name",  "prompt_tokens_seconds"},
                         {"help",  "Average prompt throughput in tokens/s."},
-                        {"value",  n_prompt_tokens_processed ? 1e3 / t_prompt_processing * n_prompt_tokens_processed : 0}
+                        {"value",  n_prompt_tokens_processed ? 1.e3 / t_prompt_processing * n_prompt_tokens_processed : 0.}
                 },{
                         {"name",  "predicted_tokens_seconds"},
                         {"help",  "Average generation throughput in tokens/s."},
-                        {"value",  n_tokens_predicted ? 1e3 / t_tokens_generation * n_tokens_predicted : 0}
+                        {"value",  n_tokens_predicted ? 1.e3 / t_tokens_generation * n_tokens_predicted : 0.}
                 },{
                         {"name",  "kv_cache_usage_ratio"},
                         {"help",  "KV-cache usage. 1 means 100 percent usage."},
@@ -2753,15 +2773,15 @@ int main(int argc, char ** argv) {
                 },{
                         {"name",  "kv_cache_tokens"},
                         {"help",  "KV-cache tokens."},
-                        {"value",  data["kv_cache_tokens_count"]}
+                        {"value",  (uint64_t) data["kv_cache_tokens_count"]}
                 },{
                         {"name",  "requests_processing"},
                         {"help",  "Number of request processing."},
-                        {"value",  data["processing"]}
+                        {"value",  (uint64_t) data["processing"]}
                 },{
                         {"name",  "requests_deferred"},
                         {"help",  "Number of request deferred."},
-                        {"value",  data["deferred"]}
+                        {"value",  (uint64_t) data["deferred"]}
                 }}}
             };
 
@@ -2775,12 +2795,15 @@ int main(int argc, char ** argv) {
                     const std::string name = metric_def["name"];
                     const std::string help = metric_def["help"];
 
-                    auto value = json_value(metric_def, "value", 0);
+                    auto value = json_value(metric_def, "value", 0.);
                     prometheus << "# HELP llamacpp:" << name << " " << help  << "\n"
                                << "# TYPE llamacpp:" << name << " " << type  << "\n"
                                << "llamacpp:"        << name << " " << value << "\n";
                 }
             }
+
+            const int64_t t_start = data["t_start"];
+            res.set_header("Process-Start-Time-Unix", std::to_string(t_start));
 
             res.set_content(prometheus.str(), "text/plain; version=0.0.4");
             res.status = 200; // HTTP OK
