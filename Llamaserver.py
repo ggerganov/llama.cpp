@@ -2,7 +2,6 @@ from queue import Queue
 import threading
 import requests
 import json
-from time import sleep
 
 def print_dict(data):
     if isinstance(data, dict):
@@ -102,8 +101,6 @@ You pay close attention to the nuance of a question and respond accordingly."
             print(f"Server responded with code {response.status_code}\n")
     except Exception as e:
         print(f"Server returned exception error {e}")
-       # sleep(delay)
-       # delay *= 2
 
 if __name__ == "__main__":
 
