@@ -565,9 +565,8 @@ static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + IQ3S_N
 #define QI1_S (QK_K / (4*QR1_S))
 typedef struct {
     half d;
-    uint8_t qs[QK_K/8];
-    uint8_t qh[QK_K/32];
-    uint8_t scales[QK_K/32];
+    uint8_t  qs[QK_K/8];
+    uint16_t qh[QK_K/32];
 } block_iq1_s;
 static_assert(sizeof(block_iq1_s) == sizeof(ggml_fp16_t) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
 
@@ -1723,9 +1722,8 @@ static __global__ void dequantize_block_iq1_s(const void * __restrict__ vx, dst_
     const int il = tid/8; // 0...3
     const int ib = tid%8; // 0...7
     dst_t * y = yy + i*QK_K + 32*ib + 8*il;
-    const int i8 = 4*ib+il;
-    const int8_t * grid = (const int8_t *)(iq1s_grid + (x[i].qs[i8] | (((x[i].qh[i8/4] >> 2*(i8%4)) & 3) << 8)));
-    const float d = (float)x[i].d * (2*((x[i].scales[ib] >> 4*(il/2)) & 0xf) + 1);
+    const int8_t * grid = (const int8_t *)(iq1s_grid + (x[i].qs[4*ib+il] | (((x[i].qh[ib] >> 3*il) & 7) << 8)));
+    const float d = (float)x[i].d * (2*((x[i].qh[ib] >> 12) & 0xf) + 1);
     for (int j = 0; j < 8; ++j) y[j] = d * grid[j];
 #else
     assert(false);
@@ -4546,8 +4544,8 @@ static __device__ __forceinline__ float vec_dot_iq1_s_q8_1(
 
     const int ib32 = iqs;
     int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
-    const uint8_t h1 = bq1->scales[2*ib32+0];
-    const uint8_t h2 = bq1->scales[2*ib32+1];
+    const uint8_t h1 = bq1->qh[2*ib32+0]; //bq1->scales[2*ib32+0];
+    const uint8_t h2 = bq1->qh[2*ib32+1]; //bq1->scales[2*ib32+1];
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     const int * q8 = (const int *)bq8_1[ib32].qs;
     const int * grid1 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+0] | ((h1 & 0x08) << 5)));
