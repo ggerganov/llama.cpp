@@ -2750,6 +2750,8 @@ int main(int argc, char ** argv) {
         }
 
         // API key is invalid or not provided
+        // TODO: make another middleware for CORS related logic
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
         res.status = 401; // Unauthorized
 
