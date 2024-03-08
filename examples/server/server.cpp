@@ -3304,8 +3304,8 @@ int main(int argc, char ** argv) {
         json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
 
     // register API routes
-    svr.Post("/health",              handle_health);
-    svr.Post("/props",               handle_props);
+    svr.Get ("/health",              handle_health);
+    svr.Get ("/props",               handle_props);
     svr.Get ("/v1/models",           handle_models);
     svr.Post("/completion",          handle_completions); // legacy
     svr.Post("/completions",         handle_completions);
