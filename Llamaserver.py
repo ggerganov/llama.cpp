@@ -113,7 +113,7 @@ if __name__ == "__main__":
     global bar
     lockbar = threading.Lock()
 
-    url = "http://192.168.1.28:8080/completion"
+    url = "http://192.168.1.32:8080/completion"
 
     num_requests = 76
     q = Queue(maxsize = 80)
