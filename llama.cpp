@@ -8943,7 +8943,7 @@ static int llama_decode_internal(
                     }
                 }
 #ifndef NDEBUG
-                logits_valid[i] = batch.logits[i] == 1;
+                logits_valid[i] = batch.logits[i] != 0;
 #endif
             }
         } else if (lctx.logits_all) {

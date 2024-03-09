@@ -1822,7 +1822,9 @@ int main(int argc, char ** argv) {
 
     const bool ppl = !params.hellaswag && !params.winogrande && !params.multiple_choice && !params.kl_divergence;
     if (ppl) {
-        int32_t n_kv = std::max(1, params.n_batch / n_ctx) * n_ctx;
+        int n_seq = std::max(1, params.n_batch / n_ctx);
+        int32_t n_kv = n_seq * n_ctx;
+        params.n_parallel = n_seq;
         params.n_ctx = n_kv;
         params.n_batch = std::min(params.n_batch, n_kv);
     } else {
