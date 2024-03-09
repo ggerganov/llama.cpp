@@ -18,12 +18,18 @@ const dataset_path = __ENV.SERVER_BENCH_DATASET ? __ENV.SERVER_BENCH_DATASET : '
 // Max tokens to predict
 const max_tokens = __ENV.SERVER_BENCH_MAX_TOKENS ? parseInt(__ENV.SERVER_BENCH_MAX_TOKENS) : 512
 
+// Max prompt tokens
+const n_prompt_tokens = __ENV.SERVER_BENCH_MAX_PROMPT_TOKENS ? parseInt(__ENV.SERVER_BENCH_MAX_PROMPT_TOKENS) : 1024
+
+// Max slot context
+const n_ctx_slot = __ENV.SERVER_BENCH_MAX_CONTEXT ? parseInt(__ENV.SERVER_BENCH_MAX_CONTEXT) : 2048
+
 export function setup() {
     console.info(`Benchmark config: server_url=${server_url} n_prompt=${n_prompt} model=${model} dataset_path=${dataset_path} max_tokens=${max_tokens}`)
 }
 
 const data = new SharedArray('conversations', function () {
-    const tokenizer = (message) => message.split(" ")
+    const tokenizer = (message) => message.split(/[\s,'".?]/)
 
     return JSON.parse(open(dataset_path))
         // Filter out the conversations with less than 2 turns.
@@ -39,7 +45,7 @@ const data = new SharedArray('conversations', function () {
         // Filter out too short sequences
         .filter(conv => conv.n_prompt_tokens >= 4 && conv.n_completion_tokens >= 4)
         // Filter out too long sequences.
-        .filter(conv => conv.n_prompt_tokens <= 1024 && conv.n_prompt_tokens + conv.n_completion_tokens <= 2048)
+        .filter(conv => conv.n_prompt_tokens <= n_prompt_tokens && conv.n_prompt_tokens + conv.n_completion_tokens <= n_ctx_slot)
         // Keep only first n prompts
         .slice(0, n_prompt)
 })
@@ -106,7 +112,7 @@ export default function () {
 
         llamacpp_tokens_second.add(completions.usage.total_tokens / res.timings.duration * 1.e3)
     } else {
-        console.error(`response: ${res.body}`)
+        console.error(`response: ${res.body} request=${payload}`)
     }
 
     sleep(0.3)

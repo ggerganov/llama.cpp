@@ -55,6 +55,10 @@ The benchmark values can be overridden with:
 - `SERVER_BENCH_MODEL_ALIAS` model alias to pass in the completion request, default `my-model`
 - `SERVER_BENCH_MAX_TOKENS` max tokens to predict, default: `512`
 - `SERVER_BENCH_DATASET` path to the benchmark dataset file
+- `SERVER_BENCH_MAX_PROMPT_TOKENS` maximum prompt tokens to filter out in the dataset: default `1024`
+- `SERVER_BENCH_MAX_CONTEXT` maximum context size of the completions request to filter out in the dataset: prompt + predicted tokens, default `2048`
+
+Note: the local tokenizer is just a string space split, real number of tokens will differ.
 
 Or with [k6 options](https://k6.io/docs/using-k6/k6-options/reference/):
 
@@ -62,7 +66,7 @@ Or with [k6 options](https://k6.io/docs/using-k6/k6-options/reference/):
 SERVER_BENCH_N_PROMPTS=500 k6 run script.js --duration 10m --iterations 500 --vus 8
 ```
 
-To [debug http request](https://k6.io/docs/using-k6/http-debugging/) use `--http-debug="full"`
+To [debug http request](https://k6.io/docs/using-k6/http-debugging/) use `--http-debug="full"`.
 
 #### Metrics
 
