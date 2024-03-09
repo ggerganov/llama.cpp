@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ggml-impl.h"
-
 // GGML internal header
+
+#include "ggml-impl.h"
 
 #include <stdint.h>
 #include <stddef.h>
