@@ -158,10 +158,15 @@ static std::string generate(llama_context* ctx, const std::string& prompt, bool 
         std::string piece = llama_token_to_piece(ctx, token);
         if (stream) {
             std::printf("%s", piece.c_str());
+            std::fflush(stdout);
         }
 
         pieces.push_back(piece);
         inputs.push_back(token);
+    }
+
+    if (stream) {
+        std::printf("\n");
     }
 
     llama_batch_free(bat);
