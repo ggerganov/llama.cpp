@@ -341,7 +341,7 @@ struct server_slot {
 };
 
 struct server_metrics {
-    const int64_t t_start = ggml_time_us();
+    int64_t t_start = 0;
 
     uint64_t n_prompt_tokens_processed_total = 0;
     uint64_t t_prompt_processing_total       = 0;
@@ -354,14 +354,18 @@ struct server_metrics {
     uint64_t n_tokens_predicted  = 0;
     uint64_t t_tokens_generation = 0;
 
-    void on_prompt_eval(const server_slot &slot) {
+    void init() {
+        t_start = ggml_time_us();
+    }
+
+    void on_prompt_eval(const server_slot & slot) {
         n_prompt_tokens_processed_total += slot.n_prompt_tokens_processed;
         n_prompt_tokens_processed       += slot.n_prompt_tokens_processed;
         t_prompt_processing             += slot.t_prompt_processing;
         t_prompt_processing_total       += slot.t_prompt_processing;
     }
 
-    void on_prediction(const server_slot &slot) {
+    void on_prediction(const server_slot & slot) {
         n_tokens_predicted_total   += slot.n_decoded;
         n_tokens_predicted         += slot.n_decoded;
         t_tokens_generation        += slot.t_token_generation;
@@ -690,10 +694,11 @@ struct server_context {
         return res > 0;
     }
 
-    void initialize() {
+    void init() {
         const int32_t n_ctx_slot = n_ctx / params.n_parallel;
 
         LOG_INFO("initializing slots", {{"n_slots", params.n_parallel}});
+
         for (int i = 0; i < params.n_parallel; i++) {
             server_slot slot;
 
@@ -735,6 +740,8 @@ struct server_context {
         default_generation_settings_for_props["seed"] = -1;
 
         batch = llama_batch_init(n_ctx, 0, params.n_parallel);
+
+        metrics.init();
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const {
@@ -2783,7 +2790,7 @@ int main(int argc, char ** argv) {
         state.store(SERVER_STATE_ERROR);
         return 1;
     } else {
-        ctx_server.initialize();
+        ctx_server.init();
         state.store(SERVER_STATE_READY);
     }
 
