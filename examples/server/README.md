@@ -42,7 +42,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
 - `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 - `--port`: Set the port to listen. Default: `8080`.
-- `--path`: path from which to serve static files (default examples/server/public)
+- `--path`: path from which to serve static files (default: disabled)
 - `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
 - `--api-key-file`: path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`'s.
 - `--embedding`: Enable embedding extraction, Default: disabled.
@@ -558,7 +558,7 @@ The HTTP server supports OAI-like API
 
 ### Extending or building alternative Web Front End
 
-The default location for the static files is `examples/server/public`. You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
+You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
 
 Read the documentation in `/completion.js` to see convenient ways to access llama.
 
