@@ -37,7 +37,7 @@ const data = new SharedArray('conversations', function () {
         // Only keep the first two turns of each conversation.
         .map(data => {
             return {
-                prompt: data["conversations"][0]["value"],
+                prompt: data["conversations"][1]["value"],
                 n_prompt_tokens: tokenizer(data["conversations"][0]["value"]).length,
                 n_completion_tokens: tokenizer(data["conversations"][1]["value"]).length,
             }
