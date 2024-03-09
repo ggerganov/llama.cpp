@@ -2133,6 +2133,8 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --yarn-beta-slow N        YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
     printf("  --yarn-beta-fast N        YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
     printf("  --pooling {none,mean,cls} pooling type for embeddings, use model default if unspecified\n");
+    printf("  -dt N, --defrag-thold N\n");
+    printf("                            KV cache defragmentation threshold (default: %.1f, < 0 - disabled)\n", params.defrag_thold);
     printf("  -b N, --batch-size N      batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
@@ -2355,6 +2357,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
             else if (value == "cls")  { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
             else { invalid_param = true; break; }
+        } else if (arg == "--defrag-thold" || arg == "-dt") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.defrag_thold = std::stof(argv[i]);
         } else if (arg == "--threads" || arg == "-t") {
             if (++i >= argc)
             {
