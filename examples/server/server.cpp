@@ -1327,6 +1327,8 @@ struct server_context {
 
         const int n_embd = llama_n_embd(model);
 
+        std::vector<float> embd_res(n_embd, 0.0f);
+
         for (int i = 0; i < batch.n_tokens; ++i) {
             if (!batch.logits[i] || batch.seq_id[i][0] != slot.id + 1) {
                 continue;
@@ -1350,8 +1352,10 @@ struct server_context {
                 continue;
             }
 
+            llama_embd_normalize(embd, embd_res.data(), n_embd);
+
             res.data = json {
-                {"embedding", std::vector<float>(embd, embd + n_embd)},
+                {"embedding", embd_res},
             };
         }
 
@@ -3354,6 +3358,8 @@ int main(int argc, char ** argv) {
             // get the result
             server_task_result result = ctx_server.queue_results.recv(id_task);
             ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+            // append to the responses
             responses.push_back(result.data);
         }
 
