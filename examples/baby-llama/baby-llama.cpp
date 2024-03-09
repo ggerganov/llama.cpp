@@ -575,10 +575,7 @@ static struct ggml_tensor * forward(
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             // KQ_scaled shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_scaled =
-                ggml_scale(ctx0,
-                        KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
+            struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, 1.0f/sqrtf(float(n_embd)/n_head));
 
             // KQ_masked = mask_past(KQ_scaled)
             // KQ_masked shape [n_past + N, N, n_head, 1]
@@ -844,10 +841,7 @@ static struct ggml_tensor * forward_batch(
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             // KQ_scaled shape [n_past + N, N, n_head, n_batch]
-            struct ggml_tensor * KQ_scaled =
-                ggml_scale(ctx0,
-                        KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
+            struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, 1.0f/sqrtf(float(n_embd)/n_head));
             assert_shape_4d(KQ_scaled, n_past + N, N, n_head, n_batch);
 
             // KQ_masked = mask_past(KQ_scaled)
@@ -1131,10 +1125,7 @@ static struct ggml_tensor * forward_lora(
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             // KQ_scaled shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_scaled =
-                ggml_scale(ctx0,
-                        KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrtf(float(n_embd)/n_head)));
+            struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, 1.0f/sqrtf(float(n_embd)/n_head));
 
             // KQ_masked = mask_past(KQ_scaled)
             // KQ_masked shape [n_past + N, N, n_head, 1]
@@ -1258,9 +1249,9 @@ static struct ggml_tensor * forward_lora(
 }
 
 static void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, struct ggml_tensor * best_samples) {
-    assert(logits->n_dims == 2);
-    assert(probs->n_dims == 2);
-    assert(best_samples->n_dims == 1);
+    assert(ggml_is_matrix(logits));
+    assert(ggml_is_matrix(probs));
+    assert(ggml_is_vector(best_samples));
     assert(logits->ne[1] == best_samples->ne[0]);
     assert(logits->ne[0] == probs->ne[0]);
     assert(logits->ne[1] == probs->ne[1]);
@@ -1292,9 +1283,9 @@ static void sample_softmax_batch(
     struct ggml_context * ctx, struct ggml_tensor * logits, struct ggml_tensor * probs,
     struct ggml_tensor * best_samples
 ) {
-    GGML_ASSERT(best_samples->n_dims == 2);
-    GGML_ASSERT(logits->n_dims == 3);
-    GGML_ASSERT(probs->n_dims == 3);
+    GGML_ASSERT(ggml_is_matrix(best_samples));
+    GGML_ASSERT(ggml_is_3d(logits));
+    GGML_ASSERT(ggml_is_3d(probs));
     int n_tokens = best_samples->ne[0];
     int n_batch  = best_samples->ne[1];
     int n_vocab  = logits->ne[0];
@@ -1334,7 +1325,7 @@ static void print_row(struct ggml_tensor * probs, int i) {
 }
 
 static void print_matrix(struct ggml_tensor * probs) {
-    assert(probs->n_dims == 2);
+    assert(ggml_is_matrix(probs));
     for (int i = 0; i < probs->ne[1]; ++i) {
         for (int k = 0; k < probs->ne[0]; ++k) {
             float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
@@ -1386,8 +1377,8 @@ static void get_example_targets(int example_id, struct ggml_tensor * tokens_inpu
 static void get_example_targets_batch(
     struct ggml_context * ctx, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * targets
 ) {
-    GGML_ASSERT(tokens_input->n_dims == 2);
-    GGML_ASSERT(     targets->n_dims == 3);
+    GGML_ASSERT(ggml_is_matrix(tokens_input));
+    GGML_ASSERT(ggml_is_3d(targets));
     int n_tokens = tokens_input->ne[0];
     int n_batch  = tokens_input->ne[1];
     GGML_ASSERT(n_tokens == targets->ne[1]);
@@ -1542,27 +1533,28 @@ int main(int argc, char ** argv) {
 
         int n_past = 0;
 
-        ggml_cgraph gf = {};
+        struct ggml_cgraph * gf = NULL;
+        gf = ggml_new_graph_custom(ctx0, LLAMA_TRAIN_MAX_NODES, true);
 
         get_example_targets_batch(ctx0, 64*ex+0,  tokens_input, targets);
 
-        struct ggml_tensor * logits = forward_batch(&model, &kv_self, ctx0, &gf, tokens_input, n_tokens, n_past, n_batch);
+        struct ggml_tensor * logits = forward_batch(&model, &kv_self, ctx0, gf, tokens_input, n_tokens, n_past, n_batch);
         // struct ggml_tensor * e = cross_entropy_loss(ctx0, targets, logits);
         struct ggml_tensor * e = square_error_loss(ctx0, targets, logits);
 
-        ggml_build_forward_expand(&gf, e);
-        ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
+        ggml_build_forward_expand(gf, e);
+        ggml_graph_compute_helper(work_buffer, gf, /*n_threads*/ 1);
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
-        struct ggml_opt_params opt_params_lbfgs = ggml_opt_default_params(GGML_OPT_LBFGS);
+        struct ggml_opt_params opt_params_lbfgs = ggml_opt_default_params(GGML_OPT_TYPE_LBFGS);
         opt_params_lbfgs.print_forward_graph = false;
         opt_params_lbfgs.print_backward_graph = false;
         opt_params_lbfgs.lbfgs.n_iter = 16;
         ggml_opt(ctx0, opt_params_lbfgs, e);
         //
-        ggml_build_forward_expand(&gf, e);
-        ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
+        ggml_build_forward_expand(gf, e);
+        ggml_graph_compute_helper(work_buffer, gf, /*n_threads*/ 1);
 
         float error_after_opt = ggml_get_f32_1d(e, 0);
 
@@ -1609,13 +1601,14 @@ int main(int argc, char ** argv) {
             };
             struct ggml_context * ctx0 = ggml_init(params);
 
-            ggml_cgraph gf = {};
+            struct ggml_cgraph * gf = NULL;
+            gf = ggml_new_graph_custom(ctx0, LLAMA_TRAIN_MAX_NODES, true);
 
             int n_past = 0;
-            struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, &gf, tokens_input, sample_ctx, n_past);
+            struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, gf, tokens_input, sample_ctx, n_past);
 
-            ggml_build_forward_expand(&gf, logits);
-            ggml_graph_compute_helper(work_buffer, &gf, /*n_threads*/ 1);
+            ggml_build_forward_expand(gf, logits);
+            ggml_graph_compute_helper(work_buffer, gf, /*n_threads*/ 1);
 
             struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
             struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);

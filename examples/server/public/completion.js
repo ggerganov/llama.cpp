@@ -34,7 +34,8 @@ export async function* llama(prompt, params = {}, config = {}) {
     headers: {
       'Connection': 'keep-alive',
       'Content-Type': 'application/json',
-      'Accept': 'text/event-stream'
+      'Accept': 'text/event-stream',
+      ...(params.api_key ? {'Authorization': `Bearer ${params.api_key}`} : {})
     },
     signal: controller.signal,
   });
@@ -96,6 +97,15 @@ export async function* llama(prompt, params = {}, config = {}) {
           }
           if (result.error) {
             result.error = JSON.parse(result.error);
+            if (result.error.content.includes('slot unavailable')) {
+              // Throw an error to be caught by upstream callers
+              throw new Error('slot unavailable');
+            } else {
+              console.error(`llama.cpp error: ${result.error.content}`);
+            }
+          }
+          if (result.error) {
+            result.error = JSON.parse(result.error);
             console.error(`llama.cpp error: ${result.error.content}`);
           }
         }
@@ -114,7 +124,7 @@ export async function* llama(prompt, params = {}, config = {}) {
   return content;
 }
 
-// Call llama, return an event target that you can subcribe to
+// Call llama, return an event target that you can subscribe to
 //
 // Example:
 //
@@ -185,7 +195,8 @@ export const llamaComplete = async (params, controller, callback) => {
 // Get the model info from the server. This is useful for getting the context window and so on.
 export const llamaModelInfo = async () => {
   if (!generation_settings) {
-    generation_settings = await fetch("/model.json").then(r => r.json());
+    const props = await fetch("/props").then(r => r.json());
+    generation_settings = props.default_generation_settings;
   }
   return generation_settings;
 }

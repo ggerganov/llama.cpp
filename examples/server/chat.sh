@@ -48,6 +48,7 @@ chat_completion() {
         top_p: 0.9,
         n_keep: $n_keep,
         n_predict: 256,
+        cache_prompt: true,
         stop: ["\n### Human:"],
         stream: true
     }')"

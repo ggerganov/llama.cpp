@@ -29,7 +29,7 @@ class SpecialVocab:
         if special_token_types is not None:
             self.special_token_types = special_token_types
         else:
-            self.special_token_types = ('bos', 'eos', 'unk', 'sep', 'pad')
+            self.special_token_types = ('bos', 'eos', 'unk', 'sep', 'pad', 'cls', 'mask')
         self._load(Path(path))
 
     def __repr__(self) -> str:
@@ -84,7 +84,7 @@ class SpecialVocab:
         merges_file = path / 'merges.txt'
         if not merges_file.is_file():
             return False
-        with open(merges_file, 'r') as fp:
+        with open(merges_file, 'r', encoding = 'utf-8') as fp:
             first_line = next(fp, '').strip()
             if not first_line.startswith('#'):
                 fp.seek(0)
@@ -109,8 +109,10 @@ class SpecialVocab:
         return True
 
     def _set_special_token(self, typ: str, tid: Any) -> None:
-        if not isinstance(tid, int) or tid < 0:
+        if not isinstance(tid, int):
             return
+        if tid < 0:
+            raise ValueError(f'invalid value for special token type {typ}: {tid}')
         if self.n_vocab is None or tid < self.n_vocab:
             if typ in self.special_token_ids:
                 return
@@ -150,10 +152,6 @@ class SpecialVocab:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
                 self.add_special_token[typ] = add_entry
-            if not added_tokens:
-                # We will need this to get the content for the token, so if it's empty
-                # may as well just give up.
-                continue
             entry = tokenizer_config.get(f'{typ}_token')
             if isinstance(entry, str):
                 tc_content = entry
