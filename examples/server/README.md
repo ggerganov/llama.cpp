@@ -198,7 +198,7 @@ node index.js
     `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
 
       - The prompt is a string or an array with the first element given as a string
-      - The model's `tokenizer.ggml.add_bost_token` metadata is `true`
+      - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
       - The system prompt is empty
 
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
