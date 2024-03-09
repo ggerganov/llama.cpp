@@ -16,13 +16,13 @@ using json = nlohmann::json;
 
 // https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11
 enum error_type {
-    ERROR_INVALID_REQUEST,
-    ERROR_AUTHENTICATION,
-    ERROR_SERVER,
-    ERROR_NOT_FOUND,
-    ERROR_PERMISSION,
-    ERROR_UNAVAILABLE, // custom error
-    ERROR_NOT_SUPPORTED, // custom error
+    ERROR_TYPE_INVALID_REQUEST,
+    ERROR_TYPE_AUTHENTICATION,
+    ERROR_TYPE_SERVER,
+    ERROR_TYPE_NOT_FOUND,
+    ERROR_TYPE_PERMISSION,
+    ERROR_TYPE_UNAVAILABLE, // custom error
+    ERROR_TYPE_NOT_SUPPORTED, // custom error
 };
 
 extern bool server_verbose;
@@ -558,31 +558,31 @@ static json format_error_response(const std::string & message, const enum error_
     std::string type_str;
     int code = 500;
     switch (type) {
-        case ERROR_INVALID_REQUEST:
+        case ERROR_TYPE_INVALID_REQUEST:
             type_str = "invalid_request_error";
             code = 400;
             break;
-        case ERROR_AUTHENTICATION:
+        case ERROR_TYPE_AUTHENTICATION:
             type_str = "authentication_error";
             code = 401;
             break;
-        case ERROR_NOT_FOUND:
+        case ERROR_TYPE_NOT_FOUND:
             type_str = "not_found_error";
             code = 404;
             break;
-        case ERROR_SERVER:
+        case ERROR_TYPE_SERVER:
             type_str = "server_error";
             code = 500;
             break;
-        case ERROR_PERMISSION:
+        case ERROR_TYPE_PERMISSION:
             type_str = "permission_error";
             code = 403;
             break;
-        case ERROR_NOT_SUPPORTED:
+        case ERROR_TYPE_NOT_SUPPORTED:
             type_str = "not_supported_error";
             code = 501;
             break;
-        case ERROR_UNAVAILABLE:
+        case ERROR_TYPE_UNAVAILABLE:
             type_str = "unavailable_error";
             code = 503;
             break;
