@@ -24,6 +24,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <exception>
 #include <set>
 #include <mutex>
 #include <thread>
@@ -1468,6 +1469,8 @@ struct server_context {
                         }
                     } catch (const llama_error & err) {
                         send_error(task, err);
+                    } catch (const std::exception & err) {
+                        send_error(task, llama_error("unhandled", err.what()));
                     }
                 } break;
             case SERVER_TASK_TYPE_CANCEL:
