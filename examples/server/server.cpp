@@ -1200,19 +1200,6 @@ struct server_context {
         };
     }
 
-    void send_error(const server_task & task, const std::string & error) {
-        LOG_TEE("task %i - error: %s\n", task.id, error.c_str());
-
-        server_task_result res;
-        res.id       = task.id;
-        res.id_multi = task.id_multi;
-        res.stop     = false;
-        res.error    = true;
-        res.data     = { { "content", error } };
-
-        queue_results.send(res);
-    }
-
     static json error_to_json(const llama_error& error)
     {
         return {
@@ -1409,7 +1396,7 @@ struct server_context {
     void split_multiprompt_task(int id_multi, const server_task & multiprompt_task) {
         const int prompt_count = multiprompt_task.data.at("prompt").size();
         if (prompt_count <= 1) {
-            send_error(multiprompt_task, "error while handling multiple prompts");
+            send_error(multiprompt_task, llama_error("prompt.multi.empty", "error while handling multiple prompts"));
             return;
         }
 
@@ -1464,7 +1451,7 @@ struct server_context {
                         if (!launch_slot_with_data(*slot, task.data))
                         {
                             // send error result
-                            send_error(task, "internal_error");
+                            send_error(task, llama_error("unknown", "Unknown error"));
                             break;
                         }
                     } catch (const llama_error & err) {
