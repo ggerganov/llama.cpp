@@ -841,12 +841,12 @@ struct server_context {
         }
 
         if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
+            // Might be better to reject the request with a 400 ?
             LOG_WARNING("Max tokens to predict exceeds server configuration", {
                 {"params.n_predict", slot.params.n_predict},
                 {"slot.n_predict",   slot.n_predict},
             });
-            error_message = "Max tokens to predict exceeds server configuration";
-            return false;
+            slot.params.n_predict = slot.n_predict;
         }
 
         // infill
