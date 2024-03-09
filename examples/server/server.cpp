@@ -3349,8 +3349,7 @@ int main(int argc, char ** argv) {
             std::string content = body["content"];
             prompts.push_back(content);
         } else {
-            // TODO @ngxson : should return an error here
-            prompts.push_back("");
+            res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_INVALID_REQUEST));
         }
 
         // process all prompts
