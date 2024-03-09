@@ -34,10 +34,10 @@ const data = new SharedArray('conversations', function () {
     return JSON.parse(open(dataset_path))
         // Filter out the conversations with less than 2 turns.
         .filter(data => data["conversations"].length >= 2)
-        // Only keep the first two turns of each conversation.
+        .filter(data => data["conversations"][0]["from"] === "human")
         .map(data => {
             return {
-                prompt: data["conversations"][1]["value"],
+                prompt: data["conversations"][0]["value"],
                 n_prompt_tokens: tokenizer(data["conversations"][0]["value"]).length,
                 n_completion_tokens: tokenizer(data["conversations"][1]["value"]).length,
             }
