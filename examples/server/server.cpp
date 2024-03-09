@@ -392,7 +392,7 @@ struct server_queue {
     // callback functions
     std::function<void(server_task       &)> callback_new_task;
     std::function<void(server_task_multi &)> callback_finish_multitask;
-    std::function<void(void)>                callback_run_slots;
+    std::function<void(void)>                callback_update_slots;
 
     // Add a new task to the end of the queue
     int post(server_task task) {
@@ -431,8 +431,8 @@ struct server_queue {
     }
 
     // Register the function to be called when all slots data is ready to be processed
-    void on_run_slots(std::function<void(void)> callback) {
-        callback_run_slots = std::move(callback);
+    void on_update_slots(std::function<void(void)> callback) {
+        callback_update_slots = std::move(callback);
     }
 
     // Call when the state of one slot is changed
@@ -457,7 +457,7 @@ struct server_queue {
      * - Wait until a new task arrives
      * - Process the task (i.e. maybe copy data into slot)
      * - Check if multitask is finished
-     * - Run all slots
+     * - Update all slots
      */
     void start_loop() {
         running = true;
@@ -495,9 +495,9 @@ struct server_queue {
             }
 
             // all tasks in the current loop is processed, slots data is now ready
-            LOG_VERBOSE("callback_run_slots", {});
+            LOG_VERBOSE("callback_update_slots", {});
 
-            callback_run_slots();
+            callback_update_slots();
 
             LOG_VERBOSE("wait for new task", {});
             {
@@ -1599,7 +1599,7 @@ struct server_context {
         queue_results.send(result);
     }
 
-    void run_slots() {
+    void update_slots() {
         if (system_need_update) {
             system_prompt_update();
         }
@@ -3473,8 +3473,8 @@ int main(int argc, char ** argv) {
         &server_context::process_single_task, &ctx_server, std::placeholders::_1));
     ctx_server.queue_tasks.on_finish_multitask(std::bind(
         &server_context::on_finish_multitask, &ctx_server, std::placeholders::_1));
-    ctx_server.queue_tasks.on_run_slots(std::bind(
-        &server_context::run_slots, &ctx_server));
+    ctx_server.queue_tasks.on_update_slots(std::bind(
+        &server_context::update_slots, &ctx_server));
     ctx_server.queue_results.on_multitask_update(std::bind(
         &server_queue::update_multitask,
         &ctx_server.queue_tasks,
