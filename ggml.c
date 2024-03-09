@@ -20175,178 +20175,44 @@ size_t ggml_quantize_chunk(
                    int   n_per_row,
                int64_t * hist,
            const float * imatrix) {
+    const int n = nrows * n_per_row;
+
+    if (ggml_quantize_requires_imatrix(type)) {
+        GGML_ASSERT(imatrix != NULL);
+    }
+
+    GGML_ASSERT(start % type_traits[type].blck_size == 0);
+    GGML_ASSERT(start % n_per_row == 0);
+
     ggml_quantize_init(type); // this is noop if already initialized
+
+    const size_t start_row = start / n_per_row;
+    const size_t row_size  = ggml_row_size(type, n_per_row);
+
     size_t result = 0;
-    int n = nrows * n_per_row;
+
     switch (type) {
-        case GGML_TYPE_Q4_0:
-            {
-                GGML_ASSERT(start % QK4_0 == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q4_0(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q4_1:
-            {
-                GGML_ASSERT(start % QK4_1 == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q4_1(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q5_0:
-            {
-                GGML_ASSERT(start % QK5_0 == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q5_0(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q5_1:
-            {
-                GGML_ASSERT(start % QK5_1 == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q5_1(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q8_0:
-            {
-                GGML_ASSERT(start % QK8_0 == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q8_0(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q2_K:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q2_K(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q3_K:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q3_K(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q4_K:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q4_K(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q5_K:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q5_K(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_Q6_K:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_q6_K(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_IQ2_XXS:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                GGML_ASSERT(imatrix);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq2_xxs(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_IQ2_XS:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                GGML_ASSERT(imatrix);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq2_xs(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_IQ3_XXS:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq3_xxs(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_IQ3_S:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq3_s(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_IQ2_S:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq2_s(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_IQ1_S:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq1_s(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-        case GGML_TYPE_IQ4_NL:
+        case GGML_TYPE_Q4_0:    result = quantize_q4_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q4_1:    result = quantize_q4_1(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q5_0:    result = quantize_q5_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q5_1:    result = quantize_q5_1(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q8_0:    result = quantize_q8_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q2_K:    result = quantize_q2_K(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q3_K:    result = quantize_q3_K(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q4_K:    result = quantize_q4_K(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q5_K:    result = quantize_q5_K(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q6_K:    result = quantize_q6_K(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ2_XXS: result = quantize_iq2_xxs(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ2_XS:  result = quantize_iq2_xs (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ3_XXS: result = quantize_iq3_xxs(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ3_S:   result = quantize_iq3_s  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ2_S:   result = quantize_iq2_s  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ1_S:   result = quantize_iq1_s  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ4_NL:  result = quantize_iq4_nl (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
 #if QK_K == 64
-        case GGML_TYPE_IQ4_XS:
-#endif
-            {
-                GGML_ASSERT(start % QK4_NL == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq4_nl(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
-#if QK_K != 64
-        case GGML_TYPE_IQ4_XS:
-            {
-                GGML_ASSERT(start % QK_K == 0);
-                GGML_ASSERT(start % n_per_row == 0);
-                size_t start_row = start / n_per_row;
-                size_t row_size = ggml_row_size(type, n_per_row);
-                result = quantize_iq4_xs(src + start, (char *)dst + start_row * row_size, nrows, n_per_row, imatrix);
-                GGML_ASSERT(result == row_size * nrows);
-            } break;
+        case GGML_TYPE_IQ4_XS:  result = quantize_iq4_nl (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+#else
+        case GGML_TYPE_IQ4_XS:  result = quantize_iq4_xs (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
 #endif
         case GGML_TYPE_F16:
             {
@@ -20364,7 +20230,9 @@ size_t ggml_quantize_chunk(
             assert(false);
     }
 
-    GGML_UNUSED(hist); // TODO: poppulate
+    GGML_ASSERT(result == nrows * row_size);
+
+    GGML_UNUSED(hist); // TODO: populate
 
     return result;
 }
