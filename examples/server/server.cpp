@@ -958,6 +958,7 @@ struct server_context {
         {
             if (slot.ctx_sampling != nullptr) {
                 llama_sampling_free(slot.ctx_sampling);
+                slot.ctx_sampling = nullptr;
             }
             slot.ctx_sampling = llama_sampling_init(slot.sparams);
             llama_set_rng_seed(ctx, slot.params.seed);
