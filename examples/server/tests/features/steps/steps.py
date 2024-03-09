@@ -285,17 +285,17 @@ def step_seed(context, seed):
 
 @step(u'a prefix prompt')
 def step_prompt_prefix(context):
-    context.prompt_prefix = context.text
+    context.prompt_prefix = context_text(context)
 
 
 @step(u'a junk suffix prompt')
 def step_prompt_junk_suffix(context):
-    context.prompt_junk_suffix = context.text
+    context.prompt_junk_suffix = context_text(context)
 
 
 @step(u'a suffix prompt')
 def step_prompt_suffix(context):
-    context.prompt_suffix = context.text
+    context.prompt_suffix = context_text(context)
 
 
 @step(u'{n_ga:d} group attention factor'
@@ -311,7 +311,7 @@ def step_impl(context, n_ga_w):
 
 @step(u'a passkey prompt template')
 def step_prompt_passkey(context):
-    context.prompt_passkey = context.text
+    context.prompt_passkey = context_text(context)
 
 
 @step(u'{n_prompts:d} fixed prompts')
@@ -371,7 +371,7 @@ async def step_oai_chat_completions(context, api_error):
 
 @step(u'a prompt')
 def step_a_prompt(context):
-    context.prompts.append(context.text)
+    context.prompts.append(context_text(context))
     context.n_prompts = len(context.prompts)
 
 
@@ -464,7 +464,7 @@ async def all_prompts_are_predicted(context, expected_predicted_n=None):
 @async_run_until_complete
 async def step_compute_embedding(context):
     context.n_prompts = 1
-    context.embeddings = await request_embedding(context.text, base_url=context.base_url)
+    context.embeddings = await request_embedding(context_text(context), base_url=context.base_url)
 
 
 @step(u'all embeddings are the same')
@@ -491,6 +491,7 @@ async def step_all_embeddings_are_the_same(context):
                 print(f"{msg}\n")
             assert np.isclose(similarity, 1.0, rtol=1e-05, atol=1e-08, equal_nan=False), msg
 
+
 @step(u'embeddings are generated')
 def step_assert_embeddings(context):
     assert context.n_prompts == len(context.embeddings), (f"unexpected response:\n"
@@ -504,7 +505,7 @@ def step_assert_embeddings(context):
 @async_run_until_complete
 async def step_oai_compute_embeddings(context):
     context.n_prompts = 1
-    context.embeddings = await request_oai_embeddings(context.text,
+    context.embeddings = await request_oai_embeddings(context_text(context),
                                                       base_url=context.base_url,
                                                       user_api_key=context.user_api_key,
                                                       model=context.model)
@@ -552,7 +553,7 @@ async def all_embeddings_are_generated(context):
 @step(u'tokenizing')
 @async_run_until_complete
 async def step_tokenize(context):
-    context.tokenized_text = context.text
+    context.tokenized_text = context_text(context)
     async with aiohttp.ClientSession() as session:
         async with session.post(f'{context.base_url}/tokenize',
                                 json={
@@ -1007,12 +1008,22 @@ async def completions_seed(context):
         else context.server_seed if hasattr(context, 'server_seed') else None
 
 
+def context_text(context):
+    return context.text.replace('\r', '')
+
+
 def start_server_background(context):
-    context.server_path = '../../../build/bin/server'
+    if os.name == 'nt':
+        context.server_path = '../../../build/bin/Release/server.exe'
+    else:
+        context.server_path = '../../../build/bin/server'
     if 'LLAMA_SERVER_BIN_PATH' in os.environ:
         context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
+    server_listen_addr = context.server_fqdn
+    if os.name == 'nt':
+        server_listen_addr = '0.0.0.0'
     server_args = [
-        '--host', context.server_fqdn,
+        '--host', server_listen_addr,
         '--port', context.server_port,
         '--model', context.model_file
     ]
@@ -1045,7 +1056,17 @@ def start_server_background(context):
     if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
         server_args.extend(['--log-format', "text"])
     print(f"starting server with: {context.server_path} {server_args}\n")
+    flags = 0
+    if 'nt' == os.name:
+        flags |= 0x00000008  # DETACHED_PROCESS
+        flags |= 0x00000200  # CREATE_NEW_PROCESS_GROUP
+        flags |= 0x08000000  # CREATE_NO_WINDOW
+
+    pkwargs = {
+        'close_fds': True,  # close stdin/stdout/stderr on child
+        'creationflags': flags,
+    }
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],
-        close_fds=True)
-    print(f"server pid={context.server_process.pid}")
+        **pkwargs)
+    print(f"server pid={context.server_process.pid}, behave pid={os.getpid()}")
