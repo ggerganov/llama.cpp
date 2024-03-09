@@ -11890,17 +11890,16 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
     return new_type;
 }
 
-static int32_t llama_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int chunk_size, int nrows, int n_per_row, int64_t * hist_cur, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
+static int32_t llama_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int chunk_size, int nrows, int n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
     std::mutex mutex;
     int counter = 0;
     size_t new_size = 0;
     if (nthread < 2) {
         // single-thread
-        return ggml_quantize_chunk(new_type, f32_data, new_data, 0, nrows, n_per_row, hist_cur, imatrix);
+        return ggml_quantize_chunk(new_type, f32_data, new_data, 0, nrows, n_per_row, imatrix);
     }
-    auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, chunk_size,
+    auto compute = [&mutex, &counter, &new_size, new_type, f32_data, new_data, chunk_size,
             nrows, n_per_row, imatrix]() {
-        std::array<int64_t, 1 << 4> local_hist = {};
         const int nrows_per_chunk = chunk_size / n_per_row;
         size_t local_size = 0;
         while (true) {
@@ -11908,17 +11907,13 @@ static int32_t llama_tensor_quantize_internal(enum ggml_type new_type, const flo
             int first_row = counter; counter += nrows_per_chunk;
             if (first_row >= nrows) {
                 if (local_size > 0) {
-                    for (int j=0; j<int(local_hist.size()); ++j) {
-                        hist_cur[j] += local_hist[j];
-                    }
                     new_size += local_size;
                 }
                 break;
             }
             lock.unlock();
             const int this_nrow = std::min(nrows - first_row, nrows_per_chunk);
-            local_size += ggml_quantize_chunk(new_type, f32_data, new_data,
-                    first_row * n_per_row, this_nrow, n_per_row, local_hist.data(), imatrix);
+            local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first_row * n_per_row, this_nrow, n_per_row, imatrix);
         }
     };
     for (int it = 0; it < nthread - 1; ++it) {
@@ -12041,7 +12036,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
-    std::vector<int64_t> hist_all(1 << 4, 0);
 
     std::vector<std::thread> workers;
     workers.reserve(nthread);
@@ -12175,7 +12169,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 work.resize(nelements * 4); // upper bound on size
             }
             new_data = work.data();
-            std::array<int64_t, 1 << 4> hist_cur = {};
 
             const int n_per_row = tensor->ne[0];
             const int nrows = nelements / n_per_row;
@@ -12185,22 +12178,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
-            new_size = llama_tensor_quantize_internal(new_type, f32_data, new_data, chunk_size, nrows, n_per_row, hist_cur.data(), imatrix, workers, nthread_use);
+            new_size = llama_tensor_quantize_internal(new_type, f32_data, new_data, chunk_size, nrows, n_per_row, imatrix, workers, nthread_use);
 
-            LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
-            int64_t tot_count = 0;
-            for (size_t i = 0; i < hist_cur.size(); i++) {
-                hist_all[i] += hist_cur[i];
-                tot_count += hist_cur[i];
-            }
-
-            if (tot_count > 0) {
-                LLAMA_LOG_INFO(" | hist: ");
-                for (size_t i = 0; i < hist_cur.size(); i++) {
-                    LLAMA_LOG_INFO("%5.3f ", hist_cur[i] / float(nelements));
-                }
-            }
-            LLAMA_LOG_INFO("\n");
+            LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB\n", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
         }
         total_size_org += ggml_nbytes(tensor);
         total_size_new += new_size;
@@ -12228,22 +12208,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     LLAMA_LOG_INFO("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
     LLAMA_LOG_INFO("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
-
-    // print histogram for all tensors
-    {
-        int64_t sum_all = 0;
-        for (size_t i = 0; i < hist_all.size(); i++) {
-            sum_all += hist_all[i];
-        }
-
-        if (sum_all > 0) {
-            LLAMA_LOG_INFO("%s: hist: ", __func__);
-            for (size_t i = 0; i < hist_all.size(); i++) {
-                LLAMA_LOG_INFO("%5.3f ", hist_all[i] / float(sum_all));
-            }
-            LLAMA_LOG_INFO("\n");
-        }
-    }
 
     if (qs.n_fallback > 0) {
         LLAMA_LOG_WARN("%s: WARNING: %d of %d tensor(s) incompatible with k-quants and required fallback quantization\n",
