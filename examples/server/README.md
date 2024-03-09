@@ -59,6 +59,10 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `--log-disable`: Output logs to stdout only, default: enabled.
 - `--log-format FORMAT`: Define the log output to FORMAT: json or text (default: json)
 
+**If compiled with `LLAMA_SERVER_SSL=ON`**
+- `--ssl-key-file FNAME`: path to file a PEM-encoded SSL private key
+- `--ssl-cert-file FNAME`: path to file a PEM-encoded SSL certificate
+
 ## Build
 
 server is build alongside everything else from the root of the project
@@ -73,6 +77,28 @@ server is build alongside everything else from the root of the project
 
   ```bash
   cmake --build . --config Release
+  ```
+
+## Build with SSL
+
+server can also be built with SSL support using OpenSSL 3
+
+- Using `make`:
+
+  ```bash
+  # NOTE: For non-system openssl, use the following:
+  #   CXXFLAGS="-I /path/to/openssl/include"
+  #   LDFLAGS="-L /path/to/openssl/lib"
+  make LLAMA_SERVER_SSL=true server
+  ```
+
+- Using `CMake`:
+
+  ```bash
+  mkdir build
+  cd build
+  cmake .. -DLLAMA_SERVER_SSL=ON
+  make server
   ```
 
 ## Quick Start
