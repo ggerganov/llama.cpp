@@ -18044,7 +18044,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     ggml_vk_preallocate_buffers_cpu_assist();
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_build_graph_cpu_assist(cgraph->nodes[i], i == cgraph->n_nodes - 1);
+        ggml_vk_build_graph_cpu_assist(cgraph->nodes[i]);
     }
 #endif
 

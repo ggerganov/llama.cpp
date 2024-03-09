@@ -5080,6 +5080,9 @@ GGML_CALL static void ggml_vk_get_device_description(int device, char * descript
 // CPU assist interface
 
 void ggml_vk_init_cpu_assist() {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_init_cpu_assist()" << std::endl;
+#endif
     ggml_vk_instance_init();
 
     std::cerr << "ggml_vulkan: Found " << ggml_vk_get_device_count() << " Vulkan devices:" << std::endl;
@@ -5092,6 +5095,9 @@ void ggml_vk_init_cpu_assist() {
 }
 
 void ggml_vk_preallocate_buffers_graph_cpu_assist(ggml_tensor * node) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_preallocate_buffers_graph_cpu_assist()" << std::endl;
+#endif
     ggml_backend_vk_context * ctx = &vk_instance.contexts[0];
 
     if (!ctx->initialized) {
@@ -5102,6 +5108,9 @@ void ggml_vk_preallocate_buffers_graph_cpu_assist(ggml_tensor * node) {
 }
 
 void ggml_vk_preallocate_buffers_cpu_assist() {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_preallocate_buffers_cpu_assist()" << std::endl;
+#endif
     ggml_backend_vk_context * ctx = &vk_instance.contexts[0];
 
     if (!ctx->initialized) {
@@ -5111,17 +5120,23 @@ void ggml_vk_preallocate_buffers_cpu_assist() {
     ggml_vk_preallocate_buffers(ctx);
 }
 
-void ggml_vk_build_graph_cpu_assist(ggml_tensor * node, bool last_node) {
+void ggml_vk_build_graph_cpu_assist(ggml_tensor * node) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_build_graph_cpu_assist()" << std::endl;
+#endif
     ggml_backend_vk_context * ctx = &vk_instance.contexts[0];
 
     if (!ctx->initialized) {
         return;
     }
 
-    ggml_vk_build_graph(ctx, node, last_node);
+    ggml_vk_build_graph(ctx, node, true);
 }
 
 bool ggml_vk_compute_forward_cpu_assist(ggml_compute_params * params, ggml_tensor * tensor){
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_compute_forward_cpu_assist()" << std::endl;
+#endif
     ggml_backend_vk_context * ctx = &vk_instance.contexts[0];
 
     if (!ctx->initialized) {
@@ -5132,6 +5147,9 @@ bool ggml_vk_compute_forward_cpu_assist(ggml_compute_params * params, ggml_tenso
 }
 
 void ggml_vk_graph_cleanup_cpu_assist() {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_graph_cleanup_cpu_assist()" << std::endl;
+#endif
     ggml_backend_vk_context * ctx = &vk_instance.contexts[0];
 
     if (!ctx->initialized) {
@@ -5142,6 +5160,9 @@ void ggml_vk_graph_cleanup_cpu_assist() {
 }
 
 void ggml_vk_free_cpu_assist() {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_init_cpu_assist()" << std::endl;
+#endif
     ggml_backend_vk_context * ctx = &vk_instance.contexts[0];
 
     if (!ctx->initialized || vk_instance.backends[0] == nullptr) {
@@ -5574,6 +5595,9 @@ GGML_CALL static void ggml_backend_vk_synchronize(ggml_backend_t backend) {
 }
 
 GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_backend_vk_graph_compute(" << cgraph->n_nodes << " nodes)" << std::endl;
+#endif
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
 
     for (int i = 0; i < cgraph->n_nodes; i++) {

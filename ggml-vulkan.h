@@ -15,7 +15,7 @@ GGML_API void ggml_vk_init_cpu_assist(void);
 
 GGML_API void ggml_vk_preallocate_buffers_graph_cpu_assist(struct ggml_tensor * node);
 GGML_API void ggml_vk_preallocate_buffers_cpu_assist(void);
-GGML_API void ggml_vk_build_graph_cpu_assist(struct ggml_tensor * node, bool last_node);
+GGML_API void ggml_vk_build_graph_cpu_assist(struct ggml_tensor * node);
 GGML_API bool ggml_vk_compute_forward_cpu_assist(struct ggml_compute_params * params, struct ggml_tensor * tensor);
 #ifdef GGML_VULKAN_CHECK_RESULTS
 void ggml_vk_check_results_1_cpu_assist(struct ggml_compute_params * params, struct ggml_tensor * tensor);
