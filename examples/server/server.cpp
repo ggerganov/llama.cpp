@@ -27,6 +27,7 @@
 #include <mutex>
 #include <thread>
 #include <signal.h>
+#include <memory>
 
 using json = nlohmann::json;
 
@@ -112,11 +113,16 @@ struct server_params {
     int32_t n_threads_http = -1;
 
     std::string hostname      = "127.0.0.1";
-    std::string public_path   = "examples/server/public";
+    std::string public_path   = "";
     std::string chat_template = "";
     std::string system_prompt = "";
 
     std::vector<std::string> api_keys;
+
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    std::string ssl_key_file = "";
+    std::string ssl_cert_file = "";
+#endif
 
     bool slots_endpoint   = true;
     bool metrics_endpoint = false;
@@ -335,7 +341,7 @@ struct server_slot {
 };
 
 struct server_metrics {
-    const int64_t t_start = ggml_time_us();
+    int64_t t_start = 0;
 
     uint64_t n_prompt_tokens_processed_total = 0;
     uint64_t t_prompt_processing_total       = 0;
@@ -348,14 +354,18 @@ struct server_metrics {
     uint64_t n_tokens_predicted  = 0;
     uint64_t t_tokens_generation = 0;
 
-    void on_prompt_eval(const server_slot &slot) {
+    void init() {
+        t_start = ggml_time_us();
+    }
+
+    void on_prompt_eval(const server_slot & slot) {
         n_prompt_tokens_processed_total += slot.n_prompt_tokens_processed;
         n_prompt_tokens_processed       += slot.n_prompt_tokens_processed;
         t_prompt_processing             += slot.t_prompt_processing;
         t_prompt_processing_total       += slot.t_prompt_processing;
     }
 
-    void on_prediction(const server_slot &slot) {
+    void on_prediction(const server_slot & slot) {
         n_tokens_predicted_total   += slot.n_decoded;
         n_tokens_predicted         += slot.n_decoded;
         t_tokens_generation        += slot.t_token_generation;
@@ -659,7 +669,11 @@ struct server_context {
     bool load_model(const gpt_params & params_) {
         params = params_;
 
+        // dedicate one sequence to the system prompt
+        params.n_parallel += 1;
+
         std::tie(model, ctx) = llama_init_from_gpt_params(params);
+        params.n_parallel -= 1; // but be sneaky about it
         if (model == nullptr) {
             LOG_ERROR("unable to load model", {{"model", params.model}});
             return false;
@@ -680,10 +694,11 @@ struct server_context {
         return res > 0;
     }
 
-    void initialize() {
+    void init() {
         const int32_t n_ctx_slot = n_ctx / params.n_parallel;
 
         LOG_INFO("initializing slots", {{"n_slots", params.n_parallel}});
+
         for (int i = 0; i < params.n_parallel; i++) {
             server_slot slot;
 
@@ -725,6 +740,8 @@ struct server_context {
         default_generation_settings_for_props["seed"] = -1;
 
         batch = llama_batch_init(n_ctx, 0, params.n_parallel);
+
+        metrics.init();
     }
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const {
@@ -842,7 +859,16 @@ struct server_context {
         // infill
         slot.params.input_prefix = json_value(data, "input_prefix", default_params.input_prefix);
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
-        slot.prompt              = json_value(data, "prompt",       std::string(""));
+
+        // get prompt
+        {
+            const auto & prompt = data.find("prompt");
+            if (prompt == data.end()) {
+                slot.prompt = "";
+            } else {
+                slot.prompt = *prompt;
+            }
+        }
 
         // penalize user-provided tokens
         {
@@ -1018,8 +1044,8 @@ struct server_context {
             }
 
             // assign the system KV cache to all parallel sequences
-            for (int32_t i = 1; i < params.n_parallel; ++i) {
-                llama_kv_cache_seq_cp(ctx, 0, i, 0, system_tokens.size());
+            for (int32_t i = 1; i <= params.n_parallel; ++i) {
+                llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
             }
         }
 
@@ -1124,6 +1150,7 @@ struct server_context {
 
             LOG_VERBOSE("stopped by limit", {
                 {"id_slot",   slot.id},
+                {"id_task",   slot.id_task},
                 {"n_decoded", slot.n_decoded},
                 {"n_predict", slot.params.n_predict},
             });
@@ -1137,6 +1164,8 @@ struct server_context {
         }
 
         LOG_VERBOSE("next token", {
+            {"id_slot",        slot.id},
+            {"id_task",        slot.id_task},
             {"token",          result.tok},
             {"token_text",     tokens_to_output_formatted_string(ctx, result.tok)},
             {"has_next_token", slot.has_next_token},
@@ -1305,8 +1334,10 @@ struct server_context {
 
         const int n_embd = llama_n_embd(model);
 
+        std::vector<float> embd_res(n_embd, 0.0f);
+
         for (int i = 0; i < batch.n_tokens; ++i) {
-            if (!batch.logits[i] || batch.seq_id[i][0] != slot.id) {
+            if (!batch.logits[i] || batch.seq_id[i][0] != slot.id + 1) {
                 continue;
             }
 
@@ -1328,8 +1359,10 @@ struct server_context {
                 continue;
             }
 
+            llama_embd_normalize(embd, embd_res.data(), n_embd);
+
             res.data = json {
-                {"embedding", std::vector<float>(embd, embd + n_embd)},
+                {"embedding", embd_res},
             };
         }
 
@@ -1633,8 +1666,8 @@ struct server_context {
                         {"n_cache_tokens",  slot.cache_tokens.size()}
                     });
 
-                    llama_kv_cache_seq_rm (ctx, slot.id, n_keep            , n_keep + n_discard);
-                    llama_kv_cache_seq_add(ctx, slot.id, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
+                    llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
+                    llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
 
                     if (slot.params.cache_prompt) {
                         for (size_t i = n_keep + n_discard; i < slot.cache_tokens.size(); i++) {
@@ -1666,7 +1699,7 @@ struct server_context {
 
             // TODO: we always have to take into account the "system_tokens"
             //       this is not great and needs to be improved somehow
-            llama_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id }, true);
+            llama_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id + 1 }, true);
 
             slot.n_past += 1;
 
@@ -1691,19 +1724,6 @@ struct server_context {
         // next, batch any pending prompts without exceeding n_batch
         if (params.cont_batching || batch.n_tokens == 0) {
             for (auto & slot : slots) {
-                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty());
-
-                // empty prompt passed -> release the slot and send empty response
-                // note: infill mode allows empty prompt
-                if (slot.state == SLOT_STATE_IDLE && slot.command == SLOT_COMMAND_LOAD_PROMPT && !has_prompt && !slot.infill) {
-                    slot.state = SLOT_STATE_PROCESSING;
-                    slot.command = SLOT_COMMAND_NONE;
-                    slot.release();
-                    slot.print_timings();
-                    send_final_response(slot);
-                    continue;
-                }
-
                 // this slot still has a prompt to be processed
                 if (slot.state == SLOT_STATE_IDLE && slot.command == SLOT_COMMAND_LOAD_PROMPT) {
                     auto & prompt_tokens = slot.prompt_tokens;
@@ -1746,6 +1766,30 @@ struct server_context {
                         slot.n_past = 0;
                         slot.n_prompt_tokens = prompt_tokens.size();
 
+                        LOG_VERBOSE("prompt tokenized", {
+                            {"id_slot",         slot.id},
+                            {"id_task",         slot.id_task},
+                            {"n_ctx",           slot.n_ctx},
+                            {"n_keep",          slot.params.n_keep},
+                            {"n_prompt_tokens", slot.n_prompt_tokens},
+                            {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                        });
+
+                        // empty prompt passed -> release the slot and send empty response
+                        if (prompt_tokens.empty()) {
+                            LOG_INFO("empty prompt - releasing slot", {
+                                {"id_slot", slot.id},
+                                {"id_task", slot.id_task}
+                            });
+
+                            slot.state = SLOT_STATE_PROCESSING;
+                            slot.command = SLOT_COMMAND_NONE;
+                            slot.release();
+                            slot.print_timings();
+                            send_final_response(slot);
+                            continue;
+                        }
+
                         if (slot.embedding) {
                             // this prompt is too large to process - discard it
                             if (slot.n_prompt_tokens > n_batch) {
@@ -1784,10 +1828,13 @@ struct server_context {
                                 slot.n_prompt_tokens = prompt_tokens.size();
 
                                 LOG_VERBOSE("input truncated", {
-                                    {"n_ctx",         slot.n_ctx},
-                                    {"n_keep",        slot.params.n_keep},
-                                    {"n_left",        n_left},
-                                    {"prompt_tokens", tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                                    {"id_slot",         slot.id},
+                                    {"id_task",         slot.id_task},
+                                    {"n_ctx",           slot.n_ctx},
+                                    {"n_keep",          slot.params.n_keep},
+                                    {"n_left",          n_left},
+                                    {"n_prompt_tokens", slot.n_prompt_tokens},
+                                    {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
                                 });
 
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
@@ -1803,9 +1850,6 @@ struct server_context {
 
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
-
-                                // remove the non-common part from the cache
-                                slot.cache_tokens.resize(slot.n_past);
 
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
@@ -1837,8 +1881,28 @@ struct server_context {
                         }
                     }
 
-                    const int p0 = (int) system_tokens.size() + slot.n_past;
-                    llama_kv_cache_seq_rm(ctx, slot.id, p0, -1);
+                    // keep only the common part
+                    int p0 = (int) system_tokens.size() + slot.n_past;
+                    if (!llama_kv_cache_seq_rm(ctx, slot.id + 1, p0, -1)) {
+                        // could not partially delete (likely using a non-Transformer model)
+                        llama_kv_cache_seq_rm(ctx, slot.id + 1, -1, -1);
+
+                        p0 = (int) system_tokens.size();
+                        if (p0 != 0) {
+                            // copy over the system prompt when there is one
+                            llama_kv_cache_seq_cp(ctx, 0, slot.id + 1, -1, -1);
+                        }
+
+                        // there is no common part left (except for the system prompt)
+                        slot.n_past = 0;
+                        slot.n_past_se = 0;
+                        slot.ga_i = 0;
+                        // TODO: is the system prompt ever in the sampling context?
+                        llama_sampling_reset(slot.ctx_sampling);
+                    }
+
+                    // remove the non-common part from the cache
+                    slot.cache_tokens.resize(slot.n_past);
 
                     LOG_INFO("kv cache rm [p0, end)", {
                         { "id_slot", slot.id },
@@ -1863,7 +1927,7 @@ struct server_context {
                             }
                         }
 
-                        llama_batch_add(batch, prompt_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id }, false);
+                        llama_batch_add(batch, prompt_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id + 1 }, false);
 
                         if (slot.params.cache_prompt) {
                             slot.cache_tokens.push_back(prompt_tokens[slot.n_past]);
@@ -1937,9 +2001,9 @@ struct server_context {
                         LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
                         LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
 
-                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i, slot.n_past_se, ib * bd);
-                        llama_kv_cache_seq_div(ctx, slot.id, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n);
-                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd);
+                        llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i, slot.n_past_se, ib * bd);
+                        llama_kv_cache_seq_div(ctx, slot.id + 1, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n);
+                        llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd);
 
                         slot.n_past_se -= bd;
 
@@ -2103,9 +2167,13 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --lora-base FNAME         optional model to use as a base for the layers modified by the LoRA adapter\n");
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
-    printf("  --path PUBLIC_PATH        path from which to serve static files (default %s)\n", sparams.public_path.c_str());
+    printf("  --path PUBLIC_PATH        path from which to serve static files (default: disabled)\n");
     printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    printf("  --ssl-key-file FNAME      path to file a PEM-encoded SSL private key\n");
+    printf("  --ssl-cert-file FNAME     path to file a PEM-encoded SSL certificate\n");
+#endif
     printf("  -to N, --timeout N        server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     printf("  --embeddings              enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N       number of slots for process requests (default: %d)\n", params.n_parallel);
@@ -2165,7 +2233,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            sparams.api_keys.emplace_back(argv[i]);
+            sparams.api_keys.push_back(argv[i]);
         } else if (arg == "--api-key-file") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2184,7 +2252,24 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                }
             }
             key_file.close();
-        } else if (arg == "--timeout" || arg == "-to") {
+
+        }
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+        else if (arg == "--ssl-key-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.ssl_key_file = argv[i];
+        } else if (arg == "--ssl-cert-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.ssl_cert_file = argv[i];
+        }
+#endif
+        else if (arg == "--timeout" || arg == "-to") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -2622,21 +2707,170 @@ int main(int argc, char ** argv) {
         {"system_info",     llama_print_system_info()},
     });
 
-    httplib::Server svr;
+    std::unique_ptr<httplib::Server> svr;
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    if (sparams.ssl_key_file != "" && sparams.ssl_cert_file != "") {
+        LOG_INFO("Running with SSL", {{"key", sparams.ssl_key_file}, {"cert", sparams.ssl_cert_file}});
+        svr.reset(
+            new httplib::SSLServer(sparams.ssl_cert_file.c_str(), sparams.ssl_key_file.c_str())
+        );
+    } else {
+        LOG_INFO("Running without SSL", {});
+        svr.reset(new httplib::Server());
+    }
+#else
+    svr.reset(new httplib::Server());
+#endif
 
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
-    svr.set_default_headers({{"Server", "llama.cpp"}});
+    svr->set_default_headers({{"Server", "llama.cpp"}});
 
     // CORS preflight
-    svr.Options(R"(.*)", [](const httplib::Request & req, httplib::Response & res) {
+    svr->Options(R"(.*)", [](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin",      req.get_header_value("Origin"));
         res.set_header("Access-Control-Allow-Credentials", "true");
         res.set_header("Access-Control-Allow-Methods",     "POST");
         res.set_header("Access-Control-Allow-Headers",     "*");
     });
 
-    svr.Get("/health", [&](const httplib::Request & req, httplib::Response & res) {
+    svr->set_logger(log_server_request);
+
+    svr->set_exception_handler([](const httplib::Request &, httplib::Response & res, std::exception_ptr ep) {
+        const char fmt[] = "500 Internal Server Error\n%s";
+
+        char buf[BUFSIZ];
+        try {
+            std::rethrow_exception(std::move(ep));
+        } catch (std::exception &e) {
+            snprintf(buf, sizeof(buf), fmt, e.what());
+        } catch (...) {
+            snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
+        }
+
+        res.set_content(buf, "text/plain; charset=utf-8");
+        res.status = 500;
+    });
+
+    svr->set_error_handler([](const httplib::Request &, httplib::Response & res) {
+        if (res.status == 401) {
+            res.set_content("Unauthorized", "text/plain; charset=utf-8");
+        }
+        if (res.status == 400) {
+            res.set_content("Invalid request", "text/plain; charset=utf-8");
+        }
+        if (res.status == 404) {
+            res.set_content("File Not Found", "text/plain; charset=utf-8");
+        }
+    });
+
+    // set timeouts and change hostname and port
+    svr->set_read_timeout (sparams.read_timeout);
+    svr->set_write_timeout(sparams.write_timeout);
+
+    if (!svr->bind_to_port(sparams.hostname, sparams.port)) {
+        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
+        return 1;
+    }
+
+    std::unordered_map<std::string, std::string> log_data;
+
+    log_data["hostname"] = sparams.hostname;
+    log_data["port"]     = std::to_string(sparams.port);
+
+    if (sparams.api_keys.size() == 1) {
+        auto key = sparams.api_keys[0];
+        log_data["api_key"] = "api_key: ****" + key.substr(std::max((int)(key.length() - 4), 0));
+    } else if (sparams.api_keys.size() > 1) {
+        log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
+    }
+
+    // load the model
+    if (!ctx_server.load_model(params)) {
+        state.store(SERVER_STATE_ERROR);
+        return 1;
+    } else {
+        ctx_server.init();
+        state.store(SERVER_STATE_READY);
+    }
+
+    LOG_INFO("model loaded", {});
+
+    const auto model_meta = ctx_server.model_meta();
+
+    if (sparams.chat_template.empty()) { // custom chat template is not supplied
+        if (!ctx_server.validate_model_chat_template()) {
+            LOG_ERROR("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
+            sparams.chat_template = "chatml";
+        }
+    }
+
+    //
+    // Middlewares
+    //
+
+    auto middleware_validate_api_key = [&sparams](const httplib::Request & req, httplib::Response & res) {
+        // TODO: should we apply API key to all endpoints, including "/health" and "/models"?
+        static const std::set<std::string> protected_endpoints = {
+            "/props",
+            "/completion",
+            "/completions",
+            "/v1/completions",
+            "/chat/completions",
+            "/v1/chat/completions",
+            "/infill",
+            "/tokenize",
+            "/detokenize",
+            "/embedding",
+            "/embeddings",
+            "/v1/embeddings",
+        };
+
+        // If API key is not set, skip validation
+        if (sparams.api_keys.empty()) {
+            return true;
+        }
+
+        // If path is not in protected_endpoints list, skip validation
+        if (protected_endpoints.find(req.path) == protected_endpoints.end()) {
+            return true;
+        }
+
+        // Check for API key in the header
+        auto auth_header = req.get_header_value("Authorization");
+
+        std::string prefix = "Bearer ";
+        if (auth_header.substr(0, prefix.size()) == prefix) {
+            std::string received_api_key = auth_header.substr(prefix.size());
+            if (std::find(sparams.api_keys.begin(), sparams.api_keys.end(), received_api_key) != sparams.api_keys.end()) {
+                return true; // API key is valid
+            }
+        }
+
+        // API key is invalid or not provided
+        // TODO: make another middleware for CORS related logic
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
+        res.status = 401; // Unauthorized
+
+        LOG_WARNING("Unauthorized: Invalid API Key", {});
+
+        return false;
+    };
+
+    // register server middlewares
+    svr->set_pre_routing_handler([&middleware_validate_api_key](const httplib::Request & req, httplib::Response & res) {
+        if (!middleware_validate_api_key(req, res)) {
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+
+    //
+    // Route handlers (or controllers)
+    //
+
+    const auto handle_health = [&](const httplib::Request & req, httplib::Response & res) {
         server_state current_state = state.load();
         switch (current_state) {
             case SERVER_STATE_READY:
@@ -2689,252 +2923,136 @@ int main(int argc, char ** argv) {
                     res.status = 500; // HTTP Internal Server Error
                 } break;
         }
-    });
-
-    if (sparams.slots_endpoint) {
-        svr.Get("/slots", [&](const httplib::Request &, httplib::Response & res) {
-            // request slots data using task queue
-            server_task task;
-            task.id = ctx_server.queue_tasks.get_new_id();
-            task.id_multi  = -1;
-            task.id_target = -1;
-            task.type = SERVER_TASK_TYPE_METRICS;
-
-            ctx_server.queue_results.add_waiting_task_id(task.id);
-            ctx_server.queue_tasks.post(task);
-
-            // get the result
-            server_task_result result = ctx_server.queue_results.recv(task.id);
-            ctx_server.queue_results.remove_waiting_task_id(task.id);
-
-            res.set_content(result.data["slots"].dump(), "application/json");
-            res.status = 200; // HTTP OK
-        });
-    }
-
-    if (sparams.metrics_endpoint) {
-        svr.Get("/metrics", [&](const httplib::Request &, httplib::Response & res) {
-            // request slots data using task queue
-            server_task task;
-            task.id = ctx_server.queue_tasks.get_new_id();
-            task.id_multi  = -1;
-            task.id_target = -1;
-            task.type = SERVER_TASK_TYPE_METRICS;
-            task.data.push_back({{"reset_bucket", true}});
-
-            ctx_server.queue_results.add_waiting_task_id(task.id);
-            ctx_server.queue_tasks.post(task);
-
-            // get the result
-            server_task_result result = ctx_server.queue_results.recv(task.id);
-            ctx_server.queue_results.remove_waiting_task_id(task.id);
-
-            json data = result.data;
-
-            const uint64_t n_prompt_tokens_processed = data["n_prompt_tokens_processed"];
-            const uint64_t t_prompt_processing       = data["t_prompt_processing"];
-
-            const uint64_t n_tokens_predicted  = data["n_tokens_predicted"];
-            const uint64_t t_tokens_generation = data["t_tokens_generation"];
-
-            const int32_t kv_cache_used_cells = data["kv_cache_used_cells"];
-
-            // metrics definition: https://prometheus.io/docs/practices/naming/#metric-names
-            json all_metrics_def = json {
-                {"counter", {{
-                        {"name",  "prompt_tokens_total"},
-                        {"help",  "Number of prompt tokens processed."},
-                        {"value",  (uint64_t) data["n_prompt_tokens_processed_total"]}
-                }, {
-                        {"name",  "prompt_seconds_total"},
-                        {"help",  "Prompt process time"},
-                        {"value",  (uint64_t) data["t_prompt_processing_total"] / 1.e3}
-                }, {
-                        {"name",  "tokens_predicted_total"},
-                        {"help",  "Number of generation tokens processed."},
-                        {"value",  (uint64_t) data["n_tokens_predicted_total"]}
-                }, {
-                        {"name",  "tokens_predicted_seconds_total"},
-                        {"help",  "Predict process time"},
-                        {"value",  (uint64_t) data["t_tokens_generation_total"] / 1.e3}
-                }}},
-                {"gauge", {{
-                        {"name",  "prompt_tokens_seconds"},
-                        {"help",  "Average prompt throughput in tokens/s."},
-                        {"value",  n_prompt_tokens_processed ? 1.e3 / t_prompt_processing * n_prompt_tokens_processed : 0.}
-                },{
-                        {"name",  "predicted_tokens_seconds"},
-                        {"help",  "Average generation throughput in tokens/s."},
-                        {"value",  n_tokens_predicted ? 1.e3 / t_tokens_generation * n_tokens_predicted : 0.}
-                },{
-                        {"name",  "kv_cache_usage_ratio"},
-                        {"help",  "KV-cache usage. 1 means 100 percent usage."},
-                        {"value",  1. * kv_cache_used_cells / params.n_ctx}
-                },{
-                        {"name",  "kv_cache_tokens"},
-                        {"help",  "KV-cache tokens."},
-                        {"value",  (uint64_t) data["kv_cache_tokens_count"]}
-                },{
-                        {"name",  "requests_processing"},
-                        {"help",  "Number of request processing."},
-                        {"value",  (uint64_t) data["processing"]}
-                },{
-                        {"name",  "requests_deferred"},
-                        {"help",  "Number of request deferred."},
-                        {"value",  (uint64_t) data["deferred"]}
-                }}}
-            };
-
-            std::stringstream prometheus;
-
-            for (const auto & el : all_metrics_def.items()) {
-                const auto & type        = el.key();
-                const auto & metrics_def = el.value();
-
-                for (const auto & metric_def : metrics_def) {
-                    const std::string name = metric_def["name"];
-                    const std::string help = metric_def["help"];
-
-                    auto value = json_value(metric_def, "value", 0.);
-                    prometheus << "# HELP llamacpp:" << name << " " << help  << "\n"
-                               << "# TYPE llamacpp:" << name << " " << type  << "\n"
-                               << "llamacpp:"        << name << " " << value << "\n";
-                }
-            }
-
-            const int64_t t_start = data["t_start"];
-            res.set_header("Process-Start-Time-Unix", std::to_string(t_start));
-
-            res.set_content(prometheus.str(), "text/plain; version=0.0.4");
-            res.status = 200; // HTTP OK
-        });
-    }
-
-    svr.set_logger(log_server_request);
-
-    svr.set_exception_handler([](const httplib::Request &, httplib::Response & res, std::exception_ptr ep) {
-        const char fmt[] = "500 Internal Server Error\n%s";
-
-        char buf[BUFSIZ];
-        try {
-            std::rethrow_exception(std::move(ep));
-        } catch (std::exception &e) {
-            snprintf(buf, sizeof(buf), fmt, e.what());
-        } catch (...) {
-            snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
-        }
-
-        res.set_content(buf, "text/plain; charset=utf-8");
-        res.status = 500;
-    });
-
-    svr.set_error_handler([](const httplib::Request &, httplib::Response & res) {
-        if (res.status == 401) {
-            res.set_content("Unauthorized", "text/plain; charset=utf-8");
-        }
-        if (res.status == 400) {
-            res.set_content("Invalid request", "text/plain; charset=utf-8");
-        }
-        if (res.status == 404) {
-            res.set_content("File Not Found", "text/plain; charset=utf-8");
-        }
-    });
-
-    // set timeouts and change hostname and port
-    svr.set_read_timeout (sparams.read_timeout);
-    svr.set_write_timeout(sparams.write_timeout);
-
-    if (!svr.bind_to_port(sparams.hostname, sparams.port)) {
-        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
-        return 1;
-    }
-
-    // Set the base directory for serving static files
-    svr.set_base_dir(sparams.public_path);
-
-    std::unordered_map<std::string, std::string> log_data;
-
-    log_data["hostname"] = sparams.hostname;
-    log_data["port"]     = std::to_string(sparams.port);
-
-    if (sparams.api_keys.size() == 1) {
-        log_data["api_key"] = "api_key: ****" + sparams.api_keys[0].substr(sparams.api_keys[0].length() - 4);
-    } else if (sparams.api_keys.size() > 1) {
-        log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
-    }
-
-    // load the model
-    if (!ctx_server.load_model(params)) {
-        state.store(SERVER_STATE_ERROR);
-        return 1;
-    } else {
-        ctx_server.initialize();
-        state.store(SERVER_STATE_READY);
-    }
-
-    LOG_INFO("model loaded", {});
-
-    const auto model_meta = ctx_server.model_meta();
-
-    if (sparams.chat_template.empty()) { // custom chat template is not supplied
-        if (!ctx_server.validate_model_chat_template()) {
-            LOG_ERROR("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
-            sparams.chat_template = "chatml";
-        }
-    }
-
-    // Middleware for API key validation
-    auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
-        // If API key is not set, skip validation
-        if (sparams.api_keys.empty()) {
-            return true;
-        }
-
-        // Check for API key in the header
-        auto auth_header = req.get_header_value("Authorization");
-
-        std::string prefix = "Bearer ";
-        if (auth_header.substr(0, prefix.size()) == prefix) {
-            std::string received_api_key = auth_header.substr(prefix.size());
-            if (std::find(sparams.api_keys.begin(), sparams.api_keys.end(), received_api_key) != sparams.api_keys.end()) {
-                return true; // API key is valid
-            }
-        }
-
-        // API key is invalid or not provided
-        res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
-        res.status = 401; // Unauthorized
-
-        LOG_WARNING("Unauthorized: Invalid API Key", {});
-
-        return false;
     };
 
-    // this is only called if no index.html is found in the public --path
-    svr.Get("/", [](const httplib::Request &, httplib::Response & res) {
-        res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html; charset=utf-8");
-        return false;
-    });
+    const auto handle_slots = [&](const httplib::Request &, httplib::Response & res) {
+        if (!sparams.slots_endpoint) {
+            res.status = 501;
+            res.set_content("This server does not support slots endpoint.", "text/plain; charset=utf-8");
+            return;
+        }
 
-    // this is only called if no index.js is found in the public --path
-    svr.Get("/index.js", [](const httplib::Request &, httplib::Response & res) {
-        res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript; charset=utf-8");
-        return false;
-    });
+        // request slots data using task queue
+        server_task task;
+        task.id = ctx_server.queue_tasks.get_new_id();
+        task.id_multi  = -1;
+        task.id_target = -1;
+        task.type = SERVER_TASK_TYPE_METRICS;
 
-    // this is only called if no index.html is found in the public --path
-    svr.Get("/completion.js", [](const httplib::Request &, httplib::Response & res) {
-        res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript; charset=utf-8");
-        return false;
-    });
+        ctx_server.queue_results.add_waiting_task_id(task.id);
+        ctx_server.queue_tasks.post(task);
 
-    // this is only called if no index.html is found in the public --path
-    svr.Get("/json-schema-to-grammar.mjs", [](const httplib::Request &, httplib::Response & res) {
-        res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript; charset=utf-8");
-        return false;
-    });
+        // get the result
+        server_task_result result = ctx_server.queue_results.recv(task.id);
+        ctx_server.queue_results.remove_waiting_task_id(task.id);
 
-    svr.Get("/props", [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+        res.set_content(result.data["slots"].dump(), "application/json");
+        res.status = 200; // HTTP OK
+    };
+
+    const auto handle_metrics = [&](const httplib::Request &, httplib::Response & res) {
+        if (!sparams.metrics_endpoint) {
+            res.status = 501;
+            res.set_content("This server does not support metrics endpoint.", "text/plain; charset=utf-8");
+            return;
+        }
+
+        // request slots data using task queue
+        server_task task;
+        task.id = ctx_server.queue_tasks.get_new_id();
+        task.id_multi  = -1;
+        task.id_target = -1;
+        task.type = SERVER_TASK_TYPE_METRICS;
+        task.data.push_back({{"reset_bucket", true}});
+
+        ctx_server.queue_results.add_waiting_task_id(task.id);
+        ctx_server.queue_tasks.post(task);
+
+        // get the result
+        server_task_result result = ctx_server.queue_results.recv(task.id);
+        ctx_server.queue_results.remove_waiting_task_id(task.id);
+
+        json data = result.data;
+
+        const uint64_t n_prompt_tokens_processed = data["n_prompt_tokens_processed"];
+        const uint64_t t_prompt_processing       = data["t_prompt_processing"];
+
+        const uint64_t n_tokens_predicted  = data["n_tokens_predicted"];
+        const uint64_t t_tokens_generation = data["t_tokens_generation"];
+
+        const int32_t kv_cache_used_cells = data["kv_cache_used_cells"];
+
+        // metrics definition: https://prometheus.io/docs/practices/naming/#metric-names
+        json all_metrics_def = json {
+            {"counter", {{
+                    {"name",  "prompt_tokens_total"},
+                    {"help",  "Number of prompt tokens processed."},
+                    {"value",  (uint64_t) data["n_prompt_tokens_processed_total"]}
+            }, {
+                    {"name",  "prompt_seconds_total"},
+                    {"help",  "Prompt process time"},
+                    {"value",  (uint64_t) data["t_prompt_processing_total"] / 1.e3}
+            }, {
+                    {"name",  "tokens_predicted_total"},
+                    {"help",  "Number of generation tokens processed."},
+                    {"value",  (uint64_t) data["n_tokens_predicted_total"]}
+            }, {
+                    {"name",  "tokens_predicted_seconds_total"},
+                    {"help",  "Predict process time"},
+                    {"value",  (uint64_t) data["t_tokens_generation_total"] / 1.e3}
+            }}},
+            {"gauge", {{
+                    {"name",  "prompt_tokens_seconds"},
+                    {"help",  "Average prompt throughput in tokens/s."},
+                    {"value",  n_prompt_tokens_processed ? 1.e3 / t_prompt_processing * n_prompt_tokens_processed : 0.}
+            },{
+                    {"name",  "predicted_tokens_seconds"},
+                    {"help",  "Average generation throughput in tokens/s."},
+                    {"value",  n_tokens_predicted ? 1.e3 / t_tokens_generation * n_tokens_predicted : 0.}
+            },{
+                    {"name",  "kv_cache_usage_ratio"},
+                    {"help",  "KV-cache usage. 1 means 100 percent usage."},
+                    {"value",  1. * kv_cache_used_cells / params.n_ctx}
+            },{
+                    {"name",  "kv_cache_tokens"},
+                    {"help",  "KV-cache tokens."},
+                    {"value",  (uint64_t) data["kv_cache_tokens_count"]}
+            },{
+                    {"name",  "requests_processing"},
+                    {"help",  "Number of request processing."},
+                    {"value",  (uint64_t) data["processing"]}
+            },{
+                    {"name",  "requests_deferred"},
+                    {"help",  "Number of request deferred."},
+                    {"value",  (uint64_t) data["deferred"]}
+            }}}
+        };
+
+        std::stringstream prometheus;
+
+        for (const auto & el : all_metrics_def.items()) {
+            const auto & type        = el.key();
+            const auto & metrics_def = el.value();
+
+            for (const auto & metric_def : metrics_def) {
+                const std::string name = metric_def["name"];
+                const std::string help = metric_def["help"];
+
+                auto value = json_value(metric_def, "value", 0.);
+                prometheus << "# HELP llamacpp:" << name << " " << help  << "\n"
+                            << "# TYPE llamacpp:" << name << " " << type  << "\n"
+                            << "llamacpp:"        << name << " " << value << "\n";
+            }
+        }
+
+        const int64_t t_start = data["t_start"];
+        res.set_header("Process-Start-Time-Unix", std::to_string(t_start));
+
+        res.set_content(prometheus.str(), "text/plain; version=0.0.4");
+        res.status = 200; // HTTP OK
+    };
+
+    const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
             { "user_name",                   ctx_server.name_user.c_str() },
@@ -2944,13 +3062,10 @@ int main(int argc, char ** argv) {
         };
 
         res.set_content(data.dump(), "application/json; charset=utf-8");
-    });
+    };
 
-    const auto completions = [&ctx_server, &validate_api_key](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_completions = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        if (!validate_api_key(req, res)) {
-            return;
-        }
 
         json data = json::parse(req.body);
 
@@ -3026,11 +3141,7 @@ int main(int argc, char ** argv) {
         }
     };
 
-    svr.Post("/completion", completions); // legacy
-    svr.Post("/completions", completions);
-    svr.Post("/v1/completions", completions);
-
-    svr.Get("/v1/models", [&params, &model_meta](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_models = [&params, &model_meta](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
 
         json models = {
@@ -3047,14 +3158,10 @@ int main(int argc, char ** argv) {
         };
 
         res.set_content(models.dump(), "application/json; charset=utf-8");
-    });
+    };
 
-    const auto chat_completions = [&ctx_server, &validate_api_key, &sparams](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_chat_completions = [&ctx_server, &sparams](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        if (!validate_api_key(req, res)) {
-            return;
-        }
-
         json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), sparams.chat_template);
 
         const int id_task = ctx_server.queue_tasks.get_new_id();
@@ -3125,14 +3232,8 @@ int main(int argc, char ** argv) {
         }
     };
 
-    svr.Post("/chat/completions",    chat_completions);
-    svr.Post("/v1/chat/completions", chat_completions);
-
-    svr.Post("/infill", [&ctx_server, &validate_api_key](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_infill = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        if (!validate_api_key(req, res)) {
-            return;
-        }
 
         json data = json::parse(req.body);
 
@@ -3190,13 +3291,9 @@ int main(int argc, char ** argv) {
 
             res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         }
-    });
+    };
 
-    svr.Options(R"(/.*)", [](const httplib::Request &, httplib::Response & res) {
-        return res.set_content("", "application/json; charset=utf-8");
-    });
-
-    svr.Post("/tokenize", [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_tokenize = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         const json body = json::parse(req.body);
 
@@ -3206,9 +3303,9 @@ int main(int argc, char ** argv) {
         }
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json; charset=utf-8");
-    });
+    };
 
-    svr.Post("/detokenize", [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_detokenize = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         const json body = json::parse(req.body);
 
@@ -3220,9 +3317,9 @@ int main(int argc, char ** argv) {
 
         const json data = format_detokenized_response(content);
         return res.set_content(data.dump(), "application/json; charset=utf-8");
-    });
+    };
 
-    svr.Post("/embedding", [&params, &ctx_server](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings = [&params, &ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         if (!params.embedding) {
             res.status = 501;
@@ -3231,106 +3328,128 @@ int main(int argc, char ** argv) {
         }
 
         const json body = json::parse(req.body);
+        bool is_openai = false;
 
-        json prompt;
-        if (body.count("content") != 0) {
-            prompt = body["content"];
-        } else {
-            prompt = "";
-        }
-
-        // create and queue the task
-        const int id_task = ctx_server.queue_tasks.get_new_id();
-
-        ctx_server.queue_results.add_waiting_task_id(id_task);
-        ctx_server.request_completion(id_task, -1, { {"prompt", prompt}, { "n_predict", 0} }, false, true);
-
-        // get the result
-        server_task_result result = ctx_server.queue_results.recv(id_task);
-        ctx_server.queue_results.remove_waiting_task_id(id_task);
-
-        // send the result
-        return res.set_content(result.data.dump(), "application/json; charset=utf-8");
-    });
-
-    svr.Post("/v1/embeddings", [&params, &ctx_server](const httplib::Request & req, httplib::Response & res) {
-        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        if (!params.embedding) {
-            res.status = 501;
-            res.set_content("This server does not support embeddings. Start it with `--embeddings`", "text/plain; charset=utf-8");
-            return;
-        }
-
-        const json body = json::parse(req.body);
-
-        json prompt;
+        // an input prompt can string or a list of tokens (integer)
+        std::vector<json> prompts;
         if (body.count("input") != 0) {
-            prompt = body["input"];
-            if (prompt.is_array()) {
-                json data = json::array();
-
-                int i = 0;
-                for (const json & elem : prompt) {
-                    const int id_task = ctx_server.queue_tasks.get_new_id();
-
-                    ctx_server.queue_results.add_waiting_task_id(id_task);
-                    ctx_server.request_completion(id_task, -1, { {"prompt", elem}, { "n_predict", 0} }, false, true);
-
-                    // get the result
-                    server_task_result result = ctx_server.queue_results.recv(id_task);
-                    ctx_server.queue_results.remove_waiting_task_id(id_task);
-
-                    json embedding = json{
-                        {"embedding", json_value(result.data, "embedding", json::array())},
-                        {"index",     i++},
-                        {"object",    "embedding"}
-                    };
-
-                    data.push_back(embedding);
+            is_openai = true;
+            if (body["input"].is_array()) {
+                // support multiple prompts
+                for (const json & elem : body["input"]) {
+                    prompts.push_back(elem);
                 }
-
-                json result = format_embeddings_response_oaicompat(body, data);
-
-                return res.set_content(result.dump(), "application/json; charset=utf-8");
+            } else {
+                // single input prompt
+                prompts.push_back(body["input"]);
             }
+        } else if (body.count("content") != 0) {
+            // only support single prompt here
+            std::string content = body["content"];
+            prompts.push_back(content);
         } else {
-            prompt = "";
+            // TODO @ngxson : should return an error here
+            prompts.push_back("");
         }
 
-        // create and queue the task
-        const int id_task = ctx_server.queue_tasks.get_new_id();
+        // process all prompts
+        json responses = json::array();
+        for (auto & prompt : prompts) {
+            // TODO @ngxson : maybe support multitask for this endpoint?
+            // create and queue the task
+            const int id_task = ctx_server.queue_tasks.get_new_id();
 
-        ctx_server.queue_results.add_waiting_task_id(id_task);
-        ctx_server.request_completion(id_task, -1, { {"prompt", prompt}, { "n_predict", 0}}, false, true);
+            ctx_server.queue_results.add_waiting_task_id(id_task);
+            ctx_server.request_completion(id_task, -1, { {"prompt", prompt}, { "n_predict", 0}}, false, true);
 
-        // get the result
-        server_task_result result = ctx_server.queue_results.recv(id_task);
-        ctx_server.queue_results.remove_waiting_task_id(id_task);
+            // get the result
+            server_task_result result = ctx_server.queue_results.recv(id_task);
+            ctx_server.queue_results.remove_waiting_task_id(id_task);
 
-        json data = json::array({json{
-            {"embedding", json_value(result.data, "embedding", json::array())},
-            {"index",     0},
-            {"object",    "embedding"}
-        }}
-        );
+            // append to the responses
+            responses.push_back(result.data);
+        }
 
-        json root = format_embeddings_response_oaicompat(body, data);
-
+        // write JSON response
+        json root;
+        if (is_openai) {
+            json res_oai = json::array();
+            int i = 0;
+            for (auto & elem : responses) {
+                res_oai.push_back(json{
+                    {"embedding", json_value(elem, "embedding", json::array())},
+                    {"index",     i++},
+                    {"object",    "embedding"}
+                });
+            }
+            root = format_embeddings_response_oaicompat(body, res_oai);
+        } else {
+            root = responses[0];
+        }
         return res.set_content(root.dump(), "application/json; charset=utf-8");
-    });
+    };
 
+    //
+    // Router
+    //
+
+    // register static assets routes
+    if (!sparams.public_path.empty()) {
+        // Set the base directory for serving static files
+        svr->set_base_dir(sparams.public_path);
+    }
+
+    // using embedded static files
+    auto handle_static_file = [](unsigned char * content, size_t len, const char * mime_type) {
+        return [content, len, mime_type](const httplib::Request &, httplib::Response & res) {
+            res.set_content(reinterpret_cast<const char*>(content), len, mime_type);
+            return false;
+        };
+    };
+
+    svr->Options(R"(/.*)", [](const httplib::Request &, httplib::Response & res) {
+        // TODO @ngxson : I have no idea what it is... maybe this is redundant?
+        return res.set_content("", "application/json; charset=utf-8");
+    });
+    svr->Get("/", handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
+    svr->Get("/index.js", handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/completion.js", handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/json-schema-to-grammar.mjs", handle_static_file(
+        json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
+
+    // register API routes
+    svr->Get ("/health",              handle_health);
+    svr->Get ("/slots",               handle_slots);
+    svr->Get ("/metrics",             handle_metrics);
+    svr->Get ("/props",               handle_props);
+    svr->Get ("/v1/models",           handle_models);
+    svr->Post("/completion",          handle_completions); // legacy
+    svr->Post("/completions",         handle_completions);
+    svr->Post("/v1/completions",      handle_completions);
+    svr->Post("/chat/completions",    handle_chat_completions);
+    svr->Post("/v1/chat/completions", handle_chat_completions);
+    svr->Post("/infill",              handle_infill);
+    svr->Post("/embedding",           handle_embeddings); // legacy
+    svr->Post("/embeddings",          handle_embeddings);
+    svr->Post("/v1/embeddings",       handle_embeddings);
+    svr->Post("/tokenize",            handle_tokenize);
+    svr->Post("/detokenize",          handle_detokenize);
+
+    //
+    // Start the server
+    //
     if (sparams.n_threads_http < 1) {
         // +2 threads for monitoring endpoints
         sparams.n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
     }
     log_data["n_threads_http"] =  std::to_string(sparams.n_threads_http);
-    svr.new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
+    svr->new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
 
     LOG_INFO("HTTP server listening", log_data);
 
     // run the HTTP server in a thread - see comment below
     std::thread t([&]() {
-        if (!svr.listen_after_bind()) {
+        if (!svr->listen_after_bind()) {
             state.store(SERVER_STATE_ERROR);
             return 1;
         }
@@ -3371,7 +3490,7 @@ int main(int argc, char ** argv) {
 
     ctx_server.queue_tasks.start_loop();
 
-    svr.stop();
+    svr->stop();
     t.join();
 
     llama_backend_free();

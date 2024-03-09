@@ -201,6 +201,10 @@ ifdef LLAMA_SERVER_VERBOSE
 	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
+ifdef LLAMA_SERVER_SSL
+	MK_CPPFLAGS += -DCPPHTTPLIB_OPENSSL_SUPPORT
+	MK_LDFLAGS += -lssl -lcrypto
+endif
 
 ifdef LLAMA_CODE_COVERAGE
 	MK_CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
@@ -449,7 +453,7 @@ endif # LLAMA_CUDA_PEER_MAX_BATCH_SIZE
 ifdef LLAMA_CUDA_CCBIN
 	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
-ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml-common.h
 ifdef JETSON_EOL_MODULE_DETECT
 	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 else
@@ -626,7 +630,7 @@ ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
 ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h
+ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
 OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o
