@@ -8,6 +8,11 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+> [!IMPORTANT]
+> **Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962**
+>
+> Vote for which quantization type provides better responses, all other parameters being the same.
+
 ### Recent API changes
 
 - [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_max_seq()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
@@ -16,11 +21,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- The `api_like_OAI.py` script has been removed - use `server` instead ([#5766](https://github.com/ggerganov/llama.cpp/issues/5766#issuecomment-1969037761))
-- Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
-- Support for Gemma models: https://github.com/ggerganov/llama.cpp/pull/5631
-- Non-linear quantization IQ4_NL: https://github.com/ggerganov/llama.cpp/pull/5590
-- Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
+- Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
 
 ----
 
