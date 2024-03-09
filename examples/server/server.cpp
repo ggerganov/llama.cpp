@@ -2651,6 +2651,17 @@ inline void signal_handler(int signal) {
     shutdown_handler(signal);
 }
 
+static void normalize(std::vector<float>& vec) {
+    float norm = 0;
+    for (float val : vec) {
+        norm += val * val;
+    }
+    norm = sqrt(norm);
+    for (float& val : vec) {
+        val /= norm;
+    }
+}
+
 int main(int argc, char ** argv) {
 #if SERVER_VERBOSE != 1
     log_disable();
@@ -3345,6 +3356,13 @@ int main(int argc, char ** argv) {
             // get the result
             server_task_result result = ctx_server.queue_results.recv(id_task);
             ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+            // normalize the embedding
+            std::vector<float> embedding = json_value(result.data, "embedding", json::array());
+            normalize(embedding);
+            result.data["embedding"] = embedding;
+
+            // append to the responses
             responses.push_back(result.data);
         }
 
