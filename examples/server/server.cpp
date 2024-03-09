@@ -852,7 +852,16 @@ struct server_context {
         // infill
         slot.params.input_prefix = json_value(data, "input_prefix", default_params.input_prefix);
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
-        slot.prompt              = json_value(data, "prompt",       std::string(""));
+
+        // get prompt
+        {
+            const auto & prompt = data.find("prompt");
+            if (prompt == data.end()) {
+                slot.prompt = "";
+            } else {
+                slot.prompt = *prompt;
+            }
+        }
 
         // penalize user-provided tokens
         {
