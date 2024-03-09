@@ -1852,3 +1852,19 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
 
     printf("\n=== Done dumping\n");
 }
+
+void llama_embd_normalize(const float * inp, float * out, int n) {
+    float norm = 0;
+    for (int i = 0; i < n; i++) {
+        norm += inp[i] * inp[i];
+    }
+    norm = sqrt(norm);
+    if (norm == 0) {
+        return;
+    }
+    norm = 1.0 / norm;
+    for (int i = 0; i < n; i++) {
+        out[i] = inp[i] * norm;
+    }
+}
+
