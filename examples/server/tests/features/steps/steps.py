@@ -582,8 +582,9 @@ async def step_detokenize(context):
 @async_run_until_complete
 async def step_options_request(context, origin):
     async with aiohttp.ClientSession() as session:
+        headers = {'Authorization': f'Bearer {context.user_api_key}', 'Origin': origin}
         async with session.options(f'{context.base_url}/v1/chat/completions',
-                                   headers={"Origin": origin}) as response:
+                                    headers=headers) as response:
             assert response.status == 200
             context.options_response = response
 
