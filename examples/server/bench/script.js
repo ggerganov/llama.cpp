@@ -23,11 +23,23 @@ export function setup() {
 }
 
 const data = new SharedArray('conversations', function () {
+    const tokenizer = (message) => message.split(" ")
+
     return JSON.parse(open(dataset_path))
         // Filter out the conversations with less than 2 turns.
         .filter(data => data["conversations"].length >= 2)
         // Only keep the first two turns of each conversation.
-        .map(data => Array(data["conversations"][0]["value"], data["conversations"][1]["value"]))
+        .map(data => {
+            return {
+                prompt: data["conversations"][0]["value"],
+                n_prompt_tokens: tokenizer(data["conversations"][0]["value"]).length,
+                n_completion_tokens: tokenizer(data["conversations"][1]["value"]).length,
+            }
+        })
+        // Filter out too short sequences
+        .filter(conv => conv.n_prompt_tokens >= 4 && conv.n_completion_tokens >= 4)
+        // Filter out too long sequences.
+        .filter(conv => conv.n_prompt_tokens <= 1024 && conv.n_prompt_tokens + conv.n_completion_tokens <= 2048)
         // Keep only first n prompts
         .slice(0, n_prompt)
 })
@@ -59,11 +71,11 @@ export default function () {
         "messages": [
             {
                 "role": "system",
-                "content": conversation[0],
+                "content": "You are ChatGPT, an AI assistant.",
             },
             {
                 "role": "user",
-                "content": conversation[1],
+                "content": conversation.prompt,
             }
         ],
         "model": model,
@@ -73,8 +85,6 @@ export default function () {
 
     const body = JSON.stringify(payload)
 
-    console.debug(`request: ${body}`)
-
     let res = http.post(`${server_url}/chat/completions`, body, {
         headers: {'Content-Type': 'application/json'},
         timeout: '300s'
@@ -83,8 +93,6 @@ export default function () {
     check(res, {'success completion': (r) => r.status === 200})
 
     if (res.status === 200) {
-        console.debug(`response: ${res.body}`)
-
         const completions = res.json()
 
         llamacpp_prompt_tokens.add(completions.usage.prompt_tokens)
