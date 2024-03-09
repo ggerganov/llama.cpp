@@ -2,6 +2,7 @@ import http from 'k6/http'
 import {check, sleep} from 'k6'
 import {SharedArray} from 'k6/data'
 import {Counter, Rate, Trend} from 'k6/metrics'
+import exec from 'k6/execution';
 
 // Server chat completions prefix
 const server_url = __ENV.SERVER_BENCH_URL ? __ENV.SERVER_BENCH_URL : 'http://localhost:8080/v1'
@@ -72,7 +73,7 @@ export const options = {
 }
 
 export default function () {
-    const conversation = data[Math.floor(Math.random() * data.length)]
+    const conversation = data[exec.scenario.iterationInInstance % data.length]
     const payload = {
         "messages": [
             {
