@@ -15,8 +15,11 @@ const model = __ENV.SERVER_BENCH_MODEL_ALIAS ? __ENV.SERVER_BENCH_MODEL_ALIAS : 
 // Dataset path
 const dataset_path = __ENV.SERVER_BENCH_DATASET ? __ENV.SERVER_BENCH_DATASET : './ShareGPT_V3_unfiltered_cleaned_split.json'
 
+// Max tokens to predict
+const max_tokens = __ENV.SERVER_BENCH_MAX_TOKENS ? parseInt(__ENV.SERVER_BENCH_MAX_TOKENS) : 512
+
 export function setup() {
-    console.info(`Benchmark config: server_url=${server_url} n_prompt=${n_prompt} model=${model} dataset_path=${dataset_path}`)
+    console.info(`Benchmark config: server_url=${server_url} n_prompt=${n_prompt} model=${model} dataset_path=${dataset_path} max_tokens=${max_tokens}`)
 }
 
 const data = new SharedArray('conversations', function () {
@@ -32,8 +35,6 @@ const data = new SharedArray('conversations', function () {
 const llamacpp_prompt_tokens = new Gauge('llamacpp_prompt_tokens')
 const llamacpp_completion_tokens = new Gauge('llamacpp_completion_tokens')
 
-const llamacpp_completions_tokens_seconds = new Gauge('llamacpp_completions_tokens_seconds')
-
 const llamacpp_prompt_tokens_total_counter = new Counter('llamacpp_prompt_tokens_total_counter')
 const llamacpp_completion_tokens_total_counter = new Counter('llamacpp_completion_tokens_total_counter')
 
@@ -43,8 +44,8 @@ const llamacpp_completions_stop_rate = new Rate('llamacpp_completions_stop_rate'
 export const options = {
     thresholds: {
         llamacpp_completions_truncated_rate: [
-            // more than 10% of truncated input will abort the test
-            {threshold: 'rate < 0.1', abortOnFail: true, delayAbortEval: '1m'},
+            // more than 80% of truncated input will abort the test
+            {threshold: 'rate < 0.8', abortOnFail: true, delayAbortEval: '1m'},
         ],
     },
     duration: '10m',
@@ -66,6 +67,7 @@ export default function () {
         ],
         "model": model,
         "stream": false,
+        "max_tokens": max_tokens
     }
 
     const body = JSON.stringify(payload)
@@ -79,21 +81,22 @@ export default function () {
 
     check(res, {'success completion': (r) => r.status === 200})
 
-    console.debug(`response: ${res.body}`)
+    if (res.status === 200) {
+        console.debug(`response: ${res.body}`)
 
-    const completions = res.json()
+        const completions = res.json()
 
-    llamacpp_prompt_tokens.add(completions.usage.prompt_tokens)
-    llamacpp_prompt_tokens_total_counter.add(completions.usage.prompt_tokens)
+        llamacpp_prompt_tokens.add(completions.usage.prompt_tokens)
+        llamacpp_prompt_tokens_total_counter.add(completions.usage.prompt_tokens)
 
-    llamacpp_completion_tokens.add(completions.usage.completion_tokens)
-    llamacpp_completion_tokens_total_counter.add(completions.usage.completion_tokens)
+        llamacpp_completion_tokens.add(completions.usage.completion_tokens)
+        llamacpp_completion_tokens_total_counter.add(completions.usage.completion_tokens)
 
-    llamacpp_completions_tokens_seconds.add(completions.usage.completion_tokens / res.timings.duration * 1e3)
-
-    llamacpp_completions_truncated_rate.add(completions.choices[0].finish_reason === 'length')
-    llamacpp_completions_stop_rate.add(completions.choices[0].finish_reason === 'stop')
-
+        llamacpp_completions_truncated_rate.add(completions.choices[0].finish_reason === 'length')
+        llamacpp_completions_stop_rate.add(completions.choices[0].finish_reason === 'stop')
+    } else {
+        console.error(`response: ${res.body}`)
+    }
 
     sleep(0.3)
 }

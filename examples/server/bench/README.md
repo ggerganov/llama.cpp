@@ -44,14 +44,16 @@ server --host localhost --port 8080 \
 
 #### Run the benchmark
 
+For 500 chat completions request with 8 concurrent users during maximum 10 minutes, run:
 ```shell
-k6 run script.js
+k6 run script.js --duration 10m --iterations 500 --vus 8
 ```
 
 The benchmark values can be overridden with:
 - `SERVER_BENCH_URL` server url prefix for chat completions, default `http://localhost:8080/v1`
 - `SERVER_BENCH_N_PROMPTS` total prompts to randomly select in the benchmark, default `480`
 - `SERVER_BENCH_MODEL_ALIAS` model alias to pass in the completion request, default `my-model`
+- `SERVER_BENCH_MAX_TOKENS` max tokens to predict, default: `1024`
 
 Or with [k6 options](https://k6.io/docs/using-k6/k6-options/reference/):
 
@@ -66,7 +68,6 @@ Following metrics are available:
 - `llamacpp_prompt_tokens_total_counter` Counter of OAI response `usage.prompt_tokens`
 - `llamacpp_completion_tokens` Gauge of OAI response `usage.completion_tokens`
 - `llamacpp_completion_tokens_total_counter` Counter of OAI response `usage.completion_tokens`
-- `llamacpp_completions_tokens_seconds` Gauge of `usage.completion_tokens` divided by the request time in second
 - `llamacpp_completions_truncated_rate` Rate of completions truncated, i.e. if `finish_reason === 'length'`
 - `llamacpp_completions_stop_rate` Rate of completions truncated, i.e. if `finish_reason === 'stop'`
 
