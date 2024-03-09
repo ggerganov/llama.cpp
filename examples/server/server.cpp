@@ -856,12 +856,9 @@ struct server_context {
         // get prompt
         {
             const auto & prompt = data.find("prompt");
-            if (prompt == data.end())
-            {
+            if (prompt == data.end()) {
                 slot.prompt = "";
-            }
-            else
-            {
+            } else {
                 slot.prompt = *prompt;
             }
         }
