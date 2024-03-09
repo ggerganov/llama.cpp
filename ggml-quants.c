@@ -4059,10 +4059,10 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
             const int8x16_t y1_h = vld1q_s8(b_y1->qs + 16);
 
             // mmla into int32x4_t
-            float32x4_t scale = {GGML_FP16_TO_FP32(b_x0->d)*GGML_FP16_TO_FP32(b_y0->d),
-                                 GGML_FP16_TO_FP32(b_x0->d)*GGML_FP16_TO_FP32(b_y1->d),
-                                 GGML_FP16_TO_FP32(b_x1->d)*GGML_FP16_TO_FP32(b_y0->d),
-                                 GGML_FP16_TO_FP32(b_x1->d)*GGML_FP16_TO_FP32(b_y1->d)};
+            float32x4_t scale = {GGML_FP16_TO_FP32(b_x0->d)*b_y0->d,
+                                 GGML_FP16_TO_FP32(b_x0->d)*b_y1->d,
+                                 GGML_FP16_TO_FP32(b_x1->d)*b_y0->d,
+                                 GGML_FP16_TO_FP32(b_x1->d)*b_y1->d};
 
             int8x16_t l0 = vreinterpretq_s8_s64(vzip1q_s64(vreinterpretq_s64_s8(x0_l), vreinterpretq_s64_s8(x1_l)));
             int8x16_t l1 = vreinterpretq_s8_s64(vzip2q_s64(vreinterpretq_s64_s8(x0_l), vreinterpretq_s64_s8(x1_l)));
