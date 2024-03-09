@@ -136,7 +136,7 @@ static std::string generate(llama_context* ctx, const std::string& prompt, bool 
     while (true) {
         llama_batch_clear(bat);
 
-        for (auto i = 0; i < inputs.size(); i++)
+        for (int32_t i = 0; i < inputs.size(); i++)
             llama_batch_add(bat, inputs[i], i_current_token++, { 0 }, i == inputs.size() - 1);
 
         inputs.clear();
@@ -146,7 +146,7 @@ static std::string generate(llama_context* ctx, const std::string& prompt, bool 
         auto logits = llama_get_logits_ith(ctx, bat.n_tokens - 1);
 
         auto candidates = std::vector<llama_token_data>(llama_n_vocab(mdl));
-        for (auto token = 0; token < candidates.size(); token++)
+        for (int32_t token = 0; token < candidates.size(); token++)
             candidates[token] = llama_token_data{ token, logits[token], 0.0f };
 
         auto candidates_p = llama_token_data_array{ candidates.data(), candidates.size(), false };
