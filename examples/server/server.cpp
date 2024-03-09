@@ -3350,6 +3350,7 @@ int main(int argc, char ** argv) {
             prompts.push_back(content);
         } else {
             res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_INVALID_REQUEST));
+            return;
         }
 
         // process all prompts
