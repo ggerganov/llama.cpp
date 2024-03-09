@@ -9622,10 +9622,10 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
 
         __m256i sumi = _mm256_setzero_si256();
         for (int ib = 0; ib < QK_K/32; ib += 2) {
-            const __m256i q1b_1 = _mm256_set_epi64x(iq1s_grid[qs[3] | (((qh[ib+0] >> 9) & 7) << 8)], iq1s_grid[qs[2] | (((qh[ib+0] >> 6) & 7) << 8)],
-                                                    iq1s_grid[qs[1] | (((qh[ib+0] >> 3) & 7) << 8)], iq1s_grid[qs[0] | (((qh[ib+0] >> 0) & 7) << 8)]);
-            const __m256i q1b_2 = _mm256_set_epi64x(iq1s_grid[qs[7] | (((qh[ib+1] >> 9) & 7) << 8)], iq1s_grid[qs[6] | (((qh[ib+1] >> 6) & 7) << 8)],
-                                                    iq1s_grid[qs[5] | (((qh[ib+1] >> 3) & 7) << 8)], iq1s_grid[qs[4] | (((qh[ib+1] >> 0) & 7) << 8)]);
+            const __m256i q1b_1 = _mm256_set_epi64x(iq1s_grid[qs[3] | ((qh[ib+0] >> 1) & 0x700)], iq1s_grid[qs[2] | ((qh[ib+0] << 2) & 0x700)],
+                                                    iq1s_grid[qs[1] | ((qh[ib+0] << 5) & 0x700)], iq1s_grid[qs[0] | ((qh[ib+0] << 8) & 0x700)]);
+            const __m256i q1b_2 = _mm256_set_epi64x(iq1s_grid[qs[7] | ((qh[ib+1] >> 1) & 0x700)], iq1s_grid[qs[6] | ((qh[ib+1] << 2) & 0x700)],
+                                                    iq1s_grid[qs[5] | ((qh[ib+1] << 5) & 0x700)], iq1s_grid[qs[4] | ((qh[ib+1] << 8) & 0x700)]);
             qs += 8;
             const __m256i q8b_1 = _mm256_loadu_si256((const __m256i*)q8); q8 += 32;
             const __m256i q8b_2 = _mm256_loadu_si256((const __m256i*)q8); q8 += 32;
