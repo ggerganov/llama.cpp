@@ -20173,7 +20173,6 @@ size_t ggml_quantize_chunk(
                    int   start,
                    int   nrows,
                    int   n_per_row,
-               int64_t * hist,
            const float * imatrix) {
     const int n = nrows * n_per_row;
 
@@ -20231,8 +20230,6 @@ size_t ggml_quantize_chunk(
     }
 
     GGML_ASSERT(result == nrows * row_size);
-
-    GGML_UNUSED(hist); // TODO: populate
 
     return result;
 }

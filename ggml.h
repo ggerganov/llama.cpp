@@ -2205,7 +2205,6 @@ extern "C" {
                        int   start,
                        int   nrows,
                        int   n_per_row,
-                   int64_t * hist,
                const float * imatrix);
 
     //
