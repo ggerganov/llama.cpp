@@ -852,7 +852,16 @@ struct server_context {
         // infill
         slot.params.input_prefix = json_value(data, "input_prefix", default_params.input_prefix);
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
-        slot.prompt              = json_value(data, "prompt",       std::string(""));
+
+        // get prompt
+        {
+            const auto & prompt = data.find("prompt");
+            if (prompt == data.end()) {
+                slot.prompt = "";
+            } else {
+                slot.prompt = *prompt;
+            }
+        }
 
         // penalize user-provided tokens
         {
@@ -1332,6 +1341,8 @@ struct server_context {
 
         const int n_embd = llama_n_embd(model);
 
+        std::vector<float> embd_res(n_embd, 0.0f);
+
         for (int i = 0; i < batch.n_tokens; ++i) {
             if (!batch.logits[i] || batch.seq_id[i][0] != slot.id + 1) {
                 continue;
@@ -1355,8 +1366,10 @@ struct server_context {
                 continue;
             }
 
+            llama_embd_normalize(embd, embd_res.data(), n_embd);
+
             res.data = json {
-                {"embedding", std::vector<float>(embd, embd + n_embd)},
+                {"embedding", embd_res},
             };
         }
 
@@ -3354,8 +3367,10 @@ int main(int argc, char ** argv) {
             server_task_result result = ctx_server.queue_results.recv(id_task);
             ctx_server.queue_results.remove_waiting_task_id(id_task);
             if (!result.error) {
+                // append to the responses
                 responses.push_back(result.data);
             } else {
+                // error received, ignore everything else
                 res_error(res, result.data);
                 return;
             }
