@@ -27,6 +27,7 @@
 #include <mutex>
 #include <thread>
 #include <signal.h>
+#include <memory>
 
 using json = nlohmann::json;
 
@@ -117,6 +118,11 @@ struct server_params {
     std::string system_prompt = "";
 
     std::vector<std::string> api_keys;
+
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    std::string ssl_key_file = "";
+    std::string ssl_cert_file = "";
+#endif
 
     bool slots_endpoint   = true;
     bool metrics_endpoint = false;
@@ -659,7 +665,11 @@ struct server_context {
     bool load_model(const gpt_params & params_) {
         params = params_;
 
+        // dedicate one sequence to the system prompt
+        params.n_parallel += 1;
+
         std::tie(model, ctx) = llama_init_from_gpt_params(params);
+        params.n_parallel -= 1; // but be sneaky about it
         if (model == nullptr) {
             LOG_ERROR("unable to load model", {{"model", params.model}});
             return false;
@@ -1018,8 +1028,8 @@ struct server_context {
             }
 
             // assign the system KV cache to all parallel sequences
-            for (int32_t i = 1; i < params.n_parallel; ++i) {
-                llama_kv_cache_seq_cp(ctx, 0, i, 0, system_tokens.size());
+            for (int32_t i = 1; i <= params.n_parallel; ++i) {
+                llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
             }
         }
 
@@ -1124,6 +1134,7 @@ struct server_context {
 
             LOG_VERBOSE("stopped by limit", {
                 {"id_slot",   slot.id},
+                {"id_task",   slot.id_task},
                 {"n_decoded", slot.n_decoded},
                 {"n_predict", slot.params.n_predict},
             });
@@ -1137,6 +1148,8 @@ struct server_context {
         }
 
         LOG_VERBOSE("next token", {
+            {"id_slot",        slot.id},
+            {"id_task",        slot.id_task},
             {"token",          result.tok},
             {"token_text",     tokens_to_output_formatted_string(ctx, result.tok)},
             {"has_next_token", slot.has_next_token},
@@ -1306,7 +1319,7 @@ struct server_context {
         const int n_embd = llama_n_embd(model);
 
         for (int i = 0; i < batch.n_tokens; ++i) {
-            if (!batch.logits[i] || batch.seq_id[i][0] != slot.id) {
+            if (!batch.logits[i] || batch.seq_id[i][0] != slot.id + 1) {
                 continue;
             }
 
@@ -1633,8 +1646,8 @@ struct server_context {
                         {"n_cache_tokens",  slot.cache_tokens.size()}
                     });
 
-                    llama_kv_cache_seq_rm (ctx, slot.id, n_keep            , n_keep + n_discard);
-                    llama_kv_cache_seq_add(ctx, slot.id, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
+                    llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
+                    llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
 
                     if (slot.params.cache_prompt) {
                         for (size_t i = n_keep + n_discard; i < slot.cache_tokens.size(); i++) {
@@ -1666,7 +1679,7 @@ struct server_context {
 
             // TODO: we always have to take into account the "system_tokens"
             //       this is not great and needs to be improved somehow
-            llama_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id }, true);
+            llama_batch_add(batch, slot.sampled, system_tokens.size() + slot_npast, { slot.id + 1 }, true);
 
             slot.n_past += 1;
 
@@ -1746,6 +1759,15 @@ struct server_context {
                         slot.n_past = 0;
                         slot.n_prompt_tokens = prompt_tokens.size();
 
+                        LOG_VERBOSE("prompt tokenized", {
+                            {"id_slot",         slot.id},
+                            {"id_task",         slot.id_task},
+                            {"n_ctx",           slot.n_ctx},
+                            {"n_keep",          slot.params.n_keep},
+                            {"n_prompt_tokens", slot.n_prompt_tokens},
+                            {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                        });
+
                         if (slot.embedding) {
                             // this prompt is too large to process - discard it
                             if (slot.n_prompt_tokens > n_batch) {
@@ -1784,10 +1806,13 @@ struct server_context {
                                 slot.n_prompt_tokens = prompt_tokens.size();
 
                                 LOG_VERBOSE("input truncated", {
-                                    {"n_ctx",         slot.n_ctx},
-                                    {"n_keep",        slot.params.n_keep},
-                                    {"n_left",        n_left},
-                                    {"prompt_tokens", tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                                    {"id_slot",         slot.id},
+                                    {"id_task",         slot.id_task},
+                                    {"n_ctx",           slot.n_ctx},
+                                    {"n_keep",          slot.params.n_keep},
+                                    {"n_left",          n_left},
+                                    {"n_prompt_tokens", slot.n_prompt_tokens},
+                                    {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
                                 });
 
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
@@ -1803,9 +1828,6 @@ struct server_context {
 
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
-
-                                // remove the non-common part from the cache
-                                slot.cache_tokens.resize(slot.n_past);
 
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
@@ -1837,8 +1859,28 @@ struct server_context {
                         }
                     }
 
-                    const int p0 = (int) system_tokens.size() + slot.n_past;
-                    llama_kv_cache_seq_rm(ctx, slot.id, p0, -1);
+                    // keep only the common part
+                    int p0 = (int) system_tokens.size() + slot.n_past;
+                    if (!llama_kv_cache_seq_rm(ctx, slot.id + 1, p0, -1)) {
+                        // could not partially delete (likely using a non-Transformer model)
+                        llama_kv_cache_seq_rm(ctx, slot.id + 1, -1, -1);
+
+                        p0 = (int) system_tokens.size();
+                        if (p0 != 0) {
+                            // copy over the system prompt when there is one
+                            llama_kv_cache_seq_cp(ctx, 0, slot.id + 1, -1, -1);
+                        }
+
+                        // there is no common part left (except for the system prompt)
+                        slot.n_past = 0;
+                        slot.n_past_se = 0;
+                        slot.ga_i = 0;
+                        // TODO: is the system prompt ever in the sampling context?
+                        llama_sampling_reset(slot.ctx_sampling);
+                    }
+
+                    // remove the non-common part from the cache
+                    slot.cache_tokens.resize(slot.n_past);
 
                     LOG_INFO("kv cache rm [p0, end)", {
                         { "id_slot", slot.id },
@@ -1863,7 +1905,7 @@ struct server_context {
                             }
                         }
 
-                        llama_batch_add(batch, prompt_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id }, false);
+                        llama_batch_add(batch, prompt_tokens[slot.n_past], system_tokens.size() + slot_npast, { slot.id + 1 }, false);
 
                         if (slot.params.cache_prompt) {
                             slot.cache_tokens.push_back(prompt_tokens[slot.n_past]);
@@ -1937,9 +1979,9 @@ struct server_context {
                         LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
                         LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
 
-                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i, slot.n_past_se, ib * bd);
-                        llama_kv_cache_seq_div(ctx, slot.id, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n);
-                        llama_kv_cache_seq_add(ctx, slot.id, slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd);
+                        llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i, slot.n_past_se, ib * bd);
+                        llama_kv_cache_seq_div(ctx, slot.id + 1, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n);
+                        llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd);
 
                         slot.n_past_se -= bd;
 
@@ -2106,6 +2148,10 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --path PUBLIC_PATH        path from which to serve static files (default: disabled)\n");
     printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    printf("  --ssl-key-file FNAME      path to file a PEM-encoded SSL private key\n");
+    printf("  --ssl-cert-file FNAME     path to file a PEM-encoded SSL certificate\n");
+#endif
     printf("  -to N, --timeout N        server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     printf("  --embeddings              enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N       number of slots for process requests (default: %d)\n", params.n_parallel);
@@ -2184,7 +2230,24 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                }
             }
             key_file.close();
-        } else if (arg == "--timeout" || arg == "-to") {
+
+        }
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+        else if (arg == "--ssl-key-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.ssl_key_file = argv[i];
+        } else if (arg == "--ssl-cert-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.ssl_cert_file = argv[i];
+        }
+#endif
+        else if (arg == "--timeout" || arg == "-to") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -2622,23 +2685,36 @@ int main(int argc, char ** argv) {
         {"system_info",     llama_print_system_info()},
     });
 
-    httplib::Server svr;
+    std::unique_ptr<httplib::Server> svr;
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    if (sparams.ssl_key_file != "" && sparams.ssl_cert_file != "") {
+        LOG_INFO("Running with SSL", {{"key", sparams.ssl_key_file}, {"cert", sparams.ssl_cert_file}});
+        svr.reset(
+            new httplib::SSLServer(sparams.ssl_cert_file.c_str(), sparams.ssl_key_file.c_str())
+        );
+    } else {
+        LOG_INFO("Running without SSL", {});
+        svr.reset(new httplib::Server());
+    }
+#else
+    svr.reset(new httplib::Server());
+#endif
 
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
-    svr.set_default_headers({{"Server", "llama.cpp"}});
+    svr->set_default_headers({{"Server", "llama.cpp"}});
 
     // CORS preflight
-    svr.Options(R"(.*)", [](const httplib::Request & req, httplib::Response & res) {
+    svr->Options(R"(.*)", [](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin",      req.get_header_value("Origin"));
         res.set_header("Access-Control-Allow-Credentials", "true");
         res.set_header("Access-Control-Allow-Methods",     "POST");
         res.set_header("Access-Control-Allow-Headers",     "*");
     });
 
-    svr.set_logger(log_server_request);
+    svr->set_logger(log_server_request);
 
-    svr.set_exception_handler([](const httplib::Request &, httplib::Response & res, std::exception_ptr ep) {
+    svr->set_exception_handler([](const httplib::Request &, httplib::Response & res, std::exception_ptr ep) {
         const char fmt[] = "500 Internal Server Error\n%s";
 
         char buf[BUFSIZ];
@@ -2654,7 +2730,7 @@ int main(int argc, char ** argv) {
         res.status = 500;
     });
 
-    svr.set_error_handler([](const httplib::Request &, httplib::Response & res) {
+    svr->set_error_handler([](const httplib::Request &, httplib::Response & res) {
         if (res.status == 401) {
             res.set_content("Unauthorized", "text/plain; charset=utf-8");
         }
@@ -2667,10 +2743,10 @@ int main(int argc, char ** argv) {
     });
 
     // set timeouts and change hostname and port
-    svr.set_read_timeout (sparams.read_timeout);
-    svr.set_write_timeout(sparams.write_timeout);
+    svr->set_read_timeout (sparams.read_timeout);
+    svr->set_write_timeout(sparams.write_timeout);
 
-    if (!svr.bind_to_port(sparams.hostname, sparams.port)) {
+    if (!svr->bind_to_port(sparams.hostname, sparams.port)) {
         fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
         return 1;
     }
@@ -2761,7 +2837,7 @@ int main(int argc, char ** argv) {
     };
 
     // register server middlewares
-    svr.set_pre_routing_handler([&middleware_validate_api_key](const httplib::Request & req, httplib::Response & res) {
+    svr->set_pre_routing_handler([&middleware_validate_api_key](const httplib::Request & req, httplib::Response & res) {
         if (!middleware_validate_api_key(req, res)) {
             return httplib::Server::HandlerResponse::Handled;
         }
@@ -3296,7 +3372,7 @@ int main(int argc, char ** argv) {
     // register static assets routes
     if (!sparams.public_path.empty()) {
         // Set the base directory for serving static files
-        svr.set_base_dir(sparams.public_path);
+        svr->set_base_dir(sparams.public_path);
     }
 
     // using embedded static files
@@ -3307,33 +3383,33 @@ int main(int argc, char ** argv) {
         };
     };
 
-    svr.Options(R"(/.*)", [](const httplib::Request &, httplib::Response & res) {
+    svr->Options(R"(/.*)", [](const httplib::Request &, httplib::Response & res) {
         // TODO @ngxson : I have no idea what it is... maybe this is redundant?
         return res.set_content("", "application/json; charset=utf-8");
     });
-    svr.Get("/", handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
-    svr.Get("/index.js", handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
-    svr.Get("/completion.js", handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
-    svr.Get("/json-schema-to-grammar.mjs", handle_static_file(
+    svr->Get("/", handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
+    svr->Get("/index.js", handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/completion.js", handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/json-schema-to-grammar.mjs", handle_static_file(
         json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
 
     // register API routes
-    svr.Get ("/health",              handle_health);
-    svr.Get ("/slots",               handle_slots);
-    svr.Get ("/metrics",             handle_metrics);
-    svr.Get ("/props",               handle_props);
-    svr.Get ("/v1/models",           handle_models);
-    svr.Post("/completion",          handle_completions); // legacy
-    svr.Post("/completions",         handle_completions);
-    svr.Post("/v1/completions",      handle_completions);
-    svr.Post("/chat/completions",    handle_chat_completions);
-    svr.Post("/v1/chat/completions", handle_chat_completions);
-    svr.Post("/infill",              handle_infill);
-    svr.Post("/embedding",           handle_embeddings); // legacy
-    svr.Post("/embeddings",          handle_embeddings);
-    svr.Post("/v1/embeddings",       handle_embeddings);
-    svr.Post("/tokenize",            handle_tokenize);
-    svr.Post("/detokenize",          handle_detokenize);
+    svr->Get ("/health",              handle_health);
+    svr->Get ("/slots",               handle_slots);
+    svr->Get ("/metrics",             handle_metrics);
+    svr->Get ("/props",               handle_props);
+    svr->Get ("/v1/models",           handle_models);
+    svr->Post("/completion",          handle_completions); // legacy
+    svr->Post("/completions",         handle_completions);
+    svr->Post("/v1/completions",      handle_completions);
+    svr->Post("/chat/completions",    handle_chat_completions);
+    svr->Post("/v1/chat/completions", handle_chat_completions);
+    svr->Post("/infill",              handle_infill);
+    svr->Post("/embedding",           handle_embeddings); // legacy
+    svr->Post("/embeddings",          handle_embeddings);
+    svr->Post("/v1/embeddings",       handle_embeddings);
+    svr->Post("/tokenize",            handle_tokenize);
+    svr->Post("/detokenize",          handle_detokenize);
 
     //
     // Start the server
@@ -3343,13 +3419,13 @@ int main(int argc, char ** argv) {
         sparams.n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
     }
     log_data["n_threads_http"] =  std::to_string(sparams.n_threads_http);
-    svr.new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
+    svr->new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
 
     LOG_INFO("HTTP server listening", log_data);
 
     // run the HTTP server in a thread - see comment below
     std::thread t([&]() {
-        if (!svr.listen_after_bind()) {
+        if (!svr->listen_after_bind()) {
             state.store(SERVER_STATE_ERROR);
             return 1;
         }
@@ -3390,7 +3466,7 @@ int main(int argc, char ** argv) {
 
     ctx_server.queue_tasks.start_loop();
 
-    svr.stop();
+    svr->stop();
     t.join();
 
     llama_backend_free();
