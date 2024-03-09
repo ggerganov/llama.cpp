@@ -62,6 +62,8 @@ Or with [k6 options](https://k6.io/docs/using-k6/k6-options/reference/):
 SERVER_BENCH_N_PROMPTS=500 k6 run script.js --duration 10m --iterations 500 --vus 8
 ```
 
+To [debug http request](https://k6.io/docs/using-k6/http-debugging/) use `--http-debug="full"`
+
 #### Metrics
 
 Following metrics are available computed from the OAI chat completions response `usage`:
