@@ -2194,25 +2194,18 @@ extern "C" {
     GGML_API void ggml_quantize_init(enum ggml_type type);
     GGML_API void ggml_quantize_free(void);
 
-    // TODO: these would probably get removed in favor of the more general ggml_quantize_chunk
-    GGML_API size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q5_0(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q5_1(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t * hist);
-
-    GGML_API size_t ggml_quantize_q2_K(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q3_K(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q4_K(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q5_K(const float * src, void * dst, int n, int k, int64_t * hist);
-    GGML_API size_t ggml_quantize_q6_K(const float * src, void * dst, int n, int k, int64_t * hist);
-
     // some quantization type cannot be used without an importance matrix
     GGML_API bool ggml_quantize_requires_imatrix(enum ggml_type type);
 
     // calls ggml_quantize_init internally (i.e. can allocate memory)
-    GGML_API size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst,
-            int start, int nrows, int n_per_row, int64_t * hist, const float * imatrix);
+    GGML_API size_t ggml_quantize_chunk(
+            enum ggml_type   type,
+               const float * src,
+                      void * dst,
+                       int   start,
+                       int   nrows,
+                       int   n_per_row,
+               const float * imatrix);
 
     //
     // gguf
