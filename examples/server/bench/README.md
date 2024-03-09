@@ -53,7 +53,8 @@ The benchmark values can be overridden with:
 - `SERVER_BENCH_URL` server url prefix for chat completions, default `http://localhost:8080/v1`
 - `SERVER_BENCH_N_PROMPTS` total prompts to randomly select in the benchmark, default `480`
 - `SERVER_BENCH_MODEL_ALIAS` model alias to pass in the completion request, default `my-model`
-- `SERVER_BENCH_MAX_TOKENS` max tokens to predict, default: `1024`
+- `SERVER_BENCH_MAX_TOKENS` max tokens to predict, default: `512`
+- `SERVER_BENCH_DATASET` path to the benchmark dataset file
 
 Or with [k6 options](https://k6.io/docs/using-k6/k6-options/reference/):
 
