@@ -20,6 +20,9 @@ class TensorNameMap:
             "wte",                                       # gpt2
             "transformer.embd.wte",                      # phi2
             "model.tok_embeddings",                      # internlm2
+            "model.embedding",                           # mamba-qbert
+            "backbone.embedding",                        # mamba
+            "backbone.embeddings",                       # mamba-hf
         ),
 
         # Token type embeddings
@@ -44,7 +47,7 @@ class TensorNameMap:
         # Output
         MODEL_TENSOR.OUTPUT: (
             "embed_out",                 # gptneox
-            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen
+            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen mamba
             "output",                    # llama-pth bloom internlm2
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
@@ -61,6 +64,8 @@ class TensorNameMap:
             "language_model.encoder.final_layernorm",  # persimmon
             "model.final_layernorm",                   # persimmon
             "lm_head.ln",                              # phi2
+            "model.norm_f",                            # mamba-qbert
+            "backbone.norm_f",                         # mamba
         ),
 
         # Rope frequencies
@@ -86,6 +91,8 @@ class TensorNameMap:
             "transformer.h.{bid}.ln",                               # phi2
             "model.layers.layers.{bid}.norm",                       # plamo
             "model.layers.{bid}.attention_norm",                    # internlm2
+            "model.layers.{bid}.norm",                              # mamba-qbert
+            "backbone.layers.{bid}.norm",                           # mamba
         ),
 
         # Attention norm 2
@@ -282,7 +289,42 @@ class TensorNameMap:
         MODEL_TENSOR.LAYER_OUT_NORM: (
             "encoder.layer.{bid}.output.LayerNorm",  # bert
             "encoder.layers.{bid}.norm2",            # nomic-bert
-        )
+        ),
+
+        MODEL_TENSOR.SSM_IN: (
+            "model.layers.{bid}.in_proj",
+            "backbone.layers.{bid}.mixer.in_proj",
+        ),
+
+        MODEL_TENSOR.SSM_CONV1D: (
+            "model.layers.{bid}.conv1d",
+            "backbone.layers.{bid}.mixer.conv1d",
+        ),
+
+        MODEL_TENSOR.SSM_X: (
+            "model.layers.{bid}.x_proj",
+            "backbone.layers.{bid}.mixer.x_proj",
+        ),
+
+        MODEL_TENSOR.SSM_DT: (
+            "model.layers.{bid}.dt_proj",
+            "backbone.layers.{bid}.mixer.dt_proj",
+        ),
+
+        MODEL_TENSOR.SSM_A: (
+            "model.layers.{bid}.A_log",
+            "backbone.layers.{bid}.mixer.A_log",
+        ),
+
+        MODEL_TENSOR.SSM_D: (
+            "model.layers.{bid}.D",
+            "backbone.layers.{bid}.mixer.D",
+        ),
+
+        MODEL_TENSOR.SSM_OUT: (
+            "model.layers.{bid}.out_proj",
+            "backbone.layers.{bid}.mixer.out_proj",
+        ),
     }
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]
