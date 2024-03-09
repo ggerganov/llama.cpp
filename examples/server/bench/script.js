@@ -34,6 +34,7 @@ const data = new SharedArray('conversations', function () {
 
 const llamacpp_prompt_tokens = new Trend('llamacpp_prompt_tokens')
 const llamacpp_completion_tokens = new Trend('llamacpp_completion_tokens')
+const llamacpp_tokens_second = new Trend('llamacpp_tokens_second')
 
 const llamacpp_prompt_tokens_total_counter = new Counter('llamacpp_prompt_tokens_total_counter')
 const llamacpp_completion_tokens_total_counter = new Counter('llamacpp_completion_tokens_total_counter')
@@ -94,6 +95,8 @@ export default function () {
 
         llamacpp_completions_truncated_rate.add(completions.choices[0].finish_reason === 'length')
         llamacpp_completions_stop_rate.add(completions.choices[0].finish_reason === 'stop')
+
+        llamacpp_tokens_second.add(completions.usage.total_tokens / res.timings.duration * 1.e3)
     } else {
         console.error(`response: ${res.body}`)
     }

@@ -64,13 +64,14 @@ SERVER_BENCH_N_PROMPTS=500 k6 run script.js --duration 10m --iterations 500 --vu
 
 #### Metrics
 
-Following metrics are available:
-- `llamacpp_prompt_tokens` Gauge of OAI response `usage.prompt_tokens`
-- `llamacpp_prompt_tokens_total_counter` Counter of OAI response `usage.prompt_tokens`
-- `llamacpp_completion_tokens` Gauge of OAI response `usage.completion_tokens`
-- `llamacpp_completion_tokens_total_counter` Counter of OAI response `usage.completion_tokens`
+Following metrics are available computed from the OAI chat completions response `usage`:
+- `llamacpp_tokens_second` Trend of `usage.total_tokens / request duration`
+- `llamacpp_prompt_tokens` Trend of `usage.prompt_tokens`
+- `llamacpp_prompt_tokens_total_counter` Counter of `usage.prompt_tokens`
+- `llamacpp_completion_tokens` Trend of `usage.completion_tokens`
+- `llamacpp_completion_tokens_total_counter` Counter of `usage.completion_tokens`
 - `llamacpp_completions_truncated_rate` Rate of completions truncated, i.e. if `finish_reason === 'length'`
-- `llamacpp_completions_stop_rate` Rate of completions truncated, i.e. if `finish_reason === 'stop'`
+- `llamacpp_completions_stop_rate` Rate of completions stopped by the model, i.e. if `finish_reason === 'stop'`
 
 The script will fail if too many completions are truncated, see `llamacpp_completions_truncated_rate`.
 
