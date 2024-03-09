@@ -4102,9 +4102,7 @@ static void ggml_vk_test_transfer(ggml_backend_vk_context * ctx, size_t ne, bool
 }
 
 static void ggml_vk_quantize_data(const float * from, void * to, size_t ne, ggml_type quant) {
-    std::vector<int64_t> hist_cur(1 << 4, 0);
-
-    gml_quantize_chunk(quant, from, to, 0, 1, ne, hist_cur.data(), nullptr);
+    ggml_quantize_chunk(quant, from, to, 0, 1, ne, nullptr);
 }
 
 static void ggml_vk_test_dequant(ggml_backend_vk_context * ctx, size_t ne, ggml_type quant) {
