@@ -9586,14 +9586,14 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
 
         for (int ib = 0; ib < QK_K/32; ib += 2) {
 
-            q1b.val[0] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[0] | (((qh[ib+0] >> 0) & 7) << 8)))),
-                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[1] | (((qh[ib+0] >> 3) & 7) << 8)))));
-            q1b.val[1] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[2] | (((qh[ib+0] >> 6) & 7) << 8)))),
-                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[3] | (((qh[ib+0] >> 9) & 7) << 8)))));
-            q1b.val[2] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[4] | (((qh[ib+1] >> 0) & 7) << 8)))),
-                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[5] | (((qh[ib+1] >> 3) & 7) << 8)))));
-            q1b.val[3] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[6] | (((qh[ib+1] >> 6) & 7) << 8)))),
-                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[7] | (((qh[ib+1] >> 9) & 7) << 8)))));
+            q1b.val[0] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[0] | ((qh[ib+0] << 8) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[1] | ((qh[ib+0] << 5) & 0x700)))));
+            q1b.val[1] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[2] | ((qh[ib+0] << 2) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[3] | ((qh[ib+0] >> 1) & 0x700)))));
+            q1b.val[2] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[4] | ((qh[ib+1] << 8) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[5] | ((qh[ib+1] << 5) & 0x700)))));
+            q1b.val[3] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[6] | ((qh[ib+1] << 2) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[7] | ((qh[ib+1] >> 1) & 0x700)))));
             qs += 8;
 
             q8b = ggml_vld1q_s8_x4(q8); q8 += 64;
