@@ -1,7 +1,7 @@
 import http from 'k6/http'
 import {check, sleep} from 'k6'
 import {SharedArray} from 'k6/data'
-import {Counter, Gauge, Rate} from 'k6/metrics'
+import {Counter, Rate, Trend} from 'k6/metrics'
 
 // Server chat completions prefix
 const server_url = __ENV.SERVER_BENCH_URL ? __ENV.SERVER_BENCH_URL : 'http://localhost:8080/v1'
@@ -32,8 +32,8 @@ const data = new SharedArray('conversations', function () {
         .slice(0, n_prompt)
 })
 
-const llamacpp_prompt_tokens = new Gauge('llamacpp_prompt_tokens')
-const llamacpp_completion_tokens = new Gauge('llamacpp_completion_tokens')
+const llamacpp_prompt_tokens = new Trend('llamacpp_prompt_tokens')
+const llamacpp_completion_tokens = new Trend('llamacpp_completion_tokens')
 
 const llamacpp_prompt_tokens_total_counter = new Counter('llamacpp_prompt_tokens_total_counter')
 const llamacpp_completion_tokens_total_counter = new Counter('llamacpp_completion_tokens_total_counter')
