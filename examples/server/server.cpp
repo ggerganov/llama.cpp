@@ -1128,6 +1128,7 @@ struct server_context {
 
             LOG_VERBOSE("stopped by limit", {
                 {"id_slot",   slot.id},
+                {"id_task",   slot.id_task},
                 {"n_decoded", slot.n_decoded},
                 {"n_predict", slot.params.n_predict},
             });
@@ -1141,6 +1142,8 @@ struct server_context {
         }
 
         LOG_VERBOSE("next token", {
+            {"id_slot",        slot.id},
+            {"id_task",        slot.id_task},
             {"token",          result.tok},
             {"token_text",     tokens_to_output_formatted_string(ctx, result.tok)},
             {"has_next_token", slot.has_next_token},
@@ -1750,6 +1753,15 @@ struct server_context {
                         slot.n_past = 0;
                         slot.n_prompt_tokens = prompt_tokens.size();
 
+                        LOG_VERBOSE("prompt tokenized", {
+                            {"id_slot",         slot.id},
+                            {"id_task",         slot.id_task},
+                            {"n_ctx",           slot.n_ctx},
+                            {"n_keep",          slot.params.n_keep},
+                            {"n_prompt_tokens", slot.n_prompt_tokens},
+                            {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                        });
+
                         if (slot.embedding) {
                             // this prompt is too large to process - discard it
                             if (slot.n_prompt_tokens > n_batch) {
@@ -1788,10 +1800,13 @@ struct server_context {
                                 slot.n_prompt_tokens = prompt_tokens.size();
 
                                 LOG_VERBOSE("input truncated", {
-                                    {"n_ctx",         slot.n_ctx},
-                                    {"n_keep",        slot.params.n_keep},
-                                    {"n_left",        n_left},
-                                    {"prompt_tokens", tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                                    {"id_slot",         slot.id},
+                                    {"id_task",         slot.id_task},
+                                    {"n_ctx",           slot.n_ctx},
+                                    {"n_keep",          slot.params.n_keep},
+                                    {"n_left",          n_left},
+                                    {"n_prompt_tokens", slot.n_prompt_tokens},
+                                    {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
                                 });
 
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
