@@ -8061,7 +8061,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
             }
         }
     } else {
-        // with causal attention, the mask needs to match the kv cache size
+        // for models using the kv cache, the mask needs to match the kv cache size
         const int64_t n_tokens = batch.n_tokens;
         const int64_t n_stride = hparams.causal_attn ? kv_self.n : n_tokens;
 
