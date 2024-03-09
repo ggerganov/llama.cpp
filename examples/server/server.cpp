@@ -1704,19 +1704,6 @@ struct server_context {
         // next, batch any pending prompts without exceeding n_batch
         if (params.cont_batching || batch.n_tokens == 0) {
             for (auto & slot : slots) {
-                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty());
-
-                // empty prompt passed -> release the slot and send empty response
-                // note: infill mode allows empty prompt
-                if (slot.state == SLOT_STATE_IDLE && slot.command == SLOT_COMMAND_LOAD_PROMPT && !has_prompt && !slot.infill) {
-                    slot.state = SLOT_STATE_PROCESSING;
-                    slot.command = SLOT_COMMAND_NONE;
-                    slot.release();
-                    slot.print_timings();
-                    send_final_response(slot);
-                    continue;
-                }
-
                 // this slot still has a prompt to be processed
                 if (slot.state == SLOT_STATE_IDLE && slot.command == SLOT_COMMAND_LOAD_PROMPT) {
                     auto & prompt_tokens = slot.prompt_tokens;
@@ -1767,6 +1754,21 @@ struct server_context {
                             {"n_prompt_tokens", slot.n_prompt_tokens},
                             {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
                         });
+
+                        // empty prompt passed -> release the slot and send empty response
+                        if (prompt_tokens.empty()) {
+                            LOG_INFO("empty prompt - releasing slot", {
+                                {"id_slot", slot.id},
+                                {"id_task", slot.id_task}
+                            });
+
+                            slot.state = SLOT_STATE_PROCESSING;
+                            slot.command = SLOT_COMMAND_NONE;
+                            slot.release();
+                            slot.print_timings();
+                            send_final_response(slot);
+                            continue;
+                        }
 
                         if (slot.embedding) {
                             // this prompt is too large to process - discard it
