@@ -2197,7 +2197,8 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`\n");
     printf("  --chat-template JINJA_TEMPLATE\n");
     printf("                            set custom jinja chat template (default: template taken from model's metadata)\n");
-    printf("                            Note: only commonly used templates are accepted, since we don't have jinja parser\n");
+    printf("                            only commonly used templates are accepted:\n");
+    printf("                            https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template\n");
     printf("\n");
 }
 
@@ -2798,11 +2799,28 @@ int main(int argc, char ** argv) {
 
     const auto model_meta = ctx_server.model_meta();
 
-    if (sparams.chat_template.empty()) { // custom chat template is not supplied
+    // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
+    if (sparams.chat_template.empty()) {
         if (!ctx_server.validate_model_chat_template()) {
             LOG_ERROR("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
             sparams.chat_template = "chatml";
         }
+    }
+
+    // print sample chat example to make it clear which template is used
+    {
+        json chat;
+        chat.push_back({{"role", "system"},    {"content", "You are a helpful assistant"}});
+        chat.push_back({{"role", "user"},      {"content", "Hello"}});
+        chat.push_back({{"role", "assistant"}, {"content", "Hi there"}});
+        chat.push_back({{"role", "user"},      {"content", "How are you?"}});
+
+        const std::string chat_example = format_chat(ctx_server.model, sparams.chat_template, chat);
+
+        LOG_INFO("chat template", {
+            {"chat_example", chat_example},
+            {"built_in", sparams.chat_template.empty()},
+        });
     }
 
     //
