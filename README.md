@@ -490,12 +490,27 @@ Building the program with BLAS support may lead to some performance improvements
     ```
   - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
     ```bash
-    CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ \
+    HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
         cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
         && cmake --build build -- -j 16
     ```
     On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
     However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
+
+    Note that if you get the following error:
+    ```
+    clang: error: cannot find ROCm device library; provide its path via '--rocm-path' or '--rocm-device-lib-path', or pass '-nogpulib' to build without ROCm device library
+    ```
+    Try searching for a directory under `HIP_PATH` that contains the file
+    `oclc_abi_version_400.bc`. Then, add the following to the start of the
+    command: `HIP_DEVICE_LIB_PATH=<directory-you-just-found>`, so something
+    like:
+    ```bash
+    HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -p)" \
+    HIP_DEVICE_LIB_PATH=<directory-you-just-found> \
+        cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build -- -j 16
+    ```
 
   - Using `make` (example for target gfx1030, build with 16 CPU threads):
     ```bash

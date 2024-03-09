@@ -498,16 +498,26 @@ if (LLAMA_VULKAN)
 endif()
 
 if (LLAMA_HIPBLAS)
-    list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
-
-    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
-        message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
+    if ($ENV{ROCM_PATH})
+        set(ROCM_PATH $ENV{ROCM_PATH})
+    else()
+        set(ROCM_PATH /opt/rocm)
     endif()
+    list(APPEND CMAKE_PREFIX_PATH ${ROCM_PATH})
 
-    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
-        message(WARNING "Only LLVM is supported for HIP, hint: CXX=/opt/rocm/llvm/bin/clang++")
+    string(REGEX MATCH "hipcc(\.bat)?$" CXX_IS_HIPCC "${CMAKE_CXX_COMPILER}")
+
+    if (CXX_IS_HIPCC AND UNIX)
+        message(WARNING "Setting hipcc as the C++ compiler is legacy behavior."
+            " Prefer setting the HIP compiler directly. See README for details.")
+    else()
+        # Forward AMDGPU_TARGETS to CMAKE_HIP_ARCHITECTURES.
+        if (AMDGPU_TARGETS AND NOT CMAKE_HIP_ARCHITECTURES)
+            set(CMAKE_HIP_ARCHITECTURES ${AMDGPU_ARGETS})
+        endif()
+        cmake_minimum_required(VERSION 3.21)
+        enable_language(HIP)
     endif()
-
     find_package(hip     REQUIRED)
     find_package(hipblas REQUIRED)
     find_package(rocblas REQUIRED)
@@ -535,13 +545,18 @@ if (LLAMA_HIPBLAS)
     add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
     add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
-    set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+    if (CXX_IS_HIPCC)
+        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} hip::device)
+    else()
+        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE HIP)
+    endif()
 
     if (LLAMA_STATIC)
         message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
     endif()
 
-    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} PUBLIC hip::host roc::rocblas roc::hipblas)
 endif()
 
 if (LLAMA_SYCL)
