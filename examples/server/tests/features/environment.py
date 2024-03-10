@@ -34,34 +34,47 @@ def after_scenario(context, scenario):
     if not pid_exists(context.server_process.pid):
         assert False, f"Server not running pid={context.server_process.pid} ..."
 
-    kill_server(context)
+    server_graceful_shutdown(context)
 
     # Wait few for socket to free up
     time.sleep(0.05)
 
     attempts = 0
     while is_server_listening(context.server_fqdn, context.server_port):
-        context.server_process.kill()
+        server_kill(context)
         time.sleep(0.1)
         attempts += 1
         if attempts > 5:
-            if os.name == 'nt':
-                print(f"Server dangling exits, task killing force {context.server_process.pid} ...\n")
-                process = subprocess.run(['taskkill', '/F', '/pid', str(context.server_process.pid)],
-                                         stderr=subprocess.PIPE)
-            else:
-                print(f"Server dangling exits, killing all {context.server_path} ...\n")
-                process = subprocess.run(['killall', '-9', context.server_path],
-                                         stderr=subprocess.PIPE)
-            print(process)
+            server_kill_hard(context)
 
 
-def kill_server(context):
-    print(f"stopping server pid={context.server_process.pid} ...\n")
+def server_graceful_shutdown(context):
+    print(f"shutting down server pid={context.server_process.pid} ...\n")
     if os.name == 'nt':
         os.kill(context.server_process.pid, signal.CTRL_C_EVENT)
     else:
-        os.kill(context.server_process.pid, signal.SIGKILL)
+        os.kill(context.server_process.pid, signal.SIGINT)
+
+
+def server_kill(context):
+    print(f"killing server pid={context.server_process.pid} ...\n")
+    context.server_process.kill()
+
+
+def server_kill_hard(context):
+    pid = context.server_process.pid
+    path = context.server_path
+
+    print(f"Server dangling exits, hard killing force {pid}={path}...\n")
+    os.kill(-pid, signal.SIGKILL)
+    # if os.name == 'nt':
+    #     process = subprocess.run(['taskkill', '/F', '/pid', str(pid)],
+    #                              stderr=subprocess.PIPE)
+    # else:
+    #     print(f"Server dangling exits, killing all {path} ...\n")
+    #     process = subprocess.run(['killall', '-9', path],
+    #                              stderr=subprocess.PIPE)
+    # print(process)
 
 
 def is_server_listening(server_fqdn, server_port):
