@@ -3940,6 +3940,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     LLAMA_LOG_INFO("%s: n_ff             = %u\n",     __func__, hparams.n_ff);
     LLAMA_LOG_INFO("%s: n_expert         = %u\n",     __func__, hparams.n_expert);
     LLAMA_LOG_INFO("%s: n_expert_used    = %u\n",     __func__, hparams.n_expert_used);
+    LLAMA_LOG_INFO("%s: causal attm      = %d\n",     __func__, hparams.causal_attn);
     LLAMA_LOG_INFO("%s: pooling type     = %d\n",     __func__, hparams.pooling_type);
     LLAMA_LOG_INFO("%s: rope type        = %d\n",     __func__, hparams.rope_type);
     LLAMA_LOG_INFO("%s: rope scaling     = %s\n",     __func__, rope_scaling_type);
@@ -8539,7 +8540,6 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
     );
 
     // NOTE: hparams.causal_attn indicates the model is capable of generation and uses the kv cache.
-    // But if cparams.embeddings is set, the attention will be non-causal nonetheless.
     if (cparams.causal_attn) {
         const int64_t n_kv     = kv_self.n;
         const int64_t n_tokens = batch.n_tokens;
@@ -12747,6 +12747,7 @@ struct llama_context * llama_new_context_with_model(
     }
 
     cparams.causal_attn = hparams.causal_attn;
+
     if (cparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
         if (hparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
             cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
