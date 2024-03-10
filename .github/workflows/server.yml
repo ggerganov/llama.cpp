@@ -47,6 +47,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -58,7 +60,6 @@ jobs:
             cmake \
             python3-pip \
             wget \
-            psmisc \
             language-pack-en
 
       - name: Build
@@ -90,3 +91,46 @@ jobs:
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
+
+
+  server-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake ..  -DLLAMA_BUILD_SERVER=ON -DCMAKE_BUILD_TYPE=Release ;
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
+
+      - name: Python setup
+        id: setup_python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Tests dependencies
+        id: test_dependencies
+        run: |
+          pip install -r examples/server/tests/requirements.txt
+
+      - name: Tests
+        id: server_integration_tests
+        run: |
+          cd examples/server/tests
+          behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
+
+      - name: Slow tests
+        id: server_integration_tests_slow
+        if: ${{ github.event.schedule != '' || github.event.inputs.slow_tests == 'true' }}
+        run: |
+          cd examples/server/tests
+          behave.exe --stop --no-skipped --no-capture --tags slow

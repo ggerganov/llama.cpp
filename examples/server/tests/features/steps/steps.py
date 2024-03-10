@@ -18,7 +18,7 @@ from huggingface_hub import hf_hub_download
 from prometheus_client import parser
 
 
-@step(u"a server listening on {server_fqdn}:{server_port}")
+@step("a server listening on {server_fqdn}:{server_port}")
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
@@ -57,24 +57,24 @@ def step_server_config(context, server_fqdn, server_port):
     context.prompts = []
 
 
-@step(u'a model file {hf_file} from HF repo {hf_repo}')
+@step('a model file {hf_file} from HF repo {hf_repo}')
 def step_download_hf_model(context, hf_file, hf_repo):
     context.model_file = hf_hub_download(repo_id=hf_repo, filename=hf_file)
     if context.debug:
         print(f"model file: {context.model_file}\n")
 
 
-@step(u'a model alias {model_alias}')
+@step('a model alias {model_alias}')
 def step_model_alias(context, model_alias):
     context.model_alias = model_alias
 
 
-@step(u'{seed:d} as server seed')
+@step('{seed:d} as server seed')
 def step_seed(context, seed):
     context.server_seed = seed
 
 
-@step(u'{ngl:d} GPU offloaded layers')
+@step('{ngl:d} GPU offloaded layers')
 def step_n_gpu_layer(context, ngl):
     if 'N_GPU_LAYERS' in os.environ:
         new_ngl = int(os.environ['N_GPU_LAYERS'])
@@ -84,37 +84,37 @@ def step_n_gpu_layer(context, ngl):
     context.n_gpu_layer = ngl
 
 
-@step(u'{n_ctx:d} KV cache size')
+@step('{n_ctx:d} KV cache size')
 def step_n_ctx(context, n_ctx):
     context.n_ctx = n_ctx
 
 
-@step(u'{n_slots:d} slots')
+@step('{n_slots:d} slots')
 def step_n_slots(context, n_slots):
     context.n_slots = n_slots
 
 
-@step(u'{n_predict:d} server max tokens to predict')
+@step('{n_predict:d} server max tokens to predict')
 def step_server_n_predict(context, n_predict):
     context.n_server_predict = n_predict
 
 
-@step(u'continuous batching')
+@step('continuous batching')
 def step_server_continuous_batching(context):
     context.server_continuous_batching = True
 
 
-@step(u'embeddings extraction')
+@step('embeddings extraction')
 def step_server_embeddings(context):
     context.server_embeddings = True
 
 
-@step(u'prometheus compatible metrics exposed')
+@step('prometheus compatible metrics exposed')
 def step_server_metrics(context):
     context.server_metrics = True
 
 
-@step(u"the server is starting")
+@step("the server is starting")
 def step_start_server(context):
     start_server_background(context)
     attempts = 0
@@ -131,7 +131,7 @@ def step_start_server(context):
             time.sleep(0.1)
 
 
-@step(u"the server is {expecting_status}")
+@step("the server is {expecting_status}")
 @async_run_until_complete
 async def step_wait_for_the_server_to_be_started(context, expecting_status):
     match expecting_status:
@@ -160,7 +160,7 @@ async def step_wait_for_the_server_to_be_started(context, expecting_status):
             assert False, "unknown status"
 
 
-@step(u'all slots are {expected_slot_status_string}')
+@step('all slots are {expected_slot_status_string}')
 @async_run_until_complete
 async def step_all_slots_status(context, expected_slot_status_string):
     match expected_slot_status_string:
@@ -176,7 +176,7 @@ async def step_all_slots_status(context, expected_slot_status_string):
     await request_slots_status(context, expected_slots)
 
 
-@step(u'a completion request with {api_error} api error')
+@step('a completion request with {api_error} api error')
 @async_run_until_complete
 async def step_request_completion(context, api_error):
     expect_api_error = api_error == 'raised'
@@ -194,133 +194,133 @@ async def step_request_completion(context, api_error):
         assert completion == 401, f"completion must be an 401 status code: {completion}"
 
 
-@step(u'{predicted_n:d} tokens are predicted matching {re_content}')
+@step('{predicted_n:d} tokens are predicted matching {re_content}')
 def step_n_tokens_predicted_with_content(context, predicted_n, re_content):
     context.completion = context.tasks_result.pop()
     assert_n_tokens_predicted(context.completion, predicted_n, re_content)
 
 
-@step(u'{predicted_n:d} tokens are predicted')
+@step('{predicted_n:d} tokens are predicted')
 def step_n_tokens_predicted(context, predicted_n):
     context.completion = context.tasks_result.pop()
     assert_n_tokens_predicted(context.completion, predicted_n)
 
 
-@step(u'the completion is  truncated')
+@step('the completion is  truncated')
 def step_assert_completion_truncated(context):
     step_assert_completion_truncated(context, '')
 
 
-@step(u'the completion is {truncated} truncated')
+@step('the completion is {truncated} truncated')
 def step_assert_completion_truncated(context, truncated):
     truncated = truncated != "not"
     assert context.completion['truncated'] == truncated, f'{context.completion}'
 
 
-@step(u'{n_prompt:d} prompt tokens are processed')
+@step('{n_prompt:d} prompt tokens are processed')
 def step_impl(context, n_prompt):
     assert n_prompt < 0 or n_prompt == context.completion['timings']['prompt_n'], f"n_prompt={context.completion['timings']['prompt_n']}"
 
 
-@step(u'a user prompt {user_prompt}')
+@step('a user prompt {user_prompt}')
 def step_user_prompt(context, user_prompt):
     context.prompts.append(user_prompt)
     context.n_prompts = len(context.prompts)
 
 
-@step(u'a system prompt {system_prompt}')
+@step('a system prompt {system_prompt}')
 def step_system_prompt(context, system_prompt):
     context.system_prompt = system_prompt
 
 
-@step(u'a model {model}')
+@step('a model {model}')
 def step_model(context, model):
     context.model = model
 
 
-@step(u'{max_tokens:d} max tokens to predict')
+@step('{max_tokens:d} max tokens to predict')
 def step_max_tokens(context, max_tokens):
     context.n_predict = max_tokens
 
 
-@step(u'streaming is {enable_streaming}')
+@step('streaming is {enable_streaming}')
 def step_streaming(context, enable_streaming):
     context.enable_streaming = enable_streaming == 'enabled'
 
 
-@step(u'a user api key {user_api_key}')
+@step('a user api key {user_api_key}')
 def step_user_api_key(context, user_api_key):
     context.user_api_key = user_api_key
 
 
-@step(u'no user api key')
+@step('no user api key')
 def step_no_user_api_key(context):
     context.user_api_key = None
 
 
-@step(u'a user api key ')
+@step('a user api key ')
 def step_no_user_api_key_space(context):
     context.user_api_key = None
 
 
-@step(u'a server api key {server_api_key}')
+@step('a server api key {server_api_key}')
 def step_server_api_key(context, server_api_key):
     context.server_api_key = server_api_key
 
 
-@step(u'{n_junk:d} as number of junk')
+@step('{n_junk:d} as number of junk')
 def step_n_junk(context, n_junk):
     context.n_junk = n_junk
 
 
-@step(u'{n_batch:d} as batch size')
+@step('{n_batch:d} as batch size')
 def step_n_batch(context, n_batch):
     context.n_batch = n_batch
 
 
-@step(u'{seed:d} as seed')
+@step('{seed:d} as seed')
 def step_seed(context, seed):
     context.seed = seed
 
 
-@step(u'a prefix prompt')
+@step('a prefix prompt')
 def step_prompt_prefix(context):
-    context.prompt_prefix = context.text
+    context.prompt_prefix = context_text(context)
 
 
-@step(u'a junk suffix prompt')
+@step('a junk suffix prompt')
 def step_prompt_junk_suffix(context):
-    context.prompt_junk_suffix = context.text
+    context.prompt_junk_suffix = context_text(context)
 
 
-@step(u'a suffix prompt')
+@step('a suffix prompt')
 def step_prompt_suffix(context):
-    context.prompt_suffix = context.text
+    context.prompt_suffix = context_text(context)
 
 
-@step(u'{n_ga:d} group attention factor'
-      u' to extend context size through self-extend')
+@step('{n_ga:d} group attention factor'
+      ' to extend context size through self-extend')
 def step_impl(context, n_ga):
     context.n_ga = n_ga
 
 
-@step(u'{n_ga_w:d} group attention width to extend context size through self-extend')
+@step('{n_ga_w:d} group attention width to extend context size through self-extend')
 def step_impl(context, n_ga_w):
     context.n_ga_w = n_ga_w
 
 
-@step(u'a passkey prompt template')
+@step('a passkey prompt template')
 def step_prompt_passkey(context):
-    context.prompt_passkey = context.text
+    context.prompt_passkey = context_text(context)
 
 
-@step(u'{n_prompts:d} fixed prompts')
+@step('{n_prompts:d} fixed prompts')
 def step_fixed_prompts(context, n_prompts):
     context.prompts.extend([str(0)*(context.n_batch if context.n_batch is not None else 512) for i in range(n_prompts)])
     context.n_prompts = n_prompts
 
 
-@step(u'a "{passkey}" passkey challenge prompt with the passkey inserted every {i_pos:d} junk')
+@step('a "{passkey}" passkey challenge prompt with the passkey inserted every {i_pos:d} junk')
 def step_prompt_passkey(context, passkey, i_pos):
     prompt = ""
     for i in range(context.n_junk):
@@ -334,7 +334,7 @@ def step_prompt_passkey(context, passkey, i_pos):
     context.n_prompts = len(context.prompts)
 
 
-@step(u'an OAI compatible chat completions request with {api_error} api error')
+@step('an OAI compatible chat completions request with {api_error} api error')
 @async_run_until_complete
 async def step_oai_chat_completions(context, api_error):
     if context.debug:
@@ -369,19 +369,19 @@ async def step_oai_chat_completions(context, api_error):
         print(f"Completion response: {completion}")
 
 
-@step(u'a prompt')
+@step('a prompt')
 def step_a_prompt(context):
-    context.prompts.append(context.text)
+    context.prompts.append(context_text(context))
     context.n_prompts = len(context.prompts)
 
 
-@step(u'a prompt {prompt}')
+@step('a prompt {prompt}')
 def step_a_prompt_prompt(context, prompt):
     context.prompts.append(prompt)
     context.n_prompts = len(context.prompts)
 
 
-@step(u'concurrent completion requests')
+@step('concurrent completion requests')
 @async_run_until_complete()
 async def step_concurrent_completion_requests(context):
     await concurrent_requests(context,
@@ -397,7 +397,7 @@ async def step_concurrent_completion_requests(context):
                                                                            'user_api_key') else None)
 
 
-@step(u'concurrent OAI completions requests')
+@step('concurrent OAI completions requests')
 @async_run_until_complete
 async def step_oai_chat_completions(context):
     await concurrent_requests(context, oai_chat_completions,
@@ -417,7 +417,7 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'user_api_key') else None)
 
 
-@step(u'concurrent OAI completions requests no v1')
+@step('concurrent OAI completions requests no v1')
 @async_run_until_complete
 async def step_oai_chat_completions(context):
     await concurrent_requests(context, oai_chat_completions,
@@ -440,13 +440,13 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'user_api_key') else None)
 
 
-@step(u'all prompts are predicted')
+@step('all prompts are predicted')
 @async_run_until_complete
 async def step_all_prompts_are_predicted(context):
     await all_prompts_are_predicted(context)
 
 
-@step(u'all prompts are predicted with {n_expected_predicted:d} tokens')
+@step('all prompts are predicted with {n_expected_predicted:d} tokens')
 @async_run_until_complete
 async def step_all_prompts_are_predicted_with_n_tokens(context, n_expected_predicted):
     await all_prompts_are_predicted(context, n_expected_predicted)
@@ -460,14 +460,14 @@ async def all_prompts_are_predicted(context, expected_predicted_n=None):
     assert len(context.concurrent_tasks) == 0, f"{len(context.concurrent_tasks)} pending requests"
 
 
-@step(u'embeddings are computed for')
+@step('embeddings are computed for')
 @async_run_until_complete
 async def step_compute_embedding(context):
     context.n_prompts = 1
-    context.embeddings = await request_embedding(context.text, base_url=context.base_url)
+    context.embeddings = await request_embedding(context_text(context), base_url=context.base_url)
 
 
-@step(u'all embeddings are the same')
+@step('all embeddings are the same')
 @async_run_until_complete
 async def step_all_embeddings_are_the_same(context):
     n_embedding_requests = await gather_tasks_results(context)
@@ -491,7 +491,8 @@ async def step_all_embeddings_are_the_same(context):
                 print(f"{msg}\n")
             assert np.isclose(similarity, 1.0, rtol=1e-05, atol=1e-08, equal_nan=False), msg
 
-@step(u'embeddings are generated')
+
+@step('embeddings are generated')
 def step_assert_embeddings(context):
     assert context.n_prompts == len(context.embeddings), (f"unexpected response:\n"
                                                              f"context.n_prompts={context.n_prompts}\n"
@@ -500,17 +501,17 @@ def step_assert_embeddings(context):
         assert_embeddings(embedding)
 
 
-@step(u'an OAI compatible embeddings computation request for')
+@step('an OAI compatible embeddings computation request for')
 @async_run_until_complete
 async def step_oai_compute_embeddings(context):
     context.n_prompts = 1
-    context.embeddings = await request_oai_embeddings(context.text,
+    context.embeddings = await request_oai_embeddings(context_text(context),
                                                       base_url=context.base_url,
                                                       user_api_key=context.user_api_key,
                                                       model=context.model)
 
 
-@step(u'an OAI compatible embeddings computation request for multiple inputs')
+@step('an OAI compatible embeddings computation request for multiple inputs')
 @async_run_until_complete
 async def step_oai_compute_embeddings_multiple_inputs(context):
     context.embeddings = await request_oai_embeddings(context.prompts,
@@ -520,7 +521,7 @@ async def step_oai_compute_embeddings_multiple_inputs(context):
     context.prompts.clear()
 
 
-@step(u'concurrent embedding requests')
+@step('concurrent embedding requests')
 @async_run_until_complete()
 async def step_concurrent_embedding_requests(context):
     await concurrent_requests(context,
@@ -529,7 +530,7 @@ async def step_concurrent_embedding_requests(context):
                               base_url=context.base_url)
 
 
-@step(u'concurrent OAI embedding requests')
+@step('concurrent OAI embedding requests')
 @async_run_until_complete()
 async def step_concurrent_oai_embedding_requests(context):
     await concurrent_requests(context,
@@ -540,7 +541,7 @@ async def step_concurrent_oai_embedding_requests(context):
                               model=context.model)
 
 
-@step(u'all embeddings are generated')
+@step('all embeddings are generated')
 @async_run_until_complete()
 async def all_embeddings_are_generated(context):
     n_embedding_requests = await gather_tasks_results(context)
@@ -549,10 +550,10 @@ async def all_embeddings_are_generated(context):
         assert_embeddings(context.tasks_result.pop().pop())
 
 
-@step(u'tokenizing')
+@step('tokenizing')
 @async_run_until_complete
 async def step_tokenize(context):
-    context.tokenized_text = context.text
+    context.tokenized_text = context_text(context)
     async with aiohttp.ClientSession() as session:
         async with session.post(f'{context.base_url}/tokenize',
                                 json={
@@ -563,7 +564,7 @@ async def step_tokenize(context):
             context.tokens = tokenize_json['tokens']
 
 
-@step(u'tokens can be detokenize')
+@step('tokens can be detokenize')
 @async_run_until_complete
 async def step_detokenize(context):
     assert len(context.tokens) > 0
@@ -578,7 +579,7 @@ async def step_detokenize(context):
             assert context.tokenized_text == detokenize_json['content'].strip()
 
 
-@step(u'an OPTIONS request is sent from {origin}')
+@step('an OPTIONS request is sent from {origin}')
 @async_run_until_complete
 async def step_options_request(context, origin):
     async with aiohttp.ClientSession() as session:
@@ -589,12 +590,12 @@ async def step_options_request(context, origin):
             context.options_response = response
 
 
-@step(u'CORS header {cors_header} is set to {cors_header_value}')
+@step('CORS header {cors_header} is set to {cors_header_value}')
 def step_check_options_header_value(context, cors_header, cors_header_value):
     assert context.options_response.headers[cors_header] == cors_header_value
 
 
-@step(u'prometheus metrics are exposed')
+@step('prometheus metrics are exposed')
 @async_run_until_complete
 async def step_prometheus_metrics_exported(context):
     async with aiohttp.ClientSession() as session:
@@ -616,14 +617,14 @@ async def step_prometheus_metrics_exported(context):
             assert metric_exported, "No metrics exported"
 
 
-@step(u'metric {metric_name} is {metric_value:d}')
+@step('metric {metric_name} is {metric_value:d}')
 def step_assert_metric_value(context, metric_name, metric_value):
     if metric_name not in context.metrics:
         assert False, f"no metric {metric_name} in {context.metrics.keys()}"
     assert context.metrics[metric_name].samples[0].value == metric_value, f"metric: {context.metrics[metric_name]}"
 
 
-@step(u'available models')
+@step('available models')
 def step_available_models(context):
     # openai client always expects an api_key
     openai.api_key = context.user_api_key if context.user_api_key is not None else 'nope'
@@ -631,14 +632,14 @@ def step_available_models(context):
     context.models = openai.Model.list().data
 
 
-@step(u'{n_model:d} models are supported')
+@step('{n_model:d} models are supported')
 def step_supported_models(context, n_model):
     if context.debug:
         print("server models available:", context.models)
     assert len(context.models) == n_model
 
 
-@step(u'model {i_model:d} is {param} {preposition} {param_value}')
+@step('model {i_model:d} is {param} {preposition} {param_value}')
 def step_supported_models(context, i_model, param, preposition, param_value):
     assert i_model < len(context.models)
     model = context.models[i_model]
@@ -1007,12 +1008,22 @@ async def completions_seed(context):
         else context.server_seed if hasattr(context, 'server_seed') else None
 
 
+def context_text(context):
+    return context.text.replace('\r', '')
+
+
 def start_server_background(context):
-    context.server_path = '../../../build/bin/server'
+    if os.name == 'nt':
+        context.server_path = '../../../build/bin/Release/server.exe'
+    else:
+        context.server_path = '../../../build/bin/server'
     if 'LLAMA_SERVER_BIN_PATH' in os.environ:
         context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
+    server_listen_addr = context.server_fqdn
+    if os.name == 'nt':
+        server_listen_addr = '0.0.0.0'
     server_args = [
-        '--host', context.server_fqdn,
+        '--host', server_listen_addr,
         '--port', context.server_port,
         '--model', context.model_file
     ]
@@ -1045,7 +1056,16 @@ def start_server_background(context):
     if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
         server_args.extend(['--log-format', "text"])
     print(f"starting server with: {context.server_path} {server_args}\n")
+    flags = 0
+    if 'nt' == os.name:
+        flags |= subprocess.DETACHED_PROCESS
+        flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+        flags |= subprocess.CREATE_NO_WINDOW
+
+    pkwargs = {
+        'creationflags': flags,
+    }
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],
-        close_fds=True)
-    print(f"server pid={context.server_process.pid}")
+        **pkwargs)
+    print(f"server pid={context.server_process.pid}, behave pid={os.getpid()}")
