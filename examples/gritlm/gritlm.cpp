@@ -22,33 +22,28 @@ static float cosine_similarity(const std::vector<float> & v1, const std::vector<
     return dot_product(v1, v2) / (norm(v1) * norm(v2));
 }
 
-static void normalize(const std::vector<float> & in, float * out) {
-    float inorm = norm(in);
-    for (uint64_t i = 0; i < in.size(); i++) {
-        out[i] = in[i] / inorm;
-    }
-}
-
 static std::vector<std::vector<float>> encode(llama_context * ctx, const std::vector<std::string> & sentences, const std::string & instruction) {
-    auto result = std::vector<std::vector<float>>{};
+    std::vector<std::vector<float>> result;
 
-    auto mdl = llama_get_model(ctx);
-    auto batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
+    const llama_model * mdl = llama_get_model(ctx);
+
+    llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
     for (uint64_t i = 0; i < sentences.size(); i++) {
         llama_batch_clear(batch);
 
-        std::string input_string = instruction + sentences[i];
+        const std::string input_string = instruction + sentences[i];
+
         std::vector<llama_token> inputs = llama_tokenize(mdl, input_string, true, false);
-        auto n_toks = (int32_t)inputs.size();
+
+        const int32_t n_toks = inputs.size();
 
         // GritLM seems to have EOS = ""
         // https://github.com/ContextualAI/gritlm/blob/92025b16534712b31b3c4aaaf069350e222bd5f8/gritlm/gritlm.py#L18
         // inputs.push_back(llama_token_eos(mdl));
 
         // we want to ignore instruction tokens for mean pooling
-        std::vector<llama_token> inputs_instruct = llama_tokenize(mdl, instruction, true, false);
-        auto n_inst = (int32_t)inputs_instruct.size();
+        const int32_t n_inst = llama_tokenize(mdl, instruction, true, false).size();
 
 #ifdef GRIT_DEBUG
         // debug tokens - should be matching as referenced in the GritLM sample
@@ -85,13 +80,16 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         }
 
         // divide by number of tokens (mean pooling)
-        uint64_t n_sent = n_toks - n_inst;
-        for (uint64_t j = 0; j < n_embd; j++) {
-            emb_unorm[j] /= n_sent;
+        {
+            const uint64_t n_sent = n_toks - n_inst;
+
+            for (uint64_t j = 0; j < n_embd; j++) {
+                emb_unorm[j] /= n_sent;
+            }
         }
 
-        auto emb_norm = std::vector<float>(emb_unorm.size());
-        normalize(emb_unorm, emb_norm.data());
+        std::vector<float> emb_norm(emb_unorm.size());
+        llama_embd_normalize(emb_unorm.data(), emb_norm.data(), n_embd);
         result.push_back(emb_norm);
 
 #ifdef GRIT_DEBUG
@@ -105,30 +103,12 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
     }
 
     llama_batch_free(batch);
-    return result;
-}
-
-static std::string aggregate_pieces(const std::vector<std::string> & pieces) {
-    // calculate total length required
-    size_t length = 0;
-    for (const auto & str : pieces) {
-        length += str.size();
-    }
-
-    // reserve memory
-    std::string result;
-    result.reserve(length);
-
-    // append pieces
-    for (const auto & str : pieces) {
-        result += str;
-    }
 
     return result;
 }
 
 static std::string generate(llama_context * ctx, const std::string & prompt, bool stream) {
-    std::vector<std::string> pieces;
+    std::string result;
 
     const llama_model * mdl = llama_get_model(ctx);
     llama_token eos_token = llama_token_eos(mdl);
@@ -169,8 +149,9 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
             std::fflush(stdout);
         }
 
-        pieces.push_back(piece);
         inputs.push_back(token);
+
+        result += piece;
     }
 
     if (stream) {
@@ -179,15 +160,14 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
 
     llama_batch_free(bat);
 
-    return aggregate_pieces(pieces);
+    return result;
 }
 
 static std::string gritlm_instruction(const std::string & instruction) {
     return !instruction.empty() ? "<|user|>\n" + instruction + "\n<|embed|>\n" : "<|embed|>\n";
 }
 
-int main(int argc, char * argv[])
-{
+int main(int argc, char * argv[]) {
     gpt_params params;
     if (!gpt_params_parse(argc, argv, params)) {
         return 1;
@@ -207,26 +187,26 @@ int main(int argc, char * argv[])
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic
     {
-        std::string instruction = "Given a scientific paper title, retrieve the paper's abstract";
+        const std::string instruction = "Given a scientific paper title, retrieve the paper's abstract";
 
-        std::vector<std::string> queries = {
+        const std::vector<std::string> queries = {
             "Bitcoin: A Peer-to-Peer Electronic Cash System",
             "Generative Representational Instruction Tuning",
         };
 
-        std::vector<std::string> documents = {
+        const std::vector<std::string> documents = {
             "A purely peer-to-peer version of electronic cash would allow online payments to be sent directly from one party to another without going through a financial institution. Digital signatures provide part of the solution, but the main benefits are lost if a trusted third party is still required to prevent double-spending. We propose a solution to the double-spending problem using a peer-to-peer network. The network timestamps transactions by hashing them into an ongoing chain of hash-based proof-of-work, forming a record that cannot be changed without redoing the proof-of-work. The longest chain not only serves as proof of the sequence of events witnessed, but proof that it came from the largest pool of CPU power. As long as a majority of CPU power is controlled by nodes that are not cooperating to attack the network, they'll generate the longest chain and outpace attackers. The network itself requires minimal structure. Messages are broadcast on a best effort basis, and nodes can leave and rejoin the network at will, accepting the longest proof-of-work chain as proof of what happened while they were gone.",
             "All text-based language problems can be reduced to either generation or embedding. Current models only perform well at one or the other. We introduce generative representational instruction tuning (GRIT) whereby a large language model is trained to handle both generative and embedding tasks by distinguishing between them through instructions. Compared to other open models, our resulting GritLM 7B sets a new state of the art on the Massive Text Embedding Benchmark (MTEB) and outperforms all models up to its size on a range of generative tasks. By scaling up further, GritLM 8X7B outperforms all open generative language models that we tried while still being among the best embedding models. Notably, we find that GRIT matches training on only generative or embedding data, thus we can unify both at no performance loss. Among other benefits, the unification via GRIT speeds up Retrieval-Augmented Generation (RAG) by > 60% for long documents, by no longer requiring separate retrieval and generation models. Models, code, etc. are freely available at https://github.com/ContextualAI/gritlm.",
         };
 
         // No need to add instruction for retrieval documents
-        std::vector<std::vector<float>> d_rep = encode(ctx, documents, gritlm_instruction(""));
-        std::vector<std::vector<float>> q_rep = encode(ctx, queries, gritlm_instruction(instruction));
+        const std::vector<std::vector<float>> d_rep = encode(ctx, documents, gritlm_instruction(""));
+        const std::vector<std::vector<float>> q_rep = encode(ctx, queries,   gritlm_instruction(instruction));
 
-        float cosine_sim_q0_d0 = cosine_similarity(q_rep[0], d_rep[0]);
-        float cosine_sim_q0_d1 = cosine_similarity(q_rep[0], d_rep[1]);
-        float cosine_sim_q1_d0 = cosine_similarity(q_rep[1], d_rep[0]);
-        float cosine_sim_q1_d1 = cosine_similarity(q_rep[1], d_rep[1]);
+        const float cosine_sim_q0_d0 = cosine_similarity(q_rep[0], d_rep[0]);
+        const float cosine_sim_q0_d1 = cosine_similarity(q_rep[0], d_rep[1]);
+        const float cosine_sim_q1_d0 = cosine_similarity(q_rep[1], d_rep[0]);
+        const float cosine_sim_q1_d1 = cosine_similarity(q_rep[1], d_rep[1]);
 
         std::printf("Cosine similarity between \"%.50s\" and \"%.50s\" is: %.3f\n", queries[0].c_str(), documents[0].c_str(), cosine_sim_q0_d0);
         std::printf("Cosine similarity between \"%.50s\" and \"%.50s\" is: %.3f\n", queries[0].c_str(), documents[1].c_str(), cosine_sim_q0_d1);
