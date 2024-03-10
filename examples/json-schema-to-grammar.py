@@ -295,7 +295,7 @@ class SchemaConverter:
             return self._add_rule(rule_name, self._visit_pattern(schema['pattern'], rule_name))
 
         elif schema_type == 'object' and len(schema) == 1 or schema_type is None and len(schema) == 0:
-            # return 'object'
+            # This depends on all primitive types
             for t, r in PRIMITIVE_RULES.items():
                 self._add_rule(t, r)
             return 'object'
@@ -314,26 +314,6 @@ class SchemaConverter:
 
         prop_kv_rule_names = {}
         for prop_name, prop_schema in properties:
-            # Note: this is to handle how Pydantic represents optional properties
-            #   import pydantic, typing
-            #   class Foo(pydantic.BaseModel):
-            #     bar: typing.Optional[str] = None
-            #   print(Foo.model_json_schema())
-            #   {
-            #     "properties": {
-            #       "bar": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-            #     },
-            #     "required": ["bar"]
-            #   }
-            if 'anyOf' in prop_schema and any(s.get('type') == 'null' for s in prop_schema['anyOf']):
-                if prop_name in required:
-                    required.remove(prop_name)
-                alts = [s for s in prop_schema['anyOf'] if s.get('type') != 'null']
-                if len(alts) == 1:
-                    prop_schema = alts[0]
-                else:
-                    prop_schema = {'anyOf': alts}
-
             prop_rule_name = self.visit(prop_schema, f'{name}{"-" if name else ""}{prop_name}')
             prop_kv_rule_names[prop_name] = self._add_rule(
                 f'{name}{"-" if name else ""}{prop_name}-kv',
