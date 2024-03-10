@@ -149,8 +149,13 @@ class SchemaConverter:
                         elif c[0] == re._parser.RANGE:
                             return f'{self._format_range_char(chr(c[1][0]))}-{self._format_range_char(chr(c[1][1]))}'
                         else:
-                            raise ValueError(f'Unrecognized pattern: {c}')
-                    return f'[{"".join(format_range_component(c) for c in pattern[1])}]'
+                            raise ValueError(f'Unrecognized pattern: {c} (pattern = {pattern})')
+                    components = pattern[1]
+                    prefix = ''
+                    if len(components) > 0 and components[0][0] == re._parser.NEGATE:
+                        prefix = '^'
+                        components = components[1:]
+                    return f'[{prefix}{"".join(format_range_component(c) for c in components)}]'
                 
                 elif pattern[0] == re._parser.BRANCH:
                     return '(' + ' | '.join((visit(p) for p in pattern[1][1])) + ')'
