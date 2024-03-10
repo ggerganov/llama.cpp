@@ -119,7 +119,7 @@ class SchemaConverter:
     def _visit_pattern(self, pattern, name):
         assert pattern.startswith('^') and pattern.endswith('$'), 'Pattern must start with "^" and end with "$"'
         pattern = pattern[1:-1]
-        next_id = 1
+        sub_rule_ids = {}
         try:
             def visit_seq(seq):
                 out = []
@@ -135,7 +135,7 @@ class SchemaConverter:
                 return '(' + ' '.join(out) + ')'
             
             def visit(pattern):
-                nonlocal next_id
+                nonlocal sub_rule_ids
 
                 if pattern[0] == re._parser.LITERAL:
                     return json.dumps(chr(pattern[1]))
@@ -166,8 +166,12 @@ class SchemaConverter:
                     min_times = pattern[1][0]
                     max_times = pattern[1][1] if not pattern[1][1] == re._parser.MAXREPEAT else None
                     sub = visit(pattern[1][2])
-                    sub = self._add_rule(f'{name}-{next_id}', sub)
-                    next_id += 1
+
+                    id = sub_rule_ids.get(sub)
+                    if id is None:
+                        id = self._add_rule(f'{name}-{len(sub_rule_ids) + 1}', sub)
+                        sub_rule_ids[sub] = id
+                    sub = id
 
                     if min_times == 0 and max_times is None:
                         return f'{sub}*'
@@ -188,7 +192,7 @@ class SchemaConverter:
                 else:
                     raise ValueError(f'Unrecognized pattern: {pattern} ({type(pattern)})')
 
-            return visit(re._parser.parse(pattern))
+            return self._add_rule(name, visit(re._parser.parse(pattern)))
         except BaseException as e:
             raise Exception(f'Error processing pattern: {pattern}: {e}') from e
 
@@ -292,7 +296,7 @@ class SchemaConverter:
                 return self._add_rule(rule_name, rule)
             
         elif schema_type in (None, 'string') and 'pattern' in schema:
-            return self._add_rule(rule_name, self._visit_pattern(schema['pattern'], rule_name))
+            return self._visit_pattern(schema['pattern'], rule_name)
 
         elif schema_type == 'object' and len(schema) == 1 or schema_type is None and len(schema) == 0:
             # This depends on all primitive types
