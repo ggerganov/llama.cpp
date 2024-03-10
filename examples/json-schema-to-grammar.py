@@ -326,7 +326,8 @@ class SchemaConverter:
             #     "required": ["bar"]
             #   }
             if 'anyOf' in prop_schema and any(s.get('type') == 'null' for s in prop_schema['anyOf']):
-                required.remove(prop_name)
+                if prop_name in required:
+                    required.remove(prop_name)
                 alts = [s for s in prop_schema['anyOf'] if s.get('type') != 'null']
                 if len(alts) == 1:
                     prop_schema = alts[0]
