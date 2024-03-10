@@ -21,6 +21,6 @@ echo "export type MyType = $type" > "$DTS_FILE"
 # npx typescript-json-schema --defaultProps --required "$DTS_FILE" MyType | tee "$SCHEMA_FILE" >&2
 
 # https://github.com/vega/ts-json-schema-generator
-npx ts-json-schema-generator --path "$DTS_FILE" --type MyType -e none | tee "$SCHEMA_FILE" >&2
+npx ts-json-schema-generator --no-top-ref --path "$DTS_FILE" --type MyType -e none | tee "$SCHEMA_FILE" >&2
 
 ./examples/json-schema-to-grammar.py "$SCHEMA_FILE"
