@@ -556,13 +556,13 @@ Run with bash:
 bash chat.sh
 ```
 
-### API like OpenAI
+### OAI-like API
 
-The HTTP server supports OpenAI-like API
+The HTTP server supports OAI-like API: https://github.com/openai/openai-openapi
 
 ### API errors
 
-Server returns error in the same format as OpenAI API: https://platform.openai.com/docs/guides/error-codes/api-errors
+Server returns error in the same format as OAI: https://github.com/openai/openai-openapi
 
 Example of an error:
 
@@ -576,7 +576,7 @@ Example of an error:
 }
 ```
 
-Apart from error types supported by OpenAI, we also have custom types that are specific to functionalities of llama.cpp:
+Apart from error types supported by OAI, we also have custom types that are specific to functionalities of llama.cpp:
 
 **When /metrics or /slots endpoint is disabled**
 
