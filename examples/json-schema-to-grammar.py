@@ -298,6 +298,9 @@ class SchemaConverter:
         elif schema_type in (None, 'string') and 'pattern' in schema:
             return self._visit_pattern(schema['pattern'], rule_name)
 
+        elif schema_type in (None, 'string') and re.match(r'^uuid[1-5]?$', schema.get('format', '')):
+            return self._visit_pattern('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$', 'uuid')
+
         elif schema_type == 'object' and len(schema) == 1 or schema_type is None and len(schema) == 0:
             # This depends on all primitive types
             for t, r in PRIMITIVE_RULES.items():
