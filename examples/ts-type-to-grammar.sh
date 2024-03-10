@@ -17,10 +17,13 @@ SCHEMA_FILE="$TMPDIR/schema.json"
 
 echo "export type MyType = $type" > "$DTS_FILE"
 
-# https://github.com/YousefED/typescript-json-schema
-# npx typescript-json-schema --defaultProps --required "$DTS_FILE" MyType | tee "$SCHEMA_FILE" >&2
 
+# This is a fork of typescript-json-schema, actively maintained as of March 2024:
 # https://github.com/vega/ts-json-schema-generator
 npx ts-json-schema-generator --no-top-ref --path "$DTS_FILE" --type MyType -e none | tee "$SCHEMA_FILE" >&2
+
+# Not actively maintained:
+# https://github.com/YousefED/typescript-json-schema
+# npx typescript-json-schema --defaultProps --required "$DTS_FILE" MyType | tee "$SCHEMA_FILE" >&2
 
 ./examples/json-schema-to-grammar.py "$SCHEMA_FILE"
