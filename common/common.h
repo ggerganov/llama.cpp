@@ -102,6 +102,9 @@ struct gpt_params {
     std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
     std::string lora_base  = "";                              // base model path for the lora adapter
 
+    std::vector<std::tuple<std::string, float>> control_vectors; // control vector with user defined scale
+    std::tuple<int32_t, int32_t> control_vector_layer_range;     // layer range for control vector
+
     int  ppl_stride        = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
     int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
                                     //                                       (which is more convenient to use for plotting)
@@ -267,3 +270,12 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40
 
 void llama_embd_normalize(const float * inp, float * out, int n);
 
+//
+// Control vector utils
+//
+
+// Load control vectors from a tuple of {path, strength}, scale each by strength, and add them together.
+// Returns a tuple of {concatenated vector data (n_emnd x n_layer), n_embd}
+// On error, returns a tuple of {empty, -1}
+std::tuple<std::vector<float>, int> llama_control_vector_load(
+    const std::vector<std::tuple<std::string, float>> & vectors);

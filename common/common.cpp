@@ -562,6 +562,35 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.lora_base = argv[i];
+        } else if (arg == "--control-vector") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back(std::make_tuple(argv[i], 1.0f));
+        } else if (arg == "--control-vector-scaled") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            const char * control_vector = argv[i];
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back(std::make_tuple(control_vector, std::stof(argv[i])));
+        } else if (arg == "--control-vector-layer-range") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            int32_t start = std::stoi(argv[i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            int32_t end = std::stoi(argv[i]);
+            params.control_vector_layer_range = std::make_tuple(start, end);
         } else if (arg == "--mmproj") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1087,6 +1116,12 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)\n");
     printf("  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
+    printf("  --control-vector FNAME\n");
+    printf("                        add a control vector\n");
+    printf("  --control-vector-scaled FNAME S\n");
+    printf("                        add a control vector with user defined scaling S\n");
+    printf("  --control-vector-layer-range START END\n");
+    printf("                        layer range to apply the control vector(s) to, start and end inclusive\n");
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
     printf("  -md FNAME, --model-draft FNAME\n");
@@ -1349,6 +1384,35 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
         llama_free_model(model);
         return std::make_tuple(nullptr, nullptr);
+    }
+
+    if (!params.control_vectors.empty()) {
+        int32_t layer_start, layer_end;
+        std::tie(layer_start, layer_end) = params.control_vector_layer_range;
+
+        if (layer_start == 0) layer_start = 1;
+        if (layer_end == 0) layer_end = 31;
+
+        std::vector<float> control_vector;
+        int n_embd;
+        std::tie(control_vector, n_embd) = llama_control_vector_load(params.control_vectors);
+        if (n_embd == -1) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+
+        int err = llama_control_vector_apply(lctx,
+                                             control_vector.data(),
+                                             control_vector.size(),
+                                             n_embd,
+                                             layer_start,
+                                             layer_end);
+        if (err) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
     }
 
     for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
@@ -1867,3 +1931,156 @@ void llama_embd_normalize(const float * inp, float * out, int n) {
     }
 }
 
+//
+// Control vector utils
+//
+
+static std::tuple<std::vector<float>, int> llama_control_vector_load_one(const std::string & path, float strength) {
+    int n_tensors;
+    size_t n_bytes = 0;
+    uint32_t max_direction_layer = 0;
+    int n_embd = -1;
+
+    // calculate size of ctx needed for tensors, ensure tensors are f32, and find max layer
+    {
+        struct ggml_init_params meta_params = {
+            /* .mem_size   = */ ggml_tensor_overhead() * 128 + ggml_graph_overhead(),
+            /* .mem_buffer = */ nullptr,
+            /* .no_alloc   = */ true,
+        };
+        ggml_context * meta_ctx = ggml_init(meta_params);
+        struct gguf_init_params meta_gguf_params = {
+            /* .no_alloc = */ true,
+            /* .ctx      = */ &meta_ctx,
+        };
+        struct gguf_context * meta_ctx_gguf = gguf_init_from_file(path.c_str(), meta_gguf_params);
+        if (!meta_ctx_gguf) {
+            fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, path.c_str());
+            ggml_free(meta_ctx);
+            return std::make_tuple(std::vector<float>(), -1);
+        }
+
+        n_tensors = gguf_get_n_tensors(meta_ctx_gguf);
+        for (int i = 0; i < n_tensors; i++) {
+            std::string name = gguf_get_tensor_name(meta_ctx_gguf, i);
+
+            // split on '.'
+            size_t dotpos = name.find('.');
+            if (dotpos != std::string::npos && name.substr(0, dotpos) == "direction") {
+                try {
+                    uint32_t layer = std::stoi(name.substr(dotpos + 1));
+                    if (layer == 0) {
+                        fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, path.c_str());
+                        ggml_free(meta_ctx);
+                        gguf_free(meta_ctx_gguf);
+                        return std::make_tuple(std::vector<float>(), -1);
+                    }
+                    if (layer > max_direction_layer) {
+                        max_direction_layer = layer;
+                    }
+                } catch (...) {
+                    fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, path.c_str());
+                    ggml_free(meta_ctx);
+                    gguf_free(meta_ctx_gguf);
+                    return std::make_tuple(std::vector<float>(), -1);
+                }
+            }
+
+            struct ggml_tensor * tensor_meta = ggml_get_tensor(meta_ctx, name.c_str());
+            if (tensor_meta->type != GGML_TYPE_F32 || ggml_n_dims(tensor_meta) != 1) {
+                fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, path.c_str());
+                ggml_free(meta_ctx);
+                gguf_free(meta_ctx_gguf);
+                return std::make_tuple(std::vector<float>(), -1);
+            }
+            if (n_embd == -1) {
+                n_embd = ggml_nelements(tensor_meta);
+            } else if (ggml_nelements(tensor_meta) != n_embd) {
+                fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, path.c_str());
+                ggml_free(meta_ctx);
+                gguf_free(meta_ctx_gguf);
+                return std::make_tuple(std::vector<float>(), -1);
+            }
+            n_bytes += ggml_nbytes(tensor_meta);
+        }
+        ggml_free(meta_ctx);
+        gguf_free(meta_ctx_gguf);
+    }
+
+    if (n_tensors == 0) {
+        fprintf(stderr, "%s: no direction tensors found in %s\n", __func__, path.c_str());
+        return std::make_tuple(std::vector<float>(), -1);
+    }
+
+    // load and scale tensors into final control vector context
+    struct ggml_init_params ggml_params = {
+        /* .mem_size   = */ ggml_tensor_overhead() * n_tensors + n_bytes,
+        /* .mem_buffer = */ nullptr,
+        /* .no_alloc   = */ false,
+    };
+    struct ggml_context * ctx = ggml_init(ggml_params);
+
+    struct gguf_init_params params = {
+        /*.no_alloc = */ false,
+        /*.ctx      = */ &ctx,
+    };
+    struct gguf_context * ctx_gguf = gguf_init_from_file(path.c_str(), params);
+    if (!ctx_gguf) {
+        fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, path.c_str());
+        ggml_free(ctx);
+        return std::make_tuple(std::vector<float>(), -1);
+    }
+
+    std::vector<float> vector;
+    for (uint32_t i = 1; i < max_direction_layer; i++) {
+        std::string name = "direction." + std::to_string(i);
+        ggml_tensor * tensor = ggml_get_tensor(ctx, name.c_str());
+        if (tensor) {
+            const float * data = (const float *) tensor->data;
+            for (int i = 0; i < n_embd; i++) {
+                vector.push_back(data[i] * strength);
+            }
+        } else {
+            vector.insert(vector.end(), n_embd, 0.); // as a filler
+        }
+    }
+
+    return std::make_tuple(vector, n_embd);
+}
+
+std::tuple<std::vector<float>, int> llama_control_vector_load(const std::vector<std::tuple<std::string, float>> & vectors) {
+    std::vector<float> vector;
+    int n_embd = -1;
+
+    for (const auto& pair : vectors) {
+        std::string path;
+        float strength;
+        std::tie(path, strength) = pair;
+
+        std::vector<float> v;
+        int v_n_embd;
+        std::tie(v, v_n_embd) = llama_control_vector_load_one(path, strength);
+
+        if (v_n_embd == -1) {
+            return std::make_tuple(std::vector<float>(), -1);
+        }
+        if (n_embd != -1 && (n_embd != v_n_embd || v.size() != vector.size())) {
+            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, path.c_str());
+            return std::make_tuple(std::vector<float>(), -1);
+        }
+
+        if (n_embd == -1) {
+            vector = std::move(v);
+            n_embd = v_n_embd;
+        } else {
+            for (size_t i = 0; i < vector.size(); i++) {
+                vector[i] += v[i];
+            }
+        }
+    }
+
+    if (n_embd == -1) {
+        fprintf(stderr, "%s: no vectors passed\n", __func__);
+    }
+    return std::make_tuple(vector, n_embd);
+}

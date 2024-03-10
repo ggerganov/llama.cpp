@@ -437,6 +437,20 @@ extern "C" {
                       const char * path_base_model,
                          int32_t   n_threads);
 
+    // Apply a loaded control vector to a llama_context, or if data is NULL, clear
+    // the currently loaded vector.
+    // n_embd should be the size of a single layer's control, and data should point
+    // to an n_embd x n_layers buffer starting from layer 1.
+    // il_start and il_end are the layer range the vector should apply to (both inclusive)
+    // See llama_control_vector_load in common to load a control vector.
+    LLAMA_API int32_t llama_control_vector_apply(
+            struct llama_context * lctx,
+                           float * data,
+                          size_t   len,
+                             int   n_embd,
+                         int32_t   il_start,
+                         int32_t   il_end);
+
     //
     // KV cache
     //
