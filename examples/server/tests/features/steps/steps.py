@@ -1063,7 +1063,6 @@ def start_server_background(context):
         flags |= subprocess.CREATE_NO_WINDOW
 
     pkwargs = {
-        'close_fds': True,  # close stdin/stdout/stderr on child
         'creationflags': flags,
     }
     context.server_process = subprocess.Popen(
