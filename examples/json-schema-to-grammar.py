@@ -208,7 +208,7 @@ class SchemaConverter:
             properties = schema['properties']
             return self._add_rule(rule_name, self._build_object_rule(properties.items(), required, name))
 
-        elif schema_type == 'object' and 'allOf' in schema:
+        elif schema_type in (None, 'object') and 'allOf' in schema:
             required = set()
             properties = []
             def add_component(comp_schema, is_required):
@@ -228,7 +228,7 @@ class SchemaConverter:
 
             return self._add_rule(rule_name, self._build_object_rule(properties, required, name))
 
-        elif schema_type == 'object' and 'additionalProperties' in schema:
+        elif schema_type in (None, 'object') and 'additionalProperties' in schema:
             additional_properties = schema['additionalProperties']
             if not isinstance(additional_properties, dict):
                 additional_properties = {}
@@ -240,7 +240,7 @@ class SchemaConverter:
                 rule_name,
                 f'( {kv_rule} ( "," space {kv_rule} )* )*')
 
-        elif schema_type == 'array' and 'items' in schema:
+        elif schema_type in (None, 'array') and 'items' in schema:
             # TODO `prefixItems` keyword
             items = schema['items']
             if isinstance(items, list):
