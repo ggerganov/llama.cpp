@@ -11675,7 +11675,7 @@ static ggml_type get_k_quant_type(quantize_state_internal & qs, ggml_type new_ty
                  ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M) {
             new_type = GGML_TYPE_Q5_K;
         }
-        else if (new_type != GGML_TYPE_Q8_0) {
+        else if (new_type != GGML_TYPE_Q8_0 && new_type != GGML_TYPE_F16 && new_type != GGML_TYPE_F32) {
             new_type = GGML_TYPE_Q6_K;
         }
     } else if (name == "token_embd.weight") {
