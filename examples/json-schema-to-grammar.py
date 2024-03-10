@@ -86,9 +86,10 @@ class SchemaConverter:
         else:
             return c
 
-    def _visit_pattern(self, pattern):
+    def _visit_pattern(self, pattern, name):
         assert pattern.startswith('^') and pattern.endswith('$'), 'Pattern must start with "^" and end with "$"'
         pattern = pattern[1:-1]
+        next_id = 1
         try:
             def visit_seq(seq):
                 out = []
@@ -104,6 +105,8 @@ class SchemaConverter:
                 return '(' + ' '.join(out) + ')'
             
             def visit(pattern):
+                nonlocal next_id
+
                 if pattern[0] == re._parser.LITERAL:
                     return json.dumps(chr(pattern[1]))
                 
@@ -133,6 +136,8 @@ class SchemaConverter:
                     min_times = pattern[1][0]
                     max_times = pattern[1][1] if not pattern[1][1] == re._parser.MAXREPEAT else None
                     sub = visit(pattern[1][2])
+                    sub = self._add_rule(f'{name}-{next_id}', sub)
+                    next_id += 1
 
                     if min_times == 0 and max_times is None:
                         return f'{sub}*'
@@ -255,7 +260,7 @@ class SchemaConverter:
                 return self._add_rule(rule_name, rule)
             
         elif schema_type in (None, 'string') and 'pattern' in schema:
-            return self._add_rule(rule_name, self._visit_pattern(schema['pattern']))
+            return self._add_rule(rule_name, self._visit_pattern(schema['pattern'], rule_name))
 
         elif (resolved := self._resolve_ref(ref)) is not None:
             (ref_name, definition) = resolved
