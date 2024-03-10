@@ -65,6 +65,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
 
         // clear previous kv_cache values (irrelevant for embeddings)
         llama_kv_cache_clear(ctx);
+        llama_set_causal_attn(ctx, false);
 
         // run model
         llama_decode(ctx, batch);
@@ -131,6 +132,9 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
 
     const llama_model * mdl = llama_get_model(ctx);
     llama_token eos_token = llama_token_eos(mdl);
+
+    llama_kv_cache_clear(ctx);
+    llama_set_causal_attn(ctx, true);
     llama_batch bat = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
     std::vector<llama_token> inputs = llama_tokenize(mdl, prompt, false, true);
@@ -197,11 +201,8 @@ int main(int argc, char * argv[])
     llama_model * mdl = llama_load_model_from_file(params.model.c_str(), mparams);
 
     // create new context - set to embedding mode
-    llama_context * embd_ctx = llama_new_context_with_model(mdl, cparams);
-    llama_set_embeddings(embd_ctx, true);
-
-    // create new context - default mode is causal
-    llama_context * causal_ctx = llama_new_context_with_model(mdl, cparams);
+    cparams.embeddings = true;
+    llama_context * ctx = llama_new_context_with_model(mdl, cparams);
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic
@@ -219,8 +220,8 @@ int main(int argc, char * argv[])
         };
 
         // No need to add instruction for retrieval documents
-        std::vector<std::vector<float>> d_rep = encode(embd_ctx, documents, gritlm_instruction(""));
-        std::vector<std::vector<float>> q_rep = encode(embd_ctx, queries, gritlm_instruction(instruction));
+        std::vector<std::vector<float>> d_rep = encode(ctx, documents, gritlm_instruction(""));
+        std::vector<std::vector<float>> q_rep = encode(ctx, queries, gritlm_instruction(instruction));
 
         float cosine_sim_q0_d0 = cosine_similarity(q_rep[0], d_rep[0]);
         float cosine_sim_q0_d1 = cosine_similarity(q_rep[0], d_rep[1]);
@@ -237,12 +238,10 @@ int main(int argc, char * argv[])
     // GritLM models are not finetuned with system prompts, as you can just include system-like instructions together with your user instruction
     {
         const std::string prompt = "<|user|>\nPlease write me a poem about my recent hike of Mt. Fuji at midnight in the style of Shakespeare.\n<|assistant|>\n";
-        std::string response = generate(causal_ctx, prompt, true);
+        std::string response = generate(ctx, prompt, true);
     }
 
-    llama_free(embd_ctx);
-    llama_free(causal_ctx);
-
+    llama_free(ctx);
     llama_free_model(mdl);
     llama_backend_free();
 

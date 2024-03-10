@@ -643,7 +643,7 @@ extern "C" {
 
     // Set whether to use causal attention or not
     // If set to true, the model will only attend to the past tokens
-    LLAMA_API void llama_set_embeddings(struct llama_context * ctx, bool embeddings);
+    LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
 
     // Set abort callback
     LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);

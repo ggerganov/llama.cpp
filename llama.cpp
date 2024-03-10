@@ -1683,7 +1683,9 @@ struct llama_cparams {
     float defrag_thold;
 
     bool embeddings;
+    bool causal_attn;
     bool offload_kqv;
+
     enum llama_pooling_type pooling_type;
 
     ggml_backend_sched_eval_callback cb_eval;
@@ -8030,13 +8032,13 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
     }
 
     GGML_ASSERT(
-        (hparams.causal_attn || cparams.embeddings) &&
+        (hparams.causal_attn || !cparams.causal_attn) &&
         "non-causal attention with generative models is not supported"
     );
 
     // NOTE: hparams.causal_attn indicates the model is capable of generation and uses the kv cache.
     // But if cparams.embeddings is set, the attention will be non-causal nonetheless.
-    if (!cparams.embeddings) {
+    if (cparams.causal_attn) {
         const int64_t n_kv     = kv_self.n;
         const int64_t n_tokens = batch.n_tokens;
 
@@ -12181,6 +12183,7 @@ struct llama_context * llama_new_context_with_model(
         cparams.yarn_ext_factor = rope_scaling_type == LLAMA_ROPE_SCALING_TYPE_YARN ? 1.0f : 0.0f;
     }
 
+    cparams.causal_attn = hparams.causal_attn;
     if (cparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
         if (hparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
             cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
@@ -13169,8 +13172,8 @@ void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)
     ctx->abort_callback_data = abort_callback_data;
 }
 
-void llama_set_embeddings(struct llama_context * ctx, bool embeddings) {
-    ctx->cparams.embeddings = embeddings;
+void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn) {
+    ctx->cparams.causal_attn = causal_attn;
 }
 
 struct llama_batch llama_batch_get_one(
