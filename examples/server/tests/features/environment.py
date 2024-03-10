@@ -40,7 +40,7 @@ def after_scenario(context, scenario):
     time.sleep(0.05)
 
     attempts = 0
-    while is_server_listening(context.server_fqdn, context.server_port):
+    while pid_exists(context.server_process.pid) or is_server_listening(context.server_fqdn, context.server_port):
         server_kill(context)
         time.sleep(0.1)
         attempts += 1
@@ -66,22 +66,21 @@ def server_kill_hard(context):
     path = context.server_path
 
     print(f"Server dangling exits, hard killing force {pid}={path}...\n")
-    os.kill(-pid, signal.SIGKILL)
-    # if os.name == 'nt':
-    #     process = subprocess.run(['taskkill', '/F', '/pid', str(pid)],
-    #                              stderr=subprocess.PIPE)
-    # else:
-    #     print(f"Server dangling exits, killing all {path} ...\n")
-    #     process = subprocess.run(['killall', '-9', path],
-    #                              stderr=subprocess.PIPE)
-    # print(process)
+    if os.name == 'nt':
+        process = subprocess.run(['taskkill', '/F', '/pid', str(pid)],
+                                 stderr=subprocess.PIPE)
+        print(process)
+    else:
+        os.kill(-pid, signal.SIGKILL)
 
 
 def is_server_listening(server_fqdn, server_port):
-    print(f"is server listening on {server_fqdn}:{server_port}...\n")
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         result = sock.connect_ex((server_fqdn, server_port))
-        return result == 0
+        _is_server_listening = result == 0
+        if _is_server_listening:
+            print(f"server is listening on {server_fqdn}:{server_port}...\n")
+        return _is_server_listening
 
 
 def pid_exists(pid):
