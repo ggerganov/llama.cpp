@@ -47,6 +47,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -58,7 +60,6 @@ jobs:
             cmake \
             python3-pip \
             wget \
-            psmisc \
             language-pack-en
 
       - name: Build
