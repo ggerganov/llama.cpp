@@ -314,6 +314,25 @@ class SchemaConverter:
 
         prop_kv_rule_names = {}
         for prop_name, prop_schema in properties:
+            # Note: this is to handle how Pydantic represents optional properties
+            #   import pydantic, typing
+            #   class Foo(pydantic.BaseModel):
+            #     bar: typing.Optional[str] = None
+            #   print(Foo.model_json_schema())
+            #   {
+            #     "properties": {
+            #       "bar": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+            #     },
+            #     "required": ["bar"]
+            #   }
+            if 'anyOf' in prop_schema and any(s.get('type') == 'null' for s in prop_schema['anyOf']):
+                required.remove(prop_name)
+                alts = [s for s in prop_schema['anyOf'] if s.get('type') != 'null']
+                if len(alts) == 1:
+                    prop_schema = alts[0]
+                else:
+                    prop_schema = {'anyOf': alts}
+
             prop_rule_name = self.visit(prop_schema, f'{name}{"-" if name else ""}{prop_name}')
             prop_kv_rule_names[prop_name] = self._add_rule(
                 f'{name}{"-" if name else ""}{prop_name}-kv',
