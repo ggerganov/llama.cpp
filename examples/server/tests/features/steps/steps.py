@@ -1058,9 +1058,9 @@ def start_server_background(context):
     print(f"starting server with: {context.server_path} {server_args}\n")
     flags = 0
     if 'nt' == os.name:
-        flags |= 0x00000008  # DETACHED_PROCESS
-        flags |= 0x00000200  # CREATE_NEW_PROCESS_GROUP
-        flags |= 0x08000000  # CREATE_NO_WINDOW
+        flags |= subprocess.DETACHED_PROCESS
+        flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+        flags |= subprocess.CREATE_NO_WINDOW
 
     pkwargs = {
         'close_fds': True,  # close stdin/stdout/stderr on child
