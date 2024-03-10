@@ -199,7 +199,8 @@ if (LLAMA_METAL)
     # get full path to the file
     #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
 
-    # copy ggml-metal.metal to bin directory
+    # copy ggml-common.h and ggml-metal.metal to bin directory
+    configure_file(ggml-common.h    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-common.h    COPYONLY)
     configure_file(ggml-metal.metal ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal COPYONLY)
 
     if (LLAMA_METAL_EMBED_LIBRARY)

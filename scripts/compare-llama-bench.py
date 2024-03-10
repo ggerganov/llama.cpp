@@ -18,7 +18,7 @@ except ImportError as e:
 KEY_PROPERTIES = [
     "cpu_info", "gpu_info", "n_gpu_layers", "main_gpu", "cuda", "opencl", "metal", "gpu_blas",
     "blas", "model_filename", "model_type", "model_size", "model_n_params", "n_batch", "n_threads",
-    "type_k", "type_v", "no_kv_offload", "mul_mat_q", "tensor_split", "n_prompt", "n_gen"
+    "type_k", "type_v", "no_kv_offload", "tensor_split", "n_prompt", "n_gen"
 ]
 
 # Properties that are boolean and are converted to Yes/No for the table:
