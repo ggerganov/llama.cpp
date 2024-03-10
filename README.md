@@ -8,11 +8,6 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
-> [!IMPORTANT]
-> **Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962**
->
-> Vote for which quantization type provides better responses, all other parameters being the same.
-
 ### Recent API changes
 
 - [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_max_seq()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
@@ -21,6 +16,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
+- Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
+- Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
 - Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
 
 ----
