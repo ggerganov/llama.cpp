@@ -17,7 +17,7 @@
 #elif defined(GGML_COMMON_IMPL_CUDA)
 #include <cstdint>
 
-#define GGML_TABLE_BEGIN(type, name, size) static const __device__ __constant__ type name[size] = {
+#define GGML_TABLE_BEGIN(type, name, size) static const __device__ type name[size] = {
 #define GGML_TABLE_END() };
 
 #define GGML_COMMON_IMPL
