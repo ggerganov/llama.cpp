@@ -33,45 +33,38 @@ jclass la_int_var;
 jmethodID la_int_var_value;
 jmethodID la_int_var_inc;
 
-std::string cached_token_chars="";
-bool is_valid_utf8(const char * string)
-{
-    if (!string)
+std::string cached_token_chars;
+
+bool is_valid_utf8(const char * string) {
+    if (!string) {
         return true;
+    }
 
     const unsigned char * bytes = (const unsigned char *)string;
     int num;
 
-    while (*bytes != 0x00)
-    {
-        if ((*bytes & 0x80) == 0x00)
-        {
+    while (*bytes != 0x00) {
+        if ((*bytes & 0x80) == 0x00) {
             // U+0000 to U+007F
             num = 1;
-        }
-        else if ((*bytes & 0xE0) == 0xC0)
-        {
+        } else if ((*bytes & 0xE0) == 0xC0) {
             // U+0080 to U+07FF
             num = 2;
-        }
-        else if ((*bytes & 0xF0) == 0xE0)
-        {
+        } else if ((*bytes & 0xF0) == 0xE0) {
             // U+0800 to U+FFFF
             num = 3;
-        }
-        else if ((*bytes & 0xF8) == 0xF0)
-        {
+        } else if ((*bytes & 0xF8) == 0xF0) {
             // U+10000 to U+10FFFF
             num = 4;
-        }
-        else
+        } else {
             return false;
+        }
 
         bytes += 1;
-        for (int i = 1; i < num; ++i)
-        {
-            if ((*bytes & 0xC0) != 0x80)
+        for (int i = 1; i < num; ++i) {
+            if ((*bytes & 0xC0) != 0x80) {
                 return false;
+            }
             bytes += 1;
         }
     }
@@ -341,7 +334,7 @@ Java_com_example_llama_Llm_completion_1init(
         jint n_len
     ) {
 
-    cached_token_chars = "";
+    cached_token_chars.clear();
 
     const auto text = env->GetStringUTFChars(jtext, 0);
     const auto context = reinterpret_cast<llama_context *>(context_pointer);
@@ -421,11 +414,12 @@ Java_com_example_llama_Llm_completion_1loop(
 
     auto new_token_chars = llama_token_to_piece(context, new_token_id);
     cached_token_chars += new_token_chars;
+
     jstring new_token = nullptr;
-    if(is_valid_utf8(cached_token_chars.c_str())) {
+    if (is_valid_utf8(cached_token_chars.c_str())) {
         new_token = env->NewStringUTF(cached_token_chars.c_str());
-        LOGi("cached: %s, new_token_chars: `%s`, id:%d", cached_token_chars.c_str(), new_token_chars.c_str(), new_token_id);
-        cached_token_chars="";
+        LOGi("cached: %s, new_token_chars: `%s`, id: %d", cached_token_chars.c_str(), new_token_chars.c_str(), new_token_id);
+        cached_token_chars.clear();
     } else {
         new_token = env->NewStringUTF("");
     }
