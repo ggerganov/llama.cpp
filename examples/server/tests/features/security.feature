@@ -39,8 +39,9 @@ Feature: Security
 
 
   Scenario Outline: CORS Options
-    When an OPTIONS request is sent from <origin>
-    Then CORS header <cors_header> is set to <cors_header_value>
+    Given a user api key llama.cpp
+    When  an OPTIONS request is sent from <origin>
+    Then  CORS header <cors_header> is set to <cors_header_value>
 
     Examples: Headers
       | origin          | cors_header                      | cors_header_value |
