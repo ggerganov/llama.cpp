@@ -643,6 +643,10 @@ extern "C" {
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
+    // Set whether to use causal attention or not
+    // If set to true, the model will only attend to the past tokens
+    LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
+
     // Set abort callback
     LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
 
