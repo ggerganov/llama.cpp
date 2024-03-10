@@ -332,6 +332,9 @@ class Params:
 #
 
 class BpeVocab:
+    tokenizer_model = "gpt2"
+    name = "bpe"
+
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
         if isinstance(self.bpe_tokenizer.get('model'), dict):
@@ -385,17 +388,14 @@ class BpeVocab:
         yield from self.bpe_tokens()
         yield from self.added_tokens()
 
-    def get_tokenizer_model(self) -> str:
-        return "gpt2"
-
-    def get_name(self) -> str:
-        return "bpe"
-
     def __repr__(self) -> str:
         return f"<BpeVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
 class SentencePieceVocab:
+    tokenizer_model = "llama"
+    name = "spm"
+
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         added_tokens: dict[str, int]
@@ -454,17 +454,14 @@ class SentencePieceVocab:
         yield from self.sentencepiece_tokens()
         yield from self.added_tokens()
 
-    def get_tokenizer_model(self) -> str:
-        return "llama"
-
-    def get_name(self) -> str:
-        return "spm"
-
     def __repr__(self) -> str:
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
 class HfVocab:
+    tokenizer_model = "llama"
+    name = "hfft"
+
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None = None) -> None:
         try:
             from transformers import AutoTokenizer
@@ -561,22 +558,13 @@ class HfVocab:
         yield from self.hf_tokens()
         yield from self.added_tokens()
 
-    def get_tokenizer_model(self) -> str:
-        return "llama"
-
-    def get_name(self) -> str:
-        return "hfft"
-
     def __repr__(self) -> str:
         return f"<HfVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
 class NoVocab:
-    def get_tokenizer_model(self) -> str:
-        return "no_vocab"
-
-    def get_name(self) -> str:
-        return "no_vocab"
+    tokenizer_model = "no_vocab"
+    name = "no_vocab"
 
     def __repr__(self) -> str:
         return "<NoVocab for a model without integrated vocabulary>"
@@ -969,8 +957,9 @@ def check_vocab_size(params: Params, vocab: Vocab) -> None:
 
 
 def prepare_vocab(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
-    assert not isinstance(vocab, NoVocab)
     check_vocab_size(params, vocab)
+    if vocab.name == "no_vocab":
+        return
 
     # Check for a vocab size mismatch
     if params.n_vocab == vocab.vocab_size:
@@ -1065,7 +1054,7 @@ class OutputFile:
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
         # Ensure that tokenizer_model is added to the GGUF model
-        self.gguf.add_tokenizer_model(vocab.get_tokenizer_model())
+        self.gguf.add_tokenizer_model(vocab.tokenizer_model)
 
         # Extract model vocabulary for model conversion
         tokens, scores, toktypes = self.extract_vocabulary_from_model(vocab)
@@ -1158,34 +1147,11 @@ class OutputFile:
 
         # meta data
         of.add_meta_arch(params)
-        of.add_meta_vocab(vocab)
-        of.add_meta_special_vocab(svocab)
-
-        # tensor info
-        for name, lazy_tensor in model.items():
-            of.add_tensor_info(name, lazy_tensor)
-
-        of.write_meta()
-        of.write_tensor_info()
-
-        # tensor data
-        of.write_tensor_data(ftype, model, concurrency)
-
-        of.close()
-
-    @staticmethod
-    def write_without_vocab(
-        fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab,
-        concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
-    ) -> None:
-        assert isinstance(vocab, NoVocab)
-        check_vocab_size(params, vocab)
-
-        of = OutputFile(fname_out, endianess=endianess)
-
-        # meta data
-        of.add_meta_arch(params)
-        of.gguf.add_tokenizer_model(vocab.get_tokenizer_model())
+        if vocab.name == "no_vocab":
+            of.gguf.add_tokenizer_model(vocab.tokenizer_model)
+        else:
+            of.add_meta_vocab(vocab)
+            of.add_meta_special_vocab(svocab)
 
         # tensor info
         for name, lazy_tensor in model.items():
@@ -1357,7 +1323,7 @@ class VocabFactory:
         raise FileNotFoundError(f"Could not find any of {[self._FILES[vt] for vt in vocab_types]}")
 
     def _create_special_vocab(self, vocab: Vocab, model_parent_path: Path) -> gguf.SpecialVocab:
-        load_merges = vocab.get_name() == "bpe"
+        load_merges = vocab.name == "bpe"
         n_vocab = vocab.vocab_size if hasattr(vocab, "vocab_size") else None
         return gguf.SpecialVocab(
             model_parent_path,
@@ -1513,12 +1479,8 @@ def main(args_in: list[str] | None = None) -> None:
     params.ftype = ftype
     print(f"Writing {outfile}, format {ftype}")
 
-    if not args.no_vocab:
-        OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab,
-                             concurrency=args.concurrency, endianess=endianess, pad_vocab=args.pad_vocab)
-    else:
-        OutputFile.write_without_vocab(outfile, ftype, params, model, vocab,
-                                       concurrency=args.concurrency, endianess=endianess)
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab,
+                         concurrency=args.concurrency, endianess=endianess, pad_vocab=args.pad_vocab)
     print(f"Wrote {outfile}")
 
 
