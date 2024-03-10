@@ -1,3 +1,4 @@
+import errno
 import os
 import socket
 import subprocess
@@ -67,8 +68,7 @@ def server_kill_hard(context):
 
     print(f"Server dangling exits, hard killing force {pid}={path}...\n")
     if os.name == 'nt':
-        process = subprocess.run(['taskkill', '/F', '/pid', str(pid)],
-                                 stderr=subprocess.PIPE)
+        process = subprocess.check_output(['taskkill', '/F', '/pid', str(pid)]).decode()
         print(process)
     else:
         os.kill(-pid, signal.SIGKILL)
@@ -85,12 +85,16 @@ def is_server_listening(server_fqdn, server_port):
 
 def pid_exists(pid):
     """Check whether pid exists in the current process table."""
-    import errno
     if pid < 0:
         return False
-    try:
-        os.kill(pid, 0)
-    except OSError as e:
-        return e.errno == errno.EPERM
+    if os.name == 'nt':
+        output = subprocess.check_output(['TASKLIST', '/FI', f'pid eq {pid}']).decode()
+        print(output)
+        return "No tasks are running" not in output
     else:
-        return True
+        try:
+            os.kill(pid, 0)
+        except OSError as e:
+            return e.errno == errno.EPERM
+        else:
+            return True
