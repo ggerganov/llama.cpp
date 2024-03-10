@@ -394,14 +394,16 @@ def main(args_in = None):
         type=lambda s: s.split(','),
         help='''
             comma-separated property names defining the order of precedence for object properties;
-            properties not specified here are given lower precedence than those that are, and are
-            sorted alphabetically
+            properties not specified here are given lower precedence than those that are, and
+            are kept in their original order from the schema. Required properties are always
+            given precedence over optional properties.
         '''
     )
     parser.add_argument('schema', help='file containing JSON schema ("-" for stdin)')
     args = parser.parse_args(args_in)
 
-    if (url := args.schema.startswith('https://')):
+    if args.schema.startswith('https://'):
+        url = args.schema
         import requests
         schema = requests.get(url).json()
     elif args.schema == '-':
