@@ -4365,10 +4365,10 @@ void kernel_mul_mv_iq1_s_f32_impl(
 
         for (int row = 0; row < N_DST; row++) {
 
-            constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid + (qs[0] | ((qh[0] << 8) & 0x700)));
-            constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid + (qs[1] | ((qh[0] << 5) & 0x700)));
-            constant uint8_t * grid3 = (constant uint8_t *)(iq1s_grid + (qs[2] | ((qh[0] << 2) & 0x700)));
-            constant uint8_t * grid4 = (constant uint8_t *)(iq1s_grid + (qs[3] | ((qh[0] >> 1) & 0x700)));
+            constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | ((qh[0] << 8) & 0x700)));
+            constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | ((qh[0] << 5) & 0x700)));
+            constant uint8_t * grid3 = (constant uint8_t *)(iq1s_grid_gpu + (qs[2] | ((qh[0] << 2) & 0x700)));
+            constant uint8_t * grid4 = (constant uint8_t *)(iq1s_grid_gpu + (qs[3] | ((qh[0] >> 1) & 0x700)));
 
             float sum = 0;
             for (int j = 0; j < 4; ++j) {
@@ -5077,8 +5077,8 @@ void dequantize_iq1_s(device const block_iq1_s * xb, short il, thread type4x4 & 
     device const uint8_t  * qs = xb->qs + 4*ib32 + 2*il;
     device const uint16_t * qh = xb->qh;
     const float dl = d * (2*(qh[ib32] >> 12) + 1);
-    constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid + (qs[0] | (((qh[ib32] >> (6*il+0)) & 7) << 8)));
-    constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid + (qs[1] | (((qh[ib32] >> (6*il+3)) & 7) << 8)));
+    constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | (((qh[ib32] >> (6*il+0)) & 7) << 8)));
+    constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | (((qh[ib32] >> (6*il+3)) & 7) << 8)));
     for (int i = 0; i < 4; ++i) {
         reg[0][i] = dl * (grid1[i] & 0xf) - dl;
         reg[1][i] = dl * (grid1[i] >>  4) - dl;
