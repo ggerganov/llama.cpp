@@ -11,7 +11,6 @@ on:
   push:
     branches:
       - master
-      - hp/server/ci/windows/init
     paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/tests/**.*']
   pull_request:
     types: [opened, synchronize, reopened]
