@@ -336,6 +336,33 @@ extern "C" {
         const char * content;
     } llama_chat_message;
 
+    enum llama_merge_method {
+        LLAMA_MERGE_LINEAR,
+        LLAMA_MERGE_SLERP,
+        LLAMA_MERGE_REPEAT, // doesn't work for now
+        LLAMA_MERGE_COPY,
+    };
+
+    // instruction for merging tensors (model merge)
+    struct llama_merge_inst {
+        char name[GGML_MAX_NAME]; // name of output tensor
+        enum llama_merge_method method;
+        // we only support 2 models for now
+        char srcs[2][GGML_MAX_NAME]; // name of input tensors. if method == copy, only one src is non-empty
+        float scales[2]; // for linear method
+        float t; // for slerp method
+    };
+
+    // merge models
+    struct llama_merge_config {
+        // we only support 2 models for now
+        const char * model_paths[2];
+        const struct llama_merge_inst * insts;
+        const size_t n_insts;
+        const size_t n_layers; // number of output layers
+        const char * output_path;
+    };
+
     // Helpers for getting default parameters
     LLAMA_API struct llama_model_params llama_model_default_params(void);
     LLAMA_API struct llama_context_params llama_context_default_params(void);
@@ -415,6 +442,9 @@ extern "C" {
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
 
+    // Get a list of model tensor name, returns number of elements
+    LLAMA_API int32_t llama_get_all_tensors_name(struct llama_model * model, const char ** name_arr, size_t arr_size);
+
     // Get a llama model tensor
     LLAMA_API struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name);
 
@@ -423,6 +453,10 @@ extern "C" {
             const char * fname_inp,
             const char * fname_out,
             const llama_model_quantize_params * params);
+
+    // Merge multiple models, inspired by mergekit
+    LLAMA_API int32_t llama_merge_models(
+            const struct llama_merge_config * config);
 
     // Apply a LoRA adapter to a loaded model
     // path_base_model is the path to a higher quality model to use as a base for
