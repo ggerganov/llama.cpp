@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
-SPACE_RULE = '" "*'
+SPACE_RULE = '" "?'
 
 PRIMITIVE_RULES = {
     'boolean': '("true" | "false") space',
