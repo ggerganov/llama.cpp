@@ -48,7 +48,7 @@ class SchemaConverter:
             key = esc_name
         else:
             i = 0
-            while f'{esc_name}{i}' in self._rules:
+            while f'{esc_name}{i}' in self._rules and self._rules[f'{esc_name}{i}'] != rule:
                 i += 1
             key = f'{esc_name}{i}'
         self._rules[key] = rule
