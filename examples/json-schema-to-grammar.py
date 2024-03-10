@@ -30,8 +30,9 @@ GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"'}
 
 
 class SchemaConverter:
-    def __init__(self, prop_order):
+    def __init__(self, prop_order, allow_fetch):
         self._prop_order = prop_order
+        self._allow_fetch = allow_fetch
         self._rules = {'space': SPACE_RULE}
         self._refs = {}
         self._refs_being_resolved = set()
@@ -67,6 +68,7 @@ class SchemaConverter:
                 ref = n.get('$ref')
                 if ref is not None and ref not in self._refs:
                     if ref.startswith('https://'):
+                        assert self._allow_fetch, 'Fetching remote schemas is not allowed (use --allow-fetch for force)'
                         import requests
                         
                         frag_split = ref.split('#')
@@ -298,6 +300,7 @@ class SchemaConverter:
         elif schema_type in (None, 'string') and 'pattern' in schema:
             return self._visit_pattern(schema['pattern'], rule_name)
 
+        # TODO: support string formats "uri", "date", "date-time"
         elif schema_type in (None, 'string') and re.match(r'^uuid[1-5]?$', schema.get('format', '')):
             return self._visit_pattern('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$', 'uuid')
 
@@ -309,6 +312,7 @@ class SchemaConverter:
         
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
+            # TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
             return self._add_rule(
                 'root' if rule_name == 'root' else schema_type,
                 PRIMITIVE_RULES[schema_type]
@@ -387,6 +391,10 @@ def main(args_in = None):
             given precedence over optional properties.
         '''
     )
+    parser.add_argument(
+        '--allow-fetch',
+        default=False,
+        help='Whether to allow fetching referenced schemas over HTTPS')
     parser.add_argument('schema', help='file containing JSON schema ("-" for stdin)')
     args = parser.parse_args(args_in)
 
@@ -402,7 +410,7 @@ def main(args_in = None):
         with open(args.schema) as f:
             schema = json.load(f)
     prop_order = {name: idx for idx, name in enumerate(args.prop_order)}
-    converter = SchemaConverter(prop_order)
+    converter = SchemaConverter(prop_order, args.allow_fetch)
     schema = converter.resolve_refs(schema, url)
     converter.visit(schema, '')
     print(converter.format_grammar())
