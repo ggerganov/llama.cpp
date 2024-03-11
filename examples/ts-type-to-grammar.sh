@@ -19,7 +19,7 @@ echo "export type MyType = $type" > "$DTS_FILE"
 
 # This is a fork of typescript-json-schema, actively maintained as of March 2024:
 # https://github.com/vega/ts-json-schema-generator
-npx ts-json-schema-generator --no-top-ref --path "$DTS_FILE" --type MyType -e none | tee "$SCHEMA_FILE" >&2
+npx ts-json-schema-generator --unstable --no-top-ref --path "$DTS_FILE" --type MyType -e none | tee "$SCHEMA_FILE" >&2
 
 # Alternative, not actively maintained as of March 2024:
 # https://github.com/YousefED/typescript-json-schema
