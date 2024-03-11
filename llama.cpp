@@ -13037,7 +13037,7 @@ uint32_t llama_n_batch(const struct llama_context * ctx) {
     return ctx->cparams.n_batch;
 }
 
-uint32_t llama_n_max_seq(const struct llama_context * ctx) {
+uint32_t llama_n_seq_max(const struct llama_context * ctx) {
     return ctx->kv_self.size;
 }
 
@@ -13201,10 +13201,10 @@ int32_t llama_model_apply_lora_from_file(const struct llama_model * model, const
     }
 }
 
-struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq) {
+struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_seq_max) {
     struct llama_kv_cache_view result = {
         /*.n_cells            = */ 0,
-        /*.n_max_seq          = */ n_max_seq,
+        /*.n_seq_max          = */ n_seq_max,
         /*.token_count        = */ 0,
         /*.used_cells         = */ llama_get_kv_cache_used_cells(ctx),
         /*.max_contiguous     = */ 0,
@@ -13232,7 +13232,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
         void * p = realloc(view->cells, sizeof(struct llama_kv_cache_view_cell) * view->n_cells);
         GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells");
         view->cells = (struct llama_kv_cache_view_cell *)p;
-        p = realloc(view->cells_sequences, sizeof(llama_seq_id) * view->n_max_seq * view->n_cells);
+        p = realloc(view->cells_sequences, sizeof(llama_seq_id) * view->n_seq_max * view->n_cells);
         GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells sequences");
         view->cells_sequences = (llama_seq_id *)p;
     }
@@ -13246,7 +13246,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
     uint32_t max_contig = 0;
     int32_t max_contig_idx = -1;
 
-    for (int32_t i = 0; i < int32_t(ctx->kv_self.size); i++, c_curr++, cs_curr += view->n_max_seq) {
+    for (int32_t i = 0; i < int32_t(ctx->kv_self.size); i++, c_curr++, cs_curr += view->n_seq_max) {
         const size_t curr_size = kv_cells[i].seq_id.size();
         token_count += curr_size;
         c_curr->pos = kv_cells[i].pos + kv_cells[i].delta;
@@ -13263,7 +13263,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
 
         int seq_idx = 0;
         for (const llama_seq_id it : kv_cells[i].seq_id) {
-            if (seq_idx >= view->n_max_seq) {
+            if (seq_idx >= view->n_seq_max) {
                 break;
             }
             cs_curr[seq_idx] = it;
@@ -13272,7 +13272,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
         if (seq_idx != 0) {
             used_cells++;
         }
-        for (; seq_idx < view->n_max_seq; seq_idx++) {
+        for (; seq_idx < view->n_seq_max; seq_idx++) {
             cs_curr[seq_idx] = -1;
         }
     }
@@ -13934,12 +13934,12 @@ int32_t llama_tokenize(
                   const char * text,
                      int32_t   text_len,
                  llama_token * tokens,
-                     int32_t   n_max_tokens,
+                     int32_t   n_tokens_max,
                         bool   add_bos,
                         bool   special) {
     auto res = llama_tokenize_internal(model->vocab, std::string(text, text_len), add_bos, special);
 
-    if (n_max_tokens < (int) res.size()) {
+    if (n_tokens_max < (int) res.size()) {
         // LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
         return -((int) res.size());
     }
