@@ -10408,7 +10408,7 @@ static void dequantize_row_iq1_s_sycl(const void *vx, dst_t *y, const int k,
                                         dpct::queue_ptr stream) {
     const int nb = k / QK_K;
     {
-        iq1s_grid.init(*stream);
+        iq1s_grid_gpu.init(*stream);
         ksigns_iq2xs.init(*stream);
         kmask_iq2xs.init(*stream);
 
@@ -10416,7 +10416,7 @@ static void dequantize_row_iq1_s_sycl(const void *vx, dst_t *y, const int k,
                                      {sycl::aspect::fp16});
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq1s_grid_ptr_ct1 = iq1s_grid.get_ptr();
+            auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
             auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
             auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
 
@@ -11156,11 +11156,11 @@ static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
     {
-        iq1s_grid.init(*stream);
+        iq1s_grid_gpu.init(*stream);
         ksigns64.init(*stream);
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq1s_grid_ptr_ct1 = iq1s_grid.get_ptr();
+            auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
             auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
 
             cgh.parallel_for(
