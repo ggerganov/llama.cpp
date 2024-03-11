@@ -1288,7 +1288,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 
     cparams.n_ctx             = params.n_ctx;
     cparams.n_batch           = params.n_batch;
-    cparams.n_parallel        = params.n_parallel;
+    cparams.n_seq_max         = params.n_parallel;
     cparams.n_threads         = params.n_threads;
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     cparams.seed              = params.seed;
@@ -1786,17 +1786,17 @@ void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = ".123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d",
-        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
+        view.n_cells, view.n_seq_max, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
 
     llama_kv_cache_view_cell * c_curr = view.cells;
     llama_seq_id * cs_curr = view.cells_sequences;
 
-    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
+    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_seq_max) {
         if (i % row_size == 0) {
             printf("\n%5d: ", i);
         }
         int seq_count = 0;
-        for (int j = 0; j < view.n_max_seq; j++) {
+        for (int j = 0; j < view.n_seq_max; j++) {
             if (cs_curr[j] >= 0) { seq_count++; }
         }
         putchar(slot_chars[std::min(sizeof(slot_chars) - 2, size_t(seq_count))]);
@@ -1809,14 +1809,14 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d\n",
-        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
+        view.n_cells, view.n_seq_max, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
 
     std::unordered_map<llama_seq_id, size_t> seqs;
     llama_kv_cache_view_cell * c_curr = view.cells;
     llama_seq_id * cs_curr = view.cells_sequences;
 
-    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
-        for (int j = 0; j < view.n_max_seq; j++) {
+    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_seq_max) {
+        for (int j = 0; j < view.n_seq_max; j++) {
             if (cs_curr[j] < 0) { continue; }
             if (seqs.find(cs_curr[j]) == seqs.end()) {
                 if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
@@ -1835,11 +1835,11 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
 
     c_curr = view.cells;
     cs_curr = view.cells_sequences;
-    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
+    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_seq_max) {
         if (i % row_size == 0) {
             printf("\n%5d: ", i);
         }
-        for (int j = 0; j < view.n_max_seq; j++) {
+        for (int j = 0; j < view.n_seq_max; j++) {
             if (cs_curr[j] >= 0) {
                 const auto & it = seqs.find(cs_curr[j]);
                 putchar(it != seqs.end() ? int(slot_chars[it->second]) : '+');
