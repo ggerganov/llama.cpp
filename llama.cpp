@@ -65,6 +65,8 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <cwctype>
 #include <forward_list>
@@ -980,113 +982,81 @@ struct no_init {
     no_init() { /* do nothing */ }
 };
 
-llama_file::llama_file(const char * fname, const char * mode) {
+struct llama_file {
+    // use FILE * so we don't have to re-open the file to mmap
+    FILE * fp;
+    size_t size;
+
+    llama_file(const char * fname, const char * mode) {
+        fp = std::fopen(fname, mode);
+        if (fp == NULL) {
+            throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
+        }
+        seek(0, SEEK_END);
+        size = tell();
+        seek(0, SEEK_SET);
+    }
+
+    size_t tell() const {
 #ifdef _WIN32
-    // temporarily change the locale to the system default to handle Unicode file names
-    std::string oldLocale = std::setlocale(LC_ALL, nullptr);
-    std::setlocale(LC_ALL, "");
-
-    // convert multi-byte string to wide-char string
-    int wsize = MultiByteToWideChar(CP_UTF8, 0, fname, -1, nullptr, 0);
-    std::vector<wchar_t> wfname(wsize);
-    MultiByteToWideChar(CP_UTF8, 0, fname, -1, wfname.data(), wsize);
-
-    // determine the correct wide-character mode string
-    std::wstring wmode;
-    for(; *mode; ++mode) {
-        wmode += wchar_t(*mode);
-    }
-
-    fp = _wfopen(wfname.data(), wmode.c_str());
-
-    std::setlocale(LC_ALL, oldLocale.c_str());
+        __int64 ret = _ftelli64(fp);
 #else
-    fp = fopen(fname, mode);
+        long ret = std::ftell(fp);
 #endif
-    if (fp == NULL) {
-        throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
+        GGML_ASSERT(ret != -1); // this really shouldn't fail
+        return (size_t) ret;
     }
-    seek(0, SEEK_END);
-    size = tell();
-    seek(0, SEEK_SET);
-}
 
-size_t llama_file::tell() const {
+    void seek(size_t offset, int whence) const {
 #ifdef _WIN32
-    __int64 ret = _ftelli64(fp);
+        int ret = _fseeki64(fp, (__int64) offset, whence);
 #else
-    long ret = std::ftell(fp);
+        int ret = std::fseek(fp, (long) offset, whence);
 #endif
-    GGML_ASSERT(ret != -1); // this really shouldn't fail
-    return (size_t) ret;
-}
-
-void llama_file::seek(size_t offset, int whence) const {
-#ifdef _WIN32
-    int ret = _fseeki64(fp, (__int64) offset, whence);
-#else
-    int ret = std::fseek(fp, (long) offset, whence);
-#endif
-    GGML_ASSERT(ret == 0); // same
-}
-
-void llama_file::read_raw(void * ptr, size_t len) const {
-    if (len == 0) {
-         return;
+        GGML_ASSERT(ret == 0); // same
     }
-    errno = 0;
-    std::size_t ret = std::fread(ptr, len, 1, fp);
-    if (ferror(fp)) {
-        throw std::runtime_error(format("read error: %s", strerror(errno)));
+
+    void read_raw(void * ptr, size_t len) const {
+        if (len == 0) {
+            return;
+        }
+        errno = 0;
+        std::size_t ret = std::fread(ptr, len, 1, fp);
+        if (ferror(fp)) {
+            throw std::runtime_error(format("read error: %s", strerror(errno)));
+        }
+        if (ret != 1) {
+            throw std::runtime_error("unexpectedly reached end of file");
+        }
     }
-    if (ret != 1) {
-        throw std::runtime_error("unexpectedly reached end of file");
+
+    uint32_t read_u32() const {
+        uint32_t ret;
+        read_raw(&ret, sizeof(ret));
+        return ret;
     }
-}
 
-uint32_t llama_file::read_u32() const {
-    uint32_t ret;
-    read_raw(&ret, sizeof(ret));
-    return ret;
-}
-
-
-float_t llama_file::read_f32() const {
-    std::float_t ret;
-    read_raw(&ret, sizeof(ret));
-    return ret;
-}
-
-std::string llama_file::read_string(std::uint32_t len) const {
-    std::vector<char> chars(len);
-    read_raw(chars.data(), len);
-    return std::string(chars.data(), len);
-}
-
-void llama_file::write_raw(const void * ptr, size_t len) const {
-    if (len == 0) {
-        return;
+    void write_raw(const void * ptr, size_t len) const {
+        if (len == 0) {
+            return;
+        }
+        errno = 0;
+        size_t ret = std::fwrite(ptr, len, 1, fp);
+        if (ret != 1) {
+            throw std::runtime_error(format("write error: %s", strerror(errno)));
+        }
     }
-    errno = 0;
-    size_t ret = std::fwrite(ptr, len, 1, fp);
-    if (ret != 1) {
-        throw std::runtime_error(format("write error: %s", strerror(errno)));
+
+    void write_u32(std::uint32_t val) const {
+        write_raw(&val, sizeof(val));
     }
-}
 
-void llama_file::write_u32(std::uint32_t val) const {
-    write_raw(&val, sizeof(val));
-}
-
-bool llama_file::eof() const {
-    return tell() >= size;
-}
-
-llama_file::~llama_file() {
-    if (fp) {
-        std::fclose(fp);
+    ~llama_file() {
+        if (fp) {
+            std::fclose(fp);
+        }
     }
-}
+};
 
 struct llama_mmap {
     void * addr;

@@ -950,33 +950,6 @@ extern "C" {
 }
 #endif
 
-#ifdef __cplusplus
-#include <cfloat>
-#include <cstdio>
-#include <cstring>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-struct llama_file {
-    FILE *fp;
-    size_t size;
-
-    llama_file(const char* fname, const char* mode);
-    ~llama_file();
-
-    size_t tell() const;
-    void seek(size_t offset, int whence) const;
-    void read_raw(void* ptr, size_t len) const;
-    uint32_t read_u32() const;
-    float_t read_f32() const;
-    std::string read_string(std::uint32_t len) const;
-    void write_raw(const void* ptr, size_t len) const;
-    void write_u32(std::uint32_t val) const;
-    bool eof() const;
-};
-#endif
-
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
 #ifdef LLAMA_API_INTERNAL
 
