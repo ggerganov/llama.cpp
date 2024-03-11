@@ -3373,40 +3373,39 @@ int main(int argc, char ** argv) {
         bool is_openai = false;
 
         // an input prompt can be a string or a list of tokens (integer)
-        json prompts = json::array();
+        json prompt;
         if (body.count("input") != 0) {
             is_openai = true;
-            prompts = body["input"].is_array()
-                ? body["input"]        // support multiple prompts
-                : json{body["input"]}; // single input prompt
+            prompt = body["input"];
         } else if (body.count("content") != 0) {
             // with "content", we only support single prompt
-            std::string content = body["content"];
-            prompts.push_back(content);
+            prompt = std::vector<std::string>{body["content"]};
         } else {
             res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
         // create and queue the task
-        json responses = json::array();
+        json responses;
         {
             const int id_task = ctx_server.queue_tasks.get_new_id();
             ctx_server.queue_results.add_waiting_task_id(id_task);
-            // if number of prompts is more than 1, we pass an array to create a multi-task
-            // otherwise, we pass a single prompt to make a single task
             ctx_server.request_completion(id_task, -1, {
-                {"prompt", prompts.size() == 1 ? prompts[0] : prompts},
-                {"n_predict", 0}
+                {"prompt", prompt},
+                {"n_predict", 0},
             }, false, true);
 
             // get the result
             server_task_result result = ctx_server.queue_results.recv(id_task);
             ctx_server.queue_results.remove_waiting_task_id(id_task);
             if (!result.error) {
-                responses = result.data.count("results")
-                    ? result.data["results"] // result for multi-task
-                    : json{result.data};     // result for single task
+                if (result.data.count("results")) {
+                    // result for multi-task
+                    responses = result.data["results"];
+                } else {
+                    // result for single task
+                    responses = std::vector<json>{result.data};
+                }
             } else {
                 // error received, ignore everything else
                 res_error(res, result.data);
