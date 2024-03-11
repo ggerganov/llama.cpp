@@ -141,7 +141,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     const std::string formatted_chat(buf.data(), res);
 
     LOG_VERBOSE("formatted_chat", {{"text", formatted_chat.c_str()}});
-
+    printf("formatted_chat: %s\n", formatted_chat.c_str());
     return formatted_chat;
 }
 
