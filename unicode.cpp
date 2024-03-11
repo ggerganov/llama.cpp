@@ -666,7 +666,7 @@ static std::unordered_map<uint32_t, int> cpt_type_map() {
     return cpt_types;
 }
 
-static std::unordered_map<uint8_t, std::string> bytes_to_unicode_map() {
+static std::unordered_map<uint8_t, std::string> unicode_byteo_to_utf8_map() {
     std::unordered_map<uint8_t, std::string> map;
     for (int ch = u'!'; ch <= u'~'; ++ch) {
         assert(0 <= ch && ch < 256);
@@ -690,7 +690,7 @@ static std::unordered_map<uint8_t, std::string> bytes_to_unicode_map() {
     return map;
 }
 
-static std::unordered_map<std::string, uint8_t> unicode_to_bytes_map() {
+static std::unordered_map<std::string, uint8_t> unicode_utf8_to_byte_map() {
     std::unordered_map<std::string, uint8_t> map;
     for (int ch = u'!'; ch <= u'~'; ++ch) {
         assert(0 <= ch && ch < 256);
@@ -771,13 +771,13 @@ int unicode_cpt_type(const std::string & utf8) {
     return unicode_cpt_type(unicode_cpt_from_utf8(utf8, offset));
 }
 
-std::string unicode_bytes_to_utf8(uint8_t byte) {
-    static std::unordered_map<uint8_t, std::string> map = bytes_to_unicode_map();
+std::string unicode_byte_to_utf8(uint8_t byte) {
+    static std::unordered_map<uint8_t, std::string> map = unicode_byteo_to_utf8_map();
     return map.at(byte);
 }
 
-uint8_t unicode_utf8_to_bytes(const std::string & utf8) {
-    static std::unordered_map<std::string, uint8_t> map = unicode_to_bytes_map();
+uint8_t unicode_utf8_to_byte(const std::string & utf8) {
+    static std::unordered_map<std::string, uint8_t> map = unicode_utf8_to_byte_map();
     return map.at(utf8);
 }
 

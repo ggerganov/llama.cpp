@@ -22,6 +22,6 @@ std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8);
 int unicode_cpt_type(uint32_t cp);
 int unicode_cpt_type(const std::string & utf8);
 
-std::string unicode_bytes_to_utf8(uint8_t byte);
+std::string unicode_byte_to_utf8(uint8_t byte);
+uint8_t unicode_utf8_to_byte(const std::string & utf8);
 
-uint8_t unicode_utf8_to_bytes(const std::string & utf8);

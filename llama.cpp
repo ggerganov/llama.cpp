@@ -9340,7 +9340,7 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
         }
         case LLAMA_VOCAB_TYPE_BPE: {
             GGML_ASSERT(false);
-            return unicode_utf8_to_bytes(token_data.text);
+            return unicode_utf8_to_byte(token_data.text);
         }
         case LLAMA_VOCAB_TYPE_WPM: {
             GGML_ASSERT(false);
@@ -9365,7 +9365,7 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
         }
         case LLAMA_VOCAB_TYPE_WPM:
         case LLAMA_VOCAB_TYPE_BPE: {
-            return vocab.token_to_id.at(unicode_bytes_to_utf8(ch));
+            return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
         }
         default:
             GGML_ASSERT(false);
@@ -9819,7 +9819,7 @@ private:
         for (std::string & word : bpe_words) {
             std::string encoded_token = "";
             for (char & c : word) {
-                encoded_token += unicode_bytes_to_utf8(c);
+                encoded_token += unicode_byte_to_utf8(c);
             }
             bpe_encoded_words.emplace_back(encoded_token);
         }
@@ -13955,8 +13955,8 @@ int32_t llama_tokenize(
 static std::string llama_decode_text(const std::string & text) {
     std::string decoded_text;
     auto unicode_sequences = unicode_cpts_from_utf8(text);
-    for (auto& unicode_sequence : unicode_sequences) {
-        decoded_text += unicode_utf8_to_bytes(unicode_cpt_to_utf8(unicode_sequence));
+    for (auto & unicode_sequence : unicode_sequences) {
+        decoded_text += unicode_utf8_to_byte(unicode_cpt_to_utf8(unicode_sequence));
     }
 
     return decoded_text;
