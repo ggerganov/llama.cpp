@@ -88,30 +88,42 @@ static string repeat(const string& str, size_t n) {
     return result;
 }
 
-static string _format_literal(const string& literal) {
-    string escaped = json(literal).dump();
-    smatch match;
-    while (regex_search(escaped, match, GRAMMAR_LITERAL_ESCAPE_RE)) {
-        char c = match.str()[0];
-        escaped.replace(match.position(), 1, GRAMMAR_LITERAL_ESCAPES.at(c));
+static std::string replacePattern(const std::string& input, const regex& regex, const function<string(const smatch &)>& replacement) {
+    std::smatch match;
+    std::string result;
+    
+    std::string::const_iterator searchStart(input.cbegin());
+    std::string::const_iterator searchEnd(input.cend());
+    
+    while (std::regex_search(searchStart, searchEnd, match, regex)) {
+        result.append(searchStart, searchStart + match.position());
+        result.append(replacement(match));
+        searchStart = match.suffix().first;
     }
+    
+    result.append(searchStart, searchEnd);
+    
+    return result;
+}
+
+static string _format_literal(const string& literal) {
+    string escaped = replacePattern(json(literal).dump(), GRAMMAR_LITERAL_ESCAPE_RE, [&](const auto& match) {
+        char c = match.str()[0];
+        return GRAMMAR_LITERAL_ESCAPES.at(c);
+    });
     return "\"" + escaped + "\"";
 }
 
-static string _format_range_char(const string& literal) {
-    string escaped = literal.substr(1, literal.length() - 2);
-    smatch match;
-    while (regex_search(escaped, match, GRAMMAR_RANGE_LITERAL_ESCAPE_RE)) {
+static string _format_range_char(const string& ch) {
+    return replacePattern(ch, GRAMMAR_RANGE_LITERAL_ESCAPE_RE, [&](const auto& match) {
         char c = match.str()[0];
-        escaped.replace(match.position(), 1, GRAMMAR_LITERAL_ESCAPES.at(c));
-    }
-    return escaped;
+        return GRAMMAR_LITERAL_ESCAPES.at(c);
+    });
 }
 
 
 class SchemaConverter {
 private:
-    unordered_map<string, int> _prop_order;
     std::optional<std::function<json(const string&)>> _fetch_json;
     bool _dotall;
     unordered_map<string, string> _rules;
@@ -348,21 +360,8 @@ private:
     }
 
     string _build_object_rule(const vector<pair<string, json>>& properties, const unordered_set<string>& required, const string& name) {
-        unordered_map<string, int> prop_order = _prop_order;
-        vector<string> sorted_props;
-        for (size_t i = 0; i < properties.size(); i++) {
-            const auto& prop = properties[i];
-            int order = (prop_order.find(prop.first) != prop_order.end()) ? prop_order[prop.first] : (int)prop_order.size();
-            sorted_props.push_back(prop.first);
-            for (size_t j = sorted_props.size() - 1; j > 0; j--) {
-                if (order < ((prop_order.find(sorted_props[j - 1]) != prop_order.end()) ? prop_order[sorted_props[j - 1]] : (int)prop_order.size())) {
-                    swap(sorted_props[j], sorted_props[j - 1]);
-                } else {
-                    break;
-                }
-            }
-        }
-
+        vector<string> required_props;
+        vector<string> optional_props;
         unordered_map<string, string> prop_kv_rule_names;
         for (const auto& [prop_name, prop_schema] : properties) {
             string prop_rule_name = visit(prop_schema, name + (name.empty() ? "" : "-") + prop_name);
@@ -370,15 +369,10 @@ private:
                 name + (name.empty() ? "" : "-") + prop_name + "-kv",
                 _format_literal(prop_name) + " space \":\" space " + prop_rule_name
             );
-        }
-
-        vector<string> required_props;
-        vector<string> optional_props;
-        for (const auto& prop : sorted_props) {
-            if (required.find(prop) != required.end()) {
-                required_props.push_back(prop);
+            if (required.find(prop_name) != required.end()) {
+                required_props.push_back(prop_name);
             } else {
-                optional_props.push_back(prop);
+                optional_props.push_back(prop_name);
             }
         }
 
@@ -438,10 +432,9 @@ private:
 
 public:
     SchemaConverter(
-        const unordered_map<std::string, int>& prop_order,
         const std::optional<std::function<json(const string&)>>& fetch_json,
         bool dotall)
-          : _prop_order(prop_order), _fetch_json(fetch_json), _dotall(dotall)
+          : _fetch_json(fetch_json), _dotall(dotall)
     {
         _rules["space"] = SPACE_RULE;
     }
@@ -668,11 +661,10 @@ public:
 
 
 string json_schema_to_grammar(const json& schema) {
-  unordered_map<string, int> prop_order;
   auto dotall = false;
   string url("input");
 
-  SchemaConverter converter(prop_order, /* fetch_json= */ std::nullopt, dotall);
+  SchemaConverter converter(/* fetch_json= */ std::nullopt, dotall);
   auto copy = schema;
   copy = converter.resolve_refs(copy, url);
   converter.visit(copy, "");
