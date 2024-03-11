@@ -103,7 +103,7 @@ class SchemaConverter:
                             self._refs[base_url] = target
 
                         if len(frag_split) == 1 or frag_split[-1] == '':
-                            return
+                            return target
                     elif ref.startswith('#/'):
                         target = schema
                         ref = f'{url}{ref}'
