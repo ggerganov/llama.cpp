@@ -336,7 +336,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
                 NSMutableDictionary * prep = [NSMutableDictionary dictionary];
 
 #ifdef GGML_QKK_64
-                prep[@"QK_K"] = @(64);
+                prep[@"GGML_QKK_64"] = @(1);
 #endif
 
                 MTLCompileOptions* options = [MTLCompileOptions new];
