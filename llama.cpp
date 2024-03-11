@@ -10538,7 +10538,7 @@ struct llama_grammar * llama_grammar_init(
 
     // loop over alternates of start rule to build initial stacks
     std::vector<std::vector<const llama_grammar_element *>> stacks;
-    pos = rules[start_rule_index];
+    pos = vec_rules[start_rule_index].data();
     do {
         std::vector<const llama_grammar_element *> stack;
         if (!llama_grammar_is_end_of_sequence(pos)) {
