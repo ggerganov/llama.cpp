@@ -634,7 +634,7 @@ ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
 unicode.o: unicode.cpp unicode.h
-	$(CC) $(CXXFLAGS)  -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o
 
