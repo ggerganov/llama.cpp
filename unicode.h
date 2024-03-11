@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <map>
 #include <vector>
 
 #define CODEPOINT_TYPE_UNIDENTIFIED 0
@@ -13,11 +12,10 @@
 #define CODEPOINT_TYPE_SYMBOL       6
 #define CODEPOINT_TYPE_CONTROL      7
 
-// TODO: remove
-const std::multimap<uint32_t, uint32_t> & unicode_nfd_map();
-
 std::string unicode_cpt_to_utf8(uint32_t cp);
 std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8);
+
+std::vector<uint32_t> unicode_cpts_normalize_nfd(std::vector<uint32_t> cpts);
 
 int unicode_cpt_type(uint32_t cp);
 int unicode_cpt_type(const std::string & utf8);

@@ -9705,9 +9705,9 @@ private:
         bpe_words.reserve(text.size());
         bpe_encoded_words.reserve(text.size());
 
-        auto cps = unicode_cpts_from_utf8(text);
-        for (size_t i = 0; i < cps.size(); ++i)
-            text_utf.emplace_back(unicode_cpt_to_utf8(cps[i]));
+        const auto cpts = unicode_cpts_from_utf8(text);
+        for (size_t i = 0; i < cpts.size(); ++i)
+            text_utf.emplace_back(unicode_cpt_to_utf8(cpts[i]));
 
         for (int i = 0; i < (int)text_utf.size(); i++) {
             const std::string & utf_char = text_utf[i];
@@ -9893,25 +9893,12 @@ struct llm_tokenizer_wpm {
     }
 
     std::vector<std::string> preprocess(const std::string & text) {
-        // normalalization form D
-        std::vector<uint32_t> cpts = unicode_cpts_from_utf8(text);
-        std::vector<uint32_t> nfd_cpts;
-        const auto & nfd_map = unicode_nfd_map();
-        for (uint32_t code : cpts) {
-            auto it = nfd_map.equal_range(code);
-            if (it.first != it.second) {
-                for (auto jt = it.first; jt != it.second; jt++) {
-                    nfd_cpts.push_back(jt->second);
-                }
-            } else {
-                nfd_cpts.push_back(code);
-            }
-        }
+        std::vector<uint32_t> cpts_nfd = unicode_cpts_normalize_nfd(unicode_cpts_from_utf8(text));
 
         // strip accents, strip control, uniformize whitespace,
         // to lowercase, pad chinese characters, pad punctuation
         std::string new_str = "";
-        for (uint32_t code : nfd_cpts) {
+        for (uint32_t code : cpts_nfd) {
             int type = unicode_cpt_type(code);
             if (type == CODEPOINT_TYPE_ACCENT_MARK || type == CODEPOINT_TYPE_CONTROL) {
                 continue;
@@ -9940,8 +9927,7 @@ struct llm_tokenizer_wpm {
                 if (r > l) words.push_back(new_str.substr(l, (r - l)));
                 l = r + 1;
                 r = l;
-            }
-            else {
+            } else {
                 r += 1;
             }
         }
