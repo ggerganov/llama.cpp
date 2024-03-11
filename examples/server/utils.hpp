@@ -378,7 +378,7 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, json result, bool streaming = false) {
+static json format_final_response_oaicompat(const json & request, json result, const std::string & completion_id, bool streaming = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
@@ -412,7 +412,7 @@ static json format_final_response_oaicompat(const json & request, json result, b
             {"prompt_tokens",     num_prompt_tokens},
             {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
         }},
-        {"id", gen_chatcmplid()}
+        {"id", completion_id}
     };
 
     if (server_verbose) {
@@ -427,7 +427,7 @@ static json format_final_response_oaicompat(const json & request, json result, b
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(json result) {
+static std::vector<json> format_partial_response_oaicompat(json result, const std::string & completion_id) {
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
         return std::vector<json>({result});
     }
@@ -471,7 +471,7 @@ static std::vector<json> format_partial_response_oaicompat(json result) {
                                             {"role", "assistant"}
                                         }}}})},
                             {"created", t},
-                            {"id", gen_chatcmplid()},
+                            {"id", completion_id},
                             {"model", modelname},
                             {"object", "chat.completion.chunk"}};
 
@@ -482,7 +482,7 @@ static std::vector<json> format_partial_response_oaicompat(json result) {
                                                             {"content", content}}}
                                                             }})},
                             {"created", t},
-                            {"id", gen_chatcmplid()},
+                            {"id", completion_id},
                             {"model", modelname},
                             {"object", "chat.completion.chunk"}};
 
@@ -509,7 +509,7 @@ static std::vector<json> format_partial_response_oaicompat(json result) {
     json ret = json {
         {"choices", choices},
         {"created", t},
-        {"id",      gen_chatcmplid()},
+        {"id",      completion_id},
         {"model",   modelname},
         {"object",  "chat.completion.chunk"}
     };
