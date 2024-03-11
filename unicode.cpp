@@ -576,7 +576,7 @@ static uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset)
     throw std::invalid_argument("invalid string");
 }
 
-static std::vector<uint16_t> cpt_to_utf16(uint32_t cp) {
+static std::vector<uint16_t> unicode_cpt_to_utf16(uint32_t cp) {
     std::vector<uint16_t> result;
     if (/* 0x0000 <= cp && */ cp <= 0xffff) {
         result.emplace_back(cp);
@@ -591,14 +591,14 @@ static std::vector<uint16_t> cpt_to_utf16(uint32_t cp) {
     return result;
 }
 
-static std::vector<uint16_t> cpts_to_utf16(const std::vector<uint32_t> & cps) {
-    std::vector<uint16_t> result;
-    for (size_t i = 0; i < cps.size(); ++i) {
-        auto temp = cpt_to_utf16(cps[i]);
-        result.insert(result.end(), temp.begin(), temp.end());
-    }
-    return result;
-}
+//static std::vector<uint16_t> unicode_cpts_to_utf16(const std::vector<uint32_t> & cps) {
+//    std::vector<uint16_t> result;
+//    for (size_t i = 0; i < cps.size(); ++i) {
+//        auto temp = unicode_cpt_to_utf16(cps[i]);
+//        result.insert(result.end(), temp.begin(), temp.end());
+//    }
+//    return result;
+//}
 
 static uint32_t cpt_from_utf16(const std::vector<uint16_t> & utf16, size_t & offset) {
     assert(offset < utf16.size());
@@ -617,16 +617,16 @@ static uint32_t cpt_from_utf16(const std::vector<uint16_t> & utf16, size_t & off
     return result;
 }
 
-static std::vector<uint32_t> cpts_from_utf16(const std::vector<uint16_t> & utf16) {
-    std::vector<uint32_t> result;
-    size_t offset = 0;
-    while (offset < utf16.size()) {
-        result.push_back(cpt_from_utf16(utf16, offset));
-    }
-    return result;
-}
+//static std::vector<uint32_t> unicode_cpts_from_utf16(const std::vector<uint16_t> & utf16) {
+//    std::vector<uint32_t> result;
+//    size_t offset = 0;
+//    while (offset < utf16.size()) {
+//        result.push_back(cpt_from_utf16(utf16, offset));
+//    }
+//    return result;
+//}
 
-static std::unordered_map<uint32_t, int> cpt_type_map() {
+static std::unordered_map<uint32_t, int> unicode_cpt_type_map() {
     std::unordered_map<uint32_t, int> cpt_types;
     for (auto p : digit_ranges) {
         for (auto i = p.first; i <= p.second; ++ i) {
@@ -666,7 +666,7 @@ static std::unordered_map<uint32_t, int> cpt_type_map() {
     return cpt_types;
 }
 
-static std::unordered_map<uint8_t, std::string> unicode_byteo_to_utf8_map() {
+static std::unordered_map<uint8_t, std::string> unicode_byte_to_utf8_map() {
     std::unordered_map<uint8_t, std::string> map;
     for (int ch = u'!'; ch <= u'~'; ++ch) {
         assert(0 <= ch && ch < 256);
@@ -758,7 +758,7 @@ std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
 }
 
 int unicode_cpt_type(uint32_t cp) {
-    static std::unordered_map<uint32_t, int> cpt_types = cpt_type_map();
+    static std::unordered_map<uint32_t, int> cpt_types = unicode_cpt_type_map();
     const auto it = cpt_types.find(cp);
     return it == cpt_types.end() ? CODEPOINT_TYPE_UNIDENTIFIED : it->second;
 }
@@ -772,7 +772,7 @@ int unicode_cpt_type(const std::string & utf8) {
 }
 
 std::string unicode_byte_to_utf8(uint8_t byte) {
-    static std::unordered_map<uint8_t, std::string> map = unicode_byteo_to_utf8_map();
+    static std::unordered_map<uint8_t, std::string> map = unicode_byte_to_utf8_map();
     return map.at(byte);
 }
 
