@@ -1288,6 +1288,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 
     cparams.n_ctx             = params.n_ctx;
     cparams.n_batch           = params.n_batch;
+    cparams.n_parallel        = params.n_parallel;
     cparams.n_threads         = params.n_threads;
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     cparams.seed              = params.seed;
@@ -1851,3 +1852,18 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
 
     printf("\n=== Done dumping\n");
 }
+
+void llama_embd_normalize(const float * inp, float * out, int n) {
+    double sum = 0.0;
+    for (int i = 0; i < n; i++) {
+        sum += inp[i] * inp[i];
+    }
+    sum = sqrt(sum);
+
+    const float norm = sum > 0.0 ? 1.0f / sum : 0.0f;
+
+    for (int i = 0; i < n; i++) {
+        out[i] = inp[i] * norm;
+    }
+}
+

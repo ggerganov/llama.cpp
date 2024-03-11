@@ -10,16 +10,15 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Recent API changes
 
+- [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_max_seq()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
 - [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
 - [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
 
 ### Hot topics
 
-- The `api_like_OAI.py` script has been removed - use `server` instead ([#5766](https://github.com/ggerganov/llama.cpp/issues/5766#issuecomment-1969037761))
-- Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
-- Support for Gemma models: https://github.com/ggerganov/llama.cpp/pull/5631
-- Non-linear quantization IQ4_NL: https://github.com/ggerganov/llama.cpp/pull/5590
-- Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
+- Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
+- Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
+- Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
 
 ----
 
@@ -110,6 +109,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [InternLM2](https://huggingface.co/models?search=internlm2)
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
+- [x] [Mamba](https://github.com/state-spaces/mamba)
 
 **Multimodal models:**
 

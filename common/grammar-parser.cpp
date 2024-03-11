@@ -278,6 +278,22 @@ namespace grammar_parser {
             while (*pos) {
                 pos = parse_rule(state, pos);
             }
+            // Validate the state to ensure that all rules are defined
+            for (const auto & rule : state.rules) {
+                for (const auto & elem : rule) {
+                    if (elem.type == LLAMA_GRETYPE_RULE_REF) {
+                        // Ensure that the rule at that location exists
+                        if (elem.value >= state.rules.size() || state.rules[elem.value].empty()) {
+                            // Get the name of the rule that is missing
+                            for (const auto & kv : state.symbol_ids) {
+                                if (kv.second == elem.value) {
+                                    throw std::runtime_error("Undefined rule identifier '" + kv.first + "'");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             return state;
         } catch (const std::exception & err) {
             fprintf(stderr, "%s: error parsing grammar: %s\n", __func__, err.what());

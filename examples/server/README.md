@@ -42,7 +42,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
 - `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
 - `--port`: Set the port to listen. Default: `8080`.
-- `--path`: path from which to serve static files (default examples/server/public)
+- `--path`: path from which to serve static files (default: disabled)
 - `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
 - `--api-key-file`: path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`'s.
 - `--embedding`: Enable embedding extraction, Default: disabled.
@@ -59,6 +59,10 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `--log-disable`: Output logs to stdout only, default: enabled.
 - `--log-format FORMAT`: Define the log output to FORMAT: json or text (default: json)
 
+**If compiled with `LLAMA_SERVER_SSL=ON`**
+- `--ssl-key-file FNAME`: path to file a PEM-encoded SSL private key
+- `--ssl-cert-file FNAME`: path to file a PEM-encoded SSL certificate
+
 ## Build
 
 server is build alongside everything else from the root of the project
@@ -73,6 +77,28 @@ server is build alongside everything else from the root of the project
 
   ```bash
   cmake --build . --config Release
+  ```
+
+## Build with SSL
+
+server can also be built with SSL support using OpenSSL 3
+
+- Using `make`:
+
+  ```bash
+  # NOTE: For non-system openssl, use the following:
+  #   CXXFLAGS="-I /path/to/openssl/include"
+  #   LDFLAGS="-L /path/to/openssl/lib"
+  make LLAMA_SERVER_SSL=true server
+  ```
+
+- Using `CMake`:
+
+  ```bash
+  mkdir build
+  cd build
+  cmake .. -DLLAMA_SERVER_SSL=ON
+  make server
   ```
 
 ## Quick Start
@@ -169,7 +195,11 @@ node index.js
 
     *Options:*
 
-    `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. If the prompt is a string or an array with the first element given as a string, a `bos` token is inserted in the front like `main` does.
+    `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
+
+      - The prompt is a string or an array with the first element given as a string
+      - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
+      - The system prompt is empty
 
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
 
@@ -282,7 +312,7 @@ Notice that each `probs` is an array of length `n_probs`.
 
     `content`: Set the text to tokenize.
 
-    Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
+    Note that a special `BOS` token is never inserted.
 
 - **POST** `/detokenize`: Convert tokens to text.
 
@@ -436,7 +466,7 @@ Notice that each `probs` is an array of length `n_probs`.
         "next_token": {
             "has_next_token": true,
             "n_remain": -1,
-            "num_tokens_predicted": 0,
+            "n_decoded": 0,
             "stopped_eos": false,
             "stopped_limit": false,
             "stopped_word": false,
@@ -532,7 +562,7 @@ The HTTP server supports OAI-like API
 
 ### Extending or building alternative Web Front End
 
-The default location for the static files is `examples/server/public`. You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
+You can extend the front end by running the server binary with `--path` set to `./your-directory` and importing `/completion.js` to get access to the llamaComplete() method.
 
 Read the documentation in `/completion.js` to see convenient ways to access llama.
 
