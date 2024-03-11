@@ -3456,11 +3456,12 @@ void dequantize_row_iq1_s(const block_iq1_s * restrict x, float * restrict y, in
         const uint16_t * qh = x[i].qh;
 
         for (int ib = 0; ib < QK_K/32; ++ib) {
-            const float dl = d * (2*(qh[ib] >> 12) + 1);
+            const float dl = d * ((2*(qh[ib] >> 12) & 7) + 1);
+            const float delta = qh[ib] & 0x8000 ? -IQ1S_DELTA : IQ1S_DELTA;
             for (int l = 0; l < 4; ++l) {
                 const int8_t * grid = (const int8_t *)(iq1s_grid + (qs[l] | (((qh[ib] >> 3*l) & 7) << 8)));
                 for (int j = 0; j < 8; ++j) {
-                    y[j] = dl * grid[j];
+                    y[j] = dl * (grid[j] + delta);
                 }
                 y += 8;
             }
@@ -9614,6 +9615,7 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
 #elif defined __AVX2__
 
     __m256 accum = _mm256_setzero_ps();
+    float accum1 = 0;
     for (int i = 0; i < nb; ++i) {
 
         const int8_t   * q8 = y[i].qs;
@@ -9621,6 +9623,7 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
         const uint16_t * qh = x[i].qh;
 
         __m256i sumi = _mm256_setzero_si256();
+        int sumi1 = 0;
         for (int ib = 0; ib < QK_K/32; ib += 2) {
             const __m256i q1b_1 = _mm256_set_epi64x(iq1s_grid[qs[3] | ((qh[ib+0] >> 1) & 0x700)], iq1s_grid[qs[2] | ((qh[ib+0] << 2) & 0x700)],
                                                     iq1s_grid[qs[1] | ((qh[ib+0] << 5) & 0x700)], iq1s_grid[qs[0] | ((qh[ib+0] << 8) & 0x700)]);
@@ -9632,17 +9635,23 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
 
             const __m256i dot1 = mul_add_epi8(q1b_1, q8b_1);
             const __m256i dot2 = mul_add_epi8(q1b_2, q8b_2);
-            const __m256i p1 = _mm256_madd_epi16(dot1, _mm256_set1_epi16(2*(qh[ib+0] >> 12) + 1));
-            const __m256i p2 = _mm256_madd_epi16(dot2, _mm256_set1_epi16(2*(qh[ib+1] >> 12) + 1));
+            const int16_t ls1 = 2*((qh[ib+0] >> 12) & 7) + 1;
+            const int16_t ls2 = 2*((qh[ib+1] >> 12) & 7) + 1;
+            const __m256i p1 = _mm256_madd_epi16(dot1, _mm256_set1_epi16(ls1));
+            const __m256i p2 = _mm256_madd_epi16(dot2, _mm256_set1_epi16(ls2));
 
             sumi = _mm256_add_epi32(sumi, _mm256_add_epi32(p1, p2));
+            sumi1 += (y[i].bsums[2*ib+0] + y[i].bsums[2*ib+1]) * (qh[ib+0] & 0x8000 ? -1 : 1) * ls1
+                   + (y[i].bsums[2*ib+2] + y[i].bsums[2*ib+3]) * (qh[ib+1] & 0x8000 ? -1 : 1) * ls2;
         }
 
-        accum = _mm256_fmadd_ps(_mm256_set1_ps(y[i].d * GGML_FP16_TO_FP32(x[i].d)), _mm256_cvtepi32_ps(sumi), accum);
+        const float d = y[i].d * GGML_FP16_TO_FP32(x[i].d);
+        accum = _mm256_fmadd_ps(_mm256_set1_ps(d), _mm256_cvtepi32_ps(sumi), accum);
+        accum1 += d * sumi1;
 
     }
 
-    *s = hsum_float_8(accum);
+    *s = hsum_float_8(accum) + IQ1S_DELTA * accum1;
 
 #else
 
@@ -9653,9 +9662,10 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
         const uint8_t  * qs = x[i].qs;
         const uint16_t * qh = x[i].qh;
 
-        int sumi = 0;
+        int sumi = 0, sumi1 = 0;
         for (int ib = 0; ib < QK_K/32; ++ib) {
-            const int ls = 2*(qh[ib] >> 12) + 1;
+            const int ls = 2*((qh[ib] >> 12) & 7) + 1;
+            const int delta = qh[ib] & 0x8000 ? -1 : 1;
             int lsum = 0;
             for (int l = 0; l < 4; ++l) {
                 const int8_t * grid = (const int8_t *)(iq1s_grid + (qs[l] | (((qh[ib] >> 3*l) & 7) << 8)));
@@ -9664,11 +9674,12 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
                 }
                 q8 += 8;
             }
-            sumi += ls * lsum;
+            sumi  += ls * lsum;
+            sumi1 += ls * delta * (y[i].bsums[2*ib+0] + y[i].bsums[2*ib+1]);
             qs += 4;
         }
 
-        sumf += GGML_FP16_TO_FP32(x[i].d) * y[i].d * sumi;
+        sumf += GGML_FP16_TO_FP32(x[i].d) * y[i].d * (sumi + IQ1S_DELTA * sumi1);
     }
 
     *s = sumf;
