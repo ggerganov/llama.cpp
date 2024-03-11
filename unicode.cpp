@@ -1623,7 +1623,7 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
     return result;
 }
 
-std::vector<uint32_t> unicode_cpts_normalize_nfd(std::vector<uint32_t> cpts) {
+std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
     std::vector<uint32_t> result;
     result.reserve(cpts.size());
     for (size_t i = 0; i < cpts.size(); ++i) {
