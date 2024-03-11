@@ -556,9 +556,51 @@ Run with bash:
 bash chat.sh
 ```
 
-### API like OAI
+### OAI-like API
 
-The HTTP server supports OAI-like API
+The HTTP server supports OAI-like API: https://github.com/openai/openai-openapi
+
+### API errors
+
+Server returns error in the same format as OAI: https://github.com/openai/openai-openapi
+
+Example of an error:
+
+```json
+{
+    "error": {
+        "code": 401,
+        "message": "Invalid API Key",
+        "type": "authentication_error"
+    }
+}
+```
+
+Apart from error types supported by OAI, we also have custom types that are specific to functionalities of llama.cpp:
+
+**When /metrics or /slots endpoint is disabled**
+
+```json
+{
+    "error": {
+        "code": 501,
+        "message": "This server does not support metrics endpoint.",
+        "type": "not_supported_error"
+    }
+}
+```
+
+**When the server receives invalid grammar via */completions endpoint**
+
+```json
+{
+    "error": {
+        "code": 400,
+        "message": "Failed to parse grammar",
+        "type": "invalid_request_error"
+    }
+}
+```
 
 ### Extending or building alternative Web Front End
 

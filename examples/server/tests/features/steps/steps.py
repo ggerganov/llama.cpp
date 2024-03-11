@@ -801,7 +801,7 @@ async def oai_chat_completions(user_prompt,
                 stream=enable_streaming,
                 seed=seed
             )
-        except openai.error.APIError as e:
+        except openai.error.AuthenticationError as e:
             if expect_api_error is not None and expect_api_error:
                 return 401
             else:
