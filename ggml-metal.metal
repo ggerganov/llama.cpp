@@ -4377,7 +4377,7 @@ void kernel_mul_mv_iq1_s_f32_impl(
                      + yl[j+16] * (grid3[j] & 0xf) + yl[j+20] * (grid3[j] >> 4)
                      + yl[j+24] * (grid4[j] & 0xf) + yl[j+28] * (grid4[j] >> 4);
             }
-            sumf[row] += (float)dh[0] * (sum - sumy) * (2*(qh[0] >> 12) + 1);
+            sumf[row] += (float)dh[0] * (sum + sumy * (qh[0] & 0x8000 ? -1 - IQ1S_DELTA : -1 + IQ1S_DELTA)) * (2*((qh[0] >> 12) & 7) + 1);
 
             dh += nb*sizeof(block_iq1_s)/2;
             qs += nb*sizeof(block_iq1_s);
@@ -5076,14 +5076,16 @@ void dequantize_iq1_s(device const block_iq1_s * xb, short il, thread type4x4 & 
     const float d = xb->d;
     device const uint8_t  * qs = xb->qs + 4*ib32 + 2*il;
     device const uint16_t * qh = xb->qh;
-    const float dl = d * (2*(qh[ib32] >> 12) + 1);
-    constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | (((qh[ib32] >> (6*il+0)) & 7) << 8)));
-    constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | (((qh[ib32] >> (6*il+3)) & 7) << 8)));
+    const float dl = d * (2*((qh[ib32] >> 12) & 7) + 1);
+    const float ml = dl * (qh[ib32] & 0x8000 ? -1 - IQ1S_DELTA : -1 + IQ1S_DELTA);
+    const uint16_t h = qh[ib32] >> 6*il;
+    constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | ((h << 8) & 0x700)));
+    constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | ((h << 5) & 0x700)));
     for (int i = 0; i < 4; ++i) {
-        reg[0][i] = dl * (grid1[i] & 0xf) - dl;
-        reg[1][i] = dl * (grid1[i] >>  4) - dl;
-        reg[2][i] = dl * (grid2[i] & 0xf) - dl;
-        reg[3][i] = dl * (grid2[i] >>  4) - dl;
+        reg[0][i] = dl * (grid1[i] & 0xf) + ml;
+        reg[1][i] = dl * (grid1[i] >>  4) + ml;
+        reg[2][i] = dl * (grid2[i] & 0xf) + ml;
+        reg[3][i] = dl * (grid2[i] >>  4) + ml;
     }
 }
 
