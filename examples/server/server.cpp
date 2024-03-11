@@ -3195,11 +3195,12 @@ int main(int argc, char ** argv) {
         ctx_server.queue_results.add_waiting_task_id(id_task);
         ctx_server.request_completion(id_task, -1, data, false, false);
 
+        const auto completion_id = gen_chatcmplid();
         if (!json_value(data, "stream", false)) {
             server_task_result result = ctx_server.queue_results.recv(id_task);
 
             if (!result.error && result.stop) {
-                json result_oai = format_final_response_oaicompat(data, result.data);
+                json result_oai = format_final_response_oaicompat(data, result.data, completion_id);
 
                 res.set_content(result_oai.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
             } else {
@@ -3208,11 +3209,11 @@ int main(int argc, char ** argv) {
             }
             ctx_server.queue_results.remove_waiting_task_id(id_task);
         } else {
-            const auto chunked_content_provider = [id_task, &ctx_server](size_t, httplib::DataSink & sink) {
+            const auto chunked_content_provider = [id_task, &ctx_server, completion_id](size_t, httplib::DataSink & sink) {
                 while (true) {
                     server_task_result result = ctx_server.queue_results.recv(id_task);
                     if (!result.error) {
-                        std::vector<json> result_array = format_partial_response_oaicompat(result.data);
+                        std::vector<json> result_array = format_partial_response_oaicompat(result.data, completion_id);
 
                         for (auto it = result_array.begin(); it != result_array.end(); ++it) {
                             if (!it->empty()) {
