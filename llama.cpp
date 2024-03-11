@@ -988,7 +988,28 @@ struct llama_file {
     size_t size;
 
     llama_file(const char * fname, const char * mode) {
+#ifdef _WIN32
+        // temporarily change the locale to the system default to handle Unicode file names
+        std::string oldLocale = std::setlocale(LC_ALL, nullptr);
+        std::setlocale(LC_ALL, "");
+
+        // convert multi-byte string to wide-char string
+        int wsize = MultiByteToWideChar(CP_UTF8, 0, fname, -1, nullptr, 0);
+        std::vector<wchar_t> wfname(wsize);
+        MultiByteToWideChar(CP_UTF8, 0, fname, -1, wfname.data(), wsize);
+
+        // determine the correct wide-character mode string
+        std::wstring wmode;
+        for(; *mode; ++mode) {
+            wmode += wchar_t(*mode);
+        }
+
+        fp = _wfopen(wfname.data(), wmode.c_str());
+
+        std::setlocale(LC_ALL, oldLocale.c_str());
+#else
         fp = std::fopen(fname, mode);
+#endif
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
         }
