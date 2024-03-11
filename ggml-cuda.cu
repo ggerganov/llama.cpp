@@ -565,8 +565,8 @@ static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + IQ3S_N
 #define QI1_S (QK_K / (4*QR1_S))
 typedef struct {
     half d;
-    uint8_t qs[QK_K/8];
-    uint8_t scales[QK_K/16];
+    uint8_t  qs[QK_K/8];
+    uint16_t qh[QK_K/32];
 } block_iq1_s;
 static_assert(sizeof(block_iq1_s) == sizeof(ggml_fp16_t) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
 
@@ -1722,11 +1722,22 @@ static __global__ void dequantize_block_iq1_s(const void * __restrict__ vx, dst_
     const int il = tid/8; // 0...3
     const int ib = tid%8; // 0...7
     dst_t * y = yy + i*QK_K + 32*ib + 8*il;
-    const int i8 = 4*ib+il;
-    uint8_t h = x[i].scales[i8/2] >> 4*(i8%2);
-    const int8_t * grid = (const int8_t *)(iq1s_grid + (x[i].qs[i8] | ((h & 8) << 5)));
-    const float d = (float)x[i].d * (2*(h & 7) + 1);
-    for (int j = 0; j < 8; ++j) y[j] = d * grid[j];
+    const float d = (float)x[i].d * (2*((x[i].qh[ib] >> 12) & 0xf) + 1);
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    int grid32[2]; const int8_t * q = (const int8_t *)grid32;
+    grid32[0] = *((const int *)(iq1s_grid_gpu + (x[i].qs[4*ib+il] | (((x[i].qh[ib] >> 3*il) & 7) << 8))));
+    grid32[1] = __vsub4((grid32[0] >>  4) & 0x0f0f0f0f, 0x01010101);
+    grid32[0] = __vsub4(grid32[0] & 0x0f0f0f0f, 0x01010101);
+    for (int j = 0; j < 8; ++j) {
+        y[j] = d * q[j];
+    }
+#else
+    const uint8_t * grid = (const uint8_t *)(iq1s_grid_gpu + (x[i].qs[4*ib+il] | (((x[i].qh[ib] >> 3*il) & 7) << 8)));
+    for (int j = 0; j < 4; ++j) {
+        y[j+0] = d * ((grid[j] & 0xf) - 1);
+        y[j+4] = d * ((grid[j] >>  4) - 1);
+    }
+#endif
 #else
     assert(false);
 #endif
@@ -4538,44 +4549,33 @@ static __device__ __forceinline__ float vec_dot_iq3_s_q8_1(
 #endif
 }
 
-
 static __device__ __forceinline__ float vec_dot_iq1_s_q8_1(
     const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
 #if QK_K == 256
     const block_iq1_s * bq1 = (const block_iq1_s *) vbq;
 
     const int ib32 = iqs;
-    int sumi1 = 0, sumi2 = 0, sumi3 = 0, sumi4 = 0;
-    const uint8_t h1 = bq1->scales[2*ib32+0];
-    const uint8_t h2 = bq1->scales[2*ib32+1];
+    int sumi = 0;
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
     const int * q8 = (const int *)bq8_1[ib32].qs;
-    const int * grid1 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+0] | ((h1 & 0x08) << 5)));
-    const int * grid2 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+1] | ((h1 & 0x80) << 1)));
-    const int * grid3 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+2] | ((h2 & 0x08) << 5)));
-    const int * grid4 = (const int *)(iq1s_grid + (bq1->qs[4*ib32+3] | ((h2 & 0x80) << 1)));
-    for (int j = 0; j < 2; ++j) {
-        sumi1 = __dp4a(q8[j+0], grid1[j], sumi1);
-        sumi2 = __dp4a(q8[j+2], grid2[j], sumi2);
-        sumi3 = __dp4a(q8[j+4], grid3[j], sumi3);
-        sumi4 = __dp4a(q8[j+6], grid4[j], sumi4);
+    for (int l = 0; l < 4; ++l) {
+        const int * grid = (const int *)(iq1s_grid_gpu + (bq1->qs[4*ib32+l] | (((bq1->qh[ib32] >> 3*l) & 7) << 8)));
+        int grid0 = __vsub4(grid[0] & 0x0f0f0f0f, 0x01010101);
+        int grid1 = __vsub4((grid[0] >> 4) & 0x0f0f0f0f, 0x01010101);
+        sumi = __dp4a(q8[2*l+1], grid1, __dp4a(q8[2*l+0], grid0, sumi));
     }
 #else
     const int8_t   * q8 = bq8_1[ib32].qs;
-    const int8_t * grid1 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+0] | ((h1 & 0x08) << 5)));
-    const int8_t * grid2 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+1] | ((h1 & 0x80) << 1)));
-    const int8_t * grid3 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+2] | ((h2 & 0x08) << 5)));
-    const int8_t * grid4 = (const int8_t *)(iq1s_grid + (bq1->qs[4*ib32+3] | ((h2 & 0x80) << 1)));
-    for (int j = 0; j < 8; ++j) {
-        sumi1 += q8[j+ 0] * grid1[j];
-        sumi2 += q8[j+ 8] * grid2[j];
-        sumi3 += q8[j+16] * grid3[j];
-        sumi4 += q8[j+24] * grid4[j];
+    for (int l = 0; l < 4; ++l) {
+        const uint8_t * grid = (const uint8_t *)(iq1s_grid_gpu + (bq1->qs[4*ib32+l] | (((bq1->qh[ib32] >> 3*l) & 7) << 8)));
+        for (int j = 0; j < 4; ++j) {
+            sumi += q8[j] * ((grid[j] & 0xf) - 1) + q8[j+4] * ((grid[j] >>  4) - 1);
+        }
+        q8 += 8;
     }
 #endif
     const float d = (float)bq1->d * __low2float(bq8_1[ib32].ds);
-    return d * (sumi1 * (2*(h1 & 7) + 1) + sumi2 * (2*((h1 >> 4) & 7) + 1) +
-                sumi3 * (2*(h2 & 7) + 1) + sumi4 * (2*((h2 >> 4) & 7) + 1));
+    return d * sumi * (2*(bq1->qh[ib32] >> 12) + 1);
 #else
     assert(false);
     return 0.f;
