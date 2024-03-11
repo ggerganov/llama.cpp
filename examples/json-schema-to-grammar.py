@@ -29,6 +29,8 @@ GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"]')
 GRAMMAR_RANGE_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"\]\-\\]')
 GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"', '-': '\\-', ']': '\\]'}
 
+NON_LITERAL_SET = set('|.()[]{}*+?')
+ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('{*+?')
 
 class SchemaConverter:
     def __init__(self, *, prop_order, allow_fetch, dotall):
@@ -245,19 +247,18 @@ class SchemaConverter:
                         )
                 else:
                     lit = ''
-                    while i < length and pattern[i] not in ('.', '(', ')', '|', '[', '{', '*', '+', '?') \
-                            and not (i < length - 1 and pattern[i+1] in ('{', '*', '+', '?')):
-                        c = pattern[i]
-                        if c == '\\' and i < length - 1:
+                    while i < length and pattern[i] not in NON_LITERAL_SET \
+                            and not (i < length - 1 and pattern[i+1] in ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS):
+                        if pattern[i] == '\\' and i < length - 1:
                             i += 1
-                            if c in ('.', '[', ']', '{', '}', '(', ')', '|', '*', '+', '?'):
+                            if pattern[i] in NON_LITERAL_SET:
                                 # Escapes in regular expressions that aren't escaped in GBNF literals
-                                lit += c
+                                lit += pattern[i]
                             else:
-                                lit += f'\\{c}'
+                                lit += f'\\{pattern[i]}'
                             i += 1
                         else:
-                            lit += c
+                            lit += pattern[i]
                             i += 1
                     if lit:
                         seq.append((f'"{lit}"', True))
