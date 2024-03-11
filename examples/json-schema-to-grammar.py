@@ -77,7 +77,7 @@ class SchemaConverter:
                     if ref.startswith('https://'):
                         assert self._allow_fetch, 'Fetching remote schemas is not allowed (use --allow-fetch for force)'
                         import requests
-                        
+
                         frag_split = ref.split('#')
                         base_url = frag_split[0]
 
@@ -94,16 +94,16 @@ class SchemaConverter:
                         n['$ref'] = ref
                     else:
                         raise ValueError(f'Unsupported ref {ref}')
-                    
+
                     for sel in ref.split('#')[-1].split('/')[1:]:
                         assert target is not None and sel in target, f'Error resolving ref {ref}: {sel} not in {target}'
                         target = target[sel]
-                    
+
                     self._refs[ref] = target
                 else:
                     for v in n.values():
                         visit(v)
-            
+
             return n
         return visit(schema)
 
@@ -220,7 +220,7 @@ class SchemaConverter:
                         assert len(nums) == 2
                         min_times = int(nums[0]) if nums[0] else 0
                         max_times = int(nums[1]) if nums[1] else None
-                        
+
                     (sub, sub_is_literal) = seq[-1]
 
                     if min_times == 0 and max_times is None:
@@ -239,7 +239,7 @@ class SchemaConverter:
 
                         seq[-1] = (
                             ' '.join(
-                                ([f'"{sub[1:-1] * min_times}"'] if sub_is_literal else [sub] * min_times) + 
+                                ([f'"{sub[1:-1] * min_times}"'] if sub_is_literal else [sub] * min_times) +
                                 ([f'{sub}?'] * (max_times - min_times) if max_times is not None else [f'{sub}*'])),
                             False
                         )
@@ -265,9 +265,9 @@ class SchemaConverter:
                     if i < length and pattern[i] not in ('.', '(', ')', '|', '[', '{', '*', '+', '?'):
                         seq.append((f'"{pattern[i]}"', True))
                         i += 1
-            
+
             return join_seq()
-        
+
         return self._add_rule(name, transform()[0])
 
 
@@ -279,7 +279,7 @@ class SchemaConverter:
             ref_name = self.visit(resolved, ref_name)
             self._refs_being_resolved.remove(ref)
         return ref_name
-    
+
     def visit(self, schema, name):
         schema_type = schema.get('type')
         rule_name = name or 'root'
@@ -289,7 +289,7 @@ class SchemaConverter:
 
         elif 'oneOf' in schema or 'anyOf' in schema:
             return self._add_rule(rule_name, self._generate_union_rule(name, schema.get('oneOf') or schema['anyOf']))
-        
+
         elif isinstance(schema_type, list):
             return self._add_rule(rule_name, self._generate_union_rule(name, [{'type': t} for t in schema_type]))
 
@@ -312,7 +312,7 @@ class SchemaConverter:
             def add_component(comp_schema, is_required):
                 if (ref := comp_schema.get('$ref')) is not None:
                     comp_schema = self._refs[ref]
-                
+
                 if 'properties' in comp_schema:
                     for prop_name, prop_schema in comp_schema['properties'].items():
                         properties.append((prop_name, prop_schema))
@@ -369,7 +369,7 @@ class SchemaConverter:
                 else:
                     rule = f'"[" space {item_rule_name} {successive_items} "]" space'
                 return self._add_rule(rule_name, rule)
-            
+
         elif schema_type in (None, 'string') and 'pattern' in schema:
             return self._visit_pattern(schema['pattern'], rule_name)
 
@@ -382,7 +382,7 @@ class SchemaConverter:
             for t, r in PRIMITIVE_RULES.items():
                 self._add_rule(t, r)
             return 'object'
-        
+
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
             # TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
@@ -390,7 +390,7 @@ class SchemaConverter:
                 'root' if rule_name == 'root' else schema_type,
                 PRIMITIVE_RULES[schema_type]
             )
-    
+
     def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str):
         prop_order = self._prop_order
         # sort by position in prop_order (if specified) then by original order
@@ -406,9 +406,9 @@ class SchemaConverter:
 
         required_props = [k for k in sorted_props if k in required]
         optional_props = [k for k in sorted_props if k not in required]
-        
+
         rule = '"{" space '
-        rule += ' "," space '.join(prop_kv_rule_names[k] for k in required_props)            
+        rule += ' "," space '.join(prop_kv_rule_names[k] for k in required_props)
 
         if optional_props:
             rule += ' ('
@@ -474,7 +474,7 @@ def main(args_in = None):
         action='store_true',
         default=False,
         help='Whether to treat dot (".") as matching all chars including line breaks in regular expression patterns')
-    
+
     parser.add_argument('schema', help='file containing JSON schema ("-" for stdin)')
     args = parser.parse_args(args_in)
 
