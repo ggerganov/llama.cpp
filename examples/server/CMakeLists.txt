@@ -2,7 +2,14 @@ set(TARGET server)
 option(LLAMA_SERVER_VERBOSE "Build verbose logging option for Server" ON)
 option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(${TARGET} server.cpp utils.hpp json.hpp httplib.h)
+add_executable(${TARGET}
+    server.cpp
+    utils.hpp
+    json.hpp
+    httplib.h 
+    json-schema-to-grammar.cpp
+    json-schema-to-grammar.h
+)
 install(TARGETS ${TARGET} RUNTIME)
 target_compile_definitions(${TARGET} PRIVATE
     SERVER_VERBOSE=$<BOOL:${LLAMA_SERVER_VERBOSE}>

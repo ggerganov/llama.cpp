@@ -60,6 +60,8 @@ add_library(${TARGET} STATIC
     console.cpp
     grammar-parser.h
     grammar-parser.cpp
+    json-schema-to-grammar.h
+    json-schema-to-grammar.cpp
     train.h
     train.cpp
     )
