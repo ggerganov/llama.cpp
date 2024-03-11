@@ -103,7 +103,7 @@ export class SchemaConverter {
             }
 
             if (fragSplit.length === 1 || fragSplit[fragSplit.length - 1] === '') {
-              return;
+              return target;
             }
           } else if (ref.startsWith('#/')) {
             target = schema;
