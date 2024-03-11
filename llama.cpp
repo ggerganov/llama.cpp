@@ -3703,7 +3703,7 @@ static void llm_load_vocab(
 
             for (int i = 0; i < n_merges; i++) {
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
-                GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+                GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
 
                 std::string first;
                 std::string second;
@@ -3748,7 +3748,7 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+        GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
 
         vocab.token_to_id[word] = i;
 
@@ -9340,7 +9340,7 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
         }
         case LLAMA_VOCAB_TYPE_BPE: {
             GGML_ASSERT(false);
-            return unicode_to_bytes_bpe(token_data.text);
+            return unicode_utf8_to_byte(token_data.text);
         }
         case LLAMA_VOCAB_TYPE_WPM: {
             GGML_ASSERT(false);
@@ -9365,7 +9365,7 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
         }
         case LLAMA_VOCAB_TYPE_WPM:
         case LLAMA_VOCAB_TYPE_BPE: {
-            return vocab.token_to_id.at(bytes_to_unicode_bpe(ch));
+            return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
         }
         default:
             GGML_ASSERT(false);
@@ -9705,9 +9705,9 @@ private:
         bpe_words.reserve(text.size());
         bpe_encoded_words.reserve(text.size());
 
-        auto cps = codepoints_from_utf8(text);
-        for (size_t i = 0; i < cps.size(); ++i)
-            text_utf.emplace_back(codepoint_to_utf8(cps[i]));
+        const auto cpts = unicode_cpts_from_utf8(text);
+        for (size_t i = 0; i < cpts.size(); ++i)
+            text_utf.emplace_back(unicode_cpt_to_utf8(cpts[i]));
 
         for (int i = 0; i < (int)text_utf.size(); i++) {
             const std::string & utf_char = text_utf[i];
@@ -9757,40 +9757,40 @@ private:
             }
 
             if (!split_condition && !collecting) {
-                if (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
+                if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
                     collecting_letter = true;
                     collecting = true;
                 }
-                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || (!token.size() && utf_char == " " && codepoint_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
                     collecting_numeric = true;
                     collecting = true;
                 }
                 else if (
-                    ((codepoint_type(utf_char) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (codepoint_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
-                    (!token.size() && utf_char == " " && codepoint_type(utf_char_next) != CODEPOINT_TYPE_LETTER && codepoint_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && codepoint_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
+                    ((unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (unicode_cpt_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
+                    (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
                     ) {
                     collecting_special = true;
                     collecting = true;
                 }
-                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE && codepoint_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) {
+                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) {
                     collecting_whitespace_lookahead = true;
                     collecting = true;
                 }
-                else if (codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE) {
+                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE) {
                     split_condition = true;
                 }
             }
             else if (!split_condition && collecting) {
-                if (collecting_letter && codepoint_type(utf_char) != CODEPOINT_TYPE_LETTER) {
+                if (collecting_letter && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER) {
                     split_condition = true;
                 }
-                else if (collecting_numeric && codepoint_type(utf_char) != CODEPOINT_TYPE_DIGIT) {
+                else if (collecting_numeric && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) {
                     split_condition = true;
                 }
-                else if (collecting_special && (codepoint_type(utf_char) == CODEPOINT_TYPE_LETTER || codepoint_type(utf_char) == CODEPOINT_TYPE_DIGIT || codepoint_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
+                else if (collecting_special && (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
                     split_condition = true;
                 }
-                else if (collecting_whitespace_lookahead && (codepoint_type(utf_char_next) == CODEPOINT_TYPE_LETTER || codepoint_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                else if (collecting_whitespace_lookahead && (unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
                     split_condition = true;
                 }
             }
@@ -9819,7 +9819,7 @@ private:
         for (std::string & word : bpe_words) {
             std::string encoded_token = "";
             for (char & c : word) {
-                encoded_token += bytes_to_unicode_bpe(c);
+                encoded_token += unicode_byte_to_utf8(c);
             }
             bpe_encoded_words.emplace_back(encoded_token);
         }
@@ -9893,25 +9893,13 @@ struct llm_tokenizer_wpm {
     }
 
     std::vector<std::string> preprocess(const std::string & text) {
-        // normalalization form D
-        std::vector<uint32_t> codepoints = codepoints_from_utf8(text);
-        std::vector<uint32_t> nfd_codepoints;
-        for (uint32_t code : codepoints) {
-            auto it = nfd_map.equal_range(code);
-            if (it.first != it.second) {
-                for (auto jt = it.first; jt != it.second; jt++) {
-                    nfd_codepoints.push_back(jt->second);
-                }
-            } else {
-                nfd_codepoints.push_back(code);
-            }
-        }
+        std::vector<uint32_t> cpts_nfd = unicode_cpts_normalize_nfd(unicode_cpts_from_utf8(text));
 
         // strip accents, strip control, uniformize whitespace,
         // to lowercase, pad chinese characters, pad punctuation
         std::string new_str = "";
-        for (uint32_t code : nfd_codepoints) {
-            int type = codepoint_type(code);
+        for (uint32_t code : cpts_nfd) {
+            int type = unicode_cpt_type(code);
             if (type == CODEPOINT_TYPE_ACCENT_MARK || type == CODEPOINT_TYPE_CONTROL) {
                 continue;
             }
@@ -9919,7 +9907,7 @@ struct llm_tokenizer_wpm {
             if (type == CODEPOINT_TYPE_WHITESPACE) {
                 code = ' ';
             }
-            std::string s = codepoint_to_utf8(code);
+            std::string s = unicode_cpt_to_utf8(code);
             if (type == CODEPOINT_TYPE_PUNCTUATION || is_ascii_punct(code) || is_chinese_char(code)) {
                 new_str += " ";
                 new_str += s;
@@ -9939,8 +9927,7 @@ struct llm_tokenizer_wpm {
                 if (r > l) words.push_back(new_str.substr(l, (r - l)));
                 l = r + 1;
                 r = l;
-            }
-            else {
+            } else {
                 r += 1;
             }
         }
@@ -9964,17 +9951,17 @@ struct llm_tokenizer_wpm {
         return code < 256 && ispunct(code);
     }
 
-    bool is_chinese_char(uint32_t codepoint) {
-        if ((codepoint >= 0x4E00  && codepoint <= 0x9FFF)  ||
-            (codepoint >= 0x3400  && codepoint <= 0x4DBF)  ||
-            (codepoint >= 0x20000 && codepoint <= 0x2A6DF) ||
-            (codepoint >= 0x2A700 && codepoint <= 0x2B73F) ||
-            (codepoint >= 0x2B740 && codepoint <= 0x2B81F) ||
-            (codepoint >= 0x2B920 && codepoint <= 0x2CEAF) || // this should be 0x2B820 but in hf rust code it is 0x2B920
-            (codepoint >= 0xF900  && codepoint <= 0xFAFF)  ||
-            (codepoint >= 0x2F800 && codepoint <= 0x2FA1F) ||
-            (codepoint >= 0x3000  && codepoint <= 0x303F)  ||
-            (codepoint >= 0xFF00  && codepoint <= 0xFFEF)) {
+    bool is_chinese_char(uint32_t cpt) {
+        if ((cpt >= 0x4E00  && cpt <= 0x9FFF)  ||
+            (cpt >= 0x3400  && cpt <= 0x4DBF)  ||
+            (cpt >= 0x20000 && cpt <= 0x2A6DF) ||
+            (cpt >= 0x2A700 && cpt <= 0x2B73F) ||
+            (cpt >= 0x2B740 && cpt <= 0x2B81F) ||
+            (cpt >= 0x2B920 && cpt <= 0x2CEAF) || // this should be 0x2B820 but in hf rust code it is 0x2B920
+            (cpt >= 0xF900  && cpt <= 0xFAFF)  ||
+            (cpt >= 0x2F800 && cpt <= 0x2FA1F) ||
+            (cpt >= 0x3000  && cpt <= 0x303F)  ||
+            (cpt >= 0xFF00  && cpt <= 0xFFEF)) {
             return true; // NOLINT
         }
         return false;
@@ -12551,7 +12538,7 @@ struct llama_context_params llama_context_default_params() {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
-        /*.n_parallel                  =*/ 1,
+        /*.n_seq_max                   =*/ 1,
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
@@ -12713,7 +12700,7 @@ struct llama_context * llama_new_context_with_model(
     auto       & cparams = ctx->cparams;
 
     cparams.n_batch          = params.n_batch;
-    // TODO: maybe add n_parallel here too
+    // TODO: maybe add n_seq_max here too
     cparams.n_threads        = params.n_threads;
     cparams.n_threads_batch  = params.n_threads_batch;
     cparams.yarn_ext_factor  = params.yarn_ext_factor;
@@ -12780,7 +12767,7 @@ struct llama_context * llama_new_context_with_model(
     // Mamba only needs a constant number of KV cache cells per sequence
     if (model->arch == LLM_ARCH_MAMBA) {
         // Mamba needs at least as many KV cells as there are sequences kept at any time
-        kv_size = std::max((uint32_t) 1, params.n_parallel);
+        kv_size = std::max((uint32_t) 1, params.n_seq_max);
         // it's probably best to keep as much precision as possible for the states
         type_k = GGML_TYPE_F32; // required by ggml_ssm_conv for Mamba's conv_states
         type_v = GGML_TYPE_F32; // required by ggml_ssm_scan for Mamba's ssm_states
@@ -13037,7 +13024,7 @@ uint32_t llama_n_batch(const struct llama_context * ctx) {
     return ctx->cparams.n_batch;
 }
 
-uint32_t llama_n_max_seq(const struct llama_context * ctx) {
+uint32_t llama_n_seq_max(const struct llama_context * ctx) {
     return ctx->kv_self.size;
 }
 
@@ -13201,10 +13188,10 @@ int32_t llama_model_apply_lora_from_file(const struct llama_model * model, const
     }
 }
 
-struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq) {
+struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_seq_max) {
     struct llama_kv_cache_view result = {
         /*.n_cells            = */ 0,
-        /*.n_max_seq          = */ n_max_seq,
+        /*.n_seq_max          = */ n_seq_max,
         /*.token_count        = */ 0,
         /*.used_cells         = */ llama_get_kv_cache_used_cells(ctx),
         /*.max_contiguous     = */ 0,
@@ -13232,7 +13219,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
         void * p = realloc(view->cells, sizeof(struct llama_kv_cache_view_cell) * view->n_cells);
         GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells");
         view->cells = (struct llama_kv_cache_view_cell *)p;
-        p = realloc(view->cells_sequences, sizeof(llama_seq_id) * view->n_max_seq * view->n_cells);
+        p = realloc(view->cells_sequences, sizeof(llama_seq_id) * view->n_seq_max * view->n_cells);
         GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells sequences");
         view->cells_sequences = (llama_seq_id *)p;
     }
@@ -13246,7 +13233,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
     uint32_t max_contig = 0;
     int32_t max_contig_idx = -1;
 
-    for (int32_t i = 0; i < int32_t(ctx->kv_self.size); i++, c_curr++, cs_curr += view->n_max_seq) {
+    for (int32_t i = 0; i < int32_t(ctx->kv_self.size); i++, c_curr++, cs_curr += view->n_seq_max) {
         const size_t curr_size = kv_cells[i].seq_id.size();
         token_count += curr_size;
         c_curr->pos = kv_cells[i].pos + kv_cells[i].delta;
@@ -13263,7 +13250,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
 
         int seq_idx = 0;
         for (const llama_seq_id it : kv_cells[i].seq_id) {
-            if (seq_idx >= view->n_max_seq) {
+            if (seq_idx >= view->n_seq_max) {
                 break;
             }
             cs_curr[seq_idx] = it;
@@ -13272,7 +13259,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
         if (seq_idx != 0) {
             used_cells++;
         }
-        for (; seq_idx < view->n_max_seq; seq_idx++) {
+        for (; seq_idx < view->n_seq_max; seq_idx++) {
             cs_curr[seq_idx] = -1;
         }
     }
@@ -13934,12 +13921,12 @@ int32_t llama_tokenize(
                   const char * text,
                      int32_t   text_len,
                  llama_token * tokens,
-                     int32_t   n_max_tokens,
+                     int32_t   n_tokens_max,
                         bool   add_bos,
                         bool   special) {
     auto res = llama_tokenize_internal(model->vocab, std::string(text, text_len), add_bos, special);
 
-    if (n_max_tokens < (int) res.size()) {
+    if (n_tokens_max < (int) res.size()) {
         // LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
         return -((int) res.size());
     }
@@ -13953,9 +13940,9 @@ int32_t llama_tokenize(
 
 static std::string llama_decode_text(const std::string & text) {
     std::string decoded_text;
-    auto unicode_sequences = codepoints_from_utf8(text);
-    for (auto& unicode_sequence : unicode_sequences) {
-        decoded_text += unicode_to_bytes_bpe(codepoint_to_utf8(unicode_sequence));
+    auto unicode_sequences = unicode_cpts_from_utf8(text);
+    for (auto & unicode_sequence : unicode_sequences) {
+        decoded_text += unicode_utf8_to_byte(unicode_cpt_to_utf8(unicode_sequence));
     }
 
     return decoded_text;
@@ -13980,7 +13967,7 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             } else if (llama_is_user_defined_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 if (length < (int) result.length()) {
-                    return -result.length();
+                    return -(int) result.length();
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
@@ -14015,7 +14002,7 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             } else if (llama_is_user_defined_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 if (length < (int) result.length()) {
-                    return -result.length();
+                    return -(int) result.length();
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();

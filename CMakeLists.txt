@@ -1141,6 +1141,8 @@ endif()
 add_library(llama
             llama.cpp
             llama.h
+            unicode.h
+            unicode.cpp
             )
 
 target_include_directories(llama PUBLIC .)

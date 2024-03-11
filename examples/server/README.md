@@ -123,10 +123,10 @@ You can consume the endpoints with Postman or NodeJS with axios library. You can
 ### Docker
 
 ```bash
-docker run -p 8080:8080 -v /path/to/models:/models ggerganov/llama.cpp:server -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080
+docker run -p 8080:8080 -v /path/to/models:/models ghcr.io/ggerganov/llama.cpp:server -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080
 
 # or, with CUDA:
-docker run -p 8080:8080 -v /path/to/models:/models --gpus all ggerganov/llama.cpp:server-cuda -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080 --n-gpu-layers 99
+docker run -p 8080:8080 -v /path/to/models:/models --gpus all ghcr.io/ggerganov/llama.cpp:server-cuda -m models/7B/ggml-model.gguf -c 512 --host 0.0.0.0 --port 8080 --n-gpu-layers 99
 ```
 
 ## Testing with CURL
@@ -556,9 +556,51 @@ Run with bash:
 bash chat.sh
 ```
 
-### API like OAI
+### OAI-like API
 
-The HTTP server supports OAI-like API
+The HTTP server supports OAI-like API: https://github.com/openai/openai-openapi
+
+### API errors
+
+Server returns error in the same format as OAI: https://github.com/openai/openai-openapi
+
+Example of an error:
+
+```json
+{
+    "error": {
+        "code": 401,
+        "message": "Invalid API Key",
+        "type": "authentication_error"
+    }
+}
+```
+
+Apart from error types supported by OAI, we also have custom types that are specific to functionalities of llama.cpp:
+
+**When /metrics or /slots endpoint is disabled**
+
+```json
+{
+    "error": {
+        "code": 501,
+        "message": "This server does not support metrics endpoint.",
+        "type": "not_supported_error"
+    }
+}
+```
+
+**When the server receives invalid grammar via */completions endpoint**
+
+```json
+{
+    "error": {
+        "code": 400,
+        "message": "Failed to parse grammar",
+        "type": "invalid_request_error"
+    }
+}
+```
 
 ### Extending or building alternative Web Front End
 

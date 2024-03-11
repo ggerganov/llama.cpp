@@ -633,9 +633,12 @@ ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o
+unicode.o: unicode.cpp unicode.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-llama.o: llama.cpp ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o
+
+llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 COMMON_H_DEPS = common/common.h common/sampling.h common/log.h

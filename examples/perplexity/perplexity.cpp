@@ -841,7 +841,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     const int n_batch = params.n_batch;
 
     const int max_tasks_per_batch = 32;
-    const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_max_seq(ctx));
+    const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
 
     llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
 
@@ -1118,7 +1118,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
     const int n_batch = params.n_batch;
 
     const int max_tasks_per_batch = 128;
-    const int max_seq = std::min(2*max_tasks_per_batch, (int) llama_n_max_seq(ctx));
+    const int max_seq = std::min(2*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
 
     llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
 
@@ -1470,7 +1470,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
     const int n_batch = params.n_batch;
 
     const int max_tasks_per_batch = 32;
-    const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_max_seq(ctx));
+    const int max_seq = std::min(4*max_tasks_per_batch, (int) llama_n_seq_max(ctx));
 
     llama_batch batch = llama_batch_init(n_ctx, 0, max_seq);
 
