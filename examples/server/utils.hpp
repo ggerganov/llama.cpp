@@ -427,7 +427,7 @@ static json format_final_response_oaicompat(const json & request, json result, s
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(json result, std::string completion_id) {
+static std::vector<json> format_partial_response_oaicompat(json result, const std::string & completion_id) {
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
         return std::vector<json>({result});
     }
