@@ -366,14 +366,13 @@ export class SchemaConverter {
       const valueRule = this.visit(additionalProperties, `${subName}-value`);
       const kvRule = this._addRule(`${subName}-kv`, `string ":" space ${valueRule}`);
       return this._addRule(ruleName, `( ${kvRule} ( "," space ${kvRule} )* )*`);
-    } else if ((schemaType === undefined || schemaType === 'array') && 'items' in schema) {
-      // TODO `prefixItems` keyword
-      const items = schema.items;
+    } else if ((schemaType === undefined || schemaType === 'array') && ('items' in schema || 'prefixItems' in schema)) {
+      const items = schema.items ?? schema.prefixItems;
       if (Array.isArray(items)) {
         return this._addRule(
           ruleName,
           '"[" space ' +
-            items.map((item, i) => this.visit(item, `${name}-${i}`)).join(' "," space ') +
+            items.map((item, i) => this.visit(item, `${name}${name ? '-' : ''}tuple-${i}`)).join(' "," space ') +
             ' "]" space'
         );
       } else {
