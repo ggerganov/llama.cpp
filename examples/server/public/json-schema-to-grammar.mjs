@@ -8,11 +8,22 @@ const PRIMITIVE_RULES = {
   value: 'object | array | string | number | boolean',
   object: '"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space',
   array: '"[" space ( value ("," space value)* )? "]" space',
+  uuid: '"\\""' + [8, 4, 4, 4, 12].map(n => [...new Array(n)].map(_ => '[0-9a-fA-F]').join('')).join(' "-" ') + '"\\"" space',
   string: ` "\\"" (
         [^"\\\\] |
         "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
       )* "\\"" space`,
   null: '"null" space',
+};
+
+// TODO: support "uri", "email" string formats
+const DATE_RULES = {
+    'date'   : '[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( [0-2] [0-9] | "3" [0-1] )',
+    'time'   : '([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )',
+    'date-time': 'date "T" time',
+    'date-string': '"\\"" date "\\"" space',
+    'time-string': '"\\"" time "\\"" space',
+    'date-time-string': '"\\"" date-time "\\"" space',
 };
 
 const INVALID_RULE_CHARS_RE = /[^\dA-Za-z-]+/g;
@@ -314,6 +325,7 @@ export class SchemaConverter {
 
   visit(schema, name) {
     const schemaType = schema.type;
+    const schemaFormat = schema.format;
     const ruleName = name || 'root';
 
     const ref = schema.$ref;
@@ -400,10 +412,14 @@ export class SchemaConverter {
     } else if ((schemaType === undefined || schemaType === 'string') && 'pattern' in schema) {
       return this._visitPattern(schema.pattern, ruleName);
     } else if ((schemaType === undefined || schemaType === 'string') && /^uuid[1-5]?$/.test(schema.format || '')) {
-      return this._visitPattern('^"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"$', 'uuid');
-    } else if ((schemaType === undefined || schemaType === 'string') && schema.format === 'date') {
-      // Adapted from full-date at https://www.rfc-editor.org/rfc/rfc3339.txt
-      return this._visitPattern('^"[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])"$', 'date')
+      return this._addRule(
+          ruleName === 'root' ? 'root' : schemaFormat,
+          PRIMITIVE_RULES['uuid'])
+    } else if ((schemaType === undefined || schemaType === 'string') && schema.format in DATE_RULES) {
+      for (const [t, r] of Object.entries(DATE_RULES)) {
+        this._addRule(t, r);
+      }
+      return schemaFormat + '-string';
     } else if (schemaType === 'object' && Object.keys(schema).length === 1 || schemaType === undefined && Object.keys(schema).length === 0) {
       // This depends on all primitive types
       for (const [t, r] of Object.entries(PRIMITIVE_RULES)) {

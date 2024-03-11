@@ -17,11 +17,22 @@ PRIMITIVE_RULES = {
     'value'  : 'object | array | string | number | boolean',
     'object' : '"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space',
     'array'  : '"[" space ( value ("," space value)* )? "]" space',
+    'uuid'   : '"\\""' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + '"\\"" space',
     'string': r''' "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
       )* "\"" space ''',
     'null': '"null" space',
+}
+
+# TODO: support "uri", "email" string formats
+DATE_RULES = {
+    'date'   : '[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( [0-2] [0-9] | "3" [0-1] )',
+    'time'   : '([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )',
+    'date-time': 'date "T" time',
+    'date-string': '"\\"" date "\\"" space',
+    'time-string': '"\\"" time "\\"" space',
+    'date-time-string': '"\\"" date-time "\\"" space',
 }
 
 INVALID_RULE_CHARS_RE = re.compile(r'[^a-zA-Z0-9-]+')
@@ -31,6 +42,9 @@ GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"', '-': '\\-', ']'
 
 NON_LITERAL_SET = set('|.()[]{}*+?')
 ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('{*+?')
+
+DATE_PATTERN = '[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])'
+TIME_PATTERN = '([01][0-9]|2[0-3])(:[0-5][0-9]){2}(\\.[0-9]{1,3})?(Z|[+-](([01][0-9]|2[0-3]):[0-5][0-9]))' # Cap millisecond precision w/ 3 digits
 
 class SchemaConverter:
     def __init__(self, *, prop_order, allow_fetch, dotall):
@@ -285,6 +299,7 @@ class SchemaConverter:
 
     def visit(self, schema, name):
         schema_type = schema.get('type')
+        schema_format = schema.get('format')
         rule_name = name or 'root'
 
         if (ref := schema.get('$ref')) is not None:
@@ -375,19 +390,22 @@ class SchemaConverter:
         elif schema_type in (None, 'string') and 'pattern' in schema:
             return self._visit_pattern(schema['pattern'], rule_name)
 
-        # TODO: support string formats "uri", "date", "date-time"
-        elif schema_type in (None, 'string') and re.match(r'^uuid[1-5]?$', schema.get('format', '')):
-            return self._visit_pattern('^"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"$', 'uuid')
-        
-        elif schema_type in (None, 'string') and schema.get('format') == 'date':
-            # Adapted from full-date at https://www.rfc-editor.org/rfc/rfc3339.txt
-            return self._visit_pattern('^"[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])"$', 'date')
-
         elif schema_type == 'object' and len(schema) == 1 or schema_type is None and len(schema) == 0:
             # This depends on all primitive types
             for t, r in PRIMITIVE_RULES.items():
                 self._add_rule(t, r)
             return 'object'
+
+        elif schema_type in (None, 'string') and re.match(r'^uuid[1-5]?$', schema_format or ''):
+            return self._add_rule(
+                'root' if rule_name == 'root' else schema_format,
+                PRIMITIVE_RULES['uuid']
+            )
+
+        elif schema_type in (None, 'string') and schema_format in DATE_RULES:
+            for t, r in DATE_RULES.items():
+                self._add_rule(t, r)
+            return schema_format + '-string'
 
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
