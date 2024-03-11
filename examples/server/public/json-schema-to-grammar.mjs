@@ -1,4 +1,5 @@
-const SPACE_RULE = '" "*';
+// WARNING: This file was ported from json-schema-to-grammar.py, please fix bugs / add features there first.
+const SPACE_RULE = '" "?';
 
 const PRIMITIVE_RULES = {
   boolean: '("true" | "false") space',
@@ -15,177 +16,307 @@ const PRIMITIVE_RULES = {
 };
 
 const INVALID_RULE_CHARS_RE = /[^\dA-Za-z-]+/g;
-const GRAMMAR_LITERAL_ESCAPE_RE = /[\n\r]/g;
-const GRAMMAR_LITERAL_ESCAPES = { '\r': '\\r', '\n': '\\n' };
+const GRAMMAR_LITERAL_ESCAPE_RE = /[\n\r"]/g;
+const GRAMMAR_RANGE_LITERAL_ESCAPE_RE = /[\n\r"\]\-\\]/g;
+const GRAMMAR_LITERAL_ESCAPES = { '\r': '\\r', '\n': '\\n', '"': '\\"', '-': '\\-', ']': '\\]' };
+
+const NON_LITERAL_SET = new Set('|.()[]{}*+?');
+const ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = new Set('{*+?');
 
 export class SchemaConverter {
-  constructor(propOrder) {
-    this._propOrder = propOrder || {};
-    this._rules = new Map();
-    this._rules.set('space', SPACE_RULE);
-    this.refBase = null;
+  constructor(options) {
+    this._propOrder = options.prop_order || {};
+    this._allowFetch = options.allow_fetch || false;
+    this._dotall = options.dotall || false;
+    this._rules = {'space': SPACE_RULE};
+    this._refs = {};
+    this._refsBeingResolved = new Set();
   }
 
   _formatLiteral(literal) {
-    const escaped = JSON.stringify(literal).slice(1, -1).replace(
+    const escaped = JSON.stringify(literal).replace(
       GRAMMAR_LITERAL_ESCAPE_RE,
       m => GRAMMAR_LITERAL_ESCAPES[m]
     );
     return `"${escaped}"`;
   }
 
+  _formatRangeChar(literal) {
+    return JSON.stringify(literal).slice(1, -1).replace(
+      GRAMMAR_RANGE_LITERAL_ESCAPE_RE,
+      m => GRAMMAR_LITERAL_ESCAPES[m]
+    );
+  }
+
   _addRule(name, rule) {
     let escName = name.replace(INVALID_RULE_CHARS_RE, '-');
     let key = escName;
 
-    if (this._rules.has(escName)) {
-      if (this._rules.get(escName) === rule) {
+    if (escName in this._rules) {
+      if (this._rules[escName] === rule) {
         return key;
       }
 
       let i = 0;
-      while (this._rules.has(`${escName}${i}`)) {
+      while ((`${escName}${i}` in this._rules) && (this._rules[`${escName}${i}`] !== rule)) {
         i += 1;
       }
       key = `${escName}${i}`;
     }
 
-    this._rules.set(key, rule);
+    this._rules[key] = rule;
     return key;
   }
 
-  _resolveRef(ref) {
-    // TODO: use https://github.com/APIDevTools/json-schema-ref-parser
-    try {
-      if (ref != null && ref.startsWith('#/')) {
-        let target = this.refBase;
-        let name = null;
-        for (const sel of ref.split('/').slice(1)) {
-          name = sel;
-          target = target[sel];
+  async resolveRefs(schema, url) {
+    const visit = async (n) => {
+      if (Array.isArray(n)) {
+        return Promise.all(n.map(visit));
+      } else if (typeof n === 'object' && n !== null) {
+        let ref = n.$ref;
+        let target;
+        if (ref !== undefined && !this._refs[ref]) {
+          if (ref.startsWith('https://')) {
+            if (!this._allowFetch) {
+              throw new Error('Fetching remote schemas is not allowed (use --allow-fetch for force)');
+            }
+            const fetch = (await import('node-fetch')).default;
+
+            const fragSplit = ref.split('#');
+            const baseUrl = fragSplit[0];
+
+            target = this._refs[baseUrl];
+            if (!target) {
+              target = await this.resolveRefs(await fetch(ref).then(res => res.json()), baseUrl);
+              this._refs[baseUrl] = target;
+            }
+
+            if (fragSplit.length === 1 || fragSplit[fragSplit.length - 1] === '') {
+              return;
+            }
+          } else if (ref.startsWith('#/')) {
+            target = schema;
+            ref = `${url}${ref}`;
+            n.$ref = ref;
+          } else {
+            throw new Error(`Unsupported ref ${ref}`);
+          }
+
+          const selectors = ref.split('#')[1].split('/').slice(1);
+          for (const sel of selectors) {
+            if (!target || !(sel in target)) {
+              throw new Error(`Error resolving ref ${ref}: ${sel} not in ${JSON.stringify(target)}`);
+            }
+            target = target[sel];
+          }
+
+          this._refs[ref] = target;
+        } else {
+          await Promise.all(Object.values(n).map(visit));
         }
-        return [name, target];
       }
-      return null;
-    } catch (e) {
-      throw new Error(`Error resolving ref ${ref}: ${e}`);
-    }
+
+      return n;
+    };
+
+    return visit(schema);
   }
 
   _generateUnionRule(name, altSchemas) {
-    return altSchemas.map((altSchema, i) =>
-      this.visit(altSchema, `${name}${name ? "-" : ""}${i}`)
-    ).join(' | ');
+    return altSchemas
+      .map((altSchema, i) => this.visit(altSchema, `${name}${name ? '-' : ''}${i}`))
+      .join(' | ');
   }
 
-  _formatRangeChar(c) {
-    if (c === '-' || c === ']' || c === '\\') {
-      return '\\' + c;
-    } else if (c === '\n') {
-      return '\\n';
-    } else if (c === '\r') {
-      return '\\r';
-    } else if (c === '\t') {
-      return '\\t';
-    } else {
-      return c;
-    }
-  }
-
-  _visitPattern(pattern) {
+  _visitPattern(pattern, name) {
     if (!pattern.startsWith('^') || !pattern.endsWith('$')) {
       throw new Error('Pattern must start with "^" and end with "$"');
     }
     pattern = pattern.slice(1, -1);
+    const subRuleIds = {};
 
-    try {
-      const visitSeq = seq => {
-        const out = [];
-        for (const [t, g] of groupBy(seq, x => x[0])) {
-          const gList = Array.from(g);
-          // Merge consecutive literals
-          if (t === RegExp.LITERAL && gList.length > 1) {
-            out.push(this._formatLiteral(gList.map(x => String.fromCharCode(x[1])).join('')));
+    let i = 0;
+    const length = pattern.length;
+
+    const getDot = () => {
+      let rule;
+      if (this._dotall) {
+        rule = '[\\U00000000-\\U0010FFFF]';
+      } else {
+        // Accept any character... except \n and \r line break chars (\x0A and \xOD)
+        rule = '[\\U00000000-\\x09\\x0B\\x0C\\x0E-\\U0010FFFF]';
+      }
+      return this._addRule('dot', rule);
+    };
+
+    const transform = () => {
+      const start = i;
+      // For each component of this sequence, store its string representation and whether it's a literal.
+      // We only need a flat structure here to apply repetition operators to the last item, and
+      // to merge literals at the and (we're parsing grouped ( sequences ) recursively and don't treat '|' specially
+      // (GBNF's syntax is luckily very close to regular expressions!)
+      const seq = [];
+
+      const joinSeq = () => {
+        const ret = [];
+        for (const [isLiteral, g] of groupBy(seq, x => x[1])) {
+          if (isLiteral) {
+            const lit = [...g].map(x => x[0].slice(1, -1)).join('');
+            ret.push([`"${lit}"`, true]);
           } else {
-            out.push(...gList.map(visit));
+            ret.push(...g);
           }
         }
-        if (out.length === 1) {
-          return out[0];
+        if (ret.length === 1) {
+          return ret[0];
         }
-        return '(' + out.join(' ') + ')';
+        return [ret.map(x => x[0]).join(' '), false];
       };
 
-      const visit = pattern => {
-        if (pattern[0] === RegExp.LITERAL) {
-          return JSON.stringify(String.fromCharCode(pattern[1]));
-        } else if (pattern[0] === RegExp.NOT_LITERAL) {
-          return `[^${this._formatRangeChar(String.fromCharCode(pattern[1]))}]`;
-        } else if (pattern[0] === RegExp.ANY) {
-          throw new Error('Unsupported pattern: "."');
-        } else if (pattern[0] === RegExp.IN) {
-          const formatRangeComp = c => {
-            if (c[0] === RegExp.LITERAL) {
-              return this._formatRangeChar(String.fromCharCode(c[1]));
-            } else if (c[0] === RegExp.RANGE) {
-              return `${this._formatRangeChar(String.fromCharCode(c[1][0]))}-${this._formatRangeChar(String.fromCharCode(c[1][1]))}`;
-            } else {
-              throw new Error(`Unrecognized pattern: ${JSON.stringify(c)}`);
+      while (i < length) {
+        const c = pattern[i];
+        if (c === '.') {
+          seq.push([getDot(), false]);
+          i += 1;
+        } else if (c === '(') {
+          i += 1;
+          if (i < length) {
+            if (pattern[i] === '?') {
+              throw new Error(`Unsupported pattern syntax "${pattern[i]}" at index ${i} of /${pattern}/`);
             }
-          };
-          return `[${pattern[1].map(formatRangeComp).join('')}]`;
-        } else if (pattern[0] === RegExp.BRANCH) {
-          return '(' + pattern[1][1].map(visit).join(' | ') + ')';
-        } else if (pattern[0] === RegExp.SUBPATTERN) {
-          return '(' + visit(pattern[1][3]) + ')';
-        } else if (pattern[0] === RegExp.MAX_REPEAT) {
-          const [minTimes, maxTimes, sub] = pattern[1];
-          const subRule = visit(sub);
-
-          if (minTimes === 0 && maxTimes == null) {
-            return `${subRule}*`;
-          } else if (minTimes === 0 && maxTimes === 1) {
-            return `${subRule}?`;
-          } else if (minTimes === 1 && maxTimes == null) {
-            return `${subRule}+`;
-          } else {
-            return Array(minTimes).fill(subRule).concat(
-              maxTimes != null ? Array(maxTimes - minTimes).fill(`${subRule}?`) : [`${subRule}*`]
-            ).join(' ');
           }
-        } else if (pattern instanceof RegExp.SubPattern) {
-          return visitSeq(pattern.data);
-        } else if (Array.isArray(pattern)) {
-          return visitSeq(pattern);
-        } else {
-          throw new Error(`Unrecognized pattern: ${JSON.stringify(pattern)} (${typeof pattern})`);
-        }
-      };
+          seq.push([`(${transform()[0]})`, false]);
+        } else if (c === ')') {
+          i += 1;
+          if (start <= 0 || pattern[start - 1] !== '(') {
+            throw new Error(`Unbalanced parentheses; start = ${start}, i = ${i}, pattern = ${pattern}`);
+          }
+          return joinSeq();
+        } else if (c === '[') {
+          let squareBrackets = c;
+          i += 1;
+          while (i < length && pattern[i] !== ']') {
+            if (pattern[i] === '\\') {
+              squareBrackets += pattern.slice(i, i + 2);
+              i += 2;
+            } else {
+              squareBrackets += pattern[i];
+              i += 1;
+            }
+          }
+          if (i >= length) {
+            throw new Error(`Unbalanced square brackets; start = ${start}, i = ${i}, pattern = ${pattern}`);
+          }
+          squareBrackets += ']';
+          i += 1;
+          seq.push([squareBrackets, false]);
+        } else if (c === '|') {
+          seq.push(['|', false]);
+          i += 1;
+        } else if (c === '*' || c === '+' || c === '?') {
+          seq[seq.length - 1] = [`${seq[seq.length - 1][0]}${c}`, false];
+          i += 1;
+        } else if (c === '{') {
+          let curlyBrackets = c;
+          i += 1;
+          while (i < length && pattern[i] !== '}') {
+            curlyBrackets += pattern[i];
+            i += 1;
+          }
+          if (i >= length) {
+            throw new Error(`Unbalanced curly brackets; start = ${start}, i = ${i}, pattern = ${pattern}`);
+          }
+          curlyBrackets += '}';
+          i += 1;
+          const nums = curlyBrackets.slice(1, -1).split(',').map(s => s.trim());
+          let minTimes, maxTimes;
+          if (nums.length === 1) {
+            minTimes = parseInt(nums[0], 10);
+            maxTimes = minTimes;
+          } else {
+            if (nums.length !== 2) {
+              throw new Error(`Invalid quantifier ${curlyBrackets}`);
+            }
+            minTimes = nums[0] ? parseInt(nums[0], 10) : 0;
+            maxTimes = nums[1] ? parseInt(nums[1], 10) : Infinity;
+          }
 
-      return visit(RegExp.parse(pattern));
-    } catch (e) {
-      throw new Error(`Error processing pattern: ${pattern}: ${e}`);
+          let [sub, subIsLiteral] = seq[seq.length - 1];
+
+          if (minTimes === 0 && maxTimes === Infinity) {
+            seq[seq.length - 1] = [`${sub}*`, false];
+          } else if (minTimes === 0 && maxTimes === 1) {
+            seq[seq.length - 1] = [`${sub}?`, false];
+          } else if (minTimes === 1 && maxTimes === Infinity) {
+            seq[seq.length - 1] = [`${sub}+`, false];
+          } else {
+            if (!subIsLiteral) {
+              let id = subRuleIds[sub];
+              if (id === undefined) {
+                id = this._addRule(`${name}-${Object.keys(subRuleIds).length + 1}`, sub);
+                subRuleIds[sub] = id;
+              }
+              sub = id;
+            }
+
+            const repeatedSub = Array.from({ length: minTimes }, () => subIsLiteral ? `"${sub.slice(1, -1).repeat(minTimes)}"` : sub);
+            const optionalSub = maxTimes !== undefined ? Array.from({ length: maxTimes - minTimes }, () => `${sub}?`) : [`${sub}*`];
+            seq[seq.length - 1] = [repeatedSub.concat(optionalSub).join(' '), false];
+          }
+        } else {
+          let lit = '';
+          while (i < length && !NON_LITERAL_SET.has(pattern[i]) &&
+                 !(i < length - 1 && ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS.has(pattern[i + 1]))) {
+            if (pattern[i] === '\\' && i < length - 1) {
+              i += 1;
+              if (NON_LITERAL_SET.has(pattern[i])) {
+                // Escapes in regular expressions that aren't escaped in GBNF literals
+                lit += pattern[i];
+              } else {
+                lit += `\\${pattern[i]}`;
+              }
+              i += 1;
+            } else {
+              lit += pattern[i];
+              i += 1;
+            }
+          }
+          if (lit) {
+            seq.push([`"${lit}"`, true]);
+          }
+
+          if (i < length && !NON_LITERAL_SET.has(pattern[i])) {
+            seq.push([`"${pattern[i]}"`, true]);
+            i += 1;
+          }
+        }
+      }
+
+      return joinSeq();
+    };
+
+    return this._addRule(name, transform()[0]);
+  }
+
+  _resolveRef(ref) {
+    let refName = ref.split('/').pop();
+    if (!(refName in this._rules) && !this._refsBeingResolved.has(ref)) {
+      this._refsBeingResolved.add(ref);
+      const resolved = this._refs[ref];
+      refName = this.visit(resolved, refName);
+      this._refsBeingResolved.delete(ref);
     }
+    return refName;
   }
 
   visit(schema, name) {
-    const oldRefBase = this.refBase;
-    if ('definitions' in schema) {
-      this.refBase = schema;
-    }
-    try {
-      return this._visit(schema, name);
-    } finally {
-      this.refBase = oldRefBase;
-    }
-  }
-
-  _visit(schema, name) {
     const schemaType = schema.type;
-    const ref = schema.$ref;
     const ruleName = name || 'root';
 
-    if ('oneOf' in schema || 'anyOf' in schema) {
+    const ref = schema.$ref;
+    if (ref !== undefined) {
+      return this._resolveRef(ref);
+    } else if (schema.oneOf || schema.anyOf) {
       return this._addRule(ruleName, this._generateUnionRule(name, schema.oneOf || schema.anyOf));
     } else if (Array.isArray(schemaType)) {
       return this._addRule(ruleName, this._generateUnionRule(name, schemaType.map(t => ({ type: t }))));
@@ -194,20 +325,17 @@ export class SchemaConverter {
     } else if ('enum' in schema) {
       const rule = schema.enum.map(v => this._formatLiteral(v)).join(' | ');
       return this._addRule(ruleName, rule);
-    } else if ((schemaType == null || schemaType === 'object') && 'properties' in schema) {
+    } else if ((schemaType === undefined || schemaType === 'object') && 'properties' in schema) {
       const required = new Set(schema.required || []);
-      const { properties } = schema;
-      return this._addRule(ruleName, this._buildObjectRule(Object.entries(properties), required, name));
-    } else if (schemaType === 'object' && 'allOf' in schema) {
+      const properties = Object.entries(schema.properties);
+      return this._addRule(ruleName, this._buildObjectRule(properties, required, name));
+    } else if ((schemaType === undefined || schemaType === 'object') && 'allOf' in schema) {
       const required = new Set();
       const properties = [];
       const addComponent = (compSchema, isRequired) => {
-        const compRef = compSchema.$ref;
-        if (compRef != null) {
-          const resolved = this._resolveRef(compRef);
-          if (resolved != null) {
-            compSchema = resolved[1];
-          }
+        const ref = compSchema.$ref;
+        if (ref !== undefined) {
+          compSchema = this._refs[ref];
         }
 
         if ('properties' in compSchema) {
@@ -231,40 +359,34 @@ export class SchemaConverter {
       }
 
       return this._addRule(ruleName, this._buildObjectRule(properties, required, name));
-    } else if (schemaType === 'object' && 'additionalProperties' in schema) {
-      let additionalProperties = schema.additionalProperties;
-      if (typeof additionalProperties !== 'object') {
-        additionalProperties = {};
-      }
+    } else if ((schemaType === undefined || schemaType === 'object') && 'additionalProperties' in schema) {
+      const additionalProperties = typeof schema.additionalProperties === 'object' ? schema.additionalProperties : {};
 
-      const subName = `${name}${name ? "-" : ""}additionalProperties`;
+      const subName = `${name}${name ? '-' : ''}additionalProperties`;
       const valueRule = this.visit(additionalProperties, `${subName}-value`);
       const kvRule = this._addRule(`${subName}-kv`, `string ":" space ${valueRule}`);
-      return this._addRule(
-        ruleName,
-        `( ${kvRule} ( "," space ${kvRule} )* )*`
-      );
-    } else if (schemaType === 'array' && 'items' in schema) {
+      return this._addRule(ruleName, `( ${kvRule} ( "," space ${kvRule} )* )*`);
+    } else if ((schemaType === undefined || schemaType === 'array') && 'items' in schema) {
       // TODO `prefixItems` keyword
-      const { items } = schema;
+      const items = schema.items;
       if (Array.isArray(items)) {
         return this._addRule(
           ruleName,
           '"[" space ' +
-          items.map((item, i) => this.visit(item, `${name}-${i}`)).join(' "," space ') +
-          ' "]" space'
+            items.map((item, i) => this.visit(item, `${name}-${i}`)).join(' "," space ') +
+            ' "]" space'
         );
       } else {
-        const itemRuleName = this.visit(items, `${name}${name ? "-" : ""}item`);
+        const itemRuleName = this.visit(items, `${name}${name ? '-' : ''}item`);
         const listItemOperator = `( "," space ${itemRuleName} )`;
-        let successiveItems = "";
+        let successiveItems = '';
         const minItems = schema.minItems || 0;
         const maxItems = schema.maxItems;
         if (minItems > 0) {
           successiveItems = listItemOperator.repeat(minItems - 1);
         }
-        if (maxItems != null && maxItems > minItems) {
-          successiveItems += `${listItemOperator}?`.repeat(maxItems - minItems);
+        if (maxItems !== undefined && maxItems > minItems) {
+          successiveItems += `${listItemOperator}?`.repeat(maxItems - minItems - 1);
         } else {
           successiveItems += `${listItemOperator}*`;
         }
@@ -273,16 +395,12 @@ export class SchemaConverter {
           : `"[" space ${itemRuleName} ${successiveItems} "]" space`;
         return this._addRule(ruleName, rule);
       }
-    } else if ((schemaType == null || schemaType === 'string') && 'pattern' in schema) {
-      return this._addRule(ruleName, this._visitPattern(schema.pattern));
-    } else if ((resolved = this._resolveRef(ref)) != null) {
-      const [refName, definition] = resolved;
-      const defName = name ? `${name}-${refName}` : '';
-      return this.visit(definition, defName);
-    // } else if (ref != null && ref.startsWith('https://')) {
-    //   const refSchema = await fetch(ref).then(res => res.json());
-    //   return this.visit(refSchema, ref);
-    } else if ((schemaType === 'object' && Object.keys(schema).length === 1) || (schemaType == null && Object.keys(schema).length === 0)) {
+    } else if ((schemaType === undefined || schemaType === 'string') && 'pattern' in schema) {
+      return this._visitPattern(schema.pattern, ruleName);
+    } else if ((schemaType === undefined || schemaType === 'string') && /^uuid[1-5]?$/.test(schema.format || '')) {
+      return this._visitPattern('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$', 'uuid');
+    } else if (schemaType === 'object' && Object.keys(schema).length === 1 || schemaType === undefined && Object.keys(schema).length === 0) {
+      // This depends on all primitive types
       for (const [t, r] of Object.entries(PRIMITIVE_RULES)) {
         this._addRule(t, r);
       }
@@ -291,27 +409,28 @@ export class SchemaConverter {
       if (!(schemaType in PRIMITIVE_RULES)) {
         throw new Error(`Unrecognized schema: ${JSON.stringify(schema)}`);
       }
-      return this._addRule(
-        ruleName === 'root' ? 'root' : schemaType,
-        PRIMITIVE_RULES[schemaType]
-      );
+      // TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
+      return this._addRule(ruleName === 'root' ? 'root' : schemaType, PRIMITIVE_RULES[schemaType]);
     }
   }
 
   _buildObjectRule(properties, required, name) {
-    // TODO: `required` keyword
     const propOrder = this._propOrder;
-    console.warn(`# properties: ${JSON.stringify(properties)}`);
     // sort by position in prop_order (if specified) then by original order
-    const sortedProps = properties.map(([name]) => name).sort(
-      (a, b) => (propOrder[a] ?? Infinity) - (propOrder[b] ?? Infinity)
-    );
+    const sortedProps = properties.map(([k]) => k).sort((a, b) => {
+      const orderA = propOrder[a] || Infinity;
+      const orderB = propOrder[b] || Infinity;
+      return orderA - orderB || properties.findIndex(([k]) => k === a) - properties.findIndex(([k]) => k === b);
+    });
+    // const sortedProps = properties.map(([name]) => name).sort(
+    //   (a, b) => (propOrder[a] ?? Infinity) - (propOrder[b] ?? Infinity)
+    // );
 
     const propKvRuleNames = {};
     for (const [propName, propSchema] of properties) {
-      const propRuleName = this.visit(propSchema, `${name}${name ? "-" : ""}${propName}`);
+      const propRuleName = this.visit(propSchema, `${name}${name ? '-' : ''}${propName}`);
       propKvRuleNames[propName] = this._addRule(
-        `${name}${name ? "-" : ""}${propName}-kv`,
+        `${name}${name ? '-' : ''}${propName}-kv`,
         `${this._formatLiteral(propName)} space ":" space ${propRuleName}`
       );
     }
@@ -334,19 +453,20 @@ export class SchemaConverter {
         let res = firstIsOptional ? `( "," space ${kvRuleName} )?` : kvRuleName;
         if (rest.length > 0) {
           res += ' ' + this._addRule(
-            `${name}${name ? "-" : ""}${k}-rest`,
+            `${name}${name ? '-' : ''}${k}-rest`,
             getRecursiveRefs(rest, true)
           );
         }
         return res;
       };
 
-      rule += Array.from({ length: optionalProps.length }, (_, i) => getRecursiveRefs(optionalProps.slice(i), false)).join(' | ') + ' ';
+      rule += optionalProps.map((_, i) => getRecursiveRefs(optionalProps.slice(i), false)).join(' | ');
       if (requiredProps.length > 0) {
         rule += ' ) ';
       }
       rule += ' )? ';
     }
+
     rule += ' "}" space ';
 
     return rule;
@@ -354,9 +474,9 @@ export class SchemaConverter {
 
   formatGrammar() {
     let grammar = '';
-    this._rules.forEach((rule, name) => {
+    for (const [name, rule] of Object.entries(this._rules)) {
       grammar += `${name} ::= ${rule}\n`;
-    });
+    }
     return grammar;
   }
 }
