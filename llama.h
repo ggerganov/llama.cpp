@@ -950,8 +950,8 @@ extern "C" {
 }
 #endif
 
-#ifdef __cplusplus
 #include <cfloat>
+#ifdef __cplusplus
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
