@@ -277,6 +277,9 @@ export class SchemaConverter {
               }
               i += 1;
             } else {
+              if (pattern[i] === '"') {
+                  lit += '\\';
+              }
               lit += pattern[i];
               i += 1;
             }
@@ -397,7 +400,10 @@ export class SchemaConverter {
     } else if ((schemaType === undefined || schemaType === 'string') && 'pattern' in schema) {
       return this._visitPattern(schema.pattern, ruleName);
     } else if ((schemaType === undefined || schemaType === 'string') && /^uuid[1-5]?$/.test(schema.format || '')) {
-      return this._visitPattern('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$', 'uuid');
+      return this._visitPattern('^"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"$', 'uuid');
+    } else if ((schemaType === undefined || schemaType === 'string') && schema.format === 'date') {
+      // Adapted from full-date at https://www.rfc-editor.org/rfc/rfc3339.txt
+      return this._visitPattern('^"[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])"$', 'date')
     } else if (schemaType === 'object' && Object.keys(schema).length === 1 || schemaType === undefined && Object.keys(schema).length === 0) {
       // This depends on all primitive types
       for (const [t, r] of Object.entries(PRIMITIVE_RULES)) {
