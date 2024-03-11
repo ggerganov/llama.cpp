@@ -5078,8 +5078,9 @@ void dequantize_iq1_s(device const block_iq1_s * xb, short il, thread type4x4 & 
     device const uint16_t * qh = xb->qh;
     const float dl = d * (2*((qh[ib32] >> 12) & 7) + 1);
     const float ml = dl * (qh[ib32] & 0x8000 ? -1 - IQ1S_DELTA : -1 + IQ1S_DELTA);
-    constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | (((qh[ib32] >> (6*il+0)) & 7) << 8)));
-    constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | (((qh[ib32] >> (6*il+3)) & 7) << 8)));
+    const uint16_t h = qh[ib32] >> 6*il;
+    constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | ((h << 8) & 0x700)));
+    constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | ((h << 5) & 0x700)));
     for (int i = 0; i < 4; ++i) {
         reg[0][i] = dl * (grid1[i] & 0xf) + ml;
         reg[1][i] = dl * (grid1[i] >>  4) + ml;
