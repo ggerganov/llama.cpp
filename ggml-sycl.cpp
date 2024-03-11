@@ -16,6 +16,7 @@
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <float.h>
 #include <limits>
 #include <stdint.h>
@@ -24,10 +25,9 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
-
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <regex>
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
@@ -937,17 +937,41 @@ namespace dpct
 
     private:
         mutable std::recursive_mutex m_mutex;
+        static bool compare_dev(sycl::device &device1, sycl::device &device2)
+        {
+            dpct::device_info prop1;
+            dpct::get_device_info(prop1, device1);
+
+            dpct::device_info prop2;
+            dpct::get_device_info(prop2, device2);
+            return prop1.get_max_compute_units() > prop2.get_max_compute_units();
+        }
         dev_mgr()
         {
             sycl::device default_device =
                 sycl::device(sycl::default_selector_v);
             _devs.push_back(std::make_shared<device_ext>(default_device));
 
-            std::vector<sycl::device> sycl_all_devs =
-                sycl::device::get_devices(sycl::info::device_type::all);
+            std::vector<sycl::device> sycl_all_devs;
             // Collect other devices except for the default device.
             if (default_device.is_cpu())
                 _cpu_device = 0;
+
+            auto Platforms = sycl::platform::get_platforms();
+            // Keep track of the number of devices per backend
+            std::map<sycl::backend, size_t> DeviceNums;
+
+            while (!Platforms.empty()) {
+                auto Platform = Platforms.back();
+                Platforms.pop_back();
+                auto Devices = Platform.get_devices();
+
+                std::sort(Devices.begin(), Devices.end(), compare_dev);
+                for (const auto &Device : Devices) {
+                    sycl_all_devs.push_back(Device);
+                }
+            }
+
             for (auto &dev : sycl_all_devs)
             {
                 if (dev == default_device)
@@ -3194,6 +3218,11 @@ static int g_work_group_size = 0;
 #define GGML_SYCL_MMV_Y 1
 #endif
 
+enum ggml_sycl_backend_gpu_mode {
+    SYCL_UNSET_GPU_MODE = -1,
+    SYCL_SINGLE_GPU_MODE = 0,
+    SYCL_Mul_GPU_MODE
+};
 
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
@@ -3672,6 +3701,8 @@ static bool g_ggml_backend_sycl_buffer_type_initialized = false;
 static std::array<float, GGML_SYCL_MAX_DEVICES> g_default_tensor_split = {};
 
 static float g_tensor_split[GGML_SYCL_MAX_DEVICES] = {0};
+
+static ggml_sycl_backend_gpu_mode g_ggml_sycl_backend_gpu_mode = SYCL_UNSET_GPU_MODE;
 
 struct sycl_device_capabilities {
     int     cc;                 // compute capability
@@ -13183,17 +13214,45 @@ bool ggml_sycl_loaded(void) {
     return g_sycl_loaded;
 }
 
-void print_device_detail(int id) {
+std::string getDeviceTypeName(const sycl::device &Device) {
+            auto DeviceType = Device.get_info<sycl::info::device::device_type>();
+            switch (DeviceType) {
+            case sycl::info::device_type::cpu:
+                return "cpu";
+            case sycl::info::device_type::gpu:
+                return "gpu";
+            case sycl::info::device_type::host:
+                return "host";
+            case sycl::info::device_type::accelerator:
+                return "acc";
+            default:
+                return "unknown";
+            }
+        }
+
+bool replace_str(std::string str, const std::string from, const std::string to) {
+    size_t start_pos = str.find(from);
+    if(start_pos == std::string::npos) {
+        return false;
+    }
+    str.replace(start_pos, from.length(), to);
+    return true;
+}
+
+void print_device_detail(int id, sycl::device &device, std::string device_type) {
+
     dpct::device_info prop;
     SYCL_CHECK(CHECK_TRY_ERROR(
-        dpct::get_device_info(prop, dpct::dev_mgr::instance().get_device(id))));
-    sycl::device cur_device = dpct::dev_mgr::instance().get_device(id);
+        dpct::get_device_info(prop, device)));
+
     std::string version;
     version += std::to_string(prop.get_major_version());
     version += ".";
     version += std::to_string(prop.get_minor_version());
 
-    fprintf(stderr, "|%2d|%45s|%18s|%17d|%14d|%13d|%15lu|\n", id,
+    device_type = std::regex_replace(device_type, std::regex("ext_oneapi_"), "");
+
+    fprintf(stderr, "|%2d|%18s|%45s|%10s|%11d|%8d|%7d|%15lu|\n", id, device_type.c_str(),
             prop.get_name(), version.c_str(), prop.get_max_compute_units(),
             prop.get_max_work_group_size(), prop.get_max_sub_group_size(),
             prop.get_global_mem_size());
@@ -13201,19 +13260,34 @@ void print_device_detail(int id) {
 
 void ggml_backend_sycl_print_sycl_devices() {
     int device_count = dpct::dev_mgr::instance().device_count();
+    std::map<sycl::backend, size_t> DeviceNums;
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
-    fprintf(stderr, "|ID| Name                                        |compute capability|Max compute units|Max work group|Max sub group|Global mem size|\n");
-    fprintf(stderr, "|--|---------------------------------------------|------------------|-----------------|--------------|-------------|---------------|\n");
+    fprintf(stderr, "|  |                  |                                             |compute   |Max compute|Max work|Max sub|               |\n");
+    fprintf(stderr, "|ID|Device Type       | Name                                        |capability|units      |group   |group  |Global mem size|\n");
+    fprintf(stderr, "|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|\n");
     for (int id = 0; id < device_count; ++id) {
-        print_device_detail(id);
+        sycl::device device = dpct::dev_mgr::instance().get_device(id);
+        sycl::backend backend = device.get_backend();
+        int type_id=DeviceNums[backend]++;
+        std::stringstream device_type;
+        device_type << "[" <<  backend << ":" << getDeviceTypeName(device) << ":" << std::to_string(type_id) << "]";
+        print_device_detail(id, device, device_type.str());
     }
 }
 
 void print_gpu_device_list() {
-    fprintf(stderr, "detect %d SYCL GPUs: [%s] with top Max compute units:%d\n",
-            g_sycl_gpu_mgr->get_gpu_count(),
-            g_sycl_gpu_mgr->gpus_list.c_str(),
-            g_sycl_gpu_mgr->max_compute_units);
+    GGML_ASSERT(g_sycl_gpu_mgr);
+
+    char* hint=NULL;
+    if (g_ggml_sycl_backend_gpu_mode == SYCL_SINGLE_GPU_MODE) {
+        hint = "use %d SYCL GPUs: [%s] with Max compute units:%d\n";
+    } else {
+        hint = "detect %d SYCL GPUs: [%s] with top Max compute units:%d\n";
+    }
+    fprintf(stderr, hint,
+        g_sycl_gpu_mgr->get_gpu_count(),
+        g_sycl_gpu_mgr->gpus_list.c_str(),
+        g_sycl_gpu_mgr->max_compute_units);
 }
 
 int get_sycl_env(const char *env_name, int default_val) {
@@ -13266,19 +13340,23 @@ void ggml_init_sycl() try {
         }
         GGML_ASSERT(g_all_sycl_device_count <= GGML_SYCL_MAX_DEVICES);
         ggml_backend_sycl_print_sycl_devices();
-        if (!g_sycl_gpu_mgr) g_sycl_gpu_mgr = new sycl_gpu_mgr();
-        print_gpu_device_list();
         initialized = true;
         g_sycl_loaded = true;
     }
+}
+catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
+}
 
-
-
-    g_device_count = g_sycl_gpu_mgr->get_gpu_count();
+void ggml_init_by_gpus(int device_count) try {
+    g_device_count = device_count;
     g_work_group_size = g_sycl_gpu_mgr->work_group_size;
 
     int64_t total_vram = 0;
 
+    print_gpu_device_list();
 
     for (int id = 0; id < GGML_SYCL_MAX_DEVICES; ++id) {
         g_device_caps[id].vmm = 0;
@@ -17486,22 +17564,43 @@ GGML_API GGML_CALL int ggml_backend_sycl_get_device_index(int device_id) {
     return g_sycl_gpu_mgr->get_index(device_id);
 }
 
-GGML_API GGML_CALL void ggml_backend_sycl_set_single_device(int main_gpu_id) {
+GGML_API GGML_CALL int ggml_backend_sycl_get_device_id(int device_index) {
+    return g_sycl_gpu_mgr->gpus[device_index];
+}
+
+GGML_API GGML_CALL void ggml_backend_sycl_set_single_device_mode(int main_gpu_id) {
     GGML_ASSERT(main_gpu_id<g_all_sycl_device_count);
-    printf("ggml_backend_sycl_set_single_device: use single device: %d\n", main_gpu_id);
+    fprintf(stderr, "ggml_backend_sycl_set_single_device: use single device: [%d]\n", main_gpu_id);
     if (g_sycl_gpu_mgr) {
         delete g_sycl_gpu_mgr;
     }
     g_sycl_gpu_mgr = new sycl_gpu_mgr(main_gpu_id);
-    ggml_init_sycl();
+    g_ggml_sycl_backend_gpu_mode = SYCL_SINGLE_GPU_MODE;
+    ggml_init_by_gpus(g_sycl_gpu_mgr->get_gpu_count());
     g_ggml_backend_sycl_buffer_type_initialized = false;
+}
+
+GGML_API GGML_CALL void ggml_backend_sycl_set_mul_device_mode() {
+    if (g_ggml_sycl_backend_gpu_mode == SYCL_Mul_GPU_MODE) {
+        return;
+    }
+
+    fprintf(stderr, "ggml_backend_sycl_set_mul_device_mode: true\n");
+
+    if (g_sycl_gpu_mgr) {
+        delete g_sycl_gpu_mgr;
+    }
+    g_sycl_gpu_mgr = new sycl_gpu_mgr();
+    ggml_init_by_gpus(g_sycl_gpu_mgr->get_gpu_count());
+    g_ggml_backend_sycl_buffer_type_initialized = false;
+
+    g_ggml_sycl_backend_gpu_mode = SYCL_Mul_GPU_MODE;
 }
 
 extern "C" int ggml_backend_sycl_reg_devices();
 
 int ggml_backend_sycl_reg_devices() {
-    if (!g_sycl_gpu_mgr) g_sycl_gpu_mgr = new sycl_gpu_mgr();
-    g_device_count = g_sycl_gpu_mgr->get_gpu_count();
+    ggml_backend_sycl_set_mul_device_mode();
     assert(g_device_count>0);
     for (int i = 0; i < g_device_count; i++) {
         int id = g_sycl_gpu_mgr->gpus[i];

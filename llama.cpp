@@ -3750,14 +3750,6 @@ static bool llm_load_tensors(
     model.main_gpu     = main_gpu;
     model.n_gpu_layers = n_gpu_layers;
 
-#ifdef GGML_USE_SYCL
-    if (split_mode == LLAMA_SPLIT_MODE_NONE) {
-        ggml_backend_sycl_set_single_device(main_gpu);
-        //SYCL use device index (0, 1, 2), instead if device id.
-        main_gpu = ggml_backend_sycl_get_device_index(main_gpu);
-    }
-#endif
-
     const int64_t n_layer     = hparams.n_layer;
     const int64_t i_gpu_start = std::max((int64_t) hparams.n_layer - n_gpu_layers, (int64_t) 0);
 
@@ -4754,6 +4746,16 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
             LLAMA_LOG_WARN("%s: disabling Kompute due to unsupported model arch or quantization\n", __func__);
             params.n_gpu_layers = 0;
         }
+#endif
+
+#ifdef GGML_USE_SYCL
+    if (params.split_mode == LLAMA_SPLIT_MODE_NONE) {
+        ggml_backend_sycl_set_single_device_mode(params.main_gpu);
+        //SYCL use device index (0, 1, 2) directly, uer input device id, then convert to device index.
+        params.main_gpu = ggml_backend_sycl_get_device_index(params.main_gpu);
+    } else {
+        ggml_backend_sycl_set_mul_device_mode();
+    }
 #endif
 
         if (!llm_load_tensors(
@@ -12258,17 +12260,16 @@ struct llama_context * llama_new_context_with_model(
         if (model->n_gpu_layers > 0) {
             // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
             if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
-                int main_gpu_index = ggml_backend_sycl_get_device_index(model->main_gpu);
-                ggml_backend_t backend = ggml_backend_sycl_init(main_gpu_index);
+                ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
                 if (backend == nullptr) {
-                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d)backend\n", __func__, model->main_gpu, main_gpu_index);
+                    int main_gpu_id = ggml_backend_sycl_get_device_id(model->main_gpu);
+                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d)backend\n", __func__, main_gpu_id, model->main_gpu);
                     llama_free(ctx);
                     return nullptr;
                 }
                 ctx->backends.push_back(backend);
             } else {
                 // LLAMA_SPLIT_LAYER requires a backend for each GPU
-
                 for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
                     ggml_backend_t backend = ggml_backend_sycl_init(i);
                     if (backend == nullptr) {
