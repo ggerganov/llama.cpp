@@ -135,7 +135,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 if (LLAMA_SYCL)
     set(CMAKE_CXX_STANDARD 17)
 else()
-    set(CMAKE_CXX_STANDARD 11)
+    set(CMAKE_CXX_STANDARD 17)
 endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED true)
