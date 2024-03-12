@@ -95,8 +95,6 @@ void ggml_mpi_backend_free(void);
  */
 struct ggml_mpi_context * ggml_mpi_init(void);
 
-void ggml_mpi_graph_creation_post(struct ggml_mpi_context * ctx_mpi, struct ggml_cgraph * cgraph, int   n_layers);
-
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer_type(ggml_backend_buffer_type_t buft);
 
 GGML_API GGML_CALL ggml_backend_buffer_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_t buf);
@@ -178,7 +176,7 @@ void ggml_mpi_eval_init(
                 int8_t          **  logits,
                 uint32_t            n_seq_max);
 
-void ggml_mpi_synch_int(
+void ggml_mpi_sync_int(
         struct ggml_mpi_context     * ctx_mpi,
                 int32_t * val
         );
@@ -206,45 +204,6 @@ uint16_t** ggml_mpi_split_range(
     uint16_t end,
     float node_weights[]
 );
-
-/**
- * Scatter the layer ranges across all nodes
- * in the given context. This is a collective operation
- * and must be called by all nodes that are within the same
- * communicator. The given layer ranges must be in the same
- * format as created by the ggml_mpi_split_range().
- *
- * @param ctx_mpi The context to scatter the layers across.
- * @param layer_ranges The pre-split ranges to scatter to the nodes.
- */
-void ggml_mpi_scatter_layers(
-    struct ggml_mpi_context * ctx_mpi,
-    uint16_t ** layer_ranges
-);
-
-/**
- * Modify compute graph to only process allocated
- * layers.
- *
- * @param ctx_mpi The context containing the allocated layer range.
- * @param gf The compute graph to modify
- * @param n_layers The number of layers in the model, used as an upper bound in the layer ranges.
- */
-void ggml_mpi_graph_compute_pre(
-        struct ggml_mpi_context * ctx_mpi,
-             struct ggml_cgraph * gf);
-
-/**
- * Sends the output tensor to the next node for processing
- * of later layers.
- *
- * @param ctx_mpi The context to use for MPI operations.
- * @param gf The graph used in the computations
- * @param n_layers The number of layers in the model.
- */
-void ggml_mpi_graph_compute_post(
-        struct ggml_mpi_context * ctx_mpi,
-             struct ggml_cgraph * gf);
 
 // BACKEND V2
 
