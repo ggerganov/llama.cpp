@@ -3269,7 +3269,7 @@ static int g_work_group_size = 0;
 enum ggml_sycl_backend_gpu_mode {
     SYCL_UNSET_GPU_MODE = -1,
     SYCL_SINGLE_GPU_MODE = 0,
-    SYCL_Mul_GPU_MODE
+    SYCL_MUL_GPU_MODE
 };
 
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
@@ -13401,6 +13401,57 @@ void ggml_init_sycl() try {
         initialized = true;
         g_sycl_loaded = true;
     }
+
+
+
+    g_device_count = g_sycl_gpu_mgr->get_gpu_count();
+    g_work_group_size = g_sycl_gpu_mgr->work_group_size;
+
+    int64_t total_vram = 0;
+
+
+    for (int id = 0; id < GGML_SYCL_MAX_DEVICES; ++id) {
+        g_device_caps[id].vmm = 0;
+        g_device_caps[id].device_id = -1;
+        g_device_caps[id].cc = 0;
+        g_tensor_split[id] = 0;
+        g_default_tensor_split[id] = 0;
+    }
+
+    for (int i = 0; i < g_device_count; ++i) {
+        int device_id = g_sycl_gpu_mgr->gpus[i];
+        g_device_caps[i].vmm = 0;
+
+        dpct::device_info prop;
+        SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
+            prop, dpct::dev_mgr::instance().get_device(device_id))));
+
+        g_default_tensor_split[i] = total_vram;
+        total_vram += prop.get_global_mem_size();
+
+        g_device_caps[i].cc =
+            100 * prop.get_major_version() + 10 * prop.get_minor_version();
+    }
+
+    for (int i = 0; i < g_device_count; ++i) {
+        g_default_tensor_split[i] /= total_vram;
+    }
+
+    for (int i = 0; i < g_device_count; ++i) {
+        SYCL_CHECK(ggml_sycl_set_device(i));
+
+        // create sycl streams
+        for (int is = 0; is < MAX_STREAMS; ++is) {
+            SYCL_CHECK(CHECK_TRY_ERROR(
+                g_syclStreams[i][is] =
+                    dpct::get_current_device().create_queue(
+                        g_sycl_gpu_mgr->get_co_ctx(), dpct::get_current_device())));
+        }
+
+        const dpct::queue_ptr stream = g_syclStreams[i][0];
+        // create sycl handle
+        SYCL_CHECK(CHECK_TRY_ERROR(g_sycl_handles[i] = stream));
+    }
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -17638,7 +17689,7 @@ GGML_API GGML_CALL void ggml_backend_sycl_set_single_device_mode(int main_gpu_id
 }
 
 GGML_API GGML_CALL void ggml_backend_sycl_set_mul_device_mode() {
-    if (g_ggml_sycl_backend_gpu_mode == SYCL_Mul_GPU_MODE) {
+    if (g_ggml_sycl_backend_gpu_mode == SYCL_MUL_GPU_MODE) {
         return;
     }
 
@@ -17648,10 +17699,9 @@ GGML_API GGML_CALL void ggml_backend_sycl_set_mul_device_mode() {
         delete g_sycl_gpu_mgr;
     }
     g_sycl_gpu_mgr = new sycl_gpu_mgr();
+    g_ggml_sycl_backend_gpu_mode = SYCL_MUL_GPU_MODE;
     ggml_init_by_gpus(g_sycl_gpu_mgr->get_gpu_count());
     g_ggml_backend_sycl_buffer_type_initialized = false;
-
-    g_ggml_sycl_backend_gpu_mode = SYCL_Mul_GPU_MODE;
 }
 
 extern "C" int ggml_backend_sycl_reg_devices();

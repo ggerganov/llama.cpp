@@ -3750,6 +3750,14 @@ static bool llm_load_tensors(
     model.main_gpu     = main_gpu;
     model.n_gpu_layers = n_gpu_layers;
 
+#ifdef GGML_USE_SYCL
+    if (split_mode == LLAMA_SPLIT_MODE_NONE) {
+        ggml_backend_sycl_set_single_device(main_gpu);
+        //SYCL use device index (0, 1, 2), instead if device id.
+        main_gpu = ggml_backend_sycl_get_device_index(main_gpu);
+    }
+#endif
+
     const int64_t n_layer     = hparams.n_layer;
     const int64_t i_gpu_start = std::max((int64_t) hparams.n_layer - n_gpu_layers, (int64_t) 0);
 
