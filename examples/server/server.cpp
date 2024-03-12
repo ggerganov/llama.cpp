@@ -3390,10 +3390,7 @@ int main(int argc, char ** argv) {
         {
             const int id_task = ctx_server.queue_tasks.get_new_id();
             ctx_server.queue_results.add_waiting_task_id(id_task);
-            ctx_server.request_completion(id_task, -1, {
-                {"prompt", prompt},
-                {"n_predict", 0},
-            }, false, true);
+            ctx_server.request_completion(id_task, -1, {{"prompt", prompt}}, false, true);
 
             // get the result
             server_task_result result = ctx_server.queue_results.recv(id_task);
