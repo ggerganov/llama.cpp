@@ -50,7 +50,7 @@ struct TestCase {
   void verify(const string& series, const string& actual) const {
     if (trim(actual) != trim(expected)) {
       cerr << "#" << endl;
-      cerr << "# Test " << series.c_str() << " / " << name.c_str() << " failed." << endl;
+      cerr << "# Test " << name.c_str() << " (" << series.c_str() << ") failed." << endl;
       cerr << "#" << endl;
       cerr << schema.c_str() << endl;
       cerr << "# EXPECTED:\n" << expected.c_str() << endl;
@@ -68,12 +68,14 @@ static void run_py(const TestCase& tc) {
   std::system(("python ./examples/json-schema-to-grammar.py " + INPUT_NAME + " > " + OUT_NAME).c_str());
   tc.read_and_verify("Python");
 }
+
 static void run_mjs(const TestCase& tc) {
   cerr << "# Running MJS " << tc.name.c_str() << endl;
   tc.prepare();
   std::system(("node ./tests/run-json-schema-to-grammar.mjs " + INPUT_NAME + " > " + OUT_NAME).c_str());
   tc.read_and_verify("JavaScript");
 }
+
 static void run_cpp(const TestCase& tc) {
   cerr << "# Running C++ " << tc.name.c_str() << endl;
   auto actual = json_schema_to_grammar(nlohmann::json::parse(tc.schema));
