@@ -83,7 +83,7 @@ Following definition copied from DPCT head files, which are used by ggml-sycl.cp
 #endif
 
 
-std::string getDeviceTypeName(const sycl::device &Device) {
+std::string get_device_type_name(const sycl::device &Device) {
     auto DeviceType = Device.get_info<sycl::info::device::device_type>();
     switch (DeviceType) {
     case sycl::info::device_type::cpu:
@@ -102,7 +102,7 @@ std::string getDeviceTypeName(const sycl::device &Device) {
 std::string get_device_backend_and_type(const sycl::device &device) {
     std::stringstream device_type;
     sycl::backend backend = device.get_backend();
-    device_type <<  backend << ":" << getDeviceTypeName(device);
+    device_type <<  backend << ":" << get_device_type_name(device);
     return device_type.str();
 }
 
