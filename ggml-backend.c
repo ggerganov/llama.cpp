@@ -1609,7 +1609,6 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                 if (sched->events[split_backend_id][sched->cur_copy] != NULL) {
                     ggml_backend_event_synchronize(sched->events[split_backend_id][sched->cur_copy]);
                 } else {
-                    //printf("%s: sync %s\n", __func__, ggml_backend_name(split_backend));
                     ggml_backend_synchronize(split_backend);
                 }
                 ggml_backend_tensor_copy(input, input_cpy);
@@ -1617,12 +1616,10 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                 if (sched->events[split_backend_id][sched->cur_copy] != NULL) {
                     ggml_backend_event_wait(split_backend, sched->events[split_backend_id][sched->cur_copy]);
                 } else {
-                    //printf("%s: sync %s %s\n", __func__, ggml_backend_name(split_backend), ggml_backend_name(input_backend));
                     ggml_backend_synchronize(split_backend);
                     ggml_backend_synchronize(input_backend);
                 }
 
-                // split_backend waits on input_backend and then copies the data
                 ggml_backend_tensor_copy_async(input_backend, split_backend, input, input_cpy);
             }
         }

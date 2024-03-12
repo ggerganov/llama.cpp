@@ -8770,9 +8770,8 @@ static int llama_decode_internal(
 
     GGML_ASSERT((!batch_all.token && batch_all.embd) || (batch_all.token && !batch_all.embd)); // NOLINT
 
-    GGML_ASSERT(n_tokens_all <= cparams.n_ctx);
+    GGML_ASSERT(n_tokens_all <= cparams.n_batch);
 
-    //const int64_t t_start_us = ggml_time_us();
     if (lctx.t_compute_start_us == 0) {
         lctx.t_compute_start_us = ggml_time_us();
     }
@@ -12959,8 +12958,8 @@ struct llama_context * llama_new_context_with_model(
         // graph outputs buffer
         {
             // resized during inference, reserve maximum
-            ctx->logits_size = hparams.n_vocab*cparams.n_ctx;
-            ctx->embd_size = params.embeddings ? hparams.n_embd*cparams.n_ctx : 0;
+            ctx->logits_size = hparams.n_vocab*cparams.n_batch;
+            ctx->embd_size = params.embeddings ? hparams.n_embd*cparams.n_batch : 0;
 
             const size_t buf_output_size = (ctx->logits_size + ctx->embd_size)*sizeof(float);
 
