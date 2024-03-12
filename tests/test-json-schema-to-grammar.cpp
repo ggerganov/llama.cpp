@@ -2,11 +2,14 @@
 #undef NDEBUG
 #endif
 
-#include "../examples/server/json-schema-to-grammar.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <regex>
+
+// TODO: split this to some library? common would need json.hpp
+#include "../examples/server/json-schema-to-grammar.h"
+#include "../examples/server/json-schema-to-grammar.cpp"
 
 using namespace std;
 
