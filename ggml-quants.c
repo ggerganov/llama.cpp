@@ -1,3 +1,6 @@
+#define GGML_COMMON_IMPL_C
+#include "ggml-common.h"
+
 #include "ggml-quants.h"
 #include "ggml-impl.h"
 
@@ -951,7 +954,7 @@ void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict
         const float d = amax / ((1 << 7) - 1);
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].d = d;
+        y[i].d = GGML_FP32_TO_FP16(d);
 
         int sum = 0;
 
@@ -966,7 +969,7 @@ void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict
             sum += y[i].qs[QK8_1/2 + j];
         }
 
-        y[i].s = sum*d;
+        y[i].s = GGML_FP32_TO_FP16(sum*d);
     }
 }
 
@@ -994,7 +997,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
         const float d = amax / ((1 << 7) - 1);
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].d = d;
+        y[i].d = GGML_FP32_TO_FP16(d);
 
         int32x4_t accv = vdupq_n_s32(0);
 
@@ -1010,7 +1013,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
             accv = vaddq_s32(accv, vi);
         }
 
-        y[i].s = d * vaddvq_s32(accv);
+        y[i].s = GGML_FP32_TO_FP16(d * vaddvq_s32(accv));
     }
 #elif defined(__wasm_simd128__)
     for (int i = 0; i < nb; i++) {
@@ -1033,7 +1036,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
         const float d = amax / ((1 << 7) - 1);
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].d = d;
+        y[i].d = GGML_FP32_TO_FP16(d);
 
         v128_t accv = wasm_i32x4_splat(0);
 
@@ -1049,10 +1052,11 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
             accv = wasm_i32x4_add(accv, vi);
         }
 
-        y[i].s = d * (wasm_i32x4_extract_lane(accv, 0) +
-                      wasm_i32x4_extract_lane(accv, 1) +
-                      wasm_i32x4_extract_lane(accv, 2) +
-                      wasm_i32x4_extract_lane(accv, 3));
+        y[i].s = GGML_FP32_TO_FP16(
+                d * (wasm_i32x4_extract_lane(accv, 0) +
+                     wasm_i32x4_extract_lane(accv, 1) +
+                     wasm_i32x4_extract_lane(accv, 2) +
+                     wasm_i32x4_extract_lane(accv, 3)));
     }
 #elif defined(__AVX2__) || defined(__AVX__)
     for (int i = 0; i < nb; i++) {
@@ -1077,7 +1081,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
 
         // Quantize these floats
         const float d = maxScalar / 127.f;
-        y[i].d = d;
+        y[i].d = GGML_FP32_TO_FP16(d);
         const float id = ( maxScalar != 0.0f ) ? 127.f / maxScalar : 0.0f;
         const __m256 mul = _mm256_set1_ps( id );
 
@@ -1101,7 +1105,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
 
 #if defined(__AVX2__)
         // Compute the sum of the quants and set y[i].s
-        y[i].s = d * hsum_i32_8(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3)));
+        y[i].s = GGML_FP32_TO_FP16(d * hsum_i32_8(_mm256_add_epi32(_mm256_add_epi32(i0, i1), _mm256_add_epi32(i2, i3))));
 
         // Convert int32 to int16
         i0 = _mm256_packs_epi32( i0, i1 );	// 0, 1, 2, 3,  8, 9, 10, 11,  4, 5, 6, 7, 12, 13, 14, 15
@@ -1131,7 +1135,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
         // Compute the sum of the quants and set y[i].s
         const __m128i s0 = _mm_add_epi32(_mm_add_epi32(ni0, ni1), _mm_add_epi32(ni2, ni3));
         const __m128i s1 = _mm_add_epi32(_mm_add_epi32(ni4, ni5), _mm_add_epi32(ni6, ni7));
-        y[i].s = d * hsum_i32_4(_mm_add_epi32(s0, s1));
+        y[i].s = GGML_FP32_TO_FP16(d * hsum_i32_4(_mm_add_epi32(s0, s1)));
 
         // Convert int32 to int16
         ni0 = _mm_packs_epi32( ni0, ni1 );
@@ -1162,7 +1166,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
         const float d  = amax / ((1 << 7) - 1);
         const float id = d ? 1.0f/d : 0.0f;
 
-        y[i].d = d;
+        y[i].d = GGML_FP32_TO_FP16(d);
 
         vfloat32m4_t x0 = __riscv_vfmul_vf_f32m4(v_x, id, vl);
 
@@ -1179,7 +1183,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
 
         // set y[i].s
         int sum = __riscv_vmv_x_s_i16m1_i16(vwrs);
-        y[i].s = sum*d;
+        y[i].s = GGML_FP32_TO_FP16(sum*d);
     }
 #else
     GGML_UNUSED(nb);
@@ -4019,10 +4023,10 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
             const block_q8_1 * restrict b_y0 = &vy0[i];
             const block_q8_1 * restrict b_y1 = &vy1[i];
 
-            float32x4_t summs_t = {GGML_FP16_TO_FP32(b_x0->m) * b_y0->s,
-                                   GGML_FP16_TO_FP32(b_x1->m) * b_y0->s,
-                                   GGML_FP16_TO_FP32(b_x0->m) * b_y1->s,
-                                   GGML_FP16_TO_FP32(b_x1->m) * b_y1->s};
+            float32x4_t summs_t = {GGML_FP16_TO_FP32(b_x0->m) * GGML_FP16_TO_FP32(b_y0->s),
+                                   GGML_FP16_TO_FP32(b_x1->m) * GGML_FP16_TO_FP32(b_y0->s),
+                                   GGML_FP16_TO_FP32(b_x0->m) * GGML_FP16_TO_FP32(b_y1->s),
+                                   GGML_FP16_TO_FP32(b_x1->m) * GGML_FP16_TO_FP32(b_y1->s)};
             summs0 += summs_t;
 
             const uint8x16_t m4b = vdupq_n_u8(0x0F);
@@ -4087,7 +4091,7 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
         const block_q8_1 * restrict y0 = &y[i + 0];
         const block_q8_1 * restrict y1 = &y[i + 1];
 
-        summs += GGML_FP16_TO_FP32(x0->m) * y0->s + GGML_FP16_TO_FP32(x1->m) * y1->s;
+        summs += GGML_FP16_TO_FP32(x0->m) * GGML_FP16_TO_FP32(y0->s) + GGML_FP16_TO_FP32(x1->m) * GGML_FP16_TO_FP32(y1->s);
 
         const uint8x16_t m4b = vdupq_n_u8(0x0F);
 
@@ -4110,8 +4114,8 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
         const int32x4_t p_0 = ggml_vdotq_s32(ggml_vdotq_s32(vdupq_n_s32(0), v0_0l, v1_0l), v0_0h, v1_0h);
         const int32x4_t p_1 = ggml_vdotq_s32(ggml_vdotq_s32(vdupq_n_s32(0), v0_1l, v1_1l), v0_1h, v1_1h);
 
-        sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(p_0), GGML_FP16_TO_FP32(x0->d)*y0->d);
-        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(p_1), GGML_FP16_TO_FP32(x1->d)*y1->d);
+        sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(p_0), GGML_FP16_TO_FP32(x0->d)*GGML_FP16_TO_FP32(y0->d));
+        sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(p_1), GGML_FP16_TO_FP32(x1->d)*GGML_FP16_TO_FP32(y1->d));
     }
 
     *s = vaddvq_f32(sumv0) + vaddvq_f32(sumv1) + summs;
@@ -4124,9 +4128,9 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
     // Main loop
     for (int i = 0; i < nb; ++i) {
         const float d0 = GGML_FP16_TO_FP32(x[i].d);
-        const float d1 = y[i].d;
+        const float d1 = GGML_FP16_TO_FP32(y[i].d);
 
-        summs += GGML_FP16_TO_FP32(x[i].m) * y[i].s;
+        summs += GGML_FP16_TO_FP32(x[i].m) * GGML_FP16_TO_FP32(y[i].s);
 
         const __m256 d0v = _mm256_set1_ps( d0 );
         const __m256 d1v = _mm256_set1_ps( d1 );
@@ -4178,7 +4182,7 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 
         int sumi = __riscv_vmv_x_s_i32m1_i32(vs2);
 
-        sumf += (GGML_FP16_TO_FP32(x[i].d)*y[i].d)*sumi + GGML_FP16_TO_FP32(x[i].m)*y[i].s;
+        sumf += (GGML_FP16_TO_FP32(x[i].d)*GGML_FP16_TO_FP32(y[i].d))*sumi + GGML_FP16_TO_FP32(x[i].m)*GGML_FP16_TO_FP32(y[i].s);
     }
 
     *s = sumf;
@@ -4196,7 +4200,7 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
             sumi += (v0 * y[i].qs[j]) + (v1 * y[i].qs[j + qk/2]);
         }
 
-        sumf += (GGML_FP16_TO_FP32(x[i].d)*y[i].d)*sumi + GGML_FP16_TO_FP32(x[i].m)*y[i].s;
+        sumf += (GGML_FP16_TO_FP32(x[i].d)*GGML_FP16_TO_FP32(y[i].d))*sumi + GGML_FP16_TO_FP32(x[i].m)*GGML_FP16_TO_FP32(y[i].s);
     }
 
     *s = sumf;
@@ -4532,8 +4536,8 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 
         const uint8x16_t m4b = vdupq_n_u8(0x0F);
 
-        summs0 += GGML_FP16_TO_FP32(x0->m) * y0->s;
-        summs1 += GGML_FP16_TO_FP32(x1->m) * y1->s;
+        summs0 += GGML_FP16_TO_FP32(x0->m) * GGML_FP16_TO_FP32(y0->s);
+        summs1 += GGML_FP16_TO_FP32(x1->m) * GGML_FP16_TO_FP32(y1->s);
 
         // extract the 5th bit via lookup table ((b) << 4)
         memcpy(&qh0, x0->qh, sizeof(qh0));
@@ -4577,10 +4581,10 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 
         sumv0 = vmlaq_n_f32(sumv0, vcvtq_f32_s32(vaddq_s32(
                         ggml_vdotq_s32(vdupq_n_s32(0), v0_0lf, v1_0l),
-                        ggml_vdotq_s32(vdupq_n_s32(0), v0_0hf, v1_0h))), GGML_FP16_TO_FP32(x0->d)*y0->d);
+                        ggml_vdotq_s32(vdupq_n_s32(0), v0_0hf, v1_0h))), GGML_FP16_TO_FP32(x0->d)*GGML_FP16_TO_FP32(y0->d));
         sumv1 = vmlaq_n_f32(sumv1, vcvtq_f32_s32(vaddq_s32(
                         ggml_vdotq_s32(vdupq_n_s32(0), v0_1lf, v1_1l),
-                        ggml_vdotq_s32(vdupq_n_s32(0), v0_1hf, v1_1h))), GGML_FP16_TO_FP32(x1->d)*y1->d);
+                        ggml_vdotq_s32(vdupq_n_s32(0), v0_1hf, v1_1h))), GGML_FP16_TO_FP32(x1->d)*GGML_FP16_TO_FP32(y1->d));
     }
 
     *s = vaddvq_f32(sumv0) + vaddvq_f32(sumv1) + summs0 + summs1;
@@ -4597,7 +4601,7 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
         const block_q5_1 * restrict x0 = &x[i];
         const block_q8_1 * restrict y0 = &y[i];
 
-        summs += GGML_FP16_TO_FP32(x0->m) * y0->s;
+        summs += GGML_FP16_TO_FP32(x0->m) * GGML_FP16_TO_FP32(y0->s);
 
         const v128_t m4b = wasm_i8x16_splat(0x0F);
 
@@ -4644,7 +4648,7 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
                                            wasm_i32x4_dot_i16x8(v0lfh, v1lh)),
                             wasm_i32x4_add(wasm_i32x4_dot_i16x8(v0hfl, v1hl),
                                            wasm_i32x4_dot_i16x8(v0hfh, v1hh)))),
-                    wasm_f32x4_splat(GGML_FP16_TO_FP32(x0->d) * y0->d)));
+                    wasm_f32x4_splat(GGML_FP16_TO_FP32(x0->d) * GGML_FP16_TO_FP32(y0->d))));
     }
 
     *s = wasm_f32x4_extract_lane(sumv, 0) + wasm_f32x4_extract_lane(sumv, 1) +
@@ -4659,14 +4663,14 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
     for (int i = 0; i < nb; i++) {
         const __m256 dx = _mm256_set1_ps(GGML_FP16_TO_FP32(x[i].d));
 
-        summs += GGML_FP16_TO_FP32(x[i].m) * y[i].s;
+        summs += GGML_FP16_TO_FP32(x[i].m) * GGML_FP16_TO_FP32(y[i].s);
 
         __m256i qx = bytes_from_nibbles_32(x[i].qs);
         __m256i bxhi = bytes_from_bits_32(x[i].qh);
         bxhi = _mm256_and_si256(bxhi, _mm256_set1_epi8(0x10));
         qx = _mm256_or_si256(qx, bxhi);
 
-        const __m256 dy = _mm256_set1_ps(y[i].d);
+        const __m256 dy = _mm256_set1_ps(GGML_FP16_TO_FP32(y[i].d));
         const __m256i qy = _mm256_loadu_si256((const __m256i *)y[i].qs);
 
         const __m256 q = mul_sum_us8_pairs_float(qx, qy);
@@ -4686,7 +4690,7 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
     for (int i = 0; i < nb; i++) {
         const __m256 dx = _mm256_set1_ps(GGML_FP16_TO_FP32(x[i].d));
 
-        summs += GGML_FP16_TO_FP32(x[i].m) * y[i].s;
+        summs += GGML_FP16_TO_FP32(x[i].m) * GGML_FP16_TO_FP32(y[i].s);
 
         __m256i bx_0 = bytes_from_nibbles_32(x[i].qs);
         const __m256i bxhi = bytes_from_bits_32(x[i].qh);
@@ -4700,7 +4704,7 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
         bxh = _mm_or_si128(bxh, bxhih);
         bx_0 = MM256_SET_M128I(bxh, bxl);
 
-        const __m256 dy = _mm256_set1_ps(y[i].d);
+        const __m256 dy = _mm256_set1_ps(GGML_FP16_TO_FP32(y[i].d));
         const __m256i by_0 = _mm256_loadu_si256((const __m256i *)y[i].qs);
 
         const __m256 q = mul_sum_us8_pairs_float(bx_0, by_0);
@@ -4767,7 +4771,7 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 
         int sumi = __riscv_vmv_x_s_i32m1_i32(vs2);
 
-        sumf += (GGML_FP16_TO_FP32(x[i].d)*y[i].d)*sumi + GGML_FP16_TO_FP32(x[i].m)*y[i].s;
+        sumf += (GGML_FP16_TO_FP32(x[i].d)*GGML_FP16_TO_FP32(y[i].d))*sumi + GGML_FP16_TO_FP32(x[i].m)*GGML_FP16_TO_FP32(y[i].s);
     }
 
     *s = sumf;
@@ -4791,7 +4795,7 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
             sumi += (x0 * y[i].qs[j]) + (x1 * y[i].qs[j + qk/2]);
         }
 
-        sumf += (GGML_FP16_TO_FP32(x[i].d)*y[i].d)*sumi + GGML_FP16_TO_FP32(x[i].m)*y[i].s;
+        sumf += (GGML_FP16_TO_FP32(x[i].d)*GGML_FP16_TO_FP32(y[i].d))*sumi + GGML_FP16_TO_FP32(x[i].m)*GGML_FP16_TO_FP32(y[i].s);
     }
 
     *s = sumf;

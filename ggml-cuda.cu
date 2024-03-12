@@ -2,7 +2,13 @@
 #include "ggml.h"
 #include "ggml-backend-impl.h"
 
+#if defined(GGML_USE_HIPBLAS)
+#define GGML_COMMON_DECL_HIP
+#define GGML_COMMON_IMPL_HIP
+#else
+#define GGML_COMMON_DECL_CUDA
 #define GGML_COMMON_IMPL_CUDA
+#endif
 #include "ggml-common.h"
 
 #include <algorithm>
@@ -359,66 +365,6 @@ typedef void (*ggml_cuda_op_flatten_t)(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, cudaStream_t main_stream);
 
-// QK = number of values after dequantization
-// QR = QK / number of values before dequantization
-// QI = number of 32 bit integers before dequantization
-
-#define QK4_0 32
-#define QR4_0 2
-#define QI4_0 (QK4_0 / (4 * QR4_0))
-typedef struct {
-    half    d;              // delta
-    uint8_t qs[QK4_0 / 2];  // nibbles / quants
-} block_q4_0;
-static_assert(sizeof(block_q4_0) == sizeof(ggml_fp16_t) + QK4_0 / 2, "wrong q4_0 block size/padding");
-
-#define QK4_1 32
-#define QR4_1 2
-#define QI4_1 (QK4_1 / (4 * QR4_1))
-typedef struct {
-    half2   dm;             // dm.x = delta, dm.y = min
-    uint8_t qs[QK4_1 / 2];  // nibbles / quants
-} block_q4_1;
-static_assert(sizeof(block_q4_1) == sizeof(ggml_fp16_t) * 2 + QK4_1 / 2, "wrong q4_1 block size/padding");
-
-#define QK5_0 32
-#define QR5_0 2
-#define QI5_0 (QK5_0 / (4 * QR5_0))
-typedef struct {
-    half d;                 // delta
-    uint8_t qh[4];          // 5-th bit of quants
-    uint8_t qs[QK5_0 / 2];  // nibbles / quants
-} block_q5_0;
-static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
-
-#define QK5_1 32
-#define QR5_1 2
-#define QI5_1 (QK5_1 / (4 * QR5_1))
-typedef struct {
-    half2 dm;               // dm.x = delta, dm.y = min
-    uint8_t qh[4];          // 5-th bit of quants
-    uint8_t qs[QK5_1 / 2];  // nibbles / quants
-} block_q5_1;
-static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
-
-#define QK8_0 32
-#define QR8_0 1
-#define QI8_0 (QK8_0 / (4 * QR8_0))
-typedef struct {
-    half    d;              // delta
-    int8_t  qs[QK8_0];      // quants
-} block_q8_0;
-static_assert(sizeof(block_q8_0) == sizeof(ggml_fp16_t) + QK8_0, "wrong q8_0 block size/padding");
-
-#define QK8_1 32
-#define QR8_1 1
-#define QI8_1 (QK8_1 / (4 * QR8_1))
-typedef struct {
-    half2   ds;             // ds.x = delta, ds.y = sum
-    int8_t  qs[QK8_0];      // quants
-} block_q8_1;
-static_assert(sizeof(block_q8_1) == 2*sizeof(ggml_fp16_t) + QK8_0, "wrong q8_1 block size/padding");
-
 typedef float (*vec_dot_q_cuda_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs);
 typedef void (*allocate_tiles_cuda_t)(int ** x_ql, half2 ** x_dm, int ** x_qh, int ** x_sc);
 typedef void (*load_tiles_cuda_t)(
@@ -427,174 +373,6 @@ typedef void (*load_tiles_cuda_t)(
 typedef float (*vec_dot_q_mul_mat_cuda_t)(
     const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
     const int * __restrict__ y_qs, const half2 * __restrict__ y_ms, const int & i, const int & j, const int & k);
-
-//================================= k-quants
-
-#ifdef GGML_QKK_64
-#define QK_K 64
-#define K_SCALE_SIZE 4
-#else
-#define QK_K 256
-#define K_SCALE_SIZE 12
-#endif
-
-#define QR2_K 4
-#define QI2_K (QK_K / (4*QR2_K))
-typedef struct {
-    uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
-    uint8_t qs[QK_K/4];      // quants
-    half2 dm;                // super-block scale for quantized scales/mins
-} block_q2_K;
-static_assert(sizeof(block_q2_K) == 2*sizeof(ggml_fp16_t) + QK_K/16 + QK_K/4, "wrong q2_K block size/padding");
-
-#define QR3_K 4
-#define QI3_K (QK_K / (4*QR3_K))
-typedef struct {
-    uint8_t hmask[QK_K/8];     // quants - high bit
-    uint8_t qs[QK_K/4];        // quants - low 2 bits
-#ifdef GGML_QKK_64
-    uint8_t scales[2]; // scales, quantized with 8 bits
-#else
-    uint8_t scales[K_SCALE_SIZE]; // scales, quantized with 6 bits
-#endif
-    half d;             // super-block scale
-} block_q3_K;
-//static_assert(sizeof(block_q3_K) == sizeof(ggml_fp16_t) + QK_K / 4 + QK_K / 8 + K_SCALE_SIZE, "wrong q3_K block size/padding");
-
-#define QR4_K 2
-#define QI4_K (QK_K / (4*QR4_K))
-#ifdef GGML_QKK_64
-typedef struct {
-    half    dm[2];             // super-block scales/mins
-    uint8_t scales[2];         // 4-bit block scales/mins
-    uint8_t qs[QK_K/2];        // 4--bit quants
-} block_q4_K;
-static_assert(sizeof(block_q4_K) == sizeof(half2) + QK_K/2 + 2, "wrong q4_K block size/padding");
-#else
-typedef struct {
-    half2 dm;                  // super-block scale for quantized scales/mins
-    uint8_t scales[3*QK_K/64]; // scales, quantized with 6 bits
-    uint8_t qs[QK_K/2];        // 4--bit quants
-} block_q4_K;
-static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + 3*QK_K/64 + QK_K/2, "wrong q4_K block size/padding");
-#endif
-
-#define QR5_K 2
-#define QI5_K (QK_K / (4*QR5_K))
-#ifdef GGML_QKK_64
-typedef struct {
-    half d;                  // super-block scale
-    int8_t scales[QK_K/16];  // block scales
-    uint8_t qh[QK_K/8];      // quants, high bit
-    uint8_t qs[QK_K/2];      // quants, low 4 bits
-} block_q5_K;
-static_assert(sizeof(block_q5_K) == sizeof(ggml_fp16_t) + QK_K/2 + QK_K/8 + QK_K/16, "wrong q5_K block size/padding");
-#else
-typedef struct {
-    half2 dm;                     // super-block scale for quantized scales/mins
-    uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
-    uint8_t qh[QK_K/8];           // quants, high bit
-    uint8_t qs[QK_K/2];           // quants, low 4 bits
-} block_q5_K;
-static_assert(sizeof(block_q5_K) == 2*sizeof(ggml_fp16_t) + K_SCALE_SIZE + QK_K/2 + QK_K/8, "wrong q5_K block size/padding");
-#endif
-
-#define QR6_K 2
-#define QI6_K (QK_K / (4*QR6_K))
-typedef struct {
-    uint8_t ql[QK_K/2];   // quants, lower 4 bits
-    uint8_t qh[QK_K/4];   // quants, upper 2 bits
-    int8_t  scales[QK_K/16]; // scales
-    half    d;         // delta
-} block_q6_K;
-static_assert(sizeof(block_q6_K) == sizeof(ggml_fp16_t) + 13*QK_K/16, "wrong q6_K block size/padding");
-
-#define QR2_XXS 8
-#define QI2_XXS (QK_K / (4*QR2_XXS))
-typedef struct {
-    half d;
-    uint16_t qs[QK_K/8];
-} block_iq2_xxs;
-static_assert(sizeof(block_iq2_xxs) == sizeof(ggml_fp16_t) + QK_K/8*sizeof(uint16_t), "wrong iq2_xxs block size/padding");
-
-#define QR2_XS 8
-#define QI2_XS (QK_K / (4*QR2_XS))
-typedef struct {
-    half d;
-    uint16_t qs[QK_K/8];
-    uint8_t  scales[QK_K/32];
-} block_iq2_xs;
-static_assert(sizeof(block_iq2_xs) == sizeof(ggml_fp16_t) + QK_K/8*sizeof(uint16_t) + QK_K/32, "wrong iq2_xs block size/padding");
-
-// 2.5625 bpw quants
-#define QR2_S 8
-#define QI2_S (QK_K / (4*QR2_S))
-typedef struct {
-    half d;
-    uint8_t qs[QK_K/4];
-    uint8_t qh[QK_K/32];
-    uint8_t scales[QK_K/32];
-} block_iq2_s;
-static_assert(sizeof(block_iq2_s) == sizeof(ggml_fp16_t) + QK_K/4 + QK_K/16, "wrong iq2_s block size/padding");
-
-#define QR3_XXS 8
-#define QI3_XXS (QK_K / (4*QR3_XXS))
-typedef struct {
-    half d;
-    uint8_t qs[3*(QK_K/8)];
-} block_iq3_xxs;
-static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong iq3_xxs block size/padding");
-
-#define QR3_XS 8
-#define QI3_XS (QK_K / (4*QR3_XS))
-#if QK_K == 64
-#define IQ3S_N_SCALE 2
-#else
-#define IQ3S_N_SCALE QK_K/64
-#endif
-typedef struct {
-    half d;
-    uint8_t qs[QK_K/4];
-    uint8_t qh[QK_K/32];
-    uint8_t signs[QK_K/8];
-    uint8_t scales[IQ3S_N_SCALE];
-} block_iq3_s;
-static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + IQ3S_N_SCALE, "wrong iq3_s block size/padding");
-
-#define QR1_S 8
-#define QI1_S (QK_K / (4*QR1_S))
-typedef struct {
-    half d;
-    uint8_t  qs[QK_K/8];
-    uint16_t qh[QK_K/32];
-} block_iq1_s;
-static_assert(sizeof(block_iq1_s) == sizeof(ggml_fp16_t) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
-
-#define QK4_NL 32
-#define QR4_NL 2
-#define QI4_NL (QK4_NL / (4*QR4_NL))
-typedef struct {
-    half d;
-    uint8_t qs[QK4_NL/2];
-} block_iq4_nl;
-static_assert(sizeof(block_iq4_nl) == sizeof(ggml_fp16_t) + QK4_NL/2, "wrong iq4_nl block size/padding");
-
-#if QK_K == 64
-#define block_iq4_xs block_iq4_nl
-#define QR4_XS QR4_NL
-#define QI4_XS QI4_NL
-#else
-// QR4_XS = 8 is very slightly faster than QR4_XS = 4
-#define QR4_XS 8
-#define QI4_XS (QK_K / (4*QR4_XS))
-typedef struct {
-    half d;
-    uint16_t scales_h;
-    uint8_t  scales_l[QK_K/64];
-    uint8_t  qs[QK_K/2];
-} block_iq4_xs;
-static_assert(sizeof(block_iq4_xs) == sizeof(ggml_fp16_t) + sizeof(uint16_t) + QK_K/64 + QK_K/2, "wrong iq4_xs block size/padding");
-#endif
 
 #define WARP_SIZE 32
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
@@ -3570,7 +3348,7 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1(
 #pragma unroll
     for (int i = 0; i < QR2_K; ++ i) {
         u[i]  = get_int_from_int8_aligned(bq8_1[bq8_offset + i].qs, iqs % QI8_1);
-        d8[i] = __low2half(bq8_1[bq8_offset + i].ds);
+        d8[i] = __low2float(bq8_1[bq8_offset + i].ds);
     }
 
     return vec_dot_q2_K_q8_1_impl_mmvq(v, u, scales, bq2_K->dm, d8);
@@ -3692,7 +3470,7 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1(
 #pragma unroll
     for (int i = 0; i < QR3_K; ++i) {
         u[i]  = get_int_from_int8_aligned(bq8_1[bq8_offset + i].qs, iqs % QI8_1);
-        d8[i] = __low2half(bq8_1[bq8_offset + i].ds);
+        d8[i] = __low2float(bq8_1[bq8_offset + i].ds);
     }
 
     return vec_dot_q3_K_q8_1_impl_mmvq(vl, vh, u, bq3_K->scales, scale_offset, d, d8);
@@ -3861,7 +3639,7 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1(
 
     for (int i = 0; i < QR4_K; ++i) {
         const block_q8_1 * bq8i = bq8_1 + bq8_offset + i;
-        d8[i] = __low2half(bq8i->ds);
+        d8[i] = __low2float(bq8i->ds);
 
         const int * q8 = (const int *)bq8i->qs + ((iqs/2)%4);
         u[2*i+0] = q8[0];
@@ -4226,7 +4004,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1(
 #pragma unroll
     for (int i = 0; i < QR6_K; ++i) {
         u[i]  = get_int_from_int8_aligned(bq8_1[bq8_offset + 2*i].qs, iqs % QI8_1);
-        d8[i] = __low2half(bq8_1[bq8_offset + 2*i].ds);
+        d8[i] = __low2float(bq8_1[bq8_offset + 2*i].ds);
     }
 
     return vec_dot_q6_K_q8_1_impl_mmvq(vl, vh, u, scales, bq6_K->d, d8);
@@ -4763,7 +4541,7 @@ static __device__ __forceinline__ void mul_mat_q(
                     *dsi_dst = *dsi_src;
                 } else {
                     float * dfi_dst = (float *) dsi_dst;
-                    *dfi_dst = __low2half(*dsi_src);
+                    *dfi_dst = __low2float(*dsi_src);
                 }
             }
 
