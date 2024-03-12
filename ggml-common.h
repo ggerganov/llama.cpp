@@ -73,7 +73,7 @@ typedef sycl::half2 ggml_half2;
 #define K_SCALE_SIZE 12
 #endif // GGML_QKK_64
 
-#if defined(GGML_COMMON_DECL_CUDA) || defined(GGML_COMMON_DECL_HIP)
+#if defined(GGML_COMMON_DECL_CUDA) || defined(GGML_COMMON_DECL_HIP) || defined(GGML_COMMON_DECL_SYCL)
 // QR = QK / number of values before dequantization
 // QI = number of 32 bit integers before dequantization
 
