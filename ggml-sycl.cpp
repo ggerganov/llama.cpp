@@ -202,24 +202,29 @@ namespace dpct
             // Version string has the following format:
             // a. OpenCL<space><major.minor><space><vendor-specific-information>
             // b. <major.minor>
+            // c. <AmdGcnArchName> e.g gfx1030
             std::string ver;
             ver = dev.get_info<sycl::info::device::version>();
             std::string::size_type i = 0;
-            while (i < ver.size())
-            {
-                if (isdigit(ver[i]))
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (isdigit(ver[i]))
+                break;
+              i++;
             }
             major = std::stoi(&(ver[i]));
-            while (i < ver.size())
-            {
-                if (ver[i] == '.')
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (ver[i] == '.')
+                break;
+              i++;
             }
-            i++;
-            minor = std::stoi(&(ver[i]));
+            if (i < ver.size()) {
+              // a. and b.
+              i++;
+              minor = std::stoi(&(ver[i]));
+            } else {
+              // c.
+              minor = 0;
+            }
         }
 
         template <typename tag, typename T>
