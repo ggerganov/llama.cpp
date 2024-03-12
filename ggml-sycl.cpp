@@ -13096,7 +13096,7 @@ void ggml_backend_sycl_print_sycl_devices() {
     int device_count = dpct::dev_mgr::instance().device_count();
     std::map<std::string, size_t> DeviceNums;
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
-    fprintf(stderr, "|  |                  |                                             |compute   |Max compute|Max work|Max sub|               |\n");
+    fprintf(stderr, "|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |\n");
     fprintf(stderr, "|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|\n");
     fprintf(stderr, "|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|\n");
     for (int id = 0; id < device_count; ++id) {
