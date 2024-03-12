@@ -6,7 +6,7 @@ add_executable(${TARGET}
     server.cpp
     utils.hpp
     json.hpp
-    httplib.h 
+    httplib.h
     json-schema-to-grammar.cpp
     json-schema-to-grammar.h
 )

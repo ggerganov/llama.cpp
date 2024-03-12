@@ -445,7 +445,7 @@ private:
             rule += " )?";
         }
 
-        rule += " \"}\" space ";
+        rule += " \"}\" space";
 
         return rule;
     }

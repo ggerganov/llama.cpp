@@ -57,14 +57,14 @@ struct TestCase {
 static void run_py(const TestCase& tc) {
   cerr << "# Running Python " << tc.name.c_str() << endl;
   tc.prepare();
-  std::system(("python ./examples/json-schema-to-grammar.py " + INPUT_NAME + " > " + OUT_NAME).c_str());
+  assert(std::system(("python ./examples/json-schema-to-grammar.py " + INPUT_NAME + " > " + OUT_NAME).c_str()) == 0);
   tc.read_and_verify("Python");
 }
 
 static void run_mjs(const TestCase& tc) {
   cerr << "# Running MJS " << tc.name.c_str() << endl;
   tc.prepare();
-  std::system(("node ./tests/run-json-schema-to-grammar.mjs " + INPUT_NAME + " > " + OUT_NAME).c_str());
+  assert(std::system(("node ./tests/run-json-schema-to-grammar.mjs " + INPUT_NAME + " > " + OUT_NAME).c_str()) == 0);
   tc.read_and_verify("JavaScript");
 }
 
@@ -290,7 +290,7 @@ int main() {
       e-additionalProperties-value-item ::= "[" space string "," space number "]" space
       e-kv ::= "\"e\"" space ":" space e
       number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
-      root ::= "{" space a-kv "," space b-kv ( "," space ( c-kv c-rest | d-kv d-rest | e-kv ) )? "}" space 
+      root ::= "{" space a-kv "," space b-kv ( "," space ( c-kv c-rest | d-kv d-rest | e-kv ) )? "}" space
       space ::= " "?
       string ::=  "\"" (
               [^"\\] |
