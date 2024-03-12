@@ -14059,7 +14059,7 @@ static int32_t llama_chat_apply_template_internal(
         bool strip_message = tmpl.find("content.strip()") != std::string::npos;
         // construct the prompt
         bool is_inside_turn = true; // skip BOS at the beginning
-        ss << "[INST] ";
+        // ss << "[INST] ";
         for (auto message : chat) {
             std::string content = strip_message ? trim(message->content) : message->content;
             std::string role(message->role);
@@ -14072,10 +14072,10 @@ static int32_t llama_chat_apply_template_internal(
                     ss << "<<SYS>>\n" << content << "\n<</SYS>>\n\n";
                 } else {
                     // if the model does not support system message, we still include it in the first message, but without <<SYS>>
-                    ss << content << "\n";
+                    ss << "<s>" << content << "\n";
                 }
-            } else if (role == "user") {
-                ss << content << " [/INST]";
+            } else if (role == "user" or role == "observation") {
+                ss << "[INST]" << content << " [/INST]";
             } else {
                 ss << (space_around_response ? " " : "") << content << (space_around_response ? " " : "") << "</s>";
                 is_inside_turn = false;

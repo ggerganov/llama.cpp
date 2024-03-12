@@ -523,6 +523,12 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
+
+static json parse_response_for_function_call(const std::string content) {
+
+}
+
+
 static json format_final_response_oaicompat(const json & request, json result, const std::string & completion_id, bool streaming = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
@@ -559,6 +565,7 @@ static json format_final_response_oaicompat(const json & request, json result, c
         }},
         {"id", completion_id}
     };
+    printf("format_final_response_oaicompat: %s\n", res.dump().c_str());
 
     if (server_verbose) {
         res["__verbose"] = result;
