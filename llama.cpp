@@ -12848,16 +12848,12 @@ struct llama_context * llama_new_context_with_model(
                 ctx->backends.push_back(backend);
             } else {
                 // LLAMA_SPLIT_LAYER requires a backend for each GPU
-<<<<<<< HEAD
-=======
-                int id_list[GGML_SYCL_MAX_DEVICES];
-                ggml_sycl_get_gpu_list(id_list, GGML_SYCL_MAX_DEVICES);
->>>>>>> 89fb735 (Revert "[SYCL] fix error when set main gpu to non-zero (#5901)" (#5918))
                 for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
-                    int device_id = id_list[i];
                     ggml_backend_t backend = ggml_backend_sycl_init(i);
                     if (backend == nullptr) {
-                        LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d)backend\n", __func__, device_id, i);
+                        int id_list[GGML_SYCL_MAX_DEVICES];
+                        ggml_sycl_get_gpu_list(id_list, GGML_SYCL_MAX_DEVICES);
+                        LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d)backend\n", __func__, id_list[i], i);
                         llama_free(ctx);
                         return nullptr;
                     }
