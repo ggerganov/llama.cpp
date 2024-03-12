@@ -14,6 +14,10 @@
 
 #define UNUSED GGML_UNUSED
 
+static bool have_init = false;
+
+static void* send_buffer;
+
 struct ggml_mpi_context {
     int rank;
     int size;
@@ -26,24 +30,45 @@ struct ggml_mpi_context {
     std::vector<ggml_backend_t> backends;
     ggml_backend_sched_t scheduler;
     bool remote;
+    void* send_buffer;
 };
 
 void ggml_mpi_backend_init(void) {
     int ret;
-    MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &ret);
+
+    GGML_ASSERT(MPI_Init_thread(nullptr, nullptr, MPI_THREAD_MULTIPLE, &ret) == MPI_SUCCESS);
+    have_init = true;
+    const int buffer_size = 128*1024*1024*8;
+    send_buffer = calloc(1, buffer_size); // 128MB buffer
+//    fprintf(stderr, "BUFFER ATTACH RETCODE=%d\n", MPI_Buffer_attach(send_buffer, buffer_size));
 }
+
+void ggml_mpi_sync_pipelined(
+        struct ggml_mpi_context *   ctx_mpi,
+        void * val,
+        int count,
+        MPI_Datatype datatype,
+        int tag
+);
 
 void ggml_mpi_backend_free(void) {
     MPI_Finalize();
 }
 
 struct ggml_mpi_context * ggml_mpi_init(void) {
+
+    if (!have_init) {
+        ggml_mpi_backend_init();
+    }
+
     auto * ctx = new ggml_mpi_context;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &ctx->rank);
     MPI_Comm_size(MPI_COMM_WORLD, &ctx->size);
     ctx->comm = MPI_COMM_WORLD;
     ctx->remote = false;
+
+    ctx->send_buffer = send_buffer;
 
     return ctx;
 }
@@ -69,77 +94,146 @@ size_t ggml_mpi_size(struct ggml_mpi_context * ctx) {
     return ctx->size;
 }
 
+int ggml_mpi_next_node(struct ggml_mpi_context * ctx_mpi) {
+    return (ctx_mpi->rank + 1) % ctx_mpi->size;
+}
+
+int ggml_mpi_prev_node(struct ggml_mpi_context * ctx_mpi) {
+    int temp = (ctx_mpi->rank - 1);
+    return (temp >= 0) ? temp : ctx_mpi->size - 1;
+}
+
+void ggml_mpi_sync_pipelined(
+        struct ggml_mpi_context *   ctx_mpi,
+        void * val,
+        int count,
+        MPI_Datatype datatype,
+        int tag
+) {
+    if(ctx_mpi->comm == MPI_COMM_NULL) {
+        return;
+    }
+
+//    printf("Rank %d sync pipelined with tag %d\n", ctx_mpi->rank, tag);
+
+
+    if (ctx_mpi->rank != 0) {
+        MPI_Recv(val, count, datatype, ggml_mpi_prev_node(ctx_mpi), tag, ctx_mpi->comm, MPI_STATUS_IGNORE);
+    }
+    if(ctx_mpi->rank < ctx_mpi->size - 1) {
+        GGML_ASSERT(ctx_mpi->send_buffer != nullptr);
+        const int retval = MPI_Bsend(val, count, datatype, ggml_mpi_next_node(ctx_mpi), tag, ctx_mpi->comm);
+        GGML_ASSERT(retval == MPI_SUCCESS);
+
+    }
+}
+
 void ggml_mpi_eval_init(
         struct ggml_mpi_context *   ctx_mpi,
                 int32_t         *   n_tokens,
                 int32_t         **  pos,
                 int32_t         **  n_seq_ids,
                 int32_t         *** seq_id,
-                int8_t          **  logits) {
+                int8_t          **  logits,
+                uint32_t            n_seq_max) {
 
 
-//    fprintf(stderr, "Beginning eval init on rank %d\n", ctx_mpi->rank);
-    MPI_Barrier(ctx_mpi->comm);
+    if(ctx_mpi->comm == MPI_COMM_NULL) {
+        return;
+    }
     int32_t old_n_tokens = *n_tokens;
-    MPI_Bcast(n_tokens, 1, MPI_INT32_T, 0, ctx_mpi->comm);
 
-//    fprintf(stderr, "Node %d, old_n_tokens: %d, new n_tokens: %d\n", ctx_mpi->rank, old_n_tokens, *n_tokens);
 
-    // If what was passed in differs from what was broadcast,
-    // we can't guarantee the allocated sizes are correct
-    // TODO check how often this is done and if it's a problem,
-    //      try to allocate ahead of time
-    if (old_n_tokens != *n_tokens) {
-        *pos = static_cast<int32_t *>(realloc(*pos, *n_tokens * sizeof(int32_t)));
-        *n_seq_ids = static_cast<int32_t *>(realloc(*n_seq_ids, *n_tokens * sizeof(int32_t)));
-        *logits = static_cast<int8_t *>(realloc(*logits, *n_tokens * sizeof(int32_t)));
+    ggml_mpi_sync_pipelined(ctx_mpi, n_tokens, 1, MPI_INT, GGML_MPI_N_TOKENS);
+    int8_t* temp_logits = (int8_t*) calloc(*n_tokens, sizeof(int8_t));
+
+    if (ctx_mpi->rank == 0 && *logits != nullptr) {
+        ggml_mpi_sync_pipelined(ctx_mpi, *logits, *n_tokens, MPI_INT8_T, GGML_MPI_BATCH_LOGITS);
+    } else {
+        ggml_mpi_sync_pipelined(ctx_mpi, temp_logits, *n_tokens, MPI_INT8_T, GGML_MPI_BATCH_LOGITS);
     }
 
 
 
-//    MPI_Bcast(&total_n_seq_ids,     1, MPI_INT32_T, 0, ctx_mpi->comm);
-    MPI_Bcast(*n_seq_ids,   *n_tokens, MPI_INT32_T, 0, ctx_mpi->comm);
+    if (ctx_mpi->rank != 0) {
+        bool should_set_batch_logits = false;
+        for (int i = 0; i < *n_tokens; i++) {
+            if (temp_logits[i]) {
+                should_set_batch_logits = true;
+                break;
+            }
+        }
+        if (should_set_batch_logits) {
+            if (*logits != NULL) {
+                free(*logits);
+                *logits = NULL;
+            }
+            *logits = temp_logits;
+        } else {
+            if (*logits != NULL) {
+                free(*logits);
+                *logits = NULL;
+            }
+            free(temp_logits);
+        }
+    } else {
+        free(temp_logits);
+    }
+
+    // For now, we assume that the pos, seq_ids, tokens, etc have been
+    // pre-allocated for the largest possible sizes, even on worker nodes.
+    //if (old_n_tokens != *n_tokens) {
+    //    *pos = realloc(*pos, *n_tokens * sizeof(int32_t));
+    //    *n_seq_ids = realloc(*n_seq_ids, *n_tokens * sizeof(int32_t ));
+    //    *tokens = realloc(*tokens, *n_tokens * sizeof(int32_t ));
+    //}
+
+    GGML_ASSERT(n_seq_ids != nullptr);
+    GGML_ASSERT(n_tokens != nullptr);
+
+
+    // FIXME Syncing n_seq_ids causes MPI to throw an invalid buffer error in Bsend
+//    ggml_mpi_sync_pipelined(ctx_mpi, *n_seq_ids, *n_tokens, MPI_INT32_T, GGML_MPI_N_SEQ_IDS);
 
     // We need to know the total number of sequence
     // ids, so we count them all up
-    int32_t total_n_seq_ids = 0;
-    for (int32_t i = 0; i < *n_tokens; i++) {
-        total_n_seq_ids += (*n_seq_ids)[i];
-    }
-
-    // MPI can't chase the pointers for multidimensional arrays, so we flatten them first
-    // for transit
-    auto * flattened_seq_ids = static_cast<int32_t *>(calloc(total_n_seq_ids, sizeof(int32_t)));
-
-    int32_t current_index = 0;
-
-    // Only rank 0 needs to flatten since the others don't have the real seq_id
-    if (ctx_mpi->rank == 0) {
-        for (int32_t i = 0; i < *n_tokens; i++) {
-            for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
-                flattened_seq_ids[current_index] = (*seq_id)[i][j];
-                current_index++;
-            }
-        }
-    }
-
-
-    MPI_Bcast(             *pos, *n_tokens,        MPI_INT32_T, 0, ctx_mpi->comm);
-    MPI_Bcast(flattened_seq_ids,  total_n_seq_ids, MPI_INT32_T, 0, ctx_mpi->comm);
-    //MPI_Bcast(*logits,               *n_tokens,        MPI_INT8_T, 0, ctx_mpi->comm);
-    auto ** new_seq_id = static_cast<int32_t **>(calloc(*n_tokens, sizeof(int32_t *)));
-    current_index = 0;
-    for (int32_t i = 0; i < *n_tokens; i++) {
-        new_seq_id[i] = static_cast<int32_t *>(calloc((*n_seq_ids)[i], sizeof(int32_t)));
-        for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
-            new_seq_id[i][j] = flattened_seq_ids[current_index];
-            current_index++;
-        }
-    }
-    free(flattened_seq_ids);
-    //free(*seq_id); // <- something is still holding onto this, need to investigate
-    *seq_id = new_seq_id;
+//    int32_t total_n_seq_ids = 0;
+//    for (int32_t i = 0; i < *n_tokens; i++) {
+//        total_n_seq_ids += (*n_seq_ids)[i];
+//    }
+//
+//    // MPI can't chase the pointers for multidimensional arrays, so we flatten them first
+//    // for transit
+//    int32_t * flattened_seq_ids = static_cast<int32_t *>(calloc(total_n_seq_ids, sizeof(int32_t)));
+//
+//    int32_t current_index = 0;
+//
+//    // Only rank 0 needs to flatten since the others don't have the real seq_id
+//    if (ctx_mpi->rank == 0) {
+//        for (int32_t i = 0; i < *n_tokens; i++) {
+//            for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
+//                flattened_seq_ids[current_index] = (*seq_id)[i][j];
+//                current_index++;
+//            }
+//        }
+//    }
+//
+//
+//
+//    ggml_mpi_sync_pipelined(ctx_mpi, *pos, *n_tokens, MPI_INT32_T, GGML_MPI_POS);
+//    ggml_mpi_sync_pipelined(ctx_mpi, flattened_seq_ids, total_n_seq_ids, MPI_INT32_T, GGML_MPI_SEQ_IDS);
+//
+//    current_index = 0;
+//    for (int32_t i = 0; i < *n_tokens; i++) {
+//        for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
+//            (*seq_id)[i][j] = flattened_seq_ids[current_index];
+//            current_index++;
+//        }
+//
+//    }
+//    free(flattened_seq_ids);
 }
+
 
 void ggml_mpi_synch_int(
         struct ggml_mpi_context * ctx_mpi,

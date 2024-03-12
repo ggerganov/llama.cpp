@@ -12,6 +12,50 @@ struct ggml_cgraph;
 extern "C" {
 #endif
 
+#define GGML_MPI_DECODE 0
+
+#define GGML_MPI_KV_CLEAR 1
+
+#define GGML_MPI_KV_SEQ_RM 2
+
+#define GGML_MPI_KV_SEQ_CP 3
+
+#define GGML_MPI_KV_SEQ_KEEP 4
+
+#define GGML_MPI_KV_SEQ_SHIFT 5
+
+#define GGML_MPI_SHUTDOWN 6
+
+#define GGML_MPI_TRANSFER_TENSORS 7
+
+#define GGML_MPI_SYNC_LOGITS 8
+
+#define GGML_MPI_CANCEL_RUN 9
+
+#define GGML_MPI_KV_SEQ_CP_BACK 10
+
+#define GGML_MPI_TRANS_ID 11
+
+#define GGML_MPI_BATCH_ID 12
+
+#define GGML_MPI_N_TOKENS 13
+
+#define GGML_MPI_TOKENS 14
+
+#define GGML_MPI_N_SEQ_IDS 15
+
+#define GGML_MPI_SEQ_IDS 16
+
+#define GGML_MPI_POS 17
+
+#define GGML_MPI_BEGIN_TRANSACTION 18
+
+#define GGML_MPI_MAX_N_SEQ 19
+
+#define GGML_MPI_BATCH_LOGITS 20
+
+
+
 /**
  * The context used for MPI operations,
  * a program may make use of more than one
@@ -131,7 +175,8 @@ void ggml_mpi_eval_init(
                 int32_t         **  pos,
                 int32_t         **  n_seq_ids,
                 int32_t         *** seq_id,
-                int8_t          **  logits);
+                int8_t          **  logits,
+                uint32_t            n_seq_max);
 
 void ggml_mpi_synch_int(
         struct ggml_mpi_context     * ctx_mpi,

@@ -1750,6 +1750,7 @@ struct llama_cparams {
 
     ggml_backend_sched_eval_callback cb_eval;
     void * cb_eval_user_data;
+    uint32_t n_seq_max;
 };
 
 struct llama_layer {
@@ -8812,7 +8813,7 @@ static int llama_decode_internal(
     uint32_t n_tokens_all = batch_all.n_tokens;
 
 #ifdef GGML_USE_MPI
-    ggml_mpi_eval_init(lctx.ctx_mpi, &(batch_all.n_tokens), &(batch_all.pos), &(batch_all.n_seq_id), &(batch_all.seq_id), &(batch_all.logits));
+    ggml_mpi_eval_init(lctx.ctx_mpi, &(batch_all.n_tokens), &(batch_all.pos), &(batch_all.n_seq_id), &(batch_all.seq_id), &(batch_all.logits), lctx.cparams.n_seq_max);
     n_tokens_all = batch_all.n_tokens;
 #endif
 
@@ -8896,7 +8897,7 @@ static int llama_decode_internal(
             seq_id_arr.resize(n_tokens);
             for (uint32_t i = 0; i < n_tokens; i++) {
                 n_seq_id[i] = 1;
-                seq_id[i].resize(1);
+                seq_id[i].resize(lctx.cparams.n_seq_max);
                 seq_id[i][0] = u_batch.all_seq_id;
                 seq_id_arr[i] = seq_id[i].data();
             }
@@ -12753,6 +12754,9 @@ void llama_backend_init(void) {
         ggml_free(ctx);
     }
 
+#ifdef GGML_USE_MPI
+    ggml_mpi_backend_init();
+#endif
 
 }
 
@@ -12760,10 +12764,6 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
     if (numa != GGML_NUMA_STRATEGY_DISABLED) {
         ggml_numa_init(numa);
     }
-
-#ifdef GGML_USE_MPI
-    ggml_mpi_backend_init();
-#endif
 }
 
 void llama_backend_free(void) {
@@ -12844,7 +12844,7 @@ struct llama_context * llama_new_context_with_model(
     const auto & hparams = model->hparams;
     auto       & cparams = ctx->cparams;
 
-    // TODO: maybe add n_seq_max here too
+    cparams.n_seq_max        = params.n_seq_max;
     cparams.n_threads        = params.n_threads;
     cparams.n_threads_batch  = params.n_threads_batch;
     cparams.yarn_ext_factor  = params.yarn_ext_factor;
@@ -13984,6 +13984,13 @@ void llama_batch_free(struct llama_batch batch) {
         free(batch.seq_id);
     }
     if (batch.logits)   free(batch.logits);
+
+    batch.token = nullptr;
+    batch.embd = nullptr;
+    batch.pos = nullptr;
+    batch.n_seq_id = nullptr;
+    batch.seq_id = nullptr;
+    batch.logits = nullptr;
 }
 
 int32_t llama_decode(
