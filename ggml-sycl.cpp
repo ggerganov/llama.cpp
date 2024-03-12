@@ -82,6 +82,30 @@ Following definition copied from DPCT head files, which are used by ggml-sycl.cp
 #define __dpct_noinline__ __attribute__((noinline))
 #endif
 
+
+std::string getDeviceTypeName(const sycl::device &Device) {
+    auto DeviceType = Device.get_info<sycl::info::device::device_type>();
+    switch (DeviceType) {
+    case sycl::info::device_type::cpu:
+        return "cpu";
+    case sycl::info::device_type::gpu:
+        return "gpu";
+    case sycl::info::device_type::host:
+        return "host";
+    case sycl::info::device_type::accelerator:
+        return "acc";
+    default:
+        return "unknown";
+    }
+}
+
+std::string get_device_backend_and_type(const sycl::device &device) {
+    std::stringstream device_type;
+    sycl::backend backend = device.get_backend();
+    device_type <<  backend << ":" << getDeviceTypeName(device);
+    return device_type.str();
+}
+
 namespace dpct
 {
     typedef sycl::queue *queue_ptr;
@@ -941,10 +965,20 @@ namespace dpct
         {
             dpct::device_info prop1;
             dpct::get_device_info(prop1, device1);
-
             dpct::device_info prop2;
             dpct::get_device_info(prop2, device2);
             return prop1.get_max_compute_units() > prop2.get_max_compute_units();
+        }
+        static int convert_backend_index(std::string & backend) {
+            if (backend == "ext_oneapi_level_zero:gpu") return 0;
+            if (backend == "opencl:gpu") return 1;
+            if (backend == "opencl:cpu") return 2;
+            if (backend == "opencl:acc") return 3;
+            printf("convert_backend_index: can't handle backend=%s\n", backend.c_str());
+            GGML_ASSERT(false);
+        }
+        static bool compare_backend(std::string &backend1, std::string &backend2) {
+            return convert_backend_index(backend1) < convert_backend_index(backend2);
         }
         dev_mgr()
         {
@@ -960,15 +994,29 @@ namespace dpct
             auto Platforms = sycl::platform::get_platforms();
             // Keep track of the number of devices per backend
             std::map<sycl::backend, size_t> DeviceNums;
+            std::map<std::string, std::vector<sycl::device>> backend_devices;
 
             while (!Platforms.empty()) {
                 auto Platform = Platforms.back();
                 Platforms.pop_back();
-                auto Devices = Platform.get_devices();
+                auto devices = Platform.get_devices();
+                std::string backend_type = get_device_backend_and_type(devices[0]);
+                for (const auto &device : devices) {
+                    backend_devices[backend_type].push_back(device);
+                }
+            }
 
-                std::sort(Devices.begin(), Devices.end(), compare_dev);
-                for (const auto &Device : Devices) {
-                    sycl_all_devs.push_back(Device);
+            std::vector<std::string> keys;
+            for(auto it = backend_devices.begin(); it != backend_devices.end(); ++it) {
+                keys.push_back(it->first);
+            }
+            std::sort(keys.begin(), keys.end(), compare_backend);
+
+            for (auto &key : keys) {
+                std::vector<sycl::device> devs = backend_devices[key];
+                std::sort(devs.begin(), devs.end(), compare_dev);
+                for (const auto &dev : devs) {
+                    sycl_all_devs.push_back(dev);
                 }
             }
 
@@ -13214,31 +13262,6 @@ bool ggml_sycl_loaded(void) {
     return g_sycl_loaded;
 }
 
-std::string getDeviceTypeName(const sycl::device &Device) {
-            auto DeviceType = Device.get_info<sycl::info::device::device_type>();
-            switch (DeviceType) {
-            case sycl::info::device_type::cpu:
-                return "cpu";
-            case sycl::info::device_type::gpu:
-                return "gpu";
-            case sycl::info::device_type::host:
-                return "host";
-            case sycl::info::device_type::accelerator:
-                return "acc";
-            default:
-                return "unknown";
-            }
-        }
-
-bool replace_str(std::string str, const std::string from, const std::string to) {
-    size_t start_pos = str.find(from);
-    if(start_pos == std::string::npos) {
-        return false;
-    }
-    str.replace(start_pos, from.length(), to);
-    return true;
-}
-
 void print_device_detail(int id, sycl::device &device, std::string device_type) {
 
     dpct::device_info prop;
@@ -13260,17 +13283,18 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
 
 void ggml_backend_sycl_print_sycl_devices() {
     int device_count = dpct::dev_mgr::instance().device_count();
-    std::map<sycl::backend, size_t> DeviceNums;
+    std::map<std::string, size_t> DeviceNums;
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
     fprintf(stderr, "|  |                  |                                             |compute   |Max compute|Max work|Max sub|               |\n");
-    fprintf(stderr, "|ID|Device Type       | Name                                        |capability|units      |group   |group  |Global mem size|\n");
+    fprintf(stderr, "|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|\n");
     fprintf(stderr, "|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|\n");
     for (int id = 0; id < device_count; ++id) {
         sycl::device device = dpct::dev_mgr::instance().get_device(id);
         sycl::backend backend = device.get_backend();
-        int type_id=DeviceNums[backend]++;
+        std::string backend_type = get_device_backend_and_type(device);
+        int type_id=DeviceNums[backend_type]++;
         std::stringstream device_type;
-        device_type << "[" <<  backend << ":" << getDeviceTypeName(device) << ":" << std::to_string(type_id) << "]";
+        device_type << "[" <<  backend_type << ":" << std::to_string(type_id) << "]";
         print_device_detail(id, device, device_type.str());
     }
 }
