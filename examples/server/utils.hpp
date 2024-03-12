@@ -361,8 +361,16 @@ static json oaicompat_completion_params_parse(
     llama_params["ignore_eos"]        = json_value(body,   "ignore_eos",        false);
     llama_params["tfs_z"]             = json_value(body,   "tfs_z",             default_sparams.tfs_z);
 
-    if (body.count("grammar") != 0) {
+    if (body.contains("grammar")) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
+    }
+
+    if (body.contains("response_format")) {
+      auto response_format = json_value(body, "response_format", json::object());
+      if (response_format.contains("schema") && response_format["type"] == "json_object") {
+        llama_params["json_schema"] = json_value(response_format, "schema", json::object());
+        std::cerr << "GOT " << llama_params["json_schema"] << std::endl;
+      }
     }
 
     // Handle 'stop' field

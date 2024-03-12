@@ -59,6 +59,8 @@ llama_build_and_test_executable(test-backend-ops.cpp)
 
 llama_build_and_test_executable(test-rope.cpp)
 
+llama_build_and_test_executable(test-json-schema-to-grammar.cpp)
+
 llama_build_and_test_executable_with_label(test-model-load-cancel.cpp "model")
 llama_build_and_test_executable_with_label(test-autorelease.cpp "model")
 
