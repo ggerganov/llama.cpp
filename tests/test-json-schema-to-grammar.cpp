@@ -2,17 +2,10 @@
 #undef NDEBUG
 #endif
 
-#include "llama.h"
-#include "grammar-parser.h"
-#include <cstdio>
-#include <cstdlib>
-#include <filesystem>
+#include "../examples/server/json-schema-to-grammar.h"
 #include <iostream>
-#include <istream>
 #include <fstream>
 #include <sstream>
-#include "../examples/server/json-schema-to-grammar.h"
-#include <cassert>
 #include <regex>
 
 using namespace std;

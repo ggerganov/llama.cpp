@@ -667,7 +667,6 @@ public:
     }
 };
 
-
 string json_schema_to_grammar(const json& schema) {
   SchemaConverter converter(/* fetch_json= */ std::nullopt, /* dotall= */ false);
   auto copy = schema;
@@ -676,23 +675,3 @@ string json_schema_to_grammar(const json& schema) {
   converter.check_errors();
   return converter.format_grammar();
 }
-
-#ifdef LLAMA_BUILD_JSON_SCHEMA_CONVERTER
-
-int main(int argc, const char** argv) {
-    if (argc != 2) {
-        cerr << "Expected only one argument" << endl;
-        return -1;
-    }
-    string file(argv[1]);
-    string schema;
-    if (file == "-") {
-        schema.append(istreambuf_iterator<char>(cin), istreambuf_iterator<char>());
-    } else {
-        ifstream in(argv[1]);
-        schema.append(istreambuf_iterator<char>(in), istreambuf_iterator<char>());
-    }
-    cout << json_schema_to_grammar(json::parse(schema)).c_str() << endl;
-}
-
-#endif
