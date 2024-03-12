@@ -218,12 +218,12 @@ if (LLAMA_METAL)
             OUTPUT ${METALLIB_EMBED_ASM}
             COMMAND echo "Embedding Metal library"
             COMMAND sed -e '/\#include \"ggml-common.h\"/r ${METALLIB_COMMON}' -e '/\#include \"ggml-common.h\"/d' < ${METALLIB_SOURCE} > ${METALLIB_SOURCE_EMBED}
-            COMMAND echo ".section __DATA,__ggml_metallib"        >  ${METALLIB_EMBED_ASM}
-            COMMAND echo ".globl _ggml_metallib_start"            >> ${METALLIB_EMBED_ASM}
-            COMMAND echo "_ggml_metallib_start:"                  >> ${METALLIB_EMBED_ASM}
-            COMMAND echo ".incbin \\\"ggml-metal-embed.metal\\\"" >> ${METALLIB_EMBED_ASM}
-            COMMAND echo ".globl _ggml_metallib_end"              >> ${METALLIB_EMBED_ASM}
-            COMMAND echo "_ggml_metallib_end:"                    >> ${METALLIB_EMBED_ASM}
+            COMMAND echo ".section __DATA,__ggml_metallib"          >  ${METALLIB_EMBED_ASM}
+            COMMAND echo ".globl _ggml_metallib_start"              >> ${METALLIB_EMBED_ASM}
+            COMMAND echo "_ggml_metallib_start:"                    >> ${METALLIB_EMBED_ASM}
+            COMMAND echo ".incbin \\\"${METALLIB_SOURCE_EMBED}\\\"" >> ${METALLIB_EMBED_ASM}
+            COMMAND echo ".globl _ggml_metallib_end"                >> ${METALLIB_EMBED_ASM}
+            COMMAND echo "_ggml_metallib_end:"                      >> ${METALLIB_EMBED_ASM}
             DEPENDS ggml-metal.metal ggml-common.h
             COMMENT "Generate assembly for embedded Metal library"
         )
