@@ -8,7 +8,7 @@ const PRIMITIVE_RULES = {
   value: 'object | array | string | number | boolean',
   object: '"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space',
   array: '"[" space ( value ("," space value)* )? "]" space',
-  uuid: '"\\""' + [8, 4, 4, 4, 12].map(n => [...new Array(n)].map(_ => '[0-9a-fA-F]').join('')).join(' "-" ') + '"\\"" space',
+  uuid: '"\\"" ' + [8, 4, 4, 4, 12].map(n => [...new Array(n)].map(_ => '[0-9a-fA-F]').join('')).join(' "-" ') + ' "\\"" space',
   string: ` "\\"" (
         [^"\\\\] |
         "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
@@ -135,7 +135,7 @@ export class SchemaConverter {
 
   _generateUnionRule(name, altSchemas) {
     return altSchemas
-      .map((altSchema, i) => this.visit(altSchema, `${name}${name ? '-' : ''}${i}`))
+      .map((altSchema, i) => this.visit(altSchema, `${name ?? ''}${name ? '-' : ''}${i}`))
       .join(' | ');
   }
 
@@ -377,7 +377,7 @@ export class SchemaConverter {
     } else if ((schemaType === undefined || schemaType === 'object') && 'additionalProperties' in schema) {
       const additionalProperties = typeof schema.additionalProperties === 'object' ? schema.additionalProperties : {};
 
-      const subName = `${name}${name ? '-' : ''}additionalProperties`;
+      const subName = `${name ?? ''}${name ? '-' : ''}additionalProperties`;
       const valueRule = this.visit(additionalProperties, `${subName}-value`);
       const kvRule = this._addRule(`${subName}-kv`, `string ":" space ${valueRule}`);
       return this._addRule(ruleName, `( ${kvRule} ( "," space ${kvRule} )* )*`);
@@ -387,17 +387,18 @@ export class SchemaConverter {
         return this._addRule(
           ruleName,
           '"[" space ' +
-            items.map((item, i) => this.visit(item, `${name}${name ? '-' : ''}tuple-${i}`)).join(' "," space ') +
+            items.map((item, i) => this.visit(item, `${name ?? ''}${name ? '-' : ''}tuple-${i}`)).join(' "," space ') +
             ' "]" space'
         );
       } else {
-        const itemRuleName = this.visit(items, `${name}${name ? '-' : ''}item`);
+        const itemRuleName = this.visit(items, `${name ?? ''}${name ? '-' : ''}item`);
         const listItemOperator = `( "," space ${itemRuleName} )`;
         let successiveItems = '';
-        const minItems = schema.minItems || 0;
+        let minItems = schema.minItems || 0;
         const maxItems = schema.maxItems;
         if (minItems > 0) {
           successiveItems = listItemOperator.repeat(minItems - 1);
+          minItems--;
         }
         if (maxItems !== undefined && maxItems > minItems) {
           successiveItems += `${listItemOperator}?`.repeat(maxItems - minItems - 1);
@@ -449,9 +450,9 @@ export class SchemaConverter {
 
     const propKvRuleNames = {};
     for (const [propName, propSchema] of properties) {
-      const propRuleName = this.visit(propSchema, `${name}${name ? '-' : ''}${propName}`);
+      const propRuleName = this.visit(propSchema, `${name ?? ''}${name ? '-' : ''}${propName}`);
       propKvRuleNames[propName] = this._addRule(
-        `${name}${name ? '-' : ''}${propName}-kv`,
+        `${name ?? ''}${name ? '-' : ''}${propName}-kv`,
         `${this._formatLiteral(propName)} space ":" space ${propRuleName}`
       );
     }
@@ -474,7 +475,7 @@ export class SchemaConverter {
         let res = firstIsOptional ? `( "," space ${kvRuleName} )?` : kvRuleName;
         if (rest.length > 0) {
           res += ' ' + this._addRule(
-            `${name}${name ? '-' : ''}${k}-rest`,
+            `${name ?? ''}${name ? '-' : ''}${k}-rest`,
             getRecursiveRefs(rest, true)
           );
         }
@@ -483,9 +484,9 @@ export class SchemaConverter {
 
       rule += optionalProps.map((_, i) => getRecursiveRefs(optionalProps.slice(i), false)).join(' | ');
       if (requiredProps.length > 0) {
-        rule += ' ) ';
+        rule += ' )';
       }
-      rule += ' )? ';
+      rule += ' )?';
     }
 
     rule += ' "}" space ';
@@ -495,7 +496,7 @@ export class SchemaConverter {
 
   formatGrammar() {
     let grammar = '';
-    for (const [name, rule] of Object.entries(this._rules)) {
+    for (const [name, rule] of Object.entries(this._rules).sort(([a], [b]) => a.localeCompare(b))) {
       grammar += `${name} ::= ${rule}\n`;
     }
     return grammar;

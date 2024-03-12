@@ -17,11 +17,11 @@ PRIMITIVE_RULES = {
     'value'  : 'object | array | string | number | boolean',
     'object' : '"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space',
     'array'  : '"[" space ( value ("," space value)* )? "]" space',
-    'uuid'   : '"\\""' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + '"\\"" space',
+    'uuid'   : '"\\"" ' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + ' "\\"" space',
     'string': r''' "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-      )* "\"" space ''',
+      )* "\"" space''',
     'null': '"null" space',
 }
 
@@ -456,17 +456,20 @@ class SchemaConverter:
             rule += ' | '.join(
                 get_recursive_refs(optional_props[i:], first_is_optional=False)
                 for i in range(len(optional_props))
-            ) + ' '
+            )
             if required_props:
-                rule += ' ) '
-            rule += ' )? '
+                rule += ' )'
+            rule += ' )?'
 
         rule += ' "}" space '
 
         return rule
 
     def format_grammar(self):
-        return '\n'.join((f'{name} ::= {rule}' for name, rule in self._rules.items()))
+        return '\n'.join(
+            f'{name} ::= {rule}'
+            for name, rule in sorted(self._rules.items(), key=lambda kv: kv[0])
+        )
 
 
 def main(args_in = None):
