@@ -9,7 +9,6 @@
 #include <regex>
 
 using namespace std;
-namespace fs = std::filesystem;
 
 string INPUT_NAME(tmpnam(nullptr));
 string OUT_NAME(tmpnam(nullptr));

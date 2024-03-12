@@ -115,7 +115,7 @@ static std::string replacePattern(const std::string& input, const regex& regex, 
 }
 
 static string _format_literal(const string& literal) {
-    string escaped = replacePattern(json(literal).dump(), GRAMMAR_LITERAL_ESCAPE_RE, [&](const auto& match) {
+    string escaped = replacePattern(json(literal).dump(), GRAMMAR_LITERAL_ESCAPE_RE, [&](const smatch& match) {
         char c = match.str()[0];
         return GRAMMAR_LITERAL_ESCAPES.at(c);
     });
@@ -123,7 +123,7 @@ static string _format_literal(const string& literal) {
 }
 
 static string _format_range_char(const string& ch) {
-    return replacePattern(ch, GRAMMAR_RANGE_LITERAL_ESCAPE_RE, [&](const auto& match) {
+    return replacePattern(ch, GRAMMAR_RANGE_LITERAL_ESCAPE_RE, [&](const smatch& match) {
         char c = match.str()[0];
         return GRAMMAR_LITERAL_ESCAPES.at(c);
     });
@@ -132,7 +132,7 @@ static string _format_range_char(const string& ch) {
 
 class SchemaConverter {
 private:
-    std::optional<std::function<json(const string&)>> _fetch_json;
+    std::function<json(const string&)> _fetch_json;
     bool _dotall;
     map<string, string> _rules;
     unordered_map<string, nlohmann::json> _refs;
@@ -288,13 +288,16 @@ private:
                             max_times = stoi(nums[1]);
                         }
                     }
-                    auto [sub, sub_is_literal] = seq.back();
+                    auto &last = seq.back();
+                    auto &sub = last.first;
+                    auto sub_is_literal = last.second;
+
                     if (min_times == 0 && max_times == numeric_limits<int>::max()) {
-                        seq.back().first = sub + "*";
+                        sub += "*";
                     } else if (min_times == 0 && max_times == 1) {
-                        seq.back().first = sub + "?";
+                        sub += "?";
                     } else if (min_times == 1 && max_times == numeric_limits<int>::max()) {
-                        seq.back().first = sub + "+";
+                        sub += "+";
                     } else {
                         if (!sub_is_literal) {
                             string& sub_id = sub_rule_ids[sub];
@@ -379,7 +382,10 @@ private:
         vector<string> required_props;
         vector<string> optional_props;
         unordered_map<string, string> prop_kv_rule_names;
-        for (const auto& [prop_name, prop_schema] : properties) {
+        for (const auto& kv : properties) {
+            const auto &prop_name = kv.first;
+            const auto &prop_schema = kv.second;
+
             string prop_rule_name = visit(prop_schema, name + (name.empty() ? "" : "-") + prop_name);
             prop_kv_rule_names[prop_name] = _add_rule(
                 name + (name.empty() ? "" : "-") + prop_name + "-kv",
@@ -446,7 +452,7 @@ private:
 
 public:
     SchemaConverter(
-        const std::optional<std::function<json(const string&)>>& fetch_json,
+        const std::function<json(const string&)>& fetch_json,
         bool dotall)
           : _fetch_json(fetch_json), _dotall(dotall)
     {
@@ -469,14 +475,14 @@ public:
                     string ref = n["$ref"];
                     if (_refs.find(ref) == _refs.end()) {
                         json target;
-                        if (ref.find("https://") == 0 && _fetch_json) {
+                        if (ref.find("https://") == 0) {
                             string base_url = ref.substr(0, ref.find('#'));
                             auto it = _refs.find(base_url);
                             if (it != _refs.end()) {
                                 target = it->second;
                             } else {
                                 // Fetch the referenced schema and resolve its refs
-                                auto referenced = _fetch_json.value()(ref);
+                                auto referenced = _fetch_json(ref);
                                 resolve_refs(referenced, base_url);
                                 _refs[base_url] = referenced;
                             }
@@ -504,8 +510,8 @@ public:
                         _refs[ref] = target;
                     }
                 } else {
-                    for (auto& [key, value] : n.items()) {
-                        visit_refs(value);
+                    for (auto& kv : n.items()) {
+                        visit_refs(kv.value());
                     }
                 }
             }
@@ -628,15 +634,15 @@ public:
         } else if ((schema_type.is_null() || schema_type == "string") && schema.contains("pattern")) {
             return _visit_pattern(schema["pattern"], rule_name);
         } else if (schema.empty() || (schema.size() == 1 && schema_type == "object")) {
-            for (const auto& [t, r] : PRIMITIVE_RULES) {
-                _add_rule(t, r);
+            for (const auto& kv : PRIMITIVE_RULES) {
+                _add_rule(kv.first, kv.second);
             }
             return "object";
         } else if ((schema_type.is_null() || schema_type == "string") && regex_match(schema_format, regex("^uuid[1-5]?$"))) {
             return _add_rule(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
         } else if ((schema_type.is_null() || schema_type == "string") && DATE_RULES.find(schema_format) != DATE_RULES.end()) {
-            for (const auto& [t, r] : DATE_RULES) {
-                _add_rule(t, r);
+            for (const auto& kv : DATE_RULES) {
+                _add_rule(kv.first, kv.second);
             }
             return schema_format + "-string";
         } else {
@@ -660,15 +666,15 @@ public:
 
     string format_grammar() {
         stringstream ss;
-        for (const auto& [name, rule] : _rules) {
-            ss << name << " ::= " << rule << endl;
+        for (const auto& kv : _rules) {
+            ss << kv.first << " ::= " << kv.second << endl;
         }
         return ss.str();
     }
 };
 
 string json_schema_to_grammar(const json& schema) {
-  SchemaConverter converter(/* fetch_json= */ std::nullopt, /* dotall= */ false);
+  SchemaConverter converter([](const string&) { return json::object(); }, /* dotall= */ false);
   auto copy = schema;
   converter.resolve_refs(copy, "input");
   converter.visit(copy, "");
