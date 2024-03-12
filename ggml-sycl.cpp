@@ -4701,9 +4701,7 @@ static void dequantize_block_iq3_s(const void * __restrict__ vx, dst_t * __restr
 template<typename dst_t>
 static void dequantize_block_iq1_s(const void * __restrict__ vx, dst_t * __restrict__ yy,
                                      const sycl::nd_item<3> &item_ct1,
-                                     const uint32_t *iq1s_grid,
-                                     const uint8_t *ksigns_iq2xs,
-                                     const uint8_t *kmask_iq2xs) {
+                                     const uint32_t *iq1s_grid) {
     const int i = item_ct1.get_group(2);
     const block_iq1_s * x = (const block_iq1_s  *) vx;
 
@@ -7616,7 +7614,7 @@ vec_dot_iq3_s_q8_1(const void *__restrict__ vbq,
 static __dpct_inline__ float
 vec_dot_iq1_s_q8_1(const void *__restrict__ vbq,
                      const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                     const uint32_t *iq1s_grid, const uint64_t *ksigns64) {
+                     const uint32_t *iq1s_grid) {
 #if QK_K == 256
     const block_iq1_s * bq1 = (const block_iq1_s *) vbq;
     const int * q8 = (const int *)bq8_1[ib32].qs;
@@ -8450,7 +8448,7 @@ static void mul_mat_vec_q_iq3_s_q8_1(const void * __restrict__ vx, const void * 
 template <int qk, int qi, typename block_q_t, int vdr>
 static void mul_mat_vec_q_iq1_s_q8_1(const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst, const int ncols, const int nrows,
                           const sycl::nd_item<3> &item_ct1,
-                          const uint32_t *iq1s_grid_ptr, const uint64_t *ksigns64_ptr ) {
+                          const uint32_t *iq1s_grid_ptr) {
     const int row = item_ct1.get_group(2) * item_ct1.get_local_range(1) +
                     item_ct1.get_local_id(1);
 
@@ -8478,7 +8476,7 @@ static void mul_mat_vec_q_iq1_s_q8_1(const void * __restrict__ vx, const void * 
             (item_ct1.get_local_id(2) %
              (qi / vdr)); // x block quant index when casting the quants to int
 
-        tmp += vec_dot_iq1_s_q8_1(&x[ibx], &y[iby], iqs, iq1s_grid_ptr, ksigns64_ptr);
+        tmp += vec_dot_iq1_s_q8_1(&x[ibx], &y[iby], iqs, iq1s_grid_ptr);
     }
 
     // sum up partial sums and write back result
@@ -10221,16 +10219,12 @@ static void dequantize_row_iq1_s_sycl(const void *vx, dst_t *y, const int k,
 
         stream->submit([&](sycl::handler &cgh) {
             auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
-            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
-            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
 
             cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 32),
                                                sycl::range<3>(1, 1, 32)),
                              [=](sycl::nd_item<3> item_ct1) {
-                                 dequantize_block_iq1_s(
-                                     vx, y, item_ct1, iq1s_grid_ptr_ct1,
-                                     ksigns_iq2xs_ptr_ct1, kmask_iq2xs_ptr_ct1);
+                                 dequantize_block_iq1_s(vx, y, item_ct1, iq1s_grid_ptr_ct1);
                              });
         });
     }
@@ -10961,11 +10955,9 @@ static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
     {
         iq1s_grid_gpu.init(*stream);
-        ksigns64.init(*stream);
 
         stream->submit([&](sycl::handler &cgh) {
             auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
-            auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -10973,7 +10965,7 @@ static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
                     [[intel::reqd_sub_group_size(32)]] {
                         mul_mat_vec_q_iq1_s_q8_1<QK_K, QI1_S, block_iq1_s, 1>(
                             vx, vy, dst, ncols, nrows, item_ct1,
-                            iq1s_grid_ptr_ct1, ksigns64_ptr_ct1);
+                            iq1s_grid_ptr_ct1);
                     });
         });
     }
