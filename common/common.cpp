@@ -985,7 +985,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
     printf("  -b N, --batch-size N  logical maximum batch size (default: %d)\n", params.n_batch);
     printf("  -ub N, --ubatch-size N\n");
-    printf("                        backend maximum batch size (default: %d)\n", params.n_ubatch);
+    printf("                        physical maximum batch size (default: %d)\n", params.n_ubatch);
     printf("  --samplers            samplers that will be used for generation in the order, separated by \';\'\n");
     printf("                        (default: %s)\n", sampler_type_names.c_str());
     printf("  --sampling-seq        simplified sequence for samplers that will be used (default: %s)\n", sampler_type_chars.c_str());

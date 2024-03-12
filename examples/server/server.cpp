@@ -2157,7 +2157,8 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --pooling {none,mean,cls} pooling type for embeddings, use model default if unspecified\n");
     printf("  -dt N, --defrag-thold N\n");
     printf("                            KV cache defragmentation threshold (default: %.1f, < 0 - disabled)\n", params.defrag_thold);
-    printf("  -b N, --batch-size N      batch size for prompt processing (default: %d)\n", params.n_batch);
+    printf("  -b N, --batch-size N      logical maximum batch size (default: %d)\n", params.n_batch);
+    printf("  -ub N, --ubatch-size N    physical maximum batch size (default: %d)\n", params.n_ubatch);
     printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_supports_mlock()) {
@@ -2424,6 +2425,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             params.n_batch = std::stoi(argv[i]);
+        } else if (arg == "-ub" || arg == "--ubatch-size") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_ubatch = std::stoi(argv[i]);
         } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
             if (++i >= argc) {
                 invalid_param = true;
