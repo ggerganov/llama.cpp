@@ -17998,6 +17998,7 @@ const char * llama_print_system_info(void) {
 #else
     s += "LLAMAFILE = 0 | ";
 #endif
+    s += "XEONPHI_KNC = " + std::to_string(ggml_cpu_is_xeonphi_knc())  + " | ";
 
     return s.c_str();
 }
