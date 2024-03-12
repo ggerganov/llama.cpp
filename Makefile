@@ -93,7 +93,7 @@ CC	:= riscv64-unknown-linux-gnu-gcc
 CXX	:= riscv64-unknown-linux-gnu-g++
 endif
 
-K1OM := $( shell echo | $CC -dM -E - | grep __k1om__ )
+K1OM := $(shell echo | $(CC) -dM -E - | grep __k1om__)
 
 #
 # Compile flags
@@ -282,7 +282,8 @@ ifndef RISCV
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 
-ifeq "$(K1OM)" ""
+# detect the PHI cross compiler.
+ifeq "${K1OM}" ""
 
 	# Use all CPU extensions that are available:
 	MK_CFLAGS     += -march=native -mtune=native
