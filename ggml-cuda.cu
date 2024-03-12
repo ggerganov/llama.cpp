@@ -11552,7 +11552,6 @@ static void ggml_backend_cuda_event_wait(ggml_backend_t backend, ggml_backend_ev
 }
 
 static void ggml_backend_cuda_event_synchronize(ggml_backend_event_t event) {
-    cudaError_t err = cudaEventQuery((cudaEvent_t)event->context);
     CUDA_CHECK(cudaEventSynchronize((cudaEvent_t)event->context));
 }
 
