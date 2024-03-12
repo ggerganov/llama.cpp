@@ -3514,8 +3514,8 @@ static_assert(sizeof(block_iq3_s) == sizeof(ggml_fp16_t) + 13*(QK_K/32) + IQ3S_N
 #define QI1_S (QK_K / (4*QR1_S))
 typedef struct {
     sycl::half d;
-    uint8_t qs[QK_K/8];
-    uint8_t scales[QK_K/16];
+    uint8_t  qs[QK_K/8];
+    uint16_t qh[QK_K/32];
 } block_iq1_s;
 static_assert(sizeof(block_iq1_s) == sizeof(ggml_fp16_t) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
 
@@ -4894,7 +4894,6 @@ static void dequantize_block_iq1_s(const void * __restrict__ vx, dst_t * __restr
                                      const uint32_t *iq1s_grid_gpu,
                                      const uint8_t *ksigns_iq2xs,
                                      const uint8_t *kmask_iq2xs) {
-
     const int i = item_ct1.get_group(2);
     const block_iq1_s * x = (const block_iq1_s  *) vx;
 
