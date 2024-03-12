@@ -93,6 +93,8 @@ CC	:= riscv64-unknown-linux-gnu-gcc
 CXX	:= riscv64-unknown-linux-gnu-g++
 endif
 
+K1OM := $( shell echo | $CC -dM -E - | grep __k1om__ )
+
 #
 # Compile flags
 #
@@ -279,6 +281,9 @@ endif
 ifndef RISCV
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
+
+ifeq "$(K1OM)" ""
+
 	# Use all CPU extensions that are available:
 	MK_CFLAGS     += -march=native -mtune=native
 	HOST_CXXFLAGS += -march=native -mtune=native
@@ -290,6 +295,8 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Usage SSSE3-only (Not is SSE3!)
 	#MK_CFLAGS   += -mssse3
 	#MK_CXXFLAGS += -mssse3
+endif
+
 endif
 
 ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
