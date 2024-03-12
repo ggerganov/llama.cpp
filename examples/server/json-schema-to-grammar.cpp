@@ -439,16 +439,16 @@ public:
         _rules["space"] = SPACE_RULE;
     }
 
-    json resolve_refs(nlohmann::json& schema, const std::string& url) {
+    void resolve_refs(nlohmann::json& schema, const std::string& url) {
         /*
         * Resolves all $ref fields in the given schema, fetching any remote schemas,
-        * replacing $ref with absolute reference URL and populating _refs with the
+        * replacing each $ref with absolute reference URL and populates _refs with the
         * respective referenced (sub)schema dictionaries.
         */
-        function<json(json&)> visit_refs = [&](json& n) {
+        function<void(json&)> visit_refs = [&](json& n) {
             if (n.is_array()) {
                 for (auto& x : n) {
-                    x = visit_refs(x);
+                    visit_refs(x);
                 }
             } else if (n.is_object()) {
                 if (n.contains("$ref")) {
@@ -463,11 +463,11 @@ public:
                             } else {
                                 // Fetch the referenced schema and resolve its refs
                                 auto referenced = _fetch_json.value()(ref);
-                                target = resolve_refs(referenced, base_url);
-                                _refs[base_url] = target;
+                                resolve_refs(referenced, base_url);
+                                _refs[base_url] = referenced;
                             }
                             if (ref.find('#') == string::npos || ref.substr(ref.find('#') + 1).empty()) {
-                                return target;
+                                return;
                             }
                         } else if (ref.find("#/") == 0) {
                             target = schema;
@@ -475,7 +475,7 @@ public:
                             ref = url + ref;
                         } else {
                             _errors.push_back("Unsupported ref: " + ref);
-                            return n;
+                            return;
                         }
                         string pointer = ref.substr(ref.find('#') + 1);
                         vector<string> tokens = split(pointer, "/");
@@ -483,7 +483,7 @@ public:
                             string sel = tokens[i];
                             if (target.is_null() || !target.contains(sel)) {
                               _errors.push_back("Error resolving ref " + ref + ": " + sel + " not in " + target.dump());
-                              return n;
+                              return;
                             }
                             target = target[sel];
                         }
@@ -495,10 +495,9 @@ public:
                     }
                 }
             }
-            return n;
         };
 
-        return visit_refs(schema);
+        visit_refs(schema);
     }
 
     string visit(const json& schema, const string& name) {
@@ -661,12 +660,9 @@ public:
 
 
 string json_schema_to_grammar(const json& schema) {
-  auto dotall = false;
-  string url("input");
-
-  SchemaConverter converter(/* fetch_json= */ std::nullopt, dotall);
+  SchemaConverter converter(/* fetch_json= */ std::nullopt, /* dotall= */ false);
   auto copy = schema;
-  copy = converter.resolve_refs(copy, url);
+  converter.resolve_refs(copy, "input");
   converter.visit(copy, "");
   converter.check_errors();
   return converter.format_grammar();
