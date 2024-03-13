@@ -41,6 +41,10 @@
 #pragma warning(disable: 4996)
 #endif
 
+#if defined(__k1om__)
+#include <immintrin.h>
+#endif
+
 #if defined(_WIN32)
 
 #include <windows.h>
