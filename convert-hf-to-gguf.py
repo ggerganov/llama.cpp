@@ -772,6 +772,7 @@ class XverseModel(Model):
         assert (self.dir_model / "tokenizer.json").is_file()
         dir_model = self.dir_model
         hparams = self.hparams
+
         tokens: list[bytearray] = []
         toktypes: list[int] = []
 
@@ -783,26 +784,30 @@ class XverseModel(Model):
         reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.vocab.items()}
         added_vocab = tokenizer.get_added_vocab()
 
-        for i in range(vocab_size):
-            if i not in reverse_vocab:
-                pad_token = f"[PAD{i}]".encode('utf-8')
-                tokens.append(bytearray(pad_token))
-                toktypes.append(gguf.TokenType.USER_DEFINED)
-            elif reverse_vocab[i] in added_vocab:
-                tokens.append(reverse_vocab[i])
-                if tokenizer.added_tokens_decoder[i].special:
-                    toktypes.append(gguf.TokenType.CONTROL)
+        for token_id in range(vocab_size):
+            token_text = reverse_vocab[token_id].encode('utf-8')
+            # replace "\x00" to string with length > 0
+            if token_text == b"\x00":
+                toktype = gguf.TokenType.BYTE  # special
+                token_text = f"<{token_text}>".encode('utf-8')
+            elif re.fullmatch(br"<0x[0-9A-Fa-f]{2}>", token_text):
+                toktype = gguf.TokenType.BYTE  # special
+            elif reverse_vocab[token_id] in added_vocab:
+                if tokenizer.added_tokens_decoder[token_id].special:
+                    toktype = gguf.TokenType.CONTROL
                 else:
-                    toktypes.append(gguf.TokenType.USER_DEFINED)
+                    toktype = gguf.TokenType.USER_DEFINED
             else:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.NORMAL)
+                toktype = gguf.TokenType.NORMAL
 
-        self.gguf_writer.add_tokenizer_model("xverse")
+            tokens.append(token_text)
+            toktypes.append(toktype)
+
+        self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
+        special_vocab = gguf.SpecialVocab(dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):

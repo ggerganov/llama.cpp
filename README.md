@@ -110,6 +110,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
 - [x] [Mamba](https://github.com/state-spaces/mamba)
+- [x] [Xverse](https://huggingface.co/models?search=xverse)
 
 **Multimodal models:**
 
