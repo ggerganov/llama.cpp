@@ -795,6 +795,7 @@ GGML_CALL static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t 
         free(cpu_ctx->work_data);
         cpu_ctx->work_data = malloc(cplan.work_size);
         if (cpu_ctx->work_data == NULL) {
+            cpu_ctx->work_size = 0;
             return GGML_STATUS_ALLOC_FAILED;
         }
         cpu_ctx->work_size = cplan.work_size;
