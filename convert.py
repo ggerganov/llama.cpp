@@ -948,18 +948,14 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
             yield result
 
 
-def check_vocab_size(params: Params, vocab: Vocab) -> None:
+def prepare_vocab(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
     # Handle special case where the model's vocab size is not set
     if params.n_vocab == -1:
         raise ValueError(
             f"The model's vocab size is set to -1 in params.json. Please update it manually.{f' Maybe {vocab.vocab_size}?' if hasattr(vocab, 'vocab_size') else ''}"
         )
-
-
-def prepare_vocab(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
-    check_vocab_size(params, vocab)
-    if vocab.name == "no_vocab":
-        return
+    if isinstance(vocab, NoVocab):
+        return  # model has no vocab
 
     # Check for a vocab size mismatch
     if params.n_vocab == vocab.vocab_size:
@@ -1147,7 +1143,7 @@ class OutputFile:
 
         # meta data
         of.add_meta_arch(params)
-        if vocab.name == "no_vocab":
+        if isinstance(vocab, NoVocab):
             of.gguf.add_tokenizer_model(vocab.tokenizer_model)
         else:
             of.add_meta_vocab(vocab)
