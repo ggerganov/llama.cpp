@@ -12579,7 +12579,7 @@ struct llama_context_params llama_context_default_params() {
     struct llama_context_params result = {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
-        /*.n_batch                     =*/ 4096,
+        /*.n_batch                     =*/ 2048,
         /*.n_ubatch                    =*/ 512,
         /*.n_seq_max                   =*/ 1,
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
