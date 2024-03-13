@@ -529,6 +529,16 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
 }
 
 static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
+    json data = json::array();
+    int i = 0;
+    for (auto & elem : embeddings) {
+        data.push_back(json{
+            {"embedding", json_value(elem, "embedding", json::array())},
+            {"index",     i++},
+            {"object",    "embedding"}
+        });
+    }
+
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
@@ -536,7 +546,7 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
             {"prompt_tokens", 0},
             {"total_tokens", 0}
         }},
-        {"data", embeddings}
+        {"data", data}
     };
 
     return res;
