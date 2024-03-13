@@ -208,8 +208,14 @@ class GGUFWriter:
                 dtype = GGMLQuantizationType.F32
             elif tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
+            elif tensor_dtype == np.int8:
+                dtype = GGMLQuantizationType.I8
+            elif tensor_dtype == np.int16:
+                dtype = GGMLQuantizationType.I16
+            elif tensor_dtype == np.int32:
+                dtype = GGMLQuantizationType.I32
             else:
-                raise ValueError("Only F32 and F16 tensors are supported for now")
+                raise ValueError("Only F32, F16, I8, I16, I32 tensors are supported for now")
         else:
             dtype = raw_dtype
         self.ti_data += self._pack("I", dtype)
