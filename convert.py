@@ -948,7 +948,7 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
             yield result
 
 
-def prepare_vocab(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
+def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
     # Handle special case where the model's vocab size is not set
     if params.n_vocab == -1:
         raise ValueError(
@@ -1105,7 +1105,7 @@ class OutputFile:
         fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab,
         endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE, pad_vocab: bool = False,
     ) -> None:
-        prepare_vocab(params, vocab, pad_vocab=pad_vocab)
+        check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
@@ -1137,7 +1137,7 @@ class OutputFile:
         concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
         pad_vocab: bool = False,
     ) -> None:
-        prepare_vocab(params, vocab, pad_vocab=pad_vocab)
+        check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
