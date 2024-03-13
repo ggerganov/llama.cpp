@@ -891,7 +891,7 @@ inline static float vaddvq_f32(float32x4_t v) {
 #define GGML_F32_ARR (GGML_F32_STEP/GGML_F32_EPR)
 
 // our vector. 128*32=512
-typedef float32_t float32x16_t __attribute__((vector_size (128)));
+typedef float float32x16_t __attribute__((vector_size (128)));
 #define GGML_F32x16              float32x16_t
 #define GGML_F32x16_ZERO		      \
   {					      \
@@ -906,6 +906,7 @@ typedef float32_t float32x16_t __attribute__((vector_size (128)));
 //vdupq_n_f32(0.0f)
 
 #define GGML_F32_VEC        GGML_F32x16
+#define GGML_F32_VEC_ZERO   GGML_F32x16_ZERO
 
 #elif defined(__ARM_NEON) && defined(__ARM_FEATURE_FMA)
 
