@@ -9,6 +9,7 @@ Feature: llama.cpp server
     And   42 as server seed
     And   2 slots
     And   1024 as batch size
+    And   1024 as ubatch size
     And   2048 KV cache size
     And   embeddings extraction
     Then  the server is starting
