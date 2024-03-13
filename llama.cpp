@@ -5416,7 +5416,7 @@ static struct ggml_tensor * llm_build_kv(
 
 struct llm_build_context {
     const llama_model    & model;
-    llama_context  & lctx;
+          llama_context  & lctx;
     const llama_hparams  & hparams;
     const llama_cparams  & cparams;
     const llama_batch    & batch;
@@ -6550,10 +6550,6 @@ struct llm_build_context {
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
-
-                cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
-                        model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             struct ggml_tensor * q =                 ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
