@@ -202,7 +202,7 @@ uint16_t** ggml_mpi_split_range(
     struct ggml_mpi_context * ctx_mpi,
     uint16_t start,
     uint16_t end,
-    float node_weights[]
+    const float node_weights[]
 );
 
 // BACKEND V2

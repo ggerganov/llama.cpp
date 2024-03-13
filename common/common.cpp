@@ -1319,6 +1319,10 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
         mparams.kv_overrides = params.kv_overrides.data();
     }
 
+    free((void *) mparams.node_layer_weights);
+
+    mparams.node_layer_weights = params.mpi_layer_split.data();
+
     return mparams;
 }
 

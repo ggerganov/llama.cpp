@@ -285,19 +285,12 @@ uint16_t** ggml_mpi_split_range(
     struct ggml_mpi_context * ctx_mpi,
     uint16_t start,
     uint16_t end,
-    float node_weights[]
+    const float node_weights[]
 ) {
     // Splits the range given by start and end
     // over the available nodes. This implementation
     // assumes that node 0 handles the final part of the range
     // while node 1 handles the beginning, to form a ring pipeline
-
-    // Only node 0 deals with the device splits, other nodes
-    // get the splits from the scatter layers operation
-
-    if (ctx_mpi->rank != 0) {
-        return NULL;
-    }
 
     uint16_t range_length = end - start + 1;
     uint16_t ** ranges = (uint16_t**) malloc(sizeof(uint16_t*) * ctx_mpi->size);
@@ -305,14 +298,14 @@ uint16_t** ggml_mpi_split_range(
         ranges[i] = (uint16_t*) malloc(sizeof(uint16_t) * 2);
     }
     uint16_t next_layer = 0;
-    for (int i=1; i < ctx_mpi->size; i++) {
+    for (int i=0; i < ctx_mpi->size; i++) {
         ranges[i][0] = next_layer;
         ranges[i][1] = MIN(end, ranges[i][0] + (node_weights[i] * range_length) + start);
         next_layer = ranges[i][1];
     }
 
-    ranges[0][0] = next_layer;
-    ranges[0][1] = MIN(end, next_layer + (node_weights[0] * range_length) + start);
+//    ranges[0][0] = next_layer;
+//    ranges[0][1] = MIN(end, next_layer + (node_weights[0] * range_length) + start);
     return ranges;
 
 }
@@ -775,8 +768,13 @@ GGML_CALL static void ggml_backend_mpi_buffer_free_buffer(ggml_backend_buffer_t 
 
 GGML_CALL static void ggml_backend_mpi_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     auto * ctx = (ggml_backend_mpi_buffer_context *) buffer->context;
+
+    if (ggml_backend_mpi_buffer_rank(buffer) != ggml_backend_mpi_buffer_local_rank(buffer)) {
+        return;
+    }
+
 //    fprintf(stderr, "SETTING TENSOR WITHOUT MPI CALLS FOR %s (%s) AND TGT BUFFER %s\n", tensor->name, ggml_backend_buffer_name(tensor->buffer), ggml_backend_buffer_name(buffer));
-    return ctx->wrapped_buffer->iface.set_tensor(ctx->wrapped_buffer, tensor, data, offset, size);
+    ctx->wrapped_buffer->iface.set_tensor(ctx->wrapped_buffer, tensor, data, offset, size);
 }
 
 GGML_CALL static void ggml_backend_mpi_buffer_get_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
@@ -794,8 +792,12 @@ GGML_CALL static void ggml_backend_mpi_buffer_get_tensor(ggml_backend_buffer_t b
 }
 
 GGML_CALL static bool ggml_backend_mpi_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
+    if (ggml_backend_mpi_buffer_rank(src->buffer) == ggml_backend_mpi_buffer_rank(dst->buffer)) {
+        return ggml_backend_mpi_buffer_unwrap(buffer)->iface.cpy_tensor(ggml_backend_mpi_buffer_unwrap(buffer), src,
+                                                                        dst);
+    }
 
-    return ggml_backend_mpi_buffer_unwrap(buffer)->iface.cpy_tensor(ggml_backend_mpi_buffer_unwrap(buffer), src, dst);
+    return true;
 }
 
 GGML_CALL static void ggml_backend_mpi_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
@@ -849,25 +851,25 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer
 }
 
 bool ggml_backend_mpi_cpy_tensor_async(ggml_backend_t backend, const struct ggml_tensor * src, struct ggml_tensor * dst) {
-    int src_rank = ggml_backend_mpi_buffer_rank(src->buffer);
-    int dst_rank = ggml_backend_mpi_buffer_rank(dst->buffer);
-
-    auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
-
-    if (ctx->remote) {
-        return true;
-    }
-
-    if (src_rank == dst_rank) {
-//        src->buffer->iface.cpy_tensor(src->buffer, src, dst);
-        return true;
-    }
-
-    if (src_rank == ctx->rank) {
-        ggml_mpi_tensor_send(src, dst_rank, ctx->comm);
-    } else if (dst_rank == ctx->rank){
-        ggml_mpi_tensor_recv(dst, src_rank, ctx->comm);
-    }
+//    int src_rank = ggml_backend_mpi_buffer_rank(src->buffer);
+//    int dst_rank = ggml_backend_mpi_buffer_rank(dst->buffer);
+//
+//    auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
+//
+//    if (ctx->remote) {
+//        return true;
+//    }
+//
+//    if (src_rank == dst_rank) {
+////        src->buffer->iface.cpy_tensor(src->buffer, src, dst);
+//        return true;
+//    }
+//
+//    if (src_rank == ggml_backend_mpi_local_rank(backend)) {
+//        ggml_mpi_tensor_send(src, dst_rank, ctx->comm);
+//    } else if (dst_rank == ggml_backend_mpi_local_rank(backend)){
+//        ggml_mpi_tensor_recv(dst, src_rank, ctx->comm);
+//    }
     return true;
 
 }

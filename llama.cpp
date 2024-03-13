@@ -2001,6 +2001,10 @@ struct llama_model {
     int64_t t_load_us = 0;
     int64_t t_start_us = 0;
 
+#ifdef GGML_USE_MPI
+    ggml_mpi_context * ctx_mpi = nullptr;
+#endif
+
     ~llama_model() {
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
@@ -2099,9 +2103,7 @@ struct llama_context {
     struct ggml_tensor * inp_s_mask;    // F32 [1, kv_size]
     struct ggml_tensor * inp_s_seq;     // I32 [kv_size, n_batch]
 
-#ifdef GGML_USE_MPI
-    ggml_mpi_context * ctx_mpi = NULL;
-#endif
+
 };
 
 //
@@ -3277,6 +3279,11 @@ static void llm_load_hparams(
     auto & hparams = model.hparams;
     const gguf_context * ctx = ml.ctx_gguf;
 
+#ifdef GGML_USE_MPI
+    model.ctx_mpi = ggml_mpi_init();
+
+#endif
+
     // get metadata as string
     for (int i = 0; i < gguf_get_n_kv(ctx); i++) {
         enum gguf_type type = gguf_get_kv_type(ctx, i);
@@ -4008,6 +4015,7 @@ static bool llm_load_tensors(
         enum llama_split_mode split_mode,
         int main_gpu,
         const float * tensor_split,
+        const float * node_split,
         bool use_mlock,
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
@@ -4097,11 +4105,17 @@ static bool llm_load_tensors(
     }
 
 #ifdef GGML_USE_MPI
-    // TESTING: Setting all non-input/output layers to node 1
-    for (int64_t i = 0; i < n_layer; i++) {
-        ggml_backend_mpi_buffer_type_set_rank(model.buft_layer[i].buft, 1);
-        ggml_backend_mpi_buffer_type_set_rank(model.buft_layer[i].buft_matrix, 1);
+    uint16_t** ranges = ggml_mpi_split_range(model.ctx_mpi, 0, n_layer - 1, node_split);
 
+
+    size_t size = ggml_mpi_size(model.ctx_mpi);
+
+    for (size_t i = 0; i < size; i++) {
+        for (uint16_t j = ranges[i][0]; j < ranges[i][1]; j++) {
+            printf("Setting buffer rank for i %zu and j %d\n", i, j);
+            ggml_backend_mpi_buffer_type_set_rank(model.buft_layer[j].buft, (int)i);
+            ggml_backend_mpi_buffer_type_set_rank(model.buft_layer[j].buft_matrix, (int)i);
+        }
     }
 
 
@@ -5101,7 +5115,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
 #endif
 
         if (!llm_load_tensors(
-            ml, model, params.n_gpu_layers, params.split_mode,  params.main_gpu, params.tensor_split, params.use_mlock,
+            ml, model, params.n_gpu_layers, params.split_mode,  params.main_gpu, params.tensor_split, params.node_layer_weights, params.use_mlock,
             params.progress_callback, params.progress_callback_user_data
         )) {
             return -2;
@@ -8813,7 +8827,7 @@ static int llama_decode_internal(
     uint32_t n_tokens_all = batch_all.n_tokens;
 
 #ifdef GGML_USE_MPI
-    ggml_mpi_eval_init(lctx.ctx_mpi, &(batch_all.n_tokens), &(batch_all.pos), &(batch_all.n_seq_id), &(batch_all.seq_id), &(batch_all.logits), lctx.cparams.n_seq_max);
+    ggml_mpi_eval_init(lctx.model.ctx_mpi, &(batch_all.n_tokens), &(batch_all.pos), &(batch_all.n_seq_id), &(batch_all.seq_id), &(batch_all.logits), lctx.cparams.n_seq_max);
     n_tokens_all = batch_all.n_tokens;
 #endif
 
@@ -9003,7 +9017,7 @@ static int llama_decode_internal(
         //       update the graphs to skip "result_output" if logits are not needed
         if (res) {
     #ifdef GGML_USE_MPI
-        if (ggml_mpi_rank(lctx.ctx_mpi) == 0) {
+        if (ggml_mpi_rank(lctx.model.ctx_mpi) == 0) {
 #endif
 
         ggml_backend_t backend_res = ggml_backend_sched_get_tensor_backend(lctx.sched, res);
@@ -12636,7 +12650,7 @@ static int llama_apply_lora_from_file_internal(
 //
 struct llama_model_params llama_model_default_params() {
     struct llama_model_params result = {
-            static_cast<int32_t *>(calloc(1, sizeof(int32_t))),
+            static_cast<float *>(calloc(1, sizeof(float))),
         /*.n_gpu_layers                =*/ 0,
         /*.split_mode                  =*/ LLAMA_SPLIT_MODE_LAYER,
         /*.main_gpu                    =*/ 0,
@@ -12706,7 +12720,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
 
 int llama_node_id(struct llama_context * ctx) {
 #ifdef GGML_USE_MPI
-    return ggml_mpi_rank(ctx->ctx_mpi);
+    return ggml_mpi_rank(ctx->model.ctx_mpi);
 
 #endif
     return 0;
@@ -13026,8 +13040,13 @@ struct llama_context * llama_new_context_with_model(
 
 #ifdef GGML_USE_MPI
 
+        std::vector<ggml_backend_t> new_backends;
 
-        ctx->backends = {ggml_backend_mpi_init(ctx->backends.data(), ctx->backends.size(), 1), ggml_backend_mpi_init(ctx->backends.data(), ctx->backends.size(), 0)};
+        for (size_t i = 0; i < ggml_mpi_size(model->ctx_mpi); i++) {
+            new_backends.push_back(ggml_backend_mpi_init(ctx->backends.data(), ctx->backends.size(), (int) i));
+        }
+
+        ctx->backends = new_backends;
 
 
 
@@ -13144,23 +13163,13 @@ struct llama_context * llama_new_context_with_model(
         }
     }
 
-#ifdef GGML_USE_MPI
-    ctx->ctx_mpi = ggml_mpi_init();
 
-#endif
 
     return ctx;
 }
 
 void llama_split_layers_weighted(struct llama_context * ctx, float device_weights[], size_t num_weights) {
-//#ifdef GGML_USE_MPI
-//    if (ggml_mpi_rank(ctx->ctx_mpi) == 0 && ggml_mpi_size(ctx->ctx_mpi) != num_weights) {
-//        GGML_ASSERT(false && "Must have same number of split percentages as devices");
-//    }
-//    uint16_t** ranges = ggml_mpi_split_range(ctx->ctx_mpi, 0, ctx->model.hparams.n_layer - 1, device_weights);
-//    ggml_mpi_scatter_layers(ctx->ctx_mpi, ranges);
-//    free(ranges);
-//#endif
+
 }
 
 void llama_free(struct llama_context * ctx) {
@@ -13998,7 +14007,7 @@ int32_t llama_decode(
           struct llama_batch   batch) {
 
 #ifdef GGML_USE_MPI
-    if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
+    if (ggml_mpi_rank(ctx->model.ctx_mpi) > 0) {
         // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
         const int n_ctx = llama_n_ctx(ctx);
         std::vector<llama_token> tmp(n_ctx, llama_token_bos(&ctx->model));
