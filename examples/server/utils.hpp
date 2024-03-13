@@ -338,9 +338,17 @@ static json probs_vector_to_json(const llama_context * ctx, const std::vector<co
 
 static std::string rubra_format_function_call_str(const std::vector<json> & functions) {
     std::string final_str = "You have access to the following tools:\n";
+    json type_mapping = {
+        {"string", "str"},
+        {"number", "float"},
+        {"object", "Dict[str, Any]"},
+        {"array", "List"},
+        {"boolean", "bool"},
+        {"null", "None"}
+    };
     std::vector<std::string> function_definitions;
     for (const auto & function : functions) {
-        const auto &spec = function["function"];
+        const auto &spec = function.contains("function") ? function["function"] : function;
         const std::string func_name = spec.value("name", "");
         const std::string description = spec.value("description", "");
         const auto& parameters = spec.contains("parameters") ? spec["parameters"].value("properties", json({})) : json({});
@@ -350,11 +358,13 @@ static std::string rubra_format_function_call_str(const std::vector<json> & func
         for (auto it = parameters.begin(); it != parameters.end(); ++it) {
             const std::string param = it.key();
             const json& details = it.value();
-            std::string type_annotation = details["type"].get<std::string>();
+            std::string json_type = details["type"].get<std::string>();
+            std::string python_type = type_mapping.value(json_type, "Any");
+            // TODO: handle the case array: should provide more details about type, such as List[str]
             if (details.contains("enum")) {
-                type_annotation = "str";
+                python_type = "str";
             }
-            std::string arg_str = param + ": " + type_annotation;
+            std::string arg_str = param + ": " + python_type;
             if (find(required_params.begin(), required_params.end(), param) == required_params.end()) {
                 arg_str += " = None";
             }
@@ -367,18 +377,40 @@ static std::string rubra_format_function_call_str(const std::vector<json> & func
         }
         
         // Generating Python-like docstring
-        std::string docstring = "    \"\"\"\n    " + description + "\n";
+        std::string docstring = "    \"\"\"\n    " + description + "\n\n";
         for (auto it = parameters.begin(); it != parameters.end(); ++it) {
             const std::string param = it.key();
             const json& details = it.value();
-            const std::string& required_text = find(required_params.begin(), required_params.end(), param) != required_params.end() ? "Required" : "Optional";
-            docstring += "    :param " + param + ": " + (details.contains("description") ? details.at("description").get<std::string>() : "No description provided.") + " (" + required_text + ")\n";
-            docstring += "    :type " + param + ": " + details.at("type").get<std::string>() + "\n";
+            const std::string& required_text = find(required_params.begin(), required_params.end(), param) != required_params.end() ? "" : "(Optional)";
+            std::string param_description = "";
+            if (details.count("description") > 0) {
+                param_description = details["description"]; // Assuming the description is the first element
+            }
+            if (details.count("enum") > 0) {
+                std::string enum_values;
+                for (const std::string val : details["enum"]) {
+                    if (!enum_values.empty()) {
+                        enum_values += " or ";
+                    }
+                    enum_values = enum_values+ "\"" + val + "\"";
+                }
+                if (details["enum"].size() == 1) {
+                    param_description += " Only Acceptable value is: " + enum_values;
+                } else {
+                    param_description += " Only Acceptable values are: " + enum_values;
+                }
+            }
+            if (param_description.empty()) {
+                param_description = "No description provided.";
+            }
+            docstring += "    :param " + param + ": " + param_description + " " + required_text + "\n";
+            std::string param_type = details["type"].get<std::string>();
+            docstring += "    :type " + param + ": " + type_mapping.value(param_type, "Any") + "\n";
         }
         docstring += "    \"\"\"\n";
         
         // Keeping the function definition in Python format
-        std::string function_definition = "def " + func_name + "(" + func_args_str + ") -> None:\n" + docstring + "    pass\n";
+        std::string function_definition = "def " + func_name + "(" + func_args_str + "):\n" + docstring;
         function_definitions.push_back(function_definition);
     }
 
