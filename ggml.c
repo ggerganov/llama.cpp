@@ -876,7 +876,38 @@ inline static float vaddvq_f32(float32x4_t v) {
 //   number of elements to fit in a single register
 //
 
-#if defined(__ARM_NEON) && defined(__ARM_FEATURE_FMA)
+
+#if defined(__k1om__) /* Xeon PHI Knights Corner (IMCI) */
+
+// No, we have an SIMD unit.
+// #define GGML_SIMD
+
+// This SIMD unit can work with 32 float32s at once.
+#define GGML_F32_STEP 32
+// We can fit 16 of these float32s in a single vector register.
+#define GGML_F32_EPR 16
+
+// because we are not defining GGML_SIMD, we have to do this ourself.
+#define GGML_F32_ARR (GGML_F32_STEP/GGML_F32_EPR)
+
+// our vector. 128*32=512
+typedef float32_t float32x16_t __attribute__((vector_size (128)));
+#define GGML_F32x16              float32x16_t
+#define GGML_F32x16_ZERO		      \
+  {					      \
+  __mmask16 mask=0xFFFF;		      \
+  float32x16_t res;			      \
+  asm ("vbroadcastf32x4 [RES] {[M]}, 0[%2]"   \
+       : [RES] "=x"(res)		      \
+       : [M]   "k" mask,		      \
+         [V]   "r" 0.0f)		      \
+  return res;				      \
+  }
+//vdupq_n_f32(0.0f)
+
+#define GGML_F32_VEC        GGML_F32x16
+
+#elif defined(__ARM_NEON) && defined(__ARM_FEATURE_FMA)
 
 #define GGML_SIMD
 
@@ -1498,6 +1529,7 @@ inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)   
 inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];   }
 inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];   }
 
+
 static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc) {
    assert(nrc == 1);
    UNUSED(nrc);
@@ -1530,6 +1562,17 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
     for (int i = np; i < n; ++i) {
         sumf += x[i]*y[i];
     }
+#elif defined(__k1om__)
+    // our result, in the end.
+    float sumf = 0.0f;
+    // the number of vector-sized steps we will need to do.
+    const int np = (n & ~(GGML_F32_STEP - 1));
+
+    GGML_F32_VEC sum[GGML_F32_ARR] = { GGML_F32_VEC_ZERO };
+    for (int i = 0; i < 16; ++i) {
+      fprintf(stderr, "boo: %f\n",sum[0]);
+    }
+
 #else
     // scalar
     ggml_float sumf = 0.0;
