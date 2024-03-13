@@ -10,12 +10,14 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Recent API changes
 
+- [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
 - [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_seq_max()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
 - [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
 - [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
 
 ### Hot topics
 
+- Multi-GPU pipeline parallelizm support https://github.com/ggerganov/llama.cpp/pull/6017
 - Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
 - Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
 - Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
