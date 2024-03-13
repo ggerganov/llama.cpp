@@ -17,6 +17,13 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
             return nullptr;
         }
 
+        // Ensure that there is a "root" node.
+        if (result->parsed_grammar.symbol_ids.find("root") == result->parsed_grammar.symbol_ids.end()) {
+            fprintf(stderr, "%s: grammar does not contain a 'root' symbol\n", __func__);
+            delete result;
+            return nullptr;
+        }
+
         std::vector<const llama_grammar_element *> grammar_rules(result->parsed_grammar.c_rules());
 
         result->grammar = llama_grammar_init(
