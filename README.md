@@ -904,6 +904,9 @@ First, install the essential packages for termux:
 pkg install clang wget git cmake
 ```
 Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+
+You can execute the following commands on your computer to avoid downloading the NDK to your mobile. Of course, you can also do this in Termux.
+
 ```
 $ mkdir build-android
 $ cd build-android
@@ -912,7 +915,28 @@ $ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROI
 $ make
 ```
 Install [termux](https://termux.dev/) on your device and run `termux-setup-storage` to get access to your SD card.
-Finally, copy the `llama` binary and the model files to your device storage. Here is a demo of an interactive session running on Pixel 5 phone:
+Finally, copy these built `llama` binaries and the model file to your device storage. Because the file permissions in the Android sdcard cannot be changed, you can copy the executable files to the `/data/data/com.termux/files/home/bin` path, and then execute the following commands in Termux to add executable permission:
+
+(Assumed that you have pushed the built executable files to the /sdcard/llama.cpp/bin path using `adb push`)
+```
+$cp -r /sdcard/llama.cpp/bin /data/data/com.termux/files/home/
+$cd /data/data/com.termux/files/home/bin
+$chmod +x ./*
+```
+
+Download model [llama-2-7b-chat.Q4_K_M.gguf](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/blob/main/llama-2-7b-chat.Q4_K_M.gguf), and push it to `/sdcard/llama.cpp/`, then move it to `/data/data/com.termux/files/home/model/`
+
+```
+$mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/home/model/
+```
+
+Now, you can start chatting:
+```
+$cd /data/data/com.termux/files/home/bin
+$./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+```
+
+Here is a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
