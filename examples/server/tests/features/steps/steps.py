@@ -33,6 +33,7 @@ def step_server_config(context, server_fqdn, server_port):
 
     context.model_alias = None
     context.n_batch = None
+    context.n_ubatch = None
     context.n_ctx = None
     context.n_ga = None
     context.n_ga_w = None
@@ -276,6 +277,11 @@ def step_n_junk(context, n_junk):
 @step('{n_batch:d} as batch size')
 def step_n_batch(context, n_batch):
     context.n_batch = n_batch
+
+
+@step('{n_ubatch:d} as ubatch size')
+def step_n_ubatch(context, n_ubatch):
+    context.n_ubatch = n_ubatch
 
 
 @step('{seed:d} as seed')
@@ -1029,6 +1035,8 @@ def start_server_background(context):
     ]
     if context.n_batch:
         server_args.extend(['--batch-size', context.n_batch])
+    if context.n_ubatch:
+        server_args.extend(['--ubatch-size', context.n_ubatch])
     if context.n_gpu_layer:
         server_args.extend(['--n-gpu-layers', context.n_gpu_layer])
     if context.server_continuous_batching:
