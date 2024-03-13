@@ -1738,7 +1738,8 @@ struct server_context {
         }
 
         // process in chunks of params.n_batch
-        int32_t n_batch = params.n_batch;
+        int32_t n_batch = llama_n_batch(ctx);
+        int32_t n_ubatch = llama_n_ubatch(ctx);
 
         // next, batch any pending prompts without exceeding n_batch
         if (params.cont_batching || batch.n_tokens == 0) {
@@ -1811,7 +1812,7 @@ struct server_context {
 
                         if (slot.embedding) {
                             // this prompt is too large to process - discard it
-                            if (slot.n_prompt_tokens > n_batch) {
+                            if (slot.n_prompt_tokens > n_ubatch) {
                                 slot.state = SLOT_STATE_PROCESSING;
                                 slot.command = SLOT_COMMAND_NONE;
                                 slot.release();

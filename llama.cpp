@@ -8774,6 +8774,8 @@ static int llama_decode_internal(
 
     GGML_ASSERT(n_tokens_all <= cparams.n_batch);
 
+    GGML_ASSERT((cparams.causal_attn || cparams.n_ubatch >= n_tokens_all) && "non-causal attention requires n_ubatch >= n_tokens");
+
     if (lctx.t_compute_start_us == 0) {
         lctx.t_compute_start_us = ggml_time_us();
     }
@@ -9011,9 +9013,6 @@ static int llama_decode_internal(
                 case LLAMA_POOLING_TYPE_CLS:
                 case LLAMA_POOLING_TYPE_MEAN:
                     {
-                        // FIXME: this may not work if the sequences are split into different batches
-                        GGML_ASSERT(n_tokens_all == n_tokens);
-
                         GGML_ASSERT(strcmp(embd->name, "result_embd_pooled") == 0);
 
                         // extract sequence embeddings
@@ -13074,6 +13073,10 @@ uint32_t llama_n_ctx(const struct llama_context * ctx) {
 
 uint32_t llama_n_batch(const struct llama_context * ctx) {
     return ctx->cparams.n_batch;
+}
+
+uint32_t llama_n_ubatch(const struct llama_context * ctx) {
+    return ctx->cparams.n_ubatch;
 }
 
 uint32_t llama_n_seq_max(const struct llama_context * ctx) {
