@@ -759,6 +759,8 @@ extern "C" {
 
     GGML_API bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor * t1);
 
+    GGML_API bool ggml_can_repeat(const struct ggml_tensor * t0, const struct ggml_tensor * t1);
+
     // use this to compute the memory overhead of a tensor
     GGML_API size_t ggml_tensor_overhead(void);
 
@@ -2365,6 +2367,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_sse3       (void);
     GGML_API int ggml_cpu_has_ssse3      (void);
     GGML_API int ggml_cpu_has_sycl       (void);
+    GGML_API int ggml_cpu_has_cann       (void);
     GGML_API int ggml_cpu_has_vsx        (void);
     GGML_API int ggml_cpu_has_matmul_int8(void);
 
