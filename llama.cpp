@@ -8367,7 +8367,9 @@ static struct ggml_cgraph * llama_build_graph(
             }
         }
 
-        if (il != -1) {
+        // norm may be automatically assigned to the backend of the previous layer, increasing data transfer between backends
+        // to fix this, we assign the norm layer manually to the backend of its layer
+        if (il != -1 && strcmp(name, "norm") == 0) {
             for (auto * backend : lctx.backends) {
                 if (ggml_backend_buft_supports_backend(lctx.model.buft_layer[il].buft, backend)) {
                     ggml_backend_sched_set_tensor_backend(lctx.sched, cur, backend);
