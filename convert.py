@@ -1034,6 +1034,8 @@ class OutputFile:
             self.gguf.add_file_type(params.ftype)
 
     def extract_vocabulary_from_model(self, vocab: Vocab) -> tuple[list[bytes], list[float], list[gguf.TokenType]]:
+        assert not isinstance(vocab, NoVocab)
+
         tokens = []
         scores = []
         toktypes = []
