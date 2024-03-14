@@ -119,6 +119,10 @@ def step_server_metrics(context):
 def step_start_server(context):
     start_server_background(context)
     attempts = 0
+    max_attempts = 20
+    if 'GITHUB_ACTIONS' in os.environ:
+        max_attempts *= 2
+
     while True:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             result = sock.connect_ex((context.server_fqdn, context.server_port))
@@ -126,7 +130,7 @@ def step_start_server(context):
                 print("\x1b[33;46mserver started!\x1b[0m")
                 return
             attempts += 1
-            if attempts > 20:
+            if attempts > max_attempts:
                 assert False, "server not started"
             print(f"waiting for server to start, connect error code = {result}...")
             time.sleep(0.1)
@@ -943,6 +947,9 @@ async def wait_for_health_status(context,
         print(f"Starting checking for health for expected_health_status={expected_health_status}\n")
     interval = 0.5
     counter = 0
+    if 'GITHUB_ACTIONS' in os.environ:
+        timeout *= 2
+
     async with aiohttp.ClientSession() as session:
         while True:
             async with await session.get(f'{base_url}/health', params=params) as health_response:
