@@ -207,6 +207,9 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.up_proj",                         # llama-hf refact
             "layers.{bid}.feed_forward.w3",                           # llama-pth
             "encoder.layer.{bid}.intermediate.dense",                 # bert
+            "encoder.layer.{bid}.mlp.gated_layers",                   # jina-bert
+            "encoder.layer.{bid}.mlp.layernorm",                      # jina-bert
+            "encoder.layer.{bid}.mlp.wo",                             # jina-bert
             "transformer.h.{bid}.mlp.fc_in",                          # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h",  # persimmon
             "model.layers.{bid}.mlp.dense_h_to_4h",                   # persimmon

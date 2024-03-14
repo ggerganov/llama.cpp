@@ -1783,6 +1783,16 @@ class NomicBertModel(BertModel):
             yield name, data
 
 
+@Model.register("JinaBertModel")
+class JinaBertModel(BertModel):
+    model_arch = gguf.MODEL_ARCH.JINA_BERT
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        assert self.hparams["position_embedding_type"] == "alibi"
+
+
 @Model.register("GemmaForCausalLM")
 class GemmaModel(Model):
     model_arch = gguf.MODEL_ARCH.GEMMA
