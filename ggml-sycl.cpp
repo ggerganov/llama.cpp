@@ -7727,14 +7727,7 @@ vec_dot_iq2_s_q8_1(const void *__restrict__ vbq,
     assert(false);
     return 0.f;
 #endif
-#else
-    (void) ksigns64;
-    assert(false);
-    return 0.f;
-#endif
 }
-
-
 
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x,
           int mmq_y, int nwarps, load_tiles_sycl_t load_tiles, int vdr,
