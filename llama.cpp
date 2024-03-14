@@ -1877,7 +1877,7 @@ struct llama_control_vector {
     std::vector<ggml_backend_buffer_t> bufs;
 
     int32_t layer_start = 0;
-    int32_t layer_end = 0;
+    int32_t layer_end   = 0;
 
     ggml_tensor * tensor_for(int il) const {
         if (il < 0 || il < layer_start || il > layer_end || (size_t) il >= tensors.size()) {
@@ -13183,6 +13183,10 @@ int32_t llama_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
+int32_t llama_n_layer(const struct llama_model * model) {
+    return model->hparams.n_layer;
+}
+
 float llama_rope_freq_scale_train(const struct llama_model * model) {
     return model->hparams.rope_freq_scale_train;
 }
@@ -13335,7 +13339,7 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
     return true;
 }
 
-int32_t llama_control_vector_apply(struct llama_context * lctx, float * data, size_t len, int n_embd, int32_t il_start, int32_t il_end) {
+int32_t llama_control_vector_apply(struct llama_context * lctx, const float * data, size_t len, int32_t n_embd, int32_t il_start, int32_t il_end) {
     const llama_model & model = lctx->model;
     llama_control_vector & cvec = lctx->cvec;
 
@@ -13351,18 +13355,14 @@ int32_t llama_control_vector_apply(struct llama_context * lctx, float * data, si
     }
 
     cvec.layer_start = il_start;
-    cvec.layer_end = il_end;
+    cvec.layer_end   = il_end;
 
     for (size_t il = 1; il < model.hparams.n_layer; il++) {
-        if (il >= cvec.tensors.size() || cvec.tensors[il] == nullptr) {
-            continue;
-        }
-        size_t off = n_embd * (il - 1); // buffer doesn't have data for layer 0, since it's never present
+        assert(cvec.tensors[il] != nullptr);
+
+        const size_t off = n_embd * (il - 1); // buffer doesn't have data for layer 0, since it's never present
         if (off + n_embd <= len) {
-            ggml_backend_tensor_set(cvec.tensors[il],
-                                    data + off,
-                                    0,
-                                    n_embd * ggml_element_size(cvec.tensors[il]));
+            ggml_backend_tensor_set(cvec.tensors[il], data + off, 0, n_embd * ggml_element_size(cvec.tensors[il]));
         }
     }
 
