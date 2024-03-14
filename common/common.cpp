@@ -483,6 +483,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_batch = std::stoi(argv[i]);
+        } else if (arg == "-ub" || arg == "--ubatch-size") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_ubatch = std::stoi(argv[i]);
         } else if (arg == "--keep") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -567,30 +573,29 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            params.control_vectors.push_back(std::make_tuple(argv[i], 1.0f));
+            params.control_vectors.push_back({ 1.0f, argv[i], });
         } else if (arg == "--control-vector-scaled") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            const char * control_vector = argv[i];
+            const char * fname = argv[i];
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.control_vectors.push_back(std::make_tuple(control_vector, std::stof(argv[i])));
+            params.control_vectors.push_back({ std::stof(argv[i]), fname, });
         } else if (arg == "--control-vector-layer-range") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            int32_t start = std::stoi(argv[i]);
+            params.control_vector_layer_start = std::stoi(argv[i]);
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            int32_t end = std::stoi(argv[i]);
-            params.control_vector_layer_range = std::make_tuple(start, end);
+            params.control_vector_layer_end = std::stoi(argv[i]);
         } else if (arg == "--mmproj") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1006,7 +1011,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        binary file containing multiple choice tasks.\n");
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
-    printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    printf("  -b N, --batch-size N  logical maximum batch size (default: %d)\n", params.n_batch);
+    printf("  -ub N, --ubatch-size N\n");
+    printf("                        physical maximum batch size (default: %d)\n", params.n_ubatch);
     printf("  --samplers            samplers that will be used for generation in the order, separated by \';\'\n");
     printf("                        (default: %s)\n", sampler_type_names.c_str());
     printf("  --sampling-seq        simplified sequence for samplers that will be used (default: %s)\n", sampler_type_chars.c_str());
@@ -1322,8 +1329,9 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     auto cparams = llama_context_default_params();
 
     cparams.n_ctx             = params.n_ctx;
-    cparams.n_batch           = params.n_batch;
     cparams.n_seq_max         = params.n_parallel;
+    cparams.n_batch           = params.n_batch;
+    cparams.n_ubatch          = params.n_ubatch;
     cparams.n_threads         = params.n_threads;
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     cparams.seed              = params.seed;
@@ -1387,27 +1395,22 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     }
 
     if (!params.control_vectors.empty()) {
-        int32_t layer_start, layer_end;
-        std::tie(layer_start, layer_end) = params.control_vector_layer_range;
+        if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
+        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
 
-        if (layer_start == 0) layer_start = 1;
-        if (layer_end == 0) layer_end = 31;
-
-        std::vector<float> control_vector;
-        int n_embd;
-        std::tie(control_vector, n_embd) = llama_control_vector_load(params.control_vectors);
-        if (n_embd == -1) {
+        const auto cvec = llama_control_vector_load(params.control_vectors);
+        if (cvec.n_embd == -1) {
             llama_free(lctx);
             llama_free_model(model);
             return std::make_tuple(nullptr, nullptr);
         }
 
         int err = llama_control_vector_apply(lctx,
-                                             control_vector.data(),
-                                             control_vector.size(),
-                                             n_embd,
-                                             layer_start,
-                                             layer_end);
+                                             cvec.data.data(),
+                                             cvec.data.size(),
+                                             cvec.n_embd,
+                                             params.control_vector_layer_start,
+                                             params.control_vector_layer_end);
         if (err) {
             llama_free(lctx);
             llama_free_model(model);
@@ -1443,6 +1446,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
         llama_kv_cache_clear(lctx);
+        llama_synchronize(lctx);
         llama_reset_timings(lctx);
     }
 
@@ -1931,15 +1935,32 @@ void llama_embd_normalize(const float * inp, float * out, int n) {
     }
 }
 
+float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n){
+    double sum  = 0.0;
+    double sum1 = 0.0;
+    double sum2 = 0.0;
+
+    for (int i = 0; i < n; i++) {
+        sum  += embd1[i] * embd2[i];
+        sum1 += embd1[i] * embd1[i];
+        sum2 += embd2[i] * embd2[i];
+    }
+
+    return sum / (sqrt(sum1) * sqrt(sum2));
+}
+
 //
 // Control vector utils
 //
 
-static std::tuple<std::vector<float>, int> llama_control_vector_load_one(const std::string & path, float strength) {
-    int n_tensors;
+static llama_control_vector_data llama_control_vector_load_one(const llama_control_vector_load_info & load_info) {
+    int32_t n_tensors;
+
     size_t n_bytes = 0;
+
     uint32_t max_direction_layer = 0;
-    int n_embd = -1;
+
+    llama_control_vector_data result = { -1, {} };
 
     // calculate size of ctx needed for tensors, ensure tensors are f32, and find max layer
     {
@@ -1953,11 +1974,11 @@ static std::tuple<std::vector<float>, int> llama_control_vector_load_one(const s
             /* .no_alloc = */ true,
             /* .ctx      = */ &meta_ctx,
         };
-        struct gguf_context * meta_ctx_gguf = gguf_init_from_file(path.c_str(), meta_gguf_params);
+        struct gguf_context * meta_ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
         if (!meta_ctx_gguf) {
-            fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, path.c_str());
+            fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
             ggml_free(meta_ctx);
-            return std::make_tuple(std::vector<float>(), -1);
+            return result;
         }
 
         n_tensors = gguf_get_n_tensors(meta_ctx_gguf);
@@ -1970,36 +1991,36 @@ static std::tuple<std::vector<float>, int> llama_control_vector_load_one(const s
                 try {
                     uint32_t layer = std::stoi(name.substr(dotpos + 1));
                     if (layer == 0) {
-                        fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, path.c_str());
+                        fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
                         ggml_free(meta_ctx);
                         gguf_free(meta_ctx_gguf);
-                        return std::make_tuple(std::vector<float>(), -1);
+                        return result;
                     }
                     if (layer > max_direction_layer) {
                         max_direction_layer = layer;
                     }
                 } catch (...) {
-                    fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, path.c_str());
+                    fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
                     ggml_free(meta_ctx);
                     gguf_free(meta_ctx_gguf);
-                    return std::make_tuple(std::vector<float>(), -1);
+                    return result;
                 }
             }
 
             struct ggml_tensor * tensor_meta = ggml_get_tensor(meta_ctx, name.c_str());
             if (tensor_meta->type != GGML_TYPE_F32 || ggml_n_dims(tensor_meta) != 1) {
-                fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, path.c_str());
+                fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
                 ggml_free(meta_ctx);
                 gguf_free(meta_ctx_gguf);
-                return std::make_tuple(std::vector<float>(), -1);
+                return result;
             }
-            if (n_embd == -1) {
-                n_embd = ggml_nelements(tensor_meta);
-            } else if (ggml_nelements(tensor_meta) != n_embd) {
-                fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, path.c_str());
+            if (result.n_embd == -1) {
+                result.n_embd = ggml_nelements(tensor_meta);
+            } else if (ggml_nelements(tensor_meta) != result.n_embd) {
+                fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, load_info.fname.c_str());
                 ggml_free(meta_ctx);
                 gguf_free(meta_ctx_gguf);
-                return std::make_tuple(std::vector<float>(), -1);
+                return result;
             }
             n_bytes += ggml_nbytes(tensor_meta);
         }
@@ -2008,8 +2029,8 @@ static std::tuple<std::vector<float>, int> llama_control_vector_load_one(const s
     }
 
     if (n_tensors == 0) {
-        fprintf(stderr, "%s: no direction tensors found in %s\n", __func__, path.c_str());
-        return std::make_tuple(std::vector<float>(), -1);
+        fprintf(stderr, "%s: no direction tensors found in %s\n", __func__, load_info.fname.c_str());
+        return result;
     }
 
     // load and scale tensors into final control vector context
@@ -2024,63 +2045,63 @@ static std::tuple<std::vector<float>, int> llama_control_vector_load_one(const s
         /*.no_alloc = */ false,
         /*.ctx      = */ &ctx,
     };
-    struct gguf_context * ctx_gguf = gguf_init_from_file(path.c_str(), params);
+    struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), params);
     if (!ctx_gguf) {
-        fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, path.c_str());
+        fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
         ggml_free(ctx);
-        return std::make_tuple(std::vector<float>(), -1);
+        return result;
     }
 
-    std::vector<float> vector;
-    for (uint32_t i = 1; i < max_direction_layer; i++) {
-        std::string name = "direction." + std::to_string(i);
-        ggml_tensor * tensor = ggml_get_tensor(ctx, name.c_str());
+    // do not store data for layer 0 (it's not used)
+    result.data.resize(result.n_embd * max_direction_layer);
+
+    for (uint32_t il = 1; il <= max_direction_layer; il++) {
+        const std::string name = "direction." + std::to_string(il);
+        const ggml_tensor * tensor = ggml_get_tensor(ctx, name.c_str());
+
+        float * dst = result.data.data() + result.n_embd * (il - 1);
+
         if (tensor) {
-            const float * data = (const float *) tensor->data;
-            for (int i = 0; i < n_embd; i++) {
-                vector.push_back(data[i] * strength);
+            const float * src = (const float *) tensor->data;
+            for (int j = 0; j < result.n_embd; j++) {
+                dst[j] = src[j] * load_info.strength;
             }
         } else {
-            vector.insert(vector.end(), n_embd, 0.); // as a filler
+            for (int j = 0; j < result.n_embd; j++) {
+                dst[j] = 0.0f;
+            }
         }
     }
 
-    return std::make_tuple(vector, n_embd);
+    return result;
 }
 
-std::tuple<std::vector<float>, int> llama_control_vector_load(const std::vector<std::tuple<std::string, float>> & vectors) {
-    std::vector<float> vector;
-    int n_embd = -1;
+llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos) {
+    llama_control_vector_data result = { -1, {} };
 
-    for (const auto& pair : vectors) {
-        std::string path;
-        float strength;
-        std::tie(path, strength) = pair;
+    for (const auto & info : load_infos) {
+        auto cur = llama_control_vector_load_one(info);
 
-        std::vector<float> v;
-        int v_n_embd;
-        std::tie(v, v_n_embd) = llama_control_vector_load_one(path, strength);
-
-        if (v_n_embd == -1) {
-            return std::make_tuple(std::vector<float>(), -1);
+        if (cur.n_embd == -1) {
+            return result;
         }
-        if (n_embd != -1 && (n_embd != v_n_embd || v.size() != vector.size())) {
-            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, path.c_str());
-            return std::make_tuple(std::vector<float>(), -1);
+        if (result.n_embd != -1 && (result.n_embd != cur.n_embd || result.data.size() != cur.data.size())) {
+            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
+            return result;
         }
 
-        if (n_embd == -1) {
-            vector = std::move(v);
-            n_embd = v_n_embd;
+        if (result.n_embd == -1) {
+            result = std::move(cur);
         } else {
-            for (size_t i = 0; i < vector.size(); i++) {
-                vector[i] += v[i];
+            for (size_t i = 0; i < cur.data.size(); i++) {
+                result.data[i] += cur.data[i];
             }
         }
     }
 
-    if (n_embd == -1) {
+    if (result.n_embd == -1) {
         fprintf(stderr, "%s: no vectors passed\n", __func__);
     }
-    return std::make_tuple(vector, n_embd);
+
+    return result;
 }

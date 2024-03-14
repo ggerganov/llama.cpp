@@ -138,6 +138,8 @@ int main(int argc, char ** argv) {
                 LOG_TEE("failed to decode the batch, n_batch = %d, ret = %d\n", n_batch, ret);
                 return false;
             }
+
+            llama_synchronize(ctx);
         }
 
         return true;
