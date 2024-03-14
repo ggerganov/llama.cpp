@@ -204,7 +204,7 @@ class GGUFWriter:
         for i in range(n_dims):
             self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
-            if tensor_shape == np.float32:
+            if tensor_dtype == np.float32:
                 dtype = GGMLQuantizationType.F32
             elif tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
