@@ -258,6 +258,7 @@ enum llm_kv {
     LLM_KV_GENERAL_SOURCE_URL,
     LLM_KV_GENERAL_SOURCE_HF_REPO,
 
+    LLM_KV_VOCAB_SIZE,
     LLM_KV_CONTEXT_LENGTH,
     LLM_KV_EMBEDDING_LENGTH,
     LLM_KV_BLOCK_COUNT,
@@ -321,6 +322,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_GENERAL_SOURCE_URL,            "general.source.url"                    },
     { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source.huggingface.repository" },
 
+    { LLM_KV_VOCAB_SIZE,                    "%s.vocab_size"            },
     { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"        },
     { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"      },
     { LLM_KV_BLOCK_COUNT,                   "%s.block_count"           },
@@ -3242,10 +3244,11 @@ static const char * llama_model_type_name(e_model type) {
 
 static const char * llama_model_vocab_type_name(enum llama_vocab_type type){
     switch (type) {
-        case LLAMA_VOCAB_TYPE_SPM: return "SPM";
-        case LLAMA_VOCAB_TYPE_BPE: return "BPE";
-        case LLAMA_VOCAB_TYPE_WPM: return "WPM";
-        default:                   return "unknown";
+        case LLAMA_VOCAB_TYPE_NONE: return "no vocab";
+        case LLAMA_VOCAB_TYPE_SPM:  return "SPM";
+        case LLAMA_VOCAB_TYPE_BPE:  return "BPE";
+        case LLAMA_VOCAB_TYPE_WPM:  return "WPM";
+        default:                    return "unknown";
     }
 }
 
@@ -3277,14 +3280,14 @@ static void llm_load_hparams(
     ml.get_key(LLM_KV_GENERAL_NAME, model.name, false);
 
     // get hparams kv
-    ml.get_arr_n(LLM_KV_TOKENIZER_LIST,       hparams.n_vocab);
-    ml.get_key  (LLM_KV_CONTEXT_LENGTH,       hparams.n_ctx_train);
-    ml.get_key  (LLM_KV_EMBEDDING_LENGTH,     hparams.n_embd);
-    ml.get_key  (LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff);
-    ml.get_key  (LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head);
-    ml.get_key  (LLM_KV_BLOCK_COUNT,          hparams.n_layer);
-    ml.get_key  (LLM_KV_EXPERT_COUNT,         hparams.n_expert,      false);
-    ml.get_key  (LLM_KV_EXPERT_USED_COUNT,    hparams.n_expert_used, false);
+    ml.get_key(LLM_KV_VOCAB_SIZE,           hparams.n_vocab,       false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, hparams.n_vocab);
+    ml.get_key(LLM_KV_CONTEXT_LENGTH,       hparams.n_ctx_train);
+    ml.get_key(LLM_KV_EMBEDDING_LENGTH,     hparams.n_embd);
+    ml.get_key(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff);
+    ml.get_key(LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head);
+    ml.get_key(LLM_KV_BLOCK_COUNT,          hparams.n_layer);
+    ml.get_key(LLM_KV_EXPERT_COUNT,         hparams.n_expert,      false);
+    ml.get_key(LLM_KV_EXPERT_USED_COUNT,    hparams.n_expert_used, false);
 
     GGML_ASSERT(hparams.n_expert <= LLAMA_MAX_EXPERTS);
     GGML_ASSERT(hparams.n_expert_used <= hparams.n_expert);
@@ -3645,30 +3648,25 @@ static void llm_load_vocab(
 
     const auto kv = LLM_KV(model.arch);
 
-    const int token_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_LIST).c_str());
-    if (token_idx == -1) {
-        throw std::runtime_error("cannot find tokenizer vocab in model file\n");
-    }
-
-    const float * scores = nullptr;
-    const int score_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_SCORES).c_str());
-    if (score_idx != -1) {
-        scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
-    }
-
-    const int * toktypes = nullptr;
-    const int toktype_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_TOKEN_TYPE).c_str());
-    if (toktype_idx != -1) {
-        toktypes = (const int * ) gguf_get_arr_data(ctx, toktype_idx);
-    }
-
     // determine vocab type
     {
         std::string tokenizer_name;
 
         ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_name);
 
-        if (tokenizer_name == "llama") {
+        if (tokenizer_name == "no_vocab") {
+            vocab.type = LLAMA_VOCAB_TYPE_NONE;
+
+            // default special tokens
+            vocab.special_bos_id = -1;
+            vocab.special_eos_id = -1;
+            vocab.special_unk_id = -1;
+            vocab.special_sep_id = -1;
+            vocab.special_pad_id = -1;
+            vocab.linefeed_id    = -1;
+
+            return;
+        } else if (tokenizer_name == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
             // default special tokens
@@ -3732,6 +3730,23 @@ static void llm_load_vocab(
 
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
         }
+    }
+
+    const int token_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_LIST).c_str());
+    if (token_idx == -1) {
+        throw std::runtime_error("cannot find tokenizer vocab in model file\n");
+    }
+
+    const float * scores = nullptr;
+    const int score_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_SCORES).c_str());
+    if (score_idx != -1) {
+        scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
+    }
+
+    const int * toktypes = nullptr;
+    const int toktype_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_TOKEN_TYPE).c_str());
+    if (toktype_idx != -1) {
+        toktypes = (const int * ) gguf_get_arr_data(ctx, toktype_idx);
     }
 
     const uint32_t n_vocab = gguf_get_arr_n(ctx, token_idx);
@@ -5023,7 +5038,8 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
 
         llm_load_print_meta(ml, model);
 
-        if (model.hparams.n_vocab != model.vocab.id_to_token.size()) {
+        if (model.vocab.type != LLAMA_VOCAB_TYPE_NONE &&
+            model.hparams.n_vocab != model.vocab.id_to_token.size()) {
             throw std::runtime_error("vocab size mismatch");
         }
 
@@ -9361,26 +9377,32 @@ static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
 }
 
 static bool llama_is_normal_token(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_NORMAL;
 }
 
 static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_UNKNOWN;
 }
 
 static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_CONTROL;
 }
 
 static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_BYTE;
 }
 
 static bool llama_is_user_defined_token(const llama_vocab& vocab, llama_token id) {
+    GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_USER_DEFINED;
 }
 
 static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
+    GGML_ASSERT(llama_vocab_get_type(vocab) != LLAMA_VOCAB_TYPE_NONE);
     GGML_ASSERT(llama_is_byte_token(vocab, id));
     const auto& token_data = vocab.id_to_token.at(id);
     switch (llama_vocab_get_type(vocab)) {
@@ -9401,6 +9423,7 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
 }
 
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
+    GGML_ASSERT(llama_vocab_get_type(vocab) != LLAMA_VOCAB_TYPE_NONE);
     static const char * hex = "0123456789ABCDEF";
     switch (llama_vocab_get_type(vocab)) {
         case LLAMA_VOCAB_TYPE_SPM: {
@@ -10232,6 +10255,8 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     }
                 }
             } break;
+        case LLAMA_VOCAB_TYPE_NONE:
+            GGML_ASSERT(false);
     }
 
     return output;
@@ -13138,7 +13163,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
 }
 
 int32_t llama_n_vocab(const struct llama_model * model) {
-    return model->vocab.id_to_token.size();
+    return model->hparams.n_vocab;
 }
 
 int32_t llama_n_ctx_train(const struct llama_model * model) {
@@ -13962,14 +13987,17 @@ float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id
 }
 
 const char * llama_token_get_text(const struct llama_model * model, llama_token token) {
+    GGML_ASSERT(model->vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return model->vocab.id_to_token[token].text.c_str();
 }
 
 float llama_token_get_score(const struct llama_model * model, llama_token token) {
+    GGML_ASSERT(model->vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return model->vocab.id_to_token[token].score;
 }
 
 llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token) {
+    GGML_ASSERT(model->vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return model->vocab.id_to_token[token].type;
 }
 

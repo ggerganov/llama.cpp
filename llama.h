@@ -59,9 +59,10 @@ extern "C" {
     typedef int32_t llama_seq_id;
 
     enum llama_vocab_type {
-        LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
-        LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
-        LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
+        LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
+        LLAMA_VOCAB_TYPE_SPM  = 1, // SentencePiece
+        LLAMA_VOCAB_TYPE_BPE  = 2, // Byte Pair Encoding
+        LLAMA_VOCAB_TYPE_WPM  = 3, // WordPiece
     };
 
     // note: these values should be synchronized with ggml_rope
