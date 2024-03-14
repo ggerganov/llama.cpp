@@ -32,6 +32,7 @@ class Keys:
         FILE_TYPE            = "general.file_type"
 
     class LLM:
+        VOCAB_SIZE            = "{arch}.vocab_size"
         CONTEXT_LENGTH        = "{arch}.context_length"
         EMBEDDING_LENGTH      = "{arch}.embedding_length"
         BLOCK_COUNT           = "{arch}.block_count"
@@ -661,6 +662,9 @@ class GGMLQuantizationType(IntEnum):
     IQ3_S   = 21
     IQ2_S   = 22
     IQ4_XS  = 23
+    I8      = 24
+    I16     = 25
+    I32     = 26
 
 
 class GGUFEndian(IntEnum):
@@ -727,6 +731,9 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.IQ3_S:   (256, 2 + QK_K // 4 + QK_K // 8 + QK_K // 32 + 4),
     GGMLQuantizationType.IQ2_S:   (256, 2 + QK_K // 4 + QK_K // 16),
     GGMLQuantizationType.IQ4_XS:  (256, 2 + 2 + QK_K // 2 + QK_K // 64),
+    GGMLQuantizationType.I8:      (1, 1),
+    GGMLQuantizationType.I16:     (1, 2),
+    GGMLQuantizationType.I32:     (1, 4),
 }
 
 
@@ -746,6 +753,7 @@ KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
 KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
+KEY_VOCAB_SIZE            = Keys.LLM.VOCAB_SIZE
 KEY_CONTEXT_LENGTH        = Keys.LLM.CONTEXT_LENGTH
 KEY_EMBEDDING_LENGTH      = Keys.LLM.EMBEDDING_LENGTH
 KEY_BLOCK_COUNT           = Keys.LLM.BLOCK_COUNT

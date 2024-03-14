@@ -51,7 +51,8 @@ struct gpt_params {
     int32_t n_threads_batch_draft = -1;
     int32_t n_predict             = -1;    // new tokens to predict
     int32_t n_ctx                 = 512;   // context size
-    int32_t n_batch               = 512;   // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_batch               = 2048;  // logical batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_ubatch              = 512;   // physical batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                = 0;     // number of tokens to keep from initial prompt
     int32_t n_draft               = 5;     // number of tokens to draft during speculative decoding
     int32_t n_chunks              = -1;    // max number of chunks to process (-1 = unlimited)
@@ -267,3 +268,4 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40
 
 void llama_embd_normalize(const float * inp, float * out, int n);
 
+float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n);

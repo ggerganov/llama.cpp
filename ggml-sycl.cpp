@@ -202,24 +202,29 @@ namespace dpct
             // Version string has the following format:
             // a. OpenCL<space><major.minor><space><vendor-specific-information>
             // b. <major.minor>
+            // c. <AmdGcnArchName> e.g gfx1030
             std::string ver;
             ver = dev.get_info<sycl::info::device::version>();
             std::string::size_type i = 0;
-            while (i < ver.size())
-            {
-                if (isdigit(ver[i]))
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (isdigit(ver[i]))
+                break;
+              i++;
             }
             major = std::stoi(&(ver[i]));
-            while (i < ver.size())
-            {
-                if (ver[i] == '.')
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (ver[i] == '.')
+                break;
+              i++;
             }
-            i++;
-            minor = std::stoi(&(ver[i]));
+            if (i < ver.size()) {
+              // a. and b.
+              i++;
+              minor = std::stoi(&(ver[i]));
+            } else {
+              // c.
+              minor = 0;
+            }
         }
 
         template <typename tag, typename T>
@@ -3144,6 +3149,7 @@ namespace dpct
 
 } // COPY from DPCT head files
 
+#define GGML_COMMON_DECL_SYCL
 #define GGML_COMMON_IMPL_SYCL
 #include "ggml-common.h"
 
@@ -3312,66 +3318,6 @@ typedef void (*ggml_sycl_op_flatten_t)(const ggml_tensor *src0,
                                        const float *src1_dd, float *dst_dd,
                                        const dpct::queue_ptr &main_stream);
 
-// QK = number of values after dequantization
-// QR = QK / number of values before dequantization
-// QI = number of 32 bit integers before dequantization
-
-#define QK4_0 32
-#define QR4_0 2
-#define QI4_0 (QK4_0 / (4 * QR4_0))
-typedef struct dpct_type_block_q4_0 {
-    sycl::half d;           // delta
-    uint8_t qs[QK4_0 / 2];  // nibbles / quants
-} block_q4_0;
-static_assert(sizeof(block_q4_0) == sizeof(ggml_fp16_t) + QK4_0 / 2, "wrong q4_0 block size/padding");
-
-#define QK4_1 32
-#define QR4_1 2
-#define QI4_1 (QK4_1 / (4 * QR4_1))
-typedef struct dpct_type_block_q4_1 {
-    sycl::half2 dm;         // dm.x = delta, dm.y = min
-    uint8_t qs[QK4_1 / 2];  // nibbles / quants
-} block_q4_1;
-static_assert(sizeof(block_q4_1) == sizeof(ggml_fp16_t) * 2 + QK4_1 / 2, "wrong q4_1 block size/padding");
-
-#define QK5_0 32
-#define QR5_0 2
-#define QI5_0 (QK5_0 / (4 * QR5_0))
-typedef struct dpct_type_block_q5_0 {
-    sycl::half d;           // delta
-    uint8_t qh[4];          // 5-th bit of quants
-    uint8_t qs[QK5_0 / 2];  // nibbles / quants
-} block_q5_0;
-static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
-
-#define QK5_1 32
-#define QR5_1 2
-#define QI5_1 (QK5_1 / (4 * QR5_1))
-typedef struct dpct_type_block_q5_1 {
-    sycl::half2 dm;         // dm.x = delta, dm.y = min
-    uint8_t qh[4];          // 5-th bit of quants
-    uint8_t qs[QK5_1 / 2];  // nibbles / quants
-} block_q5_1;
-static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
-
-#define QK8_0 32
-#define QR8_0 1
-#define QI8_0 (QK8_0 / (4 * QR8_0))
-typedef struct dpct_type_block_q8_0 {
-    sycl::half d;           // delta
-    int8_t  qs[QK8_0];      // quants
-} block_q8_0;
-static_assert(sizeof(block_q8_0) == sizeof(ggml_fp16_t) + QK8_0, "wrong q8_0 block size/padding");
-
-#define QK8_1 32
-#define QR8_1 1
-#define QI8_1 (QK8_1 / (4 * QR8_1))
-typedef struct dpct_type_block_q8_1 {
-    sycl::half2 ds;         // ds.x = delta, ds.y = sum
-    int8_t  qs[QK8_0];      // quants
-} block_q8_1;
-static_assert(sizeof(block_q8_1) == 2*sizeof(ggml_fp16_t) + QK8_0, "wrong q8_1 block size/padding");
-
 typedef float (*vec_dot_q_sycl_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs);
 typedef void (*allocate_tiles_sycl_t)(int **x_ql, sycl::half2 **x_dm,
                                       int **x_qh, int **x_sc);
@@ -3387,112 +3333,6 @@ typedef float (*vec_dot_q_mul_mat_sycl_t)(
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ms,
     const int &i, const int &j, const int &k);
-
-//================================= k-quants
-
-#ifdef GGML_QKK_64
-#define QK_K 64
-#define K_SCALE_SIZE 4
-#else
-#define QK_K 256
-#define K_SCALE_SIZE 12
-#endif
-
-#define QR2_K 4
-#define QI2_K (QK_K / (4*QR2_K))
-typedef struct dpct_type_block_q2_K {
-    uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
-    uint8_t qs[QK_K/4];      // quants
-    sycl::half2 dm;          // super-block scale for quantized scales/mins
-} block_q2_K;
-static_assert(sizeof(block_q2_K) == 2*sizeof(ggml_fp16_t) + QK_K/16 + QK_K/4, "wrong q2_K block size/padding");
-
-#define QR3_K 4
-#define QI3_K (QK_K / (4*QR3_K))
-typedef struct dpct_type_block_q3_K {
-    uint8_t hmask[QK_K/8];     // quants - high bit
-    uint8_t qs[QK_K/4];        // quants - low 2 bits
-#ifdef GGML_QKK_64
-    uint8_t scales[2]; // scales, quantized with 8 bits
-#else
-    uint8_t scales[K_SCALE_SIZE]; // scales, quantized with 6 bits
-#endif
-    sycl::half d; // super-block scale
-} block_q3_K;
-//static_assert(sizeof(block_q3_K) == sizeof(ggml_fp16_t) + QK_K / 4 + QK_K / 8 + K_SCALE_SIZE, "wrong q3_K block size/padding");
-
-#define QR4_K 2
-#define QI4_K (QK_K / (4*QR4_K))
-#ifdef GGML_QKK_64
-typedef struct {
-    sycl::half dm[2];          // super-block scales/mins
-    uint8_t scales[2];         // 4-bit block scales/mins
-    uint8_t qs[QK_K/2];        // 4--bit quants
-} block_q4_K;
-static_assert(sizeof(block_q4_K) == sizeof(sycl::half2) + QK_K/2 + 2, "wrong q4_K block size/padding");
-#else
-typedef struct dpct_type_block_q4_K {
-    sycl::half2 dm;            // super-block scale for quantized scales/mins
-    uint8_t scales[3*QK_K/64]; // scales, quantized with 6 bits
-    uint8_t qs[QK_K/2];        // 4--bit quants
-} block_q4_K;
-static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + 3*QK_K/64 + QK_K/2, "wrong q4_K block size/padding");
-#endif
-
-#define QR5_K 2
-#define QI5_K (QK_K / (4*QR5_K))
-#ifdef GGML_QKK_64
-typedef struct {
-    sycl::half d;                  // super-block scale
-    int8_t scales[QK_K/16];  // block scales
-    uint8_t qh[QK_K/8];      // quants, high bit
-    uint8_t qs[QK_K/2];      // quants, low 4 bits
-} block_q5_K;
-static_assert(sizeof(block_q5_K) == sizeof(ggml_fp16_t) + QK_K/2 + QK_K/8 + QK_K/16, "wrong q5_K block size/padding");
-#else
-typedef struct dpct_type_block_q5_K {
-    sycl::half2 dm;               // super-block scale for quantized scales/mins
-    uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
-    uint8_t qh[QK_K/8];           // quants, high bit
-    uint8_t qs[QK_K/2];           // quants, low 4 bits
-} block_q5_K;
-static_assert(sizeof(block_q5_K) == 2*sizeof(ggml_fp16_t) + K_SCALE_SIZE + QK_K/2 + QK_K/8, "wrong q5_K block size/padding");
-#endif
-
-#define QR6_K 2
-#define QI6_K (QK_K / (4*QR6_K))
-typedef struct dpct_type_block_q6_K {
-    uint8_t ql[QK_K/2];   // quants, lower 4 bits
-    uint8_t qh[QK_K/4];   // quants, upper 2 bits
-    int8_t  scales[QK_K/16]; // scales
-    sycl::half d;            // delta
-} block_q6_K;
-static_assert(sizeof(block_q6_K) == sizeof(ggml_fp16_t) + 13*QK_K/16, "wrong q6_K block size/padding");
-
-#define QR2_XXS 8
-#define QI2_XXS (QK_K / (4*QR2_XXS))
-typedef struct dpct_type_block_iq2_xxs {
-    sycl::half d;
-    uint16_t qs[QK_K/8];
-} block_iq2_xxs;
-static_assert(sizeof(block_iq2_xxs) == sizeof(ggml_fp16_t) + QK_K/8*sizeof(uint16_t), "wrong iq2_xxs block size/padding");
-
-#define QR2_XS 8
-#define QI2_XS (QK_K / (4*QR2_XS))
-typedef struct dpct_type_block_iq2_xs {
-    sycl::half d;
-    uint16_t qs[QK_K/8];
-    uint8_t  scales[QK_K/32];
-} block_iq2_xs;
-static_assert(sizeof(block_iq2_xs) == sizeof(ggml_fp16_t) + QK_K/8*sizeof(uint16_t) + QK_K/32, "wrong iq2_xs block size/padding");
-
-#define QR3_XXS 8
-#define QI3_XXS (QK_K / (4*QR3_XXS))
-typedef struct dpct_type_block_iq3_xxs {
-    sycl::half d;
-    uint8_t qs[3*(QK_K/8)];
-} block_iq3_xxs;
-static_assert(sizeof(block_iq3_xxs) == sizeof(ggml_fp16_t) + 3*(QK_K/8), "wrong iq3_xxs block size/padding");
 
 #define WARP_SIZE 32
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
@@ -4823,6 +4663,65 @@ static void dequantize_block_iq3_xxs(const void * __restrict__ vx, dst_t * __res
     const uint32_t aux32 = gas[0] | (gas[1] << 16);
     const float d = (float)x[i].d * (0.5f + (aux32 >> 28)) * 0.5f;
     const uint8_t signs = ksigns_iq2xs[(aux32 >> 7*il) & 127];
+    for (int j = 0; j < 4; ++j) {
+        y[j+0] = d * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
+        y[j+4] = d * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
+    }
+#else
+    assert(false);
+#endif
+
+}
+
+template<typename dst_t>
+static void dequantize_block_iq3_s(const void * __restrict__ vx, dst_t * __restrict__ yy,
+                                     const sycl::nd_item<3> &item_ct1,
+                                     const uint32_t *iq3s_grid,
+                                     const uint8_t *ksigns_iq2xs,
+                                     const uint8_t *kmask_iq2xs) {
+
+    const int i = item_ct1.get_group(2);
+    const block_iq3_s * x = (const block_iq3_s  *) vx;
+
+    const int tid = item_ct1.get_local_id(2);
+#if QK_K == 256
+    const int il = tid/8; // 0...3
+    const int ib = tid%8; // 0...7
+    dst_t * y = yy + i*QK_K + 32*ib + 8*il;
+    const uint8_t  * qs = x[i].qs + 8*ib;
+    const uint8_t  * grid1 = (const uint8_t *)(iq3s_grid + qs[2*il+0]);
+    const uint8_t  * grid2 = (const uint8_t *)(iq3s_grid + qs[2*il+1]);
+    const float d = (float)x[i].d * (1 + 2*((x[i].scales[ib/2] >> 4*(ib%2)) & 0xf));
+    const uint8_t signs = x[i].signs[4*ib + il];
+    for (int j = 0; j < 4; ++j) {
+        y[j+0] = d * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
+        y[j+4] = d * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
+    }
+#else
+    assert(false);
+#endif
+
+}
+
+template<typename dst_t>
+static void dequantize_block_iq1_s(const void * __restrict__ vx, dst_t * __restrict__ yy,
+                                     const sycl::nd_item<3> &item_ct1,
+                                     const uint32_t *iq1s_grid,
+                                     const uint8_t *ksigns_iq2xs,
+                                     const uint8_t *kmask_iq2xs) {
+    const int i = item_ct1.get_group(2);
+    const block_iq1_s * x = (const block_iq1_s  *) vx;
+
+    const int tid = item_ct1.get_local_id(2);
+#if QK_K == 256
+    const int il = tid/8; // 0...3
+    const int ib = tid%8; // 0...7
+    dst_t * y = yy + i*QK_K + 32*ib + 8*il;
+    const uint8_t  * qs = x[i].qs + 8*ib;
+    const uint8_t  * grid1 = (const uint8_t *)(iq1s_grid + qs[2*il+0]);
+    const uint8_t  * grid2 = (const uint8_t *)(iq1s_grid + qs[2*il+1]);
+    const float d = (float)x[i].d * (2*((x[i].qh[ib] >> 12) & 0xf) + 1);
+    const uint8_t signs = ksigns_iq2xs[(x[i].qh[ib] >> 3*il) & 7];
     for (int j = 0; j < 4; ++j) {
         y[j+0] = d * grid1[j] * (signs & kmask_iq2xs[j+0] ? -1.f : 1.f);
         y[j+4] = d * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
@@ -7679,6 +7578,75 @@ vec_dot_iq3_xxs_q8_1(const void *__restrict__ vbq,
 #endif
 }
 
+static __dpct_inline__ float
+vec_dot_iq3_s_q8_1(const void *__restrict__ vbq,
+                     const block_q8_1 *__restrict__ bq8_1, const int &iqs,
+                     const uint32_t *iq3s_grid, const uint64_t *ksigns64) {
+#if DPCT_COMPATIBILITY_TEMP >=                                                 \
+    MIN_CC_DP4A // lowest compute capability for integer intrinsics
+#if QK_K == 256
+    const block_iq3_s * bq2 = (const block_iq3_s *) vbq;
+
+    const int ib32 = iqs;
+    const uint8_t  * qs = bq2->qs + 8*ib32;
+    const int8_t   * q8 = bq8_1[ib32].qs;
+    int sumi = 0;
+    for (int l = 0; l < 4; ++l) {
+        const uint32_t * grid1 = iq3s_grid + (qs[2*l+0] | ((bq2->qh[ib32] << (8 - 2*l)) & 256));
+        const uint32_t * grid2 = iq3s_grid + (qs[2*l+1] | ((bq2->qh[ib32] << (7 - 2*l)) & 256));
+        uint32_t signs0 = dpct::vectorized_binary<sycl::uchar4>(
+            ((bq2->signs[4*ib32+l] & 0xf) * 0x01010101) & 0x08040201, 0x08040201, std::equal_to<>());
+        uint32_t signs1 = dpct::vectorized_binary<sycl::uchar4>(
+            ((bq2->signs[4*ib32+l] >>  4) * 0x01010101) & 0x08040201, 0x08040201, std::equal_to<>());
+        const int grid_l = dpct::vectorized_binary<sycl::uchar4>(
+            grid1[0] ^ signs0, signs0, std::minus<>());
+        const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
+            grid2[0] ^ signs1, signs1, std::minus<>());
+        sumi = dpct::dp4a(grid_l, *((int *)q8 + 0), sumi);
+        sumi = dpct::dp4a(grid_h, *((int *)q8 + 1), sumi);
+        q8 += 8;
+    }
+    const float d = (float)bq2->d * (1 + 2*((bq2->scales[ib32/2] >> 4*(ib32%2)) & 0xf)) * bq8_1[ib32].ds[0];
+    return d * sumi;
+#else
+    assert(false);
+    return 0.f;
+#endif
+#else
+    assert(false);
+    return 0.f;
+#endif
+}
+
+static __dpct_inline__ float
+vec_dot_iq1_s_q8_1(const void *__restrict__ vbq,
+                     const block_q8_1 *__restrict__ bq8_1, const int &iqs,
+                     const uint32_t *iq1s_grid, const uint64_t *ksigns64) {
+#if QK_K == 256
+    const block_iq1_s * bq1 = (const block_iq1_s *) vbq;
+
+    const int ib32 = iqs;
+    const uint8_t  * qs = bq1->qs + 4*ib32;
+    const int8_t   * q8 = bq8_1[ib32].qs;
+    int sumi = 0;
+    for (int l = 0; l < 4; ++l) {
+        const uint32_t * grid = (const uint32_t *)(iq1s_grid + qs[l]);
+        const uint32_t * signs = (const uint32_t *)(ksigns64 + (qs[l] >> 8));
+        const int grid_l = dpct::vectorized_binary<sycl::uchar4>(
+            grid[0] ^ signs[0], signs[0], std::minus<>());
+        const int grid_h = dpct::vectorized_binary<sycl::uchar4>(
+            grid[1] ^ signs[1], signs[1], std::minus<>());
+        sumi = dpct::dp4a(grid_l, *((int *)q8 + 0), sumi);
+        sumi = dpct::dp4a(grid_h, *((int *)q8 + 1), sumi);
+        q8 += 8;
+    }
+    const float d = (float)bq1->d * bq8_1[ib32].ds[0] * 0.25f;
+    return d * sumi;
+#else
+    assert(false);
+    return 0.f;
+#endif
+}
 
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x,
           int mmq_y, int nwarps, load_tiles_sycl_t load_tiles, int vdr,
@@ -8430,6 +8398,98 @@ static void mul_mat_vec_q_iq3_xxs_q8_1(const void * __restrict__ vx, const void 
              (qi / vdr)); // x block quant index when casting the quants to int
 
         tmp += vec_dot_iq3_xxs_q8_1(&x[ibx], &y[iby], iqs, iq3xxs_grid_ptr, ksigns64_ptr);
+    }
+
+    // sum up partial sums and write back result
+#pragma unroll
+    for (int mask = 16; mask > 0; mask >>= 1) {
+        tmp +=
+            dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
+    }
+
+    if (item_ct1.get_local_id(2) == 0) {
+        dst[row] = tmp;
+    }
+}
+
+template <int qk, int qi, typename block_q_t, int vdr>
+static void mul_mat_vec_q_iq3_s_q8_1(const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst, const int ncols, const int nrows,
+                          const sycl::nd_item<3> &item_ct1,
+                          const uint32_t *iq3s_grid_ptr, const uint64_t *ksigns64_ptr ) {
+    const int row = item_ct1.get_group(2) * item_ct1.get_local_range(1) +
+                    item_ct1.get_local_id(1);
+
+    if (row >= nrows) {
+        return;
+    }
+
+    const int blocks_per_row = ncols / qk;
+    const int blocks_per_warp = vdr * WARP_SIZE / qi;
+
+// partial sum for each thread
+    float tmp = 0.0f;
+
+    const block_q_t  * x = (const block_q_t  *) vx;
+    const block_q8_1 * y = (const block_q8_1 *) vy;
+
+    for (int i = item_ct1.get_local_id(2) / (qi / vdr); i < blocks_per_row;
+         i += blocks_per_warp) {
+        const int ibx = row*blocks_per_row + i; // x block index
+
+        const int iby = i * (qk/QK8_1); // y block index that aligns with ibx
+
+        const int iqs =
+            vdr *
+            (item_ct1.get_local_id(2) %
+             (qi / vdr)); // x block quant index when casting the quants to int
+
+        tmp += vec_dot_iq3_s_q8_1(&x[ibx], &y[iby], iqs, iq3s_grid_ptr, ksigns64_ptr);
+    }
+
+    // sum up partial sums and write back result
+#pragma unroll
+    for (int mask = 16; mask > 0; mask >>= 1) {
+        tmp +=
+            dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
+    }
+
+    if (item_ct1.get_local_id(2) == 0) {
+        dst[row] = tmp;
+    }
+}
+
+template <int qk, int qi, typename block_q_t, int vdr>
+static void mul_mat_vec_q_iq1_s_q8_1(const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst, const int ncols, const int nrows,
+                          const sycl::nd_item<3> &item_ct1,
+                          const uint32_t *iq1s_grid_ptr, const uint64_t *ksigns64_ptr ) {
+    const int row = item_ct1.get_group(2) * item_ct1.get_local_range(1) +
+                    item_ct1.get_local_id(1);
+
+    if (row >= nrows) {
+        return;
+    }
+
+    const int blocks_per_row = ncols / qk;
+    const int blocks_per_warp = vdr * WARP_SIZE / qi;
+
+// partial sum for each thread
+    float tmp = 0.0f;
+
+    const block_q_t  * x = (const block_q_t  *) vx;
+    const block_q8_1 * y = (const block_q8_1 *) vy;
+
+    for (int i = item_ct1.get_local_id(2) / (qi / vdr); i < blocks_per_row;
+         i += blocks_per_warp) {
+        const int ibx = row*blocks_per_row + i; // x block index
+
+        const int iby = i * (qk/QK8_1); // y block index that aligns with ibx
+
+        const int iqs =
+            vdr *
+            (item_ct1.get_local_id(2) %
+             (qi / vdr)); // x block quant index when casting the quants to int
+
+        tmp += vec_dot_iq1_s_q8_1(&x[ibx], &y[iby], iqs, iq1s_grid_ptr, ksigns64_ptr);
     }
 
     // sum up partial sums and write back result
@@ -10129,6 +10189,64 @@ static void dequantize_row_iq3_xxs_sycl(const void *vx, dst_t *y, const int k,
     }
 }
 
+template <typename dst_t>
+static void dequantize_row_iq3_s_sycl(const void *vx, dst_t *y, const int k,
+                                        dpct::queue_ptr stream) {
+    const int nb = k / QK_K;
+    {
+        iq3s_grid.init(*stream);
+        ksigns_iq2xs.init(*stream);
+        kmask_iq2xs.init(*stream);
+
+        dpct::has_capability_or_fail(stream->get_device(),
+                                     {sycl::aspect::fp16});
+
+        stream->submit([&](sycl::handler &cgh) {
+            auto iq3s_grid_ptr_ct1 = iq3s_grid.get_ptr();
+            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
+            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+
+            cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
+                                                   sycl::range<3>(1, 1, 32),
+                                               sycl::range<3>(1, 1, 32)),
+                             [=](sycl::nd_item<3> item_ct1) {
+                                 dequantize_block_iq3_s(
+                                     vx, y, item_ct1, iq3s_grid_ptr_ct1,
+                                     ksigns_iq2xs_ptr_ct1, kmask_iq2xs_ptr_ct1);
+                             });
+        });
+    }
+}
+
+template <typename dst_t>
+static void dequantize_row_iq1_s_sycl(const void *vx, dst_t *y, const int k,
+                                        dpct::queue_ptr stream) {
+    const int nb = k / QK_K;
+    {
+        iq1s_grid_gpu.init(*stream);
+        ksigns_iq2xs.init(*stream);
+        kmask_iq2xs.init(*stream);
+
+        dpct::has_capability_or_fail(stream->get_device(),
+                                     {sycl::aspect::fp16});
+
+        stream->submit([&](sycl::handler &cgh) {
+            auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
+            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
+            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+
+            cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
+                                                   sycl::range<3>(1, 1, 32),
+                                               sycl::range<3>(1, 1, 32)),
+                             [=](sycl::nd_item<3> item_ct1) {
+                                 dequantize_block_iq1_s(
+                                     vx, y, item_ct1, iq1s_grid_ptr_ct1,
+                                     ksigns_iq2xs_ptr_ct1, kmask_iq2xs_ptr_ct1);
+                             });
+        });
+    }
+}
+
 template <typename src_t, typename dst_t>
 static void convert_unary_sycl(const void *__restrict__ vx,
                                dst_t *__restrict__ y, const int k,
@@ -10179,6 +10297,10 @@ static to_fp16_sycl_t ggml_get_to_fp16_sycl(ggml_type type) try {
             return dequantize_row_iq2_xs_sycl;
         case GGML_TYPE_IQ3_XXS:
             return dequantize_row_iq3_xxs_sycl;
+        case GGML_TYPE_IQ3_S:
+            return dequantize_row_iq3_s_sycl;
+        case GGML_TYPE_IQ1_S:
+            return dequantize_row_iq1_s_sycl;
         case GGML_TYPE_F32:
             return convert_unary_sycl<float>;
         default:
@@ -10219,6 +10341,10 @@ static to_fp32_sycl_t ggml_get_to_fp32_sycl(ggml_type type) {
             return dequantize_row_iq2_xs_sycl;
         case GGML_TYPE_IQ3_XXS:
             return dequantize_row_iq3_xxs_sycl;
+        case GGML_TYPE_IQ3_S:
+            return dequantize_row_iq3_s_sycl;
+        case GGML_TYPE_IQ1_S:
+            return dequantize_row_iq1_s_sycl;
         case GGML_TYPE_F16:
             return convert_unary_sycl<sycl::half>;
         default:
@@ -10808,6 +10934,61 @@ static void mul_mat_vec_iq3_xxs_q8_1_sycl(const void *vx, const void *vy,
     }
 }
 
+static void mul_mat_vec_iq3_s_q8_1_sycl(const void *vx, const void *vy,
+                                          float *dst, const int ncols,
+                                          const int nrows,
+                                          dpct::queue_ptr stream) {
+    GGML_ASSERT(ncols % QK_K == 0);
+    const int block_num_y = (nrows + GGML_SYCL_MMV_Y - 1) / GGML_SYCL_MMV_Y;
+    const sycl::range<3> block_nums(1, 1, block_num_y);
+    const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
+    {
+        iq3s_grid.init(*stream);
+        ksigns64.init(*stream);
+
+        stream->submit([&](sycl::handler &cgh) {
+            auto iq3s_grid_ptr_ct1 = iq3s_grid.get_ptr();
+            auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
+
+            cgh.parallel_for(
+                sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                [=](sycl::nd_item<3> item_ct1)
+                    [[intel::reqd_sub_group_size(32)]] {
+                        mul_mat_vec_q_iq3_s_q8_1<QK_K, QI3_XS, block_iq3_s, 1>(
+                            vx, vy, dst, ncols, nrows, item_ct1,
+                            iq3s_grid_ptr_ct1, ksigns64_ptr_ct1);
+                    });
+        });
+    }
+}
+
+static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
+                                          float *dst, const int ncols,
+                                          const int nrows,
+                                          dpct::queue_ptr stream) {
+    GGML_ASSERT(ncols % QK_K == 0);
+    const int block_num_y = (nrows + GGML_SYCL_MMV_Y - 1) / GGML_SYCL_MMV_Y;
+    const sycl::range<3> block_nums(1, 1, block_num_y);
+    const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
+    {
+        iq1s_grid_gpu.init(*stream);
+        ksigns64.init(*stream);
+
+        stream->submit([&](sycl::handler &cgh) {
+            auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
+            auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
+
+            cgh.parallel_for(
+                sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                [=](sycl::nd_item<3> item_ct1)
+                    [[intel::reqd_sub_group_size(32)]] {
+                        mul_mat_vec_q_iq1_s_q8_1<QK_K, QI1_S, block_iq1_s, 1>(
+                            vx, vy, dst, ncols, nrows, item_ct1,
+                            iq1s_grid_ptr_ct1, ksigns64_ptr_ct1);
+                    });
+        });
+    }
+}
 
 static void ggml_mul_mat_q4_0_q8_1_sycl(const void *vx, const void *vy,
                                         float *dst, const int ncols_x,
@@ -13556,7 +13737,10 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_SYC
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_IQ2_XXS:
         case GGML_TYPE_IQ2_XS:
+        case GGML_TYPE_IQ1_S:
         case GGML_TYPE_IQ3_XXS:
+            return max_compute_capability >= VER_GEN9 ? 128 : 64;
+        case GGML_TYPE_IQ3_S:
             return max_compute_capability >= VER_GEN9 ? 128 : 64;
         case GGML_TYPE_Q6_K:
             return 64;
@@ -13617,6 +13801,12 @@ inline void ggml_sycl_op_mul_mat_vec_q(
             break;
         case GGML_TYPE_IQ3_XXS:
             mul_mat_vec_iq3_xxs_q8_1_sycl(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
+            break;
+        case GGML_TYPE_IQ3_S:
+            mul_mat_vec_iq3_s_q8_1_sycl(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
+            break;
+        case GGML_TYPE_IQ1_S:
+            mul_mat_vec_iq1_s_q8_1_sycl(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
             break;
         default:
             GGML_ASSERT(false);
@@ -16963,9 +17153,8 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
                     return false;
                 }
                 ggml_type a_type = a->type;
-                if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ3_XXS ||
-                    a_type == GGML_TYPE_IQ1_S   || a_type == GGML_TYPE_IQ4_NL || a_type == GGML_TYPE_IQ3_S   ||
-                    a_type == GGML_TYPE_IQ2_S   || a_type == GGML_TYPE_IQ4_XS) {
+                if (a_type == GGML_TYPE_IQ4_NL || a_type == GGML_TYPE_IQ2_S ||
+                    a_type == GGML_TYPE_IQ4_XS) {
                     return false;
                 }
                 return true;
@@ -17060,13 +17249,18 @@ static ggml_backend_i ggml_backend_sycl_interface = {
     /* .get_default_buffer_type = */ ggml_backend_sycl_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_sycl_set_tensor_async,
     /* .get_tensor_async        = */ ggml_backend_sycl_get_tensor_async,
-    /* .cpy_tensor_async        = */ ggml_backend_sycl_cpy_tensor_async,
+    /* .cpy_tensor_async        = */ NULL, //ggml_backend_sycl_cpy_tensor_async, // TODO: update for the new interface
     /* .synchronize             = */ ggml_backend_sycl_synchronize,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_sycl_graph_compute,
     /* .supports_op             = */ ggml_backend_sycl_supports_op,
+    /* .event_new               = */ NULL,
+    /* .event_free              = */ NULL,
+    /* .event_record            = */ NULL,
+    /* .event_wait              = */ NULL,
+    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_sycl_guid() {

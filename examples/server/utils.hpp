@@ -14,6 +14,17 @@
 
 using json = nlohmann::json;
 
+// https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11
+enum error_type {
+    ERROR_TYPE_INVALID_REQUEST,
+    ERROR_TYPE_AUTHENTICATION,
+    ERROR_TYPE_SERVER,
+    ERROR_TYPE_NOT_FOUND,
+    ERROR_TYPE_PERMISSION,
+    ERROR_TYPE_UNAVAILABLE, // custom error
+    ERROR_TYPE_NOT_SUPPORTED, // custom error
+};
+
 extern bool server_verbose;
 extern bool server_log_json;
 
@@ -386,7 +397,7 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, json result, bool streaming = false) {
+static json format_final_response_oaicompat(const json & request, json result, const std::string & completion_id, bool streaming = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
@@ -420,7 +431,7 @@ static json format_final_response_oaicompat(const json & request, json result, b
             {"prompt_tokens",     num_prompt_tokens},
             {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
         }},
-        {"id", gen_chatcmplid()}
+        {"id", completion_id}
     };
 
     if (server_verbose) {
@@ -435,7 +446,7 @@ static json format_final_response_oaicompat(const json & request, json result, b
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(json result) {
+static std::vector<json> format_partial_response_oaicompat(json result, const std::string & completion_id) {
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
         return std::vector<json>({result});
     }
@@ -479,7 +490,7 @@ static std::vector<json> format_partial_response_oaicompat(json result) {
                                             {"role", "assistant"}
                                         }}}})},
                             {"created", t},
-                            {"id", gen_chatcmplid()},
+                            {"id", completion_id},
                             {"model", modelname},
                             {"object", "chat.completion.chunk"}};
 
@@ -490,7 +501,7 @@ static std::vector<json> format_partial_response_oaicompat(json result) {
                                                             {"content", content}}}
                                                             }})},
                             {"created", t},
-                            {"id", gen_chatcmplid()},
+                            {"id", completion_id},
                             {"model", modelname},
                             {"object", "chat.completion.chunk"}};
 
@@ -517,7 +528,7 @@ static std::vector<json> format_partial_response_oaicompat(json result) {
     json ret = json {
         {"choices", choices},
         {"created", t},
-        {"id",      gen_chatcmplid()},
+        {"id",      completion_id},
         {"model",   modelname},
         {"object",  "chat.completion.chunk"}
     };
@@ -526,6 +537,16 @@ static std::vector<json> format_partial_response_oaicompat(json result) {
 }
 
 static json format_embeddings_response_oaicompat(const json & request, const json & embeddings) {
+    json data = json::array();
+    int i = 0;
+    for (auto & elem : embeddings) {
+        data.push_back(json{
+            {"embedding", json_value(elem, "embedding", json::array())},
+            {"index",     i++},
+            {"object",    "embedding"}
+        });
+    }
+
     json res = json {
         {"model", json_value(request, "model", std::string(DEFAULT_OAICOMPAT_MODEL))},
         {"object", "list"},
@@ -533,7 +554,7 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
             {"prompt_tokens", 0},
             {"total_tokens", 0}
         }},
-        {"data", embeddings}
+        {"data", data}
     };
 
     return res;
@@ -548,5 +569,45 @@ static json format_tokenizer_response(const std::vector<llama_token> & tokens) {
 static json format_detokenized_response(const std::string & content) {
     return json {
         {"content", content}
+    };
+}
+
+static json format_error_response(const std::string & message, const enum error_type type) {
+    std::string type_str;
+    int code = 500;
+    switch (type) {
+        case ERROR_TYPE_INVALID_REQUEST:
+            type_str = "invalid_request_error";
+            code = 400;
+            break;
+        case ERROR_TYPE_AUTHENTICATION:
+            type_str = "authentication_error";
+            code = 401;
+            break;
+        case ERROR_TYPE_NOT_FOUND:
+            type_str = "not_found_error";
+            code = 404;
+            break;
+        case ERROR_TYPE_SERVER:
+            type_str = "server_error";
+            code = 500;
+            break;
+        case ERROR_TYPE_PERMISSION:
+            type_str = "permission_error";
+            code = 403;
+            break;
+        case ERROR_TYPE_NOT_SUPPORTED:
+            type_str = "not_supported_error";
+            code = 501;
+            break;
+        case ERROR_TYPE_UNAVAILABLE:
+            type_str = "unavailable_error";
+            code = 503;
+            break;
+    }
+    return json {
+        {"code", code},
+        {"message", message},
+        {"type", type_str},
     };
 }

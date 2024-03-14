@@ -2,7 +2,7 @@
 BUILD_TARGETS = \
 	main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf llama-bench libllava.a llava-cli baby-llama beam-search  \
-	speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey tests/test-c.o
+	speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
@@ -166,6 +166,10 @@ ifeq ($(UNAME_S),NetBSD)
 endif
 ifeq ($(UNAME_S),OpenBSD)
 	MK_CPPFLAGS += -D_BSD_SOURCE
+endif
+
+ifdef LLAMA_SCHED_MAX_COPIES
+	MK_CPPFLAGS += -DGGML_SCHED_MAX_COPIES=$(LLAMA_SCHED_MAX_COPIES)
 endif
 
 ifdef LLAMA_DEBUG
@@ -554,15 +558,16 @@ ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 ifdef LLAMA_METAL_EMBED_LIBRARY
-ggml-metal-embed.o: ggml-metal.metal
+ggml-metal-embed.o: ggml-metal.metal ggml-common.h
 	@echo "Embedding Metal library"
+	@sed -e '/#include "ggml-common.h"/r ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml-metal.metal > ggml-metal-embed.metal
 	$(eval TEMP_ASSEMBLY=$(shell mktemp))
-	@echo ".section __DATA, __ggml_metallib" > $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_start" >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_start:" >> $(TEMP_ASSEMBLY)
-	@echo ".incbin \"$<\"" >> $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_end" >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_end:" >> $(TEMP_ASSEMBLY)
+	@echo ".section __DATA, __ggml_metallib"   >  $(TEMP_ASSEMBLY)
+	@echo ".globl _ggml_metallib_start"        >> $(TEMP_ASSEMBLY)
+	@echo "_ggml_metallib_start:"              >> $(TEMP_ASSEMBLY)
+	@echo ".incbin \"ggml-metal-embed.metal\"" >> $(TEMP_ASSEMBLY)
+	@echo ".globl _ggml_metallib_end"          >> $(TEMP_ASSEMBLY)
+	@echo "_ggml_metallib_end:"                >> $(TEMP_ASSEMBLY)
 	@$(AS) $(TEMP_ASSEMBLY) -o $@
 	@rm -f ${TEMP_ASSEMBLY}
 endif
@@ -634,9 +639,12 @@ ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o
+unicode.o: unicode.cpp unicode.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-llama.o: llama.cpp ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o
+
+llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 COMMON_H_DEPS = common/common.h common/sampling.h common/log.h
@@ -727,6 +735,10 @@ imatrix: examples/imatrix/imatrix.cpp                         ggml.o llama.o $(C
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 embedding: examples/embedding/embedding.cpp                   ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+gritlm: examples/gritlm/gritlm.cpp                         ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

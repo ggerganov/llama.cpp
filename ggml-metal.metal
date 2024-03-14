@@ -1,48 +1,14 @@
-#include <metal_stdlib>
-
+#define GGML_COMMON_DECL_METAL
 #define GGML_COMMON_IMPL_METAL
 #include "ggml-common.h"
+
+#include <metal_stdlib>
 
 using namespace metal;
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define SWAP(x, y) { auto tmp = (x); (x) = (y); (y) = tmp; }
-
-#define QK4_0 32
-#define QR4_0 2
-typedef struct {
-    half    d;             // delta
-    uint8_t qs[QK4_0 / 2]; // nibbles / quants
-} block_q4_0;
-
-#define QK4_1 32
-typedef struct {
-    half d;                 // delta
-    half m;                 // min
-    uint8_t qs[QK4_1 / 2];  // nibbles / quants
-} block_q4_1;
-
-#define QK5_0 32
-typedef struct {
-    half d;                // delta
-    uint8_t qh[4];         // 5-th bit of quants
-    uint8_t qs[QK5_0 / 2]; // nibbles / quants
-} block_q5_0;
-
-#define QK5_1 32
-typedef struct {
-    half d;                 // delta
-    half m;                 // min
-    uint8_t qh[4];          // 5-th bit of quants
-    uint8_t qs[QK5_1 / 2];  // nibbles / quants
-} block_q5_1;
-
-#define QK8_0 32
-typedef struct {
-    half    d;         // delta
-    int8_t  qs[QK8_0]; // quants
-} block_q8_0;
 
 #define N_SIMDWIDTH 32 // assuming SIMD group size is 32
 
@@ -2478,147 +2444,6 @@ kernel void kernel_concat(
     }
 }
 
-//============================================ k-quants ======================================================
-
-#ifndef QK_K
-#define QK_K 256
-#else
-static_assert(QK_K == 256 || QK_K == 64, "QK_K must be 256 or 64");
-#endif
-
-#if QK_K == 256
-#define K_SCALE_SIZE 12
-#else
-#define K_SCALE_SIZE 4
-#endif
-
-typedef struct {
-    uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
-    uint8_t qs[QK_K/4];      // quants
-    half d;           // super-block scale for quantized scales
-    half dmin;        // super-block scale for quantized mins
-} block_q2_K;
-// 84 bytes / block
-
-typedef struct {
-    uint8_t hmask[QK_K/8];     // quants - high bit
-    uint8_t qs[QK_K/4];        // quants - low 2 bits
-#if QK_K == 64
-    uint8_t scales[2];
-#else
-    uint8_t scales[K_SCALE_SIZE]; // scales, quantized with 6 bits
-#endif
-    half d;             // super-block scale
-} block_q3_K;
-
-#if QK_K == 64
-typedef struct {
-    half    d[2];          // super-block scales/mins
-    uint8_t scales[2];
-    uint8_t qs[QK_K/2];    // 4-bit quants
-} block_q4_K;
-#else
-typedef struct {
-    half d;             // super-block scale for quantized scales
-    half dmin;          // super-block scale for quantized mins
-    uint8_t scales[K_SCALE_SIZE]; // scales and mins, quantized with 6 bits
-    uint8_t qs[QK_K/2];        // 4--bit quants
-} block_q4_K;
-#endif
-
-#if QK_K == 64
-typedef struct {
-    half  d;                     // super-block scales/mins
-    int8_t  scales[QK_K/16];     // 8-bit block scales
-    uint8_t qh[QK_K/8];          // quants, high bit
-    uint8_t qs[QK_K/2];          // quants, low 4 bits
-} block_q5_K;
-#else
-typedef struct {
-    half d;                      // super-block scale for quantized scales
-    half dmin;                   // super-block scale for quantized mins
-    uint8_t scales[3*QK_K/64];   // scales and mins, quantized with 6 bits
-    uint8_t qh[QK_K/8];          // quants, high bit
-    uint8_t qs[QK_K/2];          // quants, low 4 bits
-} block_q5_K;
-// 176 bytes / block
-#endif
-
-typedef struct {
-    uint8_t ql[QK_K/2];      // quants, lower 4 bits
-    uint8_t qh[QK_K/4];      // quants, upper 2 bits
-    int8_t  scales[QK_K/16]; // scales, quantized with 8 bits
-    half d;                  // super-block scale
-} block_q6_K;
-// 210 bytes / block
-
-typedef struct {
-    half d;
-    uint16_t qs[QK_K/8];
-} block_iq2_xxs;
-// 66 bytes / block for QK_K = 256, so 2.0625 bpw
-
-typedef struct {
-    half d;
-    uint16_t qs[QK_K/8];
-    uint8_t  scales[QK_K/32];
-} block_iq2_xs;
-// 74 bytes / block for QK_K = 256, so 2.3125 bpw
-
-// 2.5625 bpw quants
-typedef struct {
-    half d;
-    uint8_t qs[QK_K/4];
-    uint8_t qh[QK_K/32];
-    uint8_t scales[QK_K/32];
-} block_iq2_s;
-
-typedef struct {
-    half d;
-    uint8_t qs[3*QK_K/8];
-} block_iq3_xxs;
-// 98 bytes / block for QK_K = 256, so 3.0625 bpw
-
-// 3.4375 bpw
-#if QK_K == 64
-#define IQ3S_N_SCALE 2
-#else
-#define IQ3S_N_SCALE QK_K/64
-#endif
-typedef struct {
-    half d;
-    uint8_t qs[QK_K/4];
-    uint8_t qh[QK_K/32];
-    uint8_t signs[QK_K/8];
-    uint8_t scales[IQ3S_N_SCALE];
-} block_iq3_s;
-
-typedef struct {
-    half d;
-    uint8_t qs[QK_K/8];
-    uint8_t scales[QK_K/16];
-} block_iq1_s;
-
-// Non-linear quants
-#define QK4_NL 32
-typedef struct {
-    half    d;
-    uint8_t qs[QK4_NL/2];
-} block_iq4_nl;
-
-#if QK_K == 64
-#define block_iq4_xs block_iq4_nl
-#else
-typedef struct {
-    half d;
-    uint16_t scales_h;
-    uint8_t  scales_l[QK_K/64];
-    uint8_t  qs[QK_K/2];
-} block_iq4_xs;
-#endif
-
-//====================================== dot products =========================
-
 void kernel_mul_mv_q2_K_f32_impl(
         device const  void * src0,
         device const float * src1,
@@ -4338,48 +4163,53 @@ void kernel_mul_mv_iq1_s_f32_impl(
     device const block_iq1_s * x = (device const block_iq1_s *) src0 + ib_row + offset0;
     device const float       * y = (device const float       *) src1 + r1*ne10 + im*ne00*ne1;
 
-    float yl[16];
+    float yl[32];
     float sumf[N_DST]={0.f}, all_sum;
 
     const int nb32 = nb * (QK_K / 32);
 
-    const int ix = tiisg/2;
-    const int il = tiisg%2;
+    const int ix = tiisg;
 
-    device const float * y4 = y + 32 * ix + 16 * il;
+    device const float * y4 = y + 32 * ix;
 
-    for (int ib32 = ix; ib32 < nb32; ib32 += 16) {
+    for (int ib32 = ix; ib32 < nb32; ib32 += 32) {
 
-        for (int i = 0; i < 16; ++i) {
+        float sumy = 0;
+        for (int i = 0; i < 32; ++i) {
             yl[i] = y4[i];
+            sumy += yl[i];
         }
 
         const int ibl = ib32 / (QK_K / 32);
         const int ib  = ib32 % (QK_K / 32);
 
         device const block_iq1_s * xr = x + ibl;
-        device const uint8_t * qs = xr->qs + 4 * ib + 2 * il;
-        device const uint8_t * sc = xr->scales + 2 * ib + il;
-        device const half    * dh = &xr->d;
+        device const uint8_t  * qs = xr->qs + 4 * ib;
+        device const uint16_t * qh = xr->qh + ib;
+        device const half     * dh = &xr->d;
 
         for (int row = 0; row < N_DST; row++) {
 
-            constant int8_t * grid1 = (constant int8_t *)(iq1s_grid + (qs[0] | ((sc[0] & 0x08) << 5)));
-            constant int8_t * grid2 = (constant int8_t *)(iq1s_grid + (qs[1] | ((sc[0] & 0x80) << 1)));
+            constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | ((qh[0] << 8) & 0x700)));
+            constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | ((qh[0] << 5) & 0x700)));
+            constant uint8_t * grid3 = (constant uint8_t *)(iq1s_grid_gpu + (qs[2] | ((qh[0] << 2) & 0x700)));
+            constant uint8_t * grid4 = (constant uint8_t *)(iq1s_grid_gpu + (qs[3] | ((qh[0] >> 1) & 0x700)));
 
-            float2 sum = {0};
-            for (int j = 0; j < 8; ++j) {
-                sum[0] += yl[j+ 0] * grid1[j];
-                sum[1] += yl[j+ 8] * grid2[j];
+            float sum = 0;
+            for (int j = 0; j < 4; ++j) {
+                sum += yl[j+ 0] * (grid1[j] & 0xf) + yl[j+ 4] * (grid1[j] >> 4)
+                     + yl[j+ 8] * (grid2[j] & 0xf) + yl[j+12] * (grid2[j] >> 4)
+                     + yl[j+16] * (grid3[j] & 0xf) + yl[j+20] * (grid3[j] >> 4)
+                     + yl[j+24] * (grid4[j] & 0xf) + yl[j+28] * (grid4[j] >> 4);
             }
-            sumf[row] += (float)dh[0] * (sum[0] * (2*(sc[0] & 7) + 1) + sum[1] * (2*((sc[0] >> 4) & 7) + 1));
+            sumf[row] += (float)dh[0] * (sum + sumy * (qh[0] & 0x8000 ? -1 - IQ1S_DELTA : -1 + IQ1S_DELTA)) * (2*((qh[0] >> 12) & 7) + 1);
 
             dh += nb*sizeof(block_iq1_s)/2;
             qs += nb*sizeof(block_iq1_s);
-            sc += nb*sizeof(block_iq1_s);
+            qh += nb*sizeof(block_iq1_s)/2;
         }
 
-        y4 += 16 * 32;
+        y4 += 32 * 32;
     }
 
     for (int row = 0; row < N_DST; ++row) {
@@ -5066,16 +4896,21 @@ void dequantize_iq2_s(device const block_iq2_s * xb, short il, thread type4x4 & 
 template <typename type4x4>
 void dequantize_iq1_s(device const block_iq1_s * xb, short il, thread type4x4 & reg) {
     // il is 0...15 for QK_K = 256 => index of block of 32 is il/2
+    const int ib32 = il/2;
+    il = il%2;
     const float d = xb->d;
-    device const uint8_t * qs = xb->qs + 2*il;
-    device const uint8_t * sc = xb->scales + il;
-    const float dl1 = d * (2*(sc[0] & 7) + 1);
-    const float dl2 = d * (2*((sc[0] >> 4) & 7) + 1);
-    constant int8_t * grid1 = (constant int8_t *)(iq1s_grid + (qs[0] | ((sc[0] & 0x08) << 5)));
-    constant int8_t * grid2 = (constant int8_t *)(iq1s_grid + (qs[1] | ((sc[0] & 0x80) << 1)));
-    for (int i = 0; i < 8; ++i) {
-        reg[i/4+0][i%4] = dl1 * grid1[i];
-        reg[i/4+2][i%4] = dl2 * grid2[i];
+    device const uint8_t  * qs = xb->qs + 4*ib32 + 2*il;
+    device const uint16_t * qh = xb->qh;
+    const float dl = d * (2*((qh[ib32] >> 12) & 7) + 1);
+    const float ml = dl * (qh[ib32] & 0x8000 ? -1 - IQ1S_DELTA : -1 + IQ1S_DELTA);
+    const uint16_t h = qh[ib32] >> 6*il;
+    constant uint8_t * grid1 = (constant uint8_t *)(iq1s_grid_gpu + (qs[0] | ((h << 8) & 0x700)));
+    constant uint8_t * grid2 = (constant uint8_t *)(iq1s_grid_gpu + (qs[1] | ((h << 5) & 0x700)));
+    for (int i = 0; i < 4; ++i) {
+        reg[0][i] = dl * (grid1[i] & 0xf) + ml;
+        reg[1][i] = dl * (grid1[i] >>  4) + ml;
+        reg[2][i] = dl * (grid2[i] & 0xf) + ml;
+        reg[3][i] = dl * (grid2[i] >>  4) + ml;
     }
 }
 
@@ -5386,7 +5221,7 @@ template<typename block_q, short nl, void (*dequantize_func)(device const block_
 void kernel_mul_mm_id_impl(
         device const  uchar * src0,
         device const  uchar * src1,
-        thread        short * src1ids,
+        threadgroup   short * src1ids,
         device        float * dst,
         constant    int64_t & ne00,
         constant    int64_t & ne02,
@@ -5589,9 +5424,9 @@ kernel void kernel_mul_mm_id(
     tgpig.z = tgpig.z%(ne12*ne13);
 
     // row indices of src1 for expert id
-    int64_t _ne1 = 0;
-    short src1ids[512];
+    threadgroup short * src1ids = (threadgroup short *)(shared_memory + 8192);
 
+    int64_t _ne1 = 0;
     for (int64_t i1 = 0; i1 < ne1; i1++) {
         if (((device int32_t *) (ids + i1*nbi1))[idx] == id) {
             src1ids[_ne1++] = i1;
