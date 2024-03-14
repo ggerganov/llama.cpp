@@ -25,17 +25,14 @@ jobs:
     strategy:
       matrix:
         sanitizer: [ADDRESS, THREAD, UNDEFINED]
-        build_type: [Debug, Release]
+        build_type: [Debug]
         include:
           - build_type: Release
             sanitizer: ""
-        exclude:
-          - build_type: Release
-            sanitizer: ADDRESS
-          - build_type: Release
+          - build_type: Debug
             sanitizer: THREAD
-          - build_type: Release
-            sanitizer: UNDEFINED
+            disabled_on_pr: true
+      fail-fast: false # While -DLLAMA_SANITIZE_THREAD=ON is broken
 
     container:
       image: ubuntu:latest
@@ -81,13 +78,14 @@ jobs:
 
       - name: Tests
         id: server_integration_tests
+        if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh
 
       - name: Slow tests
         id: server_integration_tests_slow
-        if: ${{ github.event.schedule != '' && matrix.build_type == 'Release' || github.event.inputs.slow_tests == 'true' }}
+        if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
@@ -124,13 +122,14 @@ jobs:
 
       - name: Tests
         id: server_integration_tests
+        if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
           behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
 
       - name: Slow tests
         id: server_integration_tests_slow
-        if: ${{ github.event.schedule != '' || github.event.inputs.slow_tests == 'true' }}
+        if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
           behave.exe --stop --no-skipped --no-capture --tags slow
