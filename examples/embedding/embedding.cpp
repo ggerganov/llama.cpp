@@ -167,9 +167,9 @@ int main(int argc, char ** argv) {
     float * out = emb + p * n_embd;
     batch_decode(ctx, batch, out, s, n_embd);
 
-    // print first 3 embeddings
+    // print the first part of the embeddings
     fprintf(stdout, "\n");
-    for (int j = 0; j < std::min(3, n_prompts); j++) {
+    for (int j = 0; j < n_prompts; j++) {
         fprintf(stdout, "embedding %d: ", j);
         for (int i = 0; i < std::min(16, n_embd); i++) {
             fprintf(stdout, "%f ", emb[j * n_embd + i]);
