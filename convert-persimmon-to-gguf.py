@@ -93,7 +93,7 @@ def main():
     gguf_writer.add_head_count(head_count)
     gguf_writer.add_head_count_kv(head_count_kv)
     gguf_writer.add_rope_freq_base(hparams.rotary_emb_base)
-    gguf_writer.add_layer_norm_eps(hparams.layernorm_epsilon)
+    gguf_writer.add_layer_norm_eps(hparams.layer_norm_epsilon)
 
     tokens, scores, toktypes = _get_sentencepiece_tokenizer_info(args.model_dir)
     gguf_writer.add_tokenizer_model('llama')
