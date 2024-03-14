@@ -665,6 +665,8 @@ class GGMLQuantizationType(IntEnum):
     I8      = 24
     I16     = 25
     I32     = 26
+    I64     = 27
+    F64     = 28
 
 
 class GGUFEndian(IntEnum):
@@ -734,6 +736,8 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.I8:      (1, 1),
     GGMLQuantizationType.I16:     (1, 2),
     GGMLQuantizationType.I32:     (1, 4),
+    GGMLQuantizationType.I64:     (1, 8),
+    GGMLQuantizationType.F64:     (1, 8),
 }
 
 

@@ -470,6 +470,19 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .type_size                = sizeof(int32_t),
         .is_quantized             = false,
     },
+    [GGML_TYPE_I64] = {
+        .type_name                = "i64",
+        .blck_size                = 1,
+        .type_size                = sizeof(int64_t),
+        .is_quantized             = false,
+    },
+    [GGML_TYPE_F64] = {
+        .type_name                = "f64",
+        .blck_size                = 1,
+        .type_size                = sizeof(double),
+        .is_quantized             = false,
+        .nrows                    = 1,
+    },
     [GGML_TYPE_F32] = {
         .type_name                = "f32",
         .blck_size                = 1,
