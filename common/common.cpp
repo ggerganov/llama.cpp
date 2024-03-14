@@ -420,6 +420,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             sparams.penalty_present = std::stof(argv[i]);
+        } else if (arg == "--penalty-threshold") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.penalty_threshold = std::stof(argv[i]);
         } else if (arg == "--dynatemp-range") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -998,6 +1004,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)sparams.penalty_repeat);
     printf("  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_present);
     printf("  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)sparams.penalty_freq);
+    printf("  --penalty-threshold N only apply penalties to tokens whose relative frequency in the penalty context is less than or equal to this value (default: %.1f, 1.0 = disabled)\n", (double)sparams.penalty_threshold);
     printf("  --dynatemp-range N    dynamic temperature range (default: %.1f, 0.0 = disabled)\n", (double)sparams.dynatemp_range);
     printf("  --dynatemp-exp N      dynamic temperature exponent (default: %.1f)\n", (double)sparams.dynatemp_exponent);
     printf("  --mirostat N          use Mirostat sampling.\n");
@@ -1746,6 +1753,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", sparams.n_probs);
     fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");
     fprintf(stream, "no_penalize_nl: %s # default: false\n", !sparams.penalize_nl ? "true" : "false");
+    fprintf(stream, "penalty_threshold: %f # default: 1.0\n", sparams.penalty_threshold);
     fprintf(stream, "ppl_output_type: %d # default: 0\n", params.ppl_output_type);
     fprintf(stream, "ppl_stride: %d # default: 0\n", params.ppl_stride);
     fprintf(stream, "presence_penalty: %f # default: 0.0\n", sparams.penalty_present);
