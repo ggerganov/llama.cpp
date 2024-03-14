@@ -3483,7 +3483,7 @@ class sycl_gpu_mgr {
         }
 
         /*
-        Use the assigned GPU as only one
+        Only use the assigned GPU
         */
         sycl_gpu_mgr(int main_gpu_id) {
             sycl::device device = dpct::dev_mgr::instance().get_device(main_gpu_id);
