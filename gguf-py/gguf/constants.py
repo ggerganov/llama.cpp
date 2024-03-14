@@ -32,6 +32,7 @@ class Keys:
         FILE_TYPE            = "general.file_type"
 
     class LLM:
+        VOCAB_SIZE            = "{arch}.vocab_size"
         CONTEXT_LENGTH        = "{arch}.context_length"
         EMBEDDING_LENGTH      = "{arch}.embedding_length"
         BLOCK_COUNT           = "{arch}.block_count"
@@ -752,6 +753,7 @@ KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
 KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
+KEY_VOCAB_SIZE            = Keys.LLM.VOCAB_SIZE
 KEY_CONTEXT_LENGTH        = Keys.LLM.CONTEXT_LENGTH
 KEY_EMBEDDING_LENGTH      = Keys.LLM.EMBEDDING_LENGTH
 KEY_BLOCK_COUNT           = Keys.LLM.BLOCK_COUNT
