@@ -202,24 +202,29 @@ namespace dpct
             // Version string has the following format:
             // a. OpenCL<space><major.minor><space><vendor-specific-information>
             // b. <major.minor>
+            // c. <AmdGcnArchName> e.g gfx1030
             std::string ver;
             ver = dev.get_info<sycl::info::device::version>();
             std::string::size_type i = 0;
-            while (i < ver.size())
-            {
-                if (isdigit(ver[i]))
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (isdigit(ver[i]))
+                break;
+              i++;
             }
             major = std::stoi(&(ver[i]));
-            while (i < ver.size())
-            {
-                if (ver[i] == '.')
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (ver[i] == '.')
+                break;
+              i++;
             }
-            i++;
-            minor = std::stoi(&(ver[i]));
+            if (i < ver.size()) {
+              // a. and b.
+              i++;
+              minor = std::stoi(&(ver[i]));
+            } else {
+              // c.
+              minor = 0;
+            }
         }
 
         template <typename tag, typename T>
@@ -17244,13 +17249,18 @@ static ggml_backend_i ggml_backend_sycl_interface = {
     /* .get_default_buffer_type = */ ggml_backend_sycl_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_sycl_set_tensor_async,
     /* .get_tensor_async        = */ ggml_backend_sycl_get_tensor_async,
-    /* .cpy_tensor_async        = */ ggml_backend_sycl_cpy_tensor_async,
+    /* .cpy_tensor_async        = */ NULL, //ggml_backend_sycl_cpy_tensor_async, // TODO: update for the new interface
     /* .synchronize             = */ ggml_backend_sycl_synchronize,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_sycl_graph_compute,
     /* .supports_op             = */ ggml_backend_sycl_supports_op,
+    /* .event_new               = */ NULL,
+    /* .event_free              = */ NULL,
+    /* .event_record            = */ NULL,
+    /* .event_wait              = */ NULL,
+    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_sycl_guid() {

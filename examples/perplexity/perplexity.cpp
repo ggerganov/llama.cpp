@@ -589,9 +589,10 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
             }
         }
 
-        const auto t_end = std::chrono::high_resolution_clock::now();
 
         if (i == 0) {
+            llama_synchronize(ctx);
+            const auto t_end = std::chrono::high_resolution_clock::now();
             const float t_total = std::chrono::duration<float>(t_end - t_start).count();
             fprintf(stderr, "%s: %.2f seconds per pass - ETA ", __func__, t_total);
             int total_seconds = (int)(t_total*n_chunk/n_seq);

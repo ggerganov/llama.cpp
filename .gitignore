@@ -25,6 +25,8 @@
 .vscode/
 .idea/
 
+ggml-metal-embed.metal
+
 lcov-report/
 gcovr-report/
 

@@ -333,6 +333,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DLLAMA_METAL_EMBED_LIBRARY=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
@@ -361,6 +362,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DLLAMA_METAL_EMBED_LIBRARY=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
