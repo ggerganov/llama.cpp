@@ -293,23 +293,19 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
         bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
 #endif
 
-        NSString * src = nil;
         NSError * error = nil;
 
 #if GGML_METAL_EMBED_LIBRARY
-        GGML_METAL_LOG_INFO("%s: using embedded metal library\n", __func__);
-
-        extern const char ggml_metallib_start[];
-        extern const char ggml_metallib_end[];
-
-        src = [[NSString alloc] initWithBytes:ggml_metallib_start length:(ggml_metallib_end-ggml_metallib_start) encoding:NSUTF8StringEncoding];
+        const bool try_metallib = false;
+#else
+        const bool try_metallib = true;
 #endif
 
-        NSString * libPath = [bundle pathForResource:@"default" ofType:@"metallib"];
-        if (src == nil && libPath != nil) {
+        NSString * path_lib = [bundle pathForResource:@"default" ofType:@"metallib"];
+        if (try_metallib && path_lib != nil) {
             // pre-compiled library found
-            NSURL * libURL = [NSURL fileURLWithPath:libPath];
-            GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [libPath UTF8String]);
+            NSURL * libURL = [NSURL fileURLWithPath:path_lib];
+            GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [path_lib UTF8String]);
 
             metal_library = [ctx->device newLibraryWithURL:libURL error:&error];
             if (error) {
@@ -317,6 +313,14 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
                 return NULL;
             }
         } else {
+#if GGML_METAL_EMBED_LIBRARY
+            GGML_METAL_LOG_INFO("%s: using embedded metal library\n", __func__);
+
+            extern const char ggml_metallib_start[];
+            extern const char ggml_metallib_end[];
+
+            NSString * src = [[NSString alloc] initWithBytes:ggml_metallib_start length:(ggml_metallib_end-ggml_metallib_start) encoding:NSUTF8StringEncoding];
+#else
             GGML_METAL_LOG_INFO("%s: default.metallib not found, loading from source\n", __func__);
 
             NSString * path_source;
@@ -337,11 +341,12 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
             GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [path_source UTF8String]);
 
-            src = [NSString stringWithContentsOfFile:path_source encoding:NSUTF8StringEncoding error:&error];
+            NSString * src = [NSString stringWithContentsOfFile:path_source encoding:NSUTF8StringEncoding error:&error];
             if (error) {
                 GGML_METAL_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
                 return NULL;
             }
+#endif // GGML_METAL_EMBED_LIBRARY
 
             @autoreleasepool {
                 // dictionary of preprocessor macros
