@@ -5056,13 +5056,13 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
 #endif
 
 #ifdef GGML_USE_SYCL
-    if (params.split_mode == LLAMA_SPLIT_MODE_NONE) {
-        ggml_backend_sycl_set_single_device_mode(params.main_gpu);
-        //SYCL use device index (0, 1, 2) directly, uer input device id, then convert to device index.
-        params.main_gpu = ggml_backend_sycl_get_device_index(params.main_gpu);
-    } else {
-        ggml_backend_sycl_set_mul_device_mode();
-    }
+        if (params.split_mode == LLAMA_SPLIT_MODE_NONE) {
+            ggml_backend_sycl_set_single_device_mode(params.main_gpu);
+            //SYCL use device index (0, 1, 2) directly, uer input device id, then convert to device index.
+            params.main_gpu = ggml_backend_sycl_get_device_index(params.main_gpu);
+        } else {
+            ggml_backend_sycl_set_mul_device_mode();
+        }
 #endif
 
         if (!llm_load_tensors(
