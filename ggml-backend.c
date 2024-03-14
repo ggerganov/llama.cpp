@@ -278,12 +278,19 @@ enum ggml_status ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_
     return err;
 }
 
-bool ggml_backend_graph_compute_async(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+enum ggml_status ggml_backend_graph_compute_async(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     return backend->iface.graph_compute(backend, cgraph);
 }
 
 bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
     return backend->iface.supports_op(backend, op);
+}
+
+bool ggml_backend_offload_op(ggml_backend_t backend, const struct ggml_tensor * op) {
+    if (backend->iface.offload_op != NULL) {
+        return backend->iface.offload_op(backend, op);
+    }
+    return false;
 }
 
 // backend copy
@@ -834,6 +841,7 @@ static struct ggml_backend_i cpu_backend_i = {
     /* .graph_plan_compute      = */ ggml_backend_cpu_graph_plan_compute,
     /* .graph_compute           = */ ggml_backend_cpu_graph_compute,
     /* .supports_op             = */ ggml_backend_cpu_supports_op,
+    /* .offload_op              = */ NULL,
     /* .event_new               = */ NULL,
     /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
@@ -999,7 +1007,7 @@ static bool ggml_is_view_op(enum ggml_op op) {
 #endif
 
 #ifndef GGML_SCHED_MAX_SPLITS
-#define GGML_SCHED_MAX_SPLITS 256
+#define GGML_SCHED_MAX_SPLITS 1024
 #endif
 
 #ifndef GGML_SCHED_MAX_SPLIT_INPUTS
@@ -1138,6 +1146,7 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
     }
 
     // assign nodes that use weights to the backend of the weights
+    // operations with weights are preferably run on the same backend as the weights
     for (int i = 0; i < GGML_MAX_SRC; i++) {
         const struct ggml_tensor * src = tensor->src[i];
         if (src == NULL) {
@@ -1145,7 +1154,15 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
         }
         if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
             int src_backend = ggml_backend_sched_backend_from_buffer(sched, src);
-            // operations with weights are always run on the same backend as the weights
+            // check if a backend with higher prio wants to run the op
+            if (src_backend == sched->n_backends - 1) {
+                for (int b = 0; b < src_backend; b++) {
+                    if (ggml_backend_offload_op(sched->backends[b], tensor)) {
+                        SET_CAUSE(tensor, "1.off");
+                        return b;
+                    }
+                }
+            }
             SET_CAUSE(tensor, "1.wgt%d", i);
             return src_backend;
         }
@@ -1404,7 +1421,25 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
 
             GGML_ASSERT(tensor_backend_id != -1); // all nodes should be assigned by now
 
-            if (tensor_backend_id != cur_backend_id) {
+            // check if a weight is on a different backend and start a new split if so
+            bool offload = false;
+            if (tensor_backend_id == cur_backend_id && sched->splits[cur_split].n_inputs > 0) {
+                for (int j = 0; j < GGML_MAX_SRC; j++) {
+                    struct ggml_tensor * src = node->src[j];
+                    if (src == NULL) {
+                        continue;
+                    }
+                    if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+                        int src_backend_id = tensor_backend_id(src);
+                        if (src_backend_id != -1 && src_backend_id != cur_backend_id) {
+                            offload = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (tensor_backend_id != cur_backend_id || offload) {
                 sched->splits[cur_split].i_end = i;
                 cur_split++;
                 GGML_ASSERT(cur_split < GGML_SCHED_MAX_SPLITS);

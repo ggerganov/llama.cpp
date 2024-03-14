@@ -2040,6 +2040,11 @@ struct llama_model {
             ggml_free(ctx);
         }
         for (ggml_backend_buffer_t buf : bufs) {
+#ifdef GGML_USE_CUBLAS
+            if (ggml_backend_buffer_get_type(buf) == ggml_backend_cpu_buffer_type()) {
+                ggml_backend_cuda_unregister_host_buffer(ggml_backend_buffer_get_base(buf));
+            }
+#endif
             ggml_backend_buffer_free(buf);
         }
     }
@@ -5033,6 +5038,9 @@ static bool llm_load_tensors(
             size_t first, last;
             ml.get_mapping_range(&first, &last, ctx);
             buf = ggml_backend_cpu_buffer_from_ptr((char *) ml.mapping->addr + first, last - first);
+#ifdef GGML_USE_CUBLAS
+            ggml_backend_cuda_register_host_buffer((char *) ml.mapping->addr + first, last - first);
+#endif
         }
 #ifdef GGML_USE_METAL
         else if (ml.use_mmap && buft == ggml_backend_metal_buffer_type()) {
@@ -8231,7 +8239,6 @@ struct llm_build_context {
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
-                cb(cur, "kqv_out", il);
             }
 
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
@@ -8602,14 +8609,15 @@ static struct ggml_cgraph * llama_build_graph(
 
         // norm may be automatically assigned to the backend of the previous layer, increasing data transfer between backends
         // to fix this, we assign the norm layer manually to the backend of its layer
-        if (il != -1 && strcmp(name, "norm") == 0) {
-            for (auto * backend : lctx.backends) {
-                if (ggml_backend_buft_supports_backend(lctx.model.buft_layer[il].buft, backend)) {
-                    ggml_backend_sched_set_tensor_backend(lctx.sched, cur, backend);
-                    break;
-                }
-            }
-        }
+        // FIXME: interferes with auto offloading of large batches
+        //if (il != -1 && strcmp(name, "norm") == 0) {
+        //    for (auto * backend : lctx.backends) {
+        //        if (ggml_backend_buft_supports_backend(lctx.model.buft_layer[il].buft, backend)) {
+        //            ggml_backend_sched_set_tensor_backend(lctx.sched, cur, backend);
+        //            break;
+        //        }
+        //    }
+        //}
     };
 
     struct ggml_cgraph * result = NULL;
@@ -13107,7 +13115,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(ctx->backend_metal);
         }
 #elif defined(GGML_USE_CUBLAS)
-        if (model->n_gpu_layers > 0) {
+        if (model->n_gpu_layers >= 0) { // TODO: make auto-offload configurable
             // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
             if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
                 ggml_backend_t backend = ggml_backend_cuda_init(model->main_gpu);
