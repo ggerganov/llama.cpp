@@ -112,11 +112,18 @@ int main(int argc, char ** argv) {
     // tokenize the prompts and trim
     std::vector<std::vector<int32_t>> inputs;
     for (const auto & prompt : prompts) {
-        auto inp = ::llama_tokenize(ctx, prompt, true);
+        auto inp = ::llama_tokenize(ctx, prompt, true, false);
         if (inp.size() > n_batch) {
             inp.resize(n_batch);
         }
         inputs.push_back(inp);
+    }
+
+    // add eos if not present
+    for (auto & inp : inputs) {
+        if (inp.empty() || inp.back() != llama_token_eos(model)) {
+            inp.push_back(llama_token_eos(model));
+        }
     }
 
     // tokenization stats
@@ -172,7 +179,7 @@ int main(int argc, char ** argv) {
     for (int j = 0; j < n_prompts; j++) {
         fprintf(stdout, "embedding %d: ", j);
         for (int i = 0; i < std::min(16, n_embd); i++) {
-            fprintf(stdout, "%f ", emb[j * n_embd + i]);
+            fprintf(stdout, "%9.6f ", emb[j * n_embd + i]);
         }
         fprintf(stdout, "\n");
     }
