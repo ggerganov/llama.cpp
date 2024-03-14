@@ -1877,3 +1877,16 @@ void llama_embd_normalize(const float * inp, float * out, int n) {
     }
 }
 
+float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n){
+    double sum  = 0.0;
+    double sum1 = 0.0;
+    double sum2 = 0.0;
+
+    for (int i = 0; i < n; i++) {
+        sum  += embd1[i] * embd2[i];
+        sum1 += embd1[i] * embd1[i];
+        sum2 += embd2[i] * embd2[i];
+    }
+
+    return sum / (sqrt(sum1) * sqrt(sum2));
+}

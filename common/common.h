@@ -268,3 +268,4 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40
 
 void llama_embd_normalize(const float * inp, float * out, int n);
 
+float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n);
