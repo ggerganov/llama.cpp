@@ -3474,7 +3474,7 @@ class sycl_gpu_mgr {
         std::string gpus_list = "";
 
         /*
-        Use all GPU with same top max compute units
+        Use all GPUs with same top max compute units
         */
         sycl_gpu_mgr() {
             detect_sycl_gpu_list_with_max_cu();
