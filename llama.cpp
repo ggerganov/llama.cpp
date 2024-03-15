@@ -14242,6 +14242,26 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<start_of_turn>model\n";
         }
+    } else if (tmpl == "orion" || tmpl.find("'\\n\\nAssistant: ' + eos_token") != std::string::npos) {
+        // OrionStarAI/Orion-14B-Chat
+        std::string system_prompt = "";
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                // there is no system message support, we will merge it with user prompt
+                system_prompt = message->content;
+                continue;
+            } else if (role == "user") {
+                ss << "Human: ";
+                if (!system_prompt.empty()) {
+                    ss << system_prompt << "\n\n";
+                    system_prompt = "";
+                }
+                ss << message->content << "\n\nAssistant: </s>";
+            } else {
+                ss << message->content << "</s>";
+            }
+        }
     } else {
         // template not supported
         return -1;
