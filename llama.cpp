@@ -1876,8 +1876,8 @@ struct llama_control_vector {
     std::vector<struct ggml_context *> ctxs;
     std::vector<ggml_backend_buffer_t> bufs;
 
-    int32_t layer_start = 0;
-    int32_t layer_end   = 0;
+    int32_t layer_start = -1;
+    int32_t layer_end   = -1;
 
     ggml_tensor * tensor_for(int il) const {
         if (il < 0 || il < layer_start || il > layer_end || (size_t) il >= tensors.size()) {
@@ -13342,6 +13342,13 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
 int32_t llama_control_vector_apply(struct llama_context * lctx, const float * data, size_t len, int32_t n_embd, int32_t il_start, int32_t il_end) {
     const llama_model & model = lctx->model;
     llama_control_vector & cvec = lctx->cvec;
+
+    if (data == nullptr) {
+        // disable the current control vector (but leave allocated for later)
+        cvec.layer_start = -1;
+        cvec.layer_end   = -1;
+        return 0;
+    }
 
     if (n_embd != (int) model.hparams.n_embd) {
         LLAMA_LOG_ERROR("%s: control vector n_embd does not match model\n", __func__);
