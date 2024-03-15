@@ -361,6 +361,9 @@ class GGUFWriter:
     def add_clamp_kqv(self, value: float) -> None:
         self.add_float32(Keys.Attention.CLAMP_KQV.format(arch=self.arch), value)
 
+    def add_logit_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.LOGIT_SCALE.format(arch=self.arch), value)
+
     def add_expert_count(self, count: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_COUNT.format(arch=self.arch), count)
 

@@ -112,6 +112,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
 - [x] [Mamba](https://github.com/state-spaces/mamba)
+- [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
 
 **Multimodal models:**
 

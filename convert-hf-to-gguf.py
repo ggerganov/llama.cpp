@@ -1965,6 +1965,23 @@ class MambaModel(Model):
             self.gguf_writer.add_tensor(new_name, data)
 
 
+@Model.register("CohereForCausalLM")
+class CommandR2Model(Model):
+    model_arch = gguf.MODEL_ARCH.COMMAND_R
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # max_position_embeddings = 8192 in config.json but model was actually
+        # trained on 128k context length
+        self.hparams["max_position_embeddings"] = self.hparams["model_max_length"]
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_logit_scale(self.hparams["logit_scale"])
+        self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
+
+
 ###### CONVERSION LOGIC ######
 
 
