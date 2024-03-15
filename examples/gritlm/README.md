@@ -21,12 +21,12 @@ not have to be performed at all.
 ### Running the example
 Download a Grit model:
 ```console
-$ curl -L https://huggingface.co/cohesionet/GritLM-7B_gguf/resolve/main/gritlm-7b_q4_1.gguf?download=true -o models/gritlm-7b_q4_1.gguf
+$ scripts/hf.sh --repo cohesionet/GritLM-7B_gguf --file gritlm-7b_q4_1.gguf
 ```
 
 Run the example using the downloaded model:
 ```console
-$ ./gritlm -m models/gritlm-7b_q4_1.gguf
+$ ./gritlm -m gritlm-7b_q4_1.gguf
 
 Cosine similarity between "Bitcoin: A Peer-to-Peer Electronic Cash System" and "A purely peer-to-peer version of electronic cash w" is: 0.605
 Cosine similarity between "Bitcoin: A Peer-to-Peer Electronic Cash System" and "All text-based language problems can be reduced to" is: 0.103
