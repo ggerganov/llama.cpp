@@ -195,6 +195,11 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_GATE_INP: (
             "layers.{bid}.feed_forward.gate",           # mixtral
             "model.layers.{bid}.block_sparse_moe.gate", # mixtral
+            "model.layers.{bid}.mlp.gate",              # qwen2moe
+        ),
+
+        MODEL_TENSOR.FFN_GATE_INP_SHARED_EXP: (
+            "model.layers.{bid}.mlp.shared_expert_gate", # qwen2moe
         ),
 
         # Feed-forward up
@@ -223,6 +228,11 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_UP_EXP: (
             "layers.{bid}.feed_forward.experts.{xid}.w3",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w3", # mixtral
+            "model.layers.{bid}.mlp.experts.{xid}.up_proj",         # qwen2moe
+        ),
+        
+        MODEL_TENSOR.FFN_UP_SHARED_EXP: (
+            "model.layers.{bid}.mlp.shared_expert.up_proj",         # qwen2moe
         ),
 
         # AWQ-activation gate
@@ -243,6 +253,11 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_GATE_EXP: (
             "layers.{bid}.feed_forward.experts.{xid}.w1",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w1", # mixtral
+            "model.layers.{bid}.mlp.experts.{xid}.gate_proj",       # qwen2moe
+        ),
+
+        MODEL_TENSOR.FFN_GATE_SHARED_EXP: (
+            "model.layers.{bid}.mlp.shared_expert.gate_proj",       # qwen2moe
         ),
 
         # Feed-forward down
@@ -270,6 +285,11 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_DOWN_EXP: (
             "layers.{bid}.feed_forward.experts.{xid}.w2",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w2", # mixtral
+            "model.layers.{bid}.mlp.experts.{xid}.down_proj",       # qwen2moe
+        ),
+
+        MODEL_TENSOR.FFN_DOWN_SHARED_EXP: (
+            "model.layers.{bid}.mlp.shared_expert.down_proj",       # qwen2moe
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
@@ -343,7 +363,7 @@ class TensorNameMap:
                 if tensor not in MODEL_TENSORS[arch]:
                     continue
                 # TODO: make this configurable
-                n_experts = 8
+                n_experts = 60
                 for xid in range(n_experts):
                     tensor_name = TENSOR_NAMES[tensor].format(bid = bid, xid = xid)
                     self.mapping[tensor_name] = (tensor, tensor_name)

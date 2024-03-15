@@ -1219,6 +1219,16 @@ class Qwen2Model(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2
 
 
+@Model.register("Qwen2MoeForCausalLM")
+class Qwen2MoeModel(Model):
+    model_arch = gguf.MODEL_ARCH.QWEN2MOE
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        if (n_experts := self.hparams.get("num_experts")) is not None:
+            self.gguf_writer.add_expert_count(n_experts)
+
+
 @Model.register("GPT2LMHeadModel")
 class GPT2Model(Model):
     model_arch = gguf.MODEL_ARCH.GPT2

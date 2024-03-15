@@ -941,7 +941,7 @@ static bool ggml_is_view_op(enum ggml_op op) {
 
 #define GGML_MAX_BACKENDS 16
 #define GGML_MAX_SPLITS 256
-#define GGML_MAX_SPLIT_INPUTS 16
+#define GGML_MAX_SPLIT_INPUTS 256
 
 struct ggml_backend_sched_split {
     int backend_id;
