@@ -674,6 +674,7 @@ extern "C" {
     LLAMA_API void llama_synchronize(struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_decode()
+    // WARNING: the following layout is only valid when the batch outputs logits for all tokens
     // The logits for the last token are stored in the last row
     // Logits for which llama_batch.logits[i] == 0 are undefined
     // Rows: n_tokens provided with llama_batch
@@ -681,10 +682,11 @@ extern "C" {
     LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 
     // Logits for the ith token. Equivalent to:
-    // llama_get_logits(ctx) + i*n_vocab
+    // llama_get_logits(ctx) + ctx->output_ids[i]*n_vocab
     LLAMA_API float * llama_get_logits_ith(struct llama_context * ctx, int32_t i);
 
     // Get all output token embeddings
+    // WARNING: only use when all outputs are requested
     // shape: [n_tokens*n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
