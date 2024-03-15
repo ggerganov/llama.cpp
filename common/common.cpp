@@ -568,6 +568,34 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.lora_base = argv[i];
+        } else if (arg == "--control-vector") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back({ 1.0f, argv[i], });
+        } else if (arg == "--control-vector-scaled") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            const char * fname = argv[i];
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back({ std::stof(argv[i]), fname, });
+        } else if (arg == "--control-vector-layer-range") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vector_layer_start = std::stoi(argv[i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vector_layer_end = std::stoi(argv[i]);
         } else if (arg == "--mmproj") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1095,6 +1123,12 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)\n");
     printf("  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
+    printf("  --control-vector FNAME\n");
+    printf("                        add a control vector\n");
+    printf("  --control-vector-scaled FNAME S\n");
+    printf("                        add a control vector with user defined scaling S\n");
+    printf("  --control-vector-layer-range START END\n");
+    printf("                        layer range to apply the control vector(s) to, start and end inclusive\n");
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
     printf("  -md FNAME, --model-draft FNAME\n");
@@ -1358,6 +1392,30 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
         llama_free_model(model);
         return std::make_tuple(nullptr, nullptr);
+    }
+
+    if (!params.control_vectors.empty()) {
+        if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
+        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
+
+        const auto cvec = llama_control_vector_load(params.control_vectors);
+        if (cvec.n_embd == -1) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+
+        int err = llama_control_vector_apply(lctx,
+                                             cvec.data.data(),
+                                             cvec.data.size(),
+                                             cvec.n_embd,
+                                             params.control_vector_layer_start,
+                                             params.control_vector_layer_end);
+        if (err) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
     }
 
     for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
@@ -1889,4 +1947,161 @@ float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n)
     }
 
     return sum / (sqrt(sum1) * sqrt(sum2));
+}
+
+//
+// Control vector utils
+//
+
+static llama_control_vector_data llama_control_vector_load_one(const llama_control_vector_load_info & load_info) {
+    int32_t n_tensors;
+
+    size_t n_bytes = 0;
+
+    uint32_t max_direction_layer = 0;
+
+    llama_control_vector_data result = { -1, {} };
+
+    // calculate size of ctx needed for tensors, ensure tensors are f32, and find max layer
+    {
+        struct ggml_init_params meta_params = {
+            /* .mem_size   = */ ggml_tensor_overhead() * 128 + ggml_graph_overhead(),
+            /* .mem_buffer = */ nullptr,
+            /* .no_alloc   = */ true,
+        };
+        ggml_context * meta_ctx = ggml_init(meta_params);
+        struct gguf_init_params meta_gguf_params = {
+            /* .no_alloc = */ true,
+            /* .ctx      = */ &meta_ctx,
+        };
+        struct gguf_context * meta_ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
+        if (!meta_ctx_gguf) {
+            fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
+            ggml_free(meta_ctx);
+            return result;
+        }
+
+        n_tensors = gguf_get_n_tensors(meta_ctx_gguf);
+        for (int i = 0; i < n_tensors; i++) {
+            std::string name = gguf_get_tensor_name(meta_ctx_gguf, i);
+
+            // split on '.'
+            size_t dotpos = name.find('.');
+            if (dotpos != std::string::npos && name.substr(0, dotpos) == "direction") {
+                try {
+                    uint32_t layer = std::stoi(name.substr(dotpos + 1));
+                    if (layer == 0) {
+                        fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
+                        ggml_free(meta_ctx);
+                        gguf_free(meta_ctx_gguf);
+                        return result;
+                    }
+                    if (layer > max_direction_layer) {
+                        max_direction_layer = layer;
+                    }
+                } catch (...) {
+                    fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
+                    ggml_free(meta_ctx);
+                    gguf_free(meta_ctx_gguf);
+                    return result;
+                }
+            }
+
+            struct ggml_tensor * tensor_meta = ggml_get_tensor(meta_ctx, name.c_str());
+            if (tensor_meta->type != GGML_TYPE_F32 || ggml_n_dims(tensor_meta) != 1) {
+                fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
+                ggml_free(meta_ctx);
+                gguf_free(meta_ctx_gguf);
+                return result;
+            }
+            if (result.n_embd == -1) {
+                result.n_embd = ggml_nelements(tensor_meta);
+            } else if (ggml_nelements(tensor_meta) != result.n_embd) {
+                fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, load_info.fname.c_str());
+                ggml_free(meta_ctx);
+                gguf_free(meta_ctx_gguf);
+                return result;
+            }
+            n_bytes += ggml_nbytes(tensor_meta);
+        }
+        ggml_free(meta_ctx);
+        gguf_free(meta_ctx_gguf);
+    }
+
+    if (n_tensors == 0) {
+        fprintf(stderr, "%s: no direction tensors found in %s\n", __func__, load_info.fname.c_str());
+        return result;
+    }
+
+    // load and scale tensors into final control vector context
+    struct ggml_init_params ggml_params = {
+        /* .mem_size   = */ ggml_tensor_overhead() * n_tensors + n_bytes,
+        /* .mem_buffer = */ nullptr,
+        /* .no_alloc   = */ false,
+    };
+    struct ggml_context * ctx = ggml_init(ggml_params);
+
+    struct gguf_init_params params = {
+        /*.no_alloc = */ false,
+        /*.ctx      = */ &ctx,
+    };
+    struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), params);
+    if (!ctx_gguf) {
+        fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
+        ggml_free(ctx);
+        return result;
+    }
+
+    // do not store data for layer 0 (it's not used)
+    result.data.resize(result.n_embd * max_direction_layer);
+
+    for (uint32_t il = 1; il <= max_direction_layer; il++) {
+        const std::string name = "direction." + std::to_string(il);
+        const ggml_tensor * tensor = ggml_get_tensor(ctx, name.c_str());
+
+        float * dst = result.data.data() + result.n_embd * (il - 1);
+
+        if (tensor) {
+            const float * src = (const float *) tensor->data;
+            for (int j = 0; j < result.n_embd; j++) {
+                dst[j] = src[j] * load_info.strength;
+            }
+        } else {
+            for (int j = 0; j < result.n_embd; j++) {
+                dst[j] = 0.0f;
+            }
+        }
+    }
+
+    return result;
+}
+
+llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos) {
+    llama_control_vector_data result = { -1, {} };
+
+    for (const auto & info : load_infos) {
+        auto cur = llama_control_vector_load_one(info);
+
+        if (cur.n_embd == -1) {
+            return result;
+        }
+        if (result.n_embd != -1 && (result.n_embd != cur.n_embd || result.data.size() != cur.data.size())) {
+            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
+            return result;
+        }
+
+        if (result.n_embd == -1) {
+            result = std::move(cur);
+        } else {
+            for (size_t i = 0; i < cur.data.size(); i++) {
+                result.data[i] += cur.data[i];
+            }
+        }
+    }
+
+    if (result.n_embd == -1) {
+        fprintf(stderr, "%s: no vectors passed\n", __func__);
+    }
+
+    return result;
 }
