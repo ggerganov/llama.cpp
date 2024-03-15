@@ -3485,7 +3485,7 @@ class sycl_gpu_mgr {
             return -1;
         }
 
-        bool can_support_multi_gpu(const sycl::device &dev) {
+        bool is_ext_oneapi_device(const sycl::device &dev) {
             sycl::backend dev_backend = dev.get_backend();
             if (dev_backend == sycl::backend::ext_oneapi_level_zero ||
                 dev_backend == sycl::backend::ext_oneapi_cuda ||
