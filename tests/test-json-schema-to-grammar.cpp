@@ -260,9 +260,60 @@ int main() {
   });
 
   run_all({
+    "object w/ required props",
+    R"""({
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "additionalProperties": false,
+      "definitions": {}
+    })""",
+    R"""(
+      a-kv ::= "\"a\"" space ":" space string
+      b-kv ::= "\"b\"" space ":" space string
+      root ::= "{" space a-kv "," space b-kv "}" space
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+    )"""
+  });
+
+  run_all({
+    "1 optional",
+    R"""({
+      "properties": {
+        "a": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    })""",
+    R"""(
+      a-kv ::= "\"a\"" space ":" space string
+      root ::= "{" space  (a-kv )? "}" space
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+    )"""
+  });
+
+  run_all({
     "optionals",
     R"""({
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "a": {
@@ -333,7 +384,6 @@ int main() {
   run_all({
     "top-level $ref",
     R"""({
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "$ref": "#/definitions/MyType",
       "definitions": {
         "MyType": {
@@ -362,4 +412,48 @@ int main() {
     )"""
   });
 
+  run_all({
+    "conflicting names",
+    R"""({
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "object",
+          "properties": {
+            "number": {
+              "type": "object",
+              "properties": {
+                "root": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "root"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "number"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "additionalProperties": false,
+      "definitions": {}
+    })""",
+    R"""(
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      number- ::= "{" space number-number-kv "}" space
+      number-kv ::= "\"number\"" space ":" space number-
+      number-number ::= "{" space number-number-root-kv "}" space
+      number-number-kv ::= "\"number\"" space ":" space number-number
+      number-number-root-kv ::= "\"root\"" space ":" space number
+      root ::= "{" space number-kv "}" space
+      space ::= " "?
+    )"""
+  });
 }

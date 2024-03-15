@@ -26,6 +26,8 @@ const DATE_RULES = {
     'date-time-string': '"\\"" date-time "\\"" space',
 };
 
+const RESERVED_NAMES = {'root': true, ...PRIMITIVE_RULES, ...DATE_RULES};
+
 const INVALID_RULE_CHARS_RE = /[^\dA-Za-z-]+/g;
 const GRAMMAR_LITERAL_ESCAPE_RE = /[\n\r"]/g;
 const GRAMMAR_RANGE_LITERAL_ESCAPE_RE = /[\n\r"\]\-\\]/g;
@@ -326,7 +328,7 @@ export class SchemaConverter {
   visit(schema, name) {
     const schemaType = schema.type;
     const schemaFormat = schema.format;
-    const ruleName = name || 'root';
+    const ruleName = name in RESERVED_NAMES ? name + '-' : name == '' ? 'root' : name;
 
     const ref = schema.$ref;
     if (ref !== undefined) {

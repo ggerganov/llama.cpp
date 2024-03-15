@@ -43,6 +43,16 @@ unordered_map<string, string> DATE_RULES = {
     {"date-time-string", "\"\\\"\" date-time \"\\\"\" space"}
 };
 
+static bool is_reserved_name(const string& name) {
+    static std::unordered_set<std::string> RESERVED_NAMES;
+    if (RESERVED_NAMES.empty()) {
+        RESERVED_NAMES.insert("root");
+        for (const auto &p : PRIMITIVE_RULES) RESERVED_NAMES.insert(p.first);
+        for (const auto &p : DATE_RULES) RESERVED_NAMES.insert(p.first);
+    }
+    return RESERVED_NAMES.find(name) != RESERVED_NAMES.end();
+}
+
 regex INVALID_RULE_CHARS_RE("[^a-zA-Z0-9-]+");
 regex GRAMMAR_LITERAL_ESCAPE_RE("[\r\n\"]");
 regex GRAMMAR_RANGE_LITERAL_ESCAPE_RE("[\r\n\"\\]\\-\\\\]");
@@ -523,7 +533,7 @@ public:
     string visit(const json& schema, const string& name) {
         json schema_type = schema.contains("type") ? schema["type"] : json();
         string schema_format = schema.contains("format") ? schema["format"].get<string>() : "";
-        string rule_name = name.empty() ? "root" : name;
+        string rule_name = is_reserved_name(name) ? name + "-" : name.empty() ? "root" : name;
 
         if (schema.contains("$ref")) {
             return _add_rule(rule_name, _resolve_ref(schema["$ref"]));

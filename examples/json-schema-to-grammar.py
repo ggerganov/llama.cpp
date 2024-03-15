@@ -35,6 +35,8 @@ DATE_RULES = {
     'date-time-string': '"\\"" date-time "\\"" space',
 }
 
+RESERVED_NAMES = set(["root", *PRIMITIVE_RULES.keys(), *DATE_RULES.keys()])
+
 INVALID_RULE_CHARS_RE = re.compile(r'[^a-zA-Z0-9-]+')
 GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"]')
 GRAMMAR_RANGE_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"\]\-\\]')
@@ -300,7 +302,7 @@ class SchemaConverter:
     def visit(self, schema, name):
         schema_type = schema.get('type')
         schema_format = schema.get('format')
-        rule_name = name or 'root'
+        rule_name = name + '-' if name in RESERVED_NAMES else name or 'root'
 
         if (ref := schema.get('$ref')) is not None:
             return self._add_rule(rule_name, self._resolve_ref(ref))
