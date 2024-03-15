@@ -329,7 +329,7 @@ int main() {
             )* "\"" space
     )"""
   });
-  
+
   run_all({
     "top-level $ref",
     R"""({
