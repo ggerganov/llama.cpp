@@ -303,7 +303,7 @@ class SchemaConverter:
         rule_name = name or 'root'
 
         if (ref := schema.get('$ref')) is not None:
-            return self._resolve_ref(ref)
+            return self._add_rule(rule_name, self._resolve_ref(ref))
 
         elif 'oneOf' in schema or 'anyOf' in schema:
             return self._add_rule(rule_name, self._generate_union_rule(name, schema.get('oneOf') or schema['anyOf']))

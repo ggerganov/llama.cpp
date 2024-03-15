@@ -84,7 +84,7 @@ int main() {
   run_all({
     .name = "exotic formats",
     .schema = R"""({
-      "prefixItems": [
+      "items": [
         { "format": "date" },
         { "format": "uuid" },
         { "format": "time" },
@@ -137,6 +137,37 @@ int main() {
     .expected = R"""(
       root ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
       space ::= " "?
+    )"""
+  });
+
+  run_all({
+    .name = "tuple1",
+    .schema = R"""({
+      "prefixItems": [{ "type": "string" }]
+    })""",
+    .expected = R"""(
+      root ::= "[" space string "]" space
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+    )"""
+  });
+
+  run_all({
+    .name = "tuple2",
+    .schema = R"""({
+      "prefixItems": [{ "type": "string" }, { "type": "number" }]
+    })""",
+    .expected = R"""(
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      root ::= "[" space string "," space number "]" space
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
     )"""
   });
 
@@ -298,4 +329,37 @@ int main() {
             )* "\"" space
     )"""
   });
+  
+  run_all({
+    .name = "top-level $ref",
+    .schema = R"""({
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$ref": "#/definitions/MyType",
+      "definitions": {
+        "MyType": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "a"
+          ],
+          "additionalProperties": false
+        }
+      }
+    })""",
+    .expected = R"""(
+      MyType ::= "{" space MyType-a-kv "}" space
+      MyType-a-kv ::= "\"a\"" space ":" space string
+      root ::= MyType
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+    )"""
+  });
+
 }

@@ -330,7 +330,7 @@ export class SchemaConverter {
 
     const ref = schema.$ref;
     if (ref !== undefined) {
-      return this._resolveRef(ref);
+      return this._addRule(ruleName, this._resolveRef(ref));
     } else if (schema.oneOf || schema.anyOf) {
       return this._addRule(ruleName, this._generateUnionRule(name, schema.oneOf || schema.anyOf));
     } else if (Array.isArray(schemaType)) {

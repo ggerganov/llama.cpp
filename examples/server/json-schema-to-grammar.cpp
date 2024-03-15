@@ -526,7 +526,7 @@ public:
         string rule_name = name.empty() ? "root" : name;
 
         if (schema.contains("$ref")) {
-            return _resolve_ref(schema["$ref"]);
+            return _add_rule(rule_name, _resolve_ref(schema["$ref"]));
         } else if (schema.contains("oneOf") || schema.contains("anyOf")) {
             vector<json> alt_schemas = schema.contains("oneOf") ? schema["oneOf"].get<vector<json>>() : schema["anyOf"].get<vector<json>>();
             return _add_rule(rule_name, _generate_union_rule(name, alt_schemas));
