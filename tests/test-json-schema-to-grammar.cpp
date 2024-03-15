@@ -13,9 +13,6 @@
 
 using namespace std;
 
-string INPUT_NAME(tmpnam(nullptr));
-string OUT_NAME(tmpnam(nullptr));
-
 static std::string trim(const std::string & source) {
     std::string s(source);
     s.erase(0,s.find_first_not_of(" \n\r\t"));
@@ -28,16 +25,16 @@ struct TestCase {
   string schema;
   string expected;
 
-  void prepare() const {
+  void write_input() const {
     ofstream f;
-    f.open(INPUT_NAME);
+    f.open("test-json-schema-input.tmp");
     f << schema.c_str();
     f.close();
   }
 
   void read_and_verify(const string& series) const {
     ostringstream actuals;
-    actuals << ifstream(OUT_NAME).rdbuf();
+    actuals << ifstream("test-grammar-output.tmp").rdbuf();
     auto actual = actuals.str();
     verify(series, actual);
   }
@@ -58,21 +55,21 @@ struct TestCase {
 
 
 static void run_py(const TestCase& tc) {
-  cerr << "# Running Python " << tc.name.c_str() << endl;
-  tc.prepare();
-  assert(std::system(("python ./examples/json-schema-to-grammar.py " + INPUT_NAME + " > " + OUT_NAME).c_str()) == 0);
+  cerr << "Testing JSON schema conversion: " << tc.name.c_str() << " (Python)" << endl;
+  tc.write_input();
+  assert(std::system("python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
   tc.read_and_verify("Python");
 }
 
 static void run_mjs(const TestCase& tc) {
-  cerr << "# Running MJS " << tc.name.c_str() << endl;
-  tc.prepare();
-  assert(std::system(("node ./tests/run-json-schema-to-grammar.mjs " + INPUT_NAME + " > " + OUT_NAME).c_str()) == 0);
+  cerr << "Testing JSON schema conversion: " << tc.name.c_str() << " (JS)" << endl;
+  tc.write_input();
+  assert(std::system("node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
   tc.read_and_verify("JavaScript");
 }
 
 static void run_cpp(const TestCase& tc) {
-  cerr << "# Running C++ " << tc.name.c_str() << endl;
+  cerr << "Testing JSON schema conversion: " << tc.name.c_str() << " (C++)" << endl;
   auto actual = json_schema_to_grammar(nlohmann::json::parse(tc.schema));
   tc.verify("C++", actual);
 }
