@@ -3451,7 +3451,7 @@ class sycl_gpu_mgr {
                 dpct::device_info prop;
                 dpct::get_device_info(prop, device);
                 if (max_compute_units == prop.get_max_compute_units() &&
-                    prop.get_major_version() == 1) {
+                    is_ext_oneapi_device(device)) {
                     gpus.push_back(id);
                     devices.push_back(device);
                     work_group_size = prop.get_max_work_group_size();
@@ -3483,6 +3483,15 @@ class sycl_gpu_mgr {
             }
             assert(false);
             return -1;
+        }
+
+        bool is_ext_oneapi_device(const sycl::device &dev) {
+            sycl::backend dev_backend = dev.get_backend();
+            if (dev_backend == sycl::backend::ext_oneapi_level_zero ||
+                dev_backend == sycl::backend::ext_oneapi_cuda ||
+                dev_backend == sycl::backend::ext_oneapi_hip)
+                return true;
+            return false;
         }
 };
 
