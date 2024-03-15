@@ -82,8 +82,8 @@ static void run_all(const TestCase& tc) {
 
 int main() {
   run_all({
-    .name = "exotic formats",
-    .schema = R"""({
+    "exotic formats",
+    R"""({
       "items": [
         { "format": "date" },
         { "format": "uuid" },
@@ -91,7 +91,7 @@ int main() {
         { "format": "date-time" }
       ]
     })""",
-    .expected = R"""(
+    R"""(
       date ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( [0-2] [0-9] | "3" [0-1] )
       date-string ::= "\"" date "\"" space
       date-time ::= date "T" time
@@ -105,11 +105,11 @@ int main() {
   });
 
   run_all({
-    .name = "string",
-    .schema = R"""({
+    "string",
+    R"""({
       "type": "string"
     })""",
-    .expected = R"""(
+    R"""(
       root ::=  "\"" (
               [^"\\] |
               "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
@@ -119,33 +119,33 @@ int main() {
   });
 
   run_all({
-    .name = "boolean",
-    .schema = R"""({
+    "boolean",
+    R"""({
       "type": "boolean"
     })""",
-    .expected = R"""(
+    R"""(
       root ::= ("true" | "false") space
       space ::= " "?
     )"""
   });
 
   run_all({
-    .name = "integer",
-    .schema = R"""({
+    "integer",
+    R"""({
       "type": "integer"
     })""",
-    .expected = R"""(
+    R"""(
       root ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
       space ::= " "?
     )"""
   });
 
   run_all({
-    .name = "tuple1",
-    .schema = R"""({
+    "tuple1",
+    R"""({
       "prefixItems": [{ "type": "string" }]
     })""",
-    .expected = R"""(
+    R"""(
       root ::= "[" space string "]" space
       space ::= " "?
       string ::=  "\"" (
@@ -156,11 +156,11 @@ int main() {
   });
 
   run_all({
-    .name = "tuple2",
-    .schema = R"""({
+    "tuple2",
+    R"""({
       "prefixItems": [{ "type": "string" }, { "type": "number" }]
     })""",
-    .expected = R"""(
+    R"""(
       number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
       root ::= "[" space string "," space number "]" space
       space ::= " "?
@@ -172,25 +172,25 @@ int main() {
   });
 
   run_all({
-    .name = "number",
-    .schema = R"""({
+    "number",
+    R"""({
       "type": "number"
     })""",
-    .expected = R"""(
+    R"""(
       root ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
       space ::= " "?
     )"""
   });
 
   run_all({
-    .name = "minItems",
-    .schema = R"""({
+    "minItems",
+    R"""({
       "items": {
         "type": "boolean"
       },
       "minItems": 2
     })""",
-    .expected = R"""(
+    R"""(
       boolean ::= ("true" | "false") space
       root ::= "[" space boolean ( "," space boolean )( "," space boolean )* "]" space
       space ::= " "?
@@ -198,14 +198,14 @@ int main() {
   });
 
   run_all({
-    .name = "maxItems 1",
-    .schema = R"""({
+    "maxItems 1",
+    R"""({
       "items": {
         "type": "boolean"
       },
       "maxItems": 1
     })""",
-    .expected = R"""(
+    R"""(
       boolean ::= ("true" | "false") space
       root ::= "[" space ( boolean  )? "]" space
       space ::= " "?
@@ -213,14 +213,14 @@ int main() {
   });
 
   run_all({
-    .name = "maxItems 2",
-    .schema = R"""({
+    "maxItems 2",
+    R"""({
       "items": {
         "type": "boolean"
       },
       "maxItems": 2
     })""",
-    .expected = R"""(
+    R"""(
       boolean ::= ("true" | "false") space
       root ::= "[" space ( boolean ( "," space boolean )? )? "]" space
       space ::= " "?
@@ -228,15 +228,15 @@ int main() {
   });
 
   run_all({
-    .name = "min + maxItems",
-    .schema = R"""({
+    "min + maxItems",
+    R"""({
       "items": {
         "type": ["number", "integer"]
       },
       "minItems": 3,
       "maxItems": 5
     })""",
-    .expected = R"""(
+    R"""(
       integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
       item ::= number | integer
       number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
@@ -246,12 +246,12 @@ int main() {
   });
 
   run_all({
-    .name = "regexp",
-    .schema = R"""({
+    "regexp",
+    R"""({
       "type": "string",
       "pattern": "^(\\([0-9]{1,3}\\))?[0-9]{3}-[0-9]{4} and...$"
     })""",
-    .expected = R"""(
+    R"""(
       dot ::= [\U00000000-\x09\x0B\x0C\x0E-\U0010FFFF]
       root ::= ("(" root-1 root-1? root-1? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " and" dot dot dot
       root-1 ::= [0-9]
@@ -260,8 +260,8 @@ int main() {
   });
 
   run_all({
-    .name = "optionals",
-    .schema = R"""({
+    "optionals",
+    R"""({
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
@@ -307,7 +307,7 @@ int main() {
       "additionalProperties": false,
       "definitions": {}
     })""",
-    .expected = R"""(
+    R"""(
       a-kv ::= "\"a\"" space ":" space string
       b-kv ::= "\"b\"" space ":" space string
       c ::= number | string
@@ -331,8 +331,8 @@ int main() {
   });
   
   run_all({
-    .name = "top-level $ref",
-    .schema = R"""({
+    "top-level $ref",
+    R"""({
       "$schema": "http://json-schema.org/draft-07/schema#",
       "$ref": "#/definitions/MyType",
       "definitions": {
@@ -350,7 +350,7 @@ int main() {
         }
       }
     })""",
-    .expected = R"""(
+    R"""(
       MyType ::= "{" space MyType-a-kv "}" space
       MyType-a-kv ::= "\"a\"" space ":" space string
       root ::= MyType
