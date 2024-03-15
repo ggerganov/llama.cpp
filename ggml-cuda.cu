@@ -10755,6 +10755,8 @@ static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
 };
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
+    ggml_init_cublas();
+
     // FIXME: this is not thread safe
     if (device >= ggml_backend_cuda_get_device_count()) {
         return nullptr;
@@ -11039,6 +11041,8 @@ static ggml_backend_buffer_type_i ggml_backend_cuda_split_buffer_type_interface 
 };
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_split_buffer_type(const float * tensor_split) {
+    ggml_init_cublas();
+
     // FIXME: this is not thread safe
     static std::map<std::array<float, GGML_CUDA_MAX_DEVICES>, struct ggml_backend_buffer_type> buft_map;
 
@@ -11389,15 +11393,9 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
 }
 
 GGML_CALL static bool ggml_backend_cuda_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
-    const ggml_tensor * dst = op;
-
     const int min_batch_size = 32;
 
-    if (dst->ne[1] > min_batch_size && dst->op != GGML_OP_GET_ROWS) {
-        return true;
-    }
-
-    return false;
+    return op->ne[1] > min_batch_size && op->op != GGML_OP_GET_ROWS;
 }
 
 static ggml_backend_event_t ggml_backend_cuda_event_new(ggml_backend_t backend) {
@@ -11476,7 +11474,7 @@ static ggml_guid_t ggml_backend_cuda_guid() {
 }
 
 GGML_CALL ggml_backend_t ggml_backend_cuda_init(int device) {
-    ggml_init_cublas(); // TODO: remove from ggml.c
+    ggml_init_cublas();
 
     if (device < 0 || device >= ggml_cuda_get_device_count()) {
         fprintf(stderr, "%s: error: invalid device %d\n", __func__, device);

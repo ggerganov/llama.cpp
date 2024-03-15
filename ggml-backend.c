@@ -1051,8 +1051,9 @@ struct ggml_backend_sched {
     struct ggml_cgraph * graph;
 
     // graph splits
-    struct ggml_backend_sched_split splits[GGML_SCHED_MAX_SPLITS];
+    struct ggml_backend_sched_split * splits;
     int n_splits;
+    int splits_capacity;
 
     // pipeline parallelism support
     int n_copies;
@@ -1443,6 +1444,10 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             if (node_backend_id != cur_backend_id || offload) {
                 split->i_end = i;
                 i_split++;
+                if (i_split >= sched->splits_capacity) {
+                    sched->splits_capacity *= 2;
+                    sched->splits = realloc(sched->splits, sched->splits_capacity * sizeof(struct ggml_backend_sched_split));
+                }
                 GGML_ASSERT(i_split < GGML_SCHED_MAX_SPLITS);
                 split = &sched->splits[i_split];
                 split->backend_id = node_backend_id;
@@ -1711,7 +1716,9 @@ ggml_backend_sched_t ggml_backend_sched_new(
 
     sched->n_copies = parallel ? GGML_SCHED_MAX_COPIES : 1;
 
-    GGML_ASSERT(sched->n_copies <= GGML_SCHED_MAX_COPIES);
+    const int initial_splits_capacity = 16;
+    sched->splits = calloc(sizeof(sched->splits[0]), initial_splits_capacity);
+    sched->splits_capacity = initial_splits_capacity;
 
     for (int b = 0; b < n_backends; b++) {
         sched->backends[b] = backends[b];
@@ -1742,6 +1749,7 @@ void ggml_backend_sched_free(ggml_backend_sched_t sched) {
     }
     ggml_gallocr_free(sched->galloc);
     ggml_free(sched->ctx);
+    free(sched->splits);
     free(sched->hash_set.keys);
     free(sched->tensor_backend_id);
     free(sched->tensor_copies);

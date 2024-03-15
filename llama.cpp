@@ -5039,7 +5039,11 @@ static bool llm_load_tensors(
             ml.get_mapping_range(&first, &last, ctx);
             buf = ggml_backend_cpu_buffer_from_ptr((char *) ml.mapping->addr + first, last - first);
 #ifdef GGML_USE_CUBLAS
-            ggml_backend_cuda_register_host_buffer((char *) ml.mapping->addr + first, last - first);
+            if (n_layer >= n_gpu_layers) {
+                ggml_backend_cuda_register_host_buffer(
+                        ggml_backend_buffer_get_base(buf),
+                        ggml_backend_buffer_get_size(buf));
+            }
 #endif
         }
 #ifdef GGML_USE_METAL
