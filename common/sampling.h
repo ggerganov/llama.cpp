@@ -13,6 +13,7 @@ enum class llama_sampler_type : char {
     TOP_K       = 'k',
     TOP_P       = 'p',
     MIN_P       = 'm',
+    P_STEP      = 's',
     TFS_Z       = 'f',
     TYPICAL_P   = 'y',
     TEMPERATURE = 't'
@@ -26,6 +27,7 @@ typedef struct llama_sampling_params {
     int32_t     top_k                 = 40;       // <= 0 to use vocab size
     float       top_p                 = 0.95f;    // 1.0 = disabled
     float       min_p                 = 0.05f;    // 0.0 = disabled
+    float       p_step                = 0.00f;    // 0.0 = disabled
     float       tfs_z                 = 1.00f;    // 1.0 = disabled
     float       typical_p             = 1.00f;    // 1.0 = disabled
     float       temp                  = 0.80f;    // <= 0.0 to sample greedily, 0.0 to not output probabilities
@@ -46,6 +48,7 @@ typedef struct llama_sampling_params {
         llama_sampler_type::TYPICAL_P,
         llama_sampler_type::TOP_P,
         llama_sampler_type::MIN_P,
+        llama_sampler_type::P_STEP,
         llama_sampler_type::TEMPERATURE
     };
 
