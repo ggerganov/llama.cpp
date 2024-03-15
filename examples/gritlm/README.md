@@ -1,6 +1,6 @@
 ## Generative Representational Instruction Tuning (GRIT) Example
 [gritlm] a model which can generate embeddings as well as "normal" text
-generation depending on the instructions in the prompt. 
+generation depending on the instructions in the prompt.
 
 * Paper: https://arxiv.org/pdf/2402.09906.pdf
 
