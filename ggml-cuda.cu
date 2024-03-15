@@ -9286,8 +9286,8 @@ static void ggml_cuda_op_mul_mat(
 
         used_devices++;
 
-        const bool src1_on_device = src1->backend == GGML_BACKEND_TYPE_GPU && id == g_main_device;
-        const bool  dst_on_device =  dst->backend == GGML_BACKEND_TYPE_GPU && id == g_main_device;
+        const bool src1_on_device = id == g_main_device; // TODO: check from buffer
+        const bool  dst_on_device = id == g_main_device;
 
         ggml_cuda_set_device(id);
         cudaStream_t stream = g_cudaStreams[id][0];
@@ -9338,8 +9338,8 @@ static void ggml_cuda_op_mul_mat(
                 continue;
             }
 
-            const bool src1_on_device = src1->backend == GGML_BACKEND_TYPE_GPU && id == g_main_device;
-            const bool  dst_on_device =  dst->backend == GGML_BACKEND_TYPE_GPU && id == g_main_device;
+            const bool src1_on_device = id == g_main_device; // TODO: check from buffer
+            const bool  dst_on_device = id == g_main_device;
             const int64_t row_diff = dev[id].row_high - dev[id].row_low;
 
             ggml_cuda_set_device(id);
@@ -9364,12 +9364,12 @@ static void ggml_cuda_op_mul_mat(
 
                 // the main device memory buffer can be on VRAM scratch, with space for all partial results
                 // in that case an offset on dst_ddf_i is needed
-                if (dst->backend == GGML_BACKEND_TYPE_GPU && id == g_main_device) {
+                if (id == g_main_device) {
                     dst_dd_i += dev[id].row_low; // offset is 0 if no tensor split
                 }
 
                 // copy src0, src1 to device if necessary
-                if (src1->backend == GGML_BACKEND_TYPE_GPU && src1_is_contiguous) {
+                if (src1_is_contiguous) {
                     if (id != g_main_device) {
                         if (convert_src1_to_q8_1) {
                             char * src1_ddq_i_source = dev[g_main_device].src1_ddq + src1_ddq_i_offset;
@@ -10351,17 +10351,8 @@ GGML_CALL static void ggml_cuda_set_main_device(const int main_device) {
     }
 }
 
-GGML_CALL bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
+GGML_CALL bool ggml_cuda_compute_forward(struct ggml_tensor * tensor) {
     if (!g_cublas_loaded) return false;
-
-    ggml_cuda_func_t func;
-    const bool any_on_device = tensor->backend == GGML_BACKEND_TYPE_GPU
-        || (tensor->src[0] != nullptr && (tensor->src[0]->backend == GGML_BACKEND_TYPE_GPU || tensor->src[0]->backend == GGML_BACKEND_TYPE_GPU_SPLIT))
-        || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_TYPE_GPU);
-
-    if (!any_on_device && tensor->op != GGML_OP_MUL_MAT && tensor->op != GGML_OP_MUL_MAT_ID) {
-        return false;
-    }
 
     if (tensor->op == GGML_OP_MUL_MAT) {
         if (tensor->src[0]->ne[3] != tensor->src[1]->ne[3]) {
@@ -10371,6 +10362,8 @@ GGML_CALL bool ggml_cuda_compute_forward(struct ggml_compute_params * params, st
             return false;
         }
     }
+
+    ggml_cuda_func_t func;
 
     switch (tensor->op) {
         case GGML_OP_REPEAT:
@@ -10449,15 +10442,9 @@ GGML_CALL bool ggml_cuda_compute_forward(struct ggml_compute_params * params, st
             func = ggml_cuda_rms_norm;
             break;
         case GGML_OP_MUL_MAT:
-            if (!any_on_device && !ggml_cuda_can_mul_mat(tensor->src[0], tensor->src[1], tensor)) {
-                return false;
-            }
             func = ggml_cuda_mul_mat;
             break;
         case GGML_OP_MUL_MAT_ID:
-            if (!any_on_device && !ggml_cuda_can_mul_mat(tensor->src[2], tensor->src[1], tensor)) {
-                return false;
-            }
             func = ggml_cuda_mul_mat_id;
             break;
         case GGML_OP_SCALE:
@@ -10514,12 +10501,6 @@ GGML_CALL bool ggml_cuda_compute_forward(struct ggml_compute_params * params, st
         ggml_cuda_set_peer_access(tensor->src[1]->ne[1]);
     }
 
-    if (params->ith != 0) {
-        return true;
-    }
-    if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
-        return true;
-    }
     func(tensor->src[0], tensor->src[1], tensor);
     return true;
 }
@@ -10636,13 +10617,8 @@ GGML_CALL static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t
         size_t original_size = ggml_nbytes(tensor);
         size_t padded_size = ggml_backend_buft_get_alloc_size(buffer->buft, tensor);
 
-        //printf("%s: data: %p, original: %lu, padded: %lu, diff: %lu\n", tensor->name, tensor->data, original_size, padded_size, padded_size - original_size);
-        //printf("buffer range: %p - %p\n", ctx->dev_ptr, (char *)ctx->dev_ptr + buffer->size);
-
         if (padded_size > original_size && tensor->view_src == nullptr) {
-            //CUDA_CHECK(cudaDeviceSynchronize());
-            //printf("cudaMemset(%p, %d, %ld)\n", (char *)tensor->data + original_size, 0, padded_size - original_size);
-            //CUDA_CHECK(cudaMemset((char *)tensor->data + original_size, 0, padded_size - original_size));
+            CUDA_CHECK(cudaMemset((char *)tensor->data + original_size, 0, padded_size - original_size));
         }
     }
 }
@@ -11254,9 +11230,6 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
 
     ggml_cuda_set_main_device(cuda_ctx->device);
 
-    ggml_compute_params params = {};
-    params.type = GGML_TASK_TYPE_COMPUTE;
-    params.ith = 0;
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_tensor * node = cgraph->nodes[i];
 
@@ -11278,7 +11251,7 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
         }
 #endif
 
-        bool ok = ggml_cuda_compute_forward(&params, node);
+        bool ok = ggml_cuda_compute_forward(node);
         if (!ok) {
             fprintf(stderr, "%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
         }
