@@ -548,7 +548,7 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
 
     if (!ctx->remote) {
         ggml_backend_sched_t sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(),
-                                                            (int) ctx->backends.size(), cgraph->n_nodes);
+                                                            (int) ctx->backends.size(), cgraph->n_nodes, false);
 
         ggml_backend_sched_reserve(sched, cgraph);
         ggml_backend_sched_graph_compute(sched, cgraph);
@@ -850,7 +850,7 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer
     return buffer;
 }
 
-bool ggml_backend_mpi_cpy_tensor_async(ggml_backend_t backend, const struct ggml_tensor * src, struct ggml_tensor * dst) {
+bool ggml_backend_mpi_cpy_tensor_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, const struct ggml_tensor * src, struct ggml_tensor * dst) {
 //    int src_rank = ggml_backend_mpi_buffer_rank(src->buffer);
 //    int dst_rank = ggml_backend_mpi_buffer_rank(dst->buffer);
 //
@@ -870,7 +870,8 @@ bool ggml_backend_mpi_cpy_tensor_async(ggml_backend_t backend, const struct ggml
 //    } else if (dst_rank == ggml_backend_mpi_local_rank(backend)){
 //        ggml_mpi_tensor_recv(dst, src_rank, ctx->comm);
 //    }
-    return true;
+//    fprintf(stderr, "ATTEMPTING ASYNC COPY FOR SRC TENSOR %s TO DST TENSOR %s WITH SRC BACKEND %s AND DST BACKEND %s\n", src->name, dst->name, ggml_backend_name(backend_src), ggml_backend_name(backend_dst));
+    return false;
 
 }
 

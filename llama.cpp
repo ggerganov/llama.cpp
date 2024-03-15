@@ -9012,13 +9012,15 @@ static int llama_decode_internal(
         //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
         //}
 
+#ifdef GGML_USE_MPI
+        if (ggml_mpi_rank(lctx.model.ctx_mpi) == 0) {
+#endif
+
         // extract logits
         // TODO: do not compute and extract logits if only embeddings are needed
         //       update the graphs to skip "result_output" if logits are not needed
         if (res) {
-    #ifdef GGML_USE_MPI
-        if (ggml_mpi_rank(lctx.model.ctx_mpi) == 0) {
-#endif
+
 
         ggml_backend_t backend_res = ggml_backend_sched_get_tensor_backend(lctx.sched, res);
             GGML_ASSERT(backend_res != nullptr);
@@ -9104,6 +9106,10 @@ static int llama_decode_internal(
                     } break;
             }
         }
+
+#ifdef GGML_USE_MPI
+        }
+#endif
     }
 
     // wait for the computation to finish (automatically done when obtaining the model output)
@@ -9121,9 +9127,7 @@ static int llama_decode_internal(
         }
     }
 
-#ifdef GGML_USE_MPI
-    }
-#endif
+
 
     return 0;
 }
@@ -13051,7 +13055,7 @@ struct llama_context * llama_new_context_with_model(
 
 
 //        ctx->backend_cpu = ctx->backends.back();
-        ctx->backends.push_back(ctx->backend_cpu);
+        ctx->backends.push_back(ggml_backend_mpi_init(&ctx->backend_cpu, 1, ggml_mpi_rank(model->ctx_mpi)));
 
 #endif
 
