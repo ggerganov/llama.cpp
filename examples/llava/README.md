@@ -63,12 +63,20 @@ Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` director
 ```console
 git clone https://huggingface.co/liuhaotian/llava-v1.6-vicuna-7b
 ```
-2) Use `llava-surgery-v2.py` which also supports llava-1.5 variants pytorch as well as safetensor models:
+
+2) Install the required Python packages:
+
+```sh
+pip install -r examples/llava/requirements.txt
+```
+
+3) Use `llava-surgery-v2.py` which also supports llava-1.5 variants pytorch as well as safetensor models:
 ```console
 python examples/llava/llava-surgery-v2.py -C -m ../llava-v1.6-vicuna-7b/
 ```
 - you will find a llava.projector and a llava.clip file in your model directory
-3) Copy the llava.clip file into a subdirectory (like vit), rename it to pytorch_model.bin and add a fitting vit configuration to the directory:
+
+4) Copy the llava.clip file into a subdirectory (like vit), rename it to pytorch_model.bin and add a fitting vit configuration to the directory:
 ```console
 mkdir vit
 cp ../llava-v1.6-vicuna-7b/llava.clip vit/pytorch_model.bin
@@ -76,18 +84,18 @@ cp ../llava-v1.6-vicuna-7b/llava.projector vit/
 curl -s -q https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json -o vit/config.json
 ```
 
-4) Create the visual gguf model:
+5) Create the visual gguf model:
 ```console
 python ./examples/llava/convert-image-encoder-to-gguf.py -m vit --llava-projector vit/llava.projector --output-dir vit --clip-model-is-vision
 ```
 - This is similar to llava-1.5, the difference is that we tell the encoder that we are working with the pure vision model part of CLIP
 
-5) Then convert the model to gguf format:
+6) Then convert the model to gguf format:
 ```console
 python ./convert.py ../llava-v1.6-vicuna-7b/ --skip-unknown
 ```
 
-6) And finally we can run the llava-cli using the 1.6 model version:
+7) And finally we can run the llava-cli using the 1.6 model version:
 ```console
 ./llava-cli -m ../llava-v1.6-vicuna-7b/ggml-model-f16.gguf --mmproj vit/mmproj-model-f16.gguf --image some-image.jpg -c 4096
 ```

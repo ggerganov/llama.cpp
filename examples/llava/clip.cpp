@@ -995,6 +995,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         if (!new_clip->ctx_data) {
             fprintf(stderr, "%s: ggml_init() failed\n", __func__);
             clip_free(new_clip);
+            gguf_free(ctx);
             return nullptr;
         }
 
@@ -1002,6 +1003,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         if (!fin) {
             printf("cannot open model file for loading tensors\n");
             clip_free(new_clip);
+            gguf_free(ctx);
             return nullptr;
         }
 
@@ -1023,6 +1025,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             if (!fin) {
                 printf("%s: failed to seek for tensor %s\n", __func__, name);
                 clip_free(new_clip);
+                gguf_free(ctx);
                 return nullptr;
             }
             int num_bytes = ggml_nbytes(cur);
@@ -1908,6 +1911,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
                 break;
             default:
                 printf("Please use an input file in f32 or f16\n");
+                gguf_free(ctx_out);
                 return false;
             }
 

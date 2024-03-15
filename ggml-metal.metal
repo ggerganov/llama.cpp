@@ -4,9 +4,6 @@
 
 #include <metal_stdlib>
 
-#define GGML_COMMON_IMPL_METAL
-#include "ggml-common.h"
-
 using namespace metal;
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
