@@ -3451,7 +3451,7 @@ class sycl_gpu_mgr {
                 dpct::device_info prop;
                 dpct::get_device_info(prop, device);
                 if (max_compute_units == prop.get_max_compute_units() &&
-                    can_support_multi_gpu(device)) {
+                    is_ext_oneapi_device(device)) {
                     gpus.push_back(id);
                     devices.push_back(device);
                     work_group_size = prop.get_max_work_group_size();
