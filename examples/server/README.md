@@ -213,6 +213,8 @@ node index.js
 
     `min_p`: The minimum probability for a token to be considered, relative to the probability of the most likely token (default: 0.05).
 
+    `top_a`: Limit the next token selection to a subset of tokens with a probability above a*P^2, where P is the most probable token (default: 0.0, 0.0 = disabled).
+
     `n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: -1, -1 = infinity).
 
     `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded.
