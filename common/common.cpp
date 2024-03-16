@@ -1686,7 +1686,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
             fprintf(stderr, "%s: previous model .etag file found %s: %s\n", __func__, path_model, etag);
         }
 
-        auto *f_last_modified = fopen(last_modified_path, "r");
+        auto * f_last_modified = fopen(last_modified_path, "r");
         if (f_last_modified) {
             fgets(last_modified, sizeof(last_modified), f_last_modified);
             fclose(f_last_modified);
