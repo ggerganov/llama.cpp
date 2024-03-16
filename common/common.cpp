@@ -16,7 +16,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cinttypes>
-#ifdef HAVE_CURL
+#ifdef LLAMA_USE_CURL
 #include <curl/curl.h>
 #endif
 
@@ -1387,7 +1387,7 @@ void llama_batch_add(
     batch.n_tokens++;
 }
 
-#ifdef HAVE_CURL
+#ifdef LLAMA_USE_CURL
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model,
                                                          struct llama_model_params     params) {
     // Initialize libcurl

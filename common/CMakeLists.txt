@@ -50,7 +50,7 @@ endif()
 # Check for curl
 find_package(CURL QUIET)
 if (CURL_FOUND)
-    add_definitions(-DHAVE_CURL)
+    add_definitions(-DLLAMA_USE_CURL)
     include_directories(${CURL_INCLUDE_DIRS})
     link_libraries(${CURL_LIBRARIES})
 else()
