@@ -1735,7 +1735,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
     // If only the ETag or the Last-Modified header are different, trigger a new download
     if (strcmp(etag, headers.etag) != 0 || strcmp(last_modified, headers.last_modified) != 0) {
         // Set the output file
-        auto *outfile = fopen(path_model, "wb");
+        auto * outfile = fopen(path_model, "wb");
         if (!outfile) {
             curl_easy_cleanup(curl);
             curl_global_cleanup();
