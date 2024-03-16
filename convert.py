@@ -1167,9 +1167,9 @@ class OutputFile:
 def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileType:
     wq_type = model[gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0) + ".weight"].data_type
 
-    if output_type_str == "f32" or (output_type_str is None and wq_type == DT_F32):
+    if output_type_str == "f32" or (output_type_str is None and wq_type in (DT_F32, DT_BF16)):
         return GGMLFileType.AllF32
-    if output_type_str == "f16" or (output_type_str is None and wq_type in (DT_F16, DT_BF16)):
+    if output_type_str == "f16" or (output_type_str is None and wq_type == DT_F16):
         return GGMLFileType.MostlyF16
     if output_type_str == "q8_0":
         return GGMLFileType.MostlyQ8_0
