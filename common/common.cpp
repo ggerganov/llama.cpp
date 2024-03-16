@@ -1775,7 +1775,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
 
         // Write the new ETag to the .etag file
         if (strlen(headers.etag) > 0) {
-            auto *etag_file = fopen(etag_path, "w");
+            auto * etag_file = fopen(etag_path, "w");
             if (etag_file) {
                 fputs(headers.etag, etag_file);
                 fclose(etag_file);
