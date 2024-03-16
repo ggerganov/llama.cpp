@@ -1785,7 +1785,7 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
             if (etag_file) {
                 fputs(headers.etag, etag_file);
                 fclose(etag_file);
-                fprintf(stderr, "%s: model etag saved %s:%s\n", __func__, etag_path, headers.etag);
+                fprintf(stderr, "%s: model etag saved %s: %s\n", __func__, etag_path, headers.etag);
             }
         }
 
@@ -1795,7 +1795,7 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
             if (last_modified_file) {
                 fputs(headers.last_modified, last_modified_file);
                 fclose(last_modified_file);
-                fprintf(stderr, "%s: model last modified saved %s:%s\n", __func__, last_modified_path,
+                fprintf(stderr, "%s: model last modified saved %s: %s\n", __func__, last_modified_path,
                         headers.last_modified);
             }
         }
