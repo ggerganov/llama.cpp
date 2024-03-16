@@ -47,6 +47,16 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
+# Check for OpenSSL
+find_package(OpenSSL QUIET)
+if (OPENSSL_FOUND)
+    add_definitions(-DHAVE_OPENSSL)
+    include_directories(${OPENSSL_INCLUDE_DIR})
+    link_libraries(${OPENSSL_LIBRARIES})
+else()
+    message(WARNING "OpenSSL not found. Building without model download support.")
+endif ()
+
 
 set(TARGET common)
 
