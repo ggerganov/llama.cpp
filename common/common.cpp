@@ -1388,61 +1388,157 @@ void llama_batch_add(
 }
 
 #ifdef LLAMA_USE_CURL
+
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model,
-                                                         struct llama_model_params     params) {
+                                               struct llama_model_params     params) {
     // Initialize libcurl globally
     curl_global_init(CURL_GLOBAL_DEFAULT);
-    auto curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
 
     if (!curl) {
         curl_global_cleanup();
         fprintf(stderr, "%s: error initializing lib curl\n", __func__);
-        return nullptr;
+        return NULL;
     }
 
-    // Set the URL, allow to follow http redirection and display download progress
+    // Set the URL, allow to follow http redirection
     curl_easy_setopt(curl, CURLOPT_URL, model_url);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
 
-    // Set the output file
-    auto outfile = fopen(path_model, "wb");
-    if (!outfile) {
-        curl_easy_cleanup(curl);
-        curl_global_cleanup();
-        fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path_model);
-        return nullptr;
+    // Check if the file already exists locally
+    struct stat buffer;
+    int file_exists = (stat(path_model, &buffer) == 0);
+
+    // If the file exists, check for an ETag file or a lastModified file
+    char etag[256] = {0};
+    char etag_path[256] = {0};
+    strcpy(etag_path, path_model);
+    strcat(etag_path, ".etag");
+
+    char last_modified[256] = {0};
+    char last_modified_path[256] = {0};
+    strcpy(last_modified_path, path_model);
+    strcat(last_modified_path, ".lastModified");
+
+    if (file_exists) {
+        FILE *f_etag = fopen(etag_path, "r");
+        if (f_etag) {
+            fgets(etag, sizeof(etag), f_etag);
+            fclose(f_etag);
+            fprintf(stderr, "%s: previous model .etag file found %s: %s\n", __func__, path_model, etag);
+        }
+
+        FILE *f_last_modified = fopen(last_modified_path, "r");
+        if (f_last_modified) {
+            fgets(last_modified, sizeof(last_modified), f_last_modified);
+            fclose(f_etag);
+            fprintf(stderr, "%s: previous model .lastModified file found %s: %s\n", __func__, last_modified_path, last_modified);
+        }
     }
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
 
-    // start the download
-    fprintf(stdout, "%s: downloading model from %s to %s ...\n", __func__, model_url, path_model);
-    auto res = curl_easy_perform(curl);
+    // Send a HEAD request to retrieve the ETag and Last-Modified headers
+    struct llama_load_model_from_url_headers {
+        char etag[256]            = {0};
+        char last_modified[256] = {0};
+    };
+    typedef size_t(*CURLOPT_HEADERFUNCTION_PTR)(char *, size_t, size_t, void *);
+    auto header_callback = [](char *buffer, size_t /*size*/, size_t n_items, void *userdata) -> size_t {
+        llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers*) userdata;
+
+        const char *etag_prefix = "etag: ";
+        if (strncmp(buffer, etag_prefix, strlen(etag_prefix)) == 0) {
+            strncpy(headers->etag, buffer + strlen(etag_prefix), n_items - strlen(etag_prefix)- 2); // Remove LRLF
+        }
+
+        const char *last_modified_prefix = "last-modified: ";
+        if (strncmp(buffer, last_modified_prefix, strlen(last_modified_prefix)) == 0) {
+            strncpy(headers->last_modified, buffer + strlen(last_modified_prefix), n_items - strlen(last_modified_prefix) - 2); // Remove LRLF
+        }
+        return n_items;
+    };
+
+    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+    llama_load_model_from_url_headers headers;
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, static_cast<CURLOPT_HEADERFUNCTION_PTR>(header_callback));
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
+
+    CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        fclose(outfile);
         curl_easy_cleanup(curl);
         curl_global_cleanup();
         fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
-        return nullptr;
+        return NULL;
     }
 
-    int http_code = 0;
-    curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (http_code < 200 || http_code >= 400) {
+    // If only the ETag or the Last-Modified header are different, trigger a new download
+    if (strcmp(etag, headers.etag) != 0 || strcmp(last_modified, headers.last_modified) != 0) {
+        // Set the output file
+        FILE *outfile = fopen(path_model, "wb");
+        if (!outfile) {
+            curl_easy_cleanup(curl);
+            curl_global_cleanup();
+            fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path_model);
+            return NULL;
+        }
+        curl_easy_setopt(curl, CURLOPT_NOBODY, 0L);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
+
+        //  display download progress
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+
+        // start the download
+        fprintf(stderr, "%s: downloading model from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__,
+                model_url, path_model, headers.etag, headers.last_modified);
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            fclose(outfile);
+            curl_easy_cleanup(curl);
+            curl_global_cleanup();
+            fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
+            return NULL;
+        }
+
+        long http_code = 0;
+        curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (http_code < 200 || http_code >= 400) {
+            fclose(outfile);
+            curl_easy_cleanup(curl);
+            curl_global_cleanup();
+            fprintf(stderr, "%s: invalid http status code failed: %ld\n", __func__, http_code);
+            return NULL;
+        }
+
+        // Clean up
         fclose(outfile);
-        curl_easy_cleanup(curl);
-        curl_global_cleanup();
-        fprintf(stderr, "%s: invalid http status code failed: %d\n", __func__, http_code);
-        return nullptr;
+
+        // Write the new ETag to the .etag file
+        if (strlen( headers.etag) > 0) {
+            FILE *etag_file = fopen(etag_path, "w");
+            if (etag_file) {
+                fputs( headers.etag, etag_file);
+                fclose(etag_file);
+                fprintf(stderr, "%s: model etag saved %s:%s\n", __func__, etag_path, etag);
+            }
+        }
+
+        // Write the new lastModified to the .etag file
+        if (strlen( headers.last_modified) > 0) {
+            FILE *last_modified_file = fopen(last_modified_path, "w");
+            if (last_modified_file) {
+                fputs(headers.last_modified, last_modified_file);
+                fclose(last_modified_file);
+                fprintf(stderr, "%s: model last modified saved %s:%s\n", __func__, last_modified_path, headers.last_modified);
+            }
+        }
     }
 
-    // Clean up
-    fclose(outfile);
     curl_easy_cleanup(curl);
     curl_global_cleanup();
 
     return llama_load_model_from_file(path_model, params);
 }
+
 #else
 
 struct llama_model *llama_load_model_from_url(const char * /*model_url*/, const char * /*path_model*/,
