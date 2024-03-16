@@ -1679,7 +1679,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
     strncat(last_modified_path, ".lastModified", 15);
 
     if (file_exists) {
-        auto *f_etag = fopen(etag_path, "r");
+        auto * f_etag = fopen(etag_path, "r");
         if (f_etag) {
             fgets(etag, sizeof(etag), f_etag);
             fclose(f_etag);
