@@ -1667,16 +1667,14 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     struct stat buffer;
     auto file_exists = (stat(path_model, &buffer) == 0);
 
-    // If the file exists, check for ${model_path}.etag or ${model_path}.lastModified files
+    // If the file exists, check for ${path_model}.etag or ${path_model}.lastModified files
     char etag[LLAMA_CURL_MAX_HEADER_LENGTH] = {0};
     char etag_path[LLAMA_CURL_MAX_PATH_LENGTH] = {0};
-    strncpy(etag_path, path_model, LLAMA_CURL_MAX_PATH_LENGTH - 6); // 6 is the length of ".etag\0"
-    strncat(etag_path, ".etag", 6);
+    snprintf(etag_path, sizeof(etag_path), "%s.etag", path_model);
 
     char last_modified[LLAMA_CURL_MAX_HEADER_LENGTH] = {0};
     char last_modified_path[LLAMA_CURL_MAX_PATH_LENGTH] = {0};
-    strncpy(last_modified_path, path_model, LLAMA_CURL_MAX_PATH_LENGTH - 15); // 15 is the length of ".lastModified\0"
-    strncat(last_modified_path, ".lastModified", 15);
+    snprintf(last_modified_path, sizeof(last_modified_path), "%s.lastModified", path_model);
 
     if (file_exists) {
         auto * f_etag = fopen(etag_path, "r");
