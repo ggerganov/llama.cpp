@@ -102,6 +102,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Download libCURL
+        id: get_libcurl
+        env:
+          CURL_VERSION: 8.6.0
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/libcurl.tar.gz -L "https://github.com/curl/curl/releases/download/v${env:CURL_VERSION}/curl-v${env:CURL_VERSION}.tar.gz"
+          mkdir $env:RUNNER_TEMP/libcurl
+          tar.exe -xvf $env:RUNNER_TEMP/libcurl.tar.gz --strip-components=1 -C $env:RUNNER_TEMP/libcurl
+
+      - name: Install libcurl
+        id: install_libcurl
+        run: |
+          cd $env:RUNNER_TEMP/libcurl
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release ;
+          cmake --build . --config Release
+          make install          
+
       - name: Build
         id: cmake_build
         run: |
