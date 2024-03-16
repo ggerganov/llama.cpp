@@ -17,18 +17,17 @@ extern "C" {
 
 #define GGML_CUDA_MAX_DEVICES       16
 
-// TODO: remove this
-GGML_API GGML_CALL int    ggml_cuda_get_device_count(void);
-GGML_API GGML_CALL void   ggml_cuda_get_device_description(int device, char * description, size_t description_size);
-
 // backend API
 GGML_API GGML_CALL ggml_backend_t ggml_backend_cuda_init(int device);
 
 GGML_API GGML_CALL bool ggml_backend_is_cuda(ggml_backend_t backend);
 
+// device buffer
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device);
+
 // split tensor buffer that splits matrices by rows across multiple devices
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_split_buffer_type(const float * tensor_split);
+
 // pinned host buffer for use with the CPU backend for faster copies between CPU and GPU
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type(void);
 

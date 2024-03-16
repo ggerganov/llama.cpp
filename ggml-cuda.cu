@@ -7791,11 +7791,11 @@ struct cuda_pool_alloc {
 
 static bool g_cublas_loaded = false;
 
-GGML_CALL bool ggml_cublas_loaded(void) {
+static bool ggml_cublas_loaded(void) {
     return g_cublas_loaded;
 }
 
-GGML_CALL void ggml_init_cublas() {
+static void ggml_init_cublas() {
     static bool initialized = false;
 
     if (!initialized) {
@@ -7884,7 +7884,7 @@ GGML_CALL void ggml_init_cublas() {
     }
 }
 
-GGML_CALL void * ggml_cuda_host_malloc(size_t size) {
+static void * ggml_cuda_host_malloc(size_t size) {
     if (getenv("GGML_CUDA_NO_PINNED") != nullptr) {
         return nullptr;
     }
@@ -7902,7 +7902,7 @@ GGML_CALL void * ggml_cuda_host_malloc(size_t size) {
     return ptr;
 }
 
-GGML_CALL void ggml_cuda_host_free(void * ptr) {
+static void ggml_cuda_host_free(void * ptr) {
     CUDA_CHECK(cudaFreeHost(ptr));
 }
 
@@ -9569,21 +9569,6 @@ static void ggml_cuda_rms_norm(const ggml_tensor * src0, const ggml_tensor * src
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_rms_norm);
 }
 
-GGML_CALL bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst) {
-    if (!g_cublas_loaded) return false;
-
-    const int64_t ne10 = src1->ne[0];
-
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
-
-    // TODO: find the optimal values for these
-    return (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
-            src1->type == GGML_TYPE_F32 &&
-             dst->type == GGML_TYPE_F32 &&
-            (ne0 >= 32 && ne1 >= 32 && ne10 >= 32);
-}
-
 static void ggml_cuda_mul_mat_vec_p021(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst){
     GGML_ASSERT(ggml_is_permuted(src0) && ggml_is_permuted(src1));
     GGML_ASSERT(src0->backend != GGML_BACKEND_TYPE_GPU_SPLIT);
@@ -10336,7 +10321,7 @@ static size_t ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_spl
     return nrows_split*ggml_row_size(tensor->type, tensor->ne[0]);
 }
 
-GGML_CALL static void ggml_cuda_set_main_device(const int main_device) {
+static void ggml_cuda_set_main_device(const int main_device) {
     if (main_device >= g_device_count) {
         fprintf(stderr, "warning: cannot set main_device=%d because there are only %d devices. Using device %d instead.\n",
                 main_device, g_device_count, g_main_device);
@@ -10351,7 +10336,7 @@ GGML_CALL static void ggml_cuda_set_main_device(const int main_device) {
     }
 }
 
-GGML_CALL bool ggml_cuda_compute_forward(struct ggml_tensor * tensor) {
+static bool ggml_cuda_compute_forward(struct ggml_tensor * tensor) {
     if (!g_cublas_loaded) return false;
 
     if (tensor->op == GGML_OP_MUL_MAT) {
@@ -10505,7 +10490,7 @@ GGML_CALL bool ggml_cuda_compute_forward(struct ggml_tensor * tensor) {
     return true;
 }
 
-GGML_CALL int ggml_cuda_get_device_count() {
+static int ggml_cuda_get_device_count() {
     int device_count;
     if (cudaGetDeviceCount(&device_count) != cudaSuccess) {
         return 0;
@@ -10513,7 +10498,7 @@ GGML_CALL int ggml_cuda_get_device_count() {
     return device_count;
 }
 
-GGML_CALL void ggml_cuda_get_device_description(int device, char * description, size_t description_size) {
+static void ggml_cuda_get_device_description(int device, char * description, size_t description_size) {
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
     snprintf(description, description_size, "%s", prop.name);
@@ -11397,6 +11382,8 @@ GGML_CALL static bool ggml_backend_cuda_offload_op(ggml_backend_t backend, const
     const int min_batch_size = 32;
 
     return op->ne[1] > min_batch_size && op->op != GGML_OP_GET_ROWS;
+
+    UNUSED(backend);
 }
 
 static ggml_backend_event_t ggml_backend_cuda_event_new(ggml_backend_t backend) {
