@@ -1703,7 +1703,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
     llama_load_model_from_url_headers headers;
     {
         typedef size_t(*CURLOPT_HEADERFUNCTION_PTR)(char *, size_t, size_t, void *);
-        auto header_callback = [](char *buffer, size_t /*size*/, size_t n_items, void *userdata) -> size_t {
+        auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
             llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
 
             const char * etag_prefix = "etag: ";
