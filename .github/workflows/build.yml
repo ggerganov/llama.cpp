@@ -33,7 +33,7 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential gcc-8
+          sudo apt-get install build-essential gcc-8 libcurl4-openssl-dev
 
       - name: Build
         id: make_build
