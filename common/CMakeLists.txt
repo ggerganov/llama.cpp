@@ -54,7 +54,7 @@ if (CURL_FOUND)
     include_directories(${CURL_INCLUDE_DIRS})
     link_libraries(${CURL_LIBRARIES})
 else()
-    message(INFO "libcurl not found. Building without model download support.")
+    message(INFO " libcurl not found. Building without model download support.")
 endif ()
 
 
