@@ -1785,7 +1785,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
 
         // Write the new lastModified to the .etag file
         if (strlen(headers.last_modified) > 0) {
-            auto *last_modified_file = fopen(last_modified_path, "w");
+            auto * last_modified_file = fopen(last_modified_path, "w");
             if (last_modified_file) {
                 fputs(headers.last_modified, last_modified_file);
                 fclose(last_modified_file);
