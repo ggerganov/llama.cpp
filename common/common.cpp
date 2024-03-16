@@ -1711,7 +1711,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
                 strncpy(headers->etag, buffer + strlen(etag_prefix), n_items - strlen(etag_prefix) - 2); // Remove LRLF
             }
 
-            const char *last_modified_prefix = "last-modified: ";
+            const char * last_modified_prefix = "last-modified: ";
             if (strncmp(buffer, last_modified_prefix, strlen(last_modified_prefix)) == 0) {
                 strncpy(headers->last_modified, buffer + strlen(last_modified_prefix),
                         n_items - strlen(last_modified_prefix) - 2); // Remove LRLF
