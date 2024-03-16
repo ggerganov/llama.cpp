@@ -43,7 +43,7 @@
 #endif
 
 #if defined(__k1om__)
-#include <immintrin.h>
+#include <ggml-phi-knc.h>
 #endif
 
 #if defined(_WIN32)
@@ -881,38 +881,7 @@ inline static float vaddvq_f32(float32x4_t v) {
 //
 
 
-#if defined(__k1om__) /* Xeon PHI Knights Corner (IMCI) */
-
-// No, we have an SIMD unit.
-// #define GGML_SIMD
-
-// This SIMD unit can work with 32 float32s at once.
-#define GGML_F32_STEP 32
-// We can fit 16 of these float32s in a single vector register.
-#define GGML_F32_EPR 16
-
-// because we are not defining GGML_SIMD, we have to do this ourself.
-#define GGML_F32_ARR (GGML_F32_STEP/GGML_F32_EPR)
-
-// our vector. 128*32=512
-typedef float float32x16_t __attribute__((vector_size (128)));
-#define GGML_F32x16              float32x16_t
-#define GGML_F32x16_ZERO		      \
-  {					      \
-  __mmask16 mask=0xFFFF;		      \
-  float32x16_t res;			      \
-  asm ("vbroadcastf32x4 [RES] {[M]}, 0[%2]"   \
-       : [RES] "=x"(res)		      \
-       : [M]   "k" mask,		      \
-         [V]   "r" 0.0f)		      \
-  return res;				      \
-  }
-//vdupq_n_f32(0.0f)
-
-#define GGML_F32_VEC        GGML_F32x16
-#define GGML_F32_VEC_ZERO   GGML_F32x16_ZERO
-
-#elif defined(__ARM_NEON) && defined(__ARM_FEATURE_FMA)
+#if defined(__ARM_NEON) && defined(__ARM_FEATURE_FMA)
 
 #define GGML_SIMD
 
@@ -1542,7 +1511,7 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
    UNUSED(by);
    UNUSED(bs);
 
-#ifdef GGML_SIMD
+#if defined(GGML_SIMD)
     float sumf = 0.0f;
     const int np = (n & ~(GGML_F32_STEP - 1));
 
@@ -1568,16 +1537,7 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
         sumf += x[i]*y[i];
     }
 #elif defined(__k1om__)
-    // our result, in the end.
-    float sumf = 0.0f;
-    // the number of vector-sized steps we will need to do.
-    const int np = (n & ~(GGML_F32_STEP - 1));
-
-    GGML_F32_VEC sum[GGML_F32_ARR] = { GGML_F32_VEC_ZERO };
-    for (int i = 0; i < 16; ++i) {
-      fprintf(stderr, "boo: %f\n",sum[0]);
-    }
-
+    float sumf = DotProduct_F32(x, y, n);
 #else
     // scalar
     ggml_float sumf = 0.0;

@@ -296,6 +296,9 @@ ifeq "${K1OM}" ""
 	# Usage SSSE3-only (Not is SSE3!)
 	#MK_CFLAGS   += -mssse3
 	#MK_CXXFLAGS += -mssse3
+else
+	OBJS         += ggml-phi-knc.o
+	MK_CFLAGS    += -march=knc -mtune=knc
 endif
 
 endif
