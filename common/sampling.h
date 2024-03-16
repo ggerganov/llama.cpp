@@ -131,6 +131,13 @@ llama_token llama_sampling_sample(
         struct llama_context * ctx_cfg,
         int idx = 0);
 
+// returns the probability that token of given id will be sampled
+llama_token_data_array llama_sampling_probability_distribution(
+        struct llama_sampling_context * ctx_sampling,
+        struct llama_context * ctx_main,
+        struct llama_context * ctx_cfg,
+        int idx = 0);
+
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,
         struct llama_context * ctx_main,

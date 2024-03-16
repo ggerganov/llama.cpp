@@ -711,6 +711,7 @@ static bool load_checkpoint_file(const char * filename, struct my_llama_model * 
 
     load_checkpoint_gguf(fctx, f_ggml_ctx, model, train);
 
+    gguf_free(fctx);
     return true;
 }
 

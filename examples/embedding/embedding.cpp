@@ -19,18 +19,7 @@ static std::vector<std::string> split_lines(const std::string & s) {
 
 static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, int seq_id) {
     for (size_t i = 0; i < tokens.size(); i++) {
-        llama_batch_add(batch, tokens[i], i, { seq_id }, false);
-    }
-}
-
-static void normalize(float * vec, float * out, int n) {
-    float norm = 0;
-    for (int i = 0; i < n; i++) {
-        norm += vec[i] * vec[i];
-    }
-    norm = sqrt(norm);
-    for (int i = 0; i < n; i++) {
-        out[i] = vec[i] / norm;
+        llama_batch_add(batch, tokens[i], i, { seq_id }, i == tokens.size() - 1);
     }
 }
 
@@ -44,11 +33,23 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
         fprintf(stderr, "%s : failed to decode\n", __func__);
     }
 
-    // normalize on copy
-    for (int k = 0; k < n_seq; k++) {
-        float * emb = llama_get_embeddings_ith(ctx, k);
-        float * out = output + k * n_embd;
-        normalize(emb, out, n_embd);
+    for (int i = 0; i < batch.n_tokens; i++) {
+        if (!batch.logits[i]) {
+            continue;
+        }
+
+        // try to get sequence embeddings - supported only when pooling_type is not NONE
+        const float * embd = llama_get_embeddings_seq(ctx, batch.seq_id[i][0]);
+        if (embd == NULL) {
+            embd = llama_get_embeddings_ith(ctx, i);
+            if (embd == NULL) {
+                fprintf(stderr, "%s: failed to get embeddings for token %d\n", __func__, i);
+                continue;
+            }
+        }
+
+        float * out = output + batch.seq_id[i][0] * n_embd;
+        llama_embd_normalize(embd, out, n_embd);
     }
 }
 
@@ -106,16 +107,23 @@ int main(int argc, char ** argv) {
 
     // max batch size
     const uint64_t n_batch = params.n_batch;
-    GGML_ASSERT(params.n_batch == params.n_ctx);
+    GGML_ASSERT(params.n_batch >= params.n_ctx);
 
     // tokenize the prompts and trim
     std::vector<std::vector<int32_t>> inputs;
     for (const auto & prompt : prompts) {
-        auto inp = ::llama_tokenize(ctx, prompt, true);
+        auto inp = ::llama_tokenize(ctx, prompt, true, false);
         if (inp.size() > n_batch) {
             inp.resize(n_batch);
         }
         inputs.push_back(inp);
+    }
+
+    // add eos if not present
+    for (auto & inp : inputs) {
+        if (inp.empty() || inp.back() != llama_token_eos(model)) {
+            inp.push_back(llama_token_eos(model));
+        }
     }
 
     // tokenization stats
@@ -132,7 +140,7 @@ int main(int argc, char ** argv) {
 
     // initialize batch
     const int n_prompts = prompts.size();
-    struct llama_batch batch = llama_batch_init(n_batch, 0, n_prompts);
+    struct llama_batch batch = llama_batch_init(n_batch, 0, 1);
 
     // allocate output
     const int n_embd = llama_n_embd(model);
@@ -145,6 +153,7 @@ int main(int argc, char ** argv) {
     for (int k = 0; k < n_prompts; k++) {
         // clamp to n_batch tokens
         auto & inp = inputs[k];
+
         const uint64_t n_toks = inp.size();
 
         // encode if at capacity
@@ -165,15 +174,26 @@ int main(int argc, char ** argv) {
     float * out = emb + p * n_embd;
     batch_decode(ctx, batch, out, s, n_embd);
 
-    // print first 3 embeddings
-    for (int j = 0; j < std::min(3, n_prompts); j++) {
-        fprintf(stderr, "embedding %d: ", j);
-        for (int i = 0; i < n_embd; i++) {
-            fprintf(stderr, "%f ", emb[j * n_embd + i]);
+    // print the first part of the embeddings
+    fprintf(stdout, "\n");
+    for (int j = 0; j < n_prompts; j++) {
+        fprintf(stdout, "embedding %d: ", j);
+        for (int i = 0; i < std::min(16, n_embd); i++) {
+            fprintf(stdout, "%9.6f ", emb[j * n_embd + i]);
         }
-        fprintf(stderr, "\n\n");
+        fprintf(stdout, "\n");
     }
-    fprintf(stderr, "\n");
+
+    // print cosine similarity matrix
+    fprintf(stdout, "\n");
+    printf("cosine similarity matrix:\n\n");
+    for (int i = 0; i < n_prompts; i++) {
+        for (int j = 0; j < n_prompts; j++) {
+            float sim = llama_embd_similarity_cos(emb + i * n_embd, emb + j * n_embd, n_embd);
+            fprintf(stdout, "%6.2f ", sim);
+        }
+        fprintf(stdout, "\n");
+    }
 
     // clean up
     llama_print_timings(ctx);

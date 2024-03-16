@@ -196,9 +196,6 @@ class GGUFWriter:
         if self.state is not WriterState.EMPTY:
             raise ValueError(f'Expected output file to be empty, got {self.state}')
 
-        if raw_dtype is None and tensor_dtype not in (np.float32, np.float16):
-            raise ValueError("Only F32 and F16 tensors are supported for now")
-
         encoded_name = name.encode("utf8")
         self.ti_data += self._pack("Q", len(encoded_name))
         self.ti_data += encoded_name
@@ -207,7 +204,22 @@ class GGUFWriter:
         for i in range(n_dims):
             self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
-            dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
+            if tensor_dtype == np.float16:
+                dtype = GGMLQuantizationType.F16
+            elif tensor_dtype == np.float32:
+                dtype = GGMLQuantizationType.F32
+            elif tensor_dtype == np.float64:
+                dtype = GGMLQuantizationType.F64
+            elif tensor_dtype == np.int8:
+                dtype = GGMLQuantizationType.I8
+            elif tensor_dtype == np.int16:
+                dtype = GGMLQuantizationType.I16
+            elif tensor_dtype == np.int32:
+                dtype = GGMLQuantizationType.I32
+            elif tensor_dtype == np.int64:
+                dtype = GGMLQuantizationType.I64
+            else:
+                raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
             dtype = raw_dtype
         self.ti_data += self._pack("I", dtype)
@@ -313,6 +325,9 @@ class GGUFWriter:
         self.data_alignment = alignment
         self.add_uint32(Keys.General.ALIGNMENT, alignment)
 
+    def add_vocab_size(self, size: int) -> None:
+        self.add_uint32(Keys.LLM.VOCAB_SIZE.format(arch=self.arch), size)
+
     def add_context_length(self, length: int) -> None:
         self.add_uint32(Keys.LLM.CONTEXT_LENGTH.format(arch=self.arch), length)
 
@@ -345,6 +360,9 @@ class GGUFWriter:
 
     def add_clamp_kqv(self, value: float) -> None:
         self.add_float32(Keys.Attention.CLAMP_KQV.format(arch=self.arch), value)
+
+    def add_logit_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.LOGIT_SCALE.format(arch=self.arch), value)
 
     def add_expert_count(self, count: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_COUNT.format(arch=self.arch), count)
@@ -381,6 +399,18 @@ class GGUFWriter:
 
     def add_rope_scaling_finetuned(self, value: bool) -> None:
         self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
+
+    def add_ssm_conv_kernel(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.CONV_KERNEL.format(arch=self.arch), value)
+
+    def add_ssm_inner_size(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.INNER_SIZE.format(arch=self.arch), value)
+
+    def add_ssm_state_size(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.STATE_SIZE.format(arch=self.arch), value)
+
+    def add_ssm_time_step_rank(self, value: int) -> None:
+        self.add_uint32(Keys.SSM.TIME_STEP_RANK.format(arch=self.arch), value)
 
     def add_tokenizer_model(self, model: str) -> None:
         self.add_string(Keys.Tokenizer.MODEL, model)
