@@ -342,10 +342,10 @@ export class SchemaConverter {
     } else if ('enum' in schema) {
       const rule = schema.enum.map(v => this._formatLiteral(v)).join(' | ');
       return this._addRule(ruleName, rule);
-    } else if ((schemaType === undefined || schemaType === 'object') && 'properties' in schema) {
+    } else if ((schemaType === undefined || schemaType === 'object') && ('properties' in schema || 'additionalProperties' in schema)) {
       const required = new Set(schema.required || []);
-      const properties = Object.entries(schema.properties);
-      return this._addRule(ruleName, this._buildObjectRule(properties, required, name));
+      const properties = Object.entries(schema.properties ?? {});
+      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, schema.additionalProperties));
     } else if ((schemaType === undefined || schemaType === 'object') && 'allOf' in schema) {
       const required = new Set();
       const properties = [];
@@ -375,14 +375,7 @@ export class SchemaConverter {
         }
       }
 
-      return this._addRule(ruleName, this._buildObjectRule(properties, required, name));
-    } else if ((schemaType === undefined || schemaType === 'object') && 'additionalProperties' in schema) {
-      const additionalProperties = typeof schema.additionalProperties === 'object' ? schema.additionalProperties : {};
-
-      const subName = `${name ?? ''}${name ? '-' : ''}additionalProperties`;
-      const valueRule = this.visit(additionalProperties, `${subName}-value`);
-      const kvRule = this._addRule(`${subName}-kv`, `string ":" space ${valueRule}`);
-      return this._addRule(ruleName, `( ${kvRule} ( "," space ${kvRule} )* )*`);
+      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, /* additionalProperties= */ false));
     } else if ((schemaType === undefined || schemaType === 'array') && ('items' in schema || 'prefixItems' in schema)) {
       const items = schema.items ?? schema.prefixItems;
       if (Array.isArray(items)) {
@@ -438,7 +431,7 @@ export class SchemaConverter {
     }
   }
 
-  _buildObjectRule(properties, required, name) {
+  _buildObjectRule(properties, required, name, additionalProperties) {
     const propOrder = this._propOrder;
     // sort by position in prop_order (if specified) then by original order
     const sortedProps = properties.map(([k]) => k).sort((a, b) => {
@@ -458,9 +451,15 @@ export class SchemaConverter {
         `${this._formatLiteral(propName)} space ":" space ${propRuleName}`
       );
     }
-
     const requiredProps = sortedProps.filter(k => required.has(k));
     const optionalProps = sortedProps.filter(k => !required.has(k));
+
+    if (typeof additionalProperties === 'object') {
+      const subName = `${name ?? ''}${name ? '-' : ''}additional`;
+      const valueRule = this.visit(additionalProperties, `${subName}-value`);
+      propKvRuleNames['*'] = this._addRule(`${subName}-kv`, `string ":" space ${valueRule}`);
+      optionalProps.push('*');
+    }
 
     let rule = '"{" space ';
     rule += requiredProps.map(k => propKvRuleNames[k]).join(' "," space ');
@@ -474,7 +473,17 @@ export class SchemaConverter {
       const getRecursiveRefs = (ks, firstIsOptional) => {
         const [k, ...rest] = ks;
         const kvRuleName = propKvRuleNames[k];
-        let res = firstIsOptional ? `( "," space ${kvRuleName} )?` : kvRuleName;
+        let res;
+        if (k === '*') {
+            res = this._addRule(
+                `${name ?? ''}${name ? '-' : ''}additional-kvs`,
+                `${kvRuleName} ( "," space ` + kvRuleName + ` )*`
+            )
+        } else if (firstIsOptional) {
+          res = `( "," space ${kvRuleName} )?`;
+        } else {
+          res = kvRuleName;
+        }
         if (rest.length > 0) {
           res += ' ' + this._addRule(
             `${name ?? ''}${name ? '-' : ''}${k}-rest`,

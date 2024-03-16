@@ -388,7 +388,12 @@ private:
         return ref_name;
     }
 
-    string _build_object_rule(const vector<pair<string, json>>& properties, const unordered_set<string>& required, const string& name) {
+    string _build_object_rule(
+        const vector<pair<string, json>>& properties,
+        const unordered_set<string>& required,
+        const string& name,
+        const json& additional_properties)
+    {
         vector<string> required_props;
         vector<string> optional_props;
         unordered_map<string, string> prop_kv_rule_names;
@@ -406,6 +411,13 @@ private:
             } else {
                 optional_props.push_back(prop_name);
             }
+        }
+        if (additional_properties.is_object()) {
+            string sub_name = name + (name.empty() ? "" : "-") + "additional";
+            string value_rule = visit(additional_properties, sub_name + "-value");
+            string kv_rule = _add_rule(sub_name + "-kv", "string \":\" space " + value_rule);
+            prop_kv_rule_names["*"] = kv_rule;
+            optional_props.push_back("*");
         }
 
         string rule = "\"{\" space ";
@@ -429,7 +441,12 @@ private:
                 }
                 string k = ks[0];
                 string kv_rule_name = prop_kv_rule_names[k];
-                if (first_is_optional) {
+                if (k == "*") {
+                    res = _add_rule(
+                        name + (name.empty() ? "" : "-") + "additional-kvs",
+                        kv_rule_name + " ( \",\" space " + kv_rule_name + " )*"
+                    );
+                } else if (first_is_optional) {
                     res = "( \",\" space " + kv_rule_name + " )?";
                 } else {
                     res = kv_rule_name;
@@ -554,7 +571,8 @@ public:
                 enum_values.push_back(_format_literal(v.dump()));
             }
             return _add_rule(rule_name, join(enum_values.begin(), enum_values.end(), " | "));
-        } else if ((schema_type.is_null() || schema_type == "object") && schema.contains("properties")) {
+        } else if ((schema_type.is_null() || schema_type == "object")
+                && (schema.contains("properties") || schema.contains("additionalProperties"))) {
             unordered_set<string> required;
             if (schema.contains("required") && schema["required"].is_array()) {
                 for (const auto& item : schema["required"]) {
@@ -564,10 +582,12 @@ public:
                 }
             }
             vector<pair<string, json>> properties;
-            for (const auto& prop : schema["properties"].items()) {
-                properties.emplace_back(prop.key(), prop.value());
+            if (schema.contains("properties")) {
+                for (const auto& prop : schema["properties"].items()) {
+                    properties.emplace_back(prop.key(), prop.value());
+                }
             }
-            return _add_rule(rule_name, _build_object_rule(properties, required, name));
+            return _add_rule(rule_name, _build_object_rule(properties, required, name, schema["additionalProperties"]));
         } else if ((schema_type.is_null() || schema_type == "object") && schema.contains("allOf")) {
             unordered_set<string> required;
             vector<pair<string, json>> properties;
@@ -595,16 +615,7 @@ public:
                     add_component(t, true);
                 }
             }
-            return _add_rule(rule_name, _build_object_rule(properties, required, hybrid_name));
-        } else if ((schema_type.is_null() || schema_type == "object") && schema.contains("additionalProperties")) {
-            json additional_properties = schema["additionalProperties"];
-            if (!additional_properties.is_object()) {
-                additional_properties = json::object();
-            }
-            string sub_name = name + (name.empty() ? "" : "-") + "additionalProperties";
-            string value_rule = visit(additional_properties, sub_name + "-value");
-            string kv_rule = _add_rule(sub_name + "-kv", "string \":\" space " + value_rule);
-            return _add_rule(rule_name, "( " + kv_rule + " ( \",\" space " + kv_rule + " )* )*");
+            return _add_rule(rule_name, _build_object_rule(properties, required, hybrid_name, json()));
         } else if ((schema_type.is_null() || schema_type == "array") && (schema.contains("items") || schema.contains("prefixItems"))) {
             json items = schema.contains("items") ? schema["items"] : schema["prefixItems"];
             if (items.is_array()) {
@@ -656,7 +667,7 @@ public:
             }
             return schema_format + "-string";
         } else {
-            if (PRIMITIVE_RULES.find(schema_type.get<string>()) == PRIMITIVE_RULES.end()) {
+            if (!schema_type.is_string() || PRIMITIVE_RULES.find(schema_type.get<string>()) == PRIMITIVE_RULES.end()) {
               _errors.push_back("Unrecognized schema: " + schema.dump());
               return "";
             }

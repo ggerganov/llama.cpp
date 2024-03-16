@@ -4,7 +4,7 @@ import itertools
 import json
 import re
 import sys
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple, Union
 
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
@@ -320,10 +320,10 @@ class SchemaConverter:
             rule = ' | '.join((self._format_literal(v) for v in schema['enum']))
             return self._add_rule(rule_name, rule)
 
-        elif schema_type in (None, 'object') and 'properties' in schema:
+        elif schema_type in (None, 'object') and ('properties' in schema or 'additionalProperties' in schema):
             required = set(schema.get('required', []))
-            properties = list(schema['properties'].items())
-            return self._add_rule(rule_name, self._build_object_rule(properties, required, name))
+            properties = list(schema.get('properties', {}).items())
+            return self._add_rule(rule_name, self._build_object_rule(properties, required, name, schema.get('additionalProperties')))
 
         elif schema_type in (None, 'object') and 'allOf' in schema:
             required = set()
@@ -346,19 +346,7 @@ class SchemaConverter:
                 else:
                     add_component(t, is_required=True)
 
-            return self._add_rule(rule_name, self._build_object_rule(properties, required, hybrid_name))
-
-        elif schema_type in (None, 'object') and 'additionalProperties' in schema:
-            additional_properties = schema['additionalProperties']
-            if not isinstance(additional_properties, dict):
-                additional_properties = {}
-
-            sub_name = f'{name}{"-" if name else ""}additionalProperties'
-            value_rule = self.visit(additional_properties, f'{sub_name}-value')
-            kv_rule = self._add_rule(f'{sub_name}-kv', f'string ":" space {value_rule}')
-            return self._add_rule(
-                rule_name,
-                f'( {kv_rule} ( "," space {kv_rule} )* )*')
+            return self._add_rule(rule_name, self._build_object_rule(properties, required, hybrid_name, additional_properties=[]))
 
         elif schema_type in (None, 'array') and ('items' in schema or 'prefixItems' in schema):
             items = schema.get('items') or schema['prefixItems']
@@ -417,7 +405,7 @@ class SchemaConverter:
                 PRIMITIVE_RULES[schema_type]
             )
 
-    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str):
+    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str, additional_properties: Union[bool, Any]):
         prop_order = self._prop_order
         # sort by position in prop_order (if specified) then by original order
         sorted_props = [kv[0] for _, kv in sorted(enumerate(properties), key=lambda ikv: (prop_order.get(ikv[1][0], len(prop_order)), ikv[0]))]
@@ -429,9 +417,14 @@ class SchemaConverter:
                 f'{name}{"-" if name else ""}{prop_name}-kv',
                 fr'{self._format_literal(prop_name)} space ":" space {prop_rule_name}'
             )
-
         required_props = [k for k in sorted_props if k in required]
         optional_props = [k for k in sorted_props if k not in required]
+
+        if additional_properties:
+            sub_name = f'{name}{"-" if name else ""}additional'
+            value_rule = self.visit(additional_properties, f'{sub_name}-value')
+            prop_kv_rule_names["*"] = self._add_rule(f'{sub_name}-kv', f'string ":" space {value_rule}')
+            optional_props.append("*")
 
         rule = '"{" space '
         rule += ' "," space '.join(prop_kv_rule_names[k] for k in required_props)
@@ -444,7 +437,12 @@ class SchemaConverter:
             def get_recursive_refs(ks, first_is_optional):
                 [k, *rest] = ks
                 kv_rule_name = prop_kv_rule_names[k]
-                if first_is_optional:
+                if k == '*':
+                    res = self._add_rule(
+                        f'{name}{"-" if name else ""}additional-kvs',
+                        f'{kv_rule_name} ( "," space ' + kv_rule_name + ' )*'
+                    )
+                elif first_is_optional:
                     res = f'( "," space {kv_rule_name} )?'
                 else:
                     res = kv_rule_name

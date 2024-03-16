@@ -58,7 +58,7 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     cerr << "- " << tc.name.c_str() << endl;
     runner(tc);
   };
-  
+
   run({
     "exotic formats",
     R"""({
@@ -290,72 +290,137 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
   });
 
   run({
-    "N optionals",
+    "N optional props",
     R"""({
-      "type": "object",
       "properties": {
-        "a": {
-          "type": "string"
-        },
-        "b": {
-          "type": "string"
-        },
-        "c": {
-          "type": [
-            "number",
-            "string"
-          ]
-        },
-        "d": {
-          "type": "string"
-        },
-        "e": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "minItems": 2,
-              "items": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                }
-              ],
-              "maxItems": 2
-            }
-          }
-        }
+        "a": {"type": "string"},
+        "b": {"type": "string"},
+        "c": {"type": "string"}
       },
-      "required": [
-        "a",
-        "b"
-      ],
-      "additionalProperties": false,
-      "definitions": {}
+      "additionalProperties": false
     })""",
     R"""(
       a-kv ::= "\"a\"" space ":" space string
+      a-rest ::= ( "," space b-kv )? b-rest
       b-kv ::= "\"b\"" space ":" space string
-      c ::= number | string
-      c-kv ::= "\"c\"" space ":" space c
-      c-rest ::= ( "," space d-kv )? d-rest
-      d-kv ::= "\"d\"" space ":" space string
-      d-rest ::= ( "," space e-kv )?
-      e ::= ( e-additionalProperties-kv ( "," space e-additionalProperties-kv )* )*
-      e-additionalProperties-kv ::= string ":" space e-additionalProperties-value
-      e-additionalProperties-value ::= "[" space ( e-additionalProperties-value-item ( "," space e-additionalProperties-value-item )* )? "]" space
-      e-additionalProperties-value-item ::= "[" space string "," space number "]" space
-      e-kv ::= "\"e\"" space ":" space e
-      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
-      root ::= "{" space a-kv "," space b-kv ( "," space ( c-kv c-rest | d-kv d-rest | e-kv ) )? "}" space
+      b-rest ::= ( "," space c-kv )?
+      c-kv ::= "\"c\"" space ":" space string
+      root ::= "{" space  (a-kv a-rest | b-kv b-rest | c-kv )? "}" space
       space ::= " "?
       string ::=  "\"" (
               [^"\\] |
               "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
             )* "\"" space
+    )"""
+  });
+
+  run({
+    "required + optional props",
+    R"""({
+      "properties": {
+        "a": {"type": "string"},
+        "b": {"type": "string"},
+        "c": {"type": "string"},
+        "d": {"type": "string"}
+      },
+      "required": ["a", "b"],
+      "additionalProperties": false
+    })""",
+    R"""(
+      a-kv ::= "\"a\"" space ":" space string
+      b-kv ::= "\"b\"" space ":" space string
+      c-kv ::= "\"c\"" space ":" space string
+      c-rest ::= ( "," space d-kv )?
+      d-kv ::= "\"d\"" space ":" space string
+      root ::= "{" space a-kv "," space b-kv ( "," space ( c-kv c-rest | d-kv ) )? "}" space
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+    )"""
+  });
+
+  run({
+    "additional props",
+    R"""({
+      "type": "object",
+      "additionalProperties": {"type": "array", "items": {"type": "number"}}
+    })""",
+    R"""(
+      additional-kv ::= string ":" space additional-value
+      additional-kvs ::= additional-kv ( "," space additional-kv )*
+      additional-value ::= "[" space ( number ( "," space number )* )? "]" space
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      root ::= "{" space  (additional-kvs )? "}" space
+      space ::= " "?
+    )"""
+  });
+
+  run({
+    "required + additional props",
+    R"""({
+      "type": "object",
+      "properties": {
+        "a": {"type": "number"}
+      },
+      "required": ["a"],
+      "additionalProperties": {"type": "string"}
+    })""",
+    R"""(
+      a-kv ::= "\"a\"" space ":" space number
+      additional-kv ::= string ":" space string
+      additional-kvs ::= additional-kv ( "," space additional-kv )*
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      root ::= "{" space a-kv ( "," space ( additional-kvs ) )? "}" space
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+    )"""
+  });
+
+  run({
+    "optional + additional props",
+    R"""({
+      "type": "object",
+      "properties": {
+        "a": {"type": "number"}
+      },
+      "additionalProperties": {"type": "number"}
+    })""",
+    R"""(
+      a-kv ::= "\"a\"" space ":" space number
+      a-rest ::= additional-kvs
+      additional-kv ::= string ":" space number
+      additional-kvs ::= additional-kv ( "," space additional-kv )*
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      root ::= "{" space  (a-kv a-rest | additional-kvs )? "}" space
+      space ::= " "?
+    )"""
+  });
+
+  run({
+    "required + optional + additional props",
+    R"""({
+      "type": "object",
+      "properties": {
+        "a": {"type": "number"},
+        "b": {"type": "number"}
+      },
+      "required": ["a"],
+      "additionalProperties": {"type": "number"}
+    })""",
+    R"""(
+      a-kv ::= "\"a\"" space ":" space number
+      additional-kv ::= string ":" space number
+      additional-kvs ::= additional-kv ( "," space additional-kv )*
+      b-kv ::= "\"b\"" space ":" space number
+      b-rest ::= additional-kvs
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      root ::= "{" space a-kv ( "," space ( b-kv b-rest | additional-kvs ) )? "}" space
+      space ::= " "?
     )"""
   });
 
@@ -451,4 +516,3 @@ int main() {
     tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
   });
 }
-  
