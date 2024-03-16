@@ -2201,6 +2201,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --lora-base FNAME         optional model to use as a base for the layers modified by the LoRA adapter\n");
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
+    printf("  --http-cors-origin DOMAIN Set what origin (example.com) is allowed to access the API. Use * to allow all origins (insecure without --api-key).  If you are using the server as an API from a browser, this parameter is required. Includes localhost and 127.0.0.1 by default.");
     printf("  --path PUBLIC_PATH        path from which to serve static files (default: disabled)\n");
     printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
@@ -2257,6 +2258,17 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             sparams.hostname = argv[i];
+        } else if (arg == "--http-cors-origin") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string cors_origins = argv[i];
+            std::stringstream ss(cors_origins);
+            std::string cors_origin;
+            while (std::getline(ss, cors_origin, ',')) {
+                sparams.http_cors_origin.push_back(cors_origin);
+            }
         } else if (arg == "--path") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2772,16 +2784,33 @@ int main(int argc, char ** argv) {
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
 
     svr->set_default_headers({{"Server", "llama.cpp"}});
-
-    // CORS preflight
-    svr->Options(R"(.*)", [](const httplib::Request & req, httplib::Response & res) {
-        res.set_header("Access-Control-Allow-Origin",      req.get_header_value("Origin"));
+  
+    // Disallow CORS requests from any origin not specified in the --http-cors-origin flag
+    svr.set_pre_routing_handler([&sparams](const httplib::Request &req, httplib::Response &res) {       
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         res.set_header("Access-Control-Allow-Credentials", "true");
-        res.set_header("Access-Control-Allow-Methods",     "POST");
-        res.set_header("Access-Control-Allow-Headers",     "*");
-        return res.set_content("", "application/json; charset=utf-8");
-    });
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "*");
 
+        // Allow options so that request will return a specific error message rather than a generic CORS error
+        if (req.method == "OPTIONS") {
+            res.status = 200;
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        
+        // Check if the request is from any of the allowed origins
+        if (req.has_header("Origin") && sparams.http_cors_origin[2] != "*"){
+            if (std::find(sparams.http_cors_origin.begin(), sparams.http_cors_origin.end(), req.get_header_value("Origin")) == sparams.http_cors_origin.end()) {
+                LOG_WARNING("Request from origin not allowed.", {{"origin", req.get_header_value("Origin")}});
+                res.status = 403; // HTTP Forbidden
+                res.set_content(R"({"error": "Origin is not allowed."})", "application/json");
+                return httplib::Server::HandlerResponse::Handled;
+            }
+        }
+
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+  
     svr->set_logger(log_server_request);
 
     auto res_error = [](httplib::Response & res, json error_data) {

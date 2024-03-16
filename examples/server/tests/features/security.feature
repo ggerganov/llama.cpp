@@ -3,7 +3,7 @@
 Feature: Security
 
   Background: Server startup with an api key defined
-    Given a server listening on localhost:8080
+    Given a server listening on 127.0.0.1:8080
     And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a server api key llama.cpp
     Then  the server is starting
@@ -44,9 +44,9 @@ Feature: Security
     Then  CORS header <cors_header> is set to <cors_header_value>
 
     Examples: Headers
-      | origin          | cors_header                      | cors_header_value |
-      | localhost       | Access-Control-Allow-Origin      | localhost         |
-      | web.mydomain.fr | Access-Control-Allow-Origin      | web.mydomain.fr   |
-      | origin          | Access-Control-Allow-Credentials | true              |
-      | web.mydomain.fr | Access-Control-Allow-Methods     | POST              |
-      | web.mydomain.fr | Access-Control-Allow-Headers     | *                 |
+      | origin          | cors_header                      | cors_header_value  |
+      | localhost       | Access-Control-Allow-Origin      | localhost          |
+      | web.mydomain.fr | Access-Control-Allow-Origin      | web.mydomain.fr    |
+      | origin          | Access-Control-Allow-Credentials | true               |
+      | web.mydomain.fr | Access-Control-Allow-Methods     | GET, POST, OPTIONS |
+      | web.mydomain.fr | Access-Control-Allow-Headers     | *                  |
