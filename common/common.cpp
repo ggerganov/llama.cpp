@@ -1803,7 +1803,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
 
 #else
 
-struct llama_model *llama_load_model_from_url(const char * /*model_url*/, const char * /*path_model*/,
+struct llama_model * llama_load_model_from_url(const char * /*model_url*/, const char * /*path_model*/,
                                               struct llama_model_params /*params*/) {
     fprintf(stderr, "%s: llama.cpp built without curl support, downloading from an url not supported.\n", __func__);
     return nullptr;
