@@ -103,7 +103,7 @@ extern "C" {
         // check if the backend supports an operation
         bool (*GGML_CALL supports_op)(ggml_backend_t backend, const struct ggml_tensor * op);
 
-        // check if the backend want to run an operation, even if the weights are allocated in a CPU buffer
+        // check if the backend wants to run an operation, even if the weights are allocated in a CPU buffer
         // these should be expensive operations with large batch sizes that may benefit from running on this backend
         // even if the weight has to be copied from the CPU temporarily
         bool (*GGML_CALL offload_op)(ggml_backend_t backend, const struct ggml_tensor * op);
