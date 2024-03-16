@@ -554,7 +554,7 @@ endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
-ggml-metal.o: ggml-metal.m ggml-metal.h
+ggml-metal.o: ggml-metal.m ggml-metal.h ggml.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 ifdef LLAMA_METAL_EMBED_LIBRARY
