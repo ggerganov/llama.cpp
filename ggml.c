@@ -1510,7 +1510,7 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
    UNUSED(by);
    UNUSED(bs);
 
-#if defined(GGML_SIMD)
+#ifdef GGML_SIMD
     float sumf = 0.0f;
     const int np = (n & ~(GGML_F32_STEP - 1));
 
