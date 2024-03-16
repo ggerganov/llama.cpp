@@ -1390,7 +1390,7 @@ void llama_batch_add(
 #ifdef LLAMA_USE_CURL
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model,
                                                          struct llama_model_params     params) {
-    // Initialize libcurl
+    // Initialize libcurl globally
     curl_global_init(CURL_GLOBAL_DEFAULT);
     auto curl = curl_easy_init();
 
@@ -1400,7 +1400,7 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
         return nullptr;
     }
 
-    // Set the URL
+    // Set the URL, allow to follow http redirection and display download progress
     curl_easy_setopt(curl, CURLOPT_URL, model_url);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
