@@ -25,24 +25,10 @@ struct TestCase {
   string schema;
   string expected;
 
-  void write_input() const {
-    ofstream f;
-    f.open("test-json-schema-input.tmp");
-    f << schema.c_str();
-    f.close();
-  }
-
-  void read_and_verify(const string& series) const {
-    ostringstream actuals;
-    actuals << ifstream("test-grammar-output.tmp").rdbuf();
-    auto actual = actuals.str();
-    verify(series, actual);
-  }
-
-  void verify(const string& series, const string& actual) const {
+  void verify(const string& actual) const {
     if (trim(actual) != trim(expected)) {
       cerr << "#" << endl;
-      cerr << "# Test " << name.c_str() << " (" << series.c_str() << ") failed." << endl;
+      cerr << "# Test '" << name.c_str() << "' failed." << endl;
       cerr << "#" << endl;
       cerr << schema.c_str() << endl;
       cerr << "# EXPECTED:\n" << expected.c_str() << endl;
@@ -53,35 +39,27 @@ struct TestCase {
 
 };
 
-
-static void run_py(const TestCase& tc) {
-  cerr << "Testing JSON schema conversion: " << tc.name.c_str() << " (Python)" << endl;
-  tc.write_input();
-  assert(std::system("python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
-  tc.read_and_verify("Python");
+static void write(const string& file, const string& content) {
+  ofstream f;
+  f.open(file.c_str());
+  f << content.c_str();
+  f.close();
 }
 
-static void run_mjs(const TestCase& tc) {
-  cerr << "Testing JSON schema conversion: " << tc.name.c_str() << " (JS)" << endl;
-  tc.write_input();
-  assert(std::system("node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
-  tc.read_and_verify("JavaScript");
+static string read(const string& file) {
+  ostringstream actuals;
+  actuals << ifstream(file.c_str()).rdbuf();
+  return actuals.str();
 }
 
-static void run_cpp(const TestCase& tc) {
-  cerr << "Testing JSON schema conversion: " << tc.name.c_str() << " (C++)" << endl;
-  auto actual = json_schema_to_grammar(nlohmann::json::parse(tc.schema));
-  tc.verify("C++", actual);
-}
-
-static void run_all(const TestCase& tc) {
-  run_py(tc);
-  run_mjs(tc);
-  run_cpp(tc);
-}
-
-int main() {
-  run_all({
+static void test(const string& lang, std::function<void(const TestCase&)> runner) {
+  cerr << "Testing JSON schema conversion (" << lang.c_str() << ")" << endl;
+  auto run = [&](const TestCase& tc) {
+    cerr << "- " << tc.name.c_str() << endl;
+    runner(tc);
+  };
+  
+  run({
     "exotic formats",
     R"""({
       "items": [
@@ -104,7 +82,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "string",
     R"""({
       "type": "string"
@@ -118,7 +96,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "boolean",
     R"""({
       "type": "boolean"
@@ -129,7 +107,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "integer",
     R"""({
       "type": "integer"
@@ -140,7 +118,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "tuple1",
     R"""({
       "prefixItems": [{ "type": "string" }]
@@ -155,7 +133,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "tuple2",
     R"""({
       "prefixItems": [{ "type": "string" }, { "type": "number" }]
@@ -171,7 +149,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "number",
     R"""({
       "type": "number"
@@ -182,7 +160,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "minItems",
     R"""({
       "items": {
@@ -197,7 +175,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "maxItems 1",
     R"""({
       "items": {
@@ -212,7 +190,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "maxItems 2",
     R"""({
       "items": {
@@ -227,7 +205,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "min + maxItems",
     R"""({
       "items": {
@@ -245,7 +223,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "regexp",
     R"""({
       "type": "string",
@@ -259,8 +237,8 @@ int main() {
     )"""
   });
 
-  run_all({
-    "object w/ required props",
+  run({
+    "required props",
     R"""({
       "type": "object",
       "properties": {
@@ -290,8 +268,8 @@ int main() {
     )"""
   });
 
-  run_all({
-    "1 optional",
+  run({
+    "1 optional prop",
     R"""({
       "properties": {
         "a": {
@@ -311,8 +289,8 @@ int main() {
     )"""
   });
 
-  run_all({
-    "optionals",
+  run({
+    "N optionals",
     R"""({
       "type": "object",
       "properties": {
@@ -381,7 +359,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "top-level $ref",
     R"""({
       "$ref": "#/definitions/MyType",
@@ -412,7 +390,7 @@ int main() {
     )"""
   });
 
-  run_all({
+  run({
     "conflicting names",
     R"""({
       "type": "object",
@@ -457,3 +435,20 @@ int main() {
     )"""
   });
 }
+
+int main() {
+  test("Python", [](const TestCase& tc) {
+    write("test-json-schema-input.tmp", tc.schema);
+    assert(std::system("python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
+    tc.verify(read("test-grammar-output.tmp"));
+  });
+  test("JavaScript", [](const TestCase& tc) {
+    write("test-json-schema-input.tmp", tc.schema);
+    assert(std::system("node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
+    tc.verify(read("test-grammar-output.tmp"));
+  });
+  test("C++", [](const TestCase& tc) {
+    tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
+  });
+}
+  
