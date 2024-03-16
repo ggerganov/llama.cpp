@@ -32,6 +32,8 @@ def step_server_config(context, server_fqdn, server_port):
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
     context.model_alias = None
+    context.model_file = None
+    context.model_url = None
     context.n_batch = None
     context.n_ubatch = None
     context.n_ctx = None
@@ -63,6 +65,16 @@ def step_download_hf_model(context, hf_file, hf_repo):
     context.model_file = hf_hub_download(repo_id=hf_repo, filename=hf_file)
     if context.debug:
         print(f"model file: {context.model_file}\n")
+
+
+@step('a model file {model_file}')
+def step_model_file(context, model_file):
+    context.model_file = model_file
+
+
+@step('a model url {model_url}')
+def step_model_url(context, model_url):
+    context.model_url = model_url
 
 
 @step('a model alias {model_alias}')
@@ -1038,8 +1050,11 @@ def start_server_background(context):
     server_args = [
         '--host', server_listen_addr,
         '--port', context.server_port,
-        '--model', context.model_file
     ]
+    if context.model_file:
+        server_args.extend(['--model', context.model_file])
+    if context.model_url:
+        server_args.extend(['--model-url', context.model_url])
     if context.n_batch:
         server_args.extend(['--batch-size', context.n_batch])
     if context.n_ubatch:
