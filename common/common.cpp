@@ -1394,7 +1394,6 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     curl_global_init(CURL_GLOBAL_DEFAULT);
     auto curl = curl_easy_init();
 
-
     if (!curl) {
         curl_global_cleanup();
         fprintf(stderr, "%s: error initializing lib curl\n", __func__);
@@ -1445,11 +1444,13 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     return llama_load_model_from_file(path_model, params);
 }
 #else
-struct llama_model * llama_load_model_from_url(const char *, const char *,
-                                               struct llama_model_params) {
-    fprintf(stderr, "%s: llama.cpp built without SSL support, downloading from url not supported.\n", __func__);
+
+struct llama_model *llama_load_model_from_url(const char * /*model_url*/, const char * /*path_model*/,
+                                              struct llama_model_params /*params*/) {
+    fprintf(stderr, "%s: llama.cpp built without curl support, downloading from an url not supported.\n", __func__);
     return nullptr;
 }
+
 #endif
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
