@@ -47,14 +47,13 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
+
 # Check for curl
-find_package(CURL QUIET)
-if (CURL_FOUND)
+if (LLAMA_CURL)
+    find_package(CURL)
     add_definitions(-DLLAMA_USE_CURL)
     include_directories(${CURL_INCLUDE_DIRS})
     link_libraries(${CURL_LIBRARIES})
-else()
-    message(INFO " libcurl not found. Building without model download support.")
 endif ()
 
 

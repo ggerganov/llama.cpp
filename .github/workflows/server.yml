@@ -68,6 +68,7 @@ jobs:
           cmake .. \
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
+              -DLLAMA_CURL=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
@@ -126,7 +127,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DCURL_LIBRARY="${env:RUNNER_TEMP}/libcurl/lib/Release/libcurl_imp.lib" -DCURL_INCLUDE_DIR="${env:RUNNER_TEMP}/libcurl/include" -DLLAMA_BUILD_SERVER=ON -DCMAKE_BUILD_TYPE=Release
+          cmake .. -DLLAMA_CURL=ON -DCURL_LIBRARY="${env:RUNNER_TEMP}/libcurl/lib/Release/libcurl_imp.lib" -DCURL_INCLUDE_DIR="${env:RUNNER_TEMP}/libcurl/include" -DLLAMA_BUILD_SERVER=ON -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
 
       - name: Python setup
