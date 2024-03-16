@@ -942,7 +942,6 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
 //   number of elements to fit in a single register
 //
 
-
 #if defined(__ARM_NEON) && defined(__ARM_FEATURE_FMA)
 
 #define GGML_SIMD
