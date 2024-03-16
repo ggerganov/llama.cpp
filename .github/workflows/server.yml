@@ -57,7 +57,8 @@ jobs:
             cmake \
             python3-pip \
             wget \
-            language-pack-en
+            language-pack-en \
+            libcurl4-openssl-dev
 
       - name: Build
         id: cmake_build
