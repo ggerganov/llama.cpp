@@ -45,6 +45,8 @@ jobs:
 
       - name: Test
         id: make_test
+        env:
+          LLAMA_CURL: 1
         run: |
           CC=gcc-8 make tests -j $(nproc)
           make test -j $(nproc)
