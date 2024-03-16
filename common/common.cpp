@@ -1706,7 +1706,7 @@ struct llama_model *llama_load_model_from_url(const char *model_url, const char 
         auto header_callback = [](char *buffer, size_t /*size*/, size_t n_items, void *userdata) -> size_t {
             llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
 
-            const char *etag_prefix = "etag: ";
+            const char * etag_prefix = "etag: ";
             if (strncmp(buffer, etag_prefix, strlen(etag_prefix)) == 0) {
                 strncpy(headers->etag, buffer + strlen(etag_prefix), n_items - strlen(etag_prefix) - 2); // Remove LRLF
             }
