@@ -1391,7 +1391,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
-    printf("                            model download url (default: %s)\n", params.model_url.c_str());
+    printf("                        model download url (default: %s)\n", params.model_url.c_str());
     printf("  -md FNAME, --model-draft FNAME\n");
     printf("                        draft model for speculative decoding\n");
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
@@ -1653,18 +1653,17 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
 
     if (!curl) {
         curl_global_cleanup();
-        fprintf(stderr, "%s: error initializing lib curl\n", __func__);
+        fprintf(stderr, "%s: error initializing libcurl\n", __func__);
         return NULL;
     }
 
     // Set the URL, allow to follow http redirection
     curl_easy_setopt(curl, CURLOPT_URL, model_url);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
 
     // Check if the file already exists locally
-    struct stat buffer;
-    auto file_exists = (stat(path_model, &buffer) == 0);
+    struct stat model_file_info;
+    auto file_exists = (stat(path_model, &model_file_info) == 0);
 
     // If the file exists, check for ${path_model}.etag or ${path_model}.lastModified files
     char etag[LLAMA_CURL_MAX_HEADER_LENGTH] = {0};
@@ -1722,7 +1721,8 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
             return n_items;
         };
 
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+        curl_easy_setopt(curl, CURLOPT_NOBODY, 1L); // will trigger the HEAD verb
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L); // hide head request progress
         curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, static_cast<CURLOPT_HEADERFUNCTION_PTR>(header_callback));
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
 
@@ -1735,7 +1735,7 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
         }
     }
 
-    // If only the ETag or the Last-Modified header are different, trigger a new download
+    // If the ETag or the Last-Modified headers are different: trigger a new download
     if (strcmp(etag, headers.etag) != 0 || strcmp(last_modified, headers.last_modified) != 0) {
         // Set the output file
         auto * outfile = fopen(path_model, "wb");
@@ -1769,7 +1769,7 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
             fclose(outfile);
             curl_easy_cleanup(curl);
             curl_global_cleanup();
-            fprintf(stderr, "%s: invalid http status code failed: %ld\n", __func__, http_code);
+            fprintf(stderr, "%s: invalid http status code received: %ld\n", __func__, http_code);
             return NULL;
         }
 
@@ -1808,7 +1808,7 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
 
 struct llama_model * llama_load_model_from_url(const char * /*model_url*/, const char * /*path_model*/,
                                               struct llama_model_params /*params*/) {
-    fprintf(stderr, "%s: llama.cpp built without curl support, downloading from an url not supported.\n", __func__);
+    fprintf(stderr, "%s: llama.cpp built without libcurl, downloading from an url not supported.\n", __func__);
     return nullptr;
 }
 
