@@ -1681,17 +1681,23 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     if (file_exists) {
         auto * f_etag = fopen(etag_path, "r");
         if (f_etag) {
-            fgets(etag, sizeof(etag), f_etag);
+            if (!fgets(etag, sizeof(etag), f_etag)) {
+                fprintf(stderr, "%s: unable to read file %s\n", __func__, etag_path);
+            } else {
+                fprintf(stderr, "%s: previous model file found %s: %s\n", __func__, etag_path, etag);
+            }
             fclose(f_etag);
-            fprintf(stderr, "%s: previous model .etag file found %s: %s\n", __func__, path_model, etag);
         }
 
         auto * f_last_modified = fopen(last_modified_path, "r");
         if (f_last_modified) {
-            fgets(last_modified, sizeof(last_modified), f_last_modified);
+            if (!fgets(last_modified, sizeof(last_modified), f_last_modified)) {
+                fprintf(stderr, "%s: unable to read file %s\n", __func__, last_modified_path);
+            } else {
+                fprintf(stderr, "%s: previous model file found %s: %s\n", __func__, last_modified_path,
+                        last_modified);
+            }
             fclose(f_last_modified);
-            fprintf(stderr, "%s: previous model .lastModified file found %s: %s\n", __func__, last_modified_path,
-                    last_modified);
         }
     }
 
