@@ -887,10 +887,6 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 sep += 4;
                 kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
                 kvo.int_value = std::atol(sep);
-            } else if (strncmp(sep, "float:", 6) == 0) {
-                sep += 6;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-                kvo.float_value = std::atof(sep);
             } else if (strncmp(sep, "bool:", 5) == 0) {
                 sep += 5;
                 kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
@@ -903,6 +899,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                     invalid_param = true;
                     break;
                 }
+            } else if (strncmp(sep, "float:", 6) == 0) {
+                sep += 6;
+                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
+                kvo.float_value = std::atof(sep);
             } else {
                 fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
                 invalid_param = true;
