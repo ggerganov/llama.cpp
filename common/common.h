@@ -17,12 +17,6 @@
 #include <unordered_map>
 #include <tuple>
 
-#ifdef HAVE_OPENSSL
-#include <openssl/ssl.h>
-#include <openssl/bio.h>
-#include <openssl/err.h>
-#endif
-
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
 #else
