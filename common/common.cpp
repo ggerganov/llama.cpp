@@ -16,6 +16,9 @@
 #include <unordered_set>
 #include <vector>
 #include <cinttypes>
+#ifdef HAVE_CURL
+#include <curl/curl.h>
+#endif
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -531,6 +534,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.model = argv[i];
+        } else if (arg == "-mu" || arg == "--model-url") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model_url = argv[i];
         } else if (arg == "-md" || arg == "--model-draft") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1131,6 +1140,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        layer range to apply the control vector(s) to, start and end inclusive\n");
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
+    printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
+    printf("                            model download url (default: %s)\n", params.model_url.c_str());
     printf("  -md FNAME, --model-draft FNAME\n");
     printf("                        draft model for speculative decoding\n");
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
@@ -1376,150 +1387,70 @@ void llama_batch_add(
     batch.n_tokens++;
 }
 
+#ifdef HAVE_CURL
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model,
                                                          struct llama_model_params     params) {
-#ifdef HAVE_OPENSSL
-    // Initialize OpenSSL
-    SSL_library_init();
-    SSL_load_error_strings();
-    OpenSSL_add_all_algorithms();
+    // Initialize libcurl
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    auto curl = curl_easy_init();
 
-    // Parse the URL to extract host, path, user, and password
-    char host[256];
-    char path[256];
-    char userpass[256];
 
-    if (sscanf(model_url, "https://%255[^/]/%255s", host, path) != 2) {
-        fprintf(stderr, "%s: invalid URL format: %s\n", __func__, model_url);
+    if (!curl) {
+        curl_global_cleanup();
+        fprintf(stderr, "%s: error initializing lib curl\n", __func__);
         return nullptr;
     }
 
-    if (strstr(host, "@")) {
-        sscanf(host, "%[^@]@%s", userpass, host);
-    }
+    // Set the URL
+    curl_easy_setopt(curl, CURLOPT_URL, model_url);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
-    // Create an SSL context
-    auto ctx = SSL_CTX_new(TLS_client_method());
-    if (!ctx) {
-        fprintf(stderr, "%s: error creating SSL context\n", __func__);
-        return nullptr;
-    }
-
-    // Set up certificate verification
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
-
-    // Load trusted CA certificates based on platform
-    const char* ca_cert_path = nullptr;
-#ifdef _WIN32
-    ca_cert_path = "C:\\path\\to\\ca-certificates.crt"; // Windows path (FIXME)
-#elif __APPLE__
-    ca_cert_path = "/etc/ssl/cert.pem"; // macOS path
-#else
-    ca_cert_path = "/etc/ssl/certs/ca-certificates.crt"; // Linux path
-#endif
-
-    if (!SSL_CTX_load_verify_locations(ctx, ca_cert_path, nullptr)) {
-        fprintf(stderr, "%s: error loading CA certificates\n", __func__);
-        SSL_CTX_free(ctx);
-        return nullptr;
-    }
-
-    // Create an SSL connection
-    auto bio = BIO_new_ssl_connect(ctx);
-    if (!bio) {
-        fprintf(stderr, "%s: error creating SSL connection\n", __func__);
-        SSL_CTX_free(ctx);
-        return nullptr;
-    }
-
-    // Set the hostname
-    if (!BIO_set_conn_hostname(bio, host)) {
-        fprintf(stderr, "%s: unable to set connection hostname %s\n", __func__, host);
-        BIO_free_all(bio);
-        SSL_CTX_free(ctx);
-        return nullptr;
-    }
-
-    // Construct the HTTP request
-    char request[1024];
-    snprintf(request, sizeof(request), "GET /%s HTTP/1.1\r\nHost: %s\r\nAccept: */*\r\nUser-Agent: llama-client\r\nConnection: close\r\n", path, host);
-
-    // Add Authorization header if user credentials are available
-    if (strlen(userpass) > 0) {
-        char auth_header[256];
-        snprintf(auth_header, sizeof(auth_header), "Authorization: Basic %s\r\n", userpass);
-        strcat(request, auth_header);
-    }
-
-    // End of headers
-    strcat(request, "\r\n");
-
-    // Send the request
-    fprintf(stdout, "%s: downloading model from https://%s/%s to %s ...\n", __func__, host, path, path_model);
-    if (!BIO_puts(bio, request)) {
-        fprintf(stderr, "%s: error sending HTTP request https://%s/%s\n", __func__, host, path);
-        BIO_free_all(bio);
-        SSL_CTX_free(ctx);
-        return nullptr;
-    }
-
-    // Read the response status line
-    char status_line[256];
-    if (BIO_gets(bio, status_line, sizeof(status_line)) <= 0) {
-        fprintf(stderr, "%s: error reading response status line\n", __func__);
-        BIO_free_all(bio);
-        SSL_CTX_free(ctx);
-        return nullptr;
-    }
-
-    // Verify HTTP status code
-    if (strncmp(status_line, "HTTP/1.1 200", 12) != 0) {
-        fprintf(stderr, "%s: HTTP request failed: %s\n", __func__, status_line);
-        BIO_free_all(bio);
-        SSL_CTX_free(ctx);
-        return nullptr;
-    }
-
-    // Skip response headers
-    char buffer[4096];
-    int n_bytes_received;
-    while ((n_bytes_received = BIO_read(bio, buffer, sizeof(buffer))) > 0) {
-        // Look for the end of headers (empty line)
-        if (strstr(buffer, "\r\n\r\n")) {
-            break;
-        }
-    }
-
-    // Read and save the file content
-    FILE* outfile = fopen(path_model, "wb");
+    // Set the output file
+    auto outfile = fopen(path_model, "wb");
     if (!outfile) {
+        curl_easy_cleanup(curl);
+        curl_global_cleanup();
         fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path_model);
-        BIO_free_all(bio);
-        SSL_CTX_free(ctx);
+        return nullptr;
+    }
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
+
+    // start the download
+    fprintf(stdout, "%s: downloading model from %s to %s ...\n", __func__, model_url, path_model);
+    auto res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        fclose(outfile);
+        curl_easy_cleanup(curl);
+        curl_global_cleanup();
+        fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
         return nullptr;
     }
 
-    int n_bytes_received_total = 0;
-    while ((n_bytes_received = BIO_read(bio, buffer, sizeof(buffer))) > 0) {
-        fwrite(buffer, 1, n_bytes_received, outfile);
-        n_bytes_received_total += n_bytes_received;
-        if (n_bytes_received_total % (1024 * 1024) == 0) {
-            fprintf(stdout, "%s: model downloading %dGi %s ...\n", __func__, n_bytes_received_total / 1024 / 1024, path_model);
-        }
+    int http_code = 0;
+    curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
+    if (http_code < 200 || http_code >= 400) {
+        fclose(outfile);
+        curl_easy_cleanup(curl);
+        curl_global_cleanup();
+        fprintf(stderr, "%s: invalid http status code failed: %d\n", __func__, http_code);
+        return nullptr;
     }
-    fclose(outfile);
 
     // Clean up
-    BIO_free_all(bio);
-    SSL_CTX_free(ctx);
-    fprintf(stdout, "%s: model downloaded from https://%s/%s to %s.\n", __func__, host, path, path_model);
+    fclose(outfile);
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
 
     return llama_load_model_from_file(path_model, params);
-#else
-    LLAMA_LOG_ERROR("llama.cpp built without SSL support, downloading from url not supported.\n", __func__);
-    return nullptr;
-#endif
 }
+#else
+struct llama_model * llama_load_model_from_url(const char *, const char *,
+                                               struct llama_model_params) {
+    fprintf(stderr, "%s: llama.cpp built without SSL support, downloading from url not supported.\n", __func__);
+    return nullptr;
+}
+#endif
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
     auto mparams = llama_model_params_from_gpt_params(params);

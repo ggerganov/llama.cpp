@@ -47,14 +47,14 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
-# Check for OpenSSL
-find_package(OpenSSL QUIET)
-if (OPENSSL_FOUND)
-    add_definitions(-DHAVE_OPENSSL)
-    include_directories(${OPENSSL_INCLUDE_DIR})
-    link_libraries(${OPENSSL_LIBRARIES})
+# Check for curl
+find_package(CURL QUIET)
+if (CURL_FOUND)
+    add_definitions(-DHAVE_CURL)
+    include_directories(${CURL_INCLUDE_DIRS})
+    link_libraries(${CURL_LIBRARIES})
 else()
-    message(WARNING "OpenSSL not found. Building without model download support.")
+    message(INFO "libcurl not found. Building without model download support.")
 endif ()
 
 
