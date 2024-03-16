@@ -49,7 +49,7 @@ jobs:
           make test -j $(nproc)
 
   ubuntu-focal-make-curl:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Clone
