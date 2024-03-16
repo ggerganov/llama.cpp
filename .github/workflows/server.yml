@@ -105,28 +105,28 @@ jobs:
       - name: Download libCURL
         id: get_libcurl
         env:
+          CURL_TAG: 8_6_0
           CURL_VERSION: 8.6.0
         run: |
-          curl.exe -o $env:RUNNER_TEMP/libcurl.tar.gz -L "https://github.com/curl/curl/releases/download/v${env:CURL_VERSION}/curl-v${env:CURL_VERSION}.tar.gz"
+          curl.exe -o $env:RUNNER_TEMP/libcurl.tar.gz -L "https://github.com/curl/curl/releases/download/curl-${env:CURL_TAG}/curl-${env:CURL_VERSION}.tar.gz"
           mkdir $env:RUNNER_TEMP/libcurl
           tar.exe -xvf $env:RUNNER_TEMP/libcurl.tar.gz --strip-components=1 -C $env:RUNNER_TEMP/libcurl
 
-      - name: Install libcurl
-        id: install_libcurl
+      - name: Build libcurl
+        id: build_libcurl
         run: |
           cd $env:RUNNER_TEMP/libcurl
           mkdir build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release ;
+          cmake .. -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
-          make install          
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake ..  -DLLAMA_BUILD_SERVER=ON -DCMAKE_BUILD_TYPE=Release ;
+          cmake .. -DCURL_LIBRARY="${env:RUNNER_TEMP}/libcurl/lib/Release/libcurl_imp.lib" -DCURL_INCLUDE_DIR="${env:RUNNER_TEMP}/libcurl/include" -DLLAMA_BUILD_SERVER=ON -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
 
       - name: Python setup
