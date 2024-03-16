@@ -39,7 +39,7 @@ jobs:
         id: make_build
         env:
             LLAMA_FATAL_WARNINGS: 1
-            LLAMA_USE_CURL: 1
+            LLAMA_CURL: 1
         run: |
           CC=gcc-8 make -j $(nproc)
 
