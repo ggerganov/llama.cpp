@@ -48,15 +48,6 @@ if (BUILD_SHARED_LIBS)
 endif()
 
 
-# Check for curl
-if (LLAMA_CURL)
-    find_package(CURL)
-    add_definitions(-DLLAMA_USE_CURL)
-    include_directories(${CURL_INCLUDE_DIRS})
-    link_libraries(${CURL_LIBRARIES})
-endif ()
-
-
 set(TARGET common)
 
 add_library(${TARGET} STATIC
@@ -80,3 +71,11 @@ endif()
 target_include_directories(${TARGET} PUBLIC .)
 target_compile_features(${TARGET} PUBLIC cxx_std_11)
 target_link_libraries(${TARGET} PRIVATE build_info PUBLIC llama)
+
+# Use curl to download model url
+if (LLAMA_CURL)
+    find_package(CURL)
+    add_definitions(-DLLAMA_USE_CURL)
+    target_include_directories(${TARGET} ${CURL_INCLUDE_DIRS})
+    target_link_libraries(${TARGET} PRIVATE curl)
+endif ()

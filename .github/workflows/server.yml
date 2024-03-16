@@ -103,31 +103,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download libCURL
+      - name: libCURL
         id: get_libcurl
         env:
-          CURL_TAG: 8_6_0
-          CURL_VERSION: 8.6.0
+          CURL_VERSION: 8.6.0_6
         run: |
-          curl.exe -o $env:RUNNER_TEMP/libcurl.tar.gz -L "https://github.com/curl/curl/releases/download/curl-${env:CURL_TAG}/curl-${env:CURL_VERSION}.tar.gz"
+          curl.exe -o $env:RUNNER_TEMP/curl.zip -L "https://curl.se/windows/dl-${env:CURL_VERSION}/curl-${env:CURL_VERSION}-win64-mingw.zip"
           mkdir $env:RUNNER_TEMP/libcurl
-          tar.exe -xvf $env:RUNNER_TEMP/libcurl.tar.gz --strip-components=1 -C $env:RUNNER_TEMP/libcurl
-
-      - name: Build libcurl
-        id: build_libcurl
-        run: |
-          cd $env:RUNNER_TEMP/libcurl
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release
+          tar.exe -xvf $env:RUNNER_TEMP/curl.zip --strip-components=1 -C $env:RUNNER_TEMP/libcurl
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_CURL=ON -DCURL_LIBRARY="${env:RUNNER_TEMP}/libcurl/lib/Release/libcurl_imp.lib" -DCURL_INCLUDE_DIR="${env:RUNNER_TEMP}/libcurl/include" -DLLAMA_BUILD_SERVER=ON -DLLAMA_NATIVE=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+          cmake .. -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include" -DLLAMA_BUILD_SERVER=ON -DLLAMA_NATIVE=OFF -DBUILD_SHARED_LIBS=ON
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
 
       - name: Python setup
