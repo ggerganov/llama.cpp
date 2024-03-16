@@ -1640,7 +1640,7 @@ void llama_batch_add(
 
 #ifdef LLAMA_USE_CURL
 
-struct llama_model *llama_load_model_from_url(const char *model_url, const char *path_model,
+struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model,
                                               struct llama_model_params params) {
     // Basic validation of the model_url
     if (!model_url || strlen(model_url) == 0) {
