@@ -5,6 +5,8 @@ import os
 import re
 import socket
 import subprocess
+import sys
+import threading
 import time
 from contextlib import closing
 from re import RegexFlag
@@ -1095,10 +1097,23 @@ def start_server_background(context):
 
     pkwargs = {
         'creationflags': flags,
-        'stderr': subprocess.PIPE,
-        'stdout': subprocess.PIPE
+        'stdout': subprocess.PIPE,
+        'stderr': subprocess.PIPE
     }
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],
         **pkwargs)
+
+    def log_stdout(process):
+        for line in iter(process.stdout.readline, b''):
+            print(line.decode('utf-8'), end='')
+    thread_stdout = threading.Thread(target=log_stdout, args=(context.server_process,))
+    thread_stdout.start()
+
+    def log_stderr(process):
+        for line in iter(process.stderr.readline, b''):
+            print(line.decode('utf-8'), end='', file=sys.stderr)
+    thread_stderr = threading.Thread(target=log_stderr, args=(context.server_process,))
+    thread_stderr.start()
+
     print(f"server pid={context.server_process.pid}, behave pid={os.getpid()}")
