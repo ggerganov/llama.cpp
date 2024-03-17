@@ -151,13 +151,17 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 
+        bool arg_found = false;
         if (arg == "-s" || arg == "--seed") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.seed = std::stoul(argv[i]);
-        } else if (arg == "-t" || arg == "--threads") {
+        }
+        if (arg == "-t" || arg == "--threads") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -166,7 +170,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.n_threads <= 0) {
                 params.n_threads = std::thread::hardware_concurrency();
             }
-        } else if (arg == "-tb" || arg == "--threads-batch") {
+        }
+        if (arg == "-tb" || arg == "--threads-batch") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -175,7 +181,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.n_threads_batch <= 0) {
                 params.n_threads_batch = std::thread::hardware_concurrency();
             }
-        } else if (arg == "-td" || arg == "--threads-draft") {
+        }
+        if (arg == "-td" || arg == "--threads-draft") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -184,7 +192,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.n_threads_draft <= 0) {
                 params.n_threads_draft = std::thread::hardware_concurrency();
             }
-        } else if (arg == "-tbd" || arg == "--threads-batch-draft") {
+        }
+        if (arg == "-tbd" || arg == "--threads-batch-draft") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -193,25 +203,37 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.n_threads_batch_draft <= 0) {
                 params.n_threads_batch_draft = std::thread::hardware_concurrency();
             }
-        } else if (arg == "-p" || arg == "--prompt") {
+        }
+        if (arg == "-p" || arg == "--prompt") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.prompt = argv[i];
-        } else if (arg == "-e" || arg == "--escape") {
+        }
+        if (arg == "-e" || arg == "--escape") {
+            arg_found = true;
             params.escape = true;
-        } else if (arg == "--prompt-cache") {
+        }
+        if (arg == "--prompt-cache") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.path_prompt_cache = argv[i];
-        } else if (arg == "--prompt-cache-all") {
+        }
+        if (arg == "--prompt-cache-all") {
+            arg_found = true;
             params.prompt_cache_all = true;
-        } else if (arg == "--prompt-cache-ro") {
+        }
+        if (arg == "--prompt-cache-ro") {
+            arg_found = true;
             params.prompt_cache_ro = true;
-        } else if (arg == "-bf" || arg == "--binary-file") {
+        }
+        if (arg == "-bf" || arg == "--binary-file") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -228,7 +250,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             ss << file.rdbuf();
             params.prompt = ss.str();
             fprintf(stderr, "Read %zu bytes from binary file %s\n", params.prompt.size(), argv[i]);
-        } else if (arg == "-f" || arg == "--file") {
+        }
+        if (arg == "-f" || arg == "--file") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -245,51 +269,67 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (!params.prompt.empty() && params.prompt.back() == '\n') {
                 params.prompt.pop_back();
             }
-        } else if (arg == "-n" || arg == "--n-predict") {
+        }
+        if (arg == "-n" || arg == "--n-predict") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_predict = std::stoi(argv[i]);
-        } else if (arg == "--top-k") {
+        }
+        if (arg == "--top-k") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.top_k = std::stoi(argv[i]);
-        } else if (arg == "-c" || arg == "--ctx-size") {
+        }
+        if (arg == "-c" || arg == "--ctx-size") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_ctx = std::stoi(argv[i]);
-        } else if (arg == "--grp-attn-n" || arg == "-gan") {
+        }
+        if (arg == "--grp-attn-n" || arg == "-gan") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
 
             params.grp_attn_n = std::stoi(argv[i]);
-        } else if (arg == "--grp-attn-w" || arg == "-gaw") {
+        }
+        if (arg == "--grp-attn-w" || arg == "-gaw") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
 
             params.grp_attn_w = std::stoi(argv[i]);
-        } else if (arg == "--rope-freq-base") {
+        }
+        if (arg == "--rope-freq-base") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.rope_freq_base = std::stof(argv[i]);
-        } else if (arg == "--rope-freq-scale") {
+        }
+        if (arg == "--rope-freq-scale") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.rope_freq_scale = std::stof(argv[i]);
-        } else if (arg == "--rope-scaling") {
+        }
+        if (arg == "--rope-scaling") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -299,43 +339,57 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_LINEAR; }
             else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
             else { invalid_param = true; break; }
-        } else if (arg == "--rope-scale") {
+        }
+        if (arg == "--rope-scale") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.rope_freq_scale = 1.0f/std::stof(argv[i]);
-        } else if (arg == "--yarn-orig-ctx") {
+        }
+        if (arg == "--yarn-orig-ctx") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.yarn_orig_ctx = std::stoi(argv[i]);
-        } else if (arg == "--yarn-ext-factor") {
+        }
+        if (arg == "--yarn-ext-factor") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.yarn_ext_factor = std::stof(argv[i]);
-        } else if (arg == "--yarn-attn-factor") {
+        }
+        if (arg == "--yarn-attn-factor") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.yarn_attn_factor = std::stof(argv[i]);
-        } else if (arg == "--yarn-beta-fast") {
+        }
+        if (arg == "--yarn-beta-fast") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.yarn_beta_fast = std::stof(argv[i]);
-        } else if (arg == "--yarn-beta-slow") {
+        }
+        if (arg == "--yarn-beta-slow") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.yarn_beta_slow = std::stof(argv[i]);
-        } else if (arg == "--pooling") {
+        }
+        if (arg == "--pooling") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -345,118 +399,156 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
             else if (value == "cls")  { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
             else { invalid_param = true; break; }
-        } else if (arg == "--defrag-thold" || arg == "-dt") {
+        }
+        if (arg == "--defrag-thold" || arg == "-dt") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.defrag_thold = std::stof(argv[i]);
-        } else if (arg == "--samplers") {
+        }
+        if (arg == "--samplers") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             const auto sampler_names = string_split(argv[i], ';');
             sparams.samplers_sequence = sampler_types_from_names(sampler_names, true);
-        } else if (arg == "--sampling-seq") {
+        }
+        if (arg == "--sampling-seq") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.samplers_sequence = sampler_types_from_chars(argv[i]);
-        } else if (arg == "--top-p") {
+        }
+        if (arg == "--top-p") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.top_p = std::stof(argv[i]);
-        } else if (arg == "--min-p") {
+        }
+        if (arg == "--min-p") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.min_p = std::stof(argv[i]);
-        } else if (arg == "--temp") {
+        }
+        if (arg == "--temp") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.temp = std::stof(argv[i]);
             sparams.temp = std::max(sparams.temp, 0.0f);
-        } else if (arg == "--tfs") {
+        }
+        if (arg == "--tfs") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.tfs_z = std::stof(argv[i]);
-        } else if (arg == "--typical") {
+        }
+        if (arg == "--typical") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.typical_p = std::stof(argv[i]);
-        } else if (arg == "--repeat-last-n") {
+        }
+        if (arg == "--repeat-last-n") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.penalty_last_n = std::stoi(argv[i]);
             sparams.n_prev = std::max(sparams.n_prev, sparams.penalty_last_n);
-        } else if (arg == "--repeat-penalty") {
+        }
+        if (arg == "--repeat-penalty") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.penalty_repeat = std::stof(argv[i]);
-        } else if (arg == "--frequency-penalty") {
+        }
+        if (arg == "--frequency-penalty") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.penalty_freq = std::stof(argv[i]);
-        } else if (arg == "--presence-penalty") {
+        }
+        if (arg == "--presence-penalty") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.penalty_present = std::stof(argv[i]);
-        } else if (arg == "--dynatemp-range") {
+        }
+        if (arg == "--dynatemp-range") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.dynatemp_range = std::stof(argv[i]);
-        } else if (arg == "--dynatemp-exp") {
+        }
+        if (arg == "--dynatemp-exp") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.dynatemp_exponent = std::stof(argv[i]);
-        } else if (arg == "--mirostat") {
+        }
+        if (arg == "--mirostat") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.mirostat = std::stoi(argv[i]);
-        } else if (arg == "--mirostat-lr") {
+        }
+        if (arg == "--mirostat-lr") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.mirostat_eta = std::stof(argv[i]);
-        } else if (arg == "--mirostat-ent") {
+        }
+        if (arg == "--mirostat-ent") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.mirostat_tau = std::stof(argv[i]);
-        } else if (arg == "--cfg-negative-prompt") {
+        }
+        if (arg == "--cfg-negative-prompt") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.cfg_negative_prompt = argv[i];
-        } else if (arg == "--cfg-negative-prompt-file") {
+        }
+        if (arg == "--cfg-negative-prompt-file") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -471,86 +563,114 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (!sparams.cfg_negative_prompt.empty() && sparams.cfg_negative_prompt.back() == '\n') {
                 sparams.cfg_negative_prompt.pop_back();
             }
-        } else if (arg == "--cfg-scale") {
+        }
+        if (arg == "--cfg-scale") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.cfg_scale = std::stof(argv[i]);
-        } else if (arg == "-b" || arg == "--batch-size") {
+        }
+        if (arg == "-b" || arg == "--batch-size") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_batch = std::stoi(argv[i]);
-        } else if (arg == "-ub" || arg == "--ubatch-size") {
+        }
+        if (arg == "-ub" || arg == "--ubatch-size") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_ubatch = std::stoi(argv[i]);
-        } else if (arg == "--keep") {
+        }
+        if (arg == "--keep") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_keep = std::stoi(argv[i]);
-        } else if (arg == "--draft") {
+        }
+        if (arg == "--draft") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_draft = std::stoi(argv[i]);
-        } else if (arg == "--chunks") {
+        }
+        if (arg == "--chunks") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_chunks = std::stoi(argv[i]);
-        } else if (arg == "-np" || arg == "--parallel") {
+        }
+        if (arg == "-np" || arg == "--parallel") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_parallel = std::stoi(argv[i]);
-        } else if (arg == "-ns" || arg == "--sequences") {
+        }
+        if (arg == "-ns" || arg == "--sequences") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_sequences = std::stoi(argv[i]);
-        } else if (arg == "--p-split" || arg == "-ps") {
+        }
+        if (arg == "--p-split" || arg == "-ps") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.p_split = std::stof(argv[i]);
-        } else if (arg == "-m" || arg == "--model") {
+        }
+        if (arg == "-m" || arg == "--model") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.model = argv[i];
-        } else if (arg == "-md" || arg == "--model-draft") {
+        }
+        if (arg == "-md" || arg == "--model-draft") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.model_draft = argv[i];
-        } else if (arg == "-a" || arg == "--alias") {
+        }
+        if (arg == "-a" || arg == "--alias") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.model_alias = argv[i];
-        } else if (arg == "--lora") {
+        }
+        if (arg == "--lora") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.lora_adapter.emplace_back(argv[i], 1.0f);
             params.use_mmap = false;
-        } else if (arg == "--lora-scaled") {
+        }
+        if (arg == "--lora-scaled") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -562,55 +682,127 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             }
             params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
             params.use_mmap = false;
-        } else if (arg == "--lora-base") {
+        }
+        if (arg == "--lora-base") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.lora_base = argv[i];
-        } else if (arg == "--mmproj") {
+        }
+        if (arg == "--control-vector") {
+            arg_found = true;
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back({ 1.0f, argv[i], });
+        }
+        if (arg == "--control-vector-scaled") {
+            arg_found = true;
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            const char * fname = argv[i];
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back({ std::stof(argv[i]), fname, });
+        }
+        if (arg == "--control-vector-layer-range") {
+            arg_found = true;
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vector_layer_start = std::stoi(argv[i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vector_layer_end = std::stoi(argv[i]);
+        }
+        if (arg == "--mmproj") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.mmproj = argv[i];
-        } else if (arg == "--image") {
+        }
+        if (arg == "--image") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.image = argv[i];
-        } else if (arg == "-i" || arg == "--interactive") {
+        }
+        if (arg == "-i" || arg == "--interactive") {
+            arg_found = true;
             params.interactive = true;
-        } else if (arg == "--embedding") {
+        }
+        if (arg == "--embedding") {
+            arg_found = true;
             params.embedding = true;
-        } else if (arg == "--interactive-first") {
+        }
+        if (arg == "--interactive-first") {
+            arg_found = true;
             params.interactive_first = true;
-        } else if (arg == "-ins" || arg == "--instruct") {
+        }
+        if (arg == "-ins" || arg == "--instruct") {
+            arg_found = true;
             params.instruct = true;
-        } else if (arg == "-cml" || arg == "--chatml") {
+        }
+        if (arg == "-cml" || arg == "--chatml") {
+            arg_found = true;
             params.chatml = true;
-        } else if (arg == "--infill") {
+        }
+        if (arg == "--infill") {
+            arg_found = true;
             params.infill = true;
-        } else if (arg == "-dkvc" || arg == "--dump-kv-cache") {
+        }
+        if (arg == "-dkvc" || arg == "--dump-kv-cache") {
+            arg_found = true;
             params.dump_kv_cache = true;
-        } else if (arg == "-nkvo" || arg == "--no-kv-offload") {
+        }
+        if (arg == "-nkvo" || arg == "--no-kv-offload") {
+            arg_found = true;
             params.no_kv_offload = true;
-        } else if (arg == "-ctk" || arg == "--cache-type-k") {
+        }
+        if (arg == "-ctk" || arg == "--cache-type-k") {
+            arg_found = true;
             params.cache_type_k = argv[++i];
-        } else if (arg == "-ctv" || arg == "--cache-type-v") {
+        }
+        if (arg == "-ctv" || arg == "--cache-type-v") {
+            arg_found = true;
             params.cache_type_v = argv[++i];
-        } else if (arg == "--multiline-input") {
+        }
+        if (arg == "--multiline-input") {
+            arg_found = true;
             params.multiline_input = true;
-        } else if (arg == "--simple-io") {
+        }
+        if (arg == "--simple-io") {
+            arg_found = true;
             params.simple_io = true;
-        } else if (arg == "-cb" || arg == "--cont-batching") {
+        }
+        if (arg == "-cb" || arg == "--cont-batching") {
+            arg_found = true;
             params.cont_batching = true;
-        } else if (arg == "--color") {
+        }
+        if (arg == "--color") {
+            arg_found = true;
             params.use_color = true;
-        } else if (arg == "--mlock") {
+        }
+        if (arg == "--mlock") {
+            arg_found = true;
             params.use_mlock = true;
-        } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+        }
+        if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -620,7 +812,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
                 fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
             }
-        } else if (arg == "--gpu-layers-draft" || arg == "-ngld" || arg == "--n-gpu-layers-draft") {
+        }
+        if (arg == "--gpu-layers-draft" || arg == "-ngld" || arg == "--n-gpu-layers-draft") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -630,7 +824,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers-draft option will be ignored\n");
                 fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
             }
-        } else if (arg == "--main-gpu" || arg == "-mg") {
+        }
+        if (arg == "--main-gpu" || arg == "-mg") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -639,7 +835,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
 #ifndef GGML_USE_CUBLAS_SYCL
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the main GPU has no effect.\n");
 #endif // GGML_USE_CUBLAS_SYCL
-        } else if (arg == "--split-mode" || arg == "-sm") {
+        }
+        if (arg == "--split-mode" || arg == "-sm") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -663,7 +861,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the split mode has no effect.\n");
 #endif // GGML_USE_CUBLAS_SYCL
 
-        } else if (arg == "--tensor-split" || arg == "-ts") {
+        }
+        if (arg == "--tensor-split" || arg == "-ts") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -688,9 +888,13 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
 #ifndef GGML_USE_CUBLAS_SYCL_VULKAN
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL/Vulkan. Setting a tensor split has no effect.\n");
 #endif // GGML_USE_CUBLAS_SYCL
-        } else if (arg == "--no-mmap") {
+        }
+        if (arg == "--no-mmap") {
+            arg_found = true;
             params.use_mmap = false;
-        } else if (arg == "--numa") {
+        }
+        if (arg == "--numa") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -700,17 +904,25 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
             else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
             else { invalid_param = true; break; }
-        } else if (arg == "--verbose-prompt") {
+        }
+        if (arg == "--verbose-prompt") {
+            arg_found = true;
             params.verbose_prompt = true;
-        } else if (arg == "--no-display-prompt") {
+        }
+        if (arg == "--no-display-prompt") {
+            arg_found = true;
             params.display_prompt = false;
-        } else if (arg == "-r" || arg == "--reverse-prompt") {
+        }
+        if (arg == "-r" || arg == "--reverse-prompt") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.antiprompt.emplace_back(argv[i]);
-        } else if (arg == "-ld" || arg == "--logdir") {
+        }
+        if (arg == "-ld" || arg == "--logdir") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -720,63 +932,93 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             if (params.logdir.back() != DIRECTORY_SEPARATOR) {
                 params.logdir += DIRECTORY_SEPARATOR;
             }
-        } else if (arg == "--save-all-logits" || arg == "--kl-divergence-base") {
+        }
+        if (arg == "--save-all-logits" || arg == "--kl-divergence-base") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.logits_file = argv[i];
-        } else if (arg == "--perplexity" || arg == "--all-logits") {
+        }
+        if (arg == "--perplexity" || arg == "--all-logits") {
+            arg_found = true;
             params.logits_all = true;
-        } else if (arg == "--ppl-stride") {
+        }
+        if (arg == "--ppl-stride") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.ppl_stride = std::stoi(argv[i]);
-        } else if (arg == "-ptc" || arg == "--print-token-count") {
+        }
+        if (arg == "-ptc" || arg == "--print-token-count") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.n_print = std::stoi(argv[i]);
-        } else if (arg == "--ppl-output-type") {
+        }
+        if (arg == "--ppl-output-type") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.ppl_output_type = std::stoi(argv[i]);
-        } else if (arg == "--hellaswag") {
+        }
+        if (arg == "--hellaswag") {
+            arg_found = true;
             params.hellaswag = true;
-        } else if (arg == "--hellaswag-tasks") {
+        }
+        if (arg == "--hellaswag-tasks") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.hellaswag_tasks = std::stoi(argv[i]);
-        } else if (arg == "--winogrande") {
+        }
+        if (arg == "--winogrande") {
+            arg_found = true;
             params.winogrande = true;
-        } else if (arg == "--winogrande-tasks") {
+        }
+        if (arg == "--winogrande-tasks") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.winogrande_tasks = std::stoi(argv[i]);
-        } else if (arg == "--multiple-choice") {
+        }
+        if (arg == "--multiple-choice") {
+            arg_found = true;
             params.multiple_choice = true;
-        } else if (arg == "--multiple-choice-tasks") {
+        }
+        if (arg == "--multiple-choice-tasks") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.multiple_choice_tasks = std::stoi(argv[i]);
-        } else if (arg == "--kl-divergence") {
+        }
+        if (arg == "--kl-divergence") {
+            arg_found = true;
             params.kl_divergence = true;
-        } else if (arg == "--ignore-eos") {
+        }
+        if (arg == "--ignore-eos") {
+            arg_found = true;
             params.ignore_eos = true;
-        } else if (arg == "--no-penalize-nl") {
+        }
+        if (arg == "--no-penalize-nl") {
+            arg_found = true;
             sparams.penalize_nl = false;
-        } else if (arg == "-l" || arg == "--logit-bias") {
+        }
+        if (arg == "-l" || arg == "--logit-bias") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -795,36 +1037,51 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-        } else if (arg == "-h" || arg == "--help") {
+        }
+        if (arg == "-h" || arg == "--help") {
+            arg_found = true;
             return false;
-
-        } else if (arg == "--version") {
+        }
+        if (arg == "--version") {
+            arg_found = true;
             fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
             fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
             exit(0);
-        } else if (arg == "--random-prompt") {
+        }
+        if (arg == "--random-prompt") {
+            arg_found = true;
             params.random_prompt = true;
-        } else if (arg == "--in-prefix-bos") {
+        }
+        if (arg == "--in-prefix-bos") {
+            arg_found = true;
             params.input_prefix_bos = true;
-        } else if (arg == "--in-prefix") {
+        }
+        if (arg == "--in-prefix") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.input_prefix = argv[i];
-        } else if (arg == "--in-suffix") {
+        }
+        if (arg == "--in-suffix") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.input_suffix = argv[i];
-        } else if (arg == "--grammar") {
+        }
+        if (arg == "--grammar") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             sparams.grammar = argv[i];
-        } else if (arg == "--grammar-file") {
+        }
+        if (arg == "--grammar-file") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -840,7 +1097,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 std::istreambuf_iterator<char>(),
                 std::back_inserter(sparams.grammar)
             );
-        } else if (arg == "--override-kv") {
+        }
+        if (arg == "--override-kv") {
+            arg_found = true;
             if (++i >= argc) {
                 invalid_param = true;
                 break;
@@ -883,10 +1142,14 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.kv_overrides.push_back(kvo);
 #ifndef LOG_DISABLE_LOGS
         // Parse args for logging parameters
-        } else if ( log_param_single_parse( argv[i] ) ) {
+        }
+        if ( log_param_single_parse( argv[i] ) ) {
+            arg_found = true;
             // Do nothing, log_param_single_parse automatically does it's thing
             //  and returns if a match was found and parsed.
-        } else if ( log_param_pair_parse( /*check_but_dont_parse*/ true, argv[i] ) ) {
+        }
+        if ( log_param_pair_parse( /*check_but_dont_parse*/ true, argv[i] ) ) {
+            arg_found = true;
             // We have a matching known parameter requiring an argument,
             //  now we need to check if there is anything after this argv
             //  and flag invalid_param or parse it.
@@ -900,7 +1163,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             }
         // End of Parse args for logging parameters
 #endif // LOG_DISABLE_LOGS
-        } else {
+        }
+
+        if (!arg_found) {
             throw std::invalid_argument("error: unknown argument: " + arg);
         }
     }
@@ -1095,6 +1360,12 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)\n");
     printf("  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
+    printf("  --control-vector FNAME\n");
+    printf("                        add a control vector\n");
+    printf("  --control-vector-scaled FNAME S\n");
+    printf("                        add a control vector with user defined scaling S\n");
+    printf("  --control-vector-layer-range START END\n");
+    printf("                        layer range to apply the control vector(s) to, start and end inclusive\n");
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
     printf("  -md FNAME, --model-draft FNAME\n");
@@ -1358,6 +1629,30 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
         llama_free_model(model);
         return std::make_tuple(nullptr, nullptr);
+    }
+
+    if (!params.control_vectors.empty()) {
+        if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
+        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
+
+        const auto cvec = llama_control_vector_load(params.control_vectors);
+        if (cvec.n_embd == -1) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+
+        int err = llama_control_vector_apply(lctx,
+                                             cvec.data.data(),
+                                             cvec.data.size(),
+                                             cvec.n_embd,
+                                             params.control_vector_layer_start,
+                                             params.control_vector_layer_end);
+        if (err) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
     }
 
     for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
@@ -1877,3 +2172,173 @@ void llama_embd_normalize(const float * inp, float * out, int n) {
     }
 }
 
+float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n){
+    double sum  = 0.0;
+    double sum1 = 0.0;
+    double sum2 = 0.0;
+
+    for (int i = 0; i < n; i++) {
+        sum  += embd1[i] * embd2[i];
+        sum1 += embd1[i] * embd1[i];
+        sum2 += embd2[i] * embd2[i];
+    }
+
+    return sum / (sqrt(sum1) * sqrt(sum2));
+}
+
+//
+// Control vector utils
+//
+
+static llama_control_vector_data llama_control_vector_load_one(const llama_control_vector_load_info & load_info) {
+    int32_t n_tensors;
+
+    size_t n_bytes = 0;
+
+    uint32_t max_direction_layer = 0;
+
+    llama_control_vector_data result = { -1, {} };
+
+    // calculate size of ctx needed for tensors, ensure tensors are f32, and find max layer
+    {
+        struct ggml_init_params meta_params = {
+            /* .mem_size   = */ ggml_tensor_overhead() * 128 + ggml_graph_overhead(),
+            /* .mem_buffer = */ nullptr,
+            /* .no_alloc   = */ true,
+        };
+        ggml_context * meta_ctx = ggml_init(meta_params);
+        struct gguf_init_params meta_gguf_params = {
+            /* .no_alloc = */ true,
+            /* .ctx      = */ &meta_ctx,
+        };
+        struct gguf_context * meta_ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
+        if (!meta_ctx_gguf) {
+            fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
+            ggml_free(meta_ctx);
+            return result;
+        }
+
+        n_tensors = gguf_get_n_tensors(meta_ctx_gguf);
+        for (int i = 0; i < n_tensors; i++) {
+            std::string name = gguf_get_tensor_name(meta_ctx_gguf, i);
+
+            // split on '.'
+            size_t dotpos = name.find('.');
+            if (dotpos != std::string::npos && name.substr(0, dotpos) == "direction") {
+                try {
+                    uint32_t layer = std::stoi(name.substr(dotpos + 1));
+                    if (layer == 0) {
+                        fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
+                        ggml_free(meta_ctx);
+                        gguf_free(meta_ctx_gguf);
+                        return result;
+                    }
+                    if (layer > max_direction_layer) {
+                        max_direction_layer = layer;
+                    }
+                } catch (...) {
+                    fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
+                    ggml_free(meta_ctx);
+                    gguf_free(meta_ctx_gguf);
+                    return result;
+                }
+            }
+
+            struct ggml_tensor * tensor_meta = ggml_get_tensor(meta_ctx, name.c_str());
+            if (tensor_meta->type != GGML_TYPE_F32 || ggml_n_dims(tensor_meta) != 1) {
+                fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
+                ggml_free(meta_ctx);
+                gguf_free(meta_ctx_gguf);
+                return result;
+            }
+            if (result.n_embd == -1) {
+                result.n_embd = ggml_nelements(tensor_meta);
+            } else if (ggml_nelements(tensor_meta) != result.n_embd) {
+                fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, load_info.fname.c_str());
+                ggml_free(meta_ctx);
+                gguf_free(meta_ctx_gguf);
+                return result;
+            }
+            n_bytes += ggml_nbytes(tensor_meta);
+        }
+        ggml_free(meta_ctx);
+        gguf_free(meta_ctx_gguf);
+    }
+
+    if (n_tensors == 0) {
+        fprintf(stderr, "%s: no direction tensors found in %s\n", __func__, load_info.fname.c_str());
+        return result;
+    }
+
+    // load and scale tensors into final control vector context
+    struct ggml_init_params ggml_params = {
+        /* .mem_size   = */ ggml_tensor_overhead() * n_tensors + n_bytes,
+        /* .mem_buffer = */ nullptr,
+        /* .no_alloc   = */ false,
+    };
+    struct ggml_context * ctx = ggml_init(ggml_params);
+
+    struct gguf_init_params params = {
+        /*.no_alloc = */ false,
+        /*.ctx      = */ &ctx,
+    };
+    struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), params);
+    if (!ctx_gguf) {
+        fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
+        ggml_free(ctx);
+        return result;
+    }
+
+    // do not store data for layer 0 (it's not used)
+    result.data.resize(result.n_embd * max_direction_layer);
+
+    for (uint32_t il = 1; il <= max_direction_layer; il++) {
+        const std::string name = "direction." + std::to_string(il);
+        const ggml_tensor * tensor = ggml_get_tensor(ctx, name.c_str());
+
+        float * dst = result.data.data() + result.n_embd * (il - 1);
+
+        if (tensor) {
+            const float * src = (const float *) tensor->data;
+            for (int j = 0; j < result.n_embd; j++) {
+                dst[j] = src[j] * load_info.strength;
+            }
+        } else {
+            for (int j = 0; j < result.n_embd; j++) {
+                dst[j] = 0.0f;
+            }
+        }
+    }
+
+    return result;
+}
+
+llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos) {
+    llama_control_vector_data result = { -1, {} };
+
+    for (const auto & info : load_infos) {
+        auto cur = llama_control_vector_load_one(info);
+
+        if (cur.n_embd == -1) {
+            return result;
+        }
+        if (result.n_embd != -1 && (result.n_embd != cur.n_embd || result.data.size() != cur.data.size())) {
+            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
+            return result;
+        }
+
+        if (result.n_embd == -1) {
+            result = std::move(cur);
+        } else {
+            for (size_t i = 0; i < cur.data.size(); i++) {
+                result.data[i] += cur.data[i];
+            }
+        }
+    }
+
+    if (result.n_embd == -1) {
+        fprintf(stderr, "%s: no vectors passed\n", __func__);
+    }
+
+    return result;
+}
