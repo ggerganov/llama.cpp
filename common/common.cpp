@@ -1758,7 +1758,7 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
 
         typedef size_t(*CURLOPT_WRITEFUNCTION_PTR)(void * data, size_t size, size_t nmemb, void * fd);
         auto write_callback = [](void * data, size_t size, size_t nmemb, void * fd) -> size_t {
-            return fwrite(data, size, nmemb, (FILE *)fd);;
+            return fwrite(data, size, nmemb, (FILE *)fd);
         };
         curl_easy_setopt(curl, CURLOPT_NOBODY, 0L);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<CURLOPT_WRITEFUNCTION_PTR>(write_callback));
