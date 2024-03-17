@@ -68,14 +68,14 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
-target_include_directories(${TARGET} PUBLIC .)
-target_compile_features(${TARGET} PUBLIC cxx_std_11)
-target_link_libraries(${TARGET} PRIVATE build_info PUBLIC llama)
-
 # Use curl to download model url
 if (LLAMA_CURL)
     find_package(CURL)
     add_definitions(-DLLAMA_USE_CURL)
-    target_include_directories(${TARGET} ${CURL_INCLUDE_DIRS})
+    include_directories(${CURL_INCLUDE_DIRS})
     target_link_libraries(${TARGET} PRIVATE curl)
 endif ()
+
+target_include_directories(${TARGET} PUBLIC .)
+target_compile_features(${TARGET} PUBLIC cxx_std_11)
+target_link_libraries(${TARGET} PRIVATE build_info PUBLIC llama)

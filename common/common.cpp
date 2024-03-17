@@ -16,9 +16,6 @@
 #include <unordered_set>
 #include <vector>
 #include <cinttypes>
-#ifdef LLAMA_USE_CURL
-#include <curl/curl.h>
-#endif
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -40,6 +37,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
+#if defined(LLAMA_USE_CURL)
+#include <curl/curl.h>
+#endif
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -53,7 +53,7 @@
 #define GGML_USE_CUBLAS_SYCL_VULKAN
 #endif
 
-#ifdef LLAMA_USE_CURL
+#if defined(LLAMA_USE_CURL)
 #ifdef __linux__
 #include <linux/limits.h>
 #elif defined(_WIN32)
