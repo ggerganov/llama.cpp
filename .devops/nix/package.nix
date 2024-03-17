@@ -4,6 +4,7 @@
   config,
   stdenv,
   mkShell,
+  runCommand,
   cmake,
   ninja,
   pkg-config,
@@ -87,6 +88,11 @@ let
     ]
   );
 
+  xcrunHost = runCommand "xcrunHost" {} ''
+    mkdir -p $out/bin
+    ln -s /usr/bin/xcrun $out/bin
+  '';
+
   # apple_sdk is supposed to choose sane defaults, no need to handle isAarch64
   # separately
   darwinBuildInputs =
@@ -157,6 +163,14 @@ effectiveStdenv.mkDerivation (
       substituteInPlace ./*.py --replace "/usr/bin/env python" "${llama-python}/bin/python"
     '';
 
+    # With PR#6015 https://github.com/ggerganov/llama.cpp/pull/6015,
+    # `default.metallib` is compiled with Metal compiler from XCode
+    # and we need to escape sandbox on MacOS to access Metal compiler.
+    # `xcrun` is used find the path of the Metal compiler, which is varible
+    # and not on $PATH
+    # see https://github.com/ggerganov/llama.cpp/pull/6118 for discussion
+    __noChroot = effectiveStdenv.isDarwin && useMetalKit;
+
     nativeBuildInputs =
       [
         cmake
@@ -173,6 +187,8 @@ effectiveStdenv.mkDerivation (
       ]
       ++ optionals (effectiveStdenv.hostPlatform.isGnu && enableStatic) [
         glibc.static
+      ] ++ optionals (effectiveStdenv.isDarwin && useMetalKit) [
+        xcrunHost
       ];
 
     buildInputs =
