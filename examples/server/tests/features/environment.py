@@ -109,10 +109,10 @@ def print_server_logs(context):
     out, err = context.server_process.communicate()
     if out:
         print("Server stdout:\n")
-        print(out.decode("utf-8"))
+        print(out.decode('utf-8'))
         print("\n")
     if err:
         print("Server stderr:\n")
-        print(err.decode("utf-8"))
+        print(err.decode('utf-8'))
         print("\n")
 

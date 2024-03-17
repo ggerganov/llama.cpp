@@ -1748,8 +1748,11 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
 
     // If the ETag or the Last-Modified headers are different: trigger a new download
     if (!file_exists || strcmp(etag, headers.etag) != 0 || strcmp(last_modified, headers.last_modified) != 0) {
+        char path_model_temporary[LLAMA_CURL_MAX_PATH_LENGTH] = {0};
+        snprintf(path_model_temporary, sizeof(path_model_temporary), "%s.downloadInProgress", path_model);
+
         // Set the output file
-        auto * outfile = fopen(path_model, "wb");
+        auto * outfile = fopen(path_model_temporary, "wb");
         if (!outfile) {
             curl_easy_cleanup(curl);
             fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path_model);
@@ -1809,6 +1812,12 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
                 fprintf(stderr, "%s: model last modified saved %s: %s\n", __func__, last_modified_path,
                         headers.last_modified);
             }
+        }
+
+        if (rename(path_model_temporary, path_model) != 0) {
+            curl_easy_cleanup(curl);
+            fprintf(stderr, "%s: unable to rename file: %s to %s\n", __func__, path_model_temporary, path_model);
+            return NULL;
         }
     }
 
