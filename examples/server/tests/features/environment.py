@@ -33,16 +33,7 @@ def after_scenario(context, scenario):
             print("\x1b[33;101mERROR: Server stopped listening\x1b[0m\n")
 
     if not pid_exists(context.server_process.pid):
-        print("Trying to find server logs:")
-        out, err = context.server_process.communicate()
-        if out:
-            print("Server stdout:\n")
-            print(out)
-            print("\n")
-        if err:
-            print("Server stderr:\n")
-            print(err)
-            print("\n")
+        print_server_logs(context)
         assert False, f"Server not running pid={context.server_process.pid} ..."
 
     server_graceful_shutdown(context)
@@ -57,6 +48,9 @@ def after_scenario(context, scenario):
         attempts += 1
         if attempts > 5:
             server_kill_hard(context)
+
+    if scenario.status == "failed" or context.debug:
+        print_server_logs(context)
 
 
 def server_graceful_shutdown(context):
@@ -108,3 +102,17 @@ def pid_exists(pid):
             return e.errno == errno.EPERM
         else:
             return True
+
+
+def print_server_logs(context):
+    print("Trying to find server logs:")
+    out, err = context.server_process.communicate()
+    if out:
+        print("Server stdout:\n")
+        print(out.decode("utf-8"))
+        print("\n")
+    if err:
+        print("Server stderr:\n")
+        print(err.decode("utf-8"))
+        print("\n")
+
