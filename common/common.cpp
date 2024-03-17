@@ -1648,11 +1648,9 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     }
 
     // Initialize libcurl globally
-    curl_global_init(CURL_GLOBAL_DEFAULT);
     auto curl = curl_easy_init();
 
     if (!curl) {
-        curl_global_cleanup();
         fprintf(stderr, "%s: error initializing libcurl\n", __func__);
         return NULL;
     }
@@ -1734,23 +1732,36 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
         CURLcode res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
             return NULL;
+        }
+
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (http_code != 200) {
+            // HEAD not supported, we don't know if the file has changed
+            // force trigger downloading
+            file_exists = false;
+            fprintf(stderr, "%s: HEAD invalid http status code received: %ld\n", __func__, http_code);
         }
     }
 
     // If the ETag or the Last-Modified headers are different: trigger a new download
-    if (strcmp(etag, headers.etag) != 0 || strcmp(last_modified, headers.last_modified) != 0) {
+    if (!file_exists || strcmp(etag, headers.etag) != 0 || strcmp(last_modified, headers.last_modified) != 0) {
         // Set the output file
         auto * outfile = fopen(path_model, "wb");
         if (!outfile) {
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path_model);
             return NULL;
         }
+
+        typedef size_t(*CURLOPT_WRITEFUNCTION_PTR)(void * data, size_t size, size_t nmemb, void * fd);
+        auto write_callback = [](void * data, size_t size, size_t nmemb, void * fd) -> size_t {
+            return fwrite(data, size, nmemb, (FILE *)fd);;
+        };
         curl_easy_setopt(curl, CURLOPT_NOBODY, 0L);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<CURLOPT_WRITEFUNCTION_PTR>(write_callback));
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
 
         //  display download progress
@@ -1763,7 +1774,6 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
         if (res != CURLE_OK) {
             fclose(outfile);
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
             return NULL;
         }
@@ -1773,7 +1783,6 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
         if (http_code < 200 || http_code >= 400) {
             fclose(outfile);
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             fprintf(stderr, "%s: invalid http status code received: %ld\n", __func__, http_code);
             return NULL;
         }
@@ -1804,7 +1813,6 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     }
 
     curl_easy_cleanup(curl);
-    curl_global_cleanup();
 
     return llama_load_model_from_file(path_model, params);
 }
