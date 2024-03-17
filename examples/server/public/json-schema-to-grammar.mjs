@@ -15,6 +15,7 @@ const PRIMITIVE_RULES = {
       )* "\\"" space`,
   null: '"null" space',
 };
+const OBJECT_RULE_NAMES = ['object', 'array', 'string', 'number', 'boolean', 'null'];
 
 // TODO: support "uri", "email" string formats
 const DATE_RULES = {
@@ -426,12 +427,11 @@ export class SchemaConverter {
         this._addRule(t, r);
       }
       return schemaFormat + '-string';
-    } else if (schemaType === 'object' && Object.keys(schema).length === 1 || schemaType === undefined && Object.keys(schema).length === 0) {
-      // This depends on all primitive types
-      for (const [t, r] of Object.entries(PRIMITIVE_RULES)) {
-        this._addRule(t, r);
+    } else if ((schemaType === 'object' && Object.keys(schema).length === 1) || (Object.keys(schema).length === 0)) {
+      for (const n of OBJECT_RULE_NAMES) {
+        this._addRule(n, PRIMITIVE_RULES[n]);
       }
-      return 'object';
+      return this._addRule(ruleName, 'object');
     } else {
       if (!(schemaType in PRIMITIVE_RULES)) {
         throw new Error(`Unrecognized schema: ${JSON.stringify(schema)}`);

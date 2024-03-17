@@ -68,7 +68,7 @@ static string read(const string& file) {
 }
 
 static void test_all(const string& lang, std::function<void(const TestCase&)> runner) {
-  cerr << "Testing JSON schema conversion (" << lang.c_str() << ")" << endl;
+  cerr << "#\n# Testing JSON schema conversion (" << lang.c_str() << ")\n#" << endl;
   auto test = [&](const TestCase& tc) {
     cerr << "- " << tc.name.c_str() << (tc.expected_status == FAILURE ? " (failure expected)" : "") << endl;
     runner(tc);
@@ -90,6 +90,25 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
       "type": 123
     })""",
     ""
+  });
+
+  test({
+    SUCCESS,
+    "empty schema (object)",
+    "{}",
+    R"""(
+      array ::= "[" space ( value ("," space value)* )? "]" space
+      boolean ::= ("true" | "false") space
+      null ::= "null" space
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      object ::= "{" space ( string ":" space value ("," space string ":" space value)* )? "}" space
+      root ::= object
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+    )"""
   });
 
   test({

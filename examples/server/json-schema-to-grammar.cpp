@@ -33,6 +33,7 @@ unordered_map<string, string> PRIMITIVE_RULES = {
                "      )* \"\\\"\" space"},
     {"null", "\"null\" space"}
 };
+vector<string> OBJECT_RULE_NAMES = {"object", "array", "string", "number", "boolean", "null"};
 
 unordered_map<string, string> DATE_RULES = {
     {"date", "[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( [0-2] [0-9] | \"3\" [0-1] )"},
@@ -663,10 +664,10 @@ public:
         } else if ((schema_type.is_null() || schema_type == "string") && schema.contains("pattern")) {
             return _visit_pattern(schema["pattern"], rule_name);
         } else if (schema.empty() || (schema.size() == 1 && schema_type == "object")) {
-            for (const auto& kv : PRIMITIVE_RULES) {
-                _add_rule(kv.first, kv.second);
+            for (const auto& n : OBJECT_RULE_NAMES) {
+                _add_rule(n, PRIMITIVE_RULES.at(n));
             }
-            return "object";
+            return _add_rule(rule_name, "object");
         } else if ((schema_type.is_null() || schema_type == "string") && regex_match(schema_format, regex("^uuid[1-5]?$"))) {
             return _add_rule(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
         } else if ((schema_type.is_null() || schema_type == "string") && DATE_RULES.find(schema_format) != DATE_RULES.end()) {

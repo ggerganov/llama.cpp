@@ -862,7 +862,7 @@ tests/test-double-float: tests/test-double-float.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp
+tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp examples/server/json-schema-to-grammar.cpp examples/server/json-schema-to-grammar.h
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
