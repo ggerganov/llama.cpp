@@ -7791,10 +7791,6 @@ struct cuda_pool_alloc {
 
 static bool g_cublas_loaded = false;
 
-static bool ggml_cublas_loaded(void) {
-    return g_cublas_loaded;
-}
-
 static void ggml_init_cublas() {
     static bool initialized = false;
 
@@ -11381,7 +11377,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
 GGML_CALL static bool ggml_backend_cuda_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
     const int min_batch_size = 32;
 
-    return op->ne[1] > min_batch_size && op->op != GGML_OP_GET_ROWS;
+    return op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS;
 
     UNUSED(backend);
 }
