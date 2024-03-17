@@ -117,7 +117,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include" -DLLAMA_BUILD_SERVER=ON -DLLAMA_NATIVE=OFF -DBUILD_SHARED_LIBS=ON
+          cmake .. -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include" -DLLAMA_BUILD_SERVER=ON -DLLAMA_NATIVE=OFF -DBUILD_SHARED_LIBS=ON
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
 
       - name: Python setup
@@ -136,6 +136,7 @@ jobs:
         if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
+          $env:PATH += ";$env:RUNNER_TEMP/libcurl/bin"
           behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
 
       - name: Slow tests
@@ -143,4 +144,5 @@ jobs:
         if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
+          $env:PATH += ";$env:RUNNER_TEMP/libcurl/bin"
           behave.exe --stop --no-skipped --no-capture --tags slow
