@@ -4,6 +4,9 @@
 
 #include <stdio.h>
 
+// For memcpy.
+#include <string.h>
+
 // No, we have an SIMD unit.
 // #define GGML_SIMD
 
