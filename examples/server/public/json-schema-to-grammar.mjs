@@ -325,6 +325,13 @@ export class SchemaConverter {
     return refName;
   }
 
+  _generateConstantRule(value) {
+    if (typeof value !== 'string') {
+      throw new Error('Only string constants are supported, got ' + JSON.stringify(value));
+    }
+    return this._formatLiteral(value);
+  }
+
   visit(schema, name) {
     const schemaType = schema.type;
     const schemaFormat = schema.format;
@@ -338,9 +345,12 @@ export class SchemaConverter {
     } else if (Array.isArray(schemaType)) {
       return this._addRule(ruleName, this._generateUnionRule(name, schemaType.map(t => ({ type: t }))));
     } else if ('const' in schema) {
-      return this._addRule(ruleName, this._formatLiteral(schema.const));
+      if (typeof schema.const !== 'string') {
+        throw new Error('Only string constants are supported, got ' + JSON.stringify(schema.const));
+      }
+      return this._addRule(ruleName, this._generateConstantRule(schema.const));
     } else if ('enum' in schema) {
-      const rule = schema.enum.map(v => this._formatLiteral(v)).join(' | ');
+      const rule = schema.enum.map(v => this._generateConstantRule(v)).join(' | ');
       return this._addRule(ruleName, rule);
     } else if ((schemaType === undefined || schemaType === 'object') && ('properties' in schema || 'additionalProperties' in schema)) {
       const required = new Set(schema.required || []);

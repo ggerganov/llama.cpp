@@ -547,6 +547,14 @@ public:
         visit_refs(schema);
     }
 
+    string _generate_constant_rule(const json& value) {
+        if (!value.is_string()) {
+            _errors.push_back("Only string constants are supported, got " + value.dump());
+            return "";
+        }
+        return _format_literal(value.get<string>());
+    }
+
     string visit(const json& schema, const string& name) {
         json schema_type = schema.contains("type") ? schema["type"] : json();
         string schema_format = schema.contains("format") ? schema["format"].get<string>() : "";
@@ -564,11 +572,11 @@ public:
             }
             return _add_rule(rule_name, _generate_union_rule(name, schema_types));
         } else if (schema.contains("const")) {
-            return _add_rule(rule_name, _format_literal(schema["const"].dump()));
+            return _add_rule(rule_name, _generate_constant_rule(schema["const"]));
         } else if (schema.contains("enum")) {
             vector<string> enum_values;
             for (const auto& v : schema["enum"]) {
-                enum_values.push_back(_format_literal(v.dump()));
+                enum_values.push_back(_generate_constant_rule(v));
             }
             return _add_rule(rule_name, join(enum_values.begin(), enum_values.end(), " | "));
         } else if ((schema_type.is_null() || schema_type == "object")

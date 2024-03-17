@@ -299,6 +299,10 @@ class SchemaConverter:
             self._refs_being_resolved.remove(ref)
         return ref_name
 
+    def _generate_constant_rule(self, value):
+        assert isinstance(value, str), f'Only string constants are supported, got {value}'
+        return self._format_literal(value)
+
     def visit(self, schema, name):
         schema_type = schema.get('type')
         schema_format = schema.get('format')
@@ -314,10 +318,10 @@ class SchemaConverter:
             return self._add_rule(rule_name, self._generate_union_rule(name, [{'type': t} for t in schema_type]))
 
         elif 'const' in schema:
-            return self._add_rule(rule_name, self._format_literal(schema['const']))
+            return self._add_rule(rule_name, self._generate_constant_rule(schema['const']))
 
         elif 'enum' in schema:
-            rule = ' | '.join((self._format_literal(v) for v in schema['enum']))
+            rule = ' | '.join((self._generate_constant_rule(v) for v in schema['enum']))
             return self._add_rule(rule_name, rule)
 
         elif schema_type in (None, 'object') and ('properties' in schema or 'additionalProperties' in schema):

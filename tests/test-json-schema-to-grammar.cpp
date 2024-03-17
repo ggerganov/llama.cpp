@@ -157,6 +157,36 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
 
   test({
     SUCCESS,
+    "string const",
+    R"""({
+      "const": "foo"
+    })""",
+    R"""(
+      root ::= "\"foo\""
+      space ::= " "?
+    )"""
+  });
+
+  test({
+    FAILURE,
+    "non-string const",
+    R"""({
+      "const": 123
+    })""",
+    ""
+  });
+
+  test({
+    FAILURE,
+    "non-string enum",
+    R"""({
+      "enum": [123]
+    })""",
+    ""
+  });
+
+  test({
+    SUCCESS,
     "tuple1",
     R"""({
       "prefixItems": [{ "type": "string" }]
