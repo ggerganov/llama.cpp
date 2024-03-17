@@ -20,7 +20,12 @@ static std::string trim(const std::string & source) {
     return regex_replace(s, regex("(^|\n)[ \t]+"), "$1");
 }
 
+enum TestCaseStatus {
+  SUCCESS, FAILURE
+};
+
 struct TestCase {
+  TestCaseStatus expected_status;
   string name;
   string schema;
   string expected;
@@ -36,7 +41,17 @@ struct TestCase {
       assert(false);
     }
   }
-
+  void verify_status(TestCaseStatus status) const {
+    if (status != expected_status) {
+      cerr << "#" << endl;
+      cerr << "# Test '" << name.c_str() << "' failed." << endl;
+      cerr << "#" << endl;
+      cerr << schema.c_str() << endl;
+      cerr << "# EXPECTED STATUS: " << (expected_status == SUCCESS ? "SUCCESS" : "FAILURE") << endl;
+      cerr << "# ACTUAL STATUS: " << (status == SUCCESS ? "SUCCESS" : "FAILURE") << endl;
+      assert(false);
+    }
+  }
 };
 
 static void write(const string& file, const string& content) {
@@ -52,14 +67,33 @@ static string read(const string& file) {
   return actuals.str();
 }
 
-static void test(const string& lang, std::function<void(const TestCase&)> runner) {
+static void test_all(const string& lang, std::function<void(const TestCase&)> runner) {
   cerr << "Testing JSON schema conversion (" << lang.c_str() << ")" << endl;
-  auto run = [&](const TestCase& tc) {
-    cerr << "- " << tc.name.c_str() << endl;
+  auto test = [&](const TestCase& tc) {
+    cerr << "- " << tc.name.c_str() << (tc.expected_status == FAILURE ? " (failure expected)" : "") << endl;
     runner(tc);
   };
 
-  run({
+  test({
+    FAILURE,
+    "unknown type",
+    R"""({
+      "type": "kaboom"
+    })""",
+    ""
+  });
+
+  test({
+    FAILURE,
+    "invalid type type",
+    R"""({
+      "type": 123
+    })""",
+    ""
+  });
+
+  test({
+    SUCCESS,
     "exotic formats",
     R"""({
       "items": [
@@ -82,7 +116,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "string",
     R"""({
       "type": "string"
@@ -96,7 +131,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "boolean",
     R"""({
       "type": "boolean"
@@ -107,7 +143,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "integer",
     R"""({
       "type": "integer"
@@ -118,7 +155,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "tuple1",
     R"""({
       "prefixItems": [{ "type": "string" }]
@@ -133,7 +171,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "tuple2",
     R"""({
       "prefixItems": [{ "type": "string" }, { "type": "number" }]
@@ -149,7 +188,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "number",
     R"""({
       "type": "number"
@@ -160,7 +200,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "minItems",
     R"""({
       "items": {
@@ -175,7 +216,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "maxItems 1",
     R"""({
       "items": {
@@ -190,7 +232,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "maxItems 2",
     R"""({
       "items": {
@@ -205,7 +248,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "min + maxItems",
     R"""({
       "items": {
@@ -223,7 +267,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "regexp",
     R"""({
       "type": "string",
@@ -237,7 +282,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "required props",
     R"""({
       "type": "object",
@@ -268,7 +314,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "1 optional prop",
     R"""({
       "properties": {
@@ -289,7 +336,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "N optional props",
     R"""({
       "properties": {
@@ -314,7 +362,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "required + optional props",
     R"""({
       "properties": {
@@ -341,7 +390,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "additional props",
     R"""({
       "type": "object",
@@ -357,7 +407,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "required + additional props",
     R"""({
       "type": "object",
@@ -381,7 +432,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "optional + additional props",
     R"""({
       "type": "object",
@@ -401,7 +453,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "required + optional + additional props",
     R"""({
       "type": "object",
@@ -424,7 +477,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "top-level $ref",
     R"""({
       "$ref": "#/definitions/MyType",
@@ -455,7 +509,8 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
     )"""
   });
 
-  run({
+  test({
+    SUCCESS,
     "conflicting names",
     R"""({
       "type": "object",
@@ -502,17 +557,25 @@ static void test(const string& lang, std::function<void(const TestCase&)> runner
 }
 
 int main() {
-  test("Python", [](const TestCase& tc) {
+  test_all("Python", [](const TestCase& tc) {
     write("test-json-schema-input.tmp", tc.schema);
-    assert(std::system("python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
+    tc.verify_status(std::system(
+      "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
     tc.verify(read("test-grammar-output.tmp"));
   });
-  test("JavaScript", [](const TestCase& tc) {
+  test_all("JavaScript", [](const TestCase& tc) {
     write("test-json-schema-input.tmp", tc.schema);
-    assert(std::system("node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0);
+    tc.verify_status(std::system(
+      "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
     tc.verify(read("test-grammar-output.tmp"));
   });
-  test("C++", [](const TestCase& tc) {
-    tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
+  test_all("C++", [](const TestCase& tc) {
+    try {
+      tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
+      tc.verify_status(SUCCESS);
+    } catch (const runtime_error& ex) {
+      cerr << "Error: " << ex.what() << endl;
+      tc.verify_status(FAILURE);
+    }
   });
 }
