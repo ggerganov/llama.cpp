@@ -48,6 +48,28 @@ jobs:
           CC=gcc-8 make tests -j $(nproc)
           make test -j $(nproc)
 
+  ubuntu-focal-make-curl:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential gcc-8 libcurl4-openssl-dev
+
+      - name: Build
+        id: make_build
+        env:
+          LLAMA_FATAL_WARNINGS: 1
+          LLAMA_CURL: 1
+        run: |
+          CC=gcc-8 make -j $(nproc)
+
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
 

@@ -4,7 +4,8 @@ Feature: llama.cpp server
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
+    And   a model url https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf
+    And   a model file stories260K.gguf
     And   a model alias tinyllama-2
     And   42 as server seed
       # KV Cache corresponds to the total amount of tokens
