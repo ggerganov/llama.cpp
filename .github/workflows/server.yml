@@ -135,8 +135,8 @@ jobs:
         id: server_integration_tests
         if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
+          cp $env:RUNNER_TEMP/libcurl/bin/libcurl-x64.dll ./build/bin/Release/libcurl.dll
           cd examples/server/tests
-          $env:PATH += ";$env:RUNNER_TEMP/libcurl/bin"
           behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
 
       - name: Slow tests
@@ -144,5 +144,4 @@ jobs:
         if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
-          $env:PATH += ";$env:RUNNER_TEMP/libcurl/bin"
           behave.exe --stop --no-skipped --no-capture --tags slow
