@@ -376,11 +376,12 @@ static json oaicompat_completion_params_parse(
         llama_params["grammar"] = json_value(body, "grammar", json::object());
     }
 
-    if (body.contains("response_format")) {
+    if (!body["response_format"].is_null()) {
       auto response_format = json_value(body, "response_format", json::object());
-      if (response_format.contains("schema") && response_format["type"] == "json_object") {
+      if (response_format["type"] == "json_object") {
         llama_params["json_schema"] = json_value(response_format, "schema", json::object());
-        std::cerr << "GOT " << llama_params["json_schema"] << std::endl;
+      } else {
+        throw std::runtime_error("response_format type not supported: " + response_format["type"].dump());
       }
     }
 
