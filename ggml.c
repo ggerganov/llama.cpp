@@ -42,6 +42,7 @@
 #pragma warning(disable: 4996)
 #endif
 
+// hand assembled replacement functions are cool.
 #if defined(__k1om__)
 #include <ggml-phi-knc.h>
 #endif
@@ -500,7 +501,11 @@ FILE * ggml_fopen(const char * fname, const char * mode) {
 
 static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 
+#if defined(__k1om__)
+// We get this function from elsewhere.
+#else
 static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc);
+#endif
 static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t * restrict x, size_t bx, ggml_fp16_t * restrict y, size_t by, int nrc);
 
 static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
@@ -1502,6 +1507,9 @@ inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)   
 inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];   }
 inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];   }
 
+#if defined(__k1om__)
+// we get this function from elsewhere.
+#else
 static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc) {
    assert(nrc == 1);
    UNUSED(nrc);
@@ -1534,8 +1542,6 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
     for (int i = np; i < n; ++i) {
         sumf += x[i]*y[i];
     }
-#elif defined(__k1om__)
-    float sumf = DotProduct_F32(x, y, n);
 #else
     // scalar
     ggml_float sumf = 0.0;
@@ -1546,6 +1552,7 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
 
     *s = sumf;
 }
+#endif
 
 static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t * restrict x, size_t bx, ggml_fp16_t * restrict y, size_t by, int nrc) {
     assert(nrc == 1);

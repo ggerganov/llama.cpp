@@ -744,12 +744,25 @@ clean:
 # Helper function that replaces .c, .cpp, and .cu file endings with .o:
 GET_OBJ_FILE = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(patsubst %.cu,%.o,$(1))))
 
+# Helper function that replaces .c, .cpp, and .cu file endings with .s:
+GET_ASM_FILE = $(patsubst %.c,%.s,$(patsubst %.cpp,%.s,$(patsubst %.cu,%.s,$(1))))
+
 main: examples/main/main.cpp                                  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
+
+bench-phi-knc.s: bench-phi-knc.c
+	$(CC) $(CFLAGS) -S $< -o $(call GET_ASM_FILE, $<)
+
+ggml-phi-knc.s: ggml-phi-knc.c
+	$(CC) $(CFLAGS) -S $< -o $(call GET_ASM_FILE, $<)
+
+bench-phi-knc: bench-phi-knc.c ggml-phi-knc.o
+	$(CC) $(CFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CC) $(CFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)

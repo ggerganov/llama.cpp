@@ -6,11 +6,8 @@
 extern "C" {
 #endif
 
-#include <stdint.h>
-
-GGML_CALL float DotProduct_F32(const float * restrict vec1, const float * restrict vec2, uint32_t count);
+void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc);
 
 #ifdef  __cplusplus
 }
 #endif
-
