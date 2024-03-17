@@ -67,6 +67,7 @@ main.exe -m models\7B\ggml-model.bin --ignore-eos -n -1 --random-prompt
 In this section, we cover the most commonly used options for running the `main` program with the LLaMA models:
 
 -   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
+-   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf).
 -   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
 -   `-ins, --instruct`: Run the program in instruction mode, which is particularly useful when working with Alpaca models.
 -   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.
