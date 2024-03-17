@@ -999,8 +999,6 @@ struct winogrande_entry {
     size_t i_logits;
     size_t common_prefix;
     size_t required_tokens;
-    size_t n_base1; // number of tokens for context + choice 1
-    size_t n_base2; // number of tokens for context + choice 2
     std::vector<llama_token> seq_tokens[2];
 };
 
@@ -1076,8 +1074,6 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string&
  */
 static void winogrande_score(llama_context * ctx, const gpt_params & params) {
 
-    constexpr int k_min_trailing_ctx = 3;
-
     auto data = load_winogrande_from_csv(params.prompt);
     if (data.empty()) {
         fprintf(stderr, "%s: no tasks\n", __func__);
@@ -1127,9 +1123,6 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             task.seq_tokens[1].size() - task.common_prefix
             // the last tokens don't need to be evaluated
             - 2;
-
-        task.n_base1 = ::llama_tokenize(ctx, task.first + task.choices[0], add_bos).size();
-        task.n_base2 = ::llama_tokenize(ctx, task.first + task.choices[1], add_bos).size();
     }
 
     fprintf(stderr, "%s : calculating winogrande score over selected tasks.\n", __func__);
@@ -1209,25 +1202,19 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         for (size_t i = i0; i < i1; ++i) {
             auto & task = data[i];
 
-            // FIXME: this should not be needed.
-            const bool skip_choice =
-                task.seq_tokens[0].size() - task.common_prefix > k_min_trailing_ctx &&
-                task.seq_tokens[1].size() - task.common_prefix > k_min_trailing_ctx;
-
-            const auto& n_base1 = skip_choice ? task.n_base1 : task.common_prefix;
-            const int last_1st = task.seq_tokens[0].size() - n_base1 > 1 ? 1 : 0;
-            // start from the end of the common prefix or the end token of the first choice
-            size_t li = n_base1 - task.common_prefix;
-            for (size_t j = n_base1-1; j < task.seq_tokens[0].size()-1-last_1st; ++j) {
+            // start from the end of the common prefix
+            size_t li = 0;
+            for (size_t j = task.common_prefix-1; j < task.seq_tokens[0].size()-1; ++j) {
                 eval_pairs.emplace_back(task.i_logits + li++, task.seq_tokens[0][j+1]);
             }
-            const auto& n_base2 = skip_choice ? task.n_base2 : task.common_prefix;
-            const int last_2nd = task.seq_tokens[1].size() - n_base2 > 1 ? 1 : 0;
-            // TODO: consider fixing the following (maybe remove choice skipping too?)
-            // start from the end of the first version (!) or the end token of the second choice?
-            li = task.seq_tokens[0].size() - 1 - task.common_prefix + n_base2 - task.common_prefix;
-            for (size_t j = n_base2-1; j < task.seq_tokens[1].size()-1-last_2nd; ++j) {
+            // first token of the second choice is predicted by the end of the common prefix
+            eval_pairs.emplace_back(task.i_logits, task.seq_tokens[1][task.common_prefix]);
+            for (size_t j = task.common_prefix; j < task.seq_tokens[1].size()-1; ++j) {
                 eval_pairs.emplace_back(task.i_logits + li++, task.seq_tokens[1][j+1]);
+            }
+            if (i < i1 - 1) {
+                // make sure all logits have been processed as expected
+                GGML_ASSERT(task.i_logits + li == data[i+1].i_logits);
             }
         }
         compute_logprobs(batch_logits.data(), n_vocab, workers, eval_pairs, eval_results);
@@ -1236,25 +1223,17 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
         for (size_t i = i0; i < i1; ++i) {
             auto & task = data[i];
 
-            const bool skip_choice =
-                task.seq_tokens[0].size() - task.common_prefix > k_min_trailing_ctx &&
-                task.seq_tokens[1].size() - task.common_prefix > k_min_trailing_ctx;
-
             float score_1st = 0;
-            const auto& n_base1 = skip_choice ? task.n_base1 : task.common_prefix;
-            const int last_1st = task.seq_tokens[0].size() - n_base1 > 1 ? 1 : 0;
-            for (size_t j = n_base1-1; j < task.seq_tokens[0].size()-1-last_1st; ++j) {
+            for (size_t j = task.common_prefix-1; j < task.seq_tokens[0].size()-1; ++j) {
                 score_1st += eval_results[ir++];
             }
-            score_1st /= (task.seq_tokens[0].size() - n_base1 - last_1st);
+            score_1st /= (task.seq_tokens[0].size() - task.common_prefix);
 
             float score_2nd = 0;
-            const auto& n_base2 = skip_choice ? task.n_base2 : task.common_prefix;
-            const int last_2nd = task.seq_tokens[1].size() - n_base2 > 1 ? 1 : 0;
-            for (size_t j = n_base2-1; j < task.seq_tokens[1].size()-1-last_2nd; ++j) {
+            for (size_t j = task.common_prefix-1; j < task.seq_tokens[1].size()-1; ++j) {
                 score_2nd += eval_results[ir++];
             }
-            score_2nd /= (task.seq_tokens[1].size() - n_base2 - last_2nd);
+            score_2nd /= (task.seq_tokens[1].size() - task.common_prefix);
 
             int result = score_1st > score_2nd ? 1 : 2;
 
