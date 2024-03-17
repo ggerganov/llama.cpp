@@ -664,8 +664,6 @@ grammar-parser.o: common/grammar-parser.cpp common/grammar-parser.h
 
 json-schema-to-grammar.o: examples/server/json-schema-to-grammar.cpp examples/server/json-schema-to-grammar.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-	# $(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)  -DLLAMA_BUILD_JSON_SCHEMA_CONVERTER=1
-	# $(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 train.o: common/train.cpp common/train.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -862,7 +860,7 @@ tests/test-double-float: tests/test-double-float.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp examples/server/json-schema-to-grammar.cpp examples/server/json-schema-to-grammar.h
+tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp ggml.o llama.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

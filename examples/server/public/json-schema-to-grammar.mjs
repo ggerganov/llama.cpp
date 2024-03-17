@@ -15,7 +15,7 @@ const PRIMITIVE_RULES = {
       )* "\\"" space`,
   null: '"null" space',
 };
-const OBJECT_RULE_NAMES = ['object', 'array', 'string', 'number', 'boolean', 'null'];
+const OBJECT_RULE_NAMES = ['object', 'array', 'string', 'number', 'boolean', 'null', 'value'];
 
 // TODO: support "uri", "email" string formats
 const DATE_RULES = {
@@ -467,7 +467,9 @@ export class SchemaConverter {
     if (typeof additionalProperties === 'object') {
       const subName = `${name ?? ''}${name ? '-' : ''}additional`;
       const valueRule = this.visit(additionalProperties, `${subName}-value`);
-      propKvRuleNames['*'] = this._addRule(`${subName}-kv`, `string ":" space ${valueRule}`);
+      propKvRuleNames['*'] = this._addRule(
+        `${subName}-kv`,
+        `${this._addRule('string', PRIMITIVE_RULES['string'])} ":" space ${valueRule}`);
       optionalProps.push('*');
     }
 

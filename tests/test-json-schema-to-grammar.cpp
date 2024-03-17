@@ -11,6 +11,8 @@
 #include "../examples/server/json-schema-to-grammar.h"
 #include "../examples/server/json-schema-to-grammar.cpp"
 
+#include "grammar-parser.h"
+
 using namespace std;
 
 static std::string trim(const std::string & source) {
@@ -30,7 +32,7 @@ struct TestCase {
   string schema;
   string expected;
 
-  void verify(const string& actual) const {
+  void verify(const string& actual, bool parse = false) const {
     if (trim(actual) != trim(expected)) {
       cerr << "#" << endl;
       cerr << "# Test '" << name.c_str() << "' failed." << endl;
@@ -39,6 +41,10 @@ struct TestCase {
       cerr << "# EXPECTED:\n" << expected.c_str() << endl;
       cerr << "# ACTUAL:\n" << actual.c_str() << endl;
       assert(false);
+    }
+    if (parse) {
+      auto state = grammar_parser::parse(actual.c_str());
+      assert(state.symbol_ids.find("root") != state.symbol_ids.end());
     }
   }
   void verify_status(TestCaseStatus status) const {
@@ -108,6 +114,7 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
               [^"\\] |
               "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
             )* "\"" space
+      value ::= object | array | string | number | boolean
     )"""
   });
 
@@ -453,6 +460,10 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
       number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
       root ::= "{" space  (additional-kvs )? "}" space
       space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
     )"""
   });
 
@@ -499,6 +510,10 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
       number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
       root ::= "{" space  (a-kv a-rest | additional-kvs )? "}" space
       space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
     )"""
   });
 
@@ -523,6 +538,10 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
       number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
       root ::= "{" space a-kv ( "," space ( b-kv b-rest | additional-kvs ) )? "}" space
       space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
     )"""
   });
 
@@ -606,6 +625,16 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
 }
 
 int main() {
+  test_all("C++", [](const TestCase& tc) {
+    try {
+      // We only try and parse the grammar output in the C++ test.
+      tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)), /* parse= */ true);
+      tc.verify_status(SUCCESS);
+    } catch (const runtime_error& ex) {
+      cerr << "Error: " << ex.what() << endl;
+      tc.verify_status(FAILURE);
+    }
+  });
   test_all("Python", [](const TestCase& tc) {
     write("test-json-schema-input.tmp", tc.schema);
     tc.verify_status(std::system(
@@ -617,14 +646,5 @@ int main() {
     tc.verify_status(std::system(
       "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
     tc.verify(read("test-grammar-output.tmp"));
-  });
-  test_all("C++", [](const TestCase& tc) {
-    try {
-      tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
-      tc.verify_status(SUCCESS);
-    } catch (const runtime_error& ex) {
-      cerr << "Error: " << ex.what() << endl;
-      tc.verify_status(FAILURE);
-    }
   });
 }

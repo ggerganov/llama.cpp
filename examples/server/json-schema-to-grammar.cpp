@@ -33,7 +33,7 @@ unordered_map<string, string> PRIMITIVE_RULES = {
                "      )* \"\\\"\" space"},
     {"null", "\"null\" space"}
 };
-vector<string> OBJECT_RULE_NAMES = {"object", "array", "string", "number", "boolean", "null"};
+vector<string> OBJECT_RULE_NAMES = {"object", "array", "string", "number", "boolean", "null", "value"};
 
 unordered_map<string, string> DATE_RULES = {
     {"date", "[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( [0-2] [0-9] | \"3\" [0-1] )"},
@@ -416,7 +416,7 @@ private:
         if (additional_properties.is_object()) {
             string sub_name = name + (name.empty() ? "" : "-") + "additional";
             string value_rule = visit(additional_properties, sub_name + "-value");
-            string kv_rule = _add_rule(sub_name + "-kv", "string \":\" space " + value_rule);
+            string kv_rule = _add_rule(sub_name + "-kv", _add_rule("string", PRIMITIVE_RULES.at("string")) + " \":\" space " + value_rule);
             prop_kv_rule_names["*"] = kv_rule;
             optional_props.push_back("*");
         }
