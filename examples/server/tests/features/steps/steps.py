@@ -153,7 +153,8 @@ def step_start_server(context):
 async def step_wait_for_the_server_to_be_started(context, expecting_status):
     match expecting_status:
         case 'healthy':
-            await wait_for_health_status(context, context.base_url, 200, 'ok')
+            await wait_for_health_status(context, context.base_url, 200, 'ok',
+                                         timeout=30)
 
         case 'ready' | 'idle':
             await wait_for_health_status(context, context.base_url, 200, 'ok',
