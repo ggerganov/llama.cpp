@@ -131,11 +131,15 @@ jobs:
         run: |
           pip install -r examples/server/tests/requirements.txt
 
+      - name: Copy Libcurl
+        id: prepare_libcurl
+        run: |
+          cp $env:RUNNER_TEMP/libcurl/bin/libcurl-x64.dll ./build/bin/Release/libcurl-x64.dll
+
       - name: Tests
         id: server_integration_tests
         if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
-          cp $env:RUNNER_TEMP/libcurl/bin/libcurl-x64.dll ./build/bin/Release/libcurl.dll
           cd examples/server/tests
           behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
 

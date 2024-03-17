@@ -1660,6 +1660,11 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     // Set the URL, allow to follow http redirection
     curl_easy_setopt(curl, CURLOPT_URL, model_url);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+#if defined(_WIN32)
+    // CURLSSLOPT_NATIVE_CA tells libcurl to use standard certificate store of
+    //   operating system. Currently implemented under MS-Windows.
+    curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+#endif
 
     // Check if the file already exists locally
     struct stat model_file_info;

@@ -1094,6 +1094,8 @@ def start_server_background(context):
 
     pkwargs = {
         'creationflags': flags,
+        'stderr': subprocess.PIPE,
+        'stdout': subprocess.PIPE
     }
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],

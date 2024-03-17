@@ -33,6 +33,16 @@ def after_scenario(context, scenario):
             print("\x1b[33;101mERROR: Server stopped listening\x1b[0m\n")
 
     if not pid_exists(context.server_process.pid):
+        print("Trying to find server logs:")
+        out, err = context.server_process.communicate()
+        if out:
+            print("Server stdout:\n")
+            print(out)
+            print("\n")
+        if err:
+            print("Server stderr:\n")
+            print(err)
+            print("\n")
         assert False, f"Server not running pid={context.server_process.pid} ..."
 
     server_graceful_shutdown(context)
