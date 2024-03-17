@@ -9223,11 +9223,11 @@ static void llama_output_reserve(llama_context & lctx, int32_t n_outputs) {
         const size_t buf_output_size = (lctx.logits_size + lctx.embd_size)*sizeof(float);
 
         if (lctx.buf_output) {
-            // This doesn't happen often
-// #ifndef NDEBUG
+#ifndef NDEBUG
+            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
             const size_t prev_size = ggml_backend_buffer_get_size(lctx.buf_output);
             LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, buf_output_size / 1024.0 / 1024.0);
-// #endif
+#endif
             ggml_backend_buffer_free(lctx.buf_output);
             lctx.buf_output = nullptr;
             lctx.logits = nullptr;
