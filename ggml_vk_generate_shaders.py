@@ -410,6 +410,133 @@ mulmat_load_q8_0 = """
             buf_a[buf_idx    ] = FLOAT_TYPE(v.x);
             buf_a[buf_idx + 1] = FLOAT_TYPE(v.y);"""
 
+
+mulmat_load_q2_K = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+
+            const uint ib = idx / 128;                         // 2 values per idx
+            const uint iqs = idx % 128;                        // 0..127
+
+            const uint qsi = (iqs / 64) * 32 + (iqs % 16) * 2; // 0,2,4..30
+            const uint scalesi = iqs / 8;                      // 0..15
+            const uint qsshift = ((iqs % 64) / 16) * 2;        // 0,2,4,6
+
+            const uvec2 qs = uvec2(data_a[ib].qs[qsi], data_a[ib].qs[qsi + 1]);
+            const uint scales = data_a[ib].scales[scalesi];
+            const vec2 d = vec2(data_a[ib].d);
+
+            const vec2 v = d.x * float(scales & 0xF) * vec2((qs >> qsshift) & 3) - d.y * float(scales >> 4);
+
+            buf_a[buf_idx    ] = FLOAT_TYPE(v.x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(v.y);"""
+
+mulmat_load_q3_K = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+
+            const uint ib = idx / 128;                   // 2 values per idx
+            const uint iqs = idx % 128;                  // 0..127
+
+            const uint n = iqs / 64;                     // 0,1
+            const uint qsi = n * 32 + (iqs % 16) * 2;    // 0,2,4..62
+            const uint hmi =          (iqs % 16) * 2;    // 0,2,4..30
+            const uint j = (iqs % 64) / 4;               // 0..3
+            const uint is = iqs / 8;                     // 0..15
+            const uint halfsplit = ((iqs % 64) / 16);    // 0,1,2,3
+            const uint qsshift = halfsplit * 2;          // 0,2,4,6
+            const uint m = 1 << (4 * n + halfsplit);     // 1,2,4,8,16,32,64,128
+
+            const int8_t us = int8_t(is <  4 ? (data_a[ib].scales[is-0] & 0xF) | (((data_a[ib].scales[is+8] >> 0) & 3) << 4) :
+                                    is <  8 ? (data_a[ib].scales[is-0] & 0xF) | (((data_a[ib].scales[is+4] >> 2) & 3) << 4) :
+                                    is < 12 ? (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is+0] >> 4) & 3) << 4) :
+                                            (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is-4] >> 6) & 3) << 4));
+            const FLOAT_TYPE dl    = FLOAT_TYPE(data_a[ib].d) * FLOAT_TYPE(us - 32);
+
+            buf_a[buf_idx    ] = dl * FLOAT_TYPE(int8_t((data_a[ib].qs[qsi    ] >> qsshift) & 3) - (((data_a[ib].hmask[hmi    ] & m) != 0) ? 0 : 4));
+            buf_a[buf_idx + 1] = dl * FLOAT_TYPE(int8_t((data_a[ib].qs[qsi + 1] >> qsshift) & 3) - (((data_a[ib].hmask[hmi + 1] & m) != 0) ? 0 : 4));"""
+
+mulmat_load_q4_K = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+
+            const uint ib = idx / 128;                 // 2 values per idx
+            const uint iqs = idx % 128;                // 0..127
+
+            const uint n = iqs / 32;                   // 0,1,2,3
+            const uint b = (iqs % 32) / 16;            // 0,1
+            const uint is = 2 * n + b;                 // 0..7
+            const uint qsi = n * 32 + (iqs % 16) * 2;  // 0,2,4..126
+
+            const vec2 loadd = vec2(data_a[ib].d);
+
+            uint8_t sc;
+            uint8_t mbyte;
+            if (is < 4) {
+                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
+                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
+            } else {
+                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
+                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
+            }
+            const FLOAT_TYPE d = FLOAT_TYPE(loadd.x) * sc;
+            const FLOAT_TYPE m = FLOAT_TYPE(loadd.y) * mbyte;
+
+            buf_a[buf_idx    ] = d * FLOAT_TYPE((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) - m;
+            buf_a[buf_idx + 1] = d * FLOAT_TYPE((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) - m;"""
+
+mulmat_load_q5_K = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+
+            const uint ib = idx / 128;                 // 2 values per idx
+            const uint iqs = idx % 128;                // 0..127
+
+            const uint n = iqs / 32;                   // 0,1,2,3
+            const uint b = (iqs % 32) / 16;            // 0,1
+            const uint is = 2 * n + b;                 // 0..7
+            const uint qsi = n * 32 + (iqs % 16) * 2;  // 0,2,4..126
+            const uint qhi = (iqs % 16) * 2;           // 0,2,4..30
+
+            const uint8_t hm = uint8_t(1 << (iqs / 16));
+
+            const vec2 loadd = vec2(data_a[ib].d);
+
+            uint8_t sc;
+            uint8_t mbyte;
+            if (is < 4) {
+                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
+                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
+            } else {
+                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
+                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
+            }
+            const FLOAT_TYPE d = FLOAT_TYPE(loadd.x) * sc;
+            const FLOAT_TYPE m = FLOAT_TYPE(loadd.y) * mbyte;
+
+            buf_a[buf_idx    ] = d * FLOAT_TYPE(((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) + ((data_a[ib].qh[qhi    ] & hm) != 0 ? 16 : 0)) - m;
+            buf_a[buf_idx + 1] = d * FLOAT_TYPE(((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) + ((data_a[ib].qh[qhi + 1] & hm) != 0 ? 16 : 0)) - m;"""
+
+mulmat_load_q6_K = """
+            const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
+            const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
+
+            const uint ib = idx / 128;                  // 2 values per idx
+            const uint iqs = idx % 128;                 // 0..127
+
+            const uint n = iqs / 64;                    // 0,1
+            const uint b = (iqs % 64) / 32;             // 0,1
+            const uint is_b = (iqs % 16) / 8;           // 0,1
+            const uint qhshift = ((iqs % 64) / 16) * 2; // 0,2,4,6
+            const uint is = 8 * n + qhshift + is_b;     // 0..15
+            const uint qsi = n * 64 + (iqs % 32) * 2;   // 0,2,4..126
+            const uint qhi = n * 32 + (iqs % 16) * 2;   // 0,2,4..62
+
+            const FLOAT_TYPE dscale = FLOAT_TYPE(data_a[ib].d) * FLOAT_TYPE(data_a[ib].scales[is]);
+
+            buf_a[buf_idx    ] = dscale * FLOAT_TYPE(int8_t(((data_a[ib].ql[qsi    ] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi    ] >> qhshift) & 3) << 4)) - 32);
+            buf_a[buf_idx + 1] = dscale * FLOAT_TYPE(int8_t(((data_a[ib].ql[qsi + 1] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi + 1] >> qhshift) & 3) << 4)) - 32);"""
+
 mulmat_body2 = """
         }
         [[unroll]] for (uint l = 0; l < BN; l += loadstride_b) {
@@ -2417,6 +2544,31 @@ async def main():
         stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q8_0_defines, mulmat_body1, mulmat_load_q8_0, mulmat_body2))
         tasks.append(string_to_spv("matmul_q8_0_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q8_0", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_q8_0_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q8_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q2_K_defines, mulmat_body1, mulmat_load_q2_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q2_k_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q2_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q2_k_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q2_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q3_K_defines, mulmat_body1, mulmat_load_q3_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q3_k_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q3_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q3_k_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q3_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q4_K_defines, mulmat_body1, mulmat_load_q4_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q4_k_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q4_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q4_k_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q5_K_defines, mulmat_body1, mulmat_load_q5_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q5_k_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q5_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q5_k_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q5_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q6_K_defines, mulmat_body1, mulmat_load_q6_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_q6_k_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q6_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_q6_k_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q6_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
     # Shaders where precision is needed, so no fp16 version
 
