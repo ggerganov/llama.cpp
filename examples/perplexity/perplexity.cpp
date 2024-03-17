@@ -1038,6 +1038,38 @@ static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string&
         auto choice2 = line.substr(comma_pos[2]+1, comma_pos[3] - comma_pos[2] - 1);
         auto answer  = line.substr(comma_pos[3]+1, line.size() - comma_pos[3] - 1);
         auto index = line.substr(0, comma_pos[0]);
+        if ('a' <= sentence[0] && sentence[0] <= 'z') {
+            // make the first letter a capital letter
+            sentence[0] -= 'a' - 'A';
+        }
+        for (int i = 0; i < (int) sentence.size() - 1; ++i) {
+            // trim repeated spaces and spaces before punctuation
+            if (sentence[i] == ' ') {
+                char next = sentence[i+1];
+                if (next == ' ' || next == ',' || next == '.' || next == '\'') {
+                    char r[2] = { next, 0 };
+                    sentence.replace(i, 2, r);
+                    --i; // stay at the same index for repeated spaces
+                }
+            } else if (sentence[i] == ',' || sentence[i] == '.') {
+                if (sentence[i] == sentence[i+1]) {
+                    // trim repeated punctuation (forward to work at the end of sentences)
+                    char r[2] = { sentence[i], 0 };
+                    sentence.replace(i, 2, r);
+                    --i; // same index to then run the other checks on that punctuation
+                } else if (0 < i && sentence[i-1] == sentence[i]) {
+                    // trim repeated punctuation (looks back to work with the space trim)
+                    char r[2] = { sentence[i], 0 };
+                    sentence.replace(i-1, 2, r);
+                    i -= 2; // go back because content was shifted
+                } else if (sentence[i+1] != ' ') {
+                    // add missing space after punctuation
+                    // (since the loop stops before the end, this adds no trailing space)
+                    char r[3] = { sentence[i], ' ', 0 };
+                    sentence.replace(i, 1, r);
+                }
+            }
+        }
         int where = 0;
         for ( ; where < int(sentence.size()); ++where) {
             if (sentence[where] == '_') break;
