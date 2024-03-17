@@ -1750,6 +1750,14 @@ struct llama_model * llama_load_model_from_url(const char * model_url, const cha
     if (!file_exists || strcmp(etag, headers.etag) != 0 || strcmp(last_modified, headers.last_modified) != 0) {
         char path_model_temporary[LLAMA_CURL_MAX_PATH_LENGTH] = {0};
         snprintf(path_model_temporary, sizeof(path_model_temporary), "%s.downloadInProgress", path_model);
+        if (file_exists) {
+            fprintf(stderr, "%s: deleting previous downloaded model file: %s\n", __func__, path_model);
+            if (remove(path_model) != 0) {
+                curl_easy_cleanup(curl);
+                fprintf(stderr, "%s: unable to delete file: %s\n", __func__, path_model);
+                return NULL;
+            }
+        }
 
         // Set the output file
         auto * outfile = fopen(path_model_temporary, "wb");
