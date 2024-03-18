@@ -515,7 +515,3 @@ Note:
   ```
 
   Otherwise, please double-check the installation GPU steps.
-
-## Todo
-
-- Add support to multiple cards.
