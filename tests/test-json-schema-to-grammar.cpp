@@ -30,29 +30,37 @@ struct TestCase {
   TestCaseStatus expected_status;
   string name;
   string schema;
-  string expected;
+  string expected_grammar;
 
-  void verify(const string& actual, bool parse = false) const {
-    if (trim(actual) != trim(expected)) {
-      cerr << "#" << endl;
-      cerr << "# Test '" << name.c_str() << "' failed." << endl;
-      cerr << "#" << endl;
-      cerr << schema.c_str() << endl;
-      cerr << "# EXPECTED:\n" << expected.c_str() << endl;
-      cerr << "# ACTUAL:\n" << actual.c_str() << endl;
+  void _print_failure_header() const {
+    cerr << "#" << endl;
+    cerr << "# Test '" << name.c_str() << "' failed." << endl;
+    cerr << "#" << endl;
+    cerr << schema.c_str() << endl;
+  }
+  void verify(const string& actual_grammar) const {
+    if (trim(actual_grammar) != trim(expected_grammar)) {
+      _print_failure_header();
+      cerr << "# EXPECTED:\n" << expected_grammar.c_str() << endl;
+      cerr << "# ACTUAL:\n" << actual_grammar.c_str() << endl;
       assert(false);
     }
-    if (parse) {
-      auto state = grammar_parser::parse(actual.c_str());
-      assert(state.symbol_ids.find("root") != state.symbol_ids.end());
+  }
+  void verify_expectation_parseable() const {
+    try {
+      auto state = grammar_parser::parse(expected_grammar.c_str());
+      if (state.symbol_ids.find("root") == state.symbol_ids.end()) {
+        throw runtime_error("Grammar failed to parse:\n" + expected_grammar);
+      }
+    } catch (const runtime_error& ex) {
+      _print_failure_header();
+      cerr << "# GRAMMAR ERROR: " << ex.what() << endl;
+      assert(false);
     }
   }
   void verify_status(TestCaseStatus status) const {
     if (status != expected_status) {
-      cerr << "#" << endl;
-      cerr << "# Test '" << name.c_str() << "' failed." << endl;
-      cerr << "#" << endl;
-      cerr << schema.c_str() << endl;
+      _print_failure_header();
       cerr << "# EXPECTED STATUS: " << (expected_status == SUCCESS ? "SUCCESS" : "FAILURE") << endl;
       cerr << "# ACTUAL STATUS: " << (status == SUCCESS ? "SUCCESS" : "FAILURE") << endl;
       assert(false);
@@ -612,7 +620,7 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
     SUCCESS,
     "mix of allOf, anyOf and $ref (similar to https://json.schemastore.org/tsconfig.json)",
     R"""({
-      "allOf": [ 
+      "allOf": [
         {"$ref": "#/definitions/foo"},
         {"$ref": "#/definitions/bar"},
         {
@@ -700,8 +708,7 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
 int main() {
   test_all("C++", [](const TestCase& tc) {
     try {
-      // We only try and parse the grammar output in the C++ test.
-      tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)), /* parse= */ true);
+      tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
       tc.verify_status(SUCCESS);
     } catch (const runtime_error& ex) {
       cerr << "Error: " << ex.what() << endl;
@@ -719,5 +726,10 @@ int main() {
     tc.verify_status(std::system(
       "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
     tc.verify(read("test-grammar-output.tmp"));
+  });
+  test_all("Check Expectations Validity", [](const TestCase& tc) {
+    if (tc.expected_status == SUCCESS) {
+      tc.verify_expectation_parseable();
+    }
   });
 }
