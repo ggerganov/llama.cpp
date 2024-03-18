@@ -62,7 +62,7 @@ unordered_map<char, string> GRAMMAR_LITERAL_ESCAPES = {
 };
 
 unordered_set<char> NON_LITERAL_SET = {'|', '.', '(', ')', '[', ']', '{', '}', '*', '+', '?'};
-unordered_set<char> ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = {'{', '*', '+', '?'};
+unordered_set<char> ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = {'[', ']', '(', ')', '|', '{', '}', '*', '+', '?'};
 
 template <typename Iterator>
 string join(Iterator begin, Iterator end, const string& separator) {
@@ -186,9 +186,15 @@ private:
         size_t i = 0;
         size_t length = sub_pattern.length();
 
-        std::function<pair<string, bool>()> transform = [&]() -> pair<string, bool> {
+        using literal_or_rule = pair<string, bool>;
+        auto to_rule = [&](const literal_or_rule& ls) {
+            auto is_literal = ls.second;
+            auto s = ls.first;
+            return is_literal ? "\"" + s + "\"" : s;
+        };
+        std::function<literal_or_rule()> transform = [&]() -> literal_or_rule {
             size_t start = i;
-            vector<pair<string, bool>> seq;
+            vector<literal_or_rule> seq;
 
             auto get_dot = [&]() {
                 string rule;
@@ -202,28 +208,32 @@ private:
 
             // Joins the sequence, merging consecutive literals together.
             auto join_seq = [&]() {
-                vector<string> results;
+                vector<literal_or_rule> ret;
 
                 string literal;
                 auto flush_literal = [&]() {
                   if (literal.empty()) {
                     return false;
                   }
-                  results.push_back("\"" + literal + "\"");
+                  ret.push_back(make_pair(literal, true));
                   literal.clear();
                   return true;
                 };
 
                 for (const auto& item : seq) {
-                    if (item.second) {
-                      literal += item.first.substr(1, item.first.length() - 2);
+                    auto is_literal = item.second;
+                    if (is_literal) {
+                      literal += item.first;
                     } else {
                       flush_literal();
-                      results.push_back(item.first);
+                      ret.push_back(item);
                     }
                 }
-                if (flush_literal() && results.size() == 1) {
-                    return make_pair(results[0], true);
+                flush_literal();
+
+                vector<string> results;
+                for (const auto& item : ret) {
+                    results.push_back(to_rule(item));
                 }
                 return make_pair(join(results.begin(), results.end(), " "), false);
             };
@@ -240,8 +250,7 @@ private:
                             _warnings.push_back("Unsupported pattern syntax");
                         }
                     }
-                    auto sub_result = transform();
-                    seq.push_back(make_pair("(" + sub_result.first + ")", false));
+                    seq.push_back(make_pair("(" + to_rule(transform()) + ")", false));
                 } else if (c == ')') {
                     i++;
                     if (start > 0 && sub_pattern[start - 1] != '(') {
@@ -270,7 +279,7 @@ private:
                     seq.push_back(make_pair("|", false));
                     i++;
                 } else if (c == '*' || c == '+' || c == '?') {
-                    seq.back().first += c;
+                    seq.back() = make_pair(to_rule(seq.back()) + c, false);
                     i++;
                 } else if (c == '{') {
                     string curly_brackets = string(1, c);
@@ -287,17 +296,22 @@ private:
                     auto nums = split(curly_brackets.substr(1, curly_brackets.length() - 2), ",");
                     int min_times = 0;
                     int max_times = numeric_limits<int>::max();
-                    if (nums.size() == 1) {
-                        min_times = max_times = stoi(nums[0]);
-                    } else if (nums.size() != 2) {
-                        _errors.push_back("Wrong number of values in curly brackets");
-                    } else {
-                        if (!nums[0].empty()) {
-                            min_times = stoi(nums[0]);
+                    try {
+                        if (nums.size() == 1) {
+                            min_times = max_times = std::stoi(nums[0]);
+                        } else if (nums.size() != 2) {
+                            _errors.push_back("Wrong number of values in curly brackets");
+                        } else {
+                            if (!nums[0].empty()) {
+                                min_times = std::stoi(nums[0]);
+                            }
+                            if (!nums[1].empty()) {
+                                max_times = std::stoi(nums[1]);
+                            }
                         }
-                        if (!nums[1].empty()) {
-                            max_times = stoi(nums[1]);
-                        }
+                    } catch (const std::invalid_argument& e) {
+                        _errors.push_back("Invalid number in curly brackets");
+                        return make_pair("", false);
                     }
                     auto &last = seq.back();
                     auto &sub = last.first;
@@ -346,36 +360,39 @@ private:
                     }
                 } else {
                     string literal;
-                    while (i < length && NON_LITERAL_SET.find(sub_pattern[i]) == NON_LITERAL_SET.end() &&
-                          (i == length - 1 || ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS.find(sub_pattern[i + 1]) == ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS.end())) {
+                    auto is_non_literal = [&](char c) {
+                        return NON_LITERAL_SET.find(c) != NON_LITERAL_SET.end();
+                    };
+                    while (i < length) {
                         if (sub_pattern[i] == '\\' && i < length - 1) {
-                            i++;
-                            if (NON_LITERAL_SET.find(sub_pattern[i]) != NON_LITERAL_SET.end()) {
+                            char next = sub_pattern[i + 1];
+                            if (ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS.find(next) != ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS.end()) {
+                                i++;
                                 literal += sub_pattern[i];
+                                i++;
                             } else {
-                                literal += "\\" + string(1, sub_pattern[i]);
+                                literal += sub_pattern.substr(i, 2);
+                                i += 2;
                             }
+                        } else if (sub_pattern[i] == '"') {
+                            literal += "\\\"";
                             i++;
-                        } else {
-                            if (sub_pattern[i] == '"') {
-                                literal += "\\";
-                            }
+                        } else if (!is_non_literal(sub_pattern[i]) &&
+                                (i == length - 1 || literal.empty() || sub_pattern[i + 1] == '.' || !is_non_literal(sub_pattern[i + 1]))) {
                             literal += sub_pattern[i];
                             i++;
+                        } else {
+                            break;
                         }
                     }
                     if (!literal.empty()) {
-                        seq.push_back(make_pair("\"" + literal + "\"", true));
-                    }
-                    if (i < length && NON_LITERAL_SET.find(sub_pattern[i]) == NON_LITERAL_SET.end()) {
-                        seq.push_back(make_pair("\"" + string(1, sub_pattern[i]) + "\"", true));
-                        i++;
+                        seq.push_back(make_pair(literal, true));
                     }
                 }
             }
             return join_seq();
         };
-        return _add_rule(name, transform().first);
+        return _add_rule(name, "\"\\\"\" " + to_rule(transform()) + " \"\\\"\" space");
     }
 
     string _resolve_ref(const string& ref) {

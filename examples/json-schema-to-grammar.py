@@ -44,16 +44,17 @@ GRAMMAR_RANGE_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"\]\-\\]')
 GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"', '-': '\\-', ']': '\\]'}
 
 NON_LITERAL_SET = set('|.()[]{}*+?')
-ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('{*+?')
+ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('[]()|{}*+?')
 
 DATE_PATTERN = '[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])'
 TIME_PATTERN = '([01][0-9]|2[0-3])(:[0-5][0-9]){2}(\\.[0-9]{1,3})?(Z|[+-](([01][0-9]|2[0-3]):[0-5][0-9]))' # Cap millisecond precision w/ 3 digits
 
 class SchemaConverter:
-    def __init__(self, *, prop_order, allow_fetch, dotall):
+    def __init__(self, *, prop_order, allow_fetch, dotall, raw_pattern):
         self._prop_order = prop_order
         self._allow_fetch = allow_fetch
         self._dotall = dotall
+        self._raw_pattern = raw_pattern
         self._rules = {'space': SPACE_RULE}
         self._refs = {}
         self._refs_being_resolved = set()
@@ -152,6 +153,10 @@ class SchemaConverter:
         i = 0
         length = len(pattern)
 
+        def to_rule(s: Tuple[str, bool]) -> str:
+            (txt, is_literal) = s
+            return "\"" + txt + "\"" if is_literal else txt
+        
         def transform() -> Tuple[str, bool]:
             '''
                 Parse a unit at index i (advancing it), and return its string representation + whether it's a literal.
@@ -180,13 +185,12 @@ class SchemaConverter:
                 ret = []
                 for is_literal, g in itertools.groupby(seq, lambda x: x[1]):
                     if is_literal:
-                        lit = ''.join(x[0][1:-1] for x in g)
-                        ret.append((f'"{lit}"', True))
+                        ret.append((''.join(x[0] for x in g), True))
                     else:
                         ret.extend(g)
                 if len(ret) == 1:
                     return ret[0]
-                return (' '.join(x[0] for x in seq), False)
+                return (' '.join(to_rule(x) for x in seq), False)
 
             while i < length:
                 c = pattern[i]
@@ -197,7 +201,7 @@ class SchemaConverter:
                     i += 1
                     if i < length:
                         assert pattern[i] != '?', f'Unsupported pattern syntax "{pattern[i]}" at index {i} of /{pattern}/'
-                    seq.append((f'({transform()[0]})', False))
+                    seq.append((f'({to_rule(transform())})', False))
                 elif c == ')':
                     i += 1
                     assert start > 0 and pattern[start-1] == '(', f'Unbalanced parentheses; start = {start}, i = {i}, pattern = {pattern}'
@@ -220,7 +224,7 @@ class SchemaConverter:
                     seq.append(('|', False))
                     i += 1
                 elif c in ('*', '+', '?'):
-                    seq[-1] = (f'{seq[-1][0]}{c}', False)
+                    seq[-1] = (to_rule(seq[-1]) + c, False)
                     i += 1
                 elif c == '{':
                     curly_brackets = c
@@ -232,13 +236,18 @@ class SchemaConverter:
                     curly_brackets += '}'
                     i += 1
                     nums = [s.strip() for s in curly_brackets[1:-1].split(',')]
-                    if len(nums) == 1:
-                        min_times = int(nums[0])
-                        max_times = min_times
-                    else:
-                        assert len(nums) == 2
-                        min_times = int(nums[0]) if nums[0] else 0
-                        max_times = int(nums[1]) if nums[1] else None
+                    min_times = 0
+                    max_times = None
+                    try:
+                        if len(nums) == 1:
+                            min_times = int(nums[0])
+                            max_times = min_times
+                        else:
+                            assert len(nums) == 2
+                            min_times = int(nums[0]) if nums[0] else 0
+                            max_times = int(nums[1]) if nums[1] else None
+                    except ValueError:
+                        raise ValueError(f'Invalid quantifier {curly_brackets} in /{pattern}/')
 
                     (sub, sub_is_literal) = seq[-1]
 
@@ -263,32 +272,35 @@ class SchemaConverter:
                             False
                         )
                 else:
-                    lit = ''
-                    while i < length and pattern[i] not in NON_LITERAL_SET \
-                            and not (i < length - 1 and pattern[i+1] in ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS):
+                    literal = ''
+                    while i < length:
                         if pattern[i] == '\\' and i < length - 1:
-                            i += 1
-                            if pattern[i] in NON_LITERAL_SET:
-                                # Escapes in regular expressions that aren't escaped in GBNF literals
-                                lit += pattern[i]
+                            next = pattern[i + 1]
+                            if next in ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS:
+                                i += 1
+                                literal += pattern[i]
+                                i += 1
                             else:
-                                lit += f'\\{pattern[i]}'
+                                literal += pattern[i:i+2]
+                                i += 2
+                        elif pattern[i] == '"' and not self._raw_pattern:
+                            literal += '\\"'
+                            i += 1
+                        elif pattern[i] not in NON_LITERAL_SET and \
+                                (i == length - 1 or literal == '' or pattern[i+1] == '.' or pattern[i+1] not in NON_LITERAL_SET):
+                            literal += pattern[i]
                             i += 1
                         else:
-                            if pattern[i] == '"':
-                                lit += '\\'
-                            lit += pattern[i]
-                            i += 1
-                    if lit:
-                        seq.append((f'"{lit}"', True))
-
-                    if i < length and pattern[i] not in ('.', '(', ')', '|', '[', '{', '*', '+', '?'):
-                        seq.append((f'"{pattern[i]}"', True))
-                        i += 1
+                            break
+                    if literal:
+                        seq.append((literal, True))
 
             return join_seq()
 
-        return self._add_rule(name, transform()[0])
+        return self._add_rule(
+            name,
+            to_rule(transform()) if self._raw_pattern \
+                else "\"\\\"\" " + to_rule(transform()) + " \"\\\"\" space")
 
 
     def _resolve_ref(self, ref):
@@ -510,6 +522,11 @@ def main(args_in = None):
         action='store_true',
         default=False,
         help='Whether to treat dot (".") as matching all chars including line breaks in regular expression patterns')
+    parser.add_argument(
+        '--raw-pattern',
+        action='store_true',
+        default=False,
+        help='Treats string patterns as raw patterns w/o quotes (or quote escapes)')
 
     parser.add_argument('schema', help='file containing JSON schema ("-" for stdin)')
     args = parser.parse_args(args_in)
@@ -528,7 +545,8 @@ def main(args_in = None):
     converter = SchemaConverter(
         prop_order={name: idx for idx, name in enumerate(args.prop_order)},
         allow_fetch=args.allow_fetch,
-        dotall=args.dotall)
+        dotall=args.dotall,
+        raw_pattern=args.raw_pattern)
     schema = converter.resolve_refs(schema, url)
     converter.visit(schema, '')
     print(converter.format_grammar())

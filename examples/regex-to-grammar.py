@@ -11,6 +11,7 @@ print(subprocess.check_output(
       "json-schema-to-grammar.py"),
     *rest,
     "-",
+    "--raw-pattern",
   ],
   text=True,
   input=json.dumps({

@@ -35,7 +35,7 @@ const GRAMMAR_RANGE_LITERAL_ESCAPE_RE = /[\n\r"\]\-\\]/g;
 const GRAMMAR_LITERAL_ESCAPES = { '\r': '\\r', '\n': '\\n', '"': '\\"', '-': '\\-', ']': '\\]' };
 
 const NON_LITERAL_SET = new Set('|.()[]{}*+?');
-const ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = new Set('{*+?');
+const ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = new Set('[]()|{}*+?');
 
 export class SchemaConverter {
   constructor(options) {
@@ -163,6 +163,9 @@ export class SchemaConverter {
       return this._addRule('dot', rule);
     };
 
+
+    const toRule = ([s, isLiteral]) => isLiteral ? "\"" + s + "\"" : s;
+
     const transform = () => {
       const start = i;
       // For each component of this sequence, store its string representation and whether it's a literal.
@@ -175,8 +178,7 @@ export class SchemaConverter {
         const ret = [];
         for (const [isLiteral, g] of groupBy(seq, x => x[1])) {
           if (isLiteral) {
-            const lit = [...g].map(x => x[0].slice(1, -1)).join('');
-            ret.push([`"${lit}"`, true]);
+            ret.push([[...g].map(x => x[0]).join(''), true]);
           } else {
             ret.push(...g);
           }
@@ -184,7 +186,7 @@ export class SchemaConverter {
         if (ret.length === 1) {
           return ret[0];
         }
-        return [ret.map(x => x[0]).join(' '), false];
+        return [ret.map(x => toRule(x)).join(' '), false];
       };
 
       while (i < length) {
@@ -199,7 +201,7 @@ export class SchemaConverter {
               throw new Error(`Unsupported pattern syntax "${pattern[i]}" at index ${i} of /${pattern}/`);
             }
           }
-          seq.push([`(${transform()[0]})`, false]);
+          seq.push([`(${toRule(transform())})`, false]);
         } else if (c === ')') {
           i += 1;
           if (start <= 0 || pattern[start - 1] !== '(') {
@@ -228,7 +230,7 @@ export class SchemaConverter {
           seq.push(['|', false]);
           i += 1;
         } else if (c === '*' || c === '+' || c === '?') {
-          seq[seq.length - 1] = [`${seq[seq.length - 1][0]}${c}`, false];
+          seq[seq.length - 1] = [toRule(seq[seq.length - 1]) + c, false];
           i += 1;
         } else if (c === '{') {
           let curlyBrackets = c;
@@ -278,33 +280,31 @@ export class SchemaConverter {
             seq[seq.length - 1] = [repeatedSub.concat(optionalSub).join(' '), false];
           }
         } else {
-          let lit = '';
-          while (i < length && !NON_LITERAL_SET.has(pattern[i]) &&
-                 !(i < length - 1 && ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS.has(pattern[i + 1]))) {
+          let literal = '';
+          while (i < length) {
             if (pattern[i] === '\\' && i < length - 1) {
-              i += 1;
-              if (NON_LITERAL_SET.has(pattern[i])) {
-                // Escapes in regular expressions that aren't escaped in GBNF literals
-                lit += pattern[i];
+              const next = pattern[i + 1];
+              if (ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS.has(next)) {
+                i += 1;
+                literal += pattern[i];
+                i += 1;
               } else {
-                lit += `\\${pattern[i]}`;
+                literal += pattern.slice(i, i + 2);
+                i += 2;
               }
+            } else if (pattern[i] === '"') {
+              literal += '\\"';
+              i += 1;
+            } else if (!NON_LITERAL_SET.has(pattern[i]) &&
+                (i === length - 1 || literal === '' || pattern[i + 1] === '.' || !NON_LITERAL_SET.has(pattern[i+1]))) {
+              literal += pattern[i];
               i += 1;
             } else {
-              if (pattern[i] === '"') {
-                  lit += '\\';
-              }
-              lit += pattern[i];
-              i += 1;
+              break;
             }
           }
-          if (lit) {
-            seq.push([`"${lit}"`, true]);
-          }
-
-          if (i < length && !NON_LITERAL_SET.has(pattern[i])) {
-            seq.push([`"${pattern[i]}"`, true]);
-            i += 1;
+          if (literal !== '') {
+            seq.push([literal, true]);
           }
         }
       }
@@ -312,7 +312,7 @@ export class SchemaConverter {
       return joinSeq();
     };
 
-    return this._addRule(name, transform()[0]);
+    return this._addRule(name, "\"\\\"\" " + toRule(transform()) + " \"\\\"\" space")
   }
 
   _resolveRef(ref) {

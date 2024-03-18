@@ -333,6 +333,45 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
 
   test({
     SUCCESS,
+    "simple regexp",
+    R"""({
+      "type": "string",
+      "pattern": "^abc?d*efg+(hij)?kl$"
+    })""",
+    R"""(
+      root ::= "\"" "ab" "c"? "d"* "ef" "g"+ ("hij")? "kl" "\"" space
+      space ::= " "?
+    )"""
+  });
+
+  test({
+    SUCCESS,
+    "regexp escapes",
+    R"""({
+      "type": "string",
+      "pattern": "^\\[\\]\\{\\}\\(\\)\\|\\+\\*\\?$"
+    })""",
+    R"""(
+      root ::= "\"" "[]{}()|+*?" "\"" space
+      space ::= " "?
+    )"""
+  });
+
+  test({
+    SUCCESS,
+    "regexp quote",
+    R"""({
+      "type": "string",
+      "pattern": "^\"$"
+    })""",
+    R"""(
+      root ::= "\"" "\"" "\"" space
+      space ::= " "?
+    )"""
+  });
+
+  test({
+    SUCCESS,
     "regexp",
     R"""({
       "type": "string",
@@ -340,7 +379,7 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
     })""",
     R"""(
       dot ::= [\U00000000-\x09\x0B\x0C\x0E-\U0010FFFF]
-      root ::= ("(" root-1 root-1? root-1? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " and" dot dot dot
+      root ::= "\"" ("(" root-1 root-1? root-1? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " and" dot dot dot "\"" space
       root-1 ::= [0-9]
       space ::= " "?
     )"""
