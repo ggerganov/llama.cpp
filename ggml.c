@@ -17935,6 +17935,12 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
 static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_threads) {
     int n_tasks = 0;
 
+    if (ggml_is_empty(node)) {
+        // no need to multi-thread a no-op
+        n_tasks = 1;
+        return n_tasks;
+    }
+
     switch (node->op) {
         case GGML_OP_CPY:
         case GGML_OP_DUP:
@@ -18017,7 +18023,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
             {
                 // FIXME: the cost of launching additional threads decreases performance with GPU offloading
                 //n_tasks = MIN(n_threads, ggml_nelements(node->src[1]));
-                n_tasks = MIN(n_cur_threads, MAX(ggml_nelements(node->src[1]), 1));
+                n_tasks = MIN(n_cur_threads, ggml_nelements(node->src[1]));
             } break;
         case GGML_OP_SCALE:
         case GGML_OP_SET:
