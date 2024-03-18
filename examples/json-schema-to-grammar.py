@@ -156,7 +156,7 @@ class SchemaConverter:
         def to_rule(s: Tuple[str, bool]) -> str:
             (txt, is_literal) = s
             return "\"" + txt + "\"" if is_literal else txt
-        
+
         def transform() -> Tuple[str, bool]:
             '''
                 Parse a unit at index i (advancing it), and return its string representation + whether it's a literal.
