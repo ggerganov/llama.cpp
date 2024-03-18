@@ -353,7 +353,9 @@ export class SchemaConverter {
     } else if ('enum' in schema) {
       const rule = schema.enum.map(v => this._generateConstantRule(v)).join(' | ');
       return this._addRule(ruleName, rule);
-    } else if ((schemaType === undefined || schemaType === 'object') && ('properties' in schema || 'additionalProperties' in schema)) {
+    } else if ((schemaType === undefined || schemaType === 'object') &&
+               ('properties' in schema ||
+                ('additionalProperties' in schema && schema.additionalProperties !== true))) {
       const required = new Set(schema.required || []);
       const properties = Object.entries(schema.properties ?? {});
       return this._addRule(ruleName, this._buildObjectRule(properties, required, name, schema.additionalProperties));
@@ -427,7 +429,7 @@ export class SchemaConverter {
         this._addRule(t, r);
       }
       return schemaFormat + '-string';
-    } else if ((schemaType === 'object' && Object.keys(schema).length === 1) || (Object.keys(schema).length === 0)) {
+    } else if ((schemaType === 'object') || (Object.keys(schema).length === 0)) {
       for (const n of OBJECT_RULE_NAMES) {
         this._addRule(n, PRIMITIVE_RULES[n]);
       }
@@ -449,9 +451,6 @@ export class SchemaConverter {
       const orderB = propOrder[b] || Infinity;
       return orderA - orderB || properties.findIndex(([k]) => k === a) - properties.findIndex(([k]) => k === b);
     });
-    // const sortedProps = properties.map(([name]) => name).sort(
-    //   (a, b) => (propOrder[a] ?? Infinity) - (propOrder[b] ?? Infinity)
-    // );
 
     const propKvRuleNames = {};
     for (const [propName, propSchema] of properties) {
@@ -464,9 +463,9 @@ export class SchemaConverter {
     const requiredProps = sortedProps.filter(k => required.has(k));
     const optionalProps = sortedProps.filter(k => !required.has(k));
 
-    if (typeof additionalProperties === 'object') {
+    if (typeof additionalProperties === 'object' || additionalProperties === true) {
       const subName = `${name ?? ''}${name ? '-' : ''}additional`;
-      const valueRule = this.visit(additionalProperties, `${subName}-value`);
+      const valueRule = this.visit(additionalProperties === true ? {} : additionalProperties, `${subName}-value`);
       propKvRuleNames['*'] = this._addRule(
         `${subName}-kv`,
         `${this._addRule('string', PRIMITIVE_RULES['string'])} ":" space ${valueRule}`);

@@ -413,9 +413,9 @@ private:
                 optional_props.push_back(prop_name);
             }
         }
-        if (additional_properties.is_object()) {
+        if (additional_properties.is_object() || (additional_properties.is_boolean() && additional_properties.get<bool>())) {
             string sub_name = name + (name.empty() ? "" : "-") + "additional";
-            string value_rule = visit(additional_properties, sub_name + "-value");
+            string value_rule = visit(additional_properties.is_object() ? additional_properties : json::object(), sub_name + "-value");
             string kv_rule = _add_rule(sub_name + "-kv", _add_rule("string", PRIMITIVE_RULES.at("string")) + " \":\" space " + value_rule);
             prop_kv_rule_names["*"] = kv_rule;
             optional_props.push_back("*");
@@ -581,7 +581,8 @@ public:
             }
             return _add_rule(rule_name, join(enum_values.begin(), enum_values.end(), " | "));
         } else if ((schema_type.is_null() || schema_type == "object")
-                && (schema.contains("properties") || schema.contains("additionalProperties"))) {
+                && (schema.contains("properties") ||
+                    (schema.contains("additionalProperties") && schema["additionalProperties"] != true))) {
             unordered_set<string> required;
             if (schema.contains("required") && schema["required"].is_array()) {
                 for (const auto& item : schema["required"]) {
@@ -666,11 +667,6 @@ public:
             }
         } else if ((schema_type.is_null() || schema_type == "string") && schema.contains("pattern")) {
             return _visit_pattern(schema["pattern"], rule_name);
-        } else if (schema.empty() || (schema.size() == 1 && schema_type == "object")) {
-            for (const auto& n : OBJECT_RULE_NAMES) {
-                _add_rule(n, PRIMITIVE_RULES.at(n));
-            }
-            return _add_rule(rule_name, "object");
         } else if ((schema_type.is_null() || schema_type == "string") && regex_match(schema_format, regex("^uuid[1-5]?$"))) {
             return _add_rule(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
         } else if ((schema_type.is_null() || schema_type == "string") && DATE_RULES.find(schema_format) != DATE_RULES.end()) {
@@ -678,6 +674,11 @@ public:
                 _add_rule(kv.first, kv.second);
             }
             return schema_format + "-string";
+        } else if (schema.empty() || schema_type == "object") {
+            for (const auto& n : OBJECT_RULE_NAMES) {
+                _add_rule(n, PRIMITIVE_RULES.at(n));
+            }
+            return _add_rule(rule_name, "object");
         } else {
             if (!schema_type.is_string() || PRIMITIVE_RULES.find(schema_type.get<string>()) == PRIMITIVE_RULES.end()) {
               _errors.push_back("Unrecognized schema: " + schema.dump());

@@ -477,6 +477,64 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
 
   test({
     SUCCESS,
+    "additional props (true)",
+    R"""({
+      "type": "object",
+      "additionalProperties": true
+    })""",
+    R"""(
+      array ::= "[" space ( value ("," space value)* )? "]" space
+      boolean ::= ("true" | "false") space
+      null ::= "null" space
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      object ::= "{" space ( string ":" space value ("," space string ":" space value)* )? "}" space
+      root ::= object
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+      value ::= object | array | string | number | boolean
+    )"""
+  });
+
+  test({
+    SUCCESS,
+    "additional props (implicit)",
+    R"""({
+      "type": "object"
+    })""",
+    R"""(
+      array ::= "[" space ( value ("," space value)* )? "]" space
+      boolean ::= ("true" | "false") space
+      null ::= "null" space
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      object ::= "{" space ( string ":" space value ("," space string ":" space value)* )? "}" space
+      root ::= object
+      space ::= " "?
+      string ::=  "\"" (
+              [^"\\] |
+              "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
+            )* "\"" space
+      value ::= object | array | string | number | boolean
+    )"""
+  });
+
+  test({
+    SUCCESS,
+    "empty w/o additional props",
+    R"""({
+      "type": "object",
+      "additionalProperties": false
+    })""",
+    R"""(
+      root ::= "{" space  "}" space
+      space ::= " "?
+    )"""
+  });
+
+  test({
+    SUCCESS,
     "required + additional props",
     R"""({
       "type": "object",
@@ -716,17 +774,20 @@ int main() {
     }
   });
   test_all("Python", [](const TestCase& tc) {
+
     write("test-json-schema-input.tmp", tc.schema);
     tc.verify_status(std::system(
       "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
     tc.verify(read("test-grammar-output.tmp"));
   });
   test_all("JavaScript", [](const TestCase& tc) {
+
     write("test-json-schema-input.tmp", tc.schema);
     tc.verify_status(std::system(
       "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
     tc.verify(read("test-grammar-output.tmp"));
   });
+
   test_all("Check Expectations Validity", [](const TestCase& tc) {
     if (tc.expected_status == SUCCESS) {
       tc.verify_expectation_parseable();

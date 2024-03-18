@@ -325,7 +325,9 @@ class SchemaConverter:
             rule = ' | '.join((self._generate_constant_rule(v) for v in schema['enum']))
             return self._add_rule(rule_name, rule)
 
-        elif schema_type in (None, 'object') and ('properties' in schema or 'additionalProperties' in schema):
+        elif schema_type in (None, 'object') and \
+             ('properties' in schema or \
+              ('additionalProperties' in schema and schema['additionalProperties'] is not True)):
             required = set(schema.get('required', []))
             properties = list(schema.get('properties', {}).items())
             return self._add_rule(rule_name, self._build_object_rule(properties, required, name, schema.get('additionalProperties')))
@@ -385,11 +387,6 @@ class SchemaConverter:
         elif schema_type in (None, 'string') and 'pattern' in schema:
             return self._visit_pattern(schema['pattern'], rule_name)
 
-        elif (schema_type == 'object' and len(schema) == 1) or (len(schema) == 0):
-            for n in OBJECT_RULE_NAMES:
-                self._add_rule(n, PRIMITIVE_RULES[n])
-            return self._add_rule(rule_name, 'object')
-
         elif schema_type in (None, 'string') and re.match(r'^uuid[1-5]?$', schema_format or ''):
             return self._add_rule(
                 'root' if rule_name == 'root' else schema_format,
@@ -400,6 +397,11 @@ class SchemaConverter:
             for t, r in DATE_RULES.items():
                 self._add_rule(t, r)
             return schema_format + '-string'
+
+        elif (schema_type == 'object') or (len(schema) == 0):
+            for n in OBJECT_RULE_NAMES:
+                self._add_rule(n, PRIMITIVE_RULES[n])
+            return self._add_rule(rule_name, 'object')
 
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
@@ -424,9 +426,9 @@ class SchemaConverter:
         required_props = [k for k in sorted_props if k in required]
         optional_props = [k for k in sorted_props if k not in required]
 
-        if additional_properties:
+        if additional_properties == True or isinstance(additional_properties, dict):
             sub_name = f'{name}{"-" if name else ""}additional'
-            value_rule = self.visit(additional_properties, f'{sub_name}-value')
+            value_rule = self.visit({} if additional_properties == True else additional_properties, f'{sub_name}-value')
             prop_kv_rule_names["*"] = self._add_rule(
                 f'{sub_name}-kv',
                 self._add_rule('string', PRIMITIVE_RULES['string']) + f' ":" space {value_rule}'

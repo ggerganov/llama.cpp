@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # ./examples/ts-type-to-grammar.sh "{a:string,b:string,c?:string}"
-# python examples/json-schema-to-grammar.py https://raw.githubusercontent.com/SchemaStore/schemastore/master/src/schemas/json/tsconfig.json
+# python examples/json-schema-to-grammar.py https://json.schemastore.org/tsconfig.json
 #
 set -euo pipefail
 
