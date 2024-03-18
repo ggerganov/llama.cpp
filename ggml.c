@@ -2542,6 +2542,11 @@ static inline bool ggml_is_padded_1d(const struct ggml_tensor * tensor) {
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
+static inline bool ggml_is_empty(const struct ggml_tensor * tensor) {
+    // nb[3] depends on the previous nb and ne
+    return tensor->nb[3] == 0 || tensor->ne[3] == 0;
+}
+
 bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
@@ -2556,11 +2561,11 @@ bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor
 static inline bool ggml_can_repeat(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
-    return
-        (t1->ne[0]%t0->ne[0] == 0) &&
-        (t1->ne[1]%t0->ne[1] == 0) &&
-        (t1->ne[2]%t0->ne[2] == 0) &&
-        (t1->ne[3]%t0->ne[3] == 0);
+    return ggml_is_empty(t0) ||
+        ((t1->ne[0]%t0->ne[0] == 0) &&
+         (t1->ne[1]%t0->ne[1] == 0) &&
+         (t1->ne[2]%t0->ne[2] == 0) &&
+         (t1->ne[3]%t0->ne[3] == 0));
 }
 
 static inline bool ggml_can_repeat_rows(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
@@ -16047,7 +16052,7 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
-    if (tensor->op == GGML_OP_NONE) {
+    if (tensor->op == GGML_OP_NONE || ggml_is_empty(tensor)) {
         return;
     }
 
@@ -18011,7 +18016,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
             {
                 // FIXME: the cost of launching additional threads decreases performance with GPU offloading
                 //n_tasks = MIN(n_threads, ggml_nelements(node->src[1]));
-                n_tasks = MIN(n_cur_threads, ggml_nelements(node->src[1]));
+                n_tasks = MIN(n_cur_threads, MAX(ggml_nelements(node->src[1]), 1));
             } break;
         case GGML_OP_SCALE:
         case GGML_OP_SET:

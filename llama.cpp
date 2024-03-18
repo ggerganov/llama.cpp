@@ -5894,7 +5894,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 n_tokens = n_outputs;
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
@@ -6082,7 +6081,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -6205,7 +6203,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur       = ggml_get_rows(ctx0,       cur, inp_out_ids);
                 inpL      = ggml_get_rows(ctx0,      inpL, inp_out_ids);
@@ -6308,7 +6305,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
@@ -6513,7 +6509,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur      = ggml_get_rows(ctx0,      cur, inp_out_ids);
                 residual = ggml_get_rows(ctx0, residual, inp_out_ids);
@@ -6610,7 +6605,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -6775,7 +6769,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1 && pooling_type == LLAMA_POOLING_TYPE_NONE) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
@@ -6905,7 +6898,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
@@ -7011,7 +7003,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
@@ -7132,7 +7123,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -7246,7 +7236,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -7366,7 +7355,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -7492,7 +7480,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur              = ggml_get_rows(ctx0,              cur, inp_out_ids);
                 inpL             = ggml_get_rows(ctx0,             inpL, inp_out_ids);
@@ -7598,7 +7585,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur    = ggml_get_rows(ctx0,    cur, inp_out_ids);
                 sa_out = ggml_get_rows(ctx0, sa_out, inp_out_ids);
@@ -7699,7 +7685,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
@@ -7807,7 +7792,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
@@ -7924,7 +7908,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -8042,7 +8025,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -8173,7 +8155,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -8295,7 +8276,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
@@ -8416,7 +8396,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
@@ -8571,7 +8550,6 @@ struct llm_build_context {
 
                 if (il == n_layer - 1) {
                     // skip computing output for unused tokens
-                    if (n_outputs == 0) { return gf; }
                     struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                     x    = ggml_get_rows(ctx0,    x, inp_out_ids);
                     y    = ggml_get_rows(ctx0,    y, inp_out_ids);
@@ -8683,7 +8661,6 @@ struct llm_build_context {
 
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
-                if (n_outputs == 0) { return gf; }
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
