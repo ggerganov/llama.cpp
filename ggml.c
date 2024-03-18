@@ -282,8 +282,6 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #else
 #include <cblas.h>
 #endif
-#elif defined(GGML_USE_CUBLAS)
-#include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
 #elif defined(GGML_USE_VULKAN)
@@ -2640,9 +2638,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             GGML_PRINT_DEBUG("%s: g_state initialized in %f ms\n", __func__, (t_end - t_start)/1000.0f);
         }
 
-#if defined(GGML_USE_CUBLAS)
-        ggml_init_cublas();
-#elif defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_CLBLAST)
         ggml_cl_init();
 #elif defined(GGML_USE_VULKAN)
         ggml_vk_init_cpu_assist();
@@ -11105,7 +11101,6 @@ static void ggml_compute_forward_out_prod_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-    // TODO: #if defined(GGML_USE_CUBLAS) ggml_cuda_out_prod
     // TODO: #if defined(GGML_USE_CLBLAST)
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
@@ -11305,7 +11300,6 @@ static void ggml_compute_forward_out_prod_q_f32(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
-    // TODO: #if defined(GGML_USE_CUBLAS) ggml_cuda_out_prod
     // TODO: #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
 
     if (params->type == GGML_TASK_TYPE_INIT) {
@@ -16051,14 +16045,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         return;
     }
 
-#ifdef GGML_USE_CUBLAS
-    bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
-    if (skip_cpu) {
-        return;
-    }
-    GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_TYPE_CPU);
-    GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_TYPE_CPU);
-#elif defined(GGML_USE_VULKAN)
+#if defined(GGML_USE_VULKAN)
     const bool skip_cpu = ggml_vk_compute_forward_cpu_assist(params, tensor);
 #ifdef GGML_VULKAN_CHECK_RESULTS
     if (skip_cpu) {
@@ -16070,7 +16057,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     }
     GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_TYPE_CPU);
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_TYPE_CPU);
-#endif // GGML_USE_CUBLAS
+#endif // GGML_USE_VULKAN
 
 #ifdef GGML_USE_SYCL
     bool skip_cpu = ggml_sycl_compute_forward(params, tensor);
