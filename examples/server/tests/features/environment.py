@@ -6,8 +6,6 @@ import time
 import traceback
 from contextlib import closing
 
-import psutil
-
 
 def before_scenario(context, scenario):
     context.debug = 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON'
@@ -35,21 +33,18 @@ def after_scenario(context, scenario):
             if not is_server_listening(context.server_fqdn, context.server_port):
                 print("\x1b[33;101mERROR: Server stopped listening\x1b[0m")
 
-        if not pid_exists(context.server_process.pid):
+        if context.server_process.poll() is not None:
             assert False, f"Server not running pid={context.server_process.pid} ..."
 
-        server_graceful_shutdown(context)
+        server_graceful_shutdown(context)  # SIGINT
 
-        # Wait few for socket to free up
-        time.sleep(0.05)
+        if context.server_process.wait(0.5) is None:
+            print(f"server still alive after 500ms, force-killing pid={context.server_process.pid} ...")
+            context.server_process.kill()  # SIGKILL
+            context.server_process.wait()
 
-        attempts = 0
-        while pid_exists(context.server_process.pid) or is_server_listening(context.server_fqdn, context.server_port):
-            server_kill(context)
+        while is_server_listening(context.server_fqdn, context.server_port):
             time.sleep(0.1)
-            attempts += 1
-            if attempts > 5:
-                server_kill_hard(context)
     except:
         exc = sys.exception()
         print("error in after scenario:")
@@ -61,26 +56,10 @@ def after_scenario(context, scenario):
 def server_graceful_shutdown(context):
     print(f"shutting down server pid={context.server_process.pid} ...")
     if os.name == 'nt':
-        os.kill(context.server_process.pid, signal.CTRL_C_EVENT)
+        interrupt = signal.CTRL_C_EVENT
     else:
-        os.kill(context.server_process.pid, signal.SIGINT)
-
-
-def server_kill(context):
-    print(f"killing server pid={context.server_process.pid} ...")
-    context.server_process.kill()
-
-
-def server_kill_hard(context):
-    pid = context.server_process.pid
-    path = context.server_path
-
-    print(f"Server dangling exits, hard killing force {pid}={path}...")
-    try:
-        psutil.Process(pid).kill()
-    except psutil.NoSuchProcess:
-        return False
-    return True
+        interrupt = signal.SIGINT
+    context.server_process.send_signal(interrupt)
 
 
 def is_server_listening(server_fqdn, server_port):
@@ -90,12 +69,3 @@ def is_server_listening(server_fqdn, server_port):
         if _is_server_listening:
             print(f"server is listening on {server_fqdn}:{server_port}...")
         return _is_server_listening
-
-
-def pid_exists(pid):
-    try:
-        psutil.Process(pid)
-    except psutil.NoSuchProcess:
-        return False
-    return True
-
