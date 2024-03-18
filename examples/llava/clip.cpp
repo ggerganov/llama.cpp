@@ -497,7 +497,6 @@ struct clip_ctx {
 
     // memory buffers to evaluate the model
     ggml_backend_buffer_t params_buffer  = NULL;
-    ggml_backend_buffer_t compute_buffer = NULL;
 
     ggml_backend_t backend       = NULL;
     ggml_gallocr_t compute_alloc = NULL;
@@ -1676,6 +1675,9 @@ void clip_free(clip_ctx * ctx) {
     ggml_free(ctx->ctx_data);
     gguf_free(ctx->ctx_gguf);
 
+    ggml_backend_buffer_free(ctx->params_buffer);
+    ggml_backend_free(ctx->backend);
+    ggml_gallocr_free(ctx->compute_alloc);
     delete ctx;
 }
 
