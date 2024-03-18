@@ -595,6 +595,11 @@ include scripts/get-flags.mk
 CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
 endif
 
+ifdef LLAMA_CURL
+override CXXFLAGS := $(CXXFLAGS) -DLLAMA_USE_CURL
+override LDFLAGS  := $(LDFLAGS) -lcurl
+endif
+
 #
 # Print build information
 #

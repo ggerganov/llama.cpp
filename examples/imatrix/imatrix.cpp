@@ -56,13 +56,31 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
     const struct ggml_tensor * src0 = t->src[0];
     const struct ggml_tensor * src1 = t->src[1];
 
+    std::string wname;
+    {
+        // remove any prefix and suffixes from the name
+        // CUDA0#blk.0.attn_k.weight#0 => blk.0.attn_k.weight
+        const char * p = strchr(src0->name, '#');
+        if (p != NULL) {
+            p = p + 1;
+            const char * q = strchr(p, '#');
+            if (q != NULL) {
+                wname = std::string(p, q - p);
+            } else {
+                wname = p;
+            }
+        } else {
+            wname = src0->name;
+        }
+    }
+
     // when ask is true, the scheduler wants to know if we are interested in data from this tensor
     // if we return true, a follow-up call will be made with ask=false in which we can do the actual collection
     if (ask) {
         if (t->op == GGML_OP_MUL_MAT_ID) return true; // collect all indirect matrix multiplications
         if (t->op != GGML_OP_MUL_MAT) return false;
         if (src1->ne[1] < 16 || src1->type != GGML_TYPE_F32) return false;
-        if (!(strncmp(src0->name, "blk.", 4) == 0 || (m_params.collect_output_weight && strcmp(src0->name, "output.weight") == 0))) return false;
+        if (!(wname.substr(0, 4) == "blk." || (m_params.collect_output_weight && wname == "output.weight"))) return false;
         return true;
     }
 
@@ -94,12 +112,12 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         // this is necessary to guarantee equal number of "ncall" for each tensor
         for (int ex = 0; ex < n_as; ++ex) {
             src0 = t->src[2 + ex];
-            auto& e = m_stats[src0->name];
+            auto& e = m_stats[wname];
             if (e.values.empty()) {
                 e.values.resize(src1->ne[0], 0);
             }
             else if (e.values.size() != (size_t)src1->ne[0]) {
-                fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", src0->name, (int)e.values.size(), (int)src1->ne[0]);
+                fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]);
                 exit(1); //GGML_ASSERT(false);
             }
             // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
@@ -107,7 +125,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
             ++e.ncall;
             if (m_params.verbosity > 1) {
-                printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, src0->name, ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
+                printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
             }
             for (int row = 0; row < (int)src1->ne[1]; ++row) {
                 const int excur = m_ids[row*n_as + idx];
@@ -129,17 +147,17 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             }
         }
     } else {
-        auto& e = m_stats[src0->name];
+        auto& e = m_stats[wname];
         if (e.values.empty()) {
             e.values.resize(src1->ne[0], 0);
         }
         else if (e.values.size() != (size_t)src1->ne[0]) {
-            fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", src0->name, (int)e.values.size(), (int)src1->ne[0]);
+            fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]);
             exit(1); //GGML_ASSERT(false);
         }
         ++e.ncall;
         if (m_params.verbosity > 1) {
-            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, src0->name, ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
+            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
         }
         for (int row = 0; row < (int)src1->ne[1]; ++row) {
             const float * x = data + row * src1->ne[0];

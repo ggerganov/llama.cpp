@@ -1,10 +1,12 @@
-import errno
 import os
-import socket
-import subprocess
-import time
-from contextlib import closing
 import signal
+import socket
+import sys
+import time
+import traceback
+from contextlib import closing
+
+import psutil
 
 
 def before_scenario(context, scenario):
@@ -20,33 +22,40 @@ def before_scenario(context, scenario):
 
 
 def after_scenario(context, scenario):
-    if context.server_process is None:
-        return
-    if scenario.status == "failed":
-        if 'GITHUB_ACTIONS' in os.environ:
-            print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n\n")
-            if os.path.isfile('llama.log'):
-                with closing(open('llama.log', 'r')) as f:
-                    for line in f:
-                        print(line)
-        if not is_server_listening(context.server_fqdn, context.server_port):
-            print("\x1b[33;101mERROR: Server stopped listening\x1b[0m\n")
+    try:
+        if 'server_process' not in context or context.server_process is None:
+            return
+        if scenario.status == "failed":
+            if 'GITHUB_ACTIONS' in os.environ:
+                print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n\n")
+                if os.path.isfile('llama.log'):
+                    with closing(open('llama.log', 'r')) as f:
+                        for line in f:
+                            print(line)
+            if not is_server_listening(context.server_fqdn, context.server_port):
+                print("\x1b[33;101mERROR: Server stopped listening\x1b[0m\n")
 
-    if not pid_exists(context.server_process.pid):
-        assert False, f"Server not running pid={context.server_process.pid} ..."
+        if not pid_exists(context.server_process.pid):
+            assert False, f"Server not running pid={context.server_process.pid} ..."
 
-    server_graceful_shutdown(context)
+        server_graceful_shutdown(context)
 
-    # Wait few for socket to free up
-    time.sleep(0.05)
+        # Wait few for socket to free up
+        time.sleep(0.05)
 
-    attempts = 0
-    while pid_exists(context.server_process.pid) or is_server_listening(context.server_fqdn, context.server_port):
-        server_kill(context)
-        time.sleep(0.1)
-        attempts += 1
-        if attempts > 5:
-            server_kill_hard(context)
+        attempts = 0
+        while pid_exists(context.server_process.pid) or is_server_listening(context.server_fqdn, context.server_port):
+            server_kill(context)
+            time.sleep(0.1)
+            attempts += 1
+            if attempts > 5:
+                server_kill_hard(context)
+    except:
+        exc = sys.exception()
+        print("error in after scenario: \n")
+        print(exc)
+        print("*** print_tb: \n")
+        traceback.print_tb(exc.__traceback__, file=sys.stdout)
 
 
 def server_graceful_shutdown(context):
@@ -67,11 +76,11 @@ def server_kill_hard(context):
     path = context.server_path
 
     print(f"Server dangling exits, hard killing force {pid}={path}...\n")
-    if os.name == 'nt':
-        process = subprocess.check_output(['taskkill', '/F', '/pid', str(pid)]).decode()
-        print(process)
-    else:
-        os.kill(-pid, signal.SIGKILL)
+    try:
+        psutil.Process(pid).kill()
+    except psutil.NoSuchProcess:
+        return False
+    return True
 
 
 def is_server_listening(server_fqdn, server_port):
@@ -84,17 +93,9 @@ def is_server_listening(server_fqdn, server_port):
 
 
 def pid_exists(pid):
-    """Check whether pid exists in the current process table."""
-    if pid < 0:
+    try:
+        psutil.Process(pid)
+    except psutil.NoSuchProcess:
         return False
-    if os.name == 'nt':
-        output = subprocess.check_output(['TASKLIST', '/FI', f'pid eq {pid}']).decode()
-        print(output)
-        return "No tasks are running" not in output
-    else:
-        try:
-            os.kill(pid, 0)
-        except OSError as e:
-            return e.errno == errno.EPERM
-        else:
-            return True
+    return True
+
