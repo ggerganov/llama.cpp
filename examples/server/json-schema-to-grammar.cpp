@@ -170,7 +170,7 @@ private:
     string _generate_union_rule(const string& name, const vector<json>& alt_schemas) {
         vector<string> rules;
         for (size_t i = 0; i < alt_schemas.size(); i++) {
-            rules.push_back(visit(alt_schemas[i], name + (name.empty() ? "" : "-") + to_string(i)));
+            rules.push_back(visit(alt_schemas[i], name + (name.empty() ? "alternative-" : "-") + to_string(i)));
         }
         return join(rules.begin(), rules.end(), " | ");
     }
@@ -596,7 +596,10 @@ public:
                     properties.emplace_back(prop.key(), prop.value());
                 }
             }
-            return _add_rule(rule_name, _build_object_rule(properties, required, name, schema["additionalProperties"]));
+            return _add_rule(rule_name,
+                _build_object_rule(
+                    properties, required, name,
+                    schema.contains("additionalProperties") ? schema["additionalProperties"] : json()));
         } else if ((schema_type.is_null() || schema_type == "object") && schema.contains("allOf")) {
             unordered_set<string> required;
             vector<pair<string, json>> properties;

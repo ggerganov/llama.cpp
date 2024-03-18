@@ -128,7 +128,7 @@ class SchemaConverter:
 
     def _generate_union_rule(self, name, alt_schemas):
         return ' | '.join((
-            self.visit(alt_schema, f'{name}{"-" if name else ""}{i}')
+            self.visit(alt_schema, f'{name}{"-" if name else "alternative-"}{i}')
             for i, alt_schema in enumerate(alt_schemas)
         ))
 

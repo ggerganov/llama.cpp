@@ -138,7 +138,7 @@ export class SchemaConverter {
 
   _generateUnionRule(name, altSchemas) {
     return altSchemas
-      .map((altSchema, i) => this.visit(altSchema, `${name ?? ''}${name ? '-' : ''}${i}`))
+      .map((altSchema, i) => this.visit(altSchema, `${name ?? ''}${name ? '-' : 'alternative-'}${i}`))
       .join(' | ');
   }
 

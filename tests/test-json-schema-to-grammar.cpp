@@ -579,6 +579,79 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
 
   test({
     SUCCESS,
+    "anyOf",
+    R"""({
+      "anyOf": [
+        {"$ref": "#/definitions/foo"},
+        {"$ref": "#/definitions/bar"}
+      ],
+      "definitions": {
+        "foo": {
+          "properties": {"a": {"type": "number"}}
+        },
+        "bar": {
+          "properties": {"b": {"type": "number"}}
+        }
+      },
+      "type": "object"
+    })""",
+    R"""(
+      alternative-0 ::= foo
+      alternative-1 ::= bar
+      bar ::= "{" space  (bar-b-kv )? "}" space
+      bar-b-kv ::= "\"b\"" space ":" space number
+      foo ::= "{" space  (foo-a-kv )? "}" space
+      foo-a-kv ::= "\"a\"" space ":" space number
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      root ::= alternative-0 | alternative-1
+      space ::= " "?
+    )"""
+  });
+
+  test({
+    SUCCESS,
+    "mix of allOf, anyOf and $ref (similar to https://json.schemastore.org/tsconfig.json)",
+    R"""({
+      "allOf": [ 
+        {"$ref": "#/definitions/foo"},
+        {"$ref": "#/definitions/bar"},
+        {
+          "anyOf": [
+            {"$ref": "#/definitions/baz"},
+            {"$ref": "#/definitions/bam"}
+          ]
+        }
+      ],
+      "definitions": {
+        "foo": {
+          "properties": {"a": {"type": "number"}}
+        },
+        "bar": {
+          "properties": {"b": {"type": "number"}}
+        },
+        "bam": {
+          "properties": {"c": {"type": "number"}}
+        },
+        "baz": {
+          "properties": {"d": {"type": "number"}}
+        }
+      },
+      "type": "object"
+    })""",
+    R"""(
+      a-kv ::= "\"a\"" space ":" space number
+      b-kv ::= "\"b\"" space ":" space number
+      c-kv ::= "\"c\"" space ":" space number
+      d-kv ::= "\"d\"" space ":" space number
+      d-rest ::= ( "," space c-kv )?
+      number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
+      root ::= "{" space a-kv "," space b-kv ( "," space ( d-kv d-rest | c-kv ) )? "}" space
+      space ::= " "?
+    )"""
+  });
+
+  test({
+    SUCCESS,
     "conflicting names",
     R"""({
       "type": "object",
