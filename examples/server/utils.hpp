@@ -376,9 +376,9 @@ static json oaicompat_completion_params_parse(
         llama_params["grammar"] = json_value(body, "grammar", json::object());
     }
 
-    if (!body["response_format"].is_null()) {
+    if (body.contains("response_format")) {
       auto response_format = json_value(body, "response_format", json::object());
-      if (response_format["type"] == "json_object") {
+      if (response_format.contains("type") && response_format["type"] == "json_object") {
         llama_params["json_schema"] = json_value(response_format, "schema", json::object());
       } else {
         throw std::runtime_error("response_format type not supported: " + response_format["type"].dump());
