@@ -325,7 +325,7 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL=OFF ..
+          cmake -DLLAMA_FATAL_WARNINGS=ON ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
