@@ -1051,6 +1051,14 @@ class MixtralModel(Model):
         self._set_vocab_sentencepiece()
 
 
+@Model.register("MistralForCausalLM")
+class MistralModel(Model):
+    model_arch = gguf.MODEL_ARCH.LLAMA
+
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
+
 @Model.register("MiniCPMForCausalLM")
 class MiniCPMModel(Model):
     model_arch = gguf.MODEL_ARCH.MINICPM
