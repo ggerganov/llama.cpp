@@ -1043,16 +1043,8 @@ class StableLMModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.find_hparam(["layer_norm_eps", "norm_eps"]))
 
 
-@Model.register("MixtralForCausalLM")
-class MixtralModel(Model):
-    model_arch = gguf.MODEL_ARCH.LLAMA
-
-    def set_vocab(self):
-        self._set_vocab_sentencepiece()
-
-
-@Model.register("MistralForCausalLM")
-class MistralModel(Model):
+@Model.register("LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
+class LlamaModel(Model):
     model_arch = gguf.MODEL_ARCH.LLAMA
 
     def set_vocab(self):
