@@ -48,7 +48,7 @@ static void split_print_usage(const char * executable) {
     printf("  -h, --help            show this help message and exit\n");
     printf("  --version             show version and build info\n");
     printf("  --split               split GGUF to multiple GGUF (default)\n");
-    printf("  --split-tensors-size  size of tensors in each split: default(%d)\n", default_params.n_split_tensors);
+    printf("  --split-max-tensors   max tensors in each split: default(%d)\n", default_params.n_split_tensors);
     printf("  --merge               merge multiple GGUF to a single GGUF\n");
     printf("  --upload              upload GGUF to an URL\n");
     printf("\n");
@@ -85,7 +85,7 @@ static bool split_params_parse_ex(int argc, const char ** argv, split_params & p
             arg_found = true;
             params.operation = SPLIT_OP_SPLIT;
         }
-        if (arg == "--split-tensors-size") {
+        if (arg == "--split-max-tensors") {
             if (++arg_idx >= argc) {
                 invalid_param = true;
                 break;
@@ -188,9 +188,9 @@ struct split_strategy {
       // Save all metadata in first split only
       if (i_split == 0) {
           gguf_set_kv(ctx_out, ctx_gguf);
-          gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_N_SPLIT, n_split);
       }
       gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_I_SPLIT, i_split);
+      gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_N_SPLIT, n_split);
 
       // populate the original tensors, so we get an initial metadata
       for (int i = i_split * params.n_split_tensors; i < n_tensors
