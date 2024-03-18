@@ -5636,6 +5636,7 @@ struct llm_build_context {
         lctx.inp_tokens = nullptr;
         lctx.inp_embd = nullptr;
         lctx.inp_pos = nullptr;
+        lctx.inp_out_ids = nullptr;
         lctx.inp_KQ_mask = nullptr;
         lctx.inp_KQ_pos = nullptr;
         lctx.inp_K_shift = nullptr;
@@ -8978,8 +8979,8 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         ggml_backend_tensor_set(lctx.inp_pos, batch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
     }
 
-    {
-        GGML_ASSERT(lctx.inp_out_ids && "every model type must skip unused outputs");
+    if (hparams.causal_attn || cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {
+        GGML_ASSERT(lctx.inp_out_ids && "every model that can must skip unused outputs");
         const int64_t n_tokens = batch.n_tokens;
 
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_out_ids->buffer));
