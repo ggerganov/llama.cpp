@@ -45,12 +45,9 @@ def after_scenario(context, scenario):
 
         while is_server_listening(context.server_fqdn, context.server_port):
             time.sleep(0.1)
-    except:
-        exc = sys.exception()
-        print("error in after scenario:")
-        print(exc)
-        print("*** print_tb:")
-        traceback.print_tb(exc.__traceback__, file=sys.stdout)
+    except Exception:
+        print("ignoring error in after_scenario:")
+        traceback.print_exc(file=sys.stdout)
 
 
 def server_graceful_shutdown(context):
