@@ -2195,6 +2195,8 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     }
     printf("  -m FNAME, --model FNAME\n");
     printf("                            model path (default: %s)\n", params.model.c_str());
+    printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
+    printf("                            model download url (default: %s)\n", params.model_url.c_str());
     printf("  -a ALIAS, --alias ALIAS\n");
     printf("                            set an alias for the model, will be added as `model` field in completion response\n");
     printf("  --lora FNAME              apply LoRA adapter (implies --no-mmap)\n");
@@ -2317,6 +2319,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             params.model = argv[i];
+        } else if (arg == "-mu" || arg == "--model-url") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model_url = argv[i];
         } else if (arg == "-a" || arg == "--alias") {
             if (++i >= argc) {
                 invalid_param = true;
