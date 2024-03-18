@@ -4867,7 +4867,7 @@ static void dequantize_block_iq2_s(const void * __restrict__ vx, dst_t * __restr
 #endif
 
 }
-                                    
+
 
 /*
 DPCT1110:4: The total declared local variable size in device function
