@@ -14081,7 +14081,7 @@ inline void ggml_sycl_op_mul_mat_vec_q(
     const int64_t src1_ncols, const int64_t src1_padded_row_size,
     const dpct::queue_ptr &stream) {
 
-    GGML_ASSERT(ggml_nrows(src1) == 1);
+    //GGML_ASSERT(ggml_nrows(src1) == 1);
 
     const int64_t ne00 = src0->ne[0];
     const int64_t row_diff = row_high - row_low;
