@@ -2543,8 +2543,9 @@ static inline bool ggml_is_padded_1d(const struct ggml_tensor * tensor) {
 }
 
 static inline bool ggml_is_empty(const struct ggml_tensor * tensor) {
-    // nb[3] depends on the previous nb and ne
-    return tensor->nb[3] == 0 || tensor->ne[3] == 0;
+    // the stride of the last dimension is zero if any of the previous dimensions has no elements
+    // but to be sure, the number of elements in the last dimension must also be checked
+    return tensor->nb[GGML_MAX_DIMS - 1] == 0 || tensor->ne[GGML_MAX_DIMS - 1] == 0;
 }
 
 bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
@@ -2561,11 +2562,11 @@ bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor
 static inline bool ggml_can_repeat(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
-    return ggml_is_empty(t0) ||
-        ((t1->ne[0]%t0->ne[0] == 0) &&
-         (t1->ne[1]%t0->ne[1] == 0) &&
-         (t1->ne[2]%t0->ne[2] == 0) &&
-         (t1->ne[3]%t0->ne[3] == 0));
+    return ggml_is_empty(t0) ? ggml_is_empty(t1) :
+        (t1->ne[0]%t0->ne[0] == 0) &&
+        (t1->ne[1]%t0->ne[1] == 0) &&
+        (t1->ne[2]%t0->ne[2] == 0) &&
+        (t1->ne[3]%t0->ne[3] == 0);
 }
 
 static inline bool ggml_can_repeat_rows(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
