@@ -154,6 +154,1040 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return result;
 }
 
+static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int & i, bool & invalid_param) {
+    std::string arg = argv[i];
+    llama_sampling_params& sparams = params.sparams;
+
+    if (arg == "-s" || arg == "--seed") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.seed = std::stoul(argv[i]);
+        return true;
+    }
+    if (arg == "-t" || arg == "--threads") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_threads = std::stoi(argv[i]);
+        if (params.n_threads <= 0) {
+            params.n_threads = std::thread::hardware_concurrency();
+        }
+        return true;
+    }
+    if (arg == "-tb" || arg == "--threads-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_threads_batch = std::stoi(argv[i]);
+        if (params.n_threads_batch <= 0) {
+            params.n_threads_batch = std::thread::hardware_concurrency();
+        }
+        return true;
+    }
+    if (arg == "-td" || arg == "--threads-draft") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_threads_draft = std::stoi(argv[i]);
+        if (params.n_threads_draft <= 0) {
+            params.n_threads_draft = std::thread::hardware_concurrency();
+        }
+        return true;
+    }
+    if (arg == "-tbd" || arg == "--threads-batch-draft") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_threads_batch_draft = std::stoi(argv[i]);
+        if (params.n_threads_batch_draft <= 0) {
+            params.n_threads_batch_draft = std::thread::hardware_concurrency();
+        }
+        return true;
+    }
+    if (arg == "-p" || arg == "--prompt") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.prompt = argv[i];
+        return true;
+    }
+    if (arg == "-e" || arg == "--escape") {
+        params.escape = true;
+        return true;
+    }
+    if (arg == "--prompt-cache") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.path_prompt_cache = argv[i];
+        return true;
+    }
+    if (arg == "--prompt-cache-all") {
+        params.prompt_cache_all = true;
+        return true;
+    }
+    if (arg == "--prompt-cache-ro") {
+        params.prompt_cache_ro = true;
+        return true;
+    }
+    if (arg == "-bf" || arg == "--binary-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream file(argv[i], std::ios::binary);
+        if (!file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        // store the external file name in params
+        params.prompt_file = argv[i];
+        std::ostringstream ss;
+        ss << file.rdbuf();
+        params.prompt = ss.str();
+        fprintf(stderr, "Read %zu bytes from binary file %s\n", params.prompt.size(), argv[i]);
+        return true;
+    }
+    if (arg == "-f" || arg == "--file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream file(argv[i]);
+        if (!file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        // store the external file name in params
+        params.prompt_file = argv[i];
+        std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
+        if (!params.prompt.empty() && params.prompt.back() == '\n') {
+            params.prompt.pop_back();
+        }
+        return true;
+    }
+    if (arg == "-n" || arg == "--n-predict") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_predict = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--top-k") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.top_k = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "-c" || arg == "--ctx-size") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_ctx = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--grp-attn-n" || arg == "-gan") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.grp_attn_n = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--grp-attn-w" || arg == "-gaw") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.grp_attn_w = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--rope-freq-base") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.rope_freq_base = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--rope-freq-scale") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.rope_freq_scale = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--rope-scaling") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string value(argv[i]);
+        /**/ if (value == "none") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_NONE; }
+        else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_LINEAR; }
+        else if (value == "yarn") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
+        else { invalid_param = true; }
+        return true;
+    }
+    if (arg == "--rope-scale") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.rope_freq_scale = 1.0f / std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--yarn-orig-ctx") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.yarn_orig_ctx = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--yarn-ext-factor") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.yarn_ext_factor = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--yarn-attn-factor") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.yarn_attn_factor = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--yarn-beta-fast") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.yarn_beta_fast = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--yarn-beta-slow") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.yarn_beta_slow = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--pooling") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string value(argv[i]);
+        /**/ if (value == "none") { params.pooling_type = LLAMA_POOLING_TYPE_NONE; }
+        else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
+        else if (value == "cls") { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
+        else { invalid_param = true; }
+        return true;
+    }
+    if (arg == "--defrag-thold" || arg == "-dt") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.defrag_thold = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--samplers") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        const auto sampler_names = string_split(argv[i], ';');
+        sparams.samplers_sequence = sampler_types_from_names(sampler_names, true);
+        return true;
+    }
+    if (arg == "--sampling-seq") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.samplers_sequence = sampler_types_from_chars(argv[i]);
+        return true;
+    }
+    if (arg == "--top-p") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.top_p = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--min-p") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.min_p = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--temp") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.temp = std::stof(argv[i]);
+        sparams.temp = std::max(sparams.temp, 0.0f);
+        return true;
+    }
+    if (arg == "--tfs") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.tfs_z = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--typical") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.typical_p = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--repeat-last-n") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.penalty_last_n = std::stoi(argv[i]);
+        sparams.n_prev = std::max(sparams.n_prev, sparams.penalty_last_n);
+        return true;
+    }
+    if (arg == "--repeat-penalty") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.penalty_repeat = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--frequency-penalty") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.penalty_freq = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--presence-penalty") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.penalty_present = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--dynatemp-range") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.dynatemp_range = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--dynatemp-exp") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.dynatemp_exponent = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--mirostat") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.mirostat = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--mirostat-lr") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.mirostat_eta = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--mirostat-ent") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.mirostat_tau = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--cfg-negative-prompt") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.cfg_negative_prompt = argv[i];
+        return true;
+    }
+    if (arg == "--cfg-negative-prompt-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream file(argv[i]);
+        if (!file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(sparams.cfg_negative_prompt));
+        if (!sparams.cfg_negative_prompt.empty() && sparams.cfg_negative_prompt.back() == '\n') {
+            sparams.cfg_negative_prompt.pop_back();
+        }
+        return true;
+    }
+    if (arg == "--cfg-scale") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.cfg_scale = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "-b" || arg == "--batch-size") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_batch = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "-ub" || arg == "--ubatch-size") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_ubatch = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--keep") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_keep = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--draft") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_draft = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--chunks") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_chunks = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "-np" || arg == "--parallel") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_parallel = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "-ns" || arg == "--sequences") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_sequences = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--p-split" || arg == "-ps") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.p_split = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "-m" || arg == "--model") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.model = argv[i];
+        return true;
+    }
+    if (arg == "-mu" || arg == "--model-url") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.model_url = argv[i];
+        return true;
+    }
+    if (arg == "-md" || arg == "--model-draft") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.model_draft = argv[i];
+        return true;
+    }
+    if (arg == "-a" || arg == "--alias") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.model_alias = argv[i];
+        return true;
+    }
+    if (arg == "--lora") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.lora_adapter.emplace_back(argv[i], 1.0f);
+        params.use_mmap = false;
+        return true;
+    }
+    if (arg == "--lora-scaled") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        const char* lora_adapter = argv[i];
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
+        params.use_mmap = false;
+        return true;
+    }
+    if (arg == "--lora-base") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.lora_base = argv[i];
+        return true;
+    }
+    if (arg == "--control-vector") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.control_vectors.push_back({ 1.0f, argv[i], });
+        return true;
+    }
+    if (arg == "--control-vector-scaled") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        const char* fname = argv[i];
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.control_vectors.push_back({ std::stof(argv[i]), fname, });
+        return true;
+    }
+    if (arg == "--control-vector-layer-range") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.control_vector_layer_start = std::stoi(argv[i]);
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.control_vector_layer_end = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--mmproj") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.mmproj = argv[i];
+        return true;
+    }
+    if (arg == "--image") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.image = argv[i];
+        return true;
+    }
+    if (arg == "-i" || arg == "--interactive") {
+        params.interactive = true;
+        return true;
+    }
+    if (arg == "--embedding") {
+        params.embedding = true;
+        return true;
+    }
+    if (arg == "--interactive-first") {
+        params.interactive_first = true;
+        return true;
+    }
+    if (arg == "-ins" || arg == "--instruct") {
+        params.instruct = true;
+        return true;
+    }
+    if (arg == "-cml" || arg == "--chatml") {
+        params.chatml = true;
+        return true;
+    }
+    if (arg == "--infill") {
+        params.infill = true;
+        return true;
+    }
+    if (arg == "-dkvc" || arg == "--dump-kv-cache") {
+        params.dump_kv_cache = true;
+        return true;
+    }
+    if (arg == "-nkvo" || arg == "--no-kv-offload") {
+        params.no_kv_offload = true;
+        return true;
+    }
+    if (arg == "-ctk" || arg == "--cache-type-k") {
+        params.cache_type_k = argv[++i];
+        return true;
+    }
+    if (arg == "-ctv" || arg == "--cache-type-v") {
+        params.cache_type_v = argv[++i];
+        return true;
+    }
+    if (arg == "--multiline-input") {
+        params.multiline_input = true;
+        return true;
+    }
+    if (arg == "--simple-io") {
+        params.simple_io = true;
+        return true;
+    }
+    if (arg == "-cb" || arg == "--cont-batching") {
+        params.cont_batching = true;
+        return true;
+    }
+    if (arg == "--color") {
+        params.use_color = true;
+        return true;
+    }
+    if (arg == "--mlock") {
+        params.use_mlock = true;
+        return true;
+    }
+    if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_gpu_layers = std::stoi(argv[i]);
+        if (!llama_supports_gpu_offload()) {
+            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+        }
+        return true;
+    }
+    if (arg == "--gpu-layers-draft" || arg == "-ngld" || arg == "--n-gpu-layers-draft") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_gpu_layers_draft = std::stoi(argv[i]);
+        if (!llama_supports_gpu_offload()) {
+            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers-draft option will be ignored\n");
+            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+        }
+        return true;
+    }
+    if (arg == "--main-gpu" || arg == "-mg") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.main_gpu = std::stoi(argv[i]);
+#ifndef GGML_USE_CUBLAS_SYCL
+        fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the main GPU has no effect.\n");
+#endif // GGML_USE_CUBLAS_SYCL
+        return true;
+    }
+    if (arg == "--split-mode" || arg == "-sm") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string arg_next = argv[i];
+        if (arg_next == "none") {
+            params.split_mode = LLAMA_SPLIT_MODE_NONE;
+        }
+        else if (arg_next == "layer") {
+            params.split_mode = LLAMA_SPLIT_MODE_LAYER;
+        }
+        else if (arg_next == "row") {
+#ifdef GGML_USE_SYCL
+            fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
+            exit(1);
+#endif // GGML_USE_SYCL
+            params.split_mode = LLAMA_SPLIT_MODE_ROW;
+        }
+        else {
+            invalid_param = true;
+            return true;
+        }
+#ifndef GGML_USE_CUBLAS_SYCL
+        fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the split mode has no effect.\n");
+#endif // GGML_USE_CUBLAS_SYCL
+        return true;
+    }
+    if (arg == "--tensor-split" || arg == "-ts") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string arg_next = argv[i];
+
+        // split string by , and /
+        const std::regex regex{ R"([,/]+)" };
+        std::sregex_token_iterator it{ arg_next.begin(), arg_next.end(), regex, -1 };
+        std::vector<std::string> split_arg{ it, {} };
+        if (split_arg.size() >= llama_max_devices()) {
+            invalid_param = true;
+            return true;
+        }
+        for (size_t i = 0; i < llama_max_devices(); ++i) {
+            if (i < split_arg.size()) {
+                params.tensor_split[i] = std::stof(split_arg[i]);
+            }
+            else {
+                params.tensor_split[i] = 0.0f;
+            }
+        }
+#ifndef GGML_USE_CUBLAS_SYCL_VULKAN
+        fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL/Vulkan. Setting a tensor split has no effect.\n");
+#endif // GGML_USE_CUBLAS_SYCL
+        return true;
+    }
+    if (arg == "--no-mmap") {
+        params.use_mmap = false;
+        return true;
+    }
+    if (arg == "--numa") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string value(argv[i]);
+        /**/ if (value == "distribute" || value == "") { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
+        else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
+        else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
+        else { invalid_param = true; }
+        return true;
+    }
+    if (arg == "--verbose-prompt") {
+        params.verbose_prompt = true;
+        return true;
+    }
+    if (arg == "--no-display-prompt") {
+        params.display_prompt = false;
+        return true;
+    }
+    if (arg == "-r" || arg == "--reverse-prompt") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.antiprompt.emplace_back(argv[i]);
+        return true;
+    }
+    if (arg == "-ld" || arg == "--logdir") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.logdir = argv[i];
+
+        if (params.logdir.back() != DIRECTORY_SEPARATOR) {
+            params.logdir += DIRECTORY_SEPARATOR;
+        }
+        return true;
+    }
+    if (arg == "--save-all-logits" || arg == "--kl-divergence-base") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.logits_file = argv[i];
+        return true;
+    }
+    if (arg == "--perplexity" || arg == "--all-logits") {
+        params.logits_all = true;
+        return true;
+    }
+    if (arg == "--ppl-stride") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.ppl_stride = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "-ptc" || arg == "--print-token-count") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_print = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--ppl-output-type") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.ppl_output_type = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--hellaswag") {
+        params.hellaswag = true;
+        return true;
+    }
+    if (arg == "--hellaswag-tasks") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.hellaswag_tasks = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--winogrande") {
+        params.winogrande = true;
+        return true;
+    }
+    if (arg == "--winogrande-tasks") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.winogrande_tasks = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--multiple-choice") {
+        params.multiple_choice = true;
+        return true;
+    }
+    if (arg == "--multiple-choice-tasks") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.multiple_choice_tasks = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--kl-divergence") {
+        params.kl_divergence = true;
+        return true;
+    }
+    if (arg == "--ignore-eos") {
+        params.ignore_eos = true;
+        return true;
+    }
+    if (arg == "--no-penalize-nl") {
+        sparams.penalize_nl = false;
+        return true;
+    }
+    if (arg == "-l" || arg == "--logit-bias") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::stringstream ss(argv[i]);
+        llama_token key;
+        char sign;
+        std::string value_str;
+        try {
+            if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
+                sparams.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
+            }
+            else {
+                throw std::exception();
+            }
+        }
+        catch (const std::exception&) {
+            invalid_param = true;
+            return true;
+        }
+        return true;
+    }
+    if (arg == "-h" || arg == "--help") {
+        return false;
+    }
+    if (arg == "--version") {
+        fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
+        fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
+        exit(0);
+    }
+    if (arg == "--random-prompt") {
+        params.random_prompt = true;
+        return true;
+    }
+    if (arg == "--in-prefix-bos") {
+        params.input_prefix_bos = true;
+        return true;
+    }
+    if (arg == "--in-prefix") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.input_prefix = argv[i];
+        return true;
+    }
+    if (arg == "--in-suffix") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.input_suffix = argv[i];
+        return true;
+    }
+    if (arg == "--grammar") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.grammar = argv[i];
+        return true;
+    }
+    if (arg == "--grammar-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream file(argv[i]);
+        if (!file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        std::copy(
+            std::istreambuf_iterator<char>(file),
+            std::istreambuf_iterator<char>(),
+            std::back_inserter(sparams.grammar)
+        );
+        return true;
+    }
+    if (arg == "--override-kv") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        char* sep = strchr(argv[i], '=');
+        if (sep == nullptr || sep - argv[i] >= 128) {
+            fprintf(stderr, "error: Malformed KV override: %s\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        struct llama_model_kv_override kvo;
+        std::strncpy(kvo.key, argv[i], sep - argv[i]);
+        kvo.key[sep - argv[i]] = 0;
+        sep++;
+        if (strncmp(sep, "int:", 4) == 0) {
+            sep += 4;
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+            kvo.int_value = std::atol(sep);
+        }
+        else if (strncmp(sep, "float:", 6) == 0) {
+            sep += 6;
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
+            kvo.float_value = std::atof(sep);
+        }
+        else if (strncmp(sep, "bool:", 5) == 0) {
+            sep += 5;
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
+            if (std::strcmp(sep, "true") == 0) {
+                kvo.bool_value = true;
+            }
+            else if (std::strcmp(sep, "false") == 0) {
+                kvo.bool_value = false;
+            }
+            else {
+                fprintf(stderr, "error: Invalid boolean value for KV override: %s\n", argv[i]);
+                invalid_param = true;
+                return true;
+            }
+        }
+        else {
+            fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        params.kv_overrides.push_back(kvo);
+        return true;
+    }
+#ifndef LOG_DISABLE_LOGS
+    // Parse args for logging parameters
+    if (log_param_single_parse(argv[i])) {
+        // Do nothing, log_param_single_parse automatically does it's thing
+        //  and returns if a match was found and parsed.
+        return true;
+    }
+    if (log_param_pair_parse( /*check_but_dont_parse*/ true, argv[i])) {
+        // We have a matching known parameter requiring an argument,
+        //  now we need to check if there is anything after this argv
+        //  and flag invalid_param or parse it.
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        if (!log_param_pair_parse( /*check_but_dont_parse*/ false, argv[i - 1], argv[i])) {
+            invalid_param = true;
+            return true;
+        }
+        return true;
+    }
+    // End of Parse args for logging parameters
+#endif // LOG_DISABLE_LOGS
+
+    return false;
+}
+
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
@@ -166,1028 +1200,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 
-        bool arg_found = false;
-        if (arg == "-s" || arg == "--seed") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.seed = std::stoul(argv[i]);
-        }
-        if (arg == "-t" || arg == "--threads") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads = std::stoi(argv[i]);
-            if (params.n_threads <= 0) {
-                params.n_threads = std::thread::hardware_concurrency();
-            }
-        }
-        if (arg == "-tb" || arg == "--threads-batch") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads_batch = std::stoi(argv[i]);
-            if (params.n_threads_batch <= 0) {
-                params.n_threads_batch = std::thread::hardware_concurrency();
-            }
-        }
-        if (arg == "-td" || arg == "--threads-draft") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads_draft = std::stoi(argv[i]);
-            if (params.n_threads_draft <= 0) {
-                params.n_threads_draft = std::thread::hardware_concurrency();
-            }
-        }
-        if (arg == "-tbd" || arg == "--threads-batch-draft") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads_batch_draft = std::stoi(argv[i]);
-            if (params.n_threads_batch_draft <= 0) {
-                params.n_threads_batch_draft = std::thread::hardware_concurrency();
-            }
-        }
-        if (arg == "-p" || arg == "--prompt") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.prompt = argv[i];
-        }
-        if (arg == "-e" || arg == "--escape") {
-            arg_found = true;
-            params.escape = true;
-        }
-        if (arg == "--prompt-cache") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.path_prompt_cache = argv[i];
-        }
-        if (arg == "--prompt-cache-all") {
-            arg_found = true;
-            params.prompt_cache_all = true;
-        }
-        if (arg == "--prompt-cache-ro") {
-            arg_found = true;
-            params.prompt_cache_ro = true;
-        }
-        if (arg == "-bf" || arg == "--binary-file") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i], std::ios::binary);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            // store the external file name in params
-            params.prompt_file = argv[i];
-            std::ostringstream ss;
-            ss << file.rdbuf();
-            params.prompt = ss.str();
-            fprintf(stderr, "Read %zu bytes from binary file %s\n", params.prompt.size(), argv[i]);
-        }
-        if (arg == "-f" || arg == "--file") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i]);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            // store the external file name in params
-            params.prompt_file = argv[i];
-            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
-            if (!params.prompt.empty() && params.prompt.back() == '\n') {
-                params.prompt.pop_back();
-            }
-        }
-        if (arg == "-n" || arg == "--n-predict") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_predict = std::stoi(argv[i]);
-        }
-        if (arg == "--top-k") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.top_k = std::stoi(argv[i]);
-        }
-        if (arg == "-c" || arg == "--ctx-size") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_ctx = std::stoi(argv[i]);
-        }
-        if (arg == "--grp-attn-n" || arg == "-gan") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-
-            params.grp_attn_n = std::stoi(argv[i]);
-        }
-        if (arg == "--grp-attn-w" || arg == "-gaw") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-
-            params.grp_attn_w = std::stoi(argv[i]);
-        }
-        if (arg == "--rope-freq-base") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rope_freq_base = std::stof(argv[i]);
-        }
-        if (arg == "--rope-freq-scale") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rope_freq_scale = std::stof(argv[i]);
-        }
-        if (arg == "--rope-scaling") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string value(argv[i]);
-            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_NONE; }
-            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_LINEAR; }
-            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
-            else { invalid_param = true; break; }
-        }
-        if (arg == "--rope-scale") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rope_freq_scale = 1.0f/std::stof(argv[i]);
-        }
-        if (arg == "--yarn-orig-ctx") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_orig_ctx = std::stoi(argv[i]);
-        }
-        if (arg == "--yarn-ext-factor") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_ext_factor = std::stof(argv[i]);
-        }
-        if (arg == "--yarn-attn-factor") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_attn_factor = std::stof(argv[i]);
-        }
-        if (arg == "--yarn-beta-fast") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_beta_fast = std::stof(argv[i]);
-        }
-        if (arg == "--yarn-beta-slow") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_beta_slow = std::stof(argv[i]);
-        }
-        if (arg == "--pooling") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string value(argv[i]);
-            /**/ if (value == "none") { params.pooling_type = LLAMA_POOLING_TYPE_NONE; }
-            else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
-            else if (value == "cls")  { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
-            else { invalid_param = true; break; }
-        }
-        if (arg == "--defrag-thold" || arg == "-dt") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.defrag_thold = std::stof(argv[i]);
-        }
-        if (arg == "--samplers") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            const auto sampler_names = string_split(argv[i], ';');
-            sparams.samplers_sequence = sampler_types_from_names(sampler_names, true);
-        }
-        if (arg == "--sampling-seq") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.samplers_sequence = sampler_types_from_chars(argv[i]);
-        }
-        if (arg == "--top-p") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.top_p = std::stof(argv[i]);
-        }
-        if (arg == "--min-p") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.min_p = std::stof(argv[i]);
-        }
-        if (arg == "--temp") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.temp = std::stof(argv[i]);
-            sparams.temp = std::max(sparams.temp, 0.0f);
-        }
-        if (arg == "--tfs") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.tfs_z = std::stof(argv[i]);
-        }
-        if (arg == "--typical") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.typical_p = std::stof(argv[i]);
-        }
-        if (arg == "--repeat-last-n") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.penalty_last_n = std::stoi(argv[i]);
-            sparams.n_prev = std::max(sparams.n_prev, sparams.penalty_last_n);
-        }
-        if (arg == "--repeat-penalty") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.penalty_repeat = std::stof(argv[i]);
-        }
-        if (arg == "--frequency-penalty") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.penalty_freq = std::stof(argv[i]);
-        }
-        if (arg == "--presence-penalty") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.penalty_present = std::stof(argv[i]);
-        }
-        if (arg == "--dynatemp-range") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.dynatemp_range = std::stof(argv[i]);
-        }
-        if (arg == "--dynatemp-exp") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.dynatemp_exponent = std::stof(argv[i]);
-        }
-        if (arg == "--mirostat") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.mirostat = std::stoi(argv[i]);
-        }
-        if (arg == "--mirostat-lr") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.mirostat_eta = std::stof(argv[i]);
-        }
-        if (arg == "--mirostat-ent") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.mirostat_tau = std::stof(argv[i]);
-        }
-        if (arg == "--cfg-negative-prompt") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.cfg_negative_prompt = argv[i];
-        }
-        if (arg == "--cfg-negative-prompt-file") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i]);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(sparams.cfg_negative_prompt));
-            if (!sparams.cfg_negative_prompt.empty() && sparams.cfg_negative_prompt.back() == '\n') {
-                sparams.cfg_negative_prompt.pop_back();
-            }
-        }
-        if (arg == "--cfg-scale") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.cfg_scale = std::stof(argv[i]);
-        }
-        if (arg == "-b" || arg == "--batch-size") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_batch = std::stoi(argv[i]);
-        }
-        if (arg == "-ub" || arg == "--ubatch-size") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_ubatch = std::stoi(argv[i]);
-        }
-        if (arg == "--keep") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_keep = std::stoi(argv[i]);
-        }
-        if (arg == "--draft") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_draft = std::stoi(argv[i]);
-        }
-        if (arg == "--chunks") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_chunks = std::stoi(argv[i]);
-        }
-        if (arg == "-np" || arg == "--parallel") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_parallel = std::stoi(argv[i]);
-        }
-        if (arg == "-ns" || arg == "--sequences") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_sequences = std::stoi(argv[i]);
-        }
-        if (arg == "--p-split" || arg == "-ps") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.p_split = std::stof(argv[i]);
-        }
-        if (arg == "-m" || arg == "--model") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model = argv[i];
-        }
-        if (arg == "-mu" || arg == "--model-url") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model_url = argv[i];
-        }
-        if (arg == "-md" || arg == "--model-draft") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model_draft = argv[i];
-        }
-        if (arg == "-a" || arg == "--alias") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model_alias = argv[i];
-        }
-        if (arg == "--lora") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_adapter.emplace_back(argv[i], 1.0f);
-            params.use_mmap = false;
-        }
-        if (arg == "--lora-scaled") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            const char * lora_adapter = argv[i];
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
-            params.use_mmap = false;
-        }
-        if (arg == "--lora-base") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_base = argv[i];
-        }
-        if (arg == "--control-vector") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.control_vectors.push_back({ 1.0f, argv[i], });
-        }
-        if (arg == "--control-vector-scaled") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            const char * fname = argv[i];
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.control_vectors.push_back({ std::stof(argv[i]), fname, });
-        }
-        if (arg == "--control-vector-layer-range") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.control_vector_layer_start = std::stoi(argv[i]);
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.control_vector_layer_end = std::stoi(argv[i]);
-        }
-        if (arg == "--mmproj") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.mmproj = argv[i];
-        }
-        if (arg == "--image") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.image = argv[i];
-        }
-        if (arg == "-i" || arg == "--interactive") {
-            arg_found = true;
-            params.interactive = true;
-        }
-        if (arg == "--embedding") {
-            arg_found = true;
-            params.embedding = true;
-        }
-        if (arg == "--interactive-first") {
-            arg_found = true;
-            params.interactive_first = true;
-        }
-        if (arg == "-ins" || arg == "--instruct") {
-            arg_found = true;
-            params.instruct = true;
-        }
-        if (arg == "-cml" || arg == "--chatml") {
-            arg_found = true;
-            params.chatml = true;
-        }
-        if (arg == "--infill") {
-            arg_found = true;
-            params.infill = true;
-        }
-        if (arg == "-dkvc" || arg == "--dump-kv-cache") {
-            arg_found = true;
-            params.dump_kv_cache = true;
-        }
-        if (arg == "-nkvo" || arg == "--no-kv-offload") {
-            arg_found = true;
-            params.no_kv_offload = true;
-        }
-        if (arg == "-ctk" || arg == "--cache-type-k") {
-            arg_found = true;
-            params.cache_type_k = argv[++i];
-        }
-        if (arg == "-ctv" || arg == "--cache-type-v") {
-            arg_found = true;
-            params.cache_type_v = argv[++i];
-        }
-        if (arg == "--multiline-input") {
-            arg_found = true;
-            params.multiline_input = true;
-        }
-        if (arg == "--simple-io") {
-            arg_found = true;
-            params.simple_io = true;
-        }
-        if (arg == "-cb" || arg == "--cont-batching") {
-            arg_found = true;
-            params.cont_batching = true;
-        }
-        if (arg == "--color") {
-            arg_found = true;
-            params.use_color = true;
-        }
-        if (arg == "--mlock") {
-            arg_found = true;
-            params.use_mlock = true;
-        }
-        if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_gpu_layers = std::stoi(argv[i]);
-            if (!llama_supports_gpu_offload()) {
-                fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
-                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
-            }
-        }
-        if (arg == "--gpu-layers-draft" || arg == "-ngld" || arg == "--n-gpu-layers-draft") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_gpu_layers_draft = std::stoi(argv[i]);
-            if (!llama_supports_gpu_offload()) {
-                fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers-draft option will be ignored\n");
-                fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
-            }
-        }
-        if (arg == "--main-gpu" || arg == "-mg") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.main_gpu = std::stoi(argv[i]);
-#ifndef GGML_USE_CUBLAS_SYCL
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the main GPU has no effect.\n");
-#endif // GGML_USE_CUBLAS_SYCL
-        }
-        if (arg == "--split-mode" || arg == "-sm") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string arg_next = argv[i];
-            if (arg_next == "none") {
-                params.split_mode = LLAMA_SPLIT_MODE_NONE;
-            } else if (arg_next == "layer") {
-                params.split_mode = LLAMA_SPLIT_MODE_LAYER;
-            } else if (arg_next == "row") {
-#ifdef GGML_USE_SYCL
-                fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
-                exit(1);
-#endif // GGML_USE_SYCL
-                params.split_mode = LLAMA_SPLIT_MODE_ROW;
-            } else {
-                invalid_param = true;
-                break;
-            }
-#ifndef GGML_USE_CUBLAS_SYCL
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUBLAS_SYCL
-
-        }
-        if (arg == "--tensor-split" || arg == "-ts") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string arg_next = argv[i];
-
-            // split string by , and /
-            const std::regex regex{R"([,/]+)"};
-            std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
-            std::vector<std::string> split_arg{it, {}};
-            if (split_arg.size() >= llama_max_devices()) {
-                invalid_param = true;
-                break;
-            }
-            for (size_t i = 0; i < llama_max_devices(); ++i) {
-                if (i < split_arg.size()) {
-                    params.tensor_split[i] = std::stof(split_arg[i]);
-                } else {
-                    params.tensor_split[i] = 0.0f;
-                }
-            }
-#ifndef GGML_USE_CUBLAS_SYCL_VULKAN
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL/Vulkan. Setting a tensor split has no effect.\n");
-#endif // GGML_USE_CUBLAS_SYCL
-        }
-        if (arg == "--no-mmap") {
-            arg_found = true;
-            params.use_mmap = false;
-        }
-        if (arg == "--numa") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string value(argv[i]);
-            /**/ if (value == "distribute" || value == "") { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
-            else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
-            else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
-            else { invalid_param = true; break; }
-        }
-        if (arg == "--verbose-prompt") {
-            arg_found = true;
-            params.verbose_prompt = true;
-        }
-        if (arg == "--no-display-prompt") {
-            arg_found = true;
-            params.display_prompt = false;
-        }
-        if (arg == "-r" || arg == "--reverse-prompt") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.antiprompt.emplace_back(argv[i]);
-        }
-        if (arg == "-ld" || arg == "--logdir") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.logdir = argv[i];
-
-            if (params.logdir.back() != DIRECTORY_SEPARATOR) {
-                params.logdir += DIRECTORY_SEPARATOR;
-            }
-        }
-        if (arg == "--save-all-logits" || arg == "--kl-divergence-base") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.logits_file = argv[i];
-        }
-        if (arg == "--perplexity" || arg == "--all-logits") {
-            arg_found = true;
-            params.logits_all = true;
-        }
-        if (arg == "--ppl-stride") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.ppl_stride = std::stoi(argv[i]);
-        }
-        if (arg == "-ptc" || arg == "--print-token-count") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_print = std::stoi(argv[i]);
-        }
-        if (arg == "--ppl-output-type") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.ppl_output_type = std::stoi(argv[i]);
-        }
-        if (arg == "--hellaswag") {
-            arg_found = true;
-            params.hellaswag = true;
-        }
-        if (arg == "--hellaswag-tasks") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.hellaswag_tasks = std::stoi(argv[i]);
-        }
-        if (arg == "--winogrande") {
-            arg_found = true;
-            params.winogrande = true;
-        }
-        if (arg == "--winogrande-tasks") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.winogrande_tasks = std::stoi(argv[i]);
-        }
-        if (arg == "--multiple-choice") {
-            arg_found = true;
-            params.multiple_choice = true;
-        }
-        if (arg == "--multiple-choice-tasks") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.multiple_choice_tasks = std::stoi(argv[i]);
-        }
-        if (arg == "--kl-divergence") {
-            arg_found = true;
-            params.kl_divergence = true;
-        }
-        if (arg == "--ignore-eos") {
-            arg_found = true;
-            params.ignore_eos = true;
-        }
-        if (arg == "--no-penalize-nl") {
-            arg_found = true;
-            sparams.penalize_nl = false;
-        }
-        if (arg == "-l" || arg == "--logit-bias") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::stringstream ss(argv[i]);
-            llama_token key;
-            char sign;
-            std::string value_str;
-            try {
-                if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
-                    sparams.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
-                } else {
-                    throw std::exception();
-                }
-            } catch (const std::exception&) {
-                invalid_param = true;
-                break;
-            }
-        }
-        if (arg == "-h" || arg == "--help") {
-            arg_found = true;
-            return false;
-        }
-        if (arg == "--version") {
-            arg_found = true;
-            fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
-            fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
-            exit(0);
-        }
-        if (arg == "--random-prompt") {
-            arg_found = true;
-            params.random_prompt = true;
-        }
-        if (arg == "--in-prefix-bos") {
-            arg_found = true;
-            params.input_prefix_bos = true;
-        }
-        if (arg == "--in-prefix") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.input_prefix = argv[i];
-        }
-        if (arg == "--in-suffix") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.input_suffix = argv[i];
-        }
-        if (arg == "--grammar") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.grammar = argv[i];
-        }
-        if (arg == "--grammar-file") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i]);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            std::copy(
-                std::istreambuf_iterator<char>(file),
-                std::istreambuf_iterator<char>(),
-                std::back_inserter(sparams.grammar)
-            );
-        }
-        if (arg == "--override-kv") {
-            arg_found = true;
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            char * sep = strchr(argv[i], '=');
-            if (sep == nullptr || sep - argv[i] >= 128) {
-                fprintf(stderr, "error: Malformed KV override: %s\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            struct llama_model_kv_override kvo;
-            std::strncpy(kvo.key, argv[i], sep - argv[i]);
-            kvo.key[sep - argv[i]] = 0;
-            sep++;
-            if (strncmp(sep, "int:", 4) == 0) {
-                sep += 4;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-                kvo.int_value = std::atol(sep);
-            } else if (strncmp(sep, "float:", 6) == 0) {
-                sep += 6;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-                kvo.float_value = std::atof(sep);
-            } else if (strncmp(sep, "bool:", 5) == 0) {
-                sep += 5;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
-                if (std::strcmp(sep, "true") == 0) {
-                    kvo.bool_value = true;
-                } else if (std::strcmp(sep, "false") == 0) {
-                    kvo.bool_value = false;
-                } else {
-                    fprintf(stderr, "error: Invalid boolean value for KV override: %s\n", argv[i]);
-                    invalid_param = true;
-                    break;
-                }
-            } else {
-                fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            params.kv_overrides.push_back(kvo);
-#ifndef LOG_DISABLE_LOGS
-        // Parse args for logging parameters
-        }
-        if ( log_param_single_parse( argv[i] ) ) {
-            arg_found = true;
-            // Do nothing, log_param_single_parse automatically does it's thing
-            //  and returns if a match was found and parsed.
-        }
-        if ( log_param_pair_parse( /*check_but_dont_parse*/ true, argv[i] ) ) {
-            arg_found = true;
-            // We have a matching known parameter requiring an argument,
-            //  now we need to check if there is anything after this argv
-            //  and flag invalid_param or parse it.
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            if( !log_param_pair_parse( /*check_but_dont_parse*/ false, argv[i-1], argv[i]) ) {
-                invalid_param = true;
-                break;
-            }
-        // End of Parse args for logging parameters
-#endif // LOG_DISABLE_LOGS
-        }
-
-        if (!arg_found) {
+        if (!gpt_params_find_arg(argc, argv, params, i, invalid_param)) {
             throw std::invalid_argument("error: unknown argument: " + arg);
         }
     }
