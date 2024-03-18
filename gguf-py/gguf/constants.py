@@ -32,6 +32,7 @@ class Keys:
         FILE_TYPE            = "general.file_type"
 
     class LLM:
+        VOCAB_SIZE            = "{arch}.vocab_size"
         CONTEXT_LENGTH        = "{arch}.context_length"
         EMBEDDING_LENGTH      = "{arch}.embedding_length"
         BLOCK_COUNT           = "{arch}.block_count"
@@ -41,6 +42,7 @@ class Keys:
         EXPERT_COUNT          = "{arch}.expert_count"
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
         POOLING_TYPE          = "{arch}.pooling_type"
+        LOGIT_SCALE           = "{arch}.logit_scale"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -60,6 +62,12 @@ class Keys:
         SCALING_FACTOR       = "{arch}.rope.scaling.factor"
         SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
         SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
+
+    class SSM:
+        CONV_KERNEL    = "{arch}.ssm.conv_kernel"
+        INNER_SIZE     = "{arch}.ssm.inner_size"
+        STATE_SIZE     = "{arch}.ssm.state_size"
+        TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
 
     class Tokenizer:
         MODEL            = "tokenizer.ggml.model"
@@ -113,6 +121,8 @@ class MODEL_ARCH(IntEnum):
     MINICPM    = auto()
     GEMMA      = auto()
     STARCODER2 = auto()
+    MAMBA      = auto()
+    COMMAND_R  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -144,6 +154,13 @@ class MODEL_TENSOR(IntEnum):
     ATTN_Q_NORM     = auto()
     ATTN_K_NORM     = auto()
     LAYER_OUT_NORM  = auto()
+    SSM_IN          = auto()
+    SSM_CONV1D      = auto()
+    SSM_X           = auto()
+    SSM_DT          = auto()
+    SSM_A           = auto()
+    SSM_D           = auto()
+    SSM_OUT         = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -171,6 +188,8 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.MINICPM:        "minicpm",
     MODEL_ARCH.GEMMA:          "gemma",
     MODEL_ARCH.STARCODER2:     "starcoder2",
+    MODEL_ARCH.MAMBA:          "mamba",
+    MODEL_ARCH.COMMAND_R:      "command-r",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -202,6 +221,13 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down.{xid}",
     MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up.{xid}",
     MODEL_TENSOR.LAYER_OUT_NORM:  "blk.{bid}.layer_output_norm",
+    MODEL_TENSOR.SSM_IN:          "blk.{bid}.ssm_in",
+    MODEL_TENSOR.SSM_CONV1D:      "blk.{bid}.ssm_conv1d",
+    MODEL_TENSOR.SSM_X:           "blk.{bid}.ssm_x",
+    MODEL_TENSOR.SSM_DT:          "blk.{bid}.ssm_dt",
+    MODEL_TENSOR.SSM_A:           "blk.{bid}.ssm_a",
+    MODEL_TENSOR.SSM_D:           "blk.{bid}.ssm_d",
+    MODEL_TENSOR.SSM_OUT:         "blk.{bid}.ssm_out",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -543,6 +569,31 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.MAMBA: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.SSM_IN,
+        MODEL_TENSOR.SSM_CONV1D,
+        MODEL_TENSOR.SSM_X,
+        MODEL_TENSOR.SSM_DT,
+        MODEL_TENSOR.SSM_A,
+        MODEL_TENSOR.SSM_D,
+        MODEL_TENSOR.SSM_OUT,
+    ],
+    MODEL_ARCH.COMMAND_R: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     # TODO
 }
 
@@ -626,6 +677,11 @@ class GGMLQuantizationType(IntEnum):
     IQ3_S   = 21
     IQ2_S   = 22
     IQ4_XS  = 23
+    I8      = 24
+    I16     = 25
+    I32     = 26
+    I64     = 27
+    F64     = 28
 
 
 class GGUFEndian(IntEnum):
@@ -692,6 +748,11 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.IQ3_S:   (256, 2 + QK_K // 4 + QK_K // 8 + QK_K // 32 + 4),
     GGMLQuantizationType.IQ2_S:   (256, 2 + QK_K // 4 + QK_K // 16),
     GGMLQuantizationType.IQ4_XS:  (256, 2 + 2 + QK_K // 2 + QK_K // 64),
+    GGMLQuantizationType.I8:      (1, 1),
+    GGMLQuantizationType.I16:     (1, 2),
+    GGMLQuantizationType.I32:     (1, 4),
+    GGMLQuantizationType.I64:     (1, 8),
+    GGMLQuantizationType.F64:     (1, 8),
 }
 
 
@@ -711,6 +772,7 @@ KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
 KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
+KEY_VOCAB_SIZE            = Keys.LLM.VOCAB_SIZE
 KEY_CONTEXT_LENGTH        = Keys.LLM.CONTEXT_LENGTH
 KEY_EMBEDDING_LENGTH      = Keys.LLM.EMBEDDING_LENGTH
 KEY_BLOCK_COUNT           = Keys.LLM.BLOCK_COUNT
@@ -733,6 +795,12 @@ KEY_ROPE_SCALING_TYPE         = Keys.Rope.SCALING_TYPE
 KEY_ROPE_SCALING_FACTOR       = Keys.Rope.SCALING_FACTOR
 KEY_ROPE_SCALING_ORIG_CTX_LEN = Keys.Rope.SCALING_ORIG_CTX_LEN
 KEY_ROPE_SCALING_FINETUNED    = Keys.Rope.SCALING_FINETUNED
+
+# SSM
+KEY_SSM_CONV_KERNEL    = Keys.SSM.CONV_KERNEL
+KEY_SSM_INNER_SIZE     = Keys.SSM.INNER_SIZE
+KEY_SSM_STATE_SIZE     = Keys.SSM.STATE_SIZE
+KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL

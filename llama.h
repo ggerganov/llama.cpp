@@ -59,9 +59,10 @@ extern "C" {
     typedef int32_t llama_seq_id;
 
     enum llama_vocab_type {
-        LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
-        LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
-        LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
+        LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
+        LLAMA_VOCAB_TYPE_SPM  = 1, // SentencePiece
+        LLAMA_VOCAB_TYPE_BPE  = 2, // Byte Pair Encoding
+        LLAMA_VOCAB_TYPE_WPM  = 3, // WordPiece
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -234,7 +235,9 @@ extern "C" {
     struct llama_context_params {
         uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
-        uint32_t n_batch;           // prompt processing maximum batch size
+        uint32_t n_batch;           // logical maximum batch size that can be submitted to llama_decode
+        uint32_t n_ubatch;          // physical maximum batch size
+        uint32_t n_seq_max;         // max number of sequences (i.e. distinct states for recurrent models)
         uint32_t n_threads;         // number of threads to use for generation
         uint32_t n_threads_batch;   // number of threads to use for batch processing
 
@@ -277,7 +280,7 @@ extern "C" {
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
         bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-        bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
+        bool pure;                   // quantize all tensors to the default type
         void * imatrix;              // pointer to importance matrix data
     } llama_model_quantize_params;
 
@@ -376,6 +379,8 @@ extern "C" {
 
     LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
     LLAMA_API enum llama_rope_type  llama_rope_type (const struct llama_model * model);
@@ -383,6 +388,7 @@ extern "C" {
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
     LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
+    LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
 
     // Get the model's RoPE frequency scaling factor
     LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
@@ -430,10 +436,24 @@ extern "C" {
     // Returns 0 on success
     LLAMA_API int32_t llama_model_apply_lora_from_file(
             const struct llama_model * model,
-                      const char * path_lora,
-                           float   scale,
-                      const char * path_base_model,
-                         int32_t   n_threads);
+                          const char * path_lora,
+                               float   scale,
+                          const char * path_base_model,
+                             int32_t   n_threads);
+
+    // Apply a loaded control vector to a llama_context, or if data is NULL, clear
+    // the currently loaded vector.
+    // n_embd should be the size of a single layer's control, and data should point
+    // to an n_embd x n_layers buffer starting from layer 1.
+    // il_start and il_end are the layer range the vector should apply to (both inclusive)
+    // See llama_control_vector_load in common to load a control vector.
+    LLAMA_API int32_t llama_control_vector_apply(
+            struct llama_context * lctx,
+                     const float * data,
+                          size_t   len,
+                         int32_t   n_embd,
+                         int32_t   il_start,
+                         int32_t   il_end);
 
     //
     // KV cache
@@ -454,7 +474,7 @@ extern "C" {
         // Maximum number of sequences that can exist in a cell. It's not an error
         // if there are more sequences in a cell than this value, however they will
         // not be visible in the view cells_sequences.
-        int32_t n_max_seq;
+        int32_t n_seq_max;
 
         // Number of tokens in the cache. For example, if there are two populated
         // cells, the first with 1 sequence id in it and the second with 2 sequence
@@ -474,12 +494,12 @@ extern "C" {
         // Information for an individual cell.
         struct llama_kv_cache_view_cell * cells;
 
-        // The sequences for each cell. There will be n_max_seq items per cell.
+        // The sequences for each cell. There will be n_seq_max items per cell.
         llama_seq_id * cells_sequences;
     };
 
     // Create an empty KV cache view. (use only for debugging purposes)
-    LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
+    LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_seq_max);
 
     // Free a KV cache view. (use only for debugging purposes)
     LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
@@ -502,7 +522,7 @@ extern "C" {
     // seq_id < 0 : match any sequence
     // p0 < 0     : [0,  p1]
     // p1 < 0     : [p0, inf)
-    LLAMA_API void llama_kv_cache_seq_rm(
+    LLAMA_API bool llama_kv_cache_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
                        llama_pos   p0,
@@ -641,8 +661,17 @@ extern "C" {
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
+    // Set whether to use causal attention or not
+    // If set to true, the model will only attend to the past tokens
+    LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
+
     // Set abort callback
     LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
+
+    // Wait until all computations are finished
+    // This is automatically done when using one of the functions below to obtain the computation results
+    // and is not necessary to call it explicitly in most cases
+    LLAMA_API void llama_synchronize(struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_decode()
     // The logits for the last token are stored in the last row
@@ -702,7 +731,7 @@ extern "C" {
 
     /// @details Convert the provided text into tokens.
     /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
-    /// @return Returns the number of tokens on success, no more than n_max_tokens
+    /// @return Returns the number of tokens on success, no more than n_tokens_max
     /// @return Returns a negative number on failure - the number of tokens that would have been returned
     /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
     ///                Does not insert a leading space.
@@ -711,7 +740,7 @@ extern "C" {
                       const char * text,
                          int32_t   text_len,
                      llama_token * tokens,
-                         int32_t   n_max_tokens,
+                         int32_t   n_tokens_max,
                             bool   add_bos,
                             bool   special);
 

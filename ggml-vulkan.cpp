@@ -709,6 +709,12 @@ static uint32_t ggml_vk_find_queue_family_index(std::vector<vk::QueueFamilyPrope
         }
     }
 
+    // All commands that are allowed on a queue that supports transfer operations are also allowed on a queue that supports either graphics or compute operations.
+    // Thus, if the capabilities of a queue family include VK_QUEUE_GRAPHICS_BIT or VK_QUEUE_COMPUTE_BIT, then reporting the VK_QUEUE_TRANSFER_BIT capability separately for that queue family is optional.
+    if (compute_index >= 0) {
+        return compute_index;
+    }
+
     std::cerr << "ggml_vulkan: No suitable queue family index found." << std::endl;
 
     for(auto &q_family : queue_family_props) {
@@ -4186,45 +4192,7 @@ static void ggml_vk_test_transfer(ggml_backend_vk_context * ctx, size_t ne, bool
 }
 
 static void ggml_vk_quantize_data(const float * from, void * to, size_t ne, ggml_type quant) {
-    std::vector<int64_t> hist_cur(1 << 4, 0);
-
-    switch(quant) {
-    case GGML_TYPE_F32:
-        memcpy(to, from, sizeof(float) * ne);
-        break;
-    case GGML_TYPE_Q4_0:
-        ggml_quantize_q4_0(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q4_1:
-        ggml_quantize_q4_1(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q5_0:
-        ggml_quantize_q5_0(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q5_1:
-        ggml_quantize_q5_1(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q8_0:
-        ggml_quantize_q8_0(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q2_K:
-        ggml_quantize_q2_K(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q3_K:
-        ggml_quantize_q3_K(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q4_K:
-        ggml_quantize_q4_K(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q5_K:
-        ggml_quantize_q5_K(from, to, ne, ne, hist_cur.data());
-        break;
-    case GGML_TYPE_Q6_K:
-        ggml_quantize_q6_K(from, to, ne, ne, hist_cur.data());
-        break;
-    default:
-        GGML_ASSERT(false);
-    }
+    ggml_quantize_chunk(quant, from, to, 0, 1, ne, nullptr);
 }
 
 static void ggml_vk_test_dequant(ggml_backend_vk_context * ctx, size_t ne, ggml_type quant) {
@@ -5875,6 +5843,12 @@ static ggml_backend_i ggml_backend_vk_interface = {
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_vk_graph_compute,
     /* .supports_op             = */ ggml_backend_vk_supports_op,
+    /* .offload_op              = */ NULL,
+    /* .event_new               = */ NULL,
+    /* .event_free              = */ NULL,
+    /* .event_record            = */ NULL,
+    /* .event_wait              = */ NULL,
+    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_vk_guid() {
