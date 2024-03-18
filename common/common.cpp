@@ -139,7 +139,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return result;
 }
 
-bool gpt_params_find_arg(int argc, char** argv, gpt_params& params, int& i, bool& invalid_param) {
+bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int & i, bool & invalid_param) {
     std::string arg = argv[i];
     llama_sampling_params& sparams = params.sparams;
 
