@@ -4178,7 +4178,7 @@ static bool llm_load_tensors(
         model.ctxs.push_back(ctx);
     }
 
-    LLAMA_LOG_INFO("%s: ggml ctx size = %7.2f MiB\n", __func__, model.ctxs.size()*ctx_size/1024.0/1024.0);
+    LLAMA_LOG_INFO("%s: ggml ctx size   = %7.2f MiB\n", __func__, model.ctxs.size()*ctx_size/1024.0/1024.0);
 
     // create tensors for the weights
     {
@@ -5092,7 +5092,7 @@ static bool llm_load_tensors(
 
     // print memory requirements
     for (ggml_backend_buffer_t buf : model.bufs) {
-        LLAMA_LOG_INFO("%s: %10s buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
+        LLAMA_LOG_INFO("%s: %s buffer size = %7.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
     }
 
     // populate tensors_by_name
