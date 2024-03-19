@@ -137,9 +137,12 @@ def step_start_server(context):
     if 'GITHUB_ACTIONS' in os.environ:
         max_attempts *= 2
 
+    addrs = socket.getaddrinfo(context.server_fqdn, context.server_port, type=socket.SOCK_STREAM)
+    family, typ, proto, _, sockaddr = addrs[0]
+
     while True:
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            result = sock.connect_ex((context.server_fqdn, context.server_port))
+        with closing(socket.socket(family, typ, proto)) as sock:
+            result = sock.connect_ex(sockaddr)
             if result == 0:
                 print("\x1b[33;46mserver started!\x1b[0m")
                 return
