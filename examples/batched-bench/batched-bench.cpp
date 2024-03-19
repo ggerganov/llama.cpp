@@ -102,8 +102,8 @@ int main(int argc, char ** argv) {
     ctx_params.n_ctx     = n_kv_max;
     ctx_params.n_batch   = 512;
 
-    ctx_params.n_threads       = params.n_threads;
-    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.n_threads       = params.n_threads[0];
+    ctx_params.n_threads_batch = params.n_threads_batch[0] == -1 ? params.n_threads[0] : params.n_threads_batch[0];
 
     // ensure enough sequences are available
     ctx_params.n_seq_max = *std::max_element(n_pl.begin(), n_pl.end());

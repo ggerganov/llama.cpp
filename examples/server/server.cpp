@@ -2409,7 +2409,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            params.n_threads = std::stoi(argv[i]);
+            params.n_threads[0] = std::stoi(argv[i]);
         } else if (arg == "--grp-attn-n" || arg == "-gan") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2429,7 +2429,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            params.n_threads_batch = std::stoi(argv[i]);
+            params.n_threads_batch[0] = std::stoi(argv[i]);
         } else if (arg == "--threads-http") {
             if (++i >= argc) {
                 invalid_param = true;
