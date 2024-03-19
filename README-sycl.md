@@ -272,7 +272,7 @@ found 6 SYCL devices:
 |compute capability 1.3|Level-zero running time, recommended |
 |compute capability 3.0|OpenCL running time, slower than level-zero in most cases|
 
-4. Device selection and execute llama.cpp
+4. Device selection and execution of llama.cpp
 
 There are two modes to select device:
 
