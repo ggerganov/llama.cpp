@@ -169,7 +169,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
     if (arg == "-t" || arg == "--threads") {
         if (++i >= argc) {
             invalid_param = true;
-            break;
+            return true;
         }
         std::string arg_next = argv[i];
 
@@ -189,7 +189,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
     if (arg == "-tb" || arg == "--threads-batch") {
         if (++i >= argc) {
             invalid_param = true;
-            break;
+            return true;
         }
         std::string arg_next = argv[i];
 
@@ -208,7 +208,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
     if (arg == "-td" || arg == "--threads-draft") {
         if (++i >= argc) {
             invalid_param = true;
-            break;
+            return true;
         }
         std::string arg_next = argv[i];
 
@@ -227,7 +227,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
     if (arg == "-tbd" || arg == "--threads-batch-draft") {
         if (++i >= argc) {
             invalid_param = true;
-            break;
+            return true;
         }
         std::string arg_next = argv[i];
 
@@ -912,7 +912,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
     if (arg == "--mpi-layer-split") {
          if (++i >= argc) {
              invalid_param = true;
-             break;
+             return true;
          }
          std::string arg_next = argv[i];
 
