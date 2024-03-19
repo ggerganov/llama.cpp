@@ -18,9 +18,9 @@
 #include <unistd.h>
 
 enum split_operation : uint8_t {
-  SPLIT_OP_SPLIT,
-  SPLIT_OP_MERGE,
-  SPLIT_OP_UPLOAD,
+    SPLIT_OP_SPLIT,
+    SPLIT_OP_MERGE,
+    SPLIT_OP_UPLOAD,
 };
 
 static const char * const LLM_KV_GENERAL_SPLIT_I_SPLIT = "general.split";
@@ -31,10 +31,10 @@ static const int SPLIT_FILENAME_MAX = 256;
 static const char * const SPLIT_FILENAME_FORMAT = "%s-%05d-of-%05d.gguf";
 
 struct split_params {
-  split_operation operation = SPLIT_OP_SPLIT;
-  int n_split_tensors = 128;
-  std::string input;
-  std::string output;
+    split_operation operation = SPLIT_OP_SPLIT;
+    int n_split_tensors = 128;
+    std::string input;
+    std::string output;
 };
 
 static void split_print_usage(const char * executable) {
@@ -149,104 +149,102 @@ static std::string split_file_name(const std::string & path, int i_split, int n_
 }
 
 struct split_strategy {
+    const split_params params;
+    std::ifstream & f_input;
+    struct gguf_context * ctx_gguf;
+    struct ggml_context * ctx_meta = NULL;
+    const int n_tensors;
 
-  const split_params params;
-  std::ifstream & f_input;
-  struct gguf_context * ctx_gguf;
-  struct ggml_context * ctx_meta = NULL;
-  const int n_tensors;
+    const int n_split;
+    int i_split = 0;
 
-  const int n_split;
-  int i_split = 0;
+    int i_tensor = 0;
 
-  int i_tensor = 0;
+    std::vector<uint8_t> read_data;
 
-  std::vector<uint8_t> read_data;
+    struct gguf_context * ctx_out;
+    std::ofstream fout;
 
-  struct gguf_context * ctx_out;
-  std::ofstream fout;
+    split_strategy(const split_params & params,
+            std::ifstream & f_input,
+            struct gguf_context * ctx_gguf,
+            struct ggml_context * ctx_meta) :
+        params(params),
+        f_input(f_input),
+        ctx_gguf(ctx_gguf),
+        ctx_meta(ctx_meta),
+        n_tensors(gguf_get_n_tensors(ctx_gguf)),
+        n_split(std::ceil(1. * n_tensors / params.n_split_tensors)) {
+        }
 
-  split_strategy(const split_params & params,
-                 std::ifstream & f_input,
-                 struct gguf_context * ctx_gguf,
-                 struct ggml_context * ctx_meta) :
-      params(params),
-      f_input(f_input),
-      ctx_gguf(ctx_gguf),
-      ctx_meta(ctx_meta),
-      n_tensors(gguf_get_n_tensors(ctx_gguf)),
-      n_split(std::ceil(1. * n_tensors / params.n_split_tensors)) {
-  }
+    bool should_split() const {
+        return i_tensor < n_tensors && i_tensor % params.n_split_tensors == 0;
+    }
 
-  bool should_split() const {
-      return i_tensor < n_tensors && i_tensor % params.n_split_tensors == 0;
-  }
+    void split_start() {
+        ctx_out = gguf_init_empty();
 
-  void split_start() {
-      ctx_out = gguf_init_empty();
+        // Save all metadata in first split only
+        if (i_split == 0) {
+            gguf_set_kv(ctx_out, ctx_gguf);
+        }
+        gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_I_SPLIT, i_split);
+        gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_N_SPLIT, n_split);
 
-      // Save all metadata in first split only
-      if (i_split == 0) {
-          gguf_set_kv(ctx_out, ctx_gguf);
-      }
-      gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_I_SPLIT, i_split);
-      gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_N_SPLIT, n_split);
+        // populate the original tensors, so we get an initial metadata
+        for (int i = i_split * params.n_split_tensors; i < n_tensors && i < (i_split + 1) * params.n_split_tensors; ++i) {
+            struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
+            gguf_add_tensor(ctx_out, meta);
+        }
 
-      // populate the original tensors, so we get an initial metadata
-      for (int i = i_split * params.n_split_tensors; i < n_tensors
-          && i < (i_split + 1) * params.n_split_tensors; ++i) {
-          struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
-          gguf_add_tensor(ctx_out, meta);
-      }
+        auto split_name = split_file_name(params.output, i_split, n_split);
 
-      auto split_name = split_file_name(params.output, i_split, n_split);
+        fprintf(stderr, "%s: %s ...", __func__, split_name.c_str());
+        fout = std::ofstream(split_name, std::ios::binary);
+        fout.exceptions(std::ofstream::failbit); // fail fast on write errors
 
-      fprintf(stderr, "%s: %s ...", __func__, split_name.c_str());
-      fout = std::ofstream(split_name, std::ios::binary);
-      fout.exceptions(std::ofstream::failbit); // fail fast on write errors
+        auto meta_size = gguf_get_meta_size(ctx_out);
 
-      auto meta_size = gguf_get_meta_size(ctx_out);
+        // placeholder for the meta data
+        ::zeros(fout, meta_size);
 
-      // placeholder for the meta data
-      ::zeros(fout, meta_size);
+        i_split++;
+    }
 
-      i_split++;
-  }
+    void next_tensor() {
+        const char * t_name = gguf_get_tensor_name(ctx_gguf, i_tensor);
+        struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
+        auto n_bytes = ggml_nbytes(t);
 
-  void next_tensor() {
-      const char * t_name = gguf_get_tensor_name(ctx_gguf, i_tensor);
-      struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
-      auto n_bytes = ggml_nbytes(t);
+        if (read_data.size() < n_bytes) {
+            read_data.resize(n_bytes);
+        }
 
-      if (read_data.size() < n_bytes) {
-          read_data.resize(n_bytes);
-      }
+        auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor);
+        f_input.seekg(offset);
+        f_input.read((char *)read_data.data(), n_bytes);
 
-      auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor);
-      f_input.seekg(offset);
-      f_input.read((char *)read_data.data(), n_bytes);
+        t->data = read_data.data();
 
-      t->data = read_data.data();
+        // write tensor data + padding
+        fout.write((const char *)t->data, n_bytes);
+        zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
 
-      // write tensor data + padding
-      fout.write((const char *)t->data, n_bytes);
-      zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
+        i_tensor++;
+    }
 
-      i_tensor++;
-  }
+    void split_end() {
+        // go back to beginning of file and write the updated metadata
+        fout.seekp(0);
+        std::vector<uint8_t> data(gguf_get_meta_size(ctx_out));
+        gguf_get_meta_data(ctx_out, data.data());
+        fout.write((const char *)data.data(), data.size());
 
-  void split_end() {
-      // go back to beginning of file and write the updated metadata
-      fout.seekp(0);
-      std::vector<uint8_t> data(gguf_get_meta_size(ctx_out));
-      gguf_get_meta_data(ctx_out, data.data());
-      fout.write((const char *)data.data(), data.size());
+        fout.close();
+        gguf_free(ctx_out);
 
-      fout.close();
-      gguf_free(ctx_out);
-
-      fprintf(stderr, "\033[3Ddone\n");
-  }
+        fprintf(stderr, "\033[3Ddone\n");
+    }
 };
 
 static void gguf_split(const split_params & split_params) {
@@ -481,10 +479,8 @@ static void gguf_merge(const split_params & split_params) {
 static void gguf_upload(const split_params & /*params*/) {
 #ifdef LLAMA_USE_CURL
     fprintf(stderr, "%s: NOT IMPLEMENTED\n", __func__);
-    exit(-1);
 #else
     fprintf(stderr, "%s: operation upload not supported, please build with -DLLAMA_CURL\n", __func__);
-    exit(1);
 #endif // LLAMA_USE_CURL
 }
 
@@ -497,14 +493,15 @@ int main(int argc, const char ** argv) {
     split_params_parse(argc, argv, params);
 
     switch (params.operation) {
-        case SPLIT_OP_SPLIT:gguf_split(params);
+        case SPLIT_OP_SPLIT: gguf_split(params);
             break;
-        case SPLIT_OP_MERGE:gguf_merge(params);
+        case SPLIT_OP_MERGE: gguf_merge(params);
             break;
-        case SPLIT_OP_UPLOAD:gguf_upload(params);
+        case SPLIT_OP_UPLOAD: gguf_upload(params);
             break;
         default:split_print_usage(argv[0]);
             exit(1);
     }
-    exit(0);
+
+    return 0;
 }
