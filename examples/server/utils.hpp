@@ -572,14 +572,25 @@ static json format_final_response_oaicompat(const json & request, json result, c
         finish_reason = "stop";
     }
 
-    json choices =
-        streaming ? json::array({json{{"finish_reason", finish_reason},
+    json choices;
+
+    if (streaming) {
+        choices = json::array({json{{"finish_reason", finish_reason},
+                                    {"index", 0},
+                                    {"delta", json::object()}}});
+    } else {
+        if (parsed_content.empty()) {
+            choices = json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
-                                        {"delta", json::object()}}})
-                  : json::array({json{{"finish_reason", finish_reason},
+                                        {"message", json{{"content", content},
+                                                         {"role", "assistant"}}}}});
+        } else {
+            choices = json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
                                         {"message", json{{"content", parsed_content},
                                                          {"role", "assistant"}}}}});
+        }
+    }
 
     std::time_t t = std::time(0);
 
