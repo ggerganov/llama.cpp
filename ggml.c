@@ -2542,10 +2542,14 @@ static inline bool ggml_is_padded_1d(const struct ggml_tensor * tensor) {
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
-static inline bool ggml_is_empty(const struct ggml_tensor * tensor) {
-    // the stride of the last dimension is zero if any of the previous dimensions has no elements
-    // but to be sure, the number of elements in the last dimension must also be checked
-    return tensor->nb[GGML_MAX_DIMS - 1] == 0 || tensor->ne[GGML_MAX_DIMS - 1] == 0;
+GGML_CALL bool ggml_is_empty(const struct ggml_tensor * tensor) {
+    for (int i = 0; i < GGML_MAX_DIMS; ++i) {
+        if (tensor->ne[i] == 0) {
+            // empty if any dimension has no elements
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
