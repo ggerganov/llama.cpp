@@ -36,7 +36,7 @@ git clone https://huggingface.co/openai/clip-vit-large-patch14-336
 python ./examples/llava/llava-surgery.py -m path/to/MobileVLM-1.7B
 ```
 
-3. Use `convert-image-encoder-to-gguf.py` with `--projector-type ldp` (for **V2** the arg is `--projector-type ldpv2`)to convert the LLaVA image encoder to GGUF :
+3. Use `convert-image-encoder-to-gguf.py` with `--projector-type ldp` (for **V2** the arg is `--projector-type ldpv2`) to convert the LLaVA image encoder to GGUF:
 
 ```sh
 python ./examples/llava/convert-image-encoder-to-gguf \
