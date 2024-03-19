@@ -513,6 +513,8 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
         }
     }
 
+    size_t n_srcs = 0;
+
     for (int i = 0; i < cgraph->n_nodes; i++) {
         if (cgraph->nodes[i]->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
             cgraph->nodes[i]->buffer = ggml_backend_mpi_buffer_unwrap(cgraph->nodes[i]->buffer);
@@ -523,6 +525,7 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
                 break;
             }
             if (src->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+                n_srcs++;
                 src->buffer = ggml_backend_mpi_buffer_unwrap(src->buffer);
             }
         }
@@ -532,6 +535,7 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
             if (src->buffer->buft != nullptr) {
 
                 if (src->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+                    n_srcs++;
                     src->buffer = ggml_backend_mpi_buffer_unwrap(src->buffer);
                 }
             }
@@ -546,12 +550,13 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
     }
 
 
+
     if (!ctx->remote) {
         ggml_backend_sched_t sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(),
-                                                            (int) ctx->backends.size(), cgraph->n_nodes, false);
+                                                            (int) ctx->backends.size(), cgraph->n_nodes + cgraph->n_leafs + n_srcs, false);
 
         ggml_backend_sched_reserve(sched, cgraph);
-        ggml_backend_sched_graph_compute(sched, cgraph);
+        ggml_backend_sched_graph_compute_async(sched, cgraph);
         ggml_backend_sched_free(sched);
 
     }

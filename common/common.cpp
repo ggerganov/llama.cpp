@@ -184,6 +184,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
                 params.n_threads[node] = std::thread::hardware_concurrency();
             }
         }
+        return true;
 
     }
     if (arg == "-tb" || arg == "--threads-batch") {
@@ -204,6 +205,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
                 params.n_threads_batch[node] = std::thread::hardware_concurrency();
             }
         }
+        return true;
     }
     if (arg == "-td" || arg == "--threads-draft") {
         if (++i >= argc) {
@@ -223,6 +225,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
                 params.n_threads_draft[node] = std::thread::hardware_concurrency();
             }
         }
+        return true;
     }
     if (arg == "-tbd" || arg == "--threads-batch-draft") {
         if (++i >= argc) {
@@ -242,6 +245,7 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
                 params.n_threads_batch_draft[node] = std::thread::hardware_concurrency();
             }
         }
+        return true;
     }
     if (arg == "-p" || arg == "--prompt") {
         if (++i >= argc) {
@@ -910,20 +914,21 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
         return true;
     }
     if (arg == "--mpi-layer-split") {
-         if (++i >= argc) {
-             invalid_param = true;
-             return true;
-         }
-         std::string arg_next = argv[i];
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string arg_next = argv[i];
 
-          // split string by , and /
-         const std::regex regex{R"([,/]+)"};
-         std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
-         std::vector<std::string> split_arg{it, {}};
-         params.mpi_layer_split.resize(split_arg.size());
-         for (size_t node = 0; node < split_arg.size(); ++node) {
-             params.mpi_layer_split[node] = std::stof(split_arg[node]);
-         }
+        // split string by , and /
+        const std::regex regex{R"([,/]+)"};
+        std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+        std::vector<std::string> split_arg{it, {}};
+        params.mpi_layer_split.resize(split_arg.size());
+        for (size_t node = 0; node < split_arg.size(); ++node) {
+            params.mpi_layer_split[node] = std::stof(split_arg[node]);
+        }
+        return true;
     }
 
     if (arg == "--tensor-split" || arg == "-ts") {
