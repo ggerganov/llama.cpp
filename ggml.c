@@ -273,8 +273,6 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #include <Accelerate/Accelerate.h>
 #if defined(GGML_USE_CLBLAST) // allow usage of CLBlast alongside Accelerate functions
 #include "ggml-opencl.h"
-#elif defined(GGML_USE_VULKAN)
-#include "ggml-vulkan.h"
 #endif
 #elif defined(GGML_USE_OPENBLAS)
 #if defined(GGML_BLAS_USE_MKL)
@@ -284,8 +282,6 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #endif
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
-#elif defined(GGML_USE_VULKAN)
-#include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
 #include "ggml-sycl.h"
 #endif
@@ -2640,8 +2636,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
 #if defined(GGML_USE_CLBLAST)
         ggml_cl_init();
-#elif defined(GGML_USE_VULKAN)
-        ggml_vk_init_cpu_assist();
 #elif defined(GGML_USE_SYCL)
         ggml_init_sycl();
 #endif
@@ -16045,20 +16039,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         return;
     }
 
-#if defined(GGML_USE_VULKAN)
-    const bool skip_cpu = ggml_vk_compute_forward_cpu_assist(params, tensor);
-#ifdef GGML_VULKAN_CHECK_RESULTS
-    if (skip_cpu) {
-        ggml_vk_check_results_1_cpu_assist(params, tensor);
-    }
-#endif
-    if (skip_cpu) {
-        return;
-    }
-    GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_TYPE_CPU);
-    GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_TYPE_CPU);
-#endif // GGML_USE_VULKAN
-
 #ifdef GGML_USE_SYCL
     bool skip_cpu = ggml_sycl_compute_forward(params, tensor);
     if (skip_cpu) {
@@ -18534,17 +18514,6 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         }
     }
 
-#ifdef GGML_USE_VULKAN
-    for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_preallocate_buffers_graph_cpu_assist(cgraph->nodes[i]);
-    }
-    ggml_vk_preallocate_buffers_cpu_assist();
-
-    for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_build_graph_cpu_assist(cgraph->nodes[i]);
-    }
-#endif
-
     const int n_threads = cplan->n_threads;
 
     struct ggml_compute_state_shared state_shared = {
@@ -18600,10 +18569,6 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
                 compute_status = workers[j].ec;
         }
     }
-
-#ifdef GGML_USE_VULKAN
-    ggml_vk_graph_cleanup_cpu_assist();
-#endif
 
     // performance stats (graph)
     {
