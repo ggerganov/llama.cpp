@@ -553,7 +553,7 @@ endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
-ggml-metal.o: ggml-metal.m ggml-metal.h
+ggml-metal.o: ggml-metal.m ggml-metal.h ggml.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 ifdef LLAMA_METAL_EMBED_LIBRARY
@@ -593,6 +593,11 @@ ifdef LLAMA_CUBLAS
 GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
 include scripts/get-flags.mk
 CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
+endif
+
+ifdef LLAMA_CURL
+override CXXFLAGS := $(CXXFLAGS) -DLLAMA_USE_CURL
+override LDFLAGS  := $(LDFLAGS) -lcurl
 endif
 
 #

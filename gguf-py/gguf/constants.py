@@ -42,6 +42,7 @@ class Keys:
         EXPERT_COUNT          = "{arch}.expert_count"
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
         POOLING_TYPE          = "{arch}.pooling_type"
+        LOGIT_SCALE           = "{arch}.logit_scale"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -121,6 +122,7 @@ class MODEL_ARCH(IntEnum):
     GEMMA      = auto()
     STARCODER2 = auto()
     MAMBA      = auto()
+    COMMAND_R  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -187,6 +189,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GEMMA:          "gemma",
     MODEL_ARCH.STARCODER2:     "starcoder2",
     MODEL_ARCH.MAMBA:          "mamba",
+    MODEL_ARCH.COMMAND_R:      "command-r",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -579,6 +582,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.SSM_D,
         MODEL_TENSOR.SSM_OUT,
     ],
+    MODEL_ARCH.COMMAND_R: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     # TODO
 }
 
@@ -665,6 +680,8 @@ class GGMLQuantizationType(IntEnum):
     I8      = 24
     I16     = 25
     I32     = 26
+    I64     = 27
+    F64     = 28
 
 
 class GGUFEndian(IntEnum):
@@ -734,6 +751,8 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.I8:      (1, 1),
     GGMLQuantizationType.I16:     (1, 2),
     GGMLQuantizationType.I32:     (1, 4),
+    GGMLQuantizationType.I64:     (1, 8),
+    GGMLQuantizationType.F64:     (1, 8),
 }
 
 
