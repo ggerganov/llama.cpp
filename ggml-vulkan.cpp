@@ -1415,14 +1415,26 @@ void ggml_vk_instance_init() {
             vk_instance.device_indices.push_back(tmp);
         }
     } else {
-        // Default to using all dedicated GPUs
         std::vector<vk::PhysicalDevice> devices = vk_instance.instance.enumeratePhysicalDevices();
+
+        // Make sure at least one device exists
+        if (devices.empty()) {
+            std::cerr << "ggml_vulkan: Error: No devices found." << std::endl;
+            GGML_ASSERT(false);
+        }
+
+        // Default to using all dedicated GPUs
         for (size_t i = 0; i < devices.size(); i++) {
             vk::PhysicalDeviceProperties props = devices[i].getProperties();
 
             if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
                 vk_instance.device_indices.push_back(i);
             }
+        }
+
+        // If no dedicated GPUs found, fall back to GPU 0
+        if (vk_instance.device_indices.empty()) {
+            vk_instance.device_indices.push_back(0);
         }
     }
 
