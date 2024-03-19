@@ -126,7 +126,7 @@ void ggml_mpi_sync_pipelined(
     }
     if(ctx_mpi->rank < ctx_mpi->size - 1) {
         GGML_ASSERT(ctx_mpi->send_buffer != nullptr);
-        GGML_ASSERT(val != nullptr);
+        GGML_ASSERT(val != nullptr || count == 0);
         GGML_ASSERT(count < 128*1024*1024);
 
         const int retval = MPI_Bsend(val, count, datatype, ggml_mpi_next_node(ctx_mpi), tag, ctx_mpi->comm);

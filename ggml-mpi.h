@@ -22,7 +22,7 @@ extern "C" {
 
 #define GGML_MPI_KV_SEQ_KEEP 4
 
-#define GGML_MPI_KV_SEQ_SHIFT 5
+#define GGML_MPI_KV_SEQ_ADD 5
 
 #define GGML_MPI_SHUTDOWN 6
 
@@ -53,6 +53,8 @@ extern "C" {
 #define GGML_MPI_MAX_N_SEQ 19
 
 #define GGML_MPI_BATCH_LOGITS 20
+
+#define GGML_MPI_KV_SEQ_DIV 21
 
 
 
