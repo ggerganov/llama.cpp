@@ -9195,7 +9195,7 @@ static void llama_output_reserve(llama_context & lctx, int32_t n_outputs) {
 
     // alloc only when more than the current capacity is required
     // TODO: also consider shrinking the buffer
-    if (prev_size < new_size) {
+    if (!lctx.buf_output || prev_size < new_size) {
         if (lctx.buf_output) {
 #ifndef NDEBUG
             // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
