@@ -50,7 +50,7 @@ python ./examples/llava/convert-image-encoder-to-gguf \
 python ./examples/llava/convert-image-encoder-to-gguf \
     -m path/to/clip-vit-large-patch14-336 \
     --llava-projector path/to/MobileVLM-1.7B_V2/llava.projector \
-    --output-dir path/to/MobileVLM-1.7B \
+    --output-dir path/to/MobileVLM-1.7B_V2 \
     --projector-type ldpv2
 ```
 
