@@ -587,4 +587,4 @@ Note: please add prefix **[SYCL]** in issue title, so that we will check it as s
 
 ## Todo
 
-- NA
+- Support row layer split for multiple card runs.
