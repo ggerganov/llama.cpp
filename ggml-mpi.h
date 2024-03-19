@@ -100,6 +100,26 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer_type(
 GGML_API GGML_CALL ggml_backend_buffer_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_t buf);
 
 
+void ggml_mpi_sync_ints_pipelined(
+        struct ggml_mpi_context * ctx_mpi,
+        int32_t * vals,
+        int count,
+        int tag
+);
+
+void ggml_mpi_sync_ints_pipelined_back(
+        struct ggml_mpi_context * ctx_mpi,
+        int32_t * vals,
+        int count,
+        int tag
+);
+// clear = 1, rm = 2, cp = 3, keep = 4, seq_shift = 5
+void ggml_mpi_probe(struct ggml_mpi_context * ctx_mpi, int src, int tag);
+int ggml_mpi_status_tag(struct ggml_mpi_context * ctx_mpi);
+
+int ggml_mpi_iprobe(struct ggml_mpi_context * ctx_mpi, int src, int tag);
+int ggml_mpi_status_count_int32(struct ggml_mpi_context * ctx_mpi);
+
 /**
  * Create a new context by splitting the given context's
  * communicator, creating a "sub-communicator." This is a collective

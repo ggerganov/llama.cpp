@@ -9064,10 +9064,57 @@ static void llama_graph_compute(
 //
 static int llama_decode_internal(
          llama_context & lctx,
-           llama_batch   batch_all) { // TODO: rename back to batch
+           llama_batch & batch_all) { // TODO: rename back to batch
 
+
+#ifdef GGML_USE_MPI
+    if (ggml_mpi_rank(lctx.model.ctx_mpi) == 0 && ggml_mpi_size(lctx.model.ctx_mpi) > 1) {
+        int transaction_type = GGML_MPI_DECODE;
+        ggml_mpi_sync_ints_pipelined(lctx.model.ctx_mpi, &transaction_type, 1, GGML_MPI_BEGIN_TRANSACTION);
+    }
+//    ggml_mpi_sync_ints_pipelined(lctx.model.ctx_mpi, &batch_all.batch_id, 1, GGML_MPI_BATCH_ID);
+    int old_tokens = batch_all.n_tokens;
+
+    ggml_mpi_sync_ints_pipelined(lctx.model.ctx_mpi, &batch_all.n_tokens, 1, GGML_MPI_N_TOKENS);
+
+    ggml_mpi_sync_ints_pipelined(lctx.model.ctx_mpi, reinterpret_cast<int32_t *>(&lctx.cparams.n_seq_max), 1, GGML_MPI_MAX_N_SEQ);
+    if (ggml_mpi_rank(lctx.model.ctx_mpi) > 0) {
+        int new_n_tokens = batch_all.n_tokens;
+        llama_batch_free(batch_all);
+        batch_all = llama_batch_init(new_n_tokens, 0, (int32_t)lctx.cparams.n_seq_max);
+    }
+#endif
 
     uint32_t n_tokens_all = batch_all.n_tokens;
+
+    std::vector<llama_pos> pos;
+    std::vector<int32_t>                   n_seq_id;
+    std::vector<llama_seq_id *>            seq_id_arr;
+    std::vector<std::vector<llama_seq_id>> seq_id;
+
+    if (batch_all.pos == nullptr) {
+        pos.resize(n_tokens_all);
+        for (uint32_t i = 0; i < n_tokens_all; i++) {
+            pos[i] = batch_all.all_pos_0 + i*batch_all.all_pos_1;
+        }
+
+        batch_all.pos = pos.data();
+    }
+
+    if (batch_all.seq_id == nullptr) {
+        n_seq_id.resize(n_tokens_all);
+        seq_id.resize(n_tokens_all);
+        seq_id_arr.resize(n_tokens_all);
+        for (uint32_t i = 0; i < n_tokens_all; i++) {
+            n_seq_id[i] = 1;
+            seq_id[i].resize(lctx.cparams.n_seq_max);
+            seq_id[i][0] = batch_all.all_seq_id;
+            seq_id_arr[i] = seq_id[i].data();
+        }
+
+        batch_all.n_seq_id = n_seq_id.data();
+        batch_all.seq_id = seq_id_arr.data();
+    }
 
 #ifdef GGML_USE_MPI
     ggml_mpi_eval_init(lctx.model.ctx_mpi, &(batch_all.n_tokens), &(batch_all.pos), &(batch_all.n_seq_id), &(batch_all.seq_id), &(batch_all.logits), lctx.cparams.n_seq_max);
@@ -9114,10 +9161,6 @@ static int llama_decode_internal(
 
     const auto n_ubatch = cparams.n_ubatch;
 
-    std::vector<llama_pos> pos;
-    std::vector<int32_t>                   n_seq_id;
-    std::vector<llama_seq_id *>            seq_id_arr;
-    std::vector<std::vector<llama_seq_id>> seq_id;
 
     for (uint32_t cur_token = 0; cur_token < n_tokens_all; cur_token += n_ubatch) {
         uint32_t n_tokens = std::min(n_ubatch, n_tokens_all - cur_token);
@@ -14344,6 +14387,87 @@ void llama_batch_free(struct llama_batch batch) {
     batch.logits = nullptr;
 }
 
+#ifdef GGML_USE_MPI
+
+int llama_process_mpi_transaction(
+        struct llama_context * ctx,
+        struct llama_batch & batch,
+        int tag) {
+//    if (ggml_mpi_rank(ctx->ctx_mpi) == ggml_mpi_size(ctx->ctx_mpi) - 1) {
+//        printf("\nBeginning transaction type %d\n", tag);
+//    }
+
+    switch (tag) {
+        case GGML_MPI_DECODE:
+//            llama_batch_free(batch);
+            return llama_decode_internal(*ctx, batch);
+            break;
+        case GGML_MPI_KV_CLEAR:
+            llama_kv_cache_clear(ctx);
+            break;
+        case GGML_MPI_KV_SEQ_RM:
+            llama_kv_cache_seq_rm(ctx, 1, -1, -1);
+            break;
+        case GGML_MPI_KV_SEQ_CP:
+            llama_kv_cache_seq_cp(ctx, 0, 0, 0, 0);
+            break;
+//        case GGML_MPI_KV_SEQ_CP_BACK:
+//            llama_kv_cache_seq_cp_back(ctx, 0, 0, 0, 0);
+//            break;
+//        case GGML_MPI_KV_SEQ_KEEP:
+//            llama_kv_cache_seq_keep(ctx, 0);
+//            break;
+//        case GGML_MPI_KV_SEQ_SHIFT:
+//            llama_kv_cache_seq_shift(ctx, 0, 0, 0, 0);
+//            break;
+        default:
+            printf("Unknown operation, exiting\n");
+            exit(1);
+            break;
+    }
+    return 0;
+}
+
+int llama_process_mpi_worker(
+        struct llama_context * ctx,
+        struct llama_batch & batch) {
+    ggml_mpi_probe(ctx->model.ctx_mpi, -1, -1);
+    int tag = ggml_mpi_status_tag(ctx->model.ctx_mpi);
+    int32_t count;
+    int32_t trans_type;
+//    if (ggml_mpi_rank(ctx->ctx_mpi) == ggml_mpi_size(ctx->ctx_mpi) - 1) {
+//        printf("\nReceived command %d\n", tag);
+//    }
+    switch (tag) {
+        case GGML_MPI_BEGIN_TRANSACTION:
+
+            ggml_mpi_sync_ints_pipelined(ctx->model.ctx_mpi, &trans_type, 1, GGML_MPI_BEGIN_TRANSACTION);
+            return llama_process_mpi_transaction(ctx, batch, trans_type);
+            break;
+        case GGML_MPI_SHUTDOWN:
+            llama_free(ctx);
+            llama_backend_free();
+            exit(0);
+            break;
+        case GGML_MPI_CANCEL_RUN:
+//            count = ggml_mpi_status_count_int32(ctx->model.ctx_mpi);
+////            printf("Received cancel run\n");
+//            {
+//                std::vector<int32_t> canceled(count, -1);
+//                llama_cancel_run(ctx, canceled.data(), canceled.size());
+//
+//            }
+//            break;
+        default:
+            printf("Unknown operation, exiting\n");
+            exit(1);
+            break;
+    }
+    return 0;
+}
+
+#endif
+
 int32_t llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
@@ -14351,9 +14475,7 @@ int32_t llama_decode(
 #ifdef GGML_USE_MPI
     if (ggml_mpi_rank(ctx->model.ctx_mpi) > 0) {
         // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
-        const int n_ctx = llama_n_ctx(ctx);
-        std::vector<llama_token> tmp(n_ctx, llama_token_bos(&ctx->model));
-        while (llama_decode_internal(*ctx, batch) >= 0){};
+        while (llama_process_mpi_worker(ctx, batch) >= 0){};
         llama_backend_free();
         exit(1);
     }

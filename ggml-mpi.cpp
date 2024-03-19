@@ -6,8 +6,8 @@
 
 #include <mpi.h>
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -24,6 +24,8 @@ struct ggml_mpi_context {
     MPI_Comm comm;
     int layer_start;
     int layer_end;
+    MPI_Status status;
+
     struct ggml_tensor *inp0;
     std::string name;
     struct ggml_backend * wrapped_backend;
@@ -31,6 +33,8 @@ struct ggml_mpi_context {
     ggml_backend_sched_t scheduler;
     bool remote;
     void* send_buffer;
+    int trans_id;
+    int recv_trans_id;
 };
 
 void ggml_mpi_backend_init(void) {
@@ -122,10 +126,41 @@ void ggml_mpi_sync_pipelined(
     }
     if(ctx_mpi->rank < ctx_mpi->size - 1) {
         GGML_ASSERT(ctx_mpi->send_buffer != nullptr);
+        GGML_ASSERT(val != nullptr);
+        GGML_ASSERT(count < 128*1024*1024);
+
         const int retval = MPI_Bsend(val, count, datatype, ggml_mpi_next_node(ctx_mpi), tag, ctx_mpi->comm);
         GGML_ASSERT(retval == MPI_SUCCESS);
 
     }
+}
+
+void ggml_mpi_barrier(struct ggml_mpi_context * ctx_mpi) {
+    MPI_Barrier(ctx_mpi->comm);
+}
+
+void ggml_mpi_probe(struct ggml_mpi_context * ctx_mpi, int src, int tag) {
+    MPI_Probe((src >= 0) ? src : MPI_ANY_SOURCE, (tag >= 0) ? tag : MPI_ANY_TAG, ctx_mpi->comm, &(ctx_mpi->status));
+}
+
+int ggml_mpi_iprobe(struct ggml_mpi_context * ctx_mpi, int src, int tag) {
+    if(ctx_mpi->comm == MPI_COMM_NULL) {
+        return 0;
+    }
+
+    int ret;
+    MPI_Iprobe((src >= 0) ? src : MPI_ANY_SOURCE, (tag >= 0) ? tag : MPI_ANY_TAG, ctx_mpi->comm, &ret, &(ctx_mpi->status));
+    return ret;
+}
+
+int ggml_mpi_status_tag(struct ggml_mpi_context * ctx_mpi) {
+    return ctx_mpi->status.MPI_TAG;
+}
+
+int ggml_mpi_status_count_int32(struct ggml_mpi_context * ctx_mpi) {
+    int32_t count;
+    MPI_Get_count(&ctx_mpi->status, MPI_INT32_T, &count);
+    return count;
 }
 
 void ggml_mpi_eval_init(
@@ -142,8 +177,15 @@ void ggml_mpi_eval_init(
         return;
     }
 
-
+    int32_t old_n_tokens = *n_tokens;
     ggml_mpi_sync_pipelined(ctx_mpi, n_tokens, 1, MPI_INT, GGML_MPI_N_TOKENS);
+
+    if (old_n_tokens != *n_tokens) {
+        *pos = static_cast<int32_t *>(realloc(*pos, *n_tokens * sizeof(int32_t)));
+        *n_seq_ids = static_cast<int32_t *>(realloc(*n_seq_ids, *n_tokens * sizeof(int32_t)));
+        *logits = static_cast<int8_t *>(realloc(*logits, *n_tokens * sizeof(int32_t)));
+    }
+
     int8_t* temp_logits = (int8_t*) calloc(*n_tokens, sizeof(int8_t));
 
     if (ctx_mpi->rank == 0 && *logits != nullptr) {
@@ -183,49 +225,51 @@ void ggml_mpi_eval_init(
     // pre-allocated for the largest possible sizes, even on worker nodes.
 
     GGML_ASSERT(n_seq_ids != nullptr);
+    GGML_ASSERT(*n_seq_ids != nullptr);
+
     GGML_ASSERT(n_tokens != nullptr);
 
 
     // FIXME Syncing n_seq_ids causes MPI to throw an invalid buffer error in Bsend
-//    ggml_mpi_sync_pipelined(ctx_mpi, *n_seq_ids, *n_tokens, MPI_INT32_T, GGML_MPI_N_SEQ_IDS);
+    ggml_mpi_sync_pipelined(ctx_mpi, *n_seq_ids, *n_tokens, MPI_INT32_T, GGML_MPI_N_SEQ_IDS);
 
     // We need to know the total number of sequence
     // ids, so we count them all up
-//    int32_t total_n_seq_ids = 0;
-//    for (int32_t i = 0; i < *n_tokens; i++) {
-//        total_n_seq_ids += (*n_seq_ids)[i];
-//    }
-//
-//    // MPI can't chase the pointers for multidimensional arrays, so we flatten them first
-//    // for transit
-//    int32_t * flattened_seq_ids = static_cast<int32_t *>(calloc(total_n_seq_ids, sizeof(int32_t)));
-//
-//    int32_t current_index = 0;
-//
-//    // Only rank 0 needs to flatten since the others don't have the real seq_id
-//    if (ctx_mpi->rank == 0) {
-//        for (int32_t i = 0; i < *n_tokens; i++) {
-//            for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
-//                flattened_seq_ids[current_index] = (*seq_id)[i][j];
-//                current_index++;
-//            }
-//        }
-//    }
-//
-//
-//
-//    ggml_mpi_sync_pipelined(ctx_mpi, *pos, *n_tokens, MPI_INT32_T, GGML_MPI_POS);
-//    ggml_mpi_sync_pipelined(ctx_mpi, flattened_seq_ids, total_n_seq_ids, MPI_INT32_T, GGML_MPI_SEQ_IDS);
-//
-//    current_index = 0;
-//    for (int32_t i = 0; i < *n_tokens; i++) {
-//        for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
-//            (*seq_id)[i][j] = flattened_seq_ids[current_index];
-//            current_index++;
-//        }
-//
-//    }
-//    free(flattened_seq_ids);
+    int32_t total_n_seq_ids = 0;
+    for (int32_t i = 0; i < *n_tokens; i++) {
+        total_n_seq_ids += (*n_seq_ids)[i];
+    }
+
+    // MPI can't chase the pointers for multidimensional arrays, so we flatten them first
+    // for transit
+    int32_t * flattened_seq_ids = static_cast<int32_t *>(calloc(total_n_seq_ids, sizeof(int32_t)));
+
+    int32_t current_index = 0;
+
+    // Only rank 0 needs to flatten since the others don't have the real seq_id
+    if (ctx_mpi->rank == 0) {
+        for (int32_t i = 0; i < *n_tokens; i++) {
+            for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
+                flattened_seq_ids[current_index] = (*seq_id)[i][j];
+                current_index++;
+            }
+        }
+    }
+
+
+
+    ggml_mpi_sync_pipelined(ctx_mpi, *pos, *n_tokens, MPI_INT32_T, GGML_MPI_POS);
+    ggml_mpi_sync_pipelined(ctx_mpi, flattened_seq_ids, total_n_seq_ids, MPI_INT32_T, GGML_MPI_SEQ_IDS);
+
+    current_index = 0;
+    for (int32_t i = 0; i < *n_tokens; i++) {
+        for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
+            (*seq_id)[i][j] = flattened_seq_ids[current_index];
+            current_index++;
+        }
+
+    }
+    free(flattened_seq_ids);
 }
 
 
@@ -234,6 +278,19 @@ void ggml_mpi_sync_int(
                         int32_t * val
 ) {
     MPI_Bcast(val, 1, MPI_INT32_T, 0, ctx_mpi->comm);
+}
+
+void ggml_mpi_sync_ints_pipelined(
+        struct ggml_mpi_context * ctx_mpi,
+        int32_t * vals,
+        int count,
+        int tag
+) {
+    ggml_mpi_sync_pipelined(ctx_mpi, vals, count, MPI_INT32_T, tag);
+    int old_trans = ctx_mpi->trans_id;
+    ggml_mpi_sync_pipelined(ctx_mpi, &ctx_mpi->trans_id, 1, MPI_INT32_T, GGML_MPI_TRANS_ID);
+    ctx_mpi->recv_trans_id = ctx_mpi->trans_id;
+    ctx_mpi->trans_id = old_trans;
 }
 
 static void ggml_mpi_tensor_send(const struct ggml_tensor * t, const void* data, int mpi_rank_dst, MPI_Comm comm) {
@@ -549,6 +606,8 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
         }
     }
 
+    // TODO exploding memory usage cause we replace the buffer with the wrapped buffer,
+    //  but don't free the contexts, and then create new ones when we re-wrap
 
 
     if (!ctx->remote) {
