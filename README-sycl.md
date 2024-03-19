@@ -16,17 +16,17 @@
 
 **SYCL** is a high-level parallel programming model designed to improve developers productivity writing code across various hardware accelerators such as CPUs, GPUs, and FPGAs. It is a single-source language designed for heterogeneous computing and based on standard C++17.
 
-**oneAPI** is an open ecosystem and a standard-based specification, supporting multiple architectures including but not limited to intel CPUs, GPUs and FPGAs. The key components of the oneAPI ecosystem include: 
+**oneAPI** is an open ecosystem and a standard-based specification, supporting multiple architectures including but not limited to intel CPUs, GPUs and FPGAs. The key components of the oneAPI ecosystem include:
 
 - **DPCPP** *(Data Parallel C++)*: The primary oneAPI SYCL implementation, which includes the icpx/icx Compilers.
 - **oneAPI Libraries**: A set of highly optimized libraries targeting multiple domains *(e.g. oneMKL - Math Kernel Library)*.
 - **oneAPI LevelZero**: A high performance low level interface for fine-grained control over intel iGPUs and dGPUs.
 - **Nvidia & AMD Plugins**: These are plugins extending oneAPI's DPCPP support to SYCL on Nvidia and AMD GPU targets.
 
-### Llama.cpp + SYCL 
+### Llama.cpp + SYCL
 This SYCL "backend" follows the same design found in other llama.cpp BLAS-based paths such as *OpenBLAS, cuBLAS, CLBlast etc..*. The oneAPI's [SYCLomatic](https://github.com/oneapi-src/SYCLomatic) open-source migration tool (Commercial release [Intel® DPC++ Compatibility Tool](https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compatibility-tool.html)) was used for this purpose.
 
-The llama.cpp SYCL backend supports: 
+The llama.cpp SYCL backend supports:
 - Intel GPUs.
 - Nvidia GPUs.
 
@@ -61,7 +61,7 @@ When targetting **Intel CPUs**, it is recommended to  use llama.cpp for [x86_64]
 
 ### Intel GPUs
 
-The oneAPI Math Kernel Library, which the oneAPI base-toolkit includes, supports intel GPUs. In order to make it "visible", simply run the following:  
+The oneAPI Math Kernel Library, which the oneAPI base-toolkit includes, supports intel GPUs. In order to make it "visible", simply run the following:
 ```sh
 source /opt/intel/oneapi/setvars.sh
 ```
@@ -97,18 +97,18 @@ The BLAS acceleration on Nvidia GPUs through oneAPI can be obtained using the Nv
 *Notes:*
   - Support for Nvidia targets through oneAPI is currently limited to Linux platforms.
 
-  - Please make sure the native oneAPI MKL *(dedicated to intel CPUs and GPUs)* is not "visible" at this stage to properly setup and use the built-from-source oneMKL with cuBLAS backend in llama.cpp for Nvidia GPUs. 
+  - Please make sure the native oneAPI MKL *(dedicated to intel CPUs and GPUs)* is not "visible" at this stage to properly setup and use the built-from-source oneMKL with cuBLAS backend in llama.cpp for Nvidia GPUs.
 
 
 ## Docker
 The docker build option is currently limited to *intel GPU* targets.
-### Build image 
+### Build image
 ```sh
 # Using FP16
 docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=ON" -f .devops/main-intel.Dockerfile .
 ```
 
-*Notes*: 
+*Notes*:
 
 To build in default FP32 *(Slower than FP16 alternative)*, you can remove the `--build-arg="LLAMA_SYCL_F16=ON"` argument from the previous command.
 
@@ -133,7 +133,7 @@ docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/ren
 
 1. **Install GPU drivers**
 
-  - **Intel GPU** 
+  - **Intel GPU**
 
 Intel data center GPUs drivers installation guide and download page can be found here: [Get intel dGPU Drivers](https://dgpu-docs.intel.com/driver/installation.html#ubuntu-install-steps).
 
@@ -172,7 +172,7 @@ Installation can be verified by running the following:
 ```sh
 nvidia-smi
 ```
-Please make sure at least one CUDA device is available, which can be displayed like this *(here an A100-40GB Nvidia GPU)*: 
+Please make sure at least one CUDA device is available, which can be displayed like this *(here an A100-40GB Nvidia GPU)*:
 ```
 +---------------------------------------------------------------------------------------+
 | NVIDIA-SMI 535.54.03              Driver Version: 535.54.03    CUDA Version: 12.2     |
@@ -216,7 +216,7 @@ make
 ```
 
 
-3. **Verify installation and environment** 
+3. **Verify installation and environment**
 
 In order to check the available SYCL devices on the machine, please use the `sycl-ls` command.
 ```sh
@@ -235,9 +235,9 @@ When targeting an intel GPU, the user should expect one or more level-zero devic
 [ext_oneapi_level_zero:gpu:0] Intel(R) Level-Zero, Intel(R) Arc(TM) A770 Graphics 1.3 [1.3.26918]
 ```
 
-- **Nvidia GPU** 
+- **Nvidia GPU**
 
-Similarly, user targetting Nvidia GPUs should expect at least one SYCL-CUDA device [`ext_oneapi_cuda:gpu`] as bellow: 
+Similarly, user targetting Nvidia GPUs should expect at least one SYCL-CUDA device [`ext_oneapi_cuda:gpu`] as bellow:
 ```
 [opencl:acc:0] Intel(R) FPGA Emulation Platform for OpenCL(TM), Intel(R) FPGA Emulation Device OpenCL 1.2  [2023.16.12.0.12_195853.xmain-hotfix]
 [opencl:cpu:1] Intel(R) OpenCL, Intel(R) Xeon(R) Gold 6326 CPU @ 2.90GHz OpenCL 3.0 (Build 0) [2023.16.12.0.12_195853.xmain-hotfix]
@@ -293,7 +293,7 @@ source /opt/intel/oneapi/setvars.sh
 
 3. List devices information
 
-Similar to the native `sycl-ls`, available SYCL devices can be queried as follow: 
+Similar to the native `sycl-ls`, available SYCL devices can be queried as follow:
 
 ```sh
 ./build/bin/ls-sycl-device
@@ -352,7 +352,7 @@ The base toolkit can be obtained from the official [Intel® oneAPI Base Toolkit]
 
 Please follow the instructions for downloading and installing the Toolkit for Windows, and preferably keep the default installation values unchanged, notably the installation path *(`C:\Program Files (x86)\Intel\oneAPI` by default)*.
 
-Following guidelines/code snippets assume the default installation values. Otherwise, please make sure the necessary changes are reflected where applicable.  
+Following guidelines/code snippets assume the default installation values. Otherwise, please make sure the necessary changes are reflected where applicable.
 
 b. Enable oneAPI running environment:
 
@@ -365,13 +365,13 @@ b. Enable oneAPI running environment:
 
 c. Verify installation
 
-In the oneAPI command line, run the following to print the available SYCL devices: 
+In the oneAPI command line, run the following to print the available SYCL devices:
 
 ```
 sycl-ls
 ```
 
-There should be one or more *level-zero* GPU devices displayed as **[ext_oneapi_level_zero:gpu]**. Below is example of such output detecting an *intel Iris Xe* GPU as a Level-zero SYCL device: 
+There should be one or more *level-zero* GPU devices displayed as **[ext_oneapi_level_zero:gpu]**. Below is example of such output detecting an *intel Iris Xe* GPU as a Level-zero SYCL device:
 
 Output (example):
 ```
@@ -407,7 +407,7 @@ cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CX
 make
 ```
 
-Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former instructions: 
+Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former instructions:
 ```sh
 .\examples\sycl\win-build-sycl.bat
 ```
@@ -424,7 +424,7 @@ You can refer to the general [*Prepare and Quantize*](README#prepare-and-quantiz
 
 2. Enable oneAPI running environment
 
-On the oneAPI command line window, run the following and step into the llama.cpp directory: 
+On the oneAPI command line window, run the following and step into the llama.cpp directory:
 ```
 "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64
 ```
@@ -511,7 +511,7 @@ Note:
   - Potential cause: Unavailable oneAPI installation or not set ENV variables.
   - Solution: Install *oneAPI base toolkit* and enable its ENV through: `source /opt/intel/oneapi/setvars.sh`.
 
-- General compiler error: 
+- General compiler error:
 
   - Remove build folder or try a clean-build.
 
