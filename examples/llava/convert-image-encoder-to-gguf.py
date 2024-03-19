@@ -39,7 +39,6 @@ def should_skip_tensor(name: str, has_text: bool, has_vision: bool, has_llava: b
 def get_tensor_name(name: str) -> str:
     if "projection" in name:
         return name
-    
     if "mm_projector" in name:
         name = name.replace("model.mm_projector", "mm")
         name = re.sub(r'mm\.mlp\.mlp', 'mm.model.mlp', name, count=1)
