@@ -848,8 +848,13 @@ struct server_context {
         slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
         slot.params.seed               = json_value(data, "seed",              default_params.seed);
         if (data.contains("json_schema") && !data.contains("grammar")) {
-            auto schema                = json_value(data, "json_schema",       json::object());
-            slot.sparams.grammar       = json_schema_to_grammar(schema);
+            try {
+                auto schema                = json_value(data, "json_schema",       json::object());
+                slot.sparams.grammar       = json_schema_to_grammar(schema);
+            } catch (const std::exception & e) {
+                send_error(task, std::string("\"json_schema\": ") + e.what(), ERROR_TYPE_INVALID_REQUEST);
+                return false;
+            }
         } else {
             slot.sparams.grammar       = json_value(data, "grammar",           default_sparams.grammar);
         }
