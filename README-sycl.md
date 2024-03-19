@@ -553,7 +553,7 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 
 ## Q&A
 
-Note: please add prefix **[SYCL]** in issue title, so that we will check it as soon.
+Note: please add prefix **[SYCL]** in issue title, so that we will check it as soon as possible.
 
 
 - Error:  `error while loading shared libraries: libsycl.so.7: cannot open shared object file: No such file or directory`.
