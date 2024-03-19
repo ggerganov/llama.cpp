@@ -36,7 +36,7 @@ unordered_map<string, string> PRIMITIVE_RULES = {
 vector<string> OBJECT_RULE_NAMES = {"object", "array", "string", "number", "boolean", "null", "value"};
 
 unordered_map<string, string> DATE_RULES = {
-    {"date", "[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( [0-2] [0-9] | \"3\" [0-1] )"},
+    {"date", "[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( \"0\" [1-9] | [1-2] [0-9] | \"3\" [0-1] )"},
     {"time", "([01] [0-9] | \"2\" [0-3]) \":\" [0-5] [0-9] \":\" [0-5] [0-9] ( \".\" [0-9] [0-9] [0-9] )? ( \"Z\" | ( \"+\" | \"-\" ) ( [01] [0-9] | \"2\" [0-3] ) \":\" [0-5] [0-9] )"},
     {"date-time", "date \"T\" time"},
     {"date-string", "\"\\\"\" date \"\\\"\" space"},

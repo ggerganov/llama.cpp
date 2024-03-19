@@ -135,7 +135,7 @@ static void test_all(const string& lang, std::function<void(const TestCase&)> ru
       ]
     })""",
     R"""(
-      date ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( [0-2] [0-9] | "3" [0-1] )
+      date ::= [0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( "0" [1-9] | [1-2] [0-9] | "3" [0-1] )
       date-string ::= "\"" date "\"" space
       date-time ::= date "T" time
       date-time-string ::= "\"" date-time "\"" space
