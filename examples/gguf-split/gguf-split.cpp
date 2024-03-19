@@ -20,7 +20,6 @@
 enum split_operation : uint8_t {
     SPLIT_OP_SPLIT,
     SPLIT_OP_MERGE,
-    SPLIT_OP_UPLOAD,
 };
 
 static const char * const LLM_KV_GENERAL_SPLIT_I_SPLIT = "general.split";
@@ -50,7 +49,6 @@ static void split_print_usage(const char * executable) {
     printf("  --split               split GGUF to multiple GGUF (default)\n");
     printf("  --split-max-tensors   max tensors in each split: default(%d)\n", default_params.n_split_tensors);
     printf("  --merge               merge multiple GGUF to a single GGUF\n");
-    printf("  --upload              upload GGUF to an URL\n");
     printf("\n");
 }
 
@@ -92,10 +90,6 @@ static bool split_params_parse_ex(int argc, const char ** argv, split_params & p
             }
             arg_found = true;
             params.n_split_tensors = atoi(argv[arg_idx]);
-        }
-        if (arg == "--upload") {
-            arg_found = true;
-            params.operation = SPLIT_OP_UPLOAD;
         }
 
         if (!arg_found) {
@@ -476,14 +470,6 @@ static void gguf_merge(const split_params & split_params) {
             __func__, split_params.output.c_str(), n_split, total_tensors);
 }
 
-static void gguf_upload(const split_params & /*params*/) {
-#ifdef LLAMA_USE_CURL
-    fprintf(stderr, "%s: NOT IMPLEMENTED\n", __func__);
-#else
-    fprintf(stderr, "%s: operation upload not supported, please build with -DLLAMA_CURL\n", __func__);
-#endif // LLAMA_USE_CURL
-}
-
 int main(int argc, const char ** argv) {
     if (argc < 3) {
         split_print_usage(argv[0]);
@@ -496,8 +482,6 @@ int main(int argc, const char ** argv) {
         case SPLIT_OP_SPLIT: gguf_split(params);
             break;
         case SPLIT_OP_MERGE: gguf_merge(params);
-            break;
-        case SPLIT_OP_UPLOAD: gguf_upload(params);
             break;
         default:split_print_usage(argv[0]);
             exit(1);
