@@ -666,11 +666,12 @@ struct ggml_backend_cuda_context {
     std::unique_ptr<ggml_cuda_pool> pools[GGML_CUDA_MAX_DEVICES];
 
     static std::unique_ptr<ggml_cuda_pool> new_pool_for_device(int device) {
+#if !defined(GGML_USE_HIPBLAS)
         if (get_cuda_global_info().devices[device].vmm) {
             return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_vmm(device));
-        } else {
-            return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_leg(device));
         }
+#endif
+        return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_leg(device));
     }
 
     ggml_cuda_pool & pool(int device) {
