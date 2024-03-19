@@ -1415,8 +1415,18 @@ void ggml_vk_instance_init() {
             vk_instance.device_indices.push_back(tmp);
         }
     } else {
-        vk_instance.device_indices.push_back(0);
+        // Default to using all dedicated GPUs
+        std::vector<vk::PhysicalDevice> devices = vk_instance.instance.enumeratePhysicalDevices();
+        for (size_t i = 0; i < devices.size(); i++) {
+            vk::PhysicalDeviceProperties props = devices[i].getProperties();
+
+            if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
+                vk_instance.device_indices.push_back(i);
+            }
+        }
     }
+
+    std::cerr << "ggml_vulkan: Found " << vk_instance.device_indices.size() << " Vulkan devices:" << std::endl;
 
     for (size_t i = 0; i < vk_instance.device_indices.size(); i++) {
         ggml_vk_print_gpu_info(i);
@@ -2713,7 +2723,7 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context 
     uint64_t x_buf_offset = 0;
     vk_buffer d_Y;
     uint64_t y_buf_offset = 0;
-    if(!src1_uma) {
+    if(!src0_uma) {
         d_Qx = extra_src0->buffer_gpu.lock();
         qx_buf_offset = extra_src0->offset;
         GGML_ASSERT(d_Qx != nullptr);
@@ -3633,6 +3643,8 @@ static void ggml_vk_print_matrix_area(const void * data, ggml_type type, int ne0
                     val = *((const float *) data + i2*ne1*ne0 + idx1*ne0 + idx0);
                 } else if (type == GGML_TYPE_F16) {
                     val = ggml_fp16_to_fp32(*((const ggml_fp16_t *) data + i2*ne1*ne0 + idx1*ne0 + idx0));
+                } else {
+                    GGML_ASSERT(false);
                 }
                 fprintf(stderr, "% 7.2f ", val);
             } else {
@@ -3934,6 +3946,8 @@ static void ggml_vk_print_tensor_area(const ggml_tensor * tensor, int i0, int i1
                     val = *(float *) ((char *) tensor->data + i3*tensor->nb[3] + i2*tensor->nb[2] + idx1*tensor->nb[1] + idx0*tensor->nb[0]);
                 } else if (tensor->type == GGML_TYPE_F16) {
                     val = ggml_fp16_to_fp32(*(ggml_fp16_t *) ((char *) tensor->data + i3*tensor->nb[3] + i2*tensor->nb[2] + idx1*tensor->nb[1] + idx0*tensor->nb[0]));
+                } else {
+                    GGML_ASSERT(false);
                 }
                 fprintf(stderr, "% 7.2f ", val);
             } else {
@@ -4430,24 +4444,6 @@ static void ggml_vk_preallocate_buffers_graph(ggml_backend_vk_context * ctx, ggm
     const ggml_type src0_type = (use_src0 && src0->type == GGML_TYPE_F32) ? src0->type : GGML_TYPE_F16;
     const ggml_type src1_type = (use_src1 && src1->type == GGML_TYPE_F32) ? src1->type : GGML_TYPE_F16;
 
-    bool src0_uma = false;
-    bool src1_uma = false;
-
-    if (ctx->device->uma) {
-        vk_buffer buf;
-        size_t tmp;
-
-        if (use_src0) {
-            ggml_vk_host_get(ctx, src0->data, buf, tmp);
-            src0_uma = buf != nullptr;
-        }
-
-        if (use_src1) {
-            ggml_vk_host_get(ctx, src1->data, buf, tmp);
-            src1_uma = buf != nullptr;
-        }
-    }
-
     const bool x_non_contig = use_src0 && !ggml_vk_dim01_contiguous(src0);
     const bool y_non_contig = use_src1 && !ggml_vk_dim01_contiguous(src1);
 
@@ -4535,7 +4531,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         return;
     }
 #ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_vk_preallocate_buffers(qx_size: " << ctx->prealloc_size_qx << " qy_size: " << ctx->prealloc_size_qy << " x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << ")" << std::endl;
+    std::cerr << "ggml_vk_preallocate_buffers(x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << ")" << std::endl;
 #endif
 #if defined(GGML_VULKAN_RUN_TESTS)
     ctx->staging = ggml_vk_create_buffer_check(ctx, 100ul * 1024ul * 1024ul,
@@ -5282,7 +5278,7 @@ static ggml_backend_buffer_type_i ggml_backend_vk_buffer_type_interface = {
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_buffer_type(size_t dev_num) {
 #ifdef GGML_VULKAN_DEBUG
-    std::cerr << "ggml_backend_vk_buffer_type(" << idx << ")" << std::endl;
+    std::cerr << "ggml_backend_vk_buffer_type(" << dev_num << ")" << std::endl;
 #endif
 
     GGML_ASSERT(dev_num < vk_instance.device_indices.size());
