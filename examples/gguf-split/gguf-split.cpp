@@ -13,9 +13,7 @@
 
 #include <stdio.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <string.h>
-#include <unistd.h>
 
 enum split_operation : uint8_t {
     SPLIT_OP_SPLIT,
