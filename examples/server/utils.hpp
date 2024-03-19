@@ -4,6 +4,7 @@
 #include "common.h"
 
 #include "json.hpp"
+#include "python-parser.hpp"
 
 #include <string>
 #include <vector>
@@ -421,7 +422,7 @@ static std::string rubra_format_function_call_str(const std::vector<json> & func
     return final_str;
 }
 
-std::string default_tool_formatter(const std::vector<json>& tools) {
+static std::string default_tool_formatter(const std::vector<json>& tools) {
     std::string toolText = "";
     std::vector<std::string> toolNames;
     for (const auto& tool : tools) {
@@ -556,17 +557,15 @@ static json oaicompat_completion_params_parse(
 }
 
 
-static json parse_response_for_function_call(const std::string content) {
-
-}
-
-
 static json format_final_response_oaicompat(const json & request, json result, const std::string & completion_id, bool streaming = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
     int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
     std::string content      = json_value(result, "content", std::string(""));
+
+    std::vector<json> parsed_content = parsePythonFunctionCalls(content);
+    
 
     std::string finish_reason = "length";
     if (stopped_word || stopped_eos) {
@@ -579,7 +578,7 @@ static json format_final_response_oaicompat(const json & request, json result, c
                                         {"delta", json::object()}}})
                   : json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
-                                        {"message", json{{"content", content},
+                                        {"message", json{{"content", parsed_content},
                                                          {"role", "assistant"}}}}});
 
     std::time_t t = std::time(0);
