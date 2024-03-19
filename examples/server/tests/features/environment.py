@@ -5,6 +5,7 @@ import sys
 import time
 import traceback
 from contextlib import closing
+from subprocess import TimeoutExpired
 
 
 def before_scenario(context, scenario):
@@ -38,7 +39,9 @@ def after_scenario(context, scenario):
 
         server_graceful_shutdown(context)  # SIGINT
 
-        if context.server_process.wait(0.5) is None:
+        try:
+            context.server_process.wait(0.5)
+        except TimeoutExpired:
             print(f"server still alive after 500ms, force-killing pid={context.server_process.pid} ...")
             context.server_process.kill()  # SIGKILL
             context.server_process.wait()
