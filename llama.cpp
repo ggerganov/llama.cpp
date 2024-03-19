@@ -52,6 +52,9 @@
         #define NOMINMAX
     #endif
     #include <windows.h>
+    #ifndef PATH_MAX
+        #define PATH_MAX MAX_PATH
+    #endif
     #include <io.h>
 #endif
 
@@ -290,6 +293,10 @@ enum llm_kv {
     LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,
     LLM_KV_ROPE_SCALING_FINETUNED,
 
+    LLM_KV_SPLIT_NO,
+    LLM_KV_SPLIT_COUNT,
+    LLM_KV_SPLIT_TENSORS_COUNT,
+
     LLM_KV_SSM_INNER_SIZE,
     LLM_KV_SSM_CONV_KERNEL,
     LLM_KV_SSM_STATE_SIZE,
@@ -354,6 +361,10 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ROPE_SCALING_FACTOR,           "%s.rope.scaling.factor"                  },
     { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,     "%s.rope.scaling.original_context_length" },
     { LLM_KV_ROPE_SCALING_FINETUNED,        "%s.rope.scaling.finetuned"               },
+
+    { LLM_KV_SPLIT_NO,                      "split.no"            },
+    { LLM_KV_SPLIT_COUNT,                   "split.count"         },
+    { LLM_KV_SPLIT_TENSORS_COUNT,           "split.tensors.count" },
 
     { LLM_KV_SSM_CONV_KERNEL,               "%s.ssm.conv_kernel"    },
     { LLM_KV_SSM_INNER_SIZE,                "%s.ssm.inner_size"     },
@@ -1449,6 +1460,17 @@ struct llama_mlock {
 #endif
 };
 
+// Holds information on a tensor data source location.
+struct llama_tensor_offset  {
+    uint16_t  idx;  // source file index
+    size_t    offs; // tensor data offset in the original file
+
+    llama_tensor_offset(uint16_t idx, const char * name, struct gguf_context * gguf_ctx) : idx(idx) {
+        const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
+        offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
+    }
+};
+
 static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
     const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
@@ -2023,12 +2045,12 @@ struct llama_model {
     // the model memory buffers for the tensor data
     std::vector<ggml_backend_buffer_t> bufs;
 
-    // model memory mapped file
-    std::unique_ptr<llama_mmap> mapping;
+    // model memory mapped files
+    std::vector<std::unique_ptr<llama_mmap>> mappings;
 
     // objects representing data potentially being locked in memory
     std::vector<std::unique_ptr<llama_mlock>> mlock_bufs;
-    llama_mlock mlock_mmap;
+    std::vector<std::unique_ptr<llama_mlock>> mlock_mmaps;
 
     // for quantize-stats only
     std::vector<std::pair<std::string, struct ggml_tensor *>> tensors_by_name;
@@ -2802,11 +2824,13 @@ struct llama_model_loader {
 
     bool use_mmap = false;
 
-    llama_file  file;
+    std::vector<std::unique_ptr<llama_file>> files;
     llama_ftype ftype;
     llama_fver  fver;
 
-    std::unique_ptr<llama_mmap> mapping;
+    std::vector<std::unique_ptr<llama_mmap>> mappings;
+    std::unordered_map<std::string, struct llama_tensor_offset> tensors_offs; // unified tensor data offset accross files
+
     std::unordered_map<std::string, struct llama_model_kv_override> kv_overrides;
 
     struct gguf_context * ctx_gguf = NULL;
@@ -2815,7 +2839,7 @@ struct llama_model_loader {
     std::string arch_name;
     LLM_KV      llm_kv    = LLM_KV(LLM_ARCH_UNKNOWN);
 
-    llama_model_loader(const std::string & fname, bool use_mmap, const struct llama_model_kv_override * param_overrides_p) : file(fname.c_str(), "rb") {
+    llama_model_loader(const std::string & fname, bool use_mmap, const struct llama_model_kv_override * param_overrides_p) {
         int trace = 0;
         if (getenv("LLAMA_TRACE")) {
             trace = atoi(getenv("LLAMA_TRACE"));
@@ -2836,9 +2860,102 @@ struct llama_model_loader {
         if (!ctx_gguf) {
             throw std::runtime_error(format("%s: failed to load model from %s\n", __func__, fname.c_str()));
         }
+        files.emplace_back(new llama_file(fname.c_str(), "rb"));
 
         get_key(llm_kv(LLM_KV_GENERAL_ARCHITECTURE), arch_name, false);
         llm_kv = LLM_KV(llm_arch_from_string(arch_name));
+
+        // Save tensors data offset of the main file.
+        // For subsidiary files, gguf_ctx tensor data offset must not be used,
+        // we build a unified tensors offset index.
+        for (ggml_tensor * tensor = ggml_get_first_tensor(ctx_meta); tensor; tensor = ggml_get_next_tensor(ctx_meta, tensor)) {
+            tensors_offs.emplace(tensor->name, llama_tensor_offset(0, tensor->name, ctx_gguf));
+        }
+
+        uint16_t n_split = 0;
+        get_key(llm_kv(LLM_KV_SPLIT_COUNT), n_split, false);
+
+        // Build virtual GGUF/GGML contexts to represent all tensors across files
+        if (n_split > 1) {
+            uint16_t idx = 0;
+            get_key(llm_kv(LLM_KV_SPLIT_NO), idx);
+            if (idx != 0) {
+                throw std::runtime_error(format("illegal split file: %d, model must be loaded with the first split", idx));
+            }
+            get_key(llm_kv(LLM_KV_SPLIT_TENSORS_COUNT), n_tensors);
+
+            char split_prefix[4096] = {0};
+            if (!llama_split_prefix(split_prefix, fname.c_str(), fname.size(), idx, n_split)) {
+                throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
+            }
+
+            size_t mem_size = n_tensors*ggml_tensor_overhead();
+            struct ggml_init_params pdata = {
+                /*.mem_size   = */ mem_size,
+                /*.mem_buffer = */ NULL,
+                /*.no_alloc   = */ true,
+            };
+
+            auto * new_ctx_meta = ggml_init(pdata);
+
+            if (trace > 0) {
+                LLAMA_LOG_INFO("%s: loading additional %d GGUFs\n", __func__, n_split);
+            }
+
+            for (; idx < n_split; idx++) {
+                char split_path[PATH_MAX] = {0};
+                struct ggml_context * split_ctx_meta = NULL;
+                struct gguf_context * split_ctx_gguf = NULL;
+                if (idx == 0) {
+                    split_ctx_gguf = ctx_gguf;
+                    split_ctx_meta = ctx_meta;
+                    strcpy(split_path, fname.c_str());
+                } else {
+                    llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
+                    struct gguf_init_params split_params = {
+                        /*.no_alloc = */ true,
+                        /*.ctx      = */ &split_ctx_meta,
+                    };
+                    split_ctx_gguf = gguf_init_from_file(split_path, split_params);
+                    if (!split_ctx_gguf) {
+                        throw std::runtime_error(format("%s: failed to load GGUF split from %s\n", __func__, fname.c_str()));
+                    }
+                }
+
+                bool ok = true;
+                for (ggml_tensor * tensor = ggml_get_first_tensor(split_ctx_meta); tensor; tensor = ggml_get_next_tensor(split_ctx_meta, tensor)) {
+                    struct ggml_tensor * copy = ggml_new_tensor(new_ctx_meta, tensor->type, ggml_n_dims(tensor), tensor->ne);
+                    ok = ok && copy != NULL;
+
+                    if (!ok) {
+                        break;
+                    }
+
+                    ggml_set_name(copy, tensor->name);
+
+                    // Add the tensor to the main gguf context if not already present
+                    if (idx > 0) {
+                        gguf_add_tensor(ctx_gguf, copy);
+                        tensors_offs.emplace(tensor->name, llama_tensor_offset(idx, tensor->name, split_ctx_gguf));
+                    }
+                }
+
+                if (!ok) {
+                    throw std::runtime_error(format("%s: failed to read the tensor metadata\n", __func__));
+                }
+
+                if (idx > 0) {
+                    files.emplace_back(new llama_file(split_path, "rb"));
+                    gguf_free(split_ctx_gguf);
+                    ggml_free(split_ctx_meta);
+                }
+            }
+
+            ggml_free(ctx_meta);
+            ctx_meta = new_ctx_meta;
+
+            LLAMA_LOG_INFO("%s: additional %d GGUFs metadata loaded.\n",  __func__, n_split);
+        }
 
         n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
@@ -3075,118 +3192,129 @@ struct llama_model_loader {
         }
     }
 
-    size_t file_offset(const char * name) const {
-        const int idx = gguf_find_tensor(ctx_gguf, name);
-
-        if (idx < 0) {
-            throw std::runtime_error(format("%s: tensor '%s' not found in the file", __func__, name));
-        }
-
-        return gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, idx);
-    }
-
-    void init_mapping(bool prefetch = true, llama_mlock * lmlock = nullptr) {
-        // prefetch the whole file - all the data is needed anyway
+    void init_mappings(bool prefetch = true, std::vector<std::unique_ptr<llama_mlock>> * mlock_mmaps = nullptr) {
         if (use_mmap) {
-            mapping.reset(new llama_mmap(&file, prefetch ? -1 : 0, ggml_is_numa()));
+            for (const auto & file : files) {
+                auto * mapping = new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa());
+                mmaps_used.emplace_back(std::make_pair(mapping->size, 0));
+                mappings.emplace_back(std::unique_ptr<llama_mmap>(mapping));
+                if (mlock_mmaps) {
+                    auto * mlock_mmap = new llama_mlock();
+                    mlock_mmap->init(mapping->addr);
+                    mlock_mmaps->emplace_back(std::unique_ptr<llama_mlock>(mlock_mmap));
+                }
+            }
         }
 
         // compute the total size of all tensors for progress reporting
-        for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
+        for (int i = 0; i < n_tensors; i++) {
             struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
             size_data += ggml_nbytes(cur);
         }
-
-        if (use_mmap && mapping) {
-            if (lmlock) {
-                lmlock->init(mapping->addr);
-            }
-            mmap_used_first = mapping->size;
-        }
     }
 
-    void get_mapping_range(size_t * first, size_t * last, ggml_context * ctx) const {
-        GGML_ASSERT(mapping);
+    void get_mapping_range(size_t * first, size_t * last, void ** addr, int idx, ggml_context * ctx) const {
+        GGML_ASSERT(!mappings.empty());
+        const auto & mapping = mappings[idx];
 
         *first = mapping->size;
         *last  = 0;
+        *addr = mapping->addr;
         for (ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor; tensor = ggml_get_next_tensor(ctx, tensor)) {
-            const size_t offs = file_offset(ggml_get_name(tensor));
-            *first = std::min(*first, offs);
-            *last  = std::max(*last,  offs + ggml_nbytes(tensor));
+            const auto & tensor_off = tensors_offs.at(ggml_get_name(tensor));
+            *first = std::min(*first, tensor_off.offs);
+            *last  = std::max(*last,  tensor_off.offs + ggml_nbytes(tensor));
         }
     }
 
     // for backwards compatibility, does not support ggml-backend
     void load_data_for(struct ggml_tensor * cur) const {
-        const size_t offs = file_offset(ggml_get_name(cur));
+        const auto & t_offs = tensors_offs.at(ggml_get_name(cur));
 
-        if (use_mmap && mapping) {
+        if (use_mmap && t_offs.idx < mappings.size()) {
+            const auto & mapping = mappings.at(t_offs.idx);
             if (cur->data == nullptr) {
-                cur->data = (uint8_t *)mapping->addr + offs;
+                cur->data = (uint8_t *)mapping->addr + t_offs.offs;
             } else {
-                memcpy(cur->data, (uint8_t *)mapping->addr + offs, ggml_nbytes(cur));
+                memcpy(cur->data, (uint8_t *)mapping->addr + t_offs.offs, ggml_nbytes(cur));
             }
         } else {
             GGML_ASSERT(cur->data != nullptr);
-            file.seek(offs, SEEK_SET);
-            file.read_raw(cur->data, ggml_nbytes(cur));
+            GGML_ASSERT(t_offs.idx < files.size());
+            const auto & file = files.at(t_offs.idx);
+            file->seek(t_offs.offs, SEEK_SET);
+            file->read_raw(cur->data, ggml_nbytes(cur));
         }
     }
 
     size_t size_done = 0;
     size_t size_data = 0;
-    size_t mmap_used_first = -1;
-    size_t mmap_used_last  = 0;
+    std::vector<std::pair<size_t, size_t>> mmaps_used;
 
     // Returns false if cancelled by progress_callback
-    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, ggml_backend_buffer_t buf_mmap, llama_mlock * lmlock) {
-        GGML_ASSERT(size_data != 0 && "call init_mapping() first");
+    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::vector<ggml_backend_buffer_t> bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
+        GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
         std::vector<no_init<uint8_t>> read_buf;
-
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             if (progress_callback) {
-                if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
+                if (!progress_callback((float)size_done / size_data, progress_callback_user_data)) {
                     return false;
                 }
             }
 
-            const size_t offs = file_offset(ggml_get_name(cur));
+            const auto & t_offs = tensors_offs.at(ggml_get_name(cur));
+            size_t n_size = ggml_nbytes(cur);
 
-            if (use_mmap && mapping) {
+            if (use_mmap && t_offs.idx < mappings.size()) {
+                const auto & mapping = mappings.at(t_offs.idx);
+                ggml_backend_buffer_t buf_mmap = nullptr;
+                if (bufs_mmap.size() > 1) {
+                    buf_mmap = bufs_mmap[t_offs.idx];
+                } else if (!bufs_mmap.empty()) {
+                    buf_mmap = bufs_mmap.front();
+                }
                 if (buf_mmap && cur->data == nullptr) {
-                    ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + offs);
-                    if (lmlock) {
-                        lmlock->grow_to(offs + ggml_nbytes(cur));
+                    ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *)mapping->addr + t_offs.offs);
+                    if (lmlocks) {
+                        const auto & lmlock = lmlocks->at(t_offs.idx);
+                        lmlock->grow_to(t_offs.offs + ggml_nbytes(cur));
                     }
-                    mmap_used_first = std::min(mmap_used_first, offs);
-                    mmap_used_last  = std::max(mmap_used_last,  offs + ggml_nbytes(cur));
+
+                    auto & mmap_used = mmaps_used[t_offs.idx];
+                    mmap_used.first = std::min(mmap_used.first, t_offs.offs);
+                    mmap_used.second = std::max(mmap_used.second, t_offs.offs + n_size);
                 } else {
-                    ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + offs, 0, ggml_nbytes(cur));
+                    ggml_backend_tensor_set(cur, (uint8_t *)mapping->addr + t_offs.offs, 0, n_size);
                 }
             } else {
+                GGML_ASSERT(t_offs.idx < files.size());
+                const auto & file = files.at(t_offs.idx);
                 if (ggml_backend_buffer_is_host(cur->buffer)) {
-                    file.seek(offs, SEEK_SET);
-                    file.read_raw(cur->data, ggml_nbytes(cur));
+                    file->seek(t_offs.offs, SEEK_SET);
+                    file->read_raw(cur->data, ggml_nbytes(cur));
                 } else {
                     read_buf.resize(ggml_nbytes(cur));
-                    file.seek(offs, SEEK_SET);
-                    file.read_raw(read_buf.data(), ggml_nbytes(cur));
-                    ggml_backend_tensor_set(cur, read_buf.data(), 0, ggml_nbytes(cur));
+                    file->seek(t_offs.offs, SEEK_SET);
+                    file->read_raw(read_buf.data(), ggml_nbytes(cur));
+                    ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
                 }
             }
 
-            size_done += ggml_nbytes(cur);
+            size_done += n_size;
         }
 
         // check if this is the last call and do final cleanup
         if (size_done >= size_data) {
             // unmap offloaded tensors and metadata
-            if (use_mmap && mapping) {
-                mapping->unmap_fragment(0, mmap_used_first);
-                if (mmap_used_last != 0) {
-                    mapping->unmap_fragment(mmap_used_last, mapping->size);
+            if (use_mmap && !mappings.empty()) {
+                for (uint32_t file_no = 0; file_no < mappings.size(); file_no++) {
+                    const auto & mmap_used = mmaps_used[file_no];
+                    auto & mapping = mappings.at(file_no);
+                    mapping->unmap_fragment(0, mmap_used.first);
+                    if (mmap_used.second != 0) {
+                        mapping->unmap_fragment(mmap_used.second, mapping->size);
+                    }
                 }
             }
             if (progress_callback) {
@@ -5024,56 +5152,74 @@ static bool llm_load_tensors(
 
     ml.done_getting_tensors();
 
-    ml.init_mapping(true, use_mlock ? &model.mlock_mmap : nullptr);
+    ml.init_mappings(true, &model.mlock_mmaps);
 
     // create the backend buffers
-    std::vector<std::pair<ggml_context *, ggml_backend_buffer_t>> ctx_bufs;
+    std::vector<std::pair<ggml_context *, std::vector<ggml_backend_buffer_t>>> ctx_bufs;
 
     for (auto & it : ctx_map) {
         ggml_backend_buffer_type_t buft = it.first;
         ggml_context * ctx = it.second;
-        ggml_backend_buffer_t buf = nullptr;
+        std::vector<ggml_backend_buffer_t> bufs;
 
         // only the mmap region containing the tensors in the model is mapped to the backend buffer
         // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
         // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
         if (ml.use_mmap && buft == llama_default_buffer_type_cpu(true)) {
-            size_t first, last;
-            ml.get_mapping_range(&first, &last, ctx);
-            buf = ggml_backend_cpu_buffer_from_ptr((char *) ml.mapping->addr + first, last - first);
+            for (uint32_t file_no = 0; file_no < ml.files.size(); file_no++) {
+                void * addr = nullptr;
+                size_t first, last;
+                ml.get_mapping_range(&first, &last, &addr, file_no, ctx);
+                ggml_backend_buffer_t buf = ggml_backend_cpu_buffer_from_ptr((char *)addr + first, last - first);
+                if (buf != nullptr) {
+                    bufs.push_back(buf);
 #ifdef GGML_USE_CUBLAS
-            if (n_layer >= n_gpu_layers) {
-                ggml_backend_cuda_register_host_buffer(
-                        ggml_backend_buffer_get_base(buf),
-                        ggml_backend_buffer_get_size(buf));
-            }
+                    if (n_layer >= n_gpu_layers) {
+                        ggml_backend_cuda_register_host_buffer(
+                            ggml_backend_buffer_get_base(buf),
+                            ggml_backend_buffer_get_size(buf));
+                    }
 #endif
+                }
+            }
         }
 #ifdef GGML_USE_METAL
         else if (ml.use_mmap && buft == ggml_backend_metal_buffer_type()) {
-            const size_t max_size = ggml_get_max_tensor_size(ctx);
-            size_t first, last;
-            ml.get_mapping_range(&first, &last, ctx);
-            buf = ggml_backend_metal_buffer_from_ptr((char *) ml.mapping->addr + first, last - first, max_size);
+            for (uint32_t file_no = 0; file_no < ml.files.size(); file_no++) {
+                const size_t max_size = ggml_get_max_tensor_size(ctx);
+                void * addr = nullptr;
+                size_t first, last;
+                ml.get_mapping_range(&first, &last, &addr, file_no, ctx);
+                ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
+                if (buf != nullptr) {
+                    bufs.push_back(buf);
+                }
+            }
         }
 #endif
         else {
-            buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
-            if (buf != nullptr && use_mlock && ggml_backend_buffer_is_host(buf)) {
-                model.mlock_bufs.emplace_back(new llama_mlock);
-                auto & mlock_buf = model.mlock_bufs.back();
-                mlock_buf->init   (ggml_backend_buffer_get_base(buf));
-                mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
+            ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
+            if (buf != nullptr) {
+                if (use_mlock && ggml_backend_buffer_is_host(buf)) {
+                    model.mlock_bufs.emplace_back(new llama_mlock);
+                    auto & mlock_buf = model.mlock_bufs.back();
+                    mlock_buf->init(ggml_backend_buffer_get_base(buf));
+                    mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
+                }
+                bufs.push_back(buf);
             }
         }
-        if (buf == nullptr) {
+        if (bufs.empty()) {
             throw std::runtime_error("failed to allocate buffer");
         }
         // indicate that this buffer contains weights
         // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
-        ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-        model.bufs.push_back(buf);
-        ctx_bufs.emplace_back(ctx, buf);
+        for (ggml_backend_buffer_t buf : bufs) {
+            ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+            model.bufs.push_back(buf);
+        }
+
+        ctx_bufs.emplace_back(ctx, bufs);
     }
 
     if (llama_supports_gpu_offload()) {
@@ -5105,13 +5251,15 @@ static bool llm_load_tensors(
     // load tensor data
     for (auto & it : ctx_bufs) {
         ggml_context * ctx = it.first;
-        ggml_backend_buffer_t buf = it.second;
-        if (!ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf, use_mlock ? &model.mlock_mmap : NULL)) {
+        std::vector<ggml_backend_buffer_t> bufs = it.second;
+        if (!ml.load_all_data(ctx, progress_callback, progress_callback_user_data, bufs, use_mlock ? &model.mlock_mmaps : NULL)) {
             return false;
         }
     }
 
-    model.mapping = std::move(ml.mapping);
+    for (auto & mapping : ml.mappings) {
+        model.mappings.emplace_back(std::move(mapping));
+    }
 
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
@@ -12308,7 +12456,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 #endif
 
     llama_model_loader ml(fname_inp, use_mmap, NULL);
-    ml.init_mapping(false); // no prefetching?
+    ml.init_mappings(false); // no prefetching?
 
     llama_model model;
     llm_load_arch(ml, model);
@@ -12582,7 +12730,7 @@ static int llama_apply_lora_from_file_internal(
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
         ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*kv_overrides*/ nullptr));
-        ml->init_mapping(/*prefetch*/ false); // no prefetching
+        ml->init_mappings(/*prefetch*/ false); // no prefetching
     }
 
     struct tensor_meta {
@@ -14646,6 +14794,36 @@ LLAMA_API int32_t llama_chat_apply_template(
         strncpy(buf, formatted_chat.c_str(), length);
     }
     return res;
+}
+
+LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {
+    static const char * const SPLIT_PATH_FORMAT = "%s-%05d-of-%05d.gguf";
+    if (snprintf(split_path, maxlen, SPLIT_PATH_FORMAT, path_prefix, split_no + 1, split_count)) {
+        return strlen(split_path);
+    }
+    return 0;
+}
+
+LLAMA_API int llama_split_prefix(char * dest, const char * split_path, size_t split_path_len, int split_no, int split_count) {
+    char split_prefix[PATH_MAX] = {0};
+    int split_no_file = 0;
+    int split_count_file = 0;
+    const char * split_format = "-00000-of-00000.gguf";
+
+    if (split_path_len > strlen(split_format) + 1) {
+        size_t prefix_len = split_path_len - strlen(split_format);
+        if (prefix_len >= sizeof(split_prefix)) {
+            prefix_len = sizeof(split_prefix) - 1;  // leave room for null terminator
+        }
+        strncpy(split_prefix, split_path, prefix_len);
+
+        int n = sscanf(&split_path[0] + strlen(split_prefix), "-%d-of-%d", &split_no_file, &split_count_file);
+        if (n == 2 && split_no_file - 1 == split_no && split_count_file == split_count) {
+            strcpy(dest, split_prefix);
+            return strlen(split_prefix);
+        }
+    }
+    return 0;
 }
 
 struct llama_timings llama_get_timings(struct llama_context * ctx) {
