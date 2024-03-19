@@ -32,7 +32,7 @@ The llama.cpp SYCL backend supports:
 
 *Upcoming support: AMD GPUs*.
 
-When targetting **Intel CPUs**, it is recommended to  use llama.cpp for [x86](README.md#intel-onemkl) approach.
+When targetting **Intel CPUs**, it is recommended to  use llama.cpp for [x86_64](README.md#intel-onemkl) approach.
 
 ## News
 
@@ -104,10 +104,15 @@ The BLAS acceleration on Nvidia GPUs through oneAPI can be obtained using the Nv
 The docker build option is currently limited to *intel GPU* targets.
 ### Build image 
 ```sh
-docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=[OFF|ON]" -f .devops/main-intel.Dockerfile .
+# Using FP16
+docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=ON" -f .devops/main-intel.Dockerfile .
 ```
 
-*Note*: you can also use the `.devops/server-intel.Dockerfile`, which builds the *"server"* alternative.
+*Notes*: 
+
+To build in default FP32 *(Slower than FP16 alternative)*, you can remove the `--build-arg="LLAMA_SYCL_F16=ON"` argument from the previous command.
+
+You can also use the `.devops/server-intel.Dockerfile`, which builds the *"server"* alternative.
 
 ### Run container
 
@@ -137,8 +142,8 @@ Intel data center GPUs drivers installation guide and download page can be found
 Once installed, add the user(s) to the `video` and `render` groups.
 
 ```sh
-sudo usermod -aG render <username>
-sudo usermod -aG video <username>
+sudo usermod -aG render $USER
+sudo usermod -aG video $USER
 ```
 
 *Note*: logout/re-login for the changes to take effect.
@@ -248,7 +253,12 @@ source /opt/intel/oneapi/setvars.sh
 
 # Build LLAMA with MKL BLAS acceleration for intel GPU
 mkdir -p build && cd build
-cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=[OFF|ON]
+
+# Option 1: Use FP16 for better performance in long-prompt  inference
+cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
+
+# Option 2: Use FP32 by default
+cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 ```
 
 #### Nvidia GPU
@@ -261,11 +271,13 @@ export CPLUS_INCLUDE_DIR=/path/to/oneMKL/include:$CPLUS_INCLUDE_DIR
 
 # Build LLAMA with Nvidia BLAS acceleration through SYCL
 mkdir -p build && cd build
+
+# Option 1: Use FP16 for better performance in long-prompt  inference
+cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
+
+# Option 2: Use FP32 by default
 cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 ```
-
-*Notes:*
-- The **F32** build is enabled by default, but the **F16** yields better performance for long-prompt inference.
 
 ### III. Run the inference
 
@@ -510,8 +522,8 @@ Note:
   If it's present in the list, please add video/render group to your user then **logout/login** or restart your system:
 
   ```
-  sudo usermod -aG render <username>
-  sudo usermod -aG video <username>
+  sudo usermod -aG render $USER
+  sudo usermod -aG video $USER
   ```
 
   Otherwise, please double-check the installation GPU steps.
