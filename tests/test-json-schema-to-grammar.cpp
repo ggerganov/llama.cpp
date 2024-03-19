@@ -7,10 +7,7 @@
 #include <sstream>
 #include <regex>
 
-// TODO: split this to some library? common would need json.hpp
-#include "../examples/server/json-schema-to-grammar.h"
-#include "../examples/server/json-schema-to-grammar.cpp"
-
+#include "json-schema-to-grammar.h"
 #include "grammar-parser.h"
 
 using namespace std;

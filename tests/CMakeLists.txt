@@ -25,7 +25,7 @@ function(llama_test source)
 
     add_executable(${TEST_TARGET} ${source} get-model.cpp)
     install(TARGETS ${TEST_TARGET} RUNTIME)
-    target_link_libraries(${TEST_TARGET} PRIVATE common)
+    target_link_libraries(${TEST_TARGET} PRIVATE common json-schema-to-grammar)
     add_test(
         NAME ${TEST_TARGET}
         WORKING_DIRECTORY ${LLAMA_TEST_WORKING_DIRECTORY}
@@ -65,10 +65,11 @@ llama_test(test-backend-ops.cpp)
 
 llama_test(test-rope.cpp)
 
-llama_test(test-model-load-cancel.cpp      LABEL "model")
-llama_test(test-autorelease.cpp            LABEL "model")
+llama_test(test-model-load-cancel.cpp  LABEL "model")
+llama_test(test-autorelease.cpp        LABEL "model")
 
-llama_test(test-json-schema-to-grammar.cpp WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
+llama_test(test-json-schema-to-grammar.cpp   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(test-json-schema-to-grammar PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../examples/server)
 
 # dummy executable - not installed
 get_filename_component(TEST_TARGET test-c.c NAME_WE)
