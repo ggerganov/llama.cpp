@@ -718,7 +718,9 @@ async def request_completion(prompt,
                                     "prompt": prompt,
                                     "input_suffix": prompt_suffix,
                                     "n_predict": n_predict if n_predict is not None else -1,
-                                    "seed": seed if seed is not None else 42
+                                    "seed": seed if seed is not None else 42,
+                                    # TODO: change the expected outputs to match no repeat penalty
+                                    "repeat_penalty": 1.1,  # use old defaults to match expected outputs
                                 },
                                 headers=headers,
                                 timeout=3600) as response:
@@ -763,6 +765,8 @@ async def oai_chat_completions(user_prompt,
         "max_tokens": n_predict,
         "stream": enable_streaming,
         "seed": seed
+        # TODO: change the expected outputs to match no repeat penalty
+        "repeat_penalty": 1.1,  # use old defaults to match expected outputs
     }
     completion_response = {
         'content': '',
