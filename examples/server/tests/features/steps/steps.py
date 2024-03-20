@@ -1051,8 +1051,6 @@ def start_server_background(context):
     if 'LLAMA_SERVER_BIN_PATH' in os.environ:
         context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
     server_listen_addr = context.server_fqdn
-    if os.name == 'nt':
-        server_listen_addr = '0.0.0.0'
     server_args = [
         '--host', server_listen_addr,
         '--port', context.server_port,
