@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#define GGML_SYCL_MAX_DEVICES       16
+#define GGML_SYCL_MAX_DEVICES       48
 #define GGML_SYCL_NAME "SYCL"
 
 GGML_API void   ggml_init_sycl(void);
