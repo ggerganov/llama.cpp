@@ -294,8 +294,9 @@ static ggml_cuda_device_info ggml_cuda_init() {
 
     ggml_cuda_device_info info = {};
 
-    if (cudaGetDeviceCount(&info.device_count) != cudaSuccess) {
-        fprintf(stderr, "%s: no " GGML_CUDA_NAME " devices found, " GGML_CUDA_NAME " will be disabled\n", __func__);
+    cudaError_t err = cudaGetDeviceCount(&info.device_count);
+    if (err != cudaSuccess) {
+        fprintf(stderr, "%s: failed to initialize " GGML_CUDA_NAME ": %s\n", __func__, cudaGetErrorString(err));
         return info;
     }
 
