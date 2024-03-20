@@ -5,6 +5,8 @@ import os
 import re
 import socket
 import subprocess
+import sys
+import threading
 import time
 from contextlib import closing
 from re import RegexFlag
@@ -32,7 +34,10 @@ def step_server_config(context, server_fqdn, server_port):
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
     context.model_alias = None
+    context.model_file = None
+    context.model_url = None
     context.n_batch = None
+    context.n_ubatch = None
     context.n_ctx = None
     context.n_ga = None
     context.n_ga_w = None
@@ -62,6 +67,16 @@ def step_download_hf_model(context, hf_file, hf_repo):
     context.model_file = hf_hub_download(repo_id=hf_repo, filename=hf_file)
     if context.debug:
         print(f"model file: {context.model_file}\n")
+
+
+@step('a model file {model_file}')
+def step_model_file(context, model_file):
+    context.model_file = model_file
+
+
+@step('a model url {model_url}')
+def step_model_url(context, model_url):
+    context.model_url = model_url
 
 
 @step('a model alias {model_alias}')
@@ -118,6 +133,10 @@ def step_server_metrics(context):
 def step_start_server(context):
     start_server_background(context)
     attempts = 0
+    max_attempts = 20
+    if 'GITHUB_ACTIONS' in os.environ:
+        max_attempts *= 2
+
     while True:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             result = sock.connect_ex((context.server_fqdn, context.server_port))
@@ -125,7 +144,7 @@ def step_start_server(context):
                 print("\x1b[33;46mserver started!\x1b[0m")
                 return
             attempts += 1
-            if attempts > 20:
+            if attempts > max_attempts:
                 assert False, "server not started"
             print(f"waiting for server to start, connect error code = {result}...")
             time.sleep(0.1)
@@ -136,7 +155,8 @@ def step_start_server(context):
 async def step_wait_for_the_server_to_be_started(context, expecting_status):
     match expecting_status:
         case 'healthy':
-            await wait_for_health_status(context, context.base_url, 200, 'ok')
+            await wait_for_health_status(context, context.base_url, 200, 'ok',
+                                         timeout=30)
 
         case 'ready' | 'idle':
             await wait_for_health_status(context, context.base_url, 200, 'ok',
@@ -276,6 +296,11 @@ def step_n_junk(context, n_junk):
 @step('{n_batch:d} as batch size')
 def step_n_batch(context, n_batch):
     context.n_batch = n_batch
+
+
+@step('{n_ubatch:d} as ubatch size')
+def step_n_ubatch(context, n_ubatch):
+    context.n_ubatch = n_ubatch
 
 
 @step('{seed:d} as seed')
@@ -937,6 +962,9 @@ async def wait_for_health_status(context,
         print(f"Starting checking for health for expected_health_status={expected_health_status}\n")
     interval = 0.5
     counter = 0
+    if 'GITHUB_ACTIONS' in os.environ:
+        timeout *= 2
+
     async with aiohttp.ClientSession() as session:
         while True:
             async with await session.get(f'{base_url}/health', params=params) as health_response:
@@ -1025,10 +1053,15 @@ def start_server_background(context):
     server_args = [
         '--host', server_listen_addr,
         '--port', context.server_port,
-        '--model', context.model_file
     ]
+    if context.model_file:
+        server_args.extend(['--model', context.model_file])
+    if context.model_url:
+        server_args.extend(['--model-url', context.model_url])
     if context.n_batch:
         server_args.extend(['--batch-size', context.n_batch])
+    if context.n_ubatch:
+        server_args.extend(['--ubatch-size', context.n_ubatch])
     if context.n_gpu_layer:
         server_args.extend(['--n-gpu-layers', context.n_gpu_layer])
     if context.server_continuous_batching:
@@ -1064,8 +1097,23 @@ def start_server_background(context):
 
     pkwargs = {
         'creationflags': flags,
+        'stdout': subprocess.PIPE,
+        'stderr': subprocess.PIPE
     }
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],
         **pkwargs)
+
+    def log_stdout(process):
+        for line in iter(process.stdout.readline, b''):
+            print(line.decode('utf-8'), end='')
+    thread_stdout = threading.Thread(target=log_stdout, args=(context.server_process,))
+    thread_stdout.start()
+
+    def log_stderr(process):
+        for line in iter(process.stderr.readline, b''):
+            print(line.decode('utf-8'), end='', file=sys.stderr)
+    thread_stderr = threading.Thread(target=log_stderr, args=(context.server_process,))
+    thread_stderr.start()
+
     print(f"server pid={context.server_process.pid}, behave pid={os.getpid()}")

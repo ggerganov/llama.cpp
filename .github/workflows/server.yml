@@ -24,18 +24,15 @@ jobs:
 
     strategy:
       matrix:
-        sanitizer: [ADDRESS, THREAD, UNDEFINED]
-        build_type: [Debug, Release]
+        # TODO: temporary disabled due to linux kernel issues
+        #sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        sanitizer: [UNDEFINED]
+        build_type: [Debug]
         include:
           - build_type: Release
             sanitizer: ""
-        exclude:
-          - build_type: Release
-            sanitizer: ADDRESS
-          - build_type: Release
-            sanitizer: THREAD
-          - build_type: Release
-            sanitizer: UNDEFINED
+            disabled_on_pr: true
+      fail-fast: false # While -DLLAMA_SANITIZE_THREAD=ON is broken
 
     container:
       image: ubuntu:latest
@@ -60,7 +57,8 @@ jobs:
             cmake \
             python3-pip \
             wget \
-            language-pack-en
+            language-pack-en \
+            libcurl4-openssl-dev
 
       - name: Build
         id: cmake_build
@@ -70,6 +68,7 @@ jobs:
           cmake .. \
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
+              -DLLAMA_CURL=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
@@ -81,13 +80,14 @@ jobs:
 
       - name: Tests
         id: server_integration_tests
+        if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh
 
       - name: Slow tests
         id: server_integration_tests_slow
-        if: ${{ github.event.schedule != '' && matrix.build_type == 'Release' || github.event.inputs.slow_tests == 'true' }}
+        if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
@@ -103,12 +103,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: libCURL
+        id: get_libcurl
+        env:
+          CURL_VERSION: 8.6.0_6
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/curl.zip -L "https://curl.se/windows/dl-${env:CURL_VERSION}/curl-${env:CURL_VERSION}-win64-mingw.zip"
+          mkdir $env:RUNNER_TEMP/libcurl
+          tar.exe -xvf $env:RUNNER_TEMP/curl.zip --strip-components=1 -C $env:RUNNER_TEMP/libcurl
+
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake ..  -DLLAMA_BUILD_SERVER=ON -DCMAKE_BUILD_TYPE=Release ;
+          cmake .. -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
 
       - name: Python setup
@@ -122,15 +131,21 @@ jobs:
         run: |
           pip install -r examples/server/tests/requirements.txt
 
+      - name: Copy Libcurl
+        id: prepare_libcurl
+        run: |
+          cp $env:RUNNER_TEMP/libcurl/bin/libcurl-x64.dll ./build/bin/Release/libcurl-x64.dll
+
       - name: Tests
         id: server_integration_tests
+        if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
           behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
 
       - name: Slow tests
         id: server_integration_tests_slow
-        if: ${{ github.event.schedule != '' || github.event.inputs.slow_tests == 'true' }}
+        if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
           behave.exe --stop --no-skipped --no-capture --tags slow

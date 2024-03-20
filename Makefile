@@ -167,6 +167,10 @@ ifeq ($(UNAME_S),OpenBSD)
 	MK_CPPFLAGS += -D_BSD_SOURCE
 endif
 
+ifdef LLAMA_SCHED_MAX_COPIES
+	MK_CPPFLAGS += -DGGML_SCHED_MAX_COPIES=$(LLAMA_SCHED_MAX_COPIES)
+endif
+
 ifdef LLAMA_DEBUG
 	MK_CFLAGS   += -O0 -g
 	MK_CXXFLAGS += -O0 -g
@@ -549,19 +553,20 @@ endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
-ggml-metal.o: ggml-metal.m ggml-metal.h
+ggml-metal.o: ggml-metal.m ggml-metal.h ggml.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 ifdef LLAMA_METAL_EMBED_LIBRARY
-ggml-metal-embed.o: ggml-metal.metal
+ggml-metal-embed.o: ggml-metal.metal ggml-common.h
 	@echo "Embedding Metal library"
+	@sed -e '/#include "ggml-common.h"/r ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml-metal.metal > ggml-metal-embed.metal
 	$(eval TEMP_ASSEMBLY=$(shell mktemp))
-	@echo ".section __DATA, __ggml_metallib" > $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_start" >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_start:" >> $(TEMP_ASSEMBLY)
-	@echo ".incbin \"$<\"" >> $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_end" >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_end:" >> $(TEMP_ASSEMBLY)
+	@echo ".section __DATA, __ggml_metallib"   >  $(TEMP_ASSEMBLY)
+	@echo ".globl _ggml_metallib_start"        >> $(TEMP_ASSEMBLY)
+	@echo "_ggml_metallib_start:"              >> $(TEMP_ASSEMBLY)
+	@echo ".incbin \"ggml-metal-embed.metal\"" >> $(TEMP_ASSEMBLY)
+	@echo ".globl _ggml_metallib_end"          >> $(TEMP_ASSEMBLY)
+	@echo "_ggml_metallib_end:"                >> $(TEMP_ASSEMBLY)
 	@$(AS) $(TEMP_ASSEMBLY) -o $@
 	@rm -f ${TEMP_ASSEMBLY}
 endif
@@ -588,6 +593,11 @@ ifdef LLAMA_CUBLAS
 GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
 include scripts/get-flags.mk
 CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
+endif
+
+ifdef LLAMA_CURL
+override CXXFLAGS := $(CXXFLAGS) -DLLAMA_USE_CURL
+override LDFLAGS  := $(LDFLAGS) -lcurl
 endif
 
 #
@@ -746,6 +756,10 @@ server: examples/server/server.cpp examples/server/utils.hpp examples/server/pyt
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
 
 gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+gguf-split: examples/gguf-split/gguf-split.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

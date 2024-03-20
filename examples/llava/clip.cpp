@@ -497,7 +497,6 @@ struct clip_ctx {
 
     // memory buffers to evaluate the model
     ggml_backend_buffer_t params_buffer  = NULL;
-    ggml_backend_buffer_t compute_buffer = NULL;
 
     ggml_backend_t backend       = NULL;
     ggml_gallocr_t compute_alloc = NULL;
@@ -995,6 +994,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         if (!new_clip->ctx_data) {
             fprintf(stderr, "%s: ggml_init() failed\n", __func__);
             clip_free(new_clip);
+            gguf_free(ctx);
             return nullptr;
         }
 
@@ -1002,6 +1002,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         if (!fin) {
             printf("cannot open model file for loading tensors\n");
             clip_free(new_clip);
+            gguf_free(ctx);
             return nullptr;
         }
 
@@ -1023,6 +1024,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             if (!fin) {
                 printf("%s: failed to seek for tensor %s\n", __func__, name);
                 clip_free(new_clip);
+                gguf_free(ctx);
                 return nullptr;
             }
             int num_bytes = ggml_nbytes(cur);
@@ -1232,16 +1234,16 @@ struct clip_image_f32 * clip_image_f32_init() {
 
 void clip_image_u8_free(struct clip_image_u8  * img) { delete img; }
 void clip_image_f32_free(struct clip_image_f32 * img) { delete img; }
-void clip_image_u8_batch_free(struct clip_image_u8_batch  & batch) {
-    if (batch.size > 0) {
-        delete[] batch.data;
-        batch.size = 0;
+void clip_image_u8_batch_free(struct clip_image_u8_batch  * batch) {
+    if (batch->size > 0) {
+        delete[] batch->data;
+        batch->size = 0;
     }
 }
-void clip_image_f32_batch_free(struct clip_image_f32_batch  & batch) {
-    if (batch.size > 0) {
-        delete[] batch.data;
-        batch.size = 0;
+void clip_image_f32_batch_free(struct clip_image_f32_batch  * batch) {
+    if (batch->size > 0) {
+        delete[] batch->data;
+        batch->size = 0;
     }
 }
 
@@ -1494,7 +1496,7 @@ static std::vector<clip_image_u8*> divide_to_patches_u8(const clip_image_u8 & im
 
 // returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
 // res_imgs memory is being allocated here, previous allocations will be freed if found
-bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch & res_imgs) {
+bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch * res_imgs) {
     bool pad_to_square = true;
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
@@ -1506,11 +1508,11 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         pad_to_square = false;
     }
     // free the previous res_imgs if any set
-    if (res_imgs.size > 0) {
+    if (res_imgs->size > 0) {
         clip_image_f32_batch_free(res_imgs);
     }
-    res_imgs.data = nullptr;
-    res_imgs.size = 0;
+    res_imgs->data = nullptr;
+    res_imgs->size = 0;
 
     // the logic below is to pad the shorter side to the longer side with a background color: rgb(122, 116, 104)
     // see https://github.com/haotian-liu/LLaVA/blob/e854a2bf85118c504f6f16bf5c3c7c92f8fa8c6b/llava/conversation.py#L113-L156
@@ -1565,11 +1567,11 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
             bicubic_resize(*img, *image_original_resize, params.image_size, params.image_size); // in python this is "shortest_edge", but all CLIP are square
             patches.insert(patches.begin(), image_original_resize);
             // clip_image_f32_batch_init(patches.size());
-            res_imgs.size = patches.size();
-            res_imgs.data = new clip_image_f32[res_imgs.size];
+            res_imgs->size = patches.size();
+            res_imgs->data = new clip_image_f32[res_imgs->size];
             int num=0;
             for (auto& patch : patches) {
-                normalize_image_u8_to_f32(patch, &res_imgs.data[num], ctx->image_mean, ctx->image_std);
+                normalize_image_u8_to_f32(patch, &res_imgs->data[num], ctx->image_mean, ctx->image_std);
                 num++;
             }
 
@@ -1657,9 +1659,9 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
     // }
     // res_imgs.push_back(res);
 
-    res_imgs.size = 1;
-    res_imgs.data = new clip_image_f32[res_imgs.size];
-    res_imgs.data[0] = *res;
+    res_imgs->size = 1;
+    res_imgs->data = new clip_image_f32[res_imgs->size];
+    res_imgs->data[0] = *res;
     clip_image_f32_free(res);
 
     return true;
@@ -1673,6 +1675,9 @@ void clip_free(clip_ctx * ctx) {
     ggml_free(ctx->ctx_data);
     gguf_free(ctx->ctx_gguf);
 
+    ggml_backend_buffer_free(ctx->params_buffer);
+    ggml_backend_free(ctx->backend);
+    ggml_gallocr_free(ctx->compute_alloc);
     delete ctx;
 }
 
@@ -1908,6 +1913,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
                 break;
             default:
                 printf("Please use an input file in f32 or f16\n");
+                gguf_free(ctx_out);
                 return false;
             }
 
