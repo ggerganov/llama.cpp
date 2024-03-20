@@ -177,8 +177,8 @@ private:
 
     string _visit_pattern(const string& pattern, const string& name) {
         if (!(pattern.front() == '^' && pattern.back() == '$')) {
-          _errors.push_back("Pattern must start with '^' and end with '$'");
-          return "";
+            _errors.push_back("Pattern must start with '^' and end with '$'");
+            return "";
         }
         string sub_pattern = pattern.substr(1, pattern.length() - 2);
         unordered_map<string, string> sub_rule_ids;
@@ -212,21 +212,21 @@ private:
 
                 string literal;
                 auto flush_literal = [&]() {
-                  if (literal.empty()) {
-                    return false;
-                  }
-                  ret.push_back(make_pair(literal, true));
-                  literal.clear();
-                  return true;
+                    if (literal.empty()) {
+                        return false;
+                    }
+                    ret.push_back(make_pair(literal, true));
+                    literal.clear();
+                    return true;
                 };
 
                 for (const auto& item : seq) {
                     auto is_literal = item.second;
                     if (is_literal) {
-                      literal += item.first;
+                        literal += item.first;
                     } else {
-                      flush_literal();
-                      ret.push_back(item);
+                        flush_literal();
+                        ret.push_back(item);
                     }
                 }
                 flush_literal();
@@ -254,7 +254,7 @@ private:
                 } else if (c == ')') {
                     i++;
                     if (start > 0 && sub_pattern[start - 1] != '(') {
-                      _errors.push_back("Unbalanced parentheses");
+                        _errors.push_back("Unbalanced parentheses");
                     }
                     return join_seq();
                 } else if (c == '[') {
@@ -270,7 +270,7 @@ private:
                         }
                     }
                     if (i >= length) {
-                      _errors.push_back("Unbalanced square brackets");
+                        _errors.push_back("Unbalanced square brackets");
                     }
                     square_brackets += ']';
                     i++;
@@ -289,7 +289,7 @@ private:
                         i++;
                     }
                     if (i >= length) {
-                      _errors.push_back("Unbalanced curly brackets");
+                        _errors.push_back("Unbalanced curly brackets");
                     }
                     curly_brackets += '}';
                     i++;
@@ -547,8 +547,8 @@ public:
                         for (size_t i = 1; i < tokens.size(); ++i) {
                             string sel = tokens[i];
                             if (target.is_null() || !target.contains(sel)) {
-                              _errors.push_back("Error resolving ref " + ref + ": " + sel + " not in " + target.dump());
-                              return;
+                                _errors.push_back("Error resolving ref " + ref + ": " + sel + " not in " + target.dump());
+                                return;
                             }
                             target = target[sel];
                         }
@@ -698,8 +698,8 @@ public:
             return _add_rule(rule_name, "object");
         } else {
             if (!schema_type.is_string() || PRIMITIVE_RULES.find(schema_type.get<string>()) == PRIMITIVE_RULES.end()) {
-              _errors.push_back("Unrecognized schema: " + schema.dump());
-              return "";
+                _errors.push_back("Unrecognized schema: " + schema.dump());
+                return "";
             }
             // TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
             return _add_rule(rule_name == "root" ? "root" : schema_type.get<string>(), PRIMITIVE_RULES.at(schema_type.get<string>()));
@@ -707,12 +707,12 @@ public:
     }
 
     void check_errors() {
-      if (!_errors.empty()) {
-        throw std::runtime_error("JSON schema conversion failed:\n" + join(_errors.begin(), _errors.end(), "\n"));
-      }
-      if (!_warnings.empty()) {
-        std::cerr << "WARNING: JSON schema conversion was incomplete: " + join(_warnings.begin(), _warnings.end(), "; ") << std::endl;
-      }
+        if (!_errors.empty()) {
+            throw std::runtime_error("JSON schema conversion failed:\n" + join(_errors.begin(), _errors.end(), "\n"));
+        }
+        if (!_warnings.empty()) {
+            std::cerr << "WARNING: JSON schema conversion was incomplete: " + join(_warnings.begin(), _warnings.end(), "; ") << std::endl;
+        }
     }
 
     string format_grammar() {
@@ -725,10 +725,10 @@ public:
 };
 
 string json_schema_to_grammar(const json& schema) {
-  SchemaConverter converter([](const string&) { return json::object(); }, /* dotall= */ false);
-  auto copy = schema;
-  converter.resolve_refs(copy, "input");
-  converter.visit(copy, "");
-  converter.check_errors();
-  return converter.format_grammar();
+    SchemaConverter converter([](const string&) { return json::object(); }, /* dotall= */ false);
+    auto copy = schema;
+    converter.resolve_refs(copy, "input");
+    converter.visit(copy, "");
+    converter.check_errors();
+    return converter.format_grammar();
 }
