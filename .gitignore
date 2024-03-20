@@ -12,6 +12,8 @@
 *.dot
 *.bat
 *.metallib
+*.etag
+*.lastModified
 .DS_Store
 .build/
 .cache/

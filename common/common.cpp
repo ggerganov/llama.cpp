@@ -1056,7 +1056,8 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
         return true;
     }
     if (arg == "-h" || arg == "--help") {
-        return false;
+        gpt_print_usage(argc, argv, gpt_params());
+        exit(0);
     }
     if (arg == "--version") {
         fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
