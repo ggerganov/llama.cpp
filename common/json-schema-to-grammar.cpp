@@ -125,19 +125,12 @@ static std::string replacePattern(const std::string& input, const regex& regex, 
     return result;
 }
 
-static string _format_literal(const string& literal) {
+static string format_literal(const string& literal) {
     string escaped = replacePattern(json(literal).dump(), GRAMMAR_LITERAL_ESCAPE_RE, [&](const smatch& match) {
         char c = match.str()[0];
         return GRAMMAR_LITERAL_ESCAPES.at(c);
     });
     return "\"" + escaped + "\"";
-}
-
-static string _format_range_char(const string& ch) {
-    return replacePattern(ch, GRAMMAR_RANGE_LITERAL_ESCAPE_RE, [&](const smatch& match) {
-        char c = match.str()[0];
-        return GRAMMAR_LITERAL_ESCAPES.at(c);
-    });
 }
 
 
@@ -422,7 +415,7 @@ private:
             string prop_rule_name = visit(prop_schema, name + (name.empty() ? "" : "-") + prop_name);
             prop_kv_rule_names[prop_name] = _add_rule(
                 name + (name.empty() ? "" : "-") + prop_name + "-kv",
-                _format_literal(prop_name) + " space \":\" space " + prop_rule_name
+                format_literal(prop_name) + " space \":\" space " + prop_rule_name
             );
             if (required.find(prop_name) != required.end()) {
                 required_props.push_back(prop_name);
@@ -570,7 +563,7 @@ public:
             _errors.push_back("Only string constants are supported, got " + value.dump());
             return "";
         }
-        return _format_literal(value.get<string>());
+        return format_literal(value.get<string>());
     }
 
     string visit(const json& schema, const string& name) {

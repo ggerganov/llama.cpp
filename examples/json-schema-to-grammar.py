@@ -65,11 +65,6 @@ class SchemaConverter:
         )
         return f'"{escaped}"'
 
-    def _format_range_char(self, literal):
-        return GRAMMAR_RANGE_LITERAL_ESCAPE_RE.sub(
-            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), json.dumps(literal)[1:-1]
-        )
-
     def _add_rule(self, name, rule):
         esc_name = INVALID_RULE_CHARS_RE.sub('-', name)
         if esc_name not in self._rules or self._rules[esc_name] == rule:
