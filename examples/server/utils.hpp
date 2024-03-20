@@ -371,6 +371,7 @@ static json oaicompat_completion_params_parse(
     llama_params["repeat_last_n"]     = json_value(body,   "repeat_last_n",     default_sparams.penalty_last_n);
     llama_params["ignore_eos"]        = json_value(body,   "ignore_eos",        false);
     llama_params["tfs_z"]             = json_value(body,   "tfs_z",             default_sparams.tfs_z);
+    llama_params["n_keep"]            = json_value(body,   "n_keep",            0);
 
     if (body.count("grammar") != 0) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
