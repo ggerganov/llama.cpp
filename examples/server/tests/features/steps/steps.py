@@ -24,12 +24,16 @@ from prometheus_client import parser
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
+    context.n_gpu_layer = None
     if 'PORT' in os.environ:
         context.server_port = int(os.environ['PORT'])
         print(f"$PORT set, overriding server port with to {context.server_port}")
     if 'FQDN' in os.environ:
         context.server_fqdn = os.environ['FQDN']
         print(f"$FQDN set, overriding server fqdn with to {context.server_fqdn}")
+    if 'N_GPU_LAYERS' in os.environ:
+        context.n_gpu_layer = int(os.environ['N_GPU_LAYERS'])
+        print(f"$N_GPU_LAYERS set, overriding n_gpu_layer with to {context.n_gpu_layer}")
 
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
@@ -41,7 +45,6 @@ def step_server_config(context, server_fqdn, server_port):
     context.n_ctx = None
     context.n_ga = None
     context.n_ga_w = None
-    context.n_gpu_layer = None
     context.n_predict = None
     context.n_prompts = 0
     context.n_server_predict = None
