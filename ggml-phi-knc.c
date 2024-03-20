@@ -1,5 +1,3 @@
-#include <immintrin.h>
-
 #include <stdint.h>
 
 #include <stdio.h>
@@ -24,11 +22,10 @@ void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restri
 
 inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 {
-  // FIXME: how do we tell GNU AS to perform upconverts? Could remove two memory reads here...
-  float zero[4] __attribute__((aligned(64))) = {0.0f,0.0f,0.0f,0.0f};
+  uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
 
   __asm__ __volatile__ (
-                        "vbroadcastf32x4\t%[Z],\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
+                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
                         "vmovaps\t\t%%zmm8,\t%[RES]\n\t"
                        : [RES]  "+m"  (*target)
                        : [Z]    "m"   (zero)
@@ -38,8 +35,7 @@ inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 // Multiply each item in mvec1 with the corresponding item in mvec2, adding the result to the corresponding item in sum. optionally clear the sum before starting. 
 inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x16_t *mvec2, float32x16_t *sumvec, size_t iterations, int clear)
 {
-  // FIXME: how do we tell GNU AS to perform upconverts? Could remove two memory reads here...
-  float zero[4] __attribute__((aligned(64))) = {0.0f,0.0f,0.0f,0.0f};
+  uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
 
   __asm__ __volatile__ (
                         "mov\t%[ITER],%%r8\n\t"                     // how many register sized chunks are we responsible for
@@ -47,7 +43,7 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                         "mov\t%[VEC2],%%r12\n\t"                    // where do we start work in mvec2?
                         "cmp\t$1,%[CLR]\n\t"                        // should we clear the sum before we start?
                         "jne\t4f\n\t"
-                        "vbroadcastf32x4\t%[Z],\t%%zmm0\n\t"        // if so, use an upscaling operator to do it.
+                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm0\n\t"        // if so, use an upscaling operator to do it.
                         "vprefetchnta\t(%%r10)\n\t"
                         "vprefetchnta\t(%%r12)\n\t"
                         "vprefetch1\t128(%%r10)\n\t"
