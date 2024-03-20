@@ -480,9 +480,9 @@ static json oaicompat_completion_params_parse(
 
     std::string function_str = "";
 
-    if (body.contains("tool") && !body["tool"].empty()) {
+    if (body.contains("tools") && !body["tools"].empty()) {
         // function_str = default_tool_formatter(body["tool"]);
-        function_str = rubra_format_function_call_str(body["tool"]);
+        function_str = rubra_format_function_call_str(body["tools"]);
     }
     // If 'tool' is not set or empty, check 'functions'
     else if (body.contains("functions") && !body["functions"].empty()) {
