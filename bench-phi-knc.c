@@ -3,11 +3,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h> /*for CLOCK_REALTIME? */
-
-void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc);
-
 #include <time.h>
 
+#include "ggml-phi-knc.h"
 
 #define MAXVEC 1024768
 #define RUNTOTAL 12
@@ -19,7 +17,7 @@ int main(void)
   double scalar_time;
   float scalar = 0.0f;
   float vector = 0.0f;
-  uint32_t vecRuns[] = {10, 16, 17, 32, 33, 48, 49, 64, 65, 80, 81, 1024768};
+  int vecRuns[] = {10, 16, 17, 32, 33, 48, 49, 64, 65, 80, 81, 1024768};
   for (uint32_t runCount = 0; runCount < RUNTOTAL; ++runCount)
     {
       // Generate random input vector of [-1, 1] values.
@@ -47,7 +45,7 @@ int main(void)
   
       clock_gettime(CLOCK_MONOTONIC, &end);
 
-      printf("vector\tvs\tscalar (%d items)\n", vector, scalar, vecRuns[runCount]);
+      printf("vector\tvs\tscalar (%d items)\n", vecRuns[runCount]);
       printf("%.9f\tvs\t%.9f\n", vector, scalar);
 
       vector_time = middle.tv_sec - start.tv_sec;
