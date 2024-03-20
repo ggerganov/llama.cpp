@@ -274,7 +274,7 @@ found 6 SYCL devices:
 
 4. Device selection and execution of llama.cpp
 
-There are two modes to select device:
+There are two device selection modes:
 
 - Single device: Use one device assigned by user.
 - Multiple devices: Detect and choose all devices which have same top Max compute units automatically.
