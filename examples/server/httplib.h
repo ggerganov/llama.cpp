@@ -4794,7 +4794,8 @@ inline bool range_error(Request &req, Response &res) {
 }
 
 inline std::pair<size_t, size_t>
-get_range_offset_and_length(Range r, size_t /*content_length*/) {
+get_range_offset_and_length(Range r, size_t content_length) {
+  (void)(content_length); // patch to get rid of "unused parameter" on release build
   assert(r.first != -1 && r.second != -1);
   assert(0 <= r.first && r.first < static_cast<ssize_t>(content_length));
   assert(r.first <= r.second &&
