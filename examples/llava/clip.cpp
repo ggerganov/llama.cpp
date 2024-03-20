@@ -478,6 +478,14 @@ struct clip_vision_model {
     struct ggml_tensor * mm_model_block_2_block_2_0_w;
     struct ggml_tensor * mm_model_block_2_block_2_1_w;
     struct ggml_tensor * mm_model_block_2_block_2_1_b;
+
+    // MobileVLM_V2 projection
+    struct ggml_tensor * mm_model_mlp_0_w;
+    struct ggml_tensor * mm_model_mlp_0_b;
+    struct ggml_tensor * mm_model_mlp_2_w;
+    struct ggml_tensor * mm_model_mlp_2_b;
+    struct ggml_tensor * mm_model_peg_0_w;
+    struct ggml_tensor * mm_model_peg_0_b;
 };
 
 struct clip_ctx {
