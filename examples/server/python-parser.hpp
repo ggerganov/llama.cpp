@@ -39,6 +39,7 @@ static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, con
     if (strcmp(type, "call") == 0) {
         
         json call = {
+            {"id", calls.size()},
             {"name", ""},
             {"args", json::array()},
             {"kwargs", json::object()}
@@ -50,7 +51,6 @@ static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, con
         // Extract the function name
         call["name"] = std::string(source_code + ts_node_start_byte(functionNode), ts_node_end_byte(functionNode) - ts_node_start_byte(functionNode));
         
-        // Loop through the arguments
         unsigned int numArgs = ts_node_named_child_count(argumentsNode);
         for (unsigned int i = 0; i < numArgs; ++i) {
             TSNode argNode = ts_node_named_child(argumentsNode, i);
@@ -58,7 +58,6 @@ static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, con
             
             // Check if the argument is a positional argument or a keyword argument
             if (strcmp(argType, "argument") == 0 || strcmp(argType, "positional_arguments") == 0 || strcmp(argType, "string") == 0 || strcmp(argType, "integer") == 0 || strcmp(argType, "true") == 0 || strcmp(argType, "false") == 0) {
-                // For simplification, we treat the entire content as the argument
                 std::string value = std::string(source_code + ts_node_start_byte(argNode), ts_node_end_byte(argNode) - ts_node_start_byte(argNode));
                 call["args"].push_back(parseValue(value));
             } else if (strcmp(argType, "keyword_argument") == 0) {
@@ -89,6 +88,7 @@ static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, con
 }
 
 static std::vector<json> parsePythonFunctionCalls(std::string source_string) {
+    // Parse Python function calls from the source code and return a JSON array
     std::vector<json> calls;
     std::string delimiter = "<<functions>>";
     std::string source_code;
@@ -115,8 +115,6 @@ static std::vector<json> parsePythonFunctionCalls(std::string source_string) {
     }
 
     parseFunctionCalls(root_node, calls, source_code_cstr, 0);
-
-    // Output the parsed calls
 
     ts_tree_delete(tree);
     ts_parser_delete(parser);

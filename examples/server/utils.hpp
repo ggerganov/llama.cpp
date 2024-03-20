@@ -585,9 +585,22 @@ static json format_final_response_oaicompat(const json & request, json result, c
                                         {"message", json{{"content", content},
                                                          {"role", "assistant"}}}}});
         } else {
+            std::vector<json> oai_format_tool_calls;
+            for (size_t i = 0; i < parsed_content.size(); ++i) {
+                const auto &pc = parsed_content[i];
+                // Use 'pc' and 'i' as needed
+                json tool_call;
+                tool_call["id"] = pc["id"];
+                tool_call["type"] = "function";
+                tool_call["function"] = json{{
+                    {"name" , pc["name"]},
+                    {"arguments" , pc["kwargs"].dump()},
+                }};
+                oai_format_tool_calls.push_back(tool_call);
+            }
             choices = json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
-                                        {"message", json{{"content", parsed_content},
+                                        {"message", json{{"tool_calls", oai_format_tool_calls},
                                                          {"role", "assistant"}}}}});
         }
     }
