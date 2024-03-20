@@ -621,11 +621,6 @@ struct ggml_backend_cuda_context {
     cudaStream_t streams[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = { { nullptr } };
     cublasHandle_t cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
 
-    struct cuda_device {
-        cublasHandle_t cublas_handle = nullptr;
-        cudaStream_t cudaStreams[GGML_CUDA_MAX_STREAMS] = {};
-    };
-
     explicit ggml_backend_cuda_context(int device) :
         device(device),
         name(GGML_CUDA_NAME + std::to_string(device)) {
@@ -634,6 +629,16 @@ struct ggml_backend_cuda_context {
     ~ggml_backend_cuda_context() {
         if (copy_event != nullptr) {
             CUDA_CHECK(cudaEventDestroy(copy_event));
+        }
+        for (int i = 0; i < GGML_CUDA_MAX_DEVICES; ++i) {
+            for (int j = 0; j < GGML_CUDA_MAX_STREAMS; ++j) {
+                if (streams[i][j] != nullptr) {
+                    CUDA_CHECK(cudaStreamDestroy(streams[i][j]));
+                }
+            }
+            if (cublas_handles[i] != nullptr) {
+                CUBLAS_CHECK(cublasDestroy(cublas_handles[i]));
+            }
         }
     }
 
@@ -699,7 +704,7 @@ struct ggml_backend_cuda_buffer_context {
     }
 
     ~ggml_backend_cuda_buffer_context() {
-        // TODO: free here
+        CUDA_CHECK(cudaFree(dev_ptr));
     }
 };
 
@@ -714,7 +719,6 @@ GGML_CALL static bool ggml_backend_buffer_is_cuda(ggml_backend_buffer_t buffer) 
 
 GGML_CALL static void ggml_backend_cuda_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
-    CUDA_CHECK(cudaFree(ctx->dev_ptr));
     delete ctx;
 }
 
