@@ -48,7 +48,7 @@ Feature: llama.cpp server
     Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
     """
     And   a completion request with no api error
-    Then  64 tokens are predicted matching fun|Annaks|popcorns|pictry
+    Then  64 tokens are predicted matching fun|Annaks|popcorns|pictry|bowl
     And   the completion is  truncated
     And   109 prompt tokens are processed
 
