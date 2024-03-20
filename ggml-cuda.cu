@@ -345,6 +345,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         info.devices[id].smpb = prop.sharedMemPerBlock;
     }
+
     for (int id = 0; id < info.device_count; ++id) {
         info.default_tensor_split[id] /= total_vram;
     }
@@ -393,14 +394,15 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
     }
 
     ~ggml_cuda_pool_leg() {
+        ggml_cuda_set_device(device);
         for (int i = 0; i < MAX_BUFFERS; ++i) {
-            ggml_cuda_buffer& b = buffer_pool[i];
+            ggml_cuda_buffer & b = buffer_pool[i];
             if (b.ptr != nullptr) {
-                ggml_cuda_set_device(device);
                 CUDA_CHECK(cudaFree(b.ptr));
                 pool_size -= b.size;
             }
         }
+        GGML_ASSERT(pool_size == 0);
     }
 
     void * alloc(size_t size, size_t * actual_size) override {
