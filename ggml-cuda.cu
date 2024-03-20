@@ -370,12 +370,6 @@ struct ggml_cuda_pool {
 
     virtual void * alloc(size_t size, size_t * actual_size) = 0;
     virtual void free(void * ptr, size_t size) = 0;
-
-    ggml_cuda_pool() = default;
-    ggml_cuda_pool(const ggml_cuda_pool &) = delete;
-    ggml_cuda_pool(ggml_cuda_pool &&) = delete;
-    ggml_cuda_pool& operator=(const ggml_cuda_pool &) = delete;
-    ggml_cuda_pool& operator=(ggml_cuda_pool &&) = delete;
 };
 
 struct ggml_cuda_pool_leg : public ggml_cuda_pool {
@@ -6969,7 +6963,7 @@ static __global__ void k_sum_rows_f32(const float * x, float * dst, const int nc
 }
 
 template<typename T>
-static inline __device__ void swap(T & a, T & b) {
+static inline __device__ void ggml_cuda_swap(T & a, T & b) {
     T tmp = a;
     a = b;
     b = tmp;
@@ -6998,11 +6992,11 @@ static __global__ void k_argsort_f32_i32(const float * x, int * dst, const int n
             if (ixj > col) {
                 if ((col & k) == 0) {
                     if (order == GGML_SORT_ORDER_ASC ? x_row[dst_row[col]] > x_row[dst_row[ixj]] : x_row[dst_row[col]] < x_row[dst_row[ixj]]) {
-                        swap(dst_row[col], dst_row[ixj]);
+                        ggml_cuda_swap(dst_row[col], dst_row[ixj]);
                     }
                 } else {
                     if (order == GGML_SORT_ORDER_ASC ? x_row[dst_row[col]] < x_row[dst_row[ixj]] : x_row[dst_row[col]] > x_row[dst_row[ixj]]) {
-                        swap(dst_row[col], dst_row[ixj]);
+                        ggml_cuda_swap(dst_row[col], dst_row[ixj]);
                     }
                 }
             }
