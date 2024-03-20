@@ -54,6 +54,7 @@
 #define __shfl_xor_sync(mask, var, laneMask, width) __shfl_xor(var, laneMask, width)
 #define cublasComputeType_t hipblasDatatype_t //deprecated, new hipblasComputeType_t not in 5.6
 #define cublasCreate hipblasCreate
+#define cublasDestroy hipblasDestroy
 #define cublasGemmEx hipblasGemmEx
 #define cublasGemmBatchedEx hipblasGemmBatchedEx
 #define cublasGemmStridedBatchedEx hipblasGemmStridedBatchedEx
@@ -110,6 +111,7 @@
 #define cudaOccupancyMaxPotentialBlockSize hipOccupancyMaxPotentialBlockSize
 #define cudaSetDevice hipSetDevice
 #define cudaStreamCreateWithFlags hipStreamCreateWithFlags
+#define cudaStreamDestroy hipStreamDestroy
 #define cudaStreamFireAndForget hipStreamFireAndForget
 #define cudaStreamNonBlocking hipStreamNonBlocking
 #define cudaStreamPerThread hipStreamPerThread
@@ -448,7 +450,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         pool_size += look_ahead_size;
 #ifdef DEBUG_CUDA_MALLOC
         fprintf(stderr, "%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, requested %u MB\n", __func__, device, nnz,
-                (uint32_t)(max_size/1024/1024), (uint32_t)(g_cuda_pool_size/1024/1024), (uint32_t)(size/1024/1024));
+                (uint32_t)(max_size/1024/1024), (uint32_t)(pool_size/1024/1024), (uint32_t)(size/1024/1024));
 #endif
         return ptr;
     }
@@ -536,7 +538,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             pool_size += reserve_size;
 
             //printf("cuda pool[%d]: size increased to %llu MB (reserved %llu MB)\n",
-            //       id, (unsigned long long) (g_cuda_pool_size[id]/1024/1024),
+            //       id, (unsigned long long) (pool_size[id]/1024/1024),
             //       (unsigned long long) (reserve_size/1024/1024));
         }
 
