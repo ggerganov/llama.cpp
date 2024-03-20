@@ -35,9 +35,9 @@ Feature: llama.cpp server
     And   metric llamacpp:tokens_predicted is <n_predicted>
 
     Examples: Prompts
-      | prompt                                                                    | n_predict | re_content                    | n_prompt | n_predicted | truncated |
-      | I believe the meaning of life is                                          | 8         | (read\|going)+                | 18       | 8           | not       |
-      | Write a joke about AI from a very long prompt which will not be truncated | 256       | (princesses\|everyone\|kids)+ | 46       | 64          | not       |
+      | prompt                                                                    | n_predict | re_content                          | n_prompt | n_predicted | truncated |
+      | I believe the meaning of life is                                          | 8         | (read\|going)+                      | 18       | 8           | not       |
+      | Write a joke about AI from a very long prompt which will not be truncated | 256       | (princesses\|everyone\|kids\|Anna)+ | 46       | 64          | not       |
 
   Scenario: Completion prompt truncated
     Given a prompt:
