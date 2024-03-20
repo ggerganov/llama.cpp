@@ -29,7 +29,7 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 ## News
 
 - 2024.3
-  - New base line is ready: tag b2437.
+  - New base line is ready: [tag b2437](https://github.com/ggerganov/llama.cpp/tree/b2437).
   - Support multiple cards: **--split-mode**: [none|layer]; not support [row], it's on developing.
   - Support to assign main GPU by **--main-gpu**, replace $GGML_SYCL_DEVICE.
   - Support detecting all GPUs with level-zero and same top **Max compute units**.
