@@ -313,14 +313,18 @@ Note:
 - By default, mmap is used to read model file. In some cases, it leads to the hang issue. Recommend to use parameter **--no-mmap** to disable mmap() to skip this issue.
 
 
-5. Check the device ID in output
+5. Verify the device ID in output
 
-Like:
+Verify to see if the selected GPU is shown in the output, like:
+
 ```
 detect 1 SYCL GPUs: [0] with top Max compute units:512
-or
+```
+Or
+```
 use 1 SYCL GPUs: [0] with Max compute units:512
 ```
+
 
 ## Windows
 
@@ -511,12 +515,16 @@ Note:
 - By default, mmap is used to read model file. In some cases, it leads to the hang issue. Recommend to use parameter **--no-mmap** to disable mmap() to skip this issue.
 
 
-5. Check the device ID in output
 
-Like:
+5. Verify the device ID in output
+
+Verify to see if the selected GPU is shown in the output, like:
+
 ```
 detect 1 SYCL GPUs: [0] with top Max compute units:512
-or
+```
+Or
+```
 use 1 SYCL GPUs: [0] with Max compute units:512
 ```
 
