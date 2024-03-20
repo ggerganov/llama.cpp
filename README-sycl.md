@@ -277,7 +277,7 @@ found 6 SYCL devices:
 There are two device selection modes:
 
 - Single device: Use one device assigned by user.
-- Multiple devices: Detect and choose all devices which have same top Max compute units automatically.
+- Multiple devices: Automatically choose the devices with the same biggest Max compute units.
 
 |Device selection|Parameter|
 |-|-|
@@ -480,7 +480,7 @@ found 6 SYCL devices:
 There are two device selection modes:
 
 - Single device: Use one device assigned by user.
-- Multiple devices: Detect and choose all devices which have same top Max compute units automatically.
+- Multiple devices: Automatically choose the devices with the same biggest Max compute units.
 
 |Device selection|Parameter|
 |-|-|
