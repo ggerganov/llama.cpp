@@ -10,13 +10,11 @@
 #include "json-schema-to-grammar.h"
 #include "grammar-parser.h"
 
-using namespace std;
-
 static std::string trim(const std::string & source) {
     std::string s(source);
     s.erase(0,s.find_first_not_of(" \n\r\t"));
     s.erase(s.find_last_not_of(" \n\r\t")+1);
-    return regex_replace(s, regex("(^|\n)[ \t]+"), "$1");
+    return std::regex_replace(s, std::regex("(^|\n)[ \t]+"), "$1");
 }
 
 enum TestCaseStatus {
@@ -26,21 +24,21 @@ enum TestCaseStatus {
 
 struct TestCase {
     TestCaseStatus expected_status;
-    string name;
-    string schema;
-    string expected_grammar;
+    std::string name;
+    std::string schema;
+    std::string expected_grammar;
 
     void _print_failure_header() const {
-        cerr << "#" << endl;
-        cerr << "# Test '" << name.c_str() << "' failed." << endl;
-        cerr << "#" << endl;
-        cerr << schema.c_str() << endl;
+        std::cerr << "#" << std::endl;
+        std::cerr << "# Test '" << name.c_str() << "' failed." << std::endl;
+        std::cerr << "#" << std::endl;
+        std::cerr << schema.c_str() << std::endl;
     }
-    void verify(const string& actual_grammar) const {
+    void verify(const std::string& actual_grammar) const {
         if (trim(actual_grammar) != trim(expected_grammar)) {
         _print_failure_header();
-        cerr << "# EXPECTED:\n" << expected_grammar.c_str() << endl;
-        cerr << "# ACTUAL:\n" << actual_grammar.c_str() << endl;
+        std::cerr << "# EXPECTED:\n" << expected_grammar.c_str() << std::endl;
+        std::cerr << "# ACTUAL:\n" << actual_grammar.c_str() << std::endl;
         assert(false);
         }
     }
@@ -48,41 +46,41 @@ struct TestCase {
         try {
             auto state = grammar_parser::parse(expected_grammar.c_str());
             if (state.symbol_ids.find("root") == state.symbol_ids.end()) {
-                throw runtime_error("Grammar failed to parse:\n" + expected_grammar);
+                throw std::runtime_error("Grammar failed to parse:\n" + expected_grammar);
             }
-        } catch (const runtime_error& ex) {
+        } catch (const std::runtime_error& ex) {
             _print_failure_header();
-            cerr << "# GRAMMAR ERROR: " << ex.what() << endl;
+            std::cerr << "# GRAMMAR ERROR: " << ex.what() << std::endl;
             assert(false);
         }
     }
     void verify_status(TestCaseStatus status) const {
         if (status != expected_status) {
             _print_failure_header();
-            cerr << "# EXPECTED STATUS: " << (expected_status == SUCCESS ? "SUCCESS" : "FAILURE") << endl;
-            cerr << "# ACTUAL STATUS: " << (status == SUCCESS ? "SUCCESS" : "FAILURE") << endl;
+            std::cerr << "# EXPECTED STATUS: " << (expected_status == SUCCESS ? "SUCCESS" : "FAILURE") << std::endl;
+            std::cerr << "# ACTUAL STATUS: " << (status == SUCCESS ? "SUCCESS" : "FAILURE") << std::endl;
             assert(false);
         }
     }
 };
 
-static void write(const string& file, const string& content) {
-    ofstream f;
+static void write(const std::string& file, const std::string& content) {
+    std::ofstream f;
     f.open(file.c_str());
     f << content.c_str();
     f.close();
 }
 
-static string read(const string& file) {
-    ostringstream actuals;
-    actuals << ifstream(file.c_str()).rdbuf();
+static std::string read(const std::string& file) {
+    std::ostringstream actuals;
+    actuals << std::ifstream(file.c_str()).rdbuf();
     return actuals.str();
 }
 
-static void test_all(const string& lang, std::function<void(const TestCase&)> runner) {
-    cerr << "#\n# Testing JSON schema conversion (" << lang.c_str() << ")\n#" << endl;
+static void test_all(const std::string& lang, std::function<void(const TestCase&)> runner) {
+    std::cerr << "#\n# Testing JSON schema conversion (" << lang.c_str() << ")\n#" << std::endl;
     auto test = [&](const TestCase& tc) {
-        cerr << "- " << tc.name.c_str() << (tc.expected_status == FAILURE ? " (failure expected)" : "") << endl;
+        std::cerr << "- " << tc.name.c_str() << (tc.expected_status == FAILURE ? " (failure expected)" : "") << std::endl;
         runner(tc);
     };
 
@@ -805,8 +803,8 @@ int main() {
         try {
             tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
             tc.verify_status(SUCCESS);
-        } catch (const runtime_error& ex) {
-            cerr << "Error: " << ex.what() << endl;
+        } catch (const std::runtime_error& ex) {
+            std::cerr << "Error: " << ex.what() << std::endl;
             tc.verify_status(FAILURE);
         }
     });
