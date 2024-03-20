@@ -381,7 +381,7 @@ a. Download & install cmake for Windows: https://cmake.org/download/
 
 b. Download & install mingw-w64 make for Windows provided by w64devkit
 
-- Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+- Download the 1.19.0 version of [w64devkit](https://github.com/skeeto/w64devkit/releases/download/v1.19.0/w64devkit-1.19.0.zip).
 
 - Extract `w64devkit` on your pc.
 
