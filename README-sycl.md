@@ -37,6 +37,7 @@ When targetting **Intel CPUs**, it is recommended to  use llama.cpp for [x86_64]
 ## News
 
 - 2024.3
+  - New base line is ready: [tag b2437](https://github.com/ggerganov/llama.cpp/tree/b2437).
   - Support multiple cards: **--split-mode**: [none|layer]; not support [row], it's on developing.
   - Support to assign main GPU by **--main-gpu**, replace $GGML_SYCL_DEVICE.
   - Support detecting all GPUs with level-zero and same top **Max compute units**.
@@ -300,15 +301,16 @@ Similar to the native `sycl-ls`, available SYCL devices can be queried as follow
 ```
 A example of such log in a system with 1 *intel CPU* and 1 *intel GPU* can look like the following:
 ```
-found 4 SYCL devices:
-  Device 0: Intel(R) Arc(TM) A770 Graphics,	compute capability 1.3,
-    max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
-  Device 1: Intel(R) FPGA Emulation Device,	compute capability 1.2,
-    max compute_units 24,	max work group size 67108864,	max sub group size 64,	global mem size 67065057280
-  Device 2: 13th Gen Intel(R) Core(TM) i7-13700K,	compute capability 3.0,
-    max compute_units 24,	max work group size 8192,	max sub group size 64,	global mem size 67065057280
-  Device 3: Intel(R) Arc(TM) A770 Graphics,	compute capability 3.0,
-    max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
+found 6 SYCL devices:
+|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |
+|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|
+|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|
+| 0|[level_zero:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       1.3|        512|    1024|     32|    16225243136|
+| 1|[level_zero:gpu:1]|                    Intel(R) UHD Graphics 770|       1.3|         32|     512|     32|    53651849216|
+| 2|    [opencl:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       3.0|        512|    1024|     32|    16225243136|
+| 3|    [opencl:gpu:1]|                    Intel(R) UHD Graphics 770|       3.0|         32|     512|     32|    53651849216|
+| 4|    [opencl:cpu:0]|         13th Gen Intel(R) Core(TM) i7-13700K|       3.0|         24|    8192|     64|    67064815616|
+| 5|    [opencl:acc:0]|               Intel(R) FPGA Emulation Device|       1.2|         24|67108864|     64|    67064815616|
 ```
 
 |Attribute|Note|
@@ -318,10 +320,33 @@ found 4 SYCL devices:
 
 4. Launch inference
 
-For instance, in order to target the SYCL device with *ID*=0 *(log from previous command)*, we simply specify `GGML_SYCL_DEVICE=0`.
+There are two device selection modes:
+
+- Single device: Use one device target specified by the user.
+- Multiple devices: Automatically select the devices with the same largest Max compute-units.
+
+|Device selection|Parameter|
+|-|-|
+|Single device|--split-mode none --main-gpu DEVICE_ID |
+|Multiple devices|--split-mode layer (default)|
+
+Examples:
+
+- Use device 0:
 
 ```sh
-GGML_SYCL_DEVICE=0 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
+ZES_ENABLE_SYSMAN=1 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm none -mg 0
+```
+or run by script:
+
+```sh
+./examples/sycl/run_llama2.sh 0
+```
+
+- Use multiple devices:
+
+```sh
+ZES_ENABLE_SYSMAN=1 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm layer
 ```
 
 Otherwise, you can run the script:
@@ -333,6 +358,15 @@ Otherwise, you can run the script:
 *Notes:*
 
 - By default, `mmap` is used to read the model file. In some cases, it causes runtime hang issues. Please disable it by passing `--no-mmap` to the `/bin/main` if faced with the issue.
+- Upon execution, verify the selected device(s) ID(s) in the output log, which can for instance be displayed as follow:
+
+```sh
+detect 1 SYCL GPUs: [0] with top Max compute units:512
+```
+Or
+```sh
+use 1 SYCL GPUs: [0] with Max compute units:512
+```
 
 ## Windows
 
@@ -387,7 +421,7 @@ a. Download & install cmake for Windows: https://cmake.org/download/
 
 b. Download & install mingw-w64 make for Windows provided by w64devkit
 
-- Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
+- Download the 1.19.0 version of [w64devkit](https://github.com/skeeto/w64devkit/releases/download/v1.19.0/w64devkit-1.19.0.zip).
 
 - Extract `w64devkit` on your pc.
 
@@ -439,15 +473,17 @@ build\bin\ls-sycl-device.exe
 
 The output of this command in a system with 1 *intel CPU* and 1 *intel GPU* would look like the following:
 ```
-found 4 SYCL devices:
-  Device 0: Intel(R) Arc(TM) A770 Graphics,	compute capability 1.3,
-    max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
-  Device 1: Intel(R) FPGA Emulation Device,	compute capability 1.2,
-    max compute_units 24,	max work group size 67108864,	max sub group size 64,	global mem size 67065057280
-  Device 2: 13th Gen Intel(R) Core(TM) i7-13700K,	compute capability 3.0,
-    max compute_units 24,	max work group size 8192,	max sub group size 64,	global mem size 67065057280
-  Device 3: Intel(R) Arc(TM) A770 Graphics,	compute capability 3.0,
-    max compute_units 512,	max work group size 1024,	max sub group size 32,	global mem size 16225243136
+found 6 SYCL devices:
+|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |
+|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|
+|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|
+| 0|[level_zero:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       1.3|        512|    1024|     32|    16225243136|
+| 1|[level_zero:gpu:1]|                    Intel(R) UHD Graphics 770|       1.3|         32|     512|     32|    53651849216|
+| 2|    [opencl:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       3.0|        512|    1024|     32|    16225243136|
+| 3|    [opencl:gpu:1]|                    Intel(R) UHD Graphics 770|       3.0|         32|     512|     32|    53651849216|
+| 4|    [opencl:cpu:0]|         13th Gen Intel(R) Core(TM) i7-13700K|       3.0|         24|    8192|     64|    67064815616|
+| 5|    [opencl:acc:0]|               Intel(R) FPGA Emulation Device|       1.2|         24|67108864|     64|    67064815616|
+
 ```
 
 |Attribute|Note|
@@ -455,13 +491,31 @@ found 4 SYCL devices:
 |compute capability 1.3|Level-zero running time, recommended |
 |compute capability 3.0|OpenCL running time, slower than level-zero in most cases|
 
+
 4. Launch inference
 
-Set device ID=0 with `set GGML_SYCL_DEVICE=0` to target the Level-zero intel GPU and run the main:
+There are two device selection modes:
+
+- Single device: Use one device assigned by user.
+- Multiple devices: Automatically choose the devices with the same biggest Max compute units.
+
+|Device selection|Parameter|
+|-|-|
+|Single device|--split-mode none --main-gpu DEVICE_ID |
+|Multiple devices|--split-mode layer (default)|
+
+Examples:
+
+- Use device 0:
 
 ```
-set GGML_SYCL_DEVICE=0
-build\bin\main.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0
+build\bin\main.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm none -mg 0
+```
+
+- Use multiple devices:
+
+```
+build\bin\main.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm layer
 ```
 Otherwise, run the following wrapper script:
 
@@ -472,9 +526,17 @@ Otherwise, run the following wrapper script:
 Note:
 
 - By default, `mmap` is used to read the model file. In some cases, it causes runtime hang issues. Please disable it by passing `--no-mmap` to the `main.exe` if faced with the issue.
+- Upon execution, verify the selected device(s) ID(s) in the output log, which can for instance be displayed as follow:
 
+```sh
+detect 1 SYCL GPUs: [0] with top Max compute units:512
+```
+Or
+```sh
+use 1 SYCL GPUs: [0] with Max compute units:512
+```
 
-## Environment Variables
+## Environment Variable
 
 #### Build
 
@@ -490,7 +552,6 @@ Note:
 
 |Name|Value|Function|
 |-|-|-|
-|GGML_SYCL_DEVICE|0 (default) or 1|Set the device id used. Check the device ids by default running output|
 |GGML_SYCL_DEBUG|0 (default) or 1|Enable log function by macro: GGML_SYCL_DEBUG|
 |ZES_ENABLE_SYSMAN| 0 (default) or 1|Support to get free memory of GPU by sycl::aspect::ext_intel_free_memory.<br>Recommended to use when --split-mode = layer|
 
@@ -506,7 +567,7 @@ Note:
 
 ## Q&A
 
-- Error: `error while loading shared libraries: libsycl.so.7: cannot open shared object file: No such file or directory`.
+- Error:  `error while loading shared libraries: libsycl.so.7: cannot open shared object file: No such file or directory`.
 
   - Potential cause: Unavailable oneAPI installation or not set ENV variables.
   - Solution: Install *oneAPI base toolkit* and enable its ENV through: `source /opt/intel/oneapi/setvars.sh`.
@@ -525,5 +586,11 @@ Note:
   sudo usermod -aG render $USER
   sudo usermod -aG video $USER
   ```
+  Otherwise, please double-check the GPU driver installation steps.
 
-  Otherwise, please double-check the installation GPU steps.
+### **GitHub contribution**:
+Please add the **[SYCL]** prefix/tag in issues/PRs titles to help the SYCL-team check/address them without delay.
+
+## Todo
+
+- Support row layer split for multiple card runs.
