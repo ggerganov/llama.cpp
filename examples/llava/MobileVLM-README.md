@@ -6,7 +6,7 @@ for more information, please go to [Meituan-AutoML/MobileVLM](https://github.com
 
 The implementation is based on llava, and is compatible with llava and mobileVLM. The usage is basically same as llava.
 
-Notice: The overall process of model inference for both **MobilVLM** and **MobilVLM_V2** models is the same, but the process of model conversion  is a little different. Therefore, using MobiVLM as an example, the different conversion step will be shown.
+Notice: The overall process of model inference for both **MobileVLM** and **MobileVLM_V2** models is the same, but the process of model conversion  is a little different. Therefore, using MobiVLM as an example, the different conversion step will be shown.
 
 ## Usage
 Build with cmake or run `make llava-cli` to build it.
