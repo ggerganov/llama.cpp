@@ -43,7 +43,7 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                         "mov\t%[VEC2],%%r12\n\t"                    // where do we start work in mvec2?
                         "cmp\t$1,%[CLR]\n\t"                        // should we clear the sum before we start?
                         "jne\t4f\n\t"
-                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm0\n\t"        // if so, use an upscaling operator to do it.
+                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm0\n\t" // if so, use an upscaling operator to do it.
                         "vprefetchnta\t(%%r10)\n\t"
                         "vprefetchnta\t(%%r12)\n\t"
                         "vprefetch1\t128(%%r10)\n\t"
@@ -97,7 +97,7 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                         "vmovaps\t\t64(%%r12),\t%%zmm4\n\t"
                         "vfmadd231ps\t%%zmm3,\t%%zmm4,\t%%zmm0\n\t" // Perform a fused multiply add
                         "2:\n\t"                                    // Label for loop end
-                        "vmovaps\t\t%%zmm0,\t(%[RES])\n\t"          // save our results.
+                        "vmovnraps\t\t%%zmm0,\t(%[RES])\n\t"        // save our results.
                         : [RES]  "+r" (sumvec)
                         : [ITER]  "r"  (iterations),
                           [VEC1]  "r"  (mvec1),
