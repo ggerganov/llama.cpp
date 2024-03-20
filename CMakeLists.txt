@@ -311,9 +311,9 @@ if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
-        set(BLA_SIZEOF_INTEGER 8)
-    endif()
+    #if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
+    #    set(BLA_SIZEOF_INTEGER 8)
+    #endif()
 
     set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
     find_package(BLAS)
@@ -379,6 +379,9 @@ if (LLAMA_BLAS)
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${LLAMA_BLAS_VENDOR} MATCHES "Generic" OR ${LLAMA_BLAS_VENDOR} MATCHES "Intel"))
             add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
+
+        set(GGML_HEADERS_BLAS ggml-blas.h)
+        set(GGML_SOURCES_BLAS ggml-blas.c)
 
         set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${BLAS_LIBRARIES})
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
@@ -1255,6 +1258,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_KOMPUTE}   ${GGML_HEADERS_KOMPUTE}
             ${GGML_SOURCES_VULKAN}    ${GGML_HEADERS_VULKAN}
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
             )
 

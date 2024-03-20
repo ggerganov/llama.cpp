@@ -408,6 +408,7 @@ ifndef LLAMA_NO_ACCELERATE
 		MK_CPPFLAGS += -DACCELERATE_NEW_LAPACK
 		MK_CPPFLAGS += -DACCELERATE_LAPACK_ILP64
 		MK_LDFLAGS  += -framework Accelerate
+		OBJS        += ggml-blas.o
 	endif
 endif # LLAMA_NO_ACCELERATE
 
@@ -421,22 +422,34 @@ ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
+	OBJS        += ggml-blas.o
 endif # LLAMA_OPENBLAS
+
+ifdef LLAMA_OPENBLAS64
+	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas64)
+	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas64)
+	MK_LDFLAGS  += $(shell pkg-config --libs openblas64)
+	OBJS        += ggml-blas.o
+endif # LLAMA_OPENBLAS64
+
+ifdef LLAMA_BLIS
+	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
+	MK_LDFLAGS  += -lblis -L/usr/local/lib
+	OBJS        += ggml-blas.o
+endif # LLAMA_BLIS
 
 ifndef LLAMA_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
 	OBJS        += sgemm.o
 endif
 
-ifdef LLAMA_BLIS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
-	MK_LDFLAGS  += -lblis -L/usr/local/lib
-endif # LLAMA_BLIS
-
 ifdef LLAMA_RPC
 	MK_CPPFLAGS   += -DGGML_USE_RPC
 	OBJS          += ggml-rpc.o
 endif # LLAMA_RPC
+
+ggml-blas.o: ggml-blas.c ggml-blas.h
+	$(CC) $(CFLAGS) -c $< -o $@
 
 ifdef LLAMA_CUBLAS
 # LLAMA_CUBLAS is deprecated and will be removed in the future
