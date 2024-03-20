@@ -122,7 +122,7 @@ pub fn build(b: *std.build.Builder) !void {
     const console = make.obj("console", "common/console.cpp");
     const sampling = make.obj("sampling", "common/sampling.cpp");
     const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
-    const json_schema_to_grammar = make.obj("json-schema-to-grammar", "examples/server/json-schema-to-grammar.cpp");
+    const json_schema_to_grammar = make.obj("json-schema-to-grammar", "common/json-schema-to-grammar.cpp");
     const train = make.obj("train", "common/train.cpp");
     const clip = make.obj("clip", "examples/llava/clip.cpp");
     const llava = make.obj("llava", "examples/llava/llava.cpp");
