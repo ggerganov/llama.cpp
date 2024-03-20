@@ -1634,7 +1634,7 @@ in chat mode so that the conversation can end normally.")
                 self.post_write_tensors(tensor_map, name, data_torch)
 
 
-@Model.register("BertModel")
+@Model.register("BertModel", "CamembertModel")
 class BertModel(Model):
     model_arch = gguf.MODEL_ARCH.BERT
 
