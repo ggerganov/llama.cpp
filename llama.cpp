@@ -1460,17 +1460,6 @@ struct llama_mlock {
 #endif
 };
 
-// Holds information on a tensor data source location.
-struct llama_tensor_offset  {
-    uint16_t  idx;  // source file index
-    size_t    offs; // tensor data offset in the original file
-
-    llama_tensor_offset(uint16_t idx, const char * name, struct gguf_context * gguf_ctx) : idx(idx) {
-        const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
-        offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
-    }
-};
-
 static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
     const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
@@ -2829,7 +2818,18 @@ struct llama_model_loader {
     llama_fver  fver;
 
     std::vector<std::unique_ptr<llama_mmap>> mappings;
-    std::unordered_map<std::string, struct llama_tensor_offset> tensors_offs; // unified tensor data offset accross files
+
+    // Holds information on a tensor data source location.
+    struct llama_tensor_offset  {
+        uint16_t  idx;  // source file index
+        size_t    offs; // tensor data offset in the original file
+
+        llama_tensor_offset(uint16_t idx, const char * name, struct gguf_context * gguf_ctx) : idx(idx) {
+            const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
+            offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
+        }
+    };
+    std::unordered_map<std::string, struct llama_tensor_offset> tensors_offs; // unified tensor data offset across files
 
     std::unordered_map<std::string, struct llama_model_kv_override> kv_overrides;
 
@@ -2884,7 +2884,7 @@ struct llama_model_loader {
             }
             get_key(llm_kv(LLM_KV_SPLIT_TENSORS_COUNT), n_tensors);
 
-            char split_prefix[4096] = {0};
+            char split_prefix[PATH_MAX] = {0};
             if (!llama_split_prefix(split_prefix, fname.c_str(), fname.size(), idx, n_split)) {
                 throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
             }
