@@ -3114,7 +3114,11 @@ struct llama_model_loader {
     }
 
     struct ggml_tensor * get_tensor_meta(const char * name) const {
-        return get_weights(name).tensor;
+        try {
+            return get_weights(name).tensor;
+        } catch (const std::runtime_error & e) {
+            return NULL;
+        }
     }
 
     struct ggml_tensor * get_tensor_meta(int i) const {
