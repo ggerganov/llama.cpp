@@ -9,7 +9,7 @@
 
 #define MAXVEC 1024768
 #define RUNTOTAL 12
-#define RUNS 
+#define RUNS
 int main(void)
 {
   struct timespec start, middle, end;
@@ -18,13 +18,14 @@ int main(void)
   float scalar = 0.0f;
   float vector = 0.0f;
   int vecRuns[] = {10, 16, 17, 32, 33, 48, 49, 64, 65, 80, 81, 1024768};
+
   for (uint32_t runCount = 0; runCount < RUNTOTAL; ++runCount)
     {
       // Generate random input vector of [-1, 1] values.
       float vec1[MAXVEC] __attribute__((aligned(64)));
       for (int i = 0; i < vecRuns[runCount]; i++)
         vec1[i] = 2 * (0.5 - rand() / (float)RAND_MAX);
-  
+
       // Generate a second random input vector of [-1, 1] values.
       float vec2[MAXVEC] __attribute__((aligned(64)));
       for (int i = 0; i < vecRuns[runCount]; i++)
@@ -38,11 +39,11 @@ int main(void)
 
       // save the middle point..
       clock_gettime(CLOCK_MONOTONIC, &middle);
-  
+
       // do the same work by hand;
       for (int i = 0; i < vecRuns[runCount]; ++i)
         scalar += vec1[i]*vec2[i];
-  
+
       clock_gettime(CLOCK_MONOTONIC, &end);
 
       printf("vector\tvs\tscalar (%d items)\n", vecRuns[runCount]);
@@ -55,8 +56,9 @@ int main(void)
       scalar_time += (end.tv_nsec - middle.tv_nsec) / 1000000000.0;
 
       printf("%.9f\tvs\t%.9f\n", vector_time, scalar_time);
-    }  
+    }
+
   fflush(stdout);
-  
+
   return 0;
 }
