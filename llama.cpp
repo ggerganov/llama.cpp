@@ -3232,7 +3232,7 @@ struct llama_model_loader {
     std::vector<std::pair<size_t, size_t>> mmaps_used;
 
     // Returns false if cancelled by progress_callback
-    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::map<uint32_t, ggml_backend_buffer *> bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
+    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::map<uint32_t, ggml_backend_buffer *> & bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
         std::vector<no_init<uint8_t>> read_buf;
@@ -5151,16 +5151,17 @@ static bool llm_load_tensors(
                     continue;
                 }
                 ggml_backend_buffer_t buf = ggml_backend_cpu_buffer_from_ptr((char *) addr + first, last - first);
-                if (buf != nullptr) {
-                    bufs.emplace(idx, buf);
-#ifdef GGML_USE_CUBLAS
-                    if (n_layer >= n_gpu_layers) {
-                        ggml_backend_cuda_register_host_buffer(
-                            ggml_backend_buffer_get_base(buf),
-                            ggml_backend_buffer_get_size(buf));
-                    }
-#endif
+                if (buf == nullptr) {
+                    throw std::runtime_error("unable to allocate backend CPU buffer");
                 }
+                bufs.emplace(idx, buf);
+#ifdef GGML_USE_CUBLAS
+                if (n_layer >= n_gpu_layers) {
+                    ggml_backend_cuda_register_host_buffer(
+                        ggml_backend_buffer_get_base(buf),
+                        ggml_backend_buffer_get_size(buf));
+                }
+#endif
             }
         }
 #ifdef GGML_USE_METAL
@@ -5174,32 +5175,34 @@ static bool llm_load_tensors(
                     continue;
                 }
                 ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
-                if (buf != nullptr) {
-                    bufs.emplace(idx, buf);
+                if (buf == nullptr) {
+                    throw std::runtime_error("unable to allocate backend metal buffer");
                 }
+                bufs.emplace(idx, buf);
             }
         }
 #endif
         else {
             ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
-            if (buf != nullptr) {
-                if (use_mlock && ggml_backend_buffer_is_host(buf)) {
-                    model.mlock_bufs.emplace_back(new llama_mlock);
-                    auto & mlock_buf = model.mlock_bufs.back();
-                    mlock_buf->init(ggml_backend_buffer_get_base(buf));
-                    mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
-                }
-                for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
-                    bufs.emplace(idx, buf);
-                }
+            if (buf == nullptr) {
+                throw std::runtime_error("unable to allocate backend buffer");
+            }
+            if (use_mlock && ggml_backend_buffer_is_host(buf)) {
+                model.mlock_bufs.emplace_back(new llama_mlock);
+                auto & mlock_buf = model.mlock_bufs.back();
+                mlock_buf->init(ggml_backend_buffer_get_base(buf));
+                mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
+            }
+            for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
+                bufs.emplace(idx, buf);
             }
         }
         if (bufs.empty()) {
             throw std::runtime_error("failed to allocate buffer");
         }
-        // indicate that this buffer contains weights
-        // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
         for (auto & buf : bufs) {
+            // indicate that this buffer contains weights
+            // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
             ggml_backend_buffer_set_usage(buf.second, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
             model.bufs.push_back(buf.second);
         }
