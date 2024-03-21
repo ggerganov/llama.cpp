@@ -5,8 +5,8 @@
 #include "llama.h"
 #include "unicode.h"
 
-#include <iostream>
-#include <fstream>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -39,51 +39,56 @@ static bool llama_sample_grammar_string(struct llama_grammar * grammar, const st
 }
 
 static void print_error_message(const std::string & input_str, size_t error_pos, const std::string & error_msg) {
-    std::cout << "Input string is invalid according to the grammar." << std::endl;
-    std::cout << "Error: " << error_msg << " at position " << std::to_string(error_pos) << std::endl;
-    std::cout << std::endl;
-    std::cout << "Input string:" << std::endl;
-    std::cout << input_str.substr(0, error_pos);
+    fprintf(stdout, "Input string is invalid according to the grammar.\n");
+    fprintf(stdout, "Error: %s at position %zu\n", error_msg.c_str(), error_pos);
+    fprintf(stdout, "\n");
+    fprintf(stdout, "Input string:\n");
+    fprintf(stdout, "%s", input_str.substr(0, error_pos).c_str());
     if (error_pos < input_str.size()) {
-        std::cout << "\033[1;31m" << input_str[error_pos];
+        fprintf(stdout, "\033[1;31m%c", input_str[error_pos]);
         if (error_pos+1 < input_str.size()) {
-            std::cout << "\033[0;31m" << input_str.substr(error_pos+1);
+            fprintf(stdout, "\033[0;31m%s", input_str.substr(error_pos+1).c_str());
         }
-        std::cout << "\033[0m" << std::endl;
+        fprintf(stdout, "\033[0m\n");
     }
 }
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <grammar_file> <input_file>" << std::endl;
+        fprintf(stdout, "Usage: %s <grammar_filename> <input_filename>\n", argv[0]);
         return 1;
     }
 
-    const std::string grammar_file = argv[1];
-    const std::string input_file = argv[2];
+    const std::string grammar_filename = argv[1];
+    const std::string input_filename = argv[2];
 
     // Read the GBNF grammar file
-    std::ifstream grammar_stream(grammar_file);
-    if (!grammar_stream.is_open()) {
-        std::cerr << "Failed to open grammar file: " << grammar_file << std::endl;
+    FILE* grammar_file = fopen(grammar_filename.c_str(), "r");
+    if (!grammar_file) {
+        fprintf(stdout, "Failed to open grammar file: %s\n", grammar_filename.c_str());
         return 1;
     }
 
-    std::string grammar_str((std::istreambuf_iterator<char>(grammar_stream)), std::istreambuf_iterator<char>());
-    grammar_stream.close();
+    fseek(grammar_file, 0, SEEK_END);
+    size_t grammar_size = ftell(grammar_file);
+    fseek(grammar_file, 0, SEEK_SET);
+
+    std::string grammar_str(grammar_size, ' ');
+    fread(&grammar_str[0], 1, grammar_size, grammar_file);
+    fclose(grammar_file);
 
     // Parse the GBNF grammar
     auto parsed_grammar = grammar_parser::parse(grammar_str.c_str());
 
     // will be empty (default) if there are parse errors
     if (parsed_grammar.rules.empty()) {
-        fprintf(stderr, "%s: failed to parse grammar\n", __func__);
+        fprintf(stdout, "%s: failed to parse grammar\n", __func__);
         return 1;
     }
 
     // Ensure that there is a "root" node.
     if (parsed_grammar.symbol_ids.find("root") == parsed_grammar.symbol_ids.end()) {
-        fprintf(stderr, "%s: grammar does not contain a 'root' symbol\n", __func__);
+        fprintf(stdout, "%s: grammar does not contain a 'root' symbol\n", __func__);
         return 1;
     }
 
@@ -95,14 +100,19 @@ int main(int argc, char** argv) {
             grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
 
     // Read the input file
-    std::ifstream input_stream(input_file);
-    if (!input_stream.is_open()) {
-        std::cerr << "Failed to open input file: " << input_file << std::endl;
+    FILE* input_file = fopen(input_filename.c_str(), "r");
+    if (!input_file) {
+        fprintf(stdout, "Failed to open input file: %s\n", input_filename.c_str());
         return 1;
     }
 
-    std::string input_str((std::istreambuf_iterator<char>(input_stream)), std::istreambuf_iterator<char>());
-    input_stream.close();
+    fseek(input_file, 0, SEEK_END);
+    size_t input_size = ftell(input_file);
+    fseek(input_file, 0, SEEK_SET);
+
+    std::string input_str(input_size, ' ');
+    fread(&input_str[0], 1, input_size, input_file);
+    fclose(input_file);
 
     // Validate the input string against the grammar
     size_t error_pos;
@@ -110,7 +120,7 @@ int main(int argc, char** argv) {
     bool is_valid = llama_sample_grammar_string(grammar, input_str, error_pos, error_msg);
 
     if (is_valid) {
-        std::cout << "Input string is valid according to the grammar." << std::endl;
+        fprintf(stdout, "Input string is valid according to the grammar.\n");
     } else {
         print_error_message(input_str, error_pos, error_msg);
     }
