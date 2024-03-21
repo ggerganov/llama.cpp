@@ -373,8 +373,19 @@ static json oaicompat_completion_params_parse(
     llama_params["tfs_z"]             = json_value(body,   "tfs_z",             default_sparams.tfs_z);
     llama_params["n_keep"]            = json_value(body,   "n_keep",            0);
 
-    if (body.count("grammar") != 0) {
+    if (body.contains("grammar")) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
+    }
+
+    if (body.contains("response_format")) {
+        auto response_format = json_value(body, "response_format", json::object());
+        if (response_format.contains("type")) {
+            if (response_format["type"] == "json_object") {
+                llama_params["json_schema"] = json_value(response_format, "schema", json::object());
+            } else {
+                throw std::runtime_error("response_format type not supported: " + response_format["type"].dump());
+            }
+        }
     }
 
     // Handle 'stop' field

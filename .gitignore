@@ -11,7 +11,10 @@
 *.gcda
 *.dot
 *.bat
+*.tmp
 *.metallib
+*.etag
+*.lastModified
 .DS_Store
 .build/
 .cache/

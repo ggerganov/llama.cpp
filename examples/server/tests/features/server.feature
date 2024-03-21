@@ -70,6 +70,22 @@ Feature: llama.cpp server
       | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 128        | (thanks\|happy\|bird\|Annabyear)+ | -1       | 64          | enabled          |           |
 
 
+  Scenario Outline: OAI Compatibility w/ response format
+    Given a model test
+    And   a system prompt test
+    And   a user prompt test
+    And   a response format <response_format>
+    And   10 max tokens to predict
+    Given an OAI compatible chat completions request with no api error
+    Then  <n_predicted> tokens are predicted matching <re_content>
+
+    Examples: Prompts
+      | response_format                                                     | n_predicted | re_content             |
+      | {"type": "json_object", "schema": {"const": "42"}}                  | 5           | "42"                   |
+      | {"type": "json_object", "schema": {"items": [{"type": "integer"}]}} | 10          | \[ -300 \]             |
+      | {"type": "json_object"}                                             | 10          | \{ " Jacky.            |
+
+
   Scenario: Tokenize / Detokenize
     When tokenizing:
     """
