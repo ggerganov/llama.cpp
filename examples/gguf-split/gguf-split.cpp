@@ -26,9 +26,9 @@ enum split_operation : uint8_t {
     SPLIT_OP_MERGE,
 };
 
-static const char * const LLM_KV_GENERAL_SPLIT_I_SPLIT   = "split.no";
-static const char * const LLM_KV_GENERAL_SPLIT_N_SPLIT   = "split.count";
-static const char * const LLM_KV_GENERAL_SPLIT_N_TENSORS = "split.tensors.count";
+static const char * const LLM_KV_SPLIT_NO            = "split.no";
+static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
+static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
 
 struct split_params {
     split_operation operation = SPLIT_OP_SPLIT;
@@ -177,9 +177,9 @@ struct split_strategy {
         if (i_split == 0) {
             gguf_set_kv(ctx_out, ctx_gguf);
         }
-        gguf_set_val_u16(ctx_out, LLM_KV_GENERAL_SPLIT_I_SPLIT,  i_split);
-        gguf_set_val_u16(ctx_out, LLM_KV_GENERAL_SPLIT_N_SPLIT,  n_split);
-        gguf_set_val_i32(ctx_out, LLM_KV_GENERAL_SPLIT_N_TENSORS,n_tensors);
+        gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_NO, i_split);
+        gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_COUNT, n_split);
+        gguf_set_val_i32(ctx_out, LLM_KV_SPLIT_TENSORS_COUNT, n_tensors);
 
         // populate the original tensors, so we get an initial metadata
         for (int i = i_split * params.n_split_tensors; i < n_tensors && i < (i_split + 1) * params.n_split_tensors; ++i) {
@@ -328,12 +328,12 @@ static void gguf_merge(const split_params & split_params) {
         ctx_metas.push_back(ctx_meta);
 
         if (i_split == 0) {
-            auto key_n_split = gguf_find_key(ctx_gguf, LLM_KV_GENERAL_SPLIT_N_SPLIT);
+            auto key_n_split = gguf_find_key(ctx_gguf, LLM_KV_SPLIT_COUNT);
             if (key_n_split < 0) {
                 fprintf(stderr,
                         "\n%s: input file does not contain %s metadata\n",
                         __func__,
-                        LLM_KV_GENERAL_SPLIT_N_SPLIT);
+                        LLM_KV_SPLIT_COUNT);
                 gguf_free(ctx_gguf);
                 ggml_free(ctx_meta);
                 gguf_free(ctx_out);
@@ -368,7 +368,7 @@ static void gguf_merge(const split_params & split_params) {
             }
 
             // Do not trigger merge if we try to merge again the output
-            gguf_set_val_u16(ctx_gguf, LLM_KV_GENERAL_SPLIT_N_SPLIT, 0);
+            gguf_set_val_u16(ctx_gguf, LLM_KV_SPLIT_COUNT, 0);
 
             // Set metadata from the first split
             gguf_set_kv(ctx_out, ctx_gguf);
