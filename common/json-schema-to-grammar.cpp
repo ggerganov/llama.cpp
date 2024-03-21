@@ -42,7 +42,7 @@ std::unordered_map<std::string, std::string> DATE_RULES = {
     {"date-time-string", "\"\\\"\" date-time \"\\\"\" space"}
 };
 
-static bool is_reserved_name(const std::string& name) {
+static bool is_reserved_name(const std::string & name) {
     static std::unordered_set<std::string> RESERVED_NAMES;
     if (RESERVED_NAMES.empty()) {
         RESERVED_NAMES.insert("root");
@@ -63,7 +63,7 @@ std::unordered_set<char> NON_LITERAL_SET = {'|', '.', '(', ')', '[', ']', '{', '
 std::unordered_set<char> ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = {'[', ']', '(', ')', '|', '{', '}', '*', '+', '?'};
 
 template <typename Iterator>
-std::string join(Iterator begin, Iterator end, const std::string& separator) {
+std::string join(Iterator begin, Iterator end, const std::string & separator) {
     std::ostringstream result;
     if (begin != end) {
         result << *begin;
@@ -74,7 +74,7 @@ std::string join(Iterator begin, Iterator end, const std::string& separator) {
     return result.str();
 }
 
-static std::vector<std::string> split(const std::string& str, const std::string& delimiter) {
+static std::vector<std::string> split(const std::string & str, const std::string & delimiter) {
     std::vector<std::string> tokens;
     size_t start = 0;
     size_t end = str.find(delimiter);
@@ -90,7 +90,7 @@ static std::vector<std::string> split(const std::string& str, const std::string&
     return tokens;
 }
 
-static std::string repeat(const std::string& str, size_t n) {
+static std::string repeat(const std::string & str, size_t n) {
     if (n == 0) {
         return "";
     }
@@ -105,7 +105,7 @@ static std::string repeat(const std::string& str, size_t n) {
     return result;
 }
 
-static std::string replacePattern(const std::string& input, const std::regex& regex, const std::function<std::string(const std::smatch &)>& replacement) {
+static std::string replacePattern(const std::string & input, const std::regex & regex, const std::function<std::string(const std::smatch  &)> & replacement) {
     std::smatch match;
     std::string result;
 
@@ -123,8 +123,8 @@ static std::string replacePattern(const std::string& input, const std::regex& re
     return result;
 }
 
-static std::string format_literal(const std::string& literal) {
-    std::string escaped = replacePattern(json(literal).dump(), GRAMMAR_LITERAL_ESCAPE_RE, [&](const std::smatch& match) {
+static std::string format_literal(const std::string & literal) {
+    std::string escaped = replacePattern(json(literal).dump(), GRAMMAR_LITERAL_ESCAPE_RE, [&](const std::smatch & match) {
         char c = match.str()[0];
         return GRAMMAR_LITERAL_ESCAPES.at(c);
     });
@@ -134,7 +134,7 @@ static std::string format_literal(const std::string& literal) {
 
 class SchemaConverter {
 private:
-    std::function<json(const std::string&)> _fetch_json;
+    std::function<json(const std::string &)> _fetch_json;
     bool _dotall;
     std::map<std::string, std::string> _rules;
     std::unordered_map<std::string, nlohmann::json> _refs;
@@ -142,7 +142,7 @@ private:
     std::vector<std::string> _errors;
     std::vector<std::string> _warnings;
 
-    std::string _add_rule(const std::string& name, const std::string& rule) {
+    std::string _add_rule(const std::string & name, const std::string & rule) {
         std::string esc_name = regex_replace(name, INVALID_RULE_CHARS_RE, "-");
         if (_rules.find(esc_name) == _rules.end() || _rules[esc_name] == rule) {
             _rules[esc_name] = rule;
@@ -158,7 +158,7 @@ private:
         }
     }
 
-    std::string _generate_union_rule(const std::string& name, const std::vector<json>& alt_schemas) {
+    std::string _generate_union_rule(const std::string & name, const std::vector<json> & alt_schemas) {
         std::vector<std::string> rules;
         for (size_t i = 0; i < alt_schemas.size(); i++) {
             rules.push_back(visit(alt_schemas[i], name + (name.empty() ? "alternative-" : "-") + std::to_string(i)));
@@ -166,7 +166,7 @@ private:
         return join(rules.begin(), rules.end(), " | ");
     }
 
-    std::string _visit_pattern(const std::string& pattern, const std::string& name) {
+    std::string _visit_pattern(const std::string & pattern, const std::string & name) {
         if (!(pattern.front() == '^' && pattern.back() == '$')) {
             _errors.push_back("Pattern must start with '^' and end with '$'");
             return "";
@@ -178,7 +178,7 @@ private:
         size_t length = sub_pattern.length();
 
         using literal_or_rule = std::pair<std::string, bool>;
-        auto to_rule = [&](const literal_or_rule& ls) {
+        auto to_rule = [&](const literal_or_rule & ls) {
             auto is_literal = ls.second;
             auto s = ls.first;
             return is_literal ? "\"" + s + "\"" : s;
@@ -211,7 +211,7 @@ private:
                     return true;
                 };
 
-                for (const auto& item : seq) {
+                for (const auto & item : seq) {
                     auto is_literal = item.second;
                     if (is_literal) {
                         literal += item.first;
@@ -223,7 +223,7 @@ private:
                 flush_literal();
 
                 std::vector<std::string> results;
-                for (const auto& item : ret) {
+                for (const auto & item : ret) {
                     results.push_back(to_rule(item));
                 }
                 return std::make_pair(join(results.begin(), results.end(), " "), false);
@@ -300,7 +300,7 @@ private:
                                 max_times = std::stoi(nums[1]);
                             }
                         }
-                    } catch (const std::invalid_argument& e) {
+                    } catch (const std::invalid_argument & e) {
                         _errors.push_back("Invalid number in curly brackets");
                         return std::make_pair("", false);
                     }
@@ -316,7 +316,7 @@ private:
                         sub += "+";
                     } else {
                         if (!sub_is_literal) {
-                            std::string& sub_id = sub_rule_ids[sub];
+                            std::string & sub_id = sub_rule_ids[sub];
                             if (sub_id.empty()) {
                                 sub_id = _add_rule(name + "-" + std::to_string(sub_rule_ids.size()), sub);
                             }
@@ -386,7 +386,7 @@ private:
         return _add_rule(name, "\"\\\"\" " + to_rule(transform()) + " \"\\\"\" space");
     }
 
-    std::string _resolve_ref(const std::string& ref) {
+    std::string _resolve_ref(const std::string & ref) {
         std::string ref_name = ref.substr(ref.find_last_of('/') + 1);
         if (_rules.find(ref_name) == _rules.end() && _refs_being_resolved.find(ref) == _refs_being_resolved.end()) {
             _refs_being_resolved.insert(ref);
@@ -398,15 +398,15 @@ private:
     }
 
     std::string _build_object_rule(
-        const std::vector<std::pair<std::string, json>>& properties,
-        const std::unordered_set<std::string>& required,
-        const std::string& name,
-        const json& additional_properties)
+        const std::vector<std::pair<std::string, json>> & properties,
+        const std::unordered_set<std::string> & required,
+        const std::string & name,
+        const json & additional_properties)
     {
         std::vector<std::string> required_props;
         std::vector<std::string> optional_props;
         std::unordered_map<std::string, std::string> prop_kv_rule_names;
-        for (const auto& kv : properties) {
+        for (const auto & kv : properties) {
             const auto &prop_name = kv.first;
             const auto &prop_schema = kv.second;
 
@@ -443,7 +443,7 @@ private:
                 rule += " \",\" space ( ";
             }
 
-            std::function<std::string(const std::vector<std::string>&, bool)> get_recursive_refs = [&](const std::vector<std::string>& ks, bool first_is_optional) {
+            std::function<std::string(const std::vector<std::string>&, bool)> get_recursive_refs = [&](const std::vector<std::string> & ks, bool first_is_optional) {
                 std::string res;
                 if (ks.empty()) {
                     return res;
@@ -488,22 +488,22 @@ private:
 
 public:
     SchemaConverter(
-        const std::function<json(const std::string&)>& fetch_json,
+        const std::function<json(const std::string &)> & fetch_json,
         bool dotall)
           : _fetch_json(fetch_json), _dotall(dotall)
     {
         _rules["space"] = SPACE_RULE;
     }
 
-    void resolve_refs(nlohmann::json& schema, const std::string& url) {
+    void resolve_refs(nlohmann::json & schema, const std::string & url) {
         /*
         * Resolves all $ref fields in the given schema, fetching any remote schemas,
         * replacing each $ref with absolute reference URL and populates _refs with the
         * respective referenced (sub)schema dictionaries.
         */
-        std::function<void(json&)> visit_refs = [&](json& n) {
+        std::function<void(json &)> visit_refs = [&](json & n) {
             if (n.is_array()) {
-                for (auto& x : n) {
+                for (auto & x : n) {
                     visit_refs(x);
                 }
             } else if (n.is_object()) {
@@ -546,7 +546,7 @@ public:
                         _refs[ref] = target;
                     }
                 } else {
-                    for (auto& kv : n.items()) {
+                    for (auto & kv : n.items()) {
                         visit_refs(kv.value());
                     }
                 }
@@ -556,7 +556,7 @@ public:
         visit_refs(schema);
     }
 
-    std::string _generate_constant_rule(const json& value) {
+    std::string _generate_constant_rule(const json & value) {
         if (!value.is_string()) {
             _errors.push_back("Only std::string constants are supported, got " + value.dump());
             return "";
@@ -564,7 +564,7 @@ public:
         return format_literal(value.get<std::string>());
     }
 
-    std::string visit(const json& schema, const std::string& name) {
+    std::string visit(const json & schema, const std::string & name) {
         json schema_type = schema.contains("type") ? schema["type"] : json();
         std::string schema_format = schema.contains("format") ? schema["format"].get<std::string>() : "";
         std::string rule_name = is_reserved_name(name) ? name + "-" : name.empty() ? "root" : name;
@@ -576,7 +576,7 @@ public:
             return _add_rule(rule_name, _generate_union_rule(name, alt_schemas));
         } else if (schema_type.is_array()) {
             std::vector<json> schema_types;
-            for (const auto& t : schema_type) {
+            for (const auto & t : schema_type) {
                 schema_types.push_back({{"type", t}});
             }
             return _add_rule(rule_name, _generate_union_rule(name, schema_types));
@@ -584,7 +584,7 @@ public:
             return _add_rule(rule_name, _generate_constant_rule(schema["const"]));
         } else if (schema.contains("enum")) {
             std::vector<std::string> enum_values;
-            for (const auto& v : schema["enum"]) {
+            for (const auto & v : schema["enum"]) {
                 enum_values.push_back(_generate_constant_rule(v));
             }
             return _add_rule(rule_name, join(enum_values.begin(), enum_values.end(), " | "));
@@ -593,7 +593,7 @@ public:
                     (schema.contains("additionalProperties") && schema["additionalProperties"] != true))) {
             std::unordered_set<std::string> required;
             if (schema.contains("required") && schema["required"].is_array()) {
-                for (const auto& item : schema["required"]) {
+                for (const auto & item : schema["required"]) {
                     if (item.is_string()) {
                         required.insert(item.get<std::string>());
                     }
@@ -601,7 +601,7 @@ public:
             }
             std::vector<std::pair<std::string, json>> properties;
             if (schema.contains("properties")) {
-                for (const auto& prop : schema["properties"].items()) {
+                for (const auto & prop : schema["properties"].items()) {
                     properties.emplace_back(prop.key(), prop.value());
                 }
             }
@@ -613,11 +613,11 @@ public:
             std::unordered_set<std::string> required;
             std::vector<std::pair<std::string, json>> properties;
             std::string hybrid_name = name;
-            std::function<void(const json&, bool)> add_component = [&](const json& comp_schema, bool is_required) {
+            std::function<void(const json&, bool)> add_component = [&](const json & comp_schema, bool is_required) {
                 if (comp_schema.contains("$ref")) {
                     add_component(_refs[comp_schema["$ref"]], is_required);
                 } else if (comp_schema.contains("properties")) {
-                    for (const auto& prop : comp_schema["properties"].items()) {
+                    for (const auto & prop : comp_schema["properties"].items()) {
                         properties.emplace_back(prop.key(), prop.value());
                         if (is_required) {
                             required.insert(prop.key());
@@ -627,9 +627,9 @@ public:
                   // todo warning
                 }
             };
-            for (auto& t : schema["allOf"]) {
+            for (auto & t : schema["allOf"]) {
                 if (t.contains("anyOf")) {
-                    for (auto& tt : t["anyOf"]) {
+                    for (auto & tt : t["anyOf"]) {
                         add_component(tt, false);
                     }
                 } else {
@@ -678,12 +678,12 @@ public:
         } else if ((schema_type.is_null() || schema_type == "string") && std::regex_match(schema_format, std::regex("^uuid[1-5]?$"))) {
             return _add_rule(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
         } else if ((schema_type.is_null() || schema_type == "string") && DATE_RULES.find(schema_format) != DATE_RULES.end()) {
-            for (const auto& kv : DATE_RULES) {
+            for (const auto & kv : DATE_RULES) {
                 _add_rule(kv.first, kv.second);
             }
             return schema_format + "-string";
         } else if (schema.empty() || schema_type == "object") {
-            for (const auto& n : OBJECT_RULE_NAMES) {
+            for (const auto & n : OBJECT_RULE_NAMES) {
                 _add_rule(n, PRIMITIVE_RULES.at(n));
             }
             return _add_rule(rule_name, "object");
@@ -708,15 +708,15 @@ public:
 
     std::string format_grammar() {
         std::stringstream ss;
-        for (const auto& kv : _rules) {
+        for (const auto & kv : _rules) {
             ss << kv.first << " ::= " << kv.second << std::endl;
         }
         return ss.str();
     }
 };
 
-std::string json_schema_to_grammar(const json& schema) {
-    SchemaConverter converter([](const std::string&) { return json::object(); }, /* dotall= */ false);
+std::string json_schema_to_grammar(const json & schema) {
+    SchemaConverter converter([](const std::string &) { return json::object(); }, /* dotall= */ false);
     auto copy = schema;
     converter.resolve_refs(copy, "input");
     converter.visit(copy, "");

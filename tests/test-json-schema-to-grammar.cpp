@@ -30,7 +30,7 @@ struct TestCase {
     void _print_failure_header() const {
         fprintf(stderr, "#\n# Test '%s' failed.\n#\n%s\n", name.c_str(), schema.c_str());
     }
-    void verify(const std::string& actual_grammar) const {
+    void verify(const std::string & actual_grammar) const {
         if (trim(actual_grammar) != trim(expected_grammar)) {
         _print_failure_header();
         fprintf(stderr, "# EXPECTED:\n%s\n# ACTUAL:\n%s\n", expected_grammar.c_str(), actual_grammar.c_str());
@@ -43,7 +43,7 @@ struct TestCase {
             if (state.symbol_ids.find("root") == state.symbol_ids.end()) {
                 throw std::runtime_error("Grammar failed to parse:\n" + expected_grammar);
             }
-        } catch (const std::runtime_error& ex) {
+        } catch (const std::runtime_error & ex) {
             _print_failure_header();
             fprintf(stderr, "# GRAMMAR ERROR: %s\n", ex.what());
             assert(false);
@@ -59,22 +59,22 @@ struct TestCase {
     }
 };
 
-static void write(const std::string& file, const std::string& content) {
+static void write(const std::string & file, const std::string & content) {
     std::ofstream f;
     f.open(file.c_str());
     f << content.c_str();
     f.close();
 }
 
-static std::string read(const std::string& file) {
+static std::string read(const std::string & file) {
     std::ostringstream actuals;
     actuals << std::ifstream(file.c_str()).rdbuf();
     return actuals.str();
 }
 
-static void test_all(const std::string& lang, std::function<void(const TestCase&)> runner) {
+static void test_all(const std::string & lang, std::function<void(const TestCase &)> runner) {
     fprintf(stderr, "#\n# Testing JSON schema conversion (%s)\n#\n", lang.c_str());
-    auto test = [&](const TestCase& tc) {
+    auto test = [&](const TestCase & tc) {
         fprintf(stderr, "- %s%s\n", tc.name.c_str(), tc.expected_status == FAILURE ? " (failure expected)" : "");
         runner(tc);
     };
@@ -794,29 +794,29 @@ static void test_all(const std::string& lang, std::function<void(const TestCase&
 }
 
 int main() {
-    test_all("C++", [](const TestCase& tc) {
+    test_all("C++", [](const TestCase & tc) {
         try {
             tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
             tc.verify_status(SUCCESS);
-        } catch (const std::runtime_error& ex) {
+        } catch (const std::runtime_error & ex) {
             fprintf(stderr, "Error: %s\n", ex.what());
             tc.verify_status(FAILURE);
         }
     });
-    test_all("Python", [](const TestCase& tc) {
+    test_all("Python", [](const TestCase & tc) {
         write("test-json-schema-input.tmp", tc.schema);
         tc.verify_status(std::system(
             "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
         tc.verify(read("test-grammar-output.tmp"));
     });
-    test_all("JavaScript", [](const TestCase& tc) {
+    test_all("JavaScript", [](const TestCase & tc) {
         write("test-json-schema-input.tmp", tc.schema);
         tc.verify_status(std::system(
             "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
         tc.verify(read("test-grammar-output.tmp"));
     });
 
-    test_all("Check Expectations Validity", [](const TestCase& tc) {
+    test_all("Check Expectations Validity", [](const TestCase & tc) {
         if (tc.expected_status == SUCCESS) {
             tc.verify_expectation_parseable();
         }
