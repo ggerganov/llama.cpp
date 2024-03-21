@@ -11718,6 +11718,7 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
     float max_scale = 0, amax_scale = 0;
     for (int ib = 0; ib < super_block_size/block_size; ++ib) {
         const float * xb = x + ib*block_size;
+        uint8_t * Lb = L + ib*block_size;
         if (quant_weights) {
             const float * qw = quant_weights + ib*block_size;
             for (int j = 0; j < block_size; ++j) weight[j] = qw[j] * sqrtf(sigma2 + xb[j]*xb[j]);
@@ -11735,12 +11736,13 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
             scales[ib] = 0;
             continue;
         }
-        float d = -max/values[0];
+        float d = ntry > 0 ? -max/values[0] : max/values[0];
         float id = 1/d;
         float sumqx = 0, sumq2 = 0;
         for (int j = 0; j < block_size; ++j) {
             float al = id*xb[j];
             int l = best_index_int8(16, values, al);
+            Lb[j] = l;
             float q = values[l];
             float w = weight[j];
             sumqx += w*q*xb[j];
@@ -11795,9 +11797,11 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
         }
     } else {
         dh[0] = GGML_FP32_TO_FP16(scales[0]);
-        float id = scales[0] ? 1/scales[0] : 0;
-        for (int j = 0; j < super_block_size; ++j) {
-            L[j] = best_index_int8(16, values, id*x[j]);
+        if (ntry > 0) {
+            float id = scales[0] ? 1/scales[0] : 0;
+            for (int j = 0; j < super_block_size; ++j) {
+                L[j] = best_index_int8(16, values, id*x[j]);
+            }
         }
     }
 
