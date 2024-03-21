@@ -3243,7 +3243,7 @@ struct llama_model_loader {
                 const auto & mapping = mappings.at(w.idx);
                 ggml_backend_buffer_t buf_mmap = nullptr;
                 if (bufs_mmap.size() > 1) {
-                    buf_mmap = bufs_mmap[w.idx];
+                    buf_mmap = bufs_mmap.at(w.idx);
                 } else if (!bufs_mmap.empty()) {
                     buf_mmap = bufs_mmap.front();
                 }
