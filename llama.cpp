@@ -5171,7 +5171,6 @@ static bool llm_load_tensors(
                 size_t first, last;
                 ml.get_mapping_range(&first, &last, &addr, file_no, ctx);
                 if (first >= last) {
-                    bufs.push_back(nullptr); // add a dummy buffer to keep the indices in sync
                     continue;
                 }
                 ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
