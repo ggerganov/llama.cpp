@@ -861,7 +861,7 @@ jobs:
       - windows-latest-cmake
       - windows-latest-cmake-cublas
       - macOS-latest-cmake-arm64
-      - macOS-latest-cmake-x64      
+      - macOS-latest-cmake-x64
 
     steps:
       - name: Clone
