@@ -11847,14 +11847,11 @@ void quantize_row_iq4_nl(const float * restrict x, void * restrict vy, int k) {
         quantize_row_iq4_nl_impl(QK4_NL, 32, x + QK4_NL*ibl, &iq4[ibl].d, iq4[ibl].qs, &unused_h, unused_l,
                 &scale, weight, L, kvalues_iq4nl, NULL, -1);
     }
-    //assert(k % QK4_NL == 0);
-    //block_iq4_nl * restrict y = vy;
-    //quantize_row_iq4_nl_reference(x, y, k);
 }
 
 void quantize_row_iq4_nl_reference(const float * restrict x, block_iq4_nl * restrict y, int k) {
     assert(k % QK4_NL == 0);
-    quantize_iq4_nl(x, y, 1, k, NULL);
+    quantize_row_iq4_nl(x, y, k);
 }
 
 size_t quantize_iq4_xs(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
