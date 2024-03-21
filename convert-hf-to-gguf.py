@@ -1068,16 +1068,14 @@ class GrokModel(Model):
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()
-        
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
+
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         self.gguf_writer.add_name("Grok")
-        
-        
-        
+
 
 @Model.register("MiniCPMForCausalLM")
 class MiniCPMModel(Model):
