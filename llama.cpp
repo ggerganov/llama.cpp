@@ -9165,14 +9165,13 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
     }
 }
 
-// Only alloc when needed
-static void llama_output_reserve(llama_context & lctx, int32_t n_outputs) {
-    GGML_ASSERT(0 <= n_outputs);
-
+// Make sure enough space is available for outputs.
+// Returns max number of outputs for which space was reserved.
+static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
     const auto & cparams = lctx.cparams;
     const auto & hparams = lctx.model.hparams;
 
-    const int32_t n_outputs_max = std::max((uint32_t) n_outputs, cparams.n_seq_max);
+    const size_t n_outputs_max = std::max(n_outputs, (size_t) cparams.n_seq_max);
 
     const auto n_batch = cparams.n_batch;
     const auto n_vocab = hparams.n_vocab;
@@ -9209,7 +9208,8 @@ static void llama_output_reserve(llama_context & lctx, int32_t n_outputs) {
 
         lctx.buf_output = ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), new_size);
         if (lctx.buf_output == nullptr) {
-            throw std::runtime_error(format("failed to allocate output buffer of size %.2f MiB", new_size / (1024.0 * 1024.0)));
+            LLAMA_LOG_ERROR("%s: failed to allocate output buffer of size %.2f MiB\n", __func__, new_size / (1024.0 * 1024.0));
+            return 0;
         }
     }
     float * output_base = (float *) ggml_backend_buffer_get_base(lctx.buf_output);
@@ -9226,6 +9226,8 @@ static void llama_output_reserve(llama_context & lctx, int32_t n_outputs) {
     ggml_backend_buffer_clear(lctx.buf_output, 0);
 
     lctx.n_outputs = 0;
+
+    return n_outputs_max;
 }
 
 
@@ -9304,8 +9306,8 @@ static int llama_decode_internal(
     const int64_t n_embd  = hparams.n_embd;
     const int64_t n_vocab = hparams.n_vocab;
 
-    int32_t n_outputs = 0;
-    int32_t n_outputs_prev = 0;
+    uint32_t n_outputs = 0;
+    uint32_t n_outputs_prev = 0;
 
     const auto n_ubatch = cparams.n_ubatch;
 
@@ -9314,29 +9316,34 @@ static int llama_decode_internal(
     std::vector<llama_seq_id *>            seq_id_arr;
     std::vector<std::vector<llama_seq_id>> seq_id;
 
-    // reserve output buffer
+    // count outputs
     if (batch_all.logits) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
             n_outputs += batch_all.logits[i] != 0;
         }
-        llama_output_reserve(lctx, n_outputs);
+    } else if (lctx.logits_all || (cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE)) {
+        n_outputs = n_tokens_all;
+    } else {
+        // keep last output only
+        n_outputs = 1;
+    }
+    // reserve output buffer
+    if (llama_output_reserve(lctx, n_outputs) < n_outputs) {
+        LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_outputs);
+        return -2;
+    };
+    // set output mappings
+    if (batch_all.logits) {
         int32_t i_logits = 0;
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
             if (batch_all.logits[i]) {
                 lctx.output_ids[i] = i_logits++;
             }
         }
-    } else if (lctx.logits_all || (cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE)) {
-        n_outputs = n_tokens_all;
-        llama_output_reserve(lctx, n_outputs);
-        for (uint32_t i = 0; i < n_tokens_all; ++i) {
+    } else {
+        for (uint32_t i = 0; i < n_outputs; ++i) {
             lctx.output_ids[i] = i;
         }
-    } else {
-        // keep last output only
-        n_outputs = 1;
-        llama_output_reserve(lctx, n_outputs);
-        lctx.output_ids[0] = 0;
     }
 
     for (uint32_t cur_token = 0; cur_token < n_tokens_all; cur_token += n_ubatch) {
@@ -9362,7 +9369,7 @@ static int llama_decode_internal(
                 for (uint32_t i = 0; i < n_tokens; i++) {
                     n_outputs_new += u_batch.logits[i] != 0;
                 }
-            } else if ((uint32_t) n_outputs == n_tokens_all) {
+            } else if (n_outputs == n_tokens_all) {
                 n_outputs_new = n_tokens;
             } else {
                 // keep last output only
@@ -13513,11 +13520,9 @@ struct llama_context * llama_new_context_with_model(
 
         // graph outputs buffer
         {
-            // resized during inference when more than n_seq_max logits are requested in a batch
-            try {
-                llama_output_reserve(*ctx, 0);
-            } catch (const std::exception & err) {
-                LLAMA_LOG_ERROR("%s: error reserving logits buffer: %s\n", __func__, err.what());
+            // resized during inference when a batch uses more outputs
+            if (llama_output_reserve(*ctx, params.n_seq_max) < params.n_seq_max) {
+                LLAMA_LOG_ERROR("%s: failed to reserve initial output buffer\n", __func__);
                 llama_free(ctx);
                 return nullptr;
             }
@@ -14299,7 +14304,7 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
 
         memcpy(&n_outputs, inp, sizeof(n_outputs)); inp += sizeof(n_outputs);
 
-        llama_output_reserve(*ctx, n_outputs);
+        GGML_ASSERT(n_outputs <= llama_output_reserve(*ctx, n_outputs));
 
         if (n_outputs) {
             output_pos.resize(n_outputs);
