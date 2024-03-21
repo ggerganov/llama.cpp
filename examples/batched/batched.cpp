@@ -48,6 +48,8 @@ int main(int argc, char ** argv) {
         params.prompt = "Hello my name is";
     }
 
+    process_escapes(params.prompt);
+
     // init LLM
 
     llama_backend_init();
