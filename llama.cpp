@@ -3199,6 +3199,9 @@ struct llama_model_loader {
         *addr = mapping->addr;
         for (ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor; tensor = ggml_get_next_tensor(ctx, tensor)) {
             const auto & w = get_weights(ggml_get_name(tensor));
+            if (w.idx != idx) {
+                continue;
+            }
             *first = std::min(*first, w.offs);
             *last  = std::max(*last, w.offs + ggml_nbytes(tensor));
         }
@@ -3245,12 +3248,8 @@ struct llama_model_loader {
 
             if (use_mmap && w.idx < mappings.size()) {
                 const auto & mapping = mappings.at(w.idx);
-                ggml_backend_buffer_t buf_mmap = nullptr;
-                if (bufs_mmap.size() > 1) {
-                    buf_mmap = bufs_mmap.at(w.idx);
-                } else if (!bufs_mmap.empty()) {
-                    buf_mmap = bufs_mmap.front();
-                }
+                ggml_backend_buffer_t buf_mmap = bufs_mmap.size() > w.idx ? bufs_mmap.at(w.idx) : nullptr;
+                GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
                 if (buf_mmap && cur->data == nullptr) {
                     ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *)mapping->addr + w.offs);
                     if (lmlocks) {
@@ -5145,6 +5144,10 @@ static bool llm_load_tensors(
                 void * addr = nullptr;
                 size_t first, last;
                 ml.get_mapping_range(&first, &last, &addr, file_no, ctx);
+                if (first >= last) {
+                    bufs.push_back(nullptr); // add a dummy buffer to keep the indices in sync
+                    continue;
+                }
                 ggml_backend_buffer_t buf = ggml_backend_cpu_buffer_from_ptr((char *)addr + first, last - first);
                 if (buf != nullptr) {
                     bufs.push_back(buf);
@@ -5167,6 +5170,10 @@ static bool llm_load_tensors(
                 void * addr = nullptr;
                 size_t first, last;
                 ml.get_mapping_range(&first, &last, &addr, file_no, ctx);
+                if (first >= last) {
+                    bufs.push_back(nullptr); // add a dummy buffer to keep the indices in sync
+                    continue;
+                }
                 ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
                 if (buf != nullptr) {
                     bufs.push_back(buf);
@@ -5196,6 +5203,9 @@ static bool llm_load_tensors(
         // indicate that this buffer contains weights
         // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
         for (ggml_backend_buffer_t buf : bufs) {
+            if (buf == nullptr) {
+                continue;
+            }
             ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
             model.bufs.push_back(buf);
         }
