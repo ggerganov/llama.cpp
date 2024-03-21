@@ -72,6 +72,7 @@ models-mnt
 /batched-bench
 /export-lora
 /finetune
+/retrieval
 /speculative
 /parallel
 /train-text-from-scratch

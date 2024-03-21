@@ -79,6 +79,9 @@ struct gpt_params {
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
+    std::vector<std::string> context_files = {}; // context files to embed
+    int32_t chunk_size            = 64;    // chunk size for context embedding
+    std::string chunk_separator   = "\n";   // chunk separator for context embedding
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 

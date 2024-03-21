@@ -276,6 +276,43 @@ static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int
         }
         return true;
     }
+    if (arg == "--context-files") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        while(true) {
+            std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            // store the external file name in params
+            params.context_files.push_back(argv[i]);
+            if (i + 1 >= argc || argv[i + 1][0] == '-') {
+                break;
+            }
+            i++;
+        }
+        return true;
+    }
+    if (arg == "--chunk-size") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.chunk_size = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--chunk-separator") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.chunk_separator = argv[i];
+        return true;
+    }
     if (arg == "-n" || arg == "--n-predict") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1282,6 +1319,11 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        prompt file to start generation.\n");
     printf("  -bf FNAME, --binary-file FNAME\n");
     printf("                        binary file containing multiple choice tasks.\n");
+    printf("  --context-files FNAME1 FNAME2...\n");
+    printf("                        files containing context to embed.\n");
+    printf("  --chunk-size N        minimum length of embedded text chunk (default:%d)\n", params.chunk_size);
+    printf("  --chunk-separator STRING\n");
+    printf("                        string to separate chunks (default: newline)\n");
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
     printf("  -b N, --batch-size N  logical maximum batch size (default: %d)\n", params.n_batch);
