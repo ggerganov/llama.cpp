@@ -832,9 +832,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             hs_cur.seq_tokens[0].size() - hs_cur.common_prefix +
             hs_cur.seq_tokens[1].size() - hs_cur.common_prefix +
             hs_cur.seq_tokens[2].size() - hs_cur.common_prefix +
-            hs_cur.seq_tokens[3].size() - hs_cur.common_prefix
-            // the last tokens don't need to be evaluated
-            - 4;
+            hs_cur.seq_tokens[3].size() - hs_cur.common_prefix;
 
         //GGML_ASSERT(hs_cur.common_prefix >= ::llama_tokenize(ctx, hs_cur.context, add_bos).size());
 
@@ -895,10 +893,12 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             n_logits += 1;
 
             for (int s = 0; s < 4; ++s) {
-                // end before the last token, no need to predict past the end of the sequences
-                for (size_t i = hs_cur.common_prefix; i < hs_cur.seq_tokens[s].size() - 1; ++i) {
-                    llama_batch_add(batch, hs_cur.seq_tokens[s][i], i, { s0 + s }, true);
-                    n_logits += 1;
+                const size_t seq_tokens_size = hs_cur.seq_tokens[s].size();
+                // TODO: don't evaluate the last token of each sequence
+                for (size_t i = hs_cur.common_prefix; i < seq_tokens_size; ++i) {
+                    const bool needs_logits = i < seq_tokens_size - 1;
+                    llama_batch_add(batch, hs_cur.seq_tokens[s][i], i, { s0 + s }, needs_logits);
+                    n_logits += needs_logits;
                 }
             }
 
@@ -1359,8 +1359,6 @@ static bool multiple_choice_prepare_one_task(llama_context * ctx, bool add_bos, 
     for (auto& seq : task.seq_tokens) {
         task.required_tokens += seq.size() - task.common_prefix;
     }
-    // the last tokens don't need to be evaluated
-    task.required_tokens -= task.seq_tokens.size();
     return true;
 }
 
@@ -1474,7 +1472,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
             return;
         }
     } else {
-        int n_dot = n_task/100;
+        int n_dot = std::max((int) n_task/100, 1);
         int i_task = 0;
         for (auto& task : tasks) {
             ++i_task;
@@ -1549,10 +1547,12 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
             n_logits += 1;
 
             for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
-                // end before the last token, no need to predict past the end of the sequences
-                for (size_t i = cur_task.common_prefix; i < cur_task.seq_tokens[s].size() - 1; ++i) {
-                    llama_batch_add(batch, cur_task.seq_tokens[s][i], i, { s0 + s }, true);
-                    n_logits += 1;
+                const size_t seq_tokens_size = cur_task.seq_tokens[s].size();
+                // TODO: don't evaluate the last token of each sequence
+                for (size_t i = cur_task.common_prefix; i < seq_tokens_size; ++i) {
+                    const bool needs_logits = i < seq_tokens_size - 1;
+                    llama_batch_add(batch, cur_task.seq_tokens[s][i], i, { s0 + s }, needs_logits);
+                    n_logits += needs_logits;
                 }
             }
 
