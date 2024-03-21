@@ -5251,7 +5251,7 @@ static bool llm_load_tensors(
     // load tensor data
     for (auto & it : ctx_bufs) {
         ggml_context * ctx = it.first;
-        std::vector<ggml_backend_buffer_t> bufs = it.second;
+        auto & bufs = it.second;
         if (!ml.load_all_data(ctx, progress_callback, progress_callback_user_data, bufs, use_mlock ? &model.mlock_mmaps : NULL)) {
             return false;
         }
