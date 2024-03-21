@@ -443,7 +443,7 @@ private:
                 rule += " \",\" space ( ";
             }
 
-            std::function<std::string(const std::vector<std::string>&, bool)> get_recursive_refs = [&](const std::vector<std::string> & ks, bool first_is_optional) {
+            std::function<std::string(const std::vector<std::string> &, bool)> get_recursive_refs = [&](const std::vector<std::string> & ks, bool first_is_optional) {
                 std::string res;
                 if (ks.empty()) {
                     return res;
@@ -613,7 +613,7 @@ public:
             std::unordered_set<std::string> required;
             std::vector<std::pair<std::string, json>> properties;
             std::string hybrid_name = name;
-            std::function<void(const json&, bool)> add_component = [&](const json & comp_schema, bool is_required) {
+            std::function<void(const json &, bool)> add_component = [&](const json & comp_schema, bool is_required) {
                 if (comp_schema.contains("$ref")) {
                     add_component(_refs[comp_schema["$ref"]], is_required);
                 } else if (comp_schema.contains("properties")) {
