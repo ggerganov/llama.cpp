@@ -3192,7 +3192,7 @@ struct llama_model_loader {
 
     void get_mapping_range(size_t * first, size_t * last, void ** addr, int idx, ggml_context * ctx) const {
         GGML_ASSERT(!mappings.empty());
-        const auto & mapping = mappings[idx];
+        const auto & mapping = mappings.at(idx);
 
         *first = mapping->size;
         *last  = 0;
@@ -3211,7 +3211,7 @@ struct llama_model_loader {
     void load_data_for(struct ggml_tensor * cur) const {
         const auto & w = get_weights(ggml_get_name(cur));
 
-        if (use_mmap && w.idx < mappings.size()) {
+        if (use_mmap) {
             const auto & mapping = mappings.at(w.idx);
             if (cur->data == nullptr) {
                 cur->data = (uint8_t *)mapping->addr + w.offs;
@@ -3232,7 +3232,7 @@ struct llama_model_loader {
     std::vector<std::pair<size_t, size_t>> mmaps_used;
 
     // Returns false if cancelled by progress_callback
-    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::vector<ggml_backend_buffer_t> bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
+    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::map<uint32_t, ggml_backend_buffer *> bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
         std::vector<no_init<uint8_t>> read_buf;
@@ -3246,9 +3246,12 @@ struct llama_model_loader {
             const auto & w = get_weights(ggml_get_name(cur));
             size_t n_size = ggml_nbytes(cur);
 
-            if (use_mmap && w.idx < mappings.size()) {
+            if (use_mmap) {
                 const auto & mapping = mappings.at(w.idx);
-                ggml_backend_buffer_t buf_mmap = bufs_mmap.size() > w.idx ? bufs_mmap.at(w.idx) : nullptr;
+                ggml_backend_buffer_t buf_mmap = nullptr;
+                if (bufs_mmap.count(w.idx)) {
+                    buf_mmap = bufs_mmap.at(w.idx);
+                }
                 GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
                 if (buf_mmap && cur->data == nullptr) {
                     ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *)mapping->addr + w.offs);
@@ -3283,7 +3286,7 @@ struct llama_model_loader {
         // check if this is the last call and do final cleanup
         if (size_done >= size_data) {
             // unmap offloaded tensors and metadata
-            if (use_mmap && !mappings.empty()) {
+            if (use_mmap) {
                 for (uint32_t file_no = 0; file_no < mappings.size(); file_no++) {
                     const auto & mmap_used = mmaps_used[file_no];
                     auto & mapping = mappings.at(file_no);
@@ -5129,12 +5132,12 @@ static bool llm_load_tensors(
     ml.init_mappings(true, &model.mlock_mmaps);
 
     // create the backend buffers
-    std::vector<std::pair<ggml_context *, std::vector<ggml_backend_buffer_t>>> ctx_bufs;
+    std::vector<std::pair<ggml_context *, std::map<uint32_t, ggml_backend_buffer_t>>> ctx_bufs;
 
     for (auto & it : ctx_map) {
         ggml_backend_buffer_type_t buft = it.first;
         ggml_context * ctx = it.second;
-        std::vector<ggml_backend_buffer_t> bufs;
+        std::map<uint32_t, ggml_backend_buffer_t> bufs;
 
         // only the mmap region containing the tensors in the model is mapped to the backend buffer
         // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
@@ -5145,12 +5148,11 @@ static bool llm_load_tensors(
                 size_t first, last;
                 ml.get_mapping_range(&first, &last, &addr, file_no, ctx);
                 if (first >= last) {
-                    bufs.push_back(nullptr); // add a dummy buffer to keep the indices in sync
                     continue;
                 }
                 ggml_backend_buffer_t buf = ggml_backend_cpu_buffer_from_ptr((char *)addr + first, last - first);
                 if (buf != nullptr) {
-                    bufs.push_back(buf);
+                    bufs.emplace(file_no, buf);
 #ifdef GGML_USE_CUBLAS
                     if (n_layer >= n_gpu_layers) {
                         ggml_backend_cuda_register_host_buffer(
@@ -5158,8 +5160,6 @@ static bool llm_load_tensors(
                             ggml_backend_buffer_get_size(buf));
                     }
 #endif
-                } else {
-                    throw std::runtime_error("failed to allocate cpu buffer");
                 }
             }
         }
@@ -5176,9 +5176,7 @@ static bool llm_load_tensors(
                 }
                 ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
                 if (buf != nullptr) {
-                    bufs.push_back(buf);
-                } else {
-                    throw std::runtime_error("failed to allocate metal buffer");
+                    bufs.emplace(file_no, buf);
                 }
             }
         }
@@ -5192,9 +5190,9 @@ static bool llm_load_tensors(
                     mlock_buf->init(ggml_backend_buffer_get_base(buf));
                     mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
                 }
-                bufs.push_back(buf);
-            } else {
-                throw std::runtime_error("failed to allocate backend buffer");
+                for (uint32_t file_no = 0; file_no < ml.files.size(); file_no++) {
+                    bufs.emplace(file_no, buf);
+                }
             }
         }
         if (bufs.empty()) {
@@ -5202,12 +5200,9 @@ static bool llm_load_tensors(
         }
         // indicate that this buffer contains weights
         // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
-        for (ggml_backend_buffer_t buf : bufs) {
-            if (buf == nullptr) {
-                continue;
-            }
-            ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-            model.bufs.push_back(buf);
+        for (auto & buf : bufs) {
+            ggml_backend_buffer_set_usage(buf.second, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+            model.bufs.push_back(buf.second);
         }
 
         ctx_bufs.emplace_back(ctx, bufs);
