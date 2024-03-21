@@ -451,10 +451,10 @@ mulmat_load_q3_K = """
                                     is <  8 ? (data_a[ib].scales[is-0] & 0xF) | (((data_a[ib].scales[is+4] >> 2) & 3) << 4) :
                                     is < 12 ? (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is+0] >> 4) & 3) << 4) :
                                             (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is-4] >> 6) & 3) << 4));
-            const FLOAT_TYPE dl    = FLOAT_TYPE(data_a[ib].d) * FLOAT_TYPE(us - 32);
+            const float dl = float(data_a[ib].d) * float(us - 32);
 
-            buf_a[buf_idx    ] = dl * FLOAT_TYPE(int8_t((data_a[ib].qs[qsi    ] >> qsshift) & 3) - (((data_a[ib].hmask[hmi    ] & m) != 0) ? 0 : 4));
-            buf_a[buf_idx + 1] = dl * FLOAT_TYPE(int8_t((data_a[ib].qs[qsi + 1] >> qsshift) & 3) - (((data_a[ib].hmask[hmi + 1] & m) != 0) ? 0 : 4));"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(dl * float(int8_t((data_a[ib].qs[qsi    ] >> qsshift) & 3) - (((data_a[ib].hmask[hmi    ] & m) != 0) ? 0 : 4)));
+            buf_a[buf_idx + 1] = FLOAT_TYPE(dl * float(int8_t((data_a[ib].qs[qsi + 1] >> qsshift) & 3) - (((data_a[ib].hmask[hmi + 1] & m) != 0) ? 0 : 4)));"""
 
 mulmat_load_q4_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -479,11 +479,11 @@ mulmat_load_q4_K = """
                 sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
                 mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
             }
-            const FLOAT_TYPE d = FLOAT_TYPE(loadd.x) * sc;
-            const FLOAT_TYPE m = FLOAT_TYPE(loadd.y) * mbyte;
+            const float d = loadd.x * sc;
+            const float m = loadd.y * mbyte;
 
-            buf_a[buf_idx    ] = d * FLOAT_TYPE((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) - m;
-            buf_a[buf_idx + 1] = d * FLOAT_TYPE((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) - m;"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(d * float((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) - m);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(d * float((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) - m);"""
 
 mulmat_load_q5_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -511,11 +511,11 @@ mulmat_load_q5_K = """
                 sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
                 mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
             }
-            const FLOAT_TYPE d = FLOAT_TYPE(loadd.x) * sc;
-            const FLOAT_TYPE m = FLOAT_TYPE(loadd.y) * mbyte;
+            const float d = loadd.x * sc;
+            const float m = loadd.y * mbyte;
 
-            buf_a[buf_idx    ] = d * FLOAT_TYPE(((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) + ((data_a[ib].qh[qhi    ] & hm) != 0 ? 16 : 0)) - m;
-            buf_a[buf_idx + 1] = d * FLOAT_TYPE(((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) + ((data_a[ib].qh[qhi + 1] & hm) != 0 ? 16 : 0)) - m;"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(d * (float((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) + float((data_a[ib].qh[qhi    ] & hm) != 0 ? 16 : 0)) - m);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(d * (float((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) + float((data_a[ib].qh[qhi + 1] & hm) != 0 ? 16 : 0)) - m);"""
 
 mulmat_load_q6_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -532,10 +532,10 @@ mulmat_load_q6_K = """
             const uint qsi = n * 64 + (iqs % 32) * 2;   // 0,2,4..126
             const uint qhi = n * 32 + (iqs % 16) * 2;   // 0,2,4..62
 
-            const FLOAT_TYPE dscale = FLOAT_TYPE(data_a[ib].d) * FLOAT_TYPE(data_a[ib].scales[is]);
+            const float dscale = float(data_a[ib].d) * float(data_a[ib].scales[is]);
 
-            buf_a[buf_idx    ] = dscale * FLOAT_TYPE(int8_t(((data_a[ib].ql[qsi    ] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi    ] >> qhshift) & 3) << 4)) - 32);
-            buf_a[buf_idx + 1] = dscale * FLOAT_TYPE(int8_t(((data_a[ib].ql[qsi + 1] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi + 1] >> qhshift) & 3) << 4)) - 32);"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(dscale * float(int8_t(((data_a[ib].ql[qsi    ] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi    ] >> qhshift) & 3) << 4)) - 32));
+            buf_a[buf_idx + 1] = FLOAT_TYPE(dscale * float(int8_t(((data_a[ib].ql[qsi + 1] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi + 1] >> qhshift) & 3) << 4)) - 32));"""
 
 mulmat_body2 = """
         }

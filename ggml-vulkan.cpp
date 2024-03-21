@@ -2143,7 +2143,6 @@ static void ggml_vk_buffer_write_2d(ggml_backend_vk_context * ctx, vk_buffer& ds
         ggml_vk_submit(subctx, ctx->fence);
         VK_CHECK(ctx->device->device.waitForFences({ ctx->fence }, true, UINT64_MAX), "vk_buffer_write_2d waitForFences");
         ctx->device->device.resetFences({ ctx->fence });
-        ggml_vk_queue_cleanup(ctx, ctx->device->transfer_queue);
     }
 }
 
@@ -2240,7 +2239,6 @@ static void ggml_vk_buffer_read(ggml_backend_vk_context * ctx, vk_buffer& src, s
         for (auto& cpy : subctx->out_memcpys) {
             memcpy(cpy.dst, cpy.src, cpy.n);
         }
-        ggml_vk_queue_cleanup(ctx, ctx->device->transfer_queue);
     }
 }
 
@@ -5935,6 +5933,10 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
         return;
     }
 
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_check_results_0(" << tensor->name << ")" << std::endl;
+#endif
+
     ggml_tensor * src0 = tensor->src[0];
     ggml_tensor * src1 = tensor->src[1];
     ggml_tensor * src2 = tensor->src[2];
@@ -6243,6 +6245,10 @@ static void ggml_vk_check_results_1(ggml_backend_vk_context * ctx, ggml_compute_
     if (!(vk_output_tensor > 0 && vk_output_tensor == check_counter) && check_counter <= vk_skip_checks) {
         return;
     }
+
+#ifdef GGML_VULKAN_DEBUG
+    std::cerr << "ggml_vk_check_results_1(" << tensor->name << ")" << std::endl;
+#endif
 
     ggml_tensor * src0 = tensor->src[0];
     ggml_tensor * src1 = tensor->src[1];
