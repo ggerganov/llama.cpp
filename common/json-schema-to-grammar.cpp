@@ -1,7 +1,6 @@
 #include "json-schema-to-grammar.h"
 #include <algorithm>
 #include <fstream>
-#include <iostream>
 #include <map>
 #include <regex>
 #include <sstream>
@@ -703,7 +702,7 @@ public:
             throw std::runtime_error("JSON schema conversion failed:\n" + join(_errors.begin(), _errors.end(), "\n"));
         }
         if (!_warnings.empty()) {
-            std::cerr << "WARNING: JSON schema conversion was incomplete: " + join(_warnings.begin(), _warnings.end(), "; ") << std::endl;
+            fprintf(stderr, "WARNING: JSON schema conversion was incomplete: %s\n", join(_warnings.begin(), _warnings.end(), "; ").c_str());
         }
     }
 

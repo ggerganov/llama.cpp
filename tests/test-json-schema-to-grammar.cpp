@@ -2,7 +2,6 @@
 #undef NDEBUG
 #endif
 
-#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <regex>
@@ -29,16 +28,12 @@ struct TestCase {
     std::string expected_grammar;
 
     void _print_failure_header() const {
-        std::cerr << "#" << std::endl;
-        std::cerr << "# Test '" << name.c_str() << "' failed." << std::endl;
-        std::cerr << "#" << std::endl;
-        std::cerr << schema.c_str() << std::endl;
+        fprintf(stderr, "#\n# Test '%s' failed.\n#\n%s\n", name.c_str(), schema.c_str());
     }
     void verify(const std::string& actual_grammar) const {
         if (trim(actual_grammar) != trim(expected_grammar)) {
         _print_failure_header();
-        std::cerr << "# EXPECTED:\n" << expected_grammar.c_str() << std::endl;
-        std::cerr << "# ACTUAL:\n" << actual_grammar.c_str() << std::endl;
+        fprintf(stderr, "# EXPECTED:\n%s\n# ACTUAL:\n%s\n", expected_grammar.c_str(), actual_grammar.c_str());
         assert(false);
         }
     }
@@ -50,15 +45,15 @@ struct TestCase {
             }
         } catch (const std::runtime_error& ex) {
             _print_failure_header();
-            std::cerr << "# GRAMMAR ERROR: " << ex.what() << std::endl;
+            fprintf(stderr, "# GRAMMAR ERROR: %s\n", ex.what());
             assert(false);
         }
     }
     void verify_status(TestCaseStatus status) const {
         if (status != expected_status) {
             _print_failure_header();
-            std::cerr << "# EXPECTED STATUS: " << (expected_status == SUCCESS ? "SUCCESS" : "FAILURE") << std::endl;
-            std::cerr << "# ACTUAL STATUS: " << (status == SUCCESS ? "SUCCESS" : "FAILURE") << std::endl;
+            fprintf(stderr, "# EXPECTED STATUS: %s\n", expected_status == SUCCESS ? "SUCCESS" : "FAILURE");
+            fprintf(stderr, "# ACTUAL STATUS: %s\n", status == SUCCESS ? "SUCCESS" : "FAILURE");
             assert(false);
         }
     }
@@ -78,9 +73,9 @@ static std::string read(const std::string& file) {
 }
 
 static void test_all(const std::string& lang, std::function<void(const TestCase&)> runner) {
-    std::cerr << "#\n# Testing JSON schema conversion (" << lang.c_str() << ")\n#" << std::endl;
+    fprintf(stderr, "#\n# Testing JSON schema conversion (%s)\n#\n", lang.c_str());
     auto test = [&](const TestCase& tc) {
-        std::cerr << "- " << tc.name.c_str() << (tc.expected_status == FAILURE ? " (failure expected)" : "") << std::endl;
+        fprintf(stderr, "- %s%s\n", tc.name.c_str(), tc.expected_status == FAILURE ? " (failure expected)" : "");
         runner(tc);
     };
 
@@ -804,7 +799,7 @@ int main() {
             tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
             tc.verify_status(SUCCESS);
         } catch (const std::runtime_error& ex) {
-            std::cerr << "Error: " << ex.what() << std::endl;
+            fprintf(stderr, "Error: %s\n", ex.what());
             tc.verify_status(FAILURE);
         }
     });
