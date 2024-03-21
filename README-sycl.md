@@ -115,7 +115,7 @@ You can choose between **F16** and **F32** build. F16 is faster for long-prompt 
 # Or, for F32:
 docker build -t llama-cpp-sycl -f .devops/main-intel.Dockerfile .
 
-# Note: you can also use the ".devops/main-server.Dockerfile", which compiles the "server" example
+# Note: you can also use the ".devops/server-intel.Dockerfile", which compiles the "server" example
 ```
 
 ### Run
