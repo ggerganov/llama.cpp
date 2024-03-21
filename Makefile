@@ -535,6 +535,9 @@ endif # LLAMA_HIP_UMA
 ifdef LLAMA_CUDA_FORCE_DMMV
 	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
 endif # LLAMA_CUDA_FORCE_DMMV
+ifdef LLAMA_CUDA_NO_PEER_COPY
+	HIPFLAGS 	+= -DGGML_CUDA_NO_PEER_COPY
+endif # LLAMA_CUDA_NO_PEER_COPY
 	OBJS        += ggml-cuda.o
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
