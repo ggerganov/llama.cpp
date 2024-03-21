@@ -1645,6 +1645,7 @@ enum e_model {
     MODEL_40B,
     MODEL_65B,
     MODEL_70B,
+    MODEL_314B,
     MODEL_SMALL,
     MODEL_MEDIUM,
     MODEL_LARGE,
@@ -3314,6 +3315,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_40B:    return "40B";
         case MODEL_65B:    return "65B";
         case MODEL_70B:    return "70B";
+        case MODEL_314B:   return "314B";
         case MODEL_SMALL:  return "0.1B";
         case MODEL_MEDIUM: return "0.4B";
         case MODEL_LARGE:  return "0.8B";
@@ -3449,6 +3451,15 @@ static void llm_load_hparams(
 
                 switch (hparams.n_layer) {
                     case 40: model.type = e_model::MODEL_2B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
+            } break;
+        case LLM_ARCH_GROK:
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+
+                switch (hparams.n_layer) {
+                    case 64: model.type = e_model::MODEL_314B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
