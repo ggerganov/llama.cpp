@@ -17,7 +17,7 @@ int main(void)
   double scalar_time;
   float scalar = 0.0f;
   float vector = 0.0f;
-  int vecRuns[] = {10, 16, 17, 32, 33, 48, 49, 64, 65, 80, 81, 1024768};
+  int vecRuns[RUNSTOTAL] = {10, 16, 17, 32, 33, 48, 49, 64, 65, 80, 81, 1024768};
 
   for (uint32_t runCount = 0; runCount < RUNTOTAL; ++runCount)
     {
