@@ -9453,7 +9453,7 @@ static void ggml_cuda_op_dequantize_mul_mat_vec(
 
     // on some GPUs it is faster to convert src1 to half and to use half precision intrinsics
 #ifdef GGML_CUDA_F16
-    cuda_pool_alloc<half> src1_dfloat_a;
+    ggml_cuda_pool_alloc<half> src1_dfloat_a(ctx.pool());
     half * src1_dfloat = nullptr; // dfloat == half
 
     bool src1_convert_f16 =
