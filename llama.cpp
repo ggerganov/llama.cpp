@@ -2820,7 +2820,7 @@ struct llama_model_loader {
     std::vector<std::unique_ptr<llama_mmap>> mappings;
 
     // Holds information on a model weights
-    struct llama_tensor_weights  {
+    struct llama_tensor_weights {
         uint16_t  idx; // source file index
         size_t   offs; // tensor data offset in the original file
 
