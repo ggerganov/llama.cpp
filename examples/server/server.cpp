@@ -1247,7 +1247,7 @@ struct server_context {
             {"penalize_nl",               slot.sparams.penalize_nl},
             {"stop",                      slot.params.antiprompt},
             {"n_predict",                 slot.params.n_predict}, // TODO: fix duplicate key n_predict
-            {"n_keep",                    params.n_keep},
+            {"n_keep",                    slot.params.n_keep},
             {"ignore_eos",                ignore_eos},
             {"stream",                    slot.params.stream},
             {"logit_bias",                slot.sparams.logit_bias},
