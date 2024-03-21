@@ -1323,7 +1323,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        files containing context to embed.\n");
     printf("  --chunk-size N        minimum length of embedded text chunk (default:%d)\n", params.chunk_size);
     printf("  --chunk-separator STRING\n");
-    printf("                        string to separate chunks (default: newline)\n");
+    printf("                        string to separate chunks (default: \"\\n\")\n");
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
     printf("  -b N, --batch-size N  logical maximum batch size (default: %d)\n", params.n_batch);

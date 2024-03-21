@@ -8,11 +8,11 @@ struct chunk {
     // filename
     std::string filename;
     // original file position
-    int64_t filepos;
+    size_t filepos;
     // original text data
     std::string textdata = "";
     // tokenized text data
-    std::vector<std::int32_t> tokens;
+    std::vector<llama_token> tokens;
     // embedding
     std::vector<float> embedding;
     // cosin similarity
@@ -240,9 +240,6 @@ int main(int argc, char ** argv) {
     while (true) {
         printf("Enter query: ");
         std::getline(std::cin, query);
-        if (query == "exit" || query == "quit" || query == "q") {
-            break;
-        }
         std::vector<int32_t> query_tokens = llama_tokenize(ctx, query, true);
 
         struct llama_batch query_batch = llama_batch_init(n_batch, 0, 1);
