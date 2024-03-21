@@ -5155,6 +5155,8 @@ static bool llm_load_tensors(
                             ggml_backend_buffer_get_size(buf));
                     }
 #endif
+                } else {
+                    throw std::runtime_error("failed to allocate cpu buffer");
                 }
             }
         }
@@ -5168,6 +5170,8 @@ static bool llm_load_tensors(
                 ggml_backend_buffer_t buf = ggml_backend_metal_buffer_from_ptr((char *) addr + first, last - first, max_size);
                 if (buf != nullptr) {
                     bufs.push_back(buf);
+                } else {
+                    throw std::runtime_error("failed to allocate metal buffer");
                 }
             }
         }
@@ -5182,6 +5186,8 @@ static bool llm_load_tensors(
                     mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
                 }
                 bufs.push_back(buf);
+            } else {
+                throw std::runtime_error("failed to allocate backend buffer");
             }
         }
         if (bufs.empty()) {
