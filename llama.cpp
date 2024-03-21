@@ -1041,7 +1041,7 @@ struct llama_file {
     size_t size;
 
     llama_file(const char * fname, const char * mode) {
-        fp = std::fopen(fname, mode);
+        fp = ggml_fopen(fname, mode);
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
         }
