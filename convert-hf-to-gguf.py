@@ -19,8 +19,8 @@ import torch
 if TYPE_CHECKING:
     from torch import Tensor
 
-#if 'NO_LOCAL_GGUF' not in os.environ:
-sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
 from convert import HfVocab
@@ -53,7 +53,7 @@ class Model(ABC):
         self.num_parts = Model.count_model_parts(self.dir_model, ".safetensors" if self.is_safetensors else ".bin")
         self.part_names = self._get_part_names()
         self.hparams = Model.load_hparams(self.dir_model)
-        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=True)
+        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=False)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
 
     @property
