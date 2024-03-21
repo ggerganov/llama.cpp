@@ -3040,7 +3040,7 @@ struct llama_model_loader {
         if (meta) {
             gguf_free(meta);
         }
-        for (auto & ctx : contexts) {
+        for (auto * ctx : contexts) {
             ggml_free(ctx);
         }
     }
