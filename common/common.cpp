@@ -1220,14 +1220,21 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             throw std::invalid_argument("error: unknown argument: " + arg);
         }
     }
+
     if (invalid_param) {
         throw std::invalid_argument("error: invalid parameter for argument: " + arg);
     }
+
     if (params.prompt_cache_all &&
             (params.interactive || params.interactive_first ||
              params.instruct)) {
 
         throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
+    }
+
+    // short-hand to avoid specifying --hf-file -> default it to --model
+    if (!params.hf_repo.empty() && params.hf_file.empty()) {
+        params.hf_file = params.model;
     }
 
     if (params.escape) {
