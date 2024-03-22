@@ -804,7 +804,7 @@ int main() {
         }
     });
 
-    if (std::system("python --version") == 0) {
+    if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python --version") == 0)) {
         test_all("Python", [](const TestCase & tc) {
             write("test-json-schema-input.tmp", tc.schema);
             tc.verify_status(std::system(
@@ -815,7 +815,7 @@ int main() {
         fprintf(stderr, "\033[33mWARNING: Python not found, skipping Python JSON schema -> grammar tests.\n\033[0m");
     }
 
-    if (std::system("node --version") == 0) {
+    if (getenv("LLAMA_NODE_AVAILABLE") || (std::system("node --version") == 0)) {
         test_all("JavaScript", [](const TestCase & tc) {
             write("test-json-schema-input.tmp", tc.schema);
             tc.verify_status(std::system(
