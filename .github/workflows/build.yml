@@ -786,9 +786,6 @@ jobs:
   windows-latest-cmake-sycl:
     runs-on: windows-latest
 
-    strategy:
-      package_name: ['sycl']
-
     defaults:
       run:
         shell: bash
@@ -831,14 +828,14 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
-          7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ package_name }}-x64.zip .\build\bin\*
+          7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip .\build\bin\*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v3
         with:
           path: |
-            llama-${{ steps.tag.outputs.name }}-bin-win-${{ package_name }}-x64.zip
+            llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
 
   ios-xcode-build:
     runs-on: macos-latest
