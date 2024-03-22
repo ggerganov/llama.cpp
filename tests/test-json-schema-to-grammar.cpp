@@ -90,7 +90,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         FAILURE,
-        "invalid type type",
+        "invalid type",
         R"""({
             "type": 123
         })""",
@@ -479,7 +479,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             string ::=  "\"" (
                     [^"\\] |
                     "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-                    )* "\"" space
+                )* "\"" space
         )"""
     });
 
@@ -647,16 +647,16 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "$ref": "#/definitions/MyType",
             "definitions": {
                 "MyType": {
-                "type": "object",
-                "properties": {
-                    "a": {
-                    "type": "string"
-                    }
-                },
-                "required": [
-                    "a"
-                ],
-                "additionalProperties": false
+                    "type": "object",
+                    "properties": {
+                        "a": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "a"
+                    ],
+                    "additionalProperties": false
                 }
             }
         })""",
@@ -682,10 +682,10 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             ],
             "definitions": {
                 "foo": {
-                "properties": {"a": {"type": "number"}}
+                    "properties": {"a": {"type": "number"}}
                 },
                 "bar": {
-                "properties": {"b": {"type": "number"}}
+                    "properties": {"b": {"type": "number"}}
                 }
             },
             "type": "object"
@@ -719,16 +719,16 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             ],
             "definitions": {
                 "foo": {
-                "properties": {"a": {"type": "number"}}
+                    "properties": {"a": {"type": "number"}}
                 },
                 "bar": {
-                "properties": {"b": {"type": "number"}}
+                    "properties": {"b": {"type": "number"}}
                 },
                 "bam": {
-                "properties": {"c": {"type": "number"}}
+                    "properties": {"c": {"type": "number"}}
                 },
                 "baz": {
-                "properties": {"d": {"type": "number"}}
+                    "properties": {"d": {"type": "number"}}
                 }
             },
             "type": "object"
@@ -756,15 +756,15 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
                 "properties": {
                     "number": {
                     "type": "object",
-                    "properties": {
-                        "root": {
-                        "type": "number"
-                        }
-                    },
-                    "required": [
-                        "root"
-                    ],
-                    "additionalProperties": false
+                        "properties": {
+                            "root": {
+                                "type": "number"
+                            }
+                        },
+                        "required": [
+                            "root"
+                        ],
+                        "additionalProperties": false
                     }
                 },
                 "required": [
