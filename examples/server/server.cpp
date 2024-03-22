@@ -30,7 +30,7 @@
 #include <signal.h>
 #include <memory>
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 bool server_verbose = false;
 bool server_log_json = true;

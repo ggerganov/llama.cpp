@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 const std::string SPACE_RULE = "\" \"?";
 
@@ -124,7 +124,7 @@ static std::string replacePattern(const std::string & input, const std::regex & 
 }
 
 static std::string format_literal(const std::string & literal) {
-    std::string escaped = replacePattern(json(literal).dump(), GRAMMAR_LITERAL_ESCAPE_RE, [&](const std::smatch & match) {
+    std::string escaped = replacePattern(literal, GRAMMAR_LITERAL_ESCAPE_RE, [&](const std::smatch & match) {
         char c = match.str()[0];
         return GRAMMAR_LITERAL_ESCAPES.at(c);
     });
@@ -137,7 +137,7 @@ private:
     std::function<json(const std::string &)> _fetch_json;
     bool _dotall;
     std::map<std::string, std::string> _rules;
-    std::unordered_map<std::string, nlohmann::json> _refs;
+    std::unordered_map<std::string, json> _refs;
     std::unordered_set<std::string> _refs_being_resolved;
     std::vector<std::string> _errors;
     std::vector<std::string> _warnings;
@@ -413,7 +413,7 @@ private:
             std::string prop_rule_name = visit(prop_schema, name + (name.empty() ? "" : "-") + prop_name);
             prop_kv_rule_names[prop_name] = _add_rule(
                 name + (name.empty() ? "" : "-") + prop_name + "-kv",
-                format_literal(prop_name) + " space \":\" space " + prop_rule_name
+                format_literal(json(prop_name).dump()) + " space \":\" space " + prop_rule_name
             );
             if (required.find(prop_name) != required.end()) {
                 required_props.push_back(prop_name);
@@ -495,7 +495,7 @@ public:
         _rules["space"] = SPACE_RULE;
     }
 
-    void resolve_refs(nlohmann::json & schema, const std::string & url) {
+    void resolve_refs(json & schema, const std::string & url) {
         /*
         * Resolves all $ref fields in the given schema, fetching any remote schemas,
         * replacing each $ref with absolute reference URL and populates _refs with the
@@ -557,11 +557,7 @@ public:
     }
 
     std::string _generate_constant_rule(const json & value) {
-        if (!value.is_string()) {
-            _errors.push_back("Only std::string constants are supported, got " + value.dump());
-            return "";
-        }
-        return format_literal(value.get<std::string>());
+        return format_literal(value.dump());
     }
 
     std::string visit(const json & schema, const std::string & name) {
