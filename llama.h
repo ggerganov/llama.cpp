@@ -966,9 +966,9 @@ extern "C" {
     LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count);
 
     /// @details Extract the path prefix from the split_path if and only if the split_no and split_count match.
-    ///          llama_split_prefix(split_prefix, "/models/ggml-model-q4_0-00002-of-00004.gguf", 43, 2, 4) => split_prefix = "/models/ggml-model-q4_0"
+    ///          llama_split_prefix(split_prefix, 64, "/models/ggml-model-q4_0-00002-of-00004.gguf", 2, 4) => split_prefix = "/models/ggml-model-q4_0"
     //  Returns the split_prefix length.
-    LLAMA_API int llama_split_prefix(char * split_prefix, const char * split_path, size_t split_path_len, int split_no, int split_count);
+    LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
 
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);

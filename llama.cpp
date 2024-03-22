@@ -2888,7 +2888,7 @@ struct llama_model_loader {
             }
 
             char split_prefix[PATH_MAX] = {0};
-            if (!llama_split_prefix(split_prefix, fname.c_str(), fname.size(), idx, n_split)) {
+            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
                 throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
             }
 
@@ -14806,25 +14806,19 @@ LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * pa
     return 0;
 }
 
-LLAMA_API int llama_split_prefix(char * dest, const char * split_path, size_t split_path_len, int split_no, int split_count) {
-    char split_prefix[PATH_MAX] = {0};
-    int split_no_file = 0;
-    int split_count_file = 0;
-    const char * split_format = "-00000-of-00000.gguf";
+int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int split_no, int split_count) {
+    std::string str_split_path(split_path);
+    char postfix[32];
+    sprintf(postfix, "-%05d-of-%05d.gguf", split_no + 1, split_count);
+    std::string str_postfix(postfix);
 
-    if (split_path_len > strlen(split_format) + 1) {
-        size_t prefix_len = split_path_len - strlen(split_format);
-        if (prefix_len >= sizeof(split_prefix)) {
-            prefix_len = sizeof(split_prefix) - 1;  // leave room for null terminator
-        }
-        strncpy(split_prefix, split_path, prefix_len);
-
-        int n = sscanf(&split_path[0] + strlen(split_prefix), "-%d-of-%d", &split_no_file, &split_count_file);
-        if (n == 2 && split_no_file - 1 == split_no && split_count_file == split_count) {
-            strcpy(dest, split_prefix);
-            return strlen(split_prefix);
-        }
+    // check if dest ends with postfix
+    auto size_prefix = str_split_path.size() - str_postfix.size();
+    if (size_prefix > 0 && str_split_path.find(str_postfix, size_prefix) != std::string::npos) {
+        strncpy(dest, split_path, std::min(size_prefix, maxlen));
+        return size_prefix;
     }
+
     return 0;
 }
 

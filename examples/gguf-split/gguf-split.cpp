@@ -355,7 +355,7 @@ static void gguf_merge(const split_params & split_params) {
             }
 
             // Verify the file naming and extract split_prefix
-            if (!llama_split_prefix(split_prefix, split_path, strlen(split_path), i_split, n_split)) {
+            if (!llama_split_prefix(split_prefix, sizeof (split_prefix), split_path, i_split, n_split)) {
                 fprintf(stderr, "\n%s: unexpected input file name: %s"
                                 " i_split=%d"
                                 " n_split=%d\n", __func__,
