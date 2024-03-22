@@ -794,6 +794,9 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 }
 
 int main() {
+    fprintf(stderr, "LLAMA_NODE_AVAILABLE = %s\n", getenv("LLAMA_NODE_AVAILABLE") ? "true" : "false");
+    fprintf(stderr, "LLAMA_PYTHON_AVAILABLE = %s\n", getenv("LLAMA_PYTHON_AVAILABLE") ? "true" : "false");
+
     test_all("C++", [](const TestCase & tc) {
         try {
             tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
