@@ -3190,14 +3190,14 @@ struct llama_model_loader {
             mappings.reserve(files.size());
             mmaps_used.reserve(files.size());
             for (const auto & file : files) {
-                auto * mapping = new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa());
+                std::unique_ptr<llama_mmap> mapping(new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa()));
                 mmaps_used.emplace_back(std::make_pair(mapping->size, 0));
-                mappings.emplace_back(std::unique_ptr<llama_mmap>(mapping));
                 if (mlock_mmaps) {
-                    auto * mlock_mmap = new llama_mlock();
+                    std::unique_ptr<llama_mlock> mlock_mmap(new llama_mlock());
                     mlock_mmap->init(mapping->addr);
-                    mlock_mmaps->emplace_back(std::unique_ptr<llama_mlock>(mlock_mmap));
+                    mlock_mmaps->emplace_back(std::move(mlock_mmap));
                 }
+                mappings.emplace_back(std::move(mapping));
             }
         }
 
