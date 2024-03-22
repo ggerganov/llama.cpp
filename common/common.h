@@ -89,9 +89,11 @@ struct gpt_params {
     struct llama_sampling_params sparams;
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
-    std::string model_url         = ""; // model url to download
-    std::string model_draft       = "";                              // draft model for speculative decoding
+    std::string model_draft       = "";  // draft model for speculative decoding
     std::string model_alias       = "unknown"; // model alias
+    std::string model_url         = "";  // model url to download
+    std::string hf_repo           = "";  // HF repo
+    std::string hf_file           = "";  // HF file
     std::string prompt            = "";
     std::string prompt_file       = "";  // store the external prompt file name
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
@@ -192,8 +194,8 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
-struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model,
-                                                         struct llama_model_params     params);
+struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const struct llama_model_params & params);
 
 // Batch utils
 
