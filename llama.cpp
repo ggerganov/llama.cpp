@@ -3293,7 +3293,7 @@ struct llama_model_loader {
             // unmap offloaded tensors and metadata
             if (use_mmap) {
                 for (uint32_t idx = 0; idx < mappings.size(); idx++) {
-                    const auto & mmap_used = mmaps_used[idx];
+                    const auto & mmap_used = mmaps_used.at(idx);
                     auto & mapping = mappings.at(idx);
                     mapping->unmap_fragment(0, mmap_used.first);
                     if (mmap_used.second != 0) {
