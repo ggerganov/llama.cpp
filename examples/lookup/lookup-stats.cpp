@@ -132,7 +132,7 @@ int main(int argc, char ** argv){
             const int64_t eta_min  = eta_ms / (60*1000);
             const int64_t eta_s    = (eta_ms - 60*1000*eta_min) / 1000;
 
-            LOG_TEE("%d/%d done, ETA: %02ld:%02ld\n", i_start, n_input, eta_min, eta_s);
+            LOG_TEE("lookup-stats: %d/%d done, ETA: %02" PRId64 ":%02" PRId64 "\n", i_start, n_input, eta_min, eta_s);
         }
 
         // After each chunk, update the dynamic ngram cache with the context ngram cache:
