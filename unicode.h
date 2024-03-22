@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <locale>
-#include <codecvt>
 
 #define CODEPOINT_TYPE_UNIDENTIFIED 0
 #define CODEPOINT_TYPE_DIGIT        1
