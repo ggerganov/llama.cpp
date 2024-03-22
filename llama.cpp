@@ -2918,10 +2918,15 @@ struct llama_model_loader {
 
                 gguf_free(ctx_gguf);
             }
+
             get_key(llm_kv(LLM_KV_SPLIT_TENSORS_COUNT), n_tensors);
-            int n_tensors_loaded = (int) weights.size();
-            if (n_tensors != n_tensors_loaded) {
-                throw std::runtime_error(format("corrupted model: %d tensors expected but %d found", n_tensors, n_tensors_loaded));
+
+            // sanity check
+            {
+                const int n_tensors_loaded = (int) weights.size();
+                if (n_tensors != n_tensors_loaded) {
+                    throw std::runtime_error(format("corrupted model: %d tensors expected but %d found", n_tensors, n_tensors_loaded));
+                }
             }
 
             LLAMA_LOG_INFO("%s: additional %d GGUFs metadata loaded.\n",  __func__, n_split);
@@ -2930,7 +2935,7 @@ struct llama_model_loader {
         n_kv      = gguf_get_n_kv(meta);
         n_tensors = weights.size();
 
-        fver = (enum llama_fver ) gguf_get_version(meta);
+        fver = (enum llama_fver) gguf_get_version(meta);
 
         for (auto & w : weights) {
             n_elements += ggml_nelements(w.tensor);
@@ -2960,7 +2965,8 @@ struct llama_model_loader {
                 }
 
                 if (trace > 0) {
-                    LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, ggml_get_name(tensor), ggml_type_name(type), llama_format_tensor_shape(tensor).c_str());
+                    const uint16_t sid = weights.at(i).idx;
+                    LLAMA_LOG_INFO("%s: - tensor %4d, split %2d: %32s %-8s [ %s ]\n", __func__, i, sid, ggml_get_name(tensor), ggml_type_name(type), llama_format_tensor_shape(tensor).c_str());
                 }
             }
 
