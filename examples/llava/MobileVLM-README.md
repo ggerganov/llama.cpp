@@ -1,10 +1,12 @@
 # MobileVLM
 
-Currently this implementation supports [MobileVLM-v1.7](https://huggingface.co/mtgv/MobileVLM-1.7B) variants.
+Currently this implementation supports [MobileVLM-1.7B](https://huggingface.co/mtgv/MobileVLM-1.7B) / [MobileVLM_V2-1.7B](https://huggingface.co/mtgv/MobileVLM_V2-1.7B) variants.
 
 for more information, please go to [Meituan-AutoML/MobileVLM](https://github.com/Meituan-AutoML/MobileVLM)
 
 The implementation is based on llava, and is compatible with llava and mobileVLM. The usage is basically same as llava.
+
+Notice: The overall process of model inference for both **MobileVLM** and **MobileVLM_V2** models is the same, but the process of model conversion  is a little different. Therefore, using MobiVLM as an example, the different conversion step will be shown.
 
 ## Usage
 Build with cmake or run `make llava-cli` to build it.
@@ -34,7 +36,7 @@ git clone https://huggingface.co/openai/clip-vit-large-patch14-336
 python ./examples/llava/llava-surgery.py -m path/to/MobileVLM-1.7B
 ```
 
-3. Use `convert-image-encoder-to-gguf.py` with `--projector-type ldp` to convert the LLaVA image encoder to GGUF:
+3. Use `convert-image-encoder-to-gguf.py` with `--projector-type ldp` (for **V2** the arg is `--projector-type ldpv2`) to convert the LLaVA image encoder to GGUF:
 
 ```sh
 python ./examples/llava/convert-image-encoder-to-gguf \
@@ -42,6 +44,14 @@ python ./examples/llava/convert-image-encoder-to-gguf \
     --llava-projector path/to/MobileVLM-1.7B/llava.projector \
     --output-dir path/to/MobileVLM-1.7B \
     --projector-type ldp
+```
+
+```sh
+python ./examples/llava/convert-image-encoder-to-gguf \
+    -m path/to/clip-vit-large-patch14-336 \
+    --llava-projector path/to/MobileVLM-1.7B_V2/llava.projector \
+    --output-dir path/to/MobileVLM-1.7B_V2 \
+    --projector-type ldpv2
 ```
 
 4. Use `convert.py` to convert the LLaMA part of LLaVA to GGUF:

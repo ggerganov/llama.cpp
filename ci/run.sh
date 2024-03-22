@@ -45,7 +45,8 @@ fi
 
 if [ ! -z ${GG_BUILD_SYCL} ]; then
     if [ -z ${ONEAPI_ROOT} ]; then
-        echo "Not detected ONEAPI_ROOT, please install oneAPI base toolkit and enable it by:\n source /opt/intel/oneapi/setvars.sh"
+        echo "Not detected ONEAPI_ROOT, please install oneAPI base toolkit and enable it by:"
+        echo "source /opt/intel/oneapi/setvars.sh"
         exit 1
     fi
 

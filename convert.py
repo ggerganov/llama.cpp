@@ -332,6 +332,9 @@ class Params:
 #
 
 class BpeVocab:
+    tokenizer_model = "gpt2"
+    name = "bpe"
+
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
         if isinstance(self.bpe_tokenizer.get('model'), dict):
@@ -390,6 +393,9 @@ class BpeVocab:
 
 
 class SentencePieceVocab:
+    tokenizer_model = "llama"
+    name = "spm"
+
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         added_tokens: dict[str, int]
@@ -453,6 +459,9 @@ class SentencePieceVocab:
 
 
 class HfVocab:
+    tokenizer_model = "llama"
+    name = "hfft"
+
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None = None) -> None:
         try:
             from transformers import AutoTokenizer
@@ -553,7 +562,15 @@ class HfVocab:
         return f"<HfVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
-Vocab: TypeAlias = "BpeVocab | SentencePieceVocab | HfVocab"
+class NoVocab:
+    tokenizer_model = "no_vocab"
+    name = "no_vocab"
+
+    def __repr__(self) -> str:
+        return "<NoVocab for a model without integrated vocabulary>"
+
+
+Vocab: TypeAlias = "BpeVocab | SentencePieceVocab | HfVocab | NoVocab"
 
 
 #
@@ -935,8 +952,10 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
     # Handle special case where the model's vocab size is not set
     if params.n_vocab == -1:
         raise ValueError(
-            f"The model's vocab size is set to -1 in params.json. Please update it manually. Maybe {vocab.vocab_size}?"
+            f"The model's vocab size is set to -1 in params.json. Please update it manually.{f' Maybe {vocab.vocab_size}?' if hasattr(vocab, 'vocab_size') else ''}"
         )
+    if isinstance(vocab, NoVocab):
+        return  # model has no vocab
 
     # Check for a vocab size mismatch
     if params.n_vocab == vocab.vocab_size:
@@ -977,6 +996,7 @@ class OutputFile:
             name = str(params.path_model.parent).split('/')[-1]
 
         self.gguf.add_name                (name)
+        self.gguf.add_vocab_size          (params.n_vocab)
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
@@ -1013,21 +1033,9 @@ class OutputFile:
         if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
 
-    def handle_tokenizer_model(self, vocab: Vocab) -> str:
-        # Map the vocab types to the supported tokenizer models
-        tokenizer_model = {
-            SentencePieceVocab: "llama",
-            HfVocab: "llama",
-            BpeVocab: "gpt2",
-        }.get(type(vocab))
-
-        # Block if vocab type is not predefined
-        if tokenizer_model is None:
-            raise ValueError("Unknown vocab type: Not supported")
-
-        return tokenizer_model
-
     def extract_vocabulary_from_model(self, vocab: Vocab) -> tuple[list[bytes], list[float], list[gguf.TokenType]]:
+        assert not isinstance(vocab, NoVocab)
+
         tokens = []
         scores = []
         toktypes = []
@@ -1043,11 +1051,8 @@ class OutputFile:
         return tokens, scores, toktypes
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
-        # Handle the tokenizer model
-        tokenizer_model = self.handle_tokenizer_model(vocab)
-
         # Ensure that tokenizer_model is added to the GGUF model
-        self.gguf.add_tokenizer_model(tokenizer_model)
+        self.gguf.add_tokenizer_model(vocab.tokenizer_model)
 
         # Extract model vocabulary for model conversion
         tokens, scores, toktypes = self.extract_vocabulary_from_model(vocab)
@@ -1074,6 +1079,26 @@ class OutputFile:
     def write_tensor_info(self) -> None:
         self.gguf.write_ti_data_to_file()
 
+    def write_tensor_data(self, ftype: GGMLFileType, model: LazyModel, concurrency: int) -> None:
+        ndarrays_inner = bounded_parallel_map(OutputFile.do_item, model.items(), concurrency=concurrency)
+        if ftype == GGMLFileType.MostlyQ8_0:
+            ndarrays = bounded_parallel_map(
+                OutputFile.maybe_do_quantize, ndarrays_inner, concurrency=concurrency, max_workers=concurrency,
+                use_processpool_executor=True,
+            )
+        else:
+            ndarrays = map(OutputFile.maybe_do_quantize, ndarrays_inner)
+
+        start = time.time()
+        for i, ((name, lazy_tensor), ndarray) in enumerate(zip(model.items(), ndarrays)):
+            elapsed = time.time() - start
+            size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
+            padi = len(str(len(model)))
+            print(
+                f"[{i + 1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}"
+            )
+            self.gguf.write_tensor_data(ndarray)
+
     def close(self) -> None:
         self.gguf.close()
 
@@ -1082,7 +1107,7 @@ class OutputFile:
         fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab,
         endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE, pad_vocab: bool = False,
     ) -> None:
-        check_vocab_size(params, vocab, pad_vocab = pad_vocab)
+        check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
@@ -1120,8 +1145,11 @@ class OutputFile:
 
         # meta data
         of.add_meta_arch(params)
-        of.add_meta_vocab(vocab)
-        of.add_meta_special_vocab(svocab)
+        if isinstance(vocab, NoVocab):
+            of.gguf.add_tokenizer_model(vocab.tokenizer_model)
+        else:
+            of.add_meta_vocab(vocab)
+            of.add_meta_special_vocab(svocab)
 
         # tensor info
         for name, lazy_tensor in model.items():
@@ -1131,24 +1159,7 @@ class OutputFile:
         of.write_tensor_info()
 
         # tensor data
-        ndarrays_inner = bounded_parallel_map(OutputFile.do_item, model.items(), concurrency = concurrency)
-        if ftype == GGMLFileType.MostlyQ8_0:
-            ndarrays = bounded_parallel_map(
-                OutputFile.maybe_do_quantize, ndarrays_inner, concurrency=concurrency, max_workers=concurrency,
-                use_processpool_executor=True,
-            )
-        else:
-            ndarrays = map(OutputFile.maybe_do_quantize, ndarrays_inner)
-
-        start = time.time()
-        for i, ((name, lazy_tensor), ndarray) in enumerate(zip(model.items(), ndarrays)):
-            elapsed = time.time() - start
-            size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
-            padi = len(str(len(model)))
-            print(
-                f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}"
-            )
-            of.gguf.write_tensor_data(ndarray)
+        of.write_tensor_data(ftype, model, concurrency)
 
         of.close()
 
@@ -1156,9 +1167,9 @@ class OutputFile:
 def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileType:
     wq_type = model[gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0) + ".weight"].data_type
 
-    if output_type_str == "f32" or (output_type_str is None and wq_type == DT_F32):
+    if output_type_str == "f32" or (output_type_str is None and wq_type in (DT_F32, DT_BF16)):
         return GGMLFileType.AllF32
-    if output_type_str == "f16" or (output_type_str is None and wq_type in (DT_F16, DT_BF16)):
+    if output_type_str == "f16" or (output_type_str is None and wq_type == DT_F16):
         return GGMLFileType.MostlyF16
     if output_type_str == "q8_0":
         return GGMLFileType.MostlyQ8_0
@@ -1309,8 +1320,8 @@ class VocabFactory:
                 return vtype, path
         raise FileNotFoundError(f"Could not find any of {[self._FILES[vt] for vt in vocab_types]}")
 
-    def _create_special_vocab(self, vocab: Vocab, vocabtype: str, model_parent_path: Path) -> gguf.SpecialVocab:
-        load_merges = vocabtype == "bpe"
+    def _create_special_vocab(self, vocab: Vocab, model_parent_path: Path) -> gguf.SpecialVocab:
+        load_merges = vocab.name == "bpe"
         n_vocab = vocab.vocab_size if hasattr(vocab, "vocab_size") else None
         return gguf.SpecialVocab(
             model_parent_path,
@@ -1319,30 +1330,34 @@ class VocabFactory:
             n_vocab=n_vocab,
         )
 
-    def load_vocab(self, vocab_types: list[str], model_parent_path: Path) -> tuple[Vocab, gguf.SpecialVocab]:
+    def _create_vocab_by_path(self, vocab_types: list[str]) -> Vocab:
         vocab_type, path = self._select_file(vocab_types)
         print(f"Loading vocab file {path!r}, type {vocab_type!r}")
 
         added_tokens_path = path.parent / "added_tokens.json"
-        vocab: Vocab
         if vocab_type == "bpe":
-            vocab = BpeVocab(
+            return BpeVocab(
                 path, added_tokens_path if added_tokens_path.exists() else None
             )
-        elif vocab_type == "spm":
-            vocab = SentencePieceVocab(
+        if vocab_type == "spm":
+            return SentencePieceVocab(
                 path, added_tokens_path if added_tokens_path.exists() else None
             )
-        elif vocab_type == "hfft":
-            vocab = HfVocab(
+        if vocab_type == "hfft":
+            return HfVocab(
                 path.parent, added_tokens_path if added_tokens_path.exists() else None
             )
+        raise ValueError(vocab_type)
+
+    def load_vocab(self, vocab_types: list[str], model_parent_path: Path) -> tuple[Vocab, gguf.SpecialVocab]:
+        vocab: Vocab
+        if len(vocab_types) == 1 and "no_vocab" in vocab_types:
+            vocab = NoVocab()
         else:
-            raise ValueError(vocab_type)
+            vocab = self._create_vocab_by_path(vocab_types)
         # FIXME: Respect --vocab-dir?
         special_vocab = self._create_special_vocab(
             vocab,
-            vocab_type,
             model_parent_path,
         )
         return vocab, special_vocab
@@ -1377,10 +1392,10 @@ def main(args_in: list[str] | None = None) -> None:
         # We currently only support Q8_0 output on little endian systems.
         output_choices.append("q8_0")
     parser = argparse.ArgumentParser(description="Convert a LLaMA model to a GGML compatible file")
-    parser.add_argument("--awq-path",     type=Path,              help="Path to scale awq cache file", default=None)
     parser.add_argument("--dump",         action="store_true",    help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single",  action="store_true",    help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only",   action="store_true",    help="extract only the vocab")
+    parser.add_argument("--no-vocab",     action="store_true",    help="store model without the vocab")
     parser.add_argument("--outtype",      choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
     parser.add_argument("--vocab-dir",    type=Path,              help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--vocab-type",                           help="vocab types to try in order, choose from 'spm', 'bpe', 'hfft' (default: spm,hfft)", default="spm,hfft")
@@ -1393,18 +1408,10 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
 
     args = parser.parse_args(args_in)
-    if args.awq_path:
-        sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
-        from awq.apply_awq import add_scale_weights  # type: ignore[import-not-found]
-        tmp_model_path = args.model / "weighted_model"
-        if tmp_model_path.is_dir():
-            print(f"{tmp_model_path} exists as a weighted model.")
-        else:
-            tmp_model_path.mkdir(parents=True, exist_ok=True)
-            print("Saving new weighted model ...")
-            add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
-            print(f"Saved weighted model at {tmp_model_path}.")
-        args.model = tmp_model_path
+    if args.no_vocab:
+        if args.vocab_only:
+            raise ValueError("no need to specify --vocab-only if using --no-vocab")
+        args.vocab_type = "no_vocab"
 
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
@@ -1455,7 +1462,7 @@ def main(args_in: list[str] | None = None) -> None:
         print(f"Wrote {outfile}")
         return
 
-    if model_plus.vocab is not None and args.vocab_dir is None:
+    if model_plus.vocab is not None and args.vocab_dir is None and not args.no_vocab:
         vocab = model_plus.vocab
 
     print(f"Vocab info: {vocab}")

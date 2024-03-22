@@ -11,7 +11,10 @@
 *.gcda
 *.dot
 *.bat
+*.tmp
 *.metallib
+*.etag
+*.lastModified
 .DS_Store
 .build/
 .cache/
@@ -24,6 +27,8 @@
 .vs/
 .vscode/
 .idea/
+
+ggml-metal-embed.metal
 
 lcov-report/
 gcovr-report/
@@ -45,6 +50,7 @@ models-mnt
 /embedding
 /gguf
 /gguf-llama-simple
+/gritlm
 /imatrix
 /infill
 /libllama.so
