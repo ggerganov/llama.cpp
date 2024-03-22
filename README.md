@@ -22,6 +22,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 - Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
 - Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
 - Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
+- Support loading sharded model, using `gguf-split` CLI https://github.com/ggerganov/llama.cpp/pull/6187
 
 ----
 
