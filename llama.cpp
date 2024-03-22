@@ -3237,7 +3237,7 @@ struct llama_model_loader {
     std::vector<std::pair<size_t, size_t>> mmaps_used;
 
     // Returns false if cancelled by progress_callback
-    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::map<uint32_t, ggml_backend_buffer *> & bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
+    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::unordered_map<uint32_t, ggml_backend_buffer *> & bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
         std::vector<no_init<uint8_t>> read_buf;
