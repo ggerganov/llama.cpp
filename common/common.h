@@ -139,7 +139,7 @@ struct gpt_params {
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
-    bool cont_batching     = false; // insert new sequences for decoding on-the-fly
+    bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
