@@ -2919,7 +2919,10 @@ struct llama_model_loader {
                 gguf_free(ctx_gguf);
             }
             get_key(llm_kv(LLM_KV_SPLIT_TENSORS_COUNT), n_tensors);
-            GGML_ASSERT(n_tensors == (int) weights.size());
+            int n_tensors_loaded = (int) weights.size();
+            if (n_tensors != n_tensors_loaded) {
+                throw std::runtime_error(format("corrupted model: %d tensors expected but %d found", n_tensors, n_tensors_loaded));
+            }
 
             LLAMA_LOG_INFO("%s: additional %d GGUFs metadata loaded.\n",  __func__, n_split);
         }
