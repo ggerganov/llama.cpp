@@ -154,8 +154,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return result;
 }
 
-static bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int & i, bool & invalid_param) {
-    std::string arg = argv[i];
+static bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param) {
     llama_sampling_params& sparams = params.sparams;
 
     if (arg == "-s" || arg == "--seed") {
@@ -1201,7 +1200,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 
-        if (!gpt_params_find_arg(argc, argv, params, i, invalid_param)) {
+        if (!gpt_params_find_arg(argc, argv, arg, params, i, invalid_param)) {
             throw std::invalid_argument("error: unknown argument: " + arg);
         }
     }
