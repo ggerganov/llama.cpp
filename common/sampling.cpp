@@ -241,6 +241,9 @@ static llama_token llama_sampling_sample_impl(
             return llama_sampling_sample_impl(ctx_sampling, ctx_main, ctx_cfg, idx, true);  // Pass true for is_resampling
         }
     }
+    if (original_logits != nullptr) {
+        delete original_logits;
+    }
 
     return id;
 }
