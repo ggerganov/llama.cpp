@@ -101,7 +101,7 @@ struct TransformerWeights {
     std::vector<float> wcls;
 };
 
-static void alloc_weights(TransformerWeights* w, const Config* p, bool shared_weights) {
+static void alloc_weights(TransformerWeights * w, const Config * p, bool shared_weights) {
     const int n_multiqueries = p->n_kv_heads <= 0 || p->n_kv_heads >= p->n_heads ? 1 : p->n_heads / p->n_kv_heads;
     try {
         w->token_embedding_table.resize(p->vocab_size * p->dim);
@@ -144,12 +144,12 @@ static void alloc_weights(TransformerWeights* w, const Config* p, bool shared_we
             LOG("%s: Allocating [%d] x [%d] = [%d] float space for w->wcls\n",__func__,p->vocab_size , p->dim, p->vocab_size * p->dim);
         }
     }
-    catch (std::length_error&) {
+    catch (std::length_error &) {
         die("Invalid configuration. Failed to allocate memory for weights");
     }
 }
 
-static int checkpoint_init_weights(TransformerWeights *w, const Config* p, FILE* f, bool shared_weights) {
+static int checkpoint_init_weights(TransformerWeights * w, const Config * p, FILE * f, bool shared_weights) {
     if (fread(w->token_embedding_table.data(), sizeof(float), w->token_embedding_table.size(), f) != w->token_embedding_table.size()) return 1;
     if (fread(w->rms_att_weight.data(), sizeof(float), w->rms_att_weight.size(), f) != w->rms_att_weight.size()) return 1;
     if (fread(w->wq.data(), sizeof(float), w->wq.size(), f) != w->wq.size()) return 1;
@@ -173,7 +173,7 @@ static int checkpoint_init_weights(TransformerWeights *w, const Config* p, FILE*
     fseek(f, 0, SEEK_END);
     auto end = ftell(f);
     if (curr != end) {
-        LOG("%s: Error: failed to read the checkpoint file to the end (curr = %ld, end =  %ld)\n",__func__, curr, end);
+        LOG("%s: Error: failed to read the checkpoint file to the end (curr = %ld, end =  %ld)\n", __func__, curr, end);
         return 1;
     }
 
@@ -216,15 +216,16 @@ struct llama_vocab {
 };
 
 struct my_llama_hparams {
-    uint32_t n_vocab = 32000;
-    uint32_t n_ctx   = 512;   // this is provided as user input?
-    uint32_t n_embd  = 4096;
-    uint32_t n_ff    = 11008;
-    uint32_t n_mult  = 4;
-    uint32_t n_head  = 32;
-    uint32_t n_head_kv  = 32;
-    uint32_t n_layer = 32;
-    uint32_t n_rot   = 64;
+    uint32_t n_vocab   = 32000;
+    uint32_t n_ctx     = 512;   // this is provided as user input?
+    uint32_t n_embd    = 4096;
+    uint32_t n_ff      = 11008;
+    uint32_t n_mult    = 4;
+    uint32_t n_head    = 32;
+    uint32_t n_head_kv = 32;
+    uint32_t n_layer   = 32;
+    uint32_t n_rot     = 64;
+
     bool operator!=(const my_llama_hparams& other) const {
         return memcmp(this, &other, sizeof(my_llama_hparams));
     }
@@ -317,15 +318,15 @@ struct train_params {
 };
 
 static void print_params(struct my_llama_hparams * params) {
-    LOG("%s: n_vocab: %u\n", __func__, params->n_vocab);
-    LOG("%s: n_ctx:   %u\n", __func__, params->n_ctx);
-    LOG("%s: n_embd:  %u\n", __func__, params->n_embd);
-    LOG("%s: n_mult:  %u\n", __func__, params->n_mult);
-    LOG("%s: n_head:  %u\n", __func__, params->n_head);
-    LOG("%s: n_head_kv:  %u\n", __func__, params->n_head_kv);
-    LOG("%s: n_ff:    %u\n", __func__, params->n_ff);
-    LOG("%s: n_layer: %u\n", __func__, params->n_layer);
-    LOG("%s: n_rot:   %u\n", __func__, params->n_rot);
+    LOG("%s: n_vocab:   %u\n", __func__, params->n_vocab);
+    LOG("%s: n_ctx:     %u\n", __func__, params->n_ctx);
+    LOG("%s: n_embd:    %u\n", __func__, params->n_embd);
+    LOG("%s: n_mult:    %u\n", __func__, params->n_mult);
+    LOG("%s: n_head:    %u\n", __func__, params->n_head);
+    LOG("%s: n_head_kv: %u\n", __func__, params->n_head_kv);
+    LOG("%s: n_ff:      %u\n", __func__, params->n_ff);
+    LOG("%s: n_layer:   %u\n", __func__, params->n_layer);
+    LOG("%s: n_rot:     %u\n", __func__, params->n_rot);
 }
 
 static void print_tensor_info(const struct ggml_context * ctx) {
@@ -523,9 +524,9 @@ static std::string llama_escape_whitespaces(const std::string & text) {
     return out.str();
 }
 
-static void load_vocab(const char *filename, const Config *config, struct llama_vocab *vocab) {
+static void load_vocab(const char * filename, const Config * config, struct llama_vocab * vocab) {
     if (is_ggml_file(filename)) {
-        LOG("%s: Loading vocabulary from gguf file %s\n",__func__,filename);
+        LOG("%s: Loading vocabulary from gguf file %s\n", __func__, filename);
         struct ggml_context * ctx_data = NULL;
 
         struct gguf_init_params params = {
@@ -573,7 +574,7 @@ static void load_vocab(const char *filename, const Config *config, struct llama_
         gguf_free(ctx);
     } else {
         // assume llama2.c vocabulary
-        LOG("%s: Assuming llama2.c vocabulary since %s is not a gguf file\n",__func__,filename);
+        LOG("%s: Assuming llama2.c vocabulary since %s is not a gguf file\n", __func__, filename);
         llama_file file(filename, "rb");
         if (!file.fp) {
             die_fmt("%s: %s", strerror(errno), filename);
@@ -643,6 +644,7 @@ static void save_as_llama_model(
     // for rms-att-weight
     int row_length = model->hparams.n_embd;
     int n_ff = model->hparams.n_ff;
+
     const uint32_t n_multiqueries = model->hparams.n_head_kv <= 0 || model->hparams.n_head_kv >= model->hparams.n_head ? 1 : model->hparams.n_head / model->hparams.n_head_kv;
 
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
@@ -746,12 +748,12 @@ static void save_as_llama_model(
 
 static struct train_params get_default_train_params() {
     struct train_params params;
-    params.fn_vocab_model    = "models/7B/ggml-model-f16.gguf";
+    params.fn_vocab_model          = "models/7B/ggml-model-f16.gguf";
     params.fn_llama2c_output_model = "ak_llama_model.bin";
-    params.fn_train_data     = "shakespeare.txt";
-    params.fn_checkpoint_in  = "checkpoint.bin";
-    params.fn_checkpoint_out = "checkpoint.bin";
-    params.fn_model_out      = "ggml-checkpoint-f32.bin";
+    params.fn_train_data           = "shakespeare.txt";
+    params.fn_checkpoint_in        = "checkpoint.bin";
+    params.fn_checkpoint_out       = "checkpoint.bin";
+    params.fn_model_out            = "ggml-checkpoint-f32.bin";
 
     params.seed       =   -1;
 
@@ -786,8 +788,8 @@ static struct train_params get_default_train_params() {
     params.adam_alpha        = 1e-3f;
     params.adam_decay        = 1e-3f;
 
-    params.mem_model_gb   = 2;
-    params.mem_compute_gb = 24;
+    params.mem_model_gb    = 2;
+    params.mem_compute_gb  = 24;
     params.mem_compute0_gb = 8;
     params.mem_compute1_gb = 2;
 
@@ -877,17 +879,26 @@ int main(int argc, char ** argv) {
     Config config;
     TransformerWeights weights = {};
     {
-        LOG("%s: Loading llama2c model from %s\n",__func__,params.fn_llama2c_model);
+        LOG("%s: Loading llama2c model from %s\n", __func__, params.fn_llama2c_model);
         FILE *file = fopen(params.fn_llama2c_model, "r");
-        if (!file) { LOG("%s: Unable to open the checkpoint file %s!\n",__func__,params.fn_llama2c_model); return 1; }
+        if (!file) {
+            LOG("%s: Unable to open the checkpoint file %s!\n", __func__, params.fn_llama2c_model);
+            return 1;
+        }
         // read in the config header
-        if (fread(&config, sizeof(Config), 1, file) != 1) { LOG("%s: Unable to read llama2c config from %s!\n",__func__,params.fn_llama2c_model); return 1; }
+        if (fread(&config, sizeof(Config), 1, file) != 1) {
+            LOG("%s: Unable to read llama2c config from %s!\n",__func__,params.fn_llama2c_model);
+            return 1;
+        }
         auto shared_weights = config.vocab_size > 0;
         config.vocab_size = abs(config.vocab_size);
 
         // read in the Transformer weights
         alloc_weights(&weights, &config, shared_weights);
-        if(checkpoint_init_weights(&weights, &config, file, shared_weights)) { LOG("%s: Unable to initialize transformer weights from %s!",__func__,params.fn_llama2c_model); return 1; }
+        if (checkpoint_init_weights(&weights, &config, file, shared_weights)) {
+            LOG("%s: Unable to initialize transformer weights from %s!",__func__,params.fn_llama2c_model);
+            return 1;
+        }
         fclose(file);
     }
 
@@ -895,16 +906,18 @@ int main(int argc, char ** argv) {
     load_vocab(params.fn_vocab_model, &config, &vocab);
 
     struct my_llama_model model;
-    model.hparams.n_vocab = config.vocab_size; //llama_n_vocab(lctx);
-    model.hparams.n_ctx   = params.n_ctx;
-    model.hparams.n_embd  = config.dim; //params.n_embd;
-    model.hparams.n_ff    = config.hidden_dim;
-    model.hparams.n_mult  = 32;//params.n_mult;
-    model.hparams.n_head  = config.n_heads; //params.n_head;
-    model.hparams.n_head_kv  = config.n_kv_heads;
-    model.hparams.n_layer = config.n_layers; //params.n_layer;
-    model.hparams.n_rot   = std::min((uint32_t)params.n_rotmax, model.hparams.n_embd / model.hparams.n_head);
+    model.hparams.n_vocab   = config.vocab_size; //llama_n_vocab(lctx);
+    model.hparams.n_ctx     = params.n_ctx;
+    model.hparams.n_embd    = config.dim; //params.n_embd;
+    model.hparams.n_ff      = config.hidden_dim;
+    model.hparams.n_mult    = 32;//params.n_mult;
+    model.hparams.n_head    = config.n_heads; //params.n_head;
+    model.hparams.n_head_kv = config.n_kv_heads;
+    model.hparams.n_layer   = config.n_layers; //params.n_layer;
+    model.hparams.n_rot     = std::min((uint32_t)params.n_rotmax, model.hparams.n_embd / model.hparams.n_head);
+
     print_params(&model.hparams);
+
     struct ggml_init_params lcparams;
     lcparams.mem_size   = 1024ll*1024ll*1024ll*((size_t) params.mem_model_gb);
     lcparams.mem_buffer = NULL;
@@ -916,7 +929,7 @@ int main(int argc, char ** argv) {
     model.name = basename(params.fn_llama2c_model);
     save_as_llama_model(&vocab, &model, &weights, params.fn_llama2c_output_model);
 
-    LOG("%s: Saving llama.c model file %s in ggml format at %s\n",__func__, params.fn_llama2c_model, params.fn_llama2c_output_model);
+    LOG("%s: Saving llama.c model file %s in ggml format at %s\n", __func__, params.fn_llama2c_model, params.fn_llama2c_output_model);
 
     ggml_free(model.ctx);
     return 0;
