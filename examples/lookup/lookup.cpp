@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
-#include <system_error>
 #include <vector>
 #include <unordered_map>
 
@@ -63,7 +62,7 @@ int main(int argc, char ** argv){
         if (!params.lookup_cache_static.empty()) {
             try {
                 ngram_cache_static = llama_ngram_cache_load(params.lookup_cache_static);
-            } catch (std::system_error const &) {
+            } catch (std::ifstream::failure const &) {
                 fprintf(stderr, "error: failed to open static lookup cache: %s", params.lookup_cache_static.c_str());
                 exit(1);
             }
@@ -72,7 +71,7 @@ int main(int argc, char ** argv){
         if (!params.lookup_cache_dynamic.empty()) {
             try {
                 ngram_cache_dynamic = llama_ngram_cache_load(params.lookup_cache_dynamic);
-            } catch (std::system_error const &) {} // if the file does not exist it will simply be created at the end of the program
+            } catch (std::ifstream::failure const &) {} // if the file does not exist it will simply be created at the end of the program
         }
 
         t_draft_flat_us += ggml_time_us() - t_start_draft_us;

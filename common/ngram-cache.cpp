@@ -217,7 +217,7 @@ void llama_ngram_cache_save(llama_ngram_cache & ngram_cache, std::string & filen
 llama_ngram_cache llama_ngram_cache_load(std::string & filename) {
     std::ifstream hashmap_file(filename, std::ios::binary);
     if (!hashmap_file) {
-        throw std::system_error();
+        throw std::ifstream::failure("Unable to open file " + filename);
     }
     llama_ngram_cache ngram_cache;
 
