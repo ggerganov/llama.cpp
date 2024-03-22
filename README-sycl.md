@@ -29,6 +29,7 @@ For Intel CPU, recommend to use llama.cpp for X86 (Intel MKL building).
 ## News
 
 - 2024.3
+  - A blog is published: **Run LLM on all Intel GPUs Using llama.cpp**: [intel.com](https://www.intel.com/content/www/us/en/developer/articles/technical/run-llm-on-all-gpus-using-llama-cpp-artical.html) or [medium.com](https://medium.com/@jianyu_neo/run-llm-on-all-intel-gpus-using-llama-cpp-fd2e2dcbd9bd).
   - New base line is ready: [tag b2437](https://github.com/ggerganov/llama.cpp/tree/b2437).
   - Support multiple cards: **--split-mode**: [none|layer]; not support [row], it's on developing.
   - Support to assign main GPU by **--main-gpu**, replace $GGML_SYCL_DEVICE.
