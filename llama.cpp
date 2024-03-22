@@ -5135,9 +5135,11 @@ static bool llm_load_tensors(
     ml.done_getting_tensors();
 
     ml.init_mappings(true, &model.mlock_mmaps);
+    model.mappings.reserve(ml.mappings.size());
 
     // create the backend buffers
     std::vector<std::pair<ggml_context *, std::unordered_map<uint32_t, ggml_backend_buffer_t>>> ctx_bufs;
+    ctx_bufs.reserve(ctx_map.size());
 
     // Ensure we have enough capacity for the maximum backend buffer we will potentially create
     size_t n_max_backend_buffer = ctx_map.size() * ml.files.size();
