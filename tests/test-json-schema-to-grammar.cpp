@@ -799,6 +799,9 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 }
 
 int main() {
+    fprintf(stderr, "LLAMA_NODE_AVAILABLE = %s\n", getenv("LLAMA_NODE_AVAILABLE") ? "true" : "false");
+    fprintf(stderr, "LLAMA_PYTHON_AVAILABLE = %s\n", getenv("LLAMA_PYTHON_AVAILABLE") ? "true" : "false");
+
     test_all("C++", [](const TestCase & tc) {
         try {
             tc.verify(json_schema_to_grammar(nlohmann::ordered_json::parse(tc.schema)));
@@ -808,18 +811,28 @@ int main() {
             tc.verify_status(FAILURE);
         }
     });
-    //test_all("Python", [](const TestCase & tc) {
-    //    write("test-json-schema-input.tmp", tc.schema);
-    //    tc.verify_status(std::system(
-    //        "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
-    //    tc.verify(read("test-grammar-output.tmp"));
-    //});
-    //test_all("JavaScript", [](const TestCase & tc) {
-    //    write("test-json-schema-input.tmp", tc.schema);
-    //    tc.verify_status(std::system(
-    //        "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
-    //    tc.verify(read("test-grammar-output.tmp"));
-    //});
+
+    if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python --version") == 0)) {
+        test_all("Python", [](const TestCase & tc) {
+            write("test-json-schema-input.tmp", tc.schema);
+            tc.verify_status(std::system(
+                "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+            tc.verify(read("test-grammar-output.tmp"));
+        });
+    } else {
+        fprintf(stderr, "\033[33mWARNING: Python not found, skipping Python JSON schema -> grammar tests.\n\033[0m");
+    }
+
+    if (getenv("LLAMA_NODE_AVAILABLE") || (std::system("node --version") == 0)) {
+        test_all("JavaScript", [](const TestCase & tc) {
+            write("test-json-schema-input.tmp", tc.schema);
+            tc.verify_status(std::system(
+                "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+            tc.verify(read("test-grammar-output.tmp"));
+        });
+    } else {
+        fprintf(stderr, "\033[33mWARNING: Node not found, skipping JavaScript JSON schema -> grammar tests.\n\033[0m");
+    }
 
     test_all("Check Expectations Validity", [](const TestCase & tc) {
         if (tc.expected_status == SUCCESS) {

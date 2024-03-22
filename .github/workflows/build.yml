@@ -135,6 +135,9 @@ jobs:
 
   ubuntu-focal-make:
     runs-on: ubuntu-20.04
+    env:
+      LLAMA_NODE_AVAILABLE: true
+      LLAMA_PYTHON_AVAILABLE: true
 
     steps:
       - name: Clone
@@ -146,6 +149,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install build-essential gcc-8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
       - name: Build
         id: make_build
