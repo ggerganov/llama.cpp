@@ -1110,6 +1110,7 @@ struct llama_file {
         }
     }
 };
+using llama_files = std::vector<std::unique_ptr<llama_file>>;
 
 struct llama_mmap {
     void * addr;
@@ -1310,6 +1311,7 @@ struct llama_mmap {
     }
 #endif
 };
+using llama_mmaps = std::vector<std::unique_ptr<llama_mmap>>;
 
 // Represents some region of memory being locked using mlock or VirtualLock;
 // will automatically unlock on destruction.
@@ -1459,6 +1461,7 @@ struct llama_mlock {
     static void raw_unlock(const void * addr, size_t len) {}
 #endif
 };
+using llama_mlocks = std::vector<std::unique_ptr<llama_mlock>>;
 
 static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
@@ -2035,11 +2038,11 @@ struct llama_model {
     std::vector<ggml_backend_buffer_t> bufs;
 
     // model memory mapped files
-    std::vector<std::unique_ptr<llama_mmap>> mappings;
+    llama_mmaps mappings;
 
     // objects representing data potentially being locked in memory
-    std::vector<std::unique_ptr<llama_mlock>> mlock_bufs;
-    std::vector<std::unique_ptr<llama_mlock>> mlock_mmaps;
+    llama_mlocks mlock_bufs;
+    llama_mlocks mlock_mmaps;
 
     // for quantize-stats only
     std::vector<std::pair<std::string, struct ggml_tensor *>> tensors_by_name;
@@ -2803,6 +2806,8 @@ namespace GGUFMeta {
     };
 }
 
+using llama_buf_map = std::unordered_map<uint32_t, ggml_backend_buffer_t>;
+
 struct llama_model_loader {
     int n_kv      = 0;
     int n_tensors = 0;
@@ -2813,11 +2818,11 @@ struct llama_model_loader {
 
     bool use_mmap = false;
 
-    std::vector<std::unique_ptr<llama_file>> files;
+    llama_files files;
     llama_ftype ftype;
     llama_fver  fver;
 
-    std::vector<std::unique_ptr<llama_mmap>> mappings;
+    llama_mmaps mappings;
 
     // Holds information on a model weights
     struct llama_tensor_weights {
@@ -3009,6 +3014,7 @@ struct llama_model_loader {
             }
 
             LLAMA_LOG_INFO("%s: Dumping metadata keys/values. Note: KV overrides do not apply in this output.\n", __func__);
+
             for (int i = 0; i < n_kv; i++) {
                 const char * name           = gguf_get_key(meta, i);
                 const enum gguf_type type   = gguf_get_kv_type(meta, i);
@@ -3179,7 +3185,7 @@ struct llama_model_loader {
         }
     }
 
-    void init_mappings(bool prefetch = true, std::vector<std::unique_ptr<llama_mlock>> * mlock_mmaps = nullptr) {
+    void init_mappings(bool prefetch = true, llama_mlocks * mlock_mmaps = nullptr) {
         if (use_mmap) {
             mappings.reserve(files.size());
             mmaps_used.reserve(files.size());
@@ -3214,7 +3220,7 @@ struct llama_model_loader {
                 continue;
             }
             *first = std::min(*first, w.offs);
-            *last  = std::max(*last, w.offs + ggml_nbytes(tensor));
+            *last  = std::max(*last,  w.offs + ggml_nbytes(tensor));
         }
     }
 
@@ -3243,7 +3249,12 @@ struct llama_model_loader {
     std::vector<std::pair<size_t, size_t>> mmaps_used;
 
     // Returns false if cancelled by progress_callback
-    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, std::unordered_map<uint32_t, ggml_backend_buffer *> & bufs_mmap, std::vector<std::unique_ptr<llama_mlock>> * lmlocks) {
+    bool load_all_data(
+            struct ggml_context * ctx,
+            llama_buf_map & bufs_mmap,
+            llama_mlocks * lmlocks,
+            llama_progress_callback progress_callback,
+            void * progress_callback_user_data) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
         std::vector<no_init<uint8_t>> read_buf;
@@ -3272,7 +3283,7 @@ struct llama_model_loader {
                     }
 
                     auto & mmap_used = mmaps_used[w.idx];
-                    mmap_used.first = std::min(mmap_used.first, w.offs);
+                    mmap_used.first  = std::min(mmap_used.first,  w.offs);
                     mmap_used.second = std::max(mmap_used.second, w.offs + n_size);
                 } else {
                     ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + w.offs, 0, n_size);
@@ -5144,7 +5155,7 @@ static bool llm_load_tensors(
     model.mappings.reserve(ml.mappings.size());
 
     // create the backend buffers
-    std::vector<std::pair<ggml_context *, std::unordered_map<uint32_t, ggml_backend_buffer_t>>> ctx_bufs;
+    std::vector<std::pair<ggml_context *, llama_buf_map>> ctx_bufs;
     ctx_bufs.reserve(ctx_map.size());
 
     // Ensure we have enough capacity for the maximum backend buffer we will potentially create
@@ -5153,8 +5164,9 @@ static bool llm_load_tensors(
 
     for (auto & it : ctx_map) {
         ggml_backend_buffer_type_t buft = it.first;
-        ggml_context * ctx = it.second;
-        std::unordered_map<uint32_t, ggml_backend_buffer_t> bufs;
+        ggml_context * ctx              = it.second;
+
+        llama_buf_map bufs;
         bufs.reserve(n_max_backend_buffer);
 
         // only the mmap region containing the tensors in the model is mapped to the backend buffer
@@ -5211,16 +5223,18 @@ static bool llm_load_tensors(
             if (use_mlock && ggml_backend_buffer_is_host(buf)) {
                 model.mlock_bufs.emplace_back(new llama_mlock);
                 auto & mlock_buf = model.mlock_bufs.back();
-                mlock_buf->init(ggml_backend_buffer_get_base(buf));
+                mlock_buf->init   (ggml_backend_buffer_get_base(buf));
                 mlock_buf->grow_to(ggml_backend_buffer_get_size(buf));
             }
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 bufs.emplace(idx, buf);
             }
         }
+
         if (bufs.empty()) {
             throw std::runtime_error("failed to allocate buffer");
         }
+
         for (auto & buf : bufs) {
             // indicate that this buffer contains weights
             // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
@@ -5260,7 +5274,7 @@ static bool llm_load_tensors(
     for (auto & it : ctx_bufs) {
         ggml_context * ctx = it.first;
         auto & bufs = it.second;
-        if (!ml.load_all_data(ctx, progress_callback, progress_callback_user_data, bufs, use_mlock ? &model.mlock_mmaps : NULL)) {
+        if (!ml.load_all_data(ctx, bufs, use_mlock ? &model.mlock_mmaps : NULL, progress_callback, progress_callback_user_data)) {
             return false;
         }
     }
