@@ -11928,9 +11928,9 @@ size_t quantize_iq1_m(const float * restrict src, void * restrict dst, int nrow,
     for (int row = 0; row < nrow; ++row) {
         quantize_row_iq1_impl(GGML_TYPE_IQ1_M, src, qrow, n_per_row, quant_weights, scales, weight, sumx, sumw, pairs, L, index, shifts);
         src += n_per_row;
-        qrow += nblock*sizeof(block_iq1_s);
+        qrow += nblock*sizeof(block_iq1_m);
     }
-    return nrow * nblock * sizeof(block_iq1_s);
+    return nrow * nblock * sizeof(block_iq1_m);
 }
 
 // ============================ 4-bit non-linear quants
