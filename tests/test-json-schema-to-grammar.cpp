@@ -193,21 +193,27 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
     });
 
     test({
-        FAILURE,
+        SUCCESS,
         "non-string const",
         R"""({
             "const": 123
         })""",
-        ""
+        R"""(
+            root ::= "123"
+            space ::= " "?
+        )"""
     });
 
     test({
-        FAILURE,
+        SUCCESS,
         "non-string enum",
         R"""({
-            "enum": [123]
+            "enum": ["red", "amber", "green", null, 42, ["foo"]]
         })""",
-        ""
+        R"""(
+            root ::= "\"red\"" | "\"amber\"" | "\"green\"" | "null" | "42" | "[\"foo\"]"
+            space ::= " "?
+        )"""
     });
 
     test({

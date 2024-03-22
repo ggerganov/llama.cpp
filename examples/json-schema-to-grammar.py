@@ -61,7 +61,7 @@ class SchemaConverter:
 
     def _format_literal(self, literal):
         escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
-            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), json.dumps(literal)
+            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), literal
         )
         return f'"{escaped}"'
 
@@ -308,8 +308,7 @@ class SchemaConverter:
         return ref_name
 
     def _generate_constant_rule(self, value):
-        assert isinstance(value, str), f'Only string constants are supported, got {value}'
-        return self._format_literal(value)
+        return self._format_literal(json.dumps(value))
 
     def visit(self, schema, name):
         schema_type = schema.get('type')
@@ -428,7 +427,7 @@ class SchemaConverter:
             prop_rule_name = self.visit(prop_schema, f'{name}{"-" if name else ""}{prop_name}')
             prop_kv_rule_names[prop_name] = self._add_rule(
                 f'{name}{"-" if name else ""}{prop_name}-kv',
-                fr'{self._format_literal(prop_name)} space ":" space {prop_rule_name}'
+                fr'{self._format_literal(json.dumps(prop_name))} space ":" space {prop_rule_name}'
             )
         required_props = [k for k in sorted_props if k in required]
         optional_props = [k for k in sorted_props if k not in required]

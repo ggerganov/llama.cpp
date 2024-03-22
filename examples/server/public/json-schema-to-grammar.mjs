@@ -48,7 +48,7 @@ export class SchemaConverter {
   }
 
   _formatLiteral(literal) {
-    const escaped = JSON.stringify(literal).replace(
+    const escaped = literal.replace(
       GRAMMAR_LITERAL_ESCAPE_RE,
       m => GRAMMAR_LITERAL_ESCAPES[m]
     );
@@ -327,10 +327,7 @@ export class SchemaConverter {
   }
 
   _generateConstantRule(value) {
-    if (typeof value !== 'string') {
-      throw new Error('Only string constants are supported, got ' + JSON.stringify(value));
-    }
-    return this._formatLiteral(value);
+    return this._formatLiteral(JSON.stringify(value));
   }
 
   visit(schema, name) {
@@ -346,9 +343,6 @@ export class SchemaConverter {
     } else if (Array.isArray(schemaType)) {
       return this._addRule(ruleName, this._generateUnionRule(name, schemaType.map(t => ({ type: t }))));
     } else if ('const' in schema) {
-      if (typeof schema.const !== 'string') {
-        throw new Error('Only string constants are supported, got ' + JSON.stringify(schema.const));
-      }
       return this._addRule(ruleName, this._generateConstantRule(schema.const));
     } else if ('enum' in schema) {
       const rule = schema.enum.map(v => this._generateConstantRule(v)).join(' | ');
@@ -457,7 +451,7 @@ export class SchemaConverter {
       const propRuleName = this.visit(propSchema, `${name ?? ''}${name ? '-' : ''}${propName}`);
       propKvRuleNames[propName] = this._addRule(
         `${name ?? ''}${name ? '-' : ''}${propName}-kv`,
-        `${this._formatLiteral(propName)} space ":" space ${propRuleName}`
+        `${this._formatLiteral(JSON.stringify(propName))} space ":" space ${propRuleName}`
       );
     }
     const requiredProps = sortedProps.filter(k => required.has(k));
