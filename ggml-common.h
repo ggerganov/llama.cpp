@@ -377,6 +377,15 @@ typedef struct {
 } block_iq1_s;
 static_assert(sizeof(block_iq1_s) == sizeof(ggml_half) + QK_K/8 + QK_K/16, "wrong iq1_s block size/padding");
 
+// 1.8125 bpw
+typedef struct {
+    ggml_half d;
+    uint8_t  qs[QK_K/8];      // grid index, low 8 bits
+    uint8_t  qh[QK_K/16];     // grid index, high 3 bits + grid shift bit (for two groups of 8)
+    uint8_t  scales[QK_K/32]; // 4-bit block scales
+} block_iq1_m;
+static_assert(sizeof(block_iq1_m) == sizeof(ggml_half) + QK_K/8 + QK_K/16 + QK_K/32, "wrong iq1_m block size/padding");
+
 // Non-linear quants
 #define QK4_NL 32
 typedef struct {
