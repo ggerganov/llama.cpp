@@ -1392,6 +1392,14 @@ static enum ggml_status ggml_metal_graph_compute(
                             (ne11 > ne11_mm_min || (ggml_is_quantized(src0t) && ne12 > 1))) {
                             //printf("matrix: ne00 = %6d, ne01 = %6d, ne02 = %6d, ne11 = %6d, ne12 = %6d\n", ne00, ne01, ne02, ne11, ne12);
 
+                            // some Metal matrix data types require aligned pointers
+                            // ref: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf (Table 2.5)
+                            switch (src0->type) {
+                                case GGML_TYPE_F32: GGML_ASSERT(nb01 % 16 == 0); break;
+                                case GGML_TYPE_F16: GGML_ASSERT(nb01 % 8  == 0); break;
+                                default: break;
+                            }
+
                             id<MTLComputePipelineState> pipeline = nil;
 
                             switch (src0->type) {
@@ -1705,6 +1713,14 @@ static enum ggml_status ggml_metal_graph_compute(
                         if ([ctx->device supportsFamily:MTLGPUFamilyApple7] &&
                             ne20 % 32 == 0 && ne20 >= 64 &&
                             ne11 > ne11_mm_min) {
+
+                            // some Metal matrix data types require aligned pointers
+                            // ref: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf (Table 2.5)
+                            switch (src0->type) {
+                                case GGML_TYPE_F32: GGML_ASSERT(nb01 % 16 == 0); break;
+                                case GGML_TYPE_F16: GGML_ASSERT(nb01 % 8  == 0); break;
+                                default: break;
+                            }
 
                             id<MTLComputePipelineState> pipeline = nil;
 
