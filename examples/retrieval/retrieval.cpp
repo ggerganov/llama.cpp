@@ -260,7 +260,7 @@ int main(int argc, char ** argv) {
         printf("Top %d similar chunks:\n", params.sparams.top_k);
         for (int i = 0; i < std::min(params.sparams.top_k, (int) chunks.size()); i++) {
             printf("filename: %s\n", chunks[i].filename.c_str());
-            printf("filepos: %lld\n", chunks[i].filepos);
+            printf("filepos: %lld\n", (long long int) chunks[i].filepos);
             printf("similarity: %f\n", chunks[i].similarity);
             printf("textdata:\n%s\n", chunks[i].textdata.c_str());
             printf("--------------------\n");
