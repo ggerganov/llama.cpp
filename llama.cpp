@@ -4228,6 +4228,16 @@ static void llm_load_vocab(
             if (add_space_prefix_keyidx != -1) {
                 vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
             } // The default value of add_space_prefix is true.
+        } else if (tokenizer_name == "bert") {
+            vocab.type = LLAMA_VOCAB_TYPE_WPM;
+
+            // default special tokens
+            vocab.special_bos_id = 101;
+            vocab.special_eos_id = 102;
+            vocab.special_unk_id = 100;
+            vocab.special_sep_id = -1;
+            vocab.special_pad_id = -1;
+            vocab.add_space_prefix = false;
         } else {
             if (tokenizer_name == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
@@ -4267,30 +4277,11 @@ static void llm_load_vocab(
             }
 
             // default special tokens
-            vocab.special_bos_id  = 11;
-            vocab.special_eos_id  = 11;
-            vocab.special_unk_id  = -1;
-            vocab.special_sep_id  = -1;
-            vocab.special_pad_id  = -1;
-            vocab.special_cls_id  = -1;
-            vocab.special_mask_id = -1;
-        } else if (tokenizer_name == "bert") {
-            vocab.type = LLAMA_VOCAB_TYPE_WPM;
-
-            // default special tokens
-            vocab.special_bos_id  = -1;
-            vocab.special_eos_id  = -1;
-            vocab.special_unk_id  = 100;
-            vocab.special_sep_id  = 102;
-            vocab.special_pad_id  = 0;
-            vocab.special_cls_id  = 101;
-            vocab.special_mask_id = 103;
-            vocab.add_space_prefix = false;
-        } else {
-            LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
-            LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
-
-            vocab.type = LLAMA_VOCAB_TYPE_SPM;
+            vocab.special_bos_id = 11;
+            vocab.special_eos_id = 11;
+            vocab.special_unk_id = -1;
+            vocab.special_sep_id = -1;
+            vocab.special_pad_id = -1;
         }
     }
 
@@ -12223,15 +12214,15 @@ private:
     }
 
     std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
-        return regex_bpe_preprocess(text, gpt2_regex);
+        return regex_bpe_preprocess(text, get_gpt2_regex());
     }
 
     std::vector<std::string> bpe_deepseek_coder_preprocess(const std::string & text) {
-        return regex_bpe_preprocess(text, deepseek_coder_regex);
+        return regex_bpe_preprocess(text, get_deepseek_coder_regex());
     }
 
     std::vector<std::string> bpe_deepseek_llm_preprocess(const std::string & text) {
-        return regex_bpe_preprocess(text, deepseek_llm_regex);
+        return regex_bpe_preprocess(text, get_deepseek_llm_regex());
     }
 
     const llama_vocab & vocab;
