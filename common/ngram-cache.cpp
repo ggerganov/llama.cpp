@@ -6,15 +6,15 @@
 void llama_ngram_cache_update(llama_ngram_cache & ngram_cache, int ngram_min, int ngram_max,
                               std::vector<llama_token> & inp, int nnew, bool print_progress) {
     const int64_t t_start_ms = ggml_time_ms();
-    const int inp_size = inp.size();
+    const int64_t inp_size = inp.size();
 
-    const int n_todo = inp_size * (ngram_max - ngram_min + 1);
-    int n_done = 0;
+    const int64_t n_todo = inp_size * (ngram_max - ngram_min + 1);
+    int64_t n_done = 0;
 
-    for (int ngram_size = ngram_min; ngram_size <= ngram_max; ++ngram_size) {
-        const int i_start = std::max(inp_size - nnew, ngram_size);
-        for (int i = i_start; i < inp_size; ++i) {
-            const int ngram_start = i - ngram_size;
+    for (int64_t ngram_size = ngram_min; ngram_size <= ngram_max; ++ngram_size) {
+        const int64_t i_start = std::max(inp_size - nnew, ngram_size);
+        for (int64_t i = i_start; i < inp_size; ++i) {
+            const int64_t ngram_start = i - ngram_size;
             llama_ngram ngram(&inp[ngram_start], ngram_size);
             const llama_token token = inp[i];
 
@@ -39,7 +39,7 @@ void llama_ngram_cache_update(llama_ngram_cache & ngram_cache, int ngram_min, in
                 const int64_t eta_min  = eta_ms / (60*1000);
                 const int64_t eta_s    = (eta_ms - 60*1000*eta_min) / 1000;
 
-                fprintf(stderr, "%s: %d/%d done, ETA: %02ld:%02ld\n", __func__, n_done, n_todo, eta_min, eta_s);
+                fprintf(stderr, "%s: %ld/%ld done, ETA: %02ld:%02ld\n", __func__, n_done, n_todo, eta_min, eta_s);
             }
         }
     }
