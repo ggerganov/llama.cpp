@@ -1420,13 +1420,13 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -m FNAME, --model FNAME\n");
     printf("                        model path (default: %s)\n", params.model.c_str());
     printf("  -md FNAME, --model-draft FNAME\n");
-    printf("                        draft model for speculative decoding\n");
+    printf("                        draft model for speculative decoding (default: unused)\n");
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
-    printf("                        model download url (default: %s)\n", params.model_url.c_str());
+    printf("                        model download url (default: unused)\n");
     printf("  -hfr REPO, --hf-repo REPO\n");
-    printf("                        Hugging Face model repository (default: %s)\n", params.hf_repo.c_str());
+    printf("                        Hugging Face model repository (default: unused)\n");
     printf("  -hff FILE, --hf-file FILE\n");
-    printf("                        Hugging Face model file (default: %s)\n", params.hf_file.c_str());
+    printf("                        Hugging Face model file (default: unused)\n");
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
     printf("  --override-kv KEY=TYPE:VALUE\n");
