@@ -3175,6 +3175,8 @@ struct llama_model_loader {
 
     void init_mappings(bool prefetch = true, std::vector<std::unique_ptr<llama_mlock>> * mlock_mmaps = nullptr) {
         if (use_mmap) {
+            mappings.reserve(files.size());
+            mmaps_used.reserve(files.size());
             for (const auto & file : files) {
                 auto * mapping = new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa());
                 mmaps_used.emplace_back(std::make_pair(mapping->size, 0));
