@@ -223,7 +223,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     clip_image_f32_batch img_res_v;
     img_res_v.size = 0;
     img_res_v.data = nullptr;
-    if (!clip_image_preprocess(ctx_clip, img, img_res_v)) {
+    if (!clip_image_preprocess(ctx_clip, img, &img_res_v)) {
         fprintf(stderr, "%s: unable to preprocess image\n", __func__);
         delete[] img_res_v.data;
         return false;

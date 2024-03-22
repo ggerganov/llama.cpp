@@ -8,12 +8,20 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+### Recent API changes
+
+- [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
+- [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_seq_max()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
+- [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
+- [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
+
 ### Hot topics
 
-- Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
-- Support for Gemma models: https://github.com/ggerganov/llama.cpp/pull/5631
-- Non-linear quantization IQ4_NL: https://github.com/ggerganov/llama.cpp/pull/5590
-- Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
+- Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
+- Multi-GPU pipeline parallelizm support https://github.com/ggerganov/llama.cpp/pull/6017
+- Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
+- Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
+- Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
 
 ----
 
@@ -104,10 +112,12 @@ Typically finetunes of the base models below are supported as well.
 - [x] [InternLM2](https://huggingface.co/models?search=internlm2)
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
+- [x] [Mamba](https://github.com/state-spaces/mamba)
+- [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
 
 **Multimodal models:**
 
-- [x] [LLaVA 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e)
+- [x] [LLaVA 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e), [LLaVA 1.6 models](https://huggingface.co/collections/liuhaotian/llava-16-65b9e40155f60fd046a5ccf2)
 - [x] [BakLLaVA](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
 - [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
@@ -125,6 +135,7 @@ Typically finetunes of the base models below are supported as well.
 - Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp)
 - JS/TS (llama.cpp server client): [lgrammel/modelfusion](https://modelfusion.dev/integration/model-provider/llamacpp)
 - JavaScript/Wasm (works in browser): [tangledgroup/llama-cpp-wasm](https://github.com/tangledgroup/llama-cpp-wasm)
+- Typescript/Wasm (nicer API, available on npm): [ngxson/wllama](https://github.com/ngxson/wllama)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
 - Rust (nicer API): [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - Rust (more direct bindings): [utilityai/llama-cpp-rs](https://github.com/utilityai/llama-cpp-rs)
@@ -155,6 +166,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
+- [RecurseChat](https://recurse.chat/) (proprietary)
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
@@ -785,7 +797,7 @@ And after 4.45 hours, you will have the final perplexity.
 ### Interactive mode
 
 If you want a more ChatGPT-like experience, you can run in interactive mode by passing `-i` as a parameter.
-In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMa emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
+In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMA emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
 
 Here is an example of a few-shot interaction, invoked with the command
 
@@ -849,7 +861,7 @@ Sample run:
 ```
 == Running in interactive mode. ==
  - Press Ctrl+C to interject at any time.
- - Press Return to return control to LLaMa.
+ - Press Return to return control to LLaMA.
  - If you want to submit another line, end your input in '\'.
 
  Below is an instruction that describes a task. Write a response that appropriately completes the request.
@@ -896,6 +908,9 @@ First, install the essential packages for termux:
 pkg install clang wget git cmake
 ```
 Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+
+You can execute the following commands on your computer to avoid downloading the NDK to your mobile. Of course, you can also do this in Termux.
+
 ```
 $ mkdir build-android
 $ cd build-android
@@ -904,7 +919,28 @@ $ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROI
 $ make
 ```
 Install [termux](https://termux.dev/) on your device and run `termux-setup-storage` to get access to your SD card.
-Finally, copy the `llama` binary and the model files to your device storage. Here is a demo of an interactive session running on Pixel 5 phone:
+Finally, copy these built `llama` binaries and the model file to your device storage. Because the file permissions in the Android sdcard cannot be changed, you can copy the executable files to the `/data/data/com.termux/files/home/bin` path, and then execute the following commands in Termux to add executable permission:
+
+(Assumed that you have pushed the built executable files to the /sdcard/llama.cpp/bin path using `adb push`)
+```
+$cp -r /sdcard/llama.cpp/bin /data/data/com.termux/files/home/
+$cd /data/data/com.termux/files/home/bin
+$chmod +x ./*
+```
+
+Download model [llama-2-7b-chat.Q4_K_M.gguf](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/blob/main/llama-2-7b-chat.Q4_K_M.gguf), and push it to `/sdcard/llama.cpp/`, then move it to `/data/data/com.termux/files/home/model/`
+
+```
+$mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/home/model/
+```
+
+Now, you can start chatting:
+```
+$cd /data/data/com.termux/files/home/bin
+$./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+```
+
+Here is a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 

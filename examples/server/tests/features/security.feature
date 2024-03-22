@@ -1,9 +1,10 @@
 @llama.cpp
+@security
 Feature: Security
 
   Background: Server startup with an api key defined
     Given a server listening on localhost:8080
-    And   a model file stories260K.gguf
+    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a server api key llama.cpp
     Then  the server is starting
     Then  the server is healthy
@@ -36,10 +37,27 @@ Feature: Security
       | llama.cpp | no        |
       | hackme    | raised    |
 
+  Scenario Outline: OAI Compatibility (invalid response formats)
+    Given a system prompt test
+    And   a user prompt test
+    And   a response format <response_format>
+    And   a model test
+    And   2 max tokens to predict
+    And   streaming is disabled
+    Given an OAI compatible chat completions request with raised api error
+
+    Examples: Prompts
+      | response_format                                       |
+      | {"type": "sound"}                                     |
+      | {"type": "json_object", "schema": 123}                |
+      | {"type": "json_object", "schema": {"type": 123}}      |
+      | {"type": "json_object", "schema": {"type": "hiccup"}} |
+
 
   Scenario Outline: CORS Options
-    When an OPTIONS request is sent from <origin>
-    Then CORS header <cors_header> is set to <cors_header_value>
+    Given a user api key llama.cpp
+    When  an OPTIONS request is sent from <origin>
+    Then  CORS header <cors_header> is set to <cors_header_value>
 
     Examples: Headers
       | origin          | cors_header                      | cors_header_value |

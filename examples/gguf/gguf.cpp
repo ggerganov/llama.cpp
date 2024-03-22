@@ -211,6 +211,7 @@ static bool gguf_ex_read_1(const std::string & fname) {
                 for (int j = 0; j < ggml_nelements(cur); ++j) {
                     if (data[j] != 100 + i) {
                         fprintf(stderr, "%s: tensor[%d]: data[%d] = %f\n", __func__, i, j, data[j]);
+                        gguf_free(ctx);
                         return false;
                     }
                 }

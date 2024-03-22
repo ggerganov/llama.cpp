@@ -53,7 +53,6 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
     } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16) {
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
-        int64_t hist[16];
         std::vector<float> imatrix(tensor->ne[0], 1.0f); // dummy importance matrix
         const float * im = imatrix.data();
         if (!ggml_quantize_requires_imatrix(tensor->type)) {
@@ -63,7 +62,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
                 im = nullptr;
             }
         }
-        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], hist, im);
+        ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], im);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
@@ -1412,6 +1411,50 @@ struct test_pad : public test_case {
     }
 };
 
+// GGML_OP_ARANGE
+struct test_arange : public test_case {
+    const ggml_type type;
+    const float start;
+    const float stop;
+    const float step;
+
+    std::string vars() override {
+        return VARS_TO_STR4(type, start, stop, step);
+    }
+
+    test_arange(ggml_type type = GGML_TYPE_F32,
+            float start = 0.f, float stop = 10.f, float step = 1.f)
+        : type(type), start(start), stop(stop), step(step)  {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * out = ggml_arange(ctx, start, stop, step);
+        return out;
+    }
+};
+
+// GGML_OP_TIMESTEP_EMBEDDING
+struct test_timestep_embedding : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne_a;
+    const int dim;
+    const int max_period;
+
+    std::string vars() override {
+        return VARS_TO_STR4(type, ne_a, dim, max_period);
+    }
+
+    test_timestep_embedding(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne_a = {2, 1, 1, 1},
+            int dim = 320, int max_period=10000)
+        : type(type), ne_a(ne_a), dim(dim), max_period(max_period)  {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne_a.data());
+        ggml_tensor * out = ggml_timestep_embedding(ctx, a, dim, max_period);
+        return out;
+    }
+};
+
 // GGML_OP_LEAKY_RELU
 struct test_leaky_relu : public test_case {
     const ggml_type type;
@@ -1916,9 +1959,9 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_Q2_K, GGML_TYPE_Q3_K,
         GGML_TYPE_Q4_K, GGML_TYPE_Q5_K,
         GGML_TYPE_Q6_K,
-        GGML_TYPE_IQ2_XXS, GGML_TYPE_IQ2_XS,
+        GGML_TYPE_IQ2_XXS, GGML_TYPE_IQ2_XS, GGML_TYPE_IQ2_S,
         GGML_TYPE_IQ3_XXS, GGML_TYPE_IQ1_S,
-        GGML_TYPE_IQ4_NL, GGML_TYPE_IQ3_S,
+        GGML_TYPE_IQ4_NL, GGML_TYPE_IQ3_S, GGML_TYPE_IQ4_XS,
     };
 
     // unary ops
@@ -2048,6 +2091,13 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         }
     }
 
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  64, 2,  128, { 8,  1}, {1, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  83, 2,  128, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  64, 2,   64, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  83, 2,   64, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  64, 45, 128, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32, 128, 45,  64, { 8,  1}, {4, 1}));
+
     for (ggml_type type_a : all_types) {
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
             for (int n_mats : {2, 4, 8}) {
@@ -2126,6 +2176,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_group_norm());
     test_cases.emplace_back(new test_acc());
     test_cases.emplace_back(new test_pad());
+    test_cases.emplace_back(new test_arange());
+    test_cases.emplace_back(new test_timestep_embedding());
     test_cases.emplace_back(new test_leaky_relu());
 
     // these tests are disabled to save execution time, but they can be handy for debugging
@@ -2177,8 +2229,8 @@ static void usage(char ** argv) {
 
 int main(int argc, char ** argv) {
     test_mode mode = MODE_TEST;
-    const char * op_name = NULL;
-    const char * backend = NULL;
+    const char * op_name_filter = NULL;
+    const char * backend_filter = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "test") == 0) {
@@ -2187,14 +2239,14 @@ int main(int argc, char ** argv) {
             mode = MODE_PERF;
         } else if (strcmp(argv[i], "-o") == 0) {
             if (i + 1 < argc) {
-                op_name = argv[++i];
+                op_name_filter = argv[++i];
             } else {
                 usage(argv);
                 return 1;
             }
         } else if (strcmp(argv[i], "-b") == 0) {
             if (i + 1 < argc) {
-                backend = argv[++i];
+                backend_filter = argv[++i];
             } else {
                 usage(argv);
                 return 1;
@@ -2213,7 +2265,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < ggml_backend_reg_get_count(); i++) {
         printf("Backend %zu/%zu (%s)\n", i + 1, ggml_backend_reg_get_count(), ggml_backend_reg_get_name(i));
 
-        if (backend != NULL && strcmp(backend, ggml_backend_reg_get_name(i)) != 0) {
+        if (backend_filter != NULL && strcmp(backend_filter, ggml_backend_reg_get_name(i)) != 0) {
             printf("  Skipping\n");
             n_ok++;
             continue;
@@ -2221,9 +2273,17 @@ int main(int argc, char ** argv) {
 
         ggml_backend_t backend = ggml_backend_reg_init_backend(i, NULL);
         GGML_ASSERT(backend != NULL);
+
+        if (backend_filter == NULL && ggml_backend_is_cpu(backend)) {
+            printf("  Skipping CPU backend\n");
+            ggml_backend_free(backend);
+            n_ok++;
+            continue;
+        }
+
         printf("  Backend name: %s\n", ggml_backend_name(backend));
 
-        bool ok = test_backend(backend, mode, op_name);
+        bool ok = test_backend(backend, mode, op_name_filter);
 
         printf("  Backend %s: ", ggml_backend_name(backend));
         if (ok) {

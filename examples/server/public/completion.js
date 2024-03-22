@@ -96,17 +96,17 @@ export async function* llama(prompt, params = {}, config = {}) {
             }
           }
           if (result.error) {
-            result.error = JSON.parse(result.error);
-            if (result.error.content.includes('slot unavailable')) {
-              // Throw an error to be caught by upstream callers
-              throw new Error('slot unavailable');
-            } else {
-              console.error(`llama.cpp error: ${result.error.content}`);
+            try {
+              result.error = JSON.parse(result.error);
+              if (result.error.message.includes('slot unavailable')) {
+                // Throw an error to be caught by upstream callers
+                throw new Error('slot unavailable');
+              } else {
+                console.error(`llama.cpp error [${result.error.code} - ${result.error.type}]: ${result.error.message}`);
+              }
+            } catch(e) {
+              console.error(`llama.cpp error ${result.error}`)
             }
-          }
-          if (result.error) {
-            result.error = JSON.parse(result.error);
-            console.error(`llama.cpp error: ${result.error.content}`);
           }
         }
       }

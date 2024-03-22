@@ -48,6 +48,8 @@ int main(int argc, char ** argv) {
         params.prompt = "Hello my name is";
     }
 
+    process_escapes(params.prompt);
+
     // init LLM
 
     llama_backend_init();
@@ -78,8 +80,9 @@ int main(int argc, char ** argv) {
     llama_context_params ctx_params = llama_context_default_params();
 
     ctx_params.seed  = 1234;
-    ctx_params.n_ctx = n_kv_req;
+    ctx_params.n_ctx   = n_kv_req;
     ctx_params.n_batch = std::max(n_len, n_parallel);
+    ctx_params.n_seq_max       = n_parallel;
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
 
@@ -132,7 +135,7 @@ int main(int argc, char ** argv) {
     // assign the system KV cache to all parallel sequences
     // this way, the parallel sequences will "reuse" the prompt tokens without having to copy them
     for (int32_t i = 1; i < n_parallel; ++i) {
-        llama_kv_cache_seq_cp(ctx, 0, i, 0, batch.n_tokens);
+        llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
     }
 
     if (n_parallel > 1) {

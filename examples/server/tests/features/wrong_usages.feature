@@ -1,4 +1,4 @@
-# run with ./test.sh --tags wrong_usage
+# run with: ./tests.sh --no-skipped --tags wrong_usage
 @wrong_usage
 Feature: Wrong usage of llama.cpp server
 
@@ -7,7 +7,7 @@ Feature: Wrong usage of llama.cpp server
   # or pass n_predict/max_tokens in the request.
   Scenario: Infinite loop
     Given a server listening on localhost:8080
-    And   a model file stories260K.gguf
+    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     # Uncomment below to fix the issue
     #And   64 server max tokens to predict
     Then  the server is starting
@@ -18,4 +18,5 @@ Feature: Wrong usage of llama.cpp server
     # Uncomment below to fix the issue
     #And   128 max tokens to predict
     Given concurrent completion requests
+    Then the server is idle
     Then all prompts are predicted
