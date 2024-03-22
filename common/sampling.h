@@ -138,7 +138,7 @@ llama_token_data_array llama_sampling_configure_token_candidates(
         struct llama_context * ctx_cfg,
         int idx = 0,
         bool apply_grammar = true,
-        std::vector<float>* original_logits = nullptr);
+        std::vector<float> * original_logits = nullptr);
 
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,
