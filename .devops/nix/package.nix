@@ -156,6 +156,8 @@ effectiveStdenv.mkDerivation (
     postPatch = ''
       substituteInPlace ./ggml-metal.m \
         --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
+      substituteInPlace ./ggml-metal.m \
+        --replace '[bundle pathForResource:@"default" ofType:@"metallib"];' "@\"$out/bin/default.metallib\";"
 
       # TODO: Package up each Python script or service appropriately.
       # If we were to migrate to buildPythonPackage and prepare the `pyproject.toml`,
