@@ -170,20 +170,39 @@ static bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg,
             invalid_param = true;
             return true;
         }
-        params.n_threads = std::stoi(argv[i]);
-        if (params.n_threads <= 0) {
-            params.n_threads = std::thread::hardware_concurrency();
+        std::string arg_next = argv[i];
+
+        // split string by , and /
+        const std::regex regex{R"([,/]+)"};
+        std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+        std::vector<std::string> split_arg{it, {}};
+        params.n_threads.resize(split_arg.size());
+        for (size_t node = 0; node < split_arg.size(); ++node) {
+            params.n_threads[node] = std::stoi(split_arg[node]);
+            if (params.n_threads[node] <= 0) {
+                params.n_threads[node] = std::thread::hardware_concurrency();
+            }
         }
         return true;
+
     }
     if (arg == "-tb" || arg == "--threads-batch") {
         if (++i >= argc) {
             invalid_param = true;
             return true;
         }
-        params.n_threads_batch = std::stoi(argv[i]);
-        if (params.n_threads_batch <= 0) {
-            params.n_threads_batch = std::thread::hardware_concurrency();
+        std::string arg_next = argv[i];
+
+        // split string by , and /
+        const std::regex regex{R"([,/]+)"};
+        std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+        std::vector<std::string> split_arg{it, {}};
+        params.n_threads_batch.resize(split_arg.size());
+        for (size_t node = 0; node < split_arg.size(); ++node) {
+            params.n_threads_batch[node] = std::stoi(split_arg[node]);
+            if (params.n_threads_batch[node] <= 0) {
+                params.n_threads_batch[node] = std::thread::hardware_concurrency();
+            }
         }
         return true;
     }
@@ -192,9 +211,18 @@ static bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg,
             invalid_param = true;
             return true;
         }
-        params.n_threads_draft = std::stoi(argv[i]);
-        if (params.n_threads_draft <= 0) {
-            params.n_threads_draft = std::thread::hardware_concurrency();
+        std::string arg_next = argv[i];
+
+        // split string by , and /
+        const std::regex regex{R"([,/]+)"};
+        std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+        std::vector<std::string> split_arg{it, {}};
+        params.n_threads_draft.resize(split_arg.size());
+        for (size_t node = 0; node < split_arg.size(); ++node) {
+            params.n_threads_draft[node] = std::stoi(split_arg[node]);
+            if (params.n_threads_draft[node] <= 0) {
+                params.n_threads_draft[node] = std::thread::hardware_concurrency();
+            }
         }
         return true;
     }
@@ -203,9 +231,18 @@ static bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg,
             invalid_param = true;
             return true;
         }
-        params.n_threads_batch_draft = std::stoi(argv[i]);
-        if (params.n_threads_batch_draft <= 0) {
-            params.n_threads_batch_draft = std::thread::hardware_concurrency();
+        std::string arg_next = argv[i];
+
+        // split string by , and /
+        const std::regex regex{R"([,/]+)"};
+        std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+        std::vector<std::string> split_arg{it, {}};
+        params.n_threads_batch_draft.resize(split_arg.size());
+        for (size_t node = 0; node < split_arg.size(); ++node) {
+            params.n_threads_batch_draft[node] = std::stoi(split_arg[node]);
+            if (params.n_threads_batch_draft[node] <= 0) {
+                params.n_threads_batch_draft[node] = std::thread::hardware_concurrency();
+            }
         }
         return true;
     }
@@ -891,6 +928,24 @@ static bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg,
 #endif // GGML_USE_CUBLAS_SYCL
         return true;
     }
+    if (arg == "--mpi-layer-split") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string arg_next = argv[i];
+
+        // split string by , and /
+        const std::regex regex{R"([,/]+)"};
+        std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+        std::vector<std::string> split_arg{it, {}};
+        params.mpi_layer_split.resize(split_arg.size());
+        for (size_t node = 0; node < split_arg.size(); ++node) {
+            params.mpi_layer_split[node] = std::stof(split_arg[node]);
+        }
+        return true;
+    }
+
     if (arg == "--tensor-split" || arg == "-ts") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1275,7 +1330,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        (can be specified more than once for multiple prompts).\n");
     printf("  --color               colorise output to distinguish prompt and user input from generations\n");
     printf("  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
-    printf("  -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads);
+    printf("  -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads[0]);
     printf("  -tb N, --threads-batch N\n");
     printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");
     printf("  -td N, --threads-draft N");
@@ -1393,6 +1448,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
         printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
         printf("                        or for intermediate results and KV (with split-mode = row) (default: %d)\n", params.main_gpu);
     }
+#ifdef GGML_USE_MPI
+    printf("  --mpi-layer-split N   percentiles to split the layers by across nodes\n");
+#endif
     printf("  --verbose-prompt      print a verbose prompt before generation (default: %s)\n", params.verbose_prompt ? "true" : "false");
     printf("  --no-display-prompt   don't print prompt at generation (default: %s)\n", !params.display_prompt ? "true" : "false");
     printf("  -gan N, --grp-attn-n N\n");
@@ -1443,9 +1501,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 std::string get_system_info(const gpt_params & params) {
     std::ostringstream os;
 
-    os << "system_info: n_threads = " << params.n_threads;
-    if (params.n_threads_batch != -1) {
-        os << " (n_threads_batch = " << params.n_threads_batch << ")";
+    os << "system_info: n_threads = " << params.n_threads[0];
+    if (params.n_threads_batch[0] != -1) {
+        os << " (n_threads_batch = " << params.n_threads_batch[0] << ")";
     }
     os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
 
@@ -1590,6 +1648,10 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
         mparams.kv_overrides = params.kv_overrides.data();
     }
 
+    free((void *) mparams.node_layer_weights);
+
+    mparams.node_layer_weights = params.mpi_layer_split.data();
+
     return mparams;
 }
 
@@ -1629,8 +1691,8 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_seq_max         = params.n_parallel;
     cparams.n_batch           = params.n_batch;
     cparams.n_ubatch          = params.n_ubatch;
-    cparams.n_threads         = params.n_threads;
-    cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    cparams.n_threads         = params.n_threads[0];
+    cparams.n_threads_batch   = params.n_threads_batch[0] == -1 ? params.n_threads[0] : params.n_threads_batch[0];
     cparams.seed              = params.seed;
     cparams.logits_all        = params.logits_all;
     cparams.embeddings        = params.embedding;
@@ -1916,6 +1978,7 @@ struct llama_model * llama_load_model_from_hf(
 #endif // LLAMA_USE_CURL
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
+    int32_t n_threads = params.n_threads[0];
     auto mparams = llama_model_params_from_gpt_params(params);
 
     llama_model * model = nullptr;
@@ -1942,6 +2005,16 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         return std::make_tuple(nullptr, nullptr);
     }
 
+#ifdef GGML_USE_MPI
+    int node_id = llama_node_id(lctx);
+    n_threads = (node_id >= params.n_threads.size()) ? get_num_physical_cores() : params.n_threads[node_id];
+    int32_t n_threads_batch = (node_id >= params.n_threads_batch.size()) ? -1 : params.n_threads_batch[node_id];
+
+    params.n_threads[0] = n_threads; // So we can treat index 0 as what our n_threads is elsewhere
+    params.n_threads_batch[0] = n_threads_batch;
+    llama_set_n_threads(lctx, n_threads, (n_threads_batch > 0) ? n_threads_batch : get_num_physical_cores());
+#endif
+  
     if (!params.control_vectors.empty()) {
         if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
         if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
@@ -1975,7 +2048,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
                                              ((i > 0) || params.lora_base.empty())
                                                 ? NULL
                                                 : params.lora_base.c_str(),
-                                             params.n_threads);
+                                             n_threads);
         if (err != 0) {
             fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
             llama_free(lctx);
@@ -1991,10 +2064,17 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     {
         LOG("warming up the model with an empty run\n");
 
+#ifndef GGML_USE_MPI
+        // When using MPI, llama_decode() enters into an infinite loop
+        // on non-head nodes. Thus, we only want to warmup the model here
+        // if we aren't using MPI.
+        // FIXME have a way to terminate the infinite loop so we can warmup the model
+        //       in MPI mode
         std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
         llama_kv_cache_clear(lctx);
         llama_synchronize(lctx);
+#endif
         llama_reset_timings(lctx);
     }
 
@@ -2385,7 +2465,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     dump_vector_float_yaml(stream, "tensor_split", tensor_split_vector);
 
     fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
-    fprintf(stream, "threads: %d # default: %u\n", params.n_threads, std::thread::hardware_concurrency());
+    fprintf(stream, "threads: %d # default: %u\n", params.n_threads[0], std::thread::hardware_concurrency());
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);

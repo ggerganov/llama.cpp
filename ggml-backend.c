@@ -1719,7 +1719,7 @@ ggml_backend_sched_t ggml_backend_sched_new(
         bool parallel) {
     GGML_ASSERT(n_backends > 0);
     GGML_ASSERT(n_backends <= GGML_SCHED_MAX_BACKENDS);
-    GGML_ASSERT(ggml_backend_is_cpu(backends[n_backends - 1])); // last backend must be CPU
+    GGML_ASSERT(ggml_backend_buft_is_host(ggml_backend_get_default_buffer_type(backends[n_backends - 1]))); // last backend must be host
 
     struct ggml_backend_sched * sched = calloc(sizeof(struct ggml_backend_sched), 1);
 

@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
-
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
 #        ifdef LLAMA_BUILD
@@ -203,6 +202,9 @@ extern "C" {
     };
 
     struct llama_model_params {
+        // Array of layers to allocate to each node
+        const float * node_layer_weights;
+
         int32_t n_gpu_layers; // number of layers to store in VRAM
         enum llama_split_mode split_mode; // how to split the model across multiple GPUs
 
@@ -358,6 +360,8 @@ extern "C" {
                              const char * path_model,
             struct llama_model_params     params);
 
+    LLAMA_API void llama_split_layers_weighted(struct llama_context * ctx, float device_weights[], size_t num_weights);
+
     LLAMA_API void llama_free_model(struct llama_model * model);
 
     LLAMA_API struct llama_context * llama_new_context_with_model(
@@ -371,6 +375,9 @@ extern "C" {
 
     LLAMA_API size_t llama_max_devices(void);
 
+    // Get the ID of this compute node, usually 0
+    // unless running MPI, in which case it is the rank of the node
+    LLAMA_API int llama_node_id(struct llama_context * ctx);
     LLAMA_API bool llama_supports_mmap       (void);
     LLAMA_API bool llama_supports_mlock      (void);
     LLAMA_API bool llama_supports_gpu_offload(void);

@@ -94,8 +94,8 @@ int main(int argc, char ** argv) {
     ctx_params.seed    = seed;
     ctx_params.n_ctx   = llama_n_ctx_train(model)*n_grp + n_keep;
     ctx_params.n_batch = 512;
-    ctx_params.n_threads       = params.n_threads;
-    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.n_threads       = params.n_threads[0];
+    ctx_params.n_threads_batch = params.n_threads_batch[0] == -1 ? params.n_threads[0] : params.n_threads_batch[0];
 
     GGML_ASSERT(ctx_params.n_batch % n_grp == 0 && "n_batch must be divisible by n_grp");
 
