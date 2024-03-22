@@ -787,7 +787,7 @@ jobs:
     runs-on: windows-latest
 
     strategy:
-      package_name: sycl
+      package_name: 'sycl'
 
     defaults:
       run:
