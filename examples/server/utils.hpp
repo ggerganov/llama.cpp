@@ -341,7 +341,9 @@ static std::string rubra_format_function_call_str(const std::vector<json> & func
     std::string final_str = "You have access to the following tools:\n";
     json type_mapping = {
         {"string", "str"},
+        {"integer", "int"},
         {"number", "float"},
+        {"float", "float"},
         {"object", "Dict[str, Any]"},
         {"array", "List"},
         {"boolean", "bool"},
@@ -592,10 +594,11 @@ static json format_final_response_oaicompat(const json & request, json result, c
                 json tool_call;
                 tool_call["id"] = pc["id"];
                 tool_call["type"] = "function";
-                tool_call["function"] = json{{
+                tool_call["function"] = json{
                     {"name" , pc["name"]},
                     {"arguments" , pc["kwargs"].dump()},
-                }};
+                };
+                printf("format_final_response_oaicompat: tool_call: %s\n", tool_call.dump().c_str());
                 oai_format_tool_calls.push_back(tool_call);
             }
             choices = json::array({json{{"finish_reason", finish_reason},

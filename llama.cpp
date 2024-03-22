@@ -14518,6 +14518,7 @@ static int32_t llama_chat_apply_template_internal(
         // construct the prompt
         bool is_inside_turn = true; // skip BOS at the beginning
         // ss << "[INST] ";
+        
         for (auto message : chat) {
             std::string content = strip_message ? trim(message->content) : message->content;
             std::string role(message->role);
