@@ -221,6 +221,12 @@ int main(int argc, char ** argv) {
             } else {
                 usage(argv[0]);
             }
+        } else if (strcmp(argv[arg_idx], "--token-embedding-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.token_embedding_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
             params.allow_requantize = true;
         } else if (strcmp(argv[arg_idx], "--pure") == 0) {
