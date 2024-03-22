@@ -5137,12 +5137,17 @@ static bool llm_load_tensors(
     ml.init_mappings(true, &model.mlock_mmaps);
 
     // create the backend buffers
-    std::vector<std::pair<ggml_context *, std::map<uint32_t, ggml_backend_buffer_t>>> ctx_bufs;
+    std::vector<std::pair<ggml_context *, std::unordered_map<uint32_t, ggml_backend_buffer_t>>> ctx_bufs;
+
+    // Ensure we have enough capacity for the maximum backend buffer we will potentially create
+    size_t n_max_backend_buffer = ctx_map.size() * ml.files.size();
+    model.bufs.reserve(n_max_backend_buffer);
 
     for (auto & it : ctx_map) {
         ggml_backend_buffer_type_t buft = it.first;
         ggml_context * ctx = it.second;
-        std::map<uint32_t, ggml_backend_buffer_t> bufs;
+        std::unordered_map<uint32_t, ggml_backend_buffer_t> bufs;
+        bufs.reserve(n_max_backend_buffer);
 
         // only the mmap region containing the tensors in the model is mapped to the backend buffer
         // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
@@ -5159,6 +5164,7 @@ static bool llm_load_tensors(
                 if (buf == nullptr) {
                     throw std::runtime_error("unable to allocate backend CPU buffer");
                 }
+                model.bufs.push_back(buf);
                 bufs.emplace(idx, buf);
 #ifdef GGML_USE_CUBLAS
                 if (n_layer >= n_gpu_layers) {
@@ -5183,6 +5189,7 @@ static bool llm_load_tensors(
                 if (buf == nullptr) {
                     throw std::runtime_error("unable to allocate backend metal buffer");
                 }
+                model.bufs.push_back(buf);
                 bufs.emplace(idx, buf);
             }
         }
@@ -5192,6 +5199,7 @@ static bool llm_load_tensors(
             if (buf == nullptr) {
                 throw std::runtime_error("unable to allocate backend buffer");
             }
+            model.bufs.push_back(buf);
             if (use_mlock && ggml_backend_buffer_is_host(buf)) {
                 model.mlock_bufs.emplace_back(new llama_mlock);
                 auto & mlock_buf = model.mlock_bufs.back();
@@ -5209,7 +5217,6 @@ static bool llm_load_tensors(
             // indicate that this buffer contains weights
             // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
             ggml_backend_buffer_set_usage(buf.second, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-            model.bufs.push_back(buf.second);
         }
 
         ctx_bufs.emplace_back(ctx, bufs);
