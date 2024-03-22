@@ -99,6 +99,7 @@ option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some 
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
+option(LLAMA_CUDA_NO_PEER_COPY               "llama: do not use peer to peer copies"            OFF)
 option(LLAMA_CURL                            "llama: use libcurl to download model from an URL" OFF)
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
@@ -387,6 +388,9 @@ if (LLAMA_CUBLAS)
         endif()
         add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
+        if (LLAMA_CUDA_NO_PEER_COPY)
+            add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+        endif()
 
         if (LLAMA_STATIC)
             if (WIN32)
@@ -529,6 +533,10 @@ if (LLAMA_HIPBLAS)
 
     if (LLAMA_CUDA_FORCE_MMQ)
         add_compile_definitions(GGML_CUDA_FORCE_MMQ)
+    endif()
+
+    if (LLAMA_CUDA_NO_PEER_COPY)
+        add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
     endif()
 
     add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})

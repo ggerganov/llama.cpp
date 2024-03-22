@@ -771,7 +771,11 @@ GGML_CALL static bool ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t 
         if (src_ctx->device == dst_ctx->device) {
             CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(src), cudaMemcpyDeviceToDevice, cudaStreamPerThread));
         } else {
+#ifdef GGML_CUDA_NO_PEER_COPY
+            return false;
+#else
             CUDA_CHECK(cudaMemcpyPeerAsync(dst->data, dst_ctx->device, src->data, src_ctx->device, ggml_nbytes(src), cudaStreamPerThread));
+#endif
         }
         CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
         return true;
@@ -11322,19 +11326,23 @@ GGML_CALL static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_
         GGML_ASSERT(cuda_ctx_src->device == buf_ctx_src->device);
         GGML_ASSERT(cuda_ctx_dst->device == buf_ctx_dst->device);
 
+        // copy on src stream
+        if (cuda_ctx_src->device == cuda_ctx_dst->device) {
+            CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, cuda_ctx_dst->stream()));
+        } else {
+#ifdef GGML_CUDA_NO_PEER_COPY
+            return false;
+#else
+            CUDA_CHECK(cudaMemcpyPeerAsync(dst->data, cuda_ctx_dst->device, src->data, cuda_ctx_src->device, ggml_nbytes(dst), cuda_ctx_src->stream()));
+#endif
+        }
+
+        // record event on src stream
         if (!cuda_ctx_src->copy_event) {
             ggml_cuda_set_device(cuda_ctx_src->device);
             CUDA_CHECK(cudaEventCreateWithFlags(&cuda_ctx_src->copy_event, cudaEventDisableTiming));
         }
 
-        // copy on src stream
-        if (cuda_ctx_src->device == cuda_ctx_dst->device) {
-            CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, cuda_ctx_dst->stream()));
-        } else {
-            CUDA_CHECK(cudaMemcpyPeerAsync(dst->data, cuda_ctx_dst->device, src->data, cuda_ctx_src->device, ggml_nbytes(dst), cuda_ctx_src->stream()));
-        }
-
-        // record event on src stream
         CUDA_CHECK(cudaEventRecord(cuda_ctx_src->copy_event, cuda_ctx_src->stream()));
 
         // wait on dst stream for the copy to complete
@@ -11530,6 +11538,9 @@ GGML_CALL static bool ggml_backend_cuda_offload_op(ggml_backend_t backend, const
 }
 
 static ggml_backend_event_t ggml_backend_cuda_event_new(ggml_backend_t backend) {
+#ifdef GGML_CUDA_NO_PEER_COPY
+    return nullptr;
+#else
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
 
     ggml_cuda_set_device(cuda_ctx->device);
@@ -11541,6 +11552,7 @@ static ggml_backend_event_t ggml_backend_cuda_event_new(ggml_backend_t backend) 
         /* .backend = */ backend,
         /* .context = */ event,
     };
+#endif
 }
 
 static void ggml_backend_cuda_event_free(ggml_backend_event_t event) {
