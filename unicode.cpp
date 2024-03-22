@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <locale>
+#include <codecvt>
 
 static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
