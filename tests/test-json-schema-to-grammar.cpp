@@ -812,7 +812,7 @@ int main() {
             tc.verify(read("test-grammar-output.tmp"));
         });
     } else {
-        fprintf(stderr, "#\n# WARNING: Python not found, skipping Python JSON schema -> grammar tests!\n#\n");
+        fprintf(stderr, "\033[33mWARNING: Python not found, skipping Python JSON schema -> grammar tests.\n\033[0m");
     }
 
     if (std::system("node --version") == 0) {
@@ -823,7 +823,7 @@ int main() {
             tc.verify(read("test-grammar-output.tmp"));
         });
     } else {
-        fprintf(stderr, "#\n# WARNING: Node not found, skipping JavaScript JSON schema -> grammar tests!\n#\n");
+        fprintf(stderr, "\033[33mWARNING: Node not found, skipping JavaScript JSON schema -> grammar tests.\n\033[0m");
     }
 
     test_all("Check Expectations Validity", [](const TestCase & tc) {
