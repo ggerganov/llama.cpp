@@ -31,10 +31,10 @@ static std::vector<chunk> chunk_file(const std::string filename, int chunk_size,
     }
 
     chunk current_chunk;
-    char buffer[chunk_size];
+    char buffer[100];
     int64_t filepos = 0;
     std::string current = "";
-    while (f.read(buffer, chunk_size)) {
+    while (f.read(buffer, 100)) {
         current += std::string(buffer, f.gcount());
         size_t pos;
         while ((pos = current.find(chunk_separator)) != std::string::npos) {
