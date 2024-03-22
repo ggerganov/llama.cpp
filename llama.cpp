@@ -14829,13 +14829,13 @@ LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * pa
 int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int split_no, int split_count) {
     std::string str_split_path(split_path);
     char postfix[32];
-    sprintf(postfix, "-%05d-of-%05d.gguf", split_no + 1, split_count);
+    snprintf(postfix, 32, "-%05d-of-%05d.gguf", split_no + 1, split_count);
     std::string str_postfix(postfix);
 
     // check if dest ends with postfix
-    auto size_prefix = str_split_path.size() - str_postfix.size();
+    int size_prefix = str_split_path.size() - str_postfix.size();
     if (size_prefix > 0 && str_split_path.find(str_postfix, size_prefix) != std::string::npos) {
-        strncpy(dest, split_path, std::min(size_prefix, maxlen));
+        snprintf(dest, std::min((size_t) size_prefix, maxlen), "%s", split_path);
         return size_prefix;
     }
 
