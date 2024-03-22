@@ -378,20 +378,18 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         SUCCESS,
-        "required props",
+        "required props in original order",
         R"""({
             "type": "object",
             "properties": {
-                "a": {
-                "type": "string"
-                },
-                "b": {
-                "type": "string"
-                }
+                "b": {"type": "string"},
+                "c": {"type": "string"},
+                "a": {"type": "string"}
             },
             "required": [
                 "a",
-                "b"
+                "b",
+                "c"
             ],
             "additionalProperties": false,
             "definitions": {}
@@ -399,7 +397,8 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             a-kv ::= "\"a\"" space ":" space string
             b-kv ::= "\"b\"" space ":" space string
-            root ::= "{" space a-kv "," space b-kv "}" space
+            c-kv ::= "\"c\"" space ":" space string
+            root ::= "{" space b-kv "," space c-kv "," space a-kv "}" space
             space ::= " "?
             string ::=  "\"" (
                     [^"\\] |
@@ -458,13 +457,13 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         SUCCESS,
-        "required + optional props",
+        "required + optional props each in original order",
         R"""({
             "properties": {
-                "a": {"type": "string"},
                 "b": {"type": "string"},
-                "c": {"type": "string"},
-                "d": {"type": "string"}
+                "a": {"type": "string"},
+                "d": {"type": "string"},
+                "c": {"type": "string"}
             },
             "required": ["a", "b"],
             "additionalProperties": false
@@ -473,9 +472,9 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             a-kv ::= "\"a\"" space ":" space string
             b-kv ::= "\"b\"" space ":" space string
             c-kv ::= "\"c\"" space ":" space string
-            c-rest ::= ( "," space d-kv )?
             d-kv ::= "\"d\"" space ":" space string
-            root ::= "{" space a-kv "," space b-kv ( "," space ( c-kv c-rest | d-kv ) )? "}" space
+            d-rest ::= ( "," space c-kv )?
+            root ::= "{" space b-kv "," space a-kv ( "," space ( d-kv d-rest | c-kv ) )? "}" space
             space ::= " "?
             string ::=  "\"" (
                     [^"\\] |
@@ -796,7 +795,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 int main() {
     test_all("C++", [](const TestCase & tc) {
         try {
-            tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
+            tc.verify(json_schema_to_grammar(nlohmann::ordered_json::parse(tc.schema)));
             tc.verify_status(SUCCESS);
         } catch (const std::runtime_error & ex) {
             fprintf(stderr, "Error: %s\n", ex.what());

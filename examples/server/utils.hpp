@@ -12,7 +12,7 @@
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 // https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11
 enum error_type {

@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 const std::string SPACE_RULE = "\" \"?";
 
@@ -137,7 +137,7 @@ private:
     std::function<json(const std::string &)> _fetch_json;
     bool _dotall;
     std::map<std::string, std::string> _rules;
-    std::unordered_map<std::string, nlohmann::json> _refs;
+    std::unordered_map<std::string, json> _refs;
     std::unordered_set<std::string> _refs_being_resolved;
     std::vector<std::string> _errors;
     std::vector<std::string> _warnings;
@@ -495,7 +495,7 @@ public:
         _rules["space"] = SPACE_RULE;
     }
 
-    void resolve_refs(nlohmann::json & schema, const std::string & url) {
+    void resolve_refs(json & schema, const std::string & url) {
         /*
         * Resolves all $ref fields in the given schema, fetching any remote schemas,
         * replacing each $ref with absolute reference URL and populates _refs with the
