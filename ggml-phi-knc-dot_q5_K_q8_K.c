@@ -22,7 +22,7 @@
 #define GGML_F32_EPR 16
 
 typedef float float32x8_t __attribute__((vector_size (64)));
-typedef int16 int16x16_t __attribute__((vector_size (64)));
+typedef int16_t int16x16_t __attribute__((vector_size (64)));
 
 /* A forward declaration, to keep GCC happy. */
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc);
