@@ -55,6 +55,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
   static const uint32_t kmask2 = 0x0f0f0f0f;
   static const uint32_t kmask3 = 0x03030303;
 
+  uint32_t utmp[4];
+
   const uint8_t * scales = (const uint8_t*)&utmp[0];
   const uint8_t * mins   = (const uint8_t*)&utmp[2];
 
