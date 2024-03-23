@@ -1984,7 +1984,7 @@ struct llama_model * llama_load_model_from_url(
                 char split_path[PATH_MAX] = {0};
                 llama_split_path(split_path, sizeof(split_path), split_prefix, download_idx, n_split);
 
-                char split_url[PATH_MAX] = {0};
+                char split_url[2084] = {0};
                 llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
                 auto * curl = curl_easy_init();
