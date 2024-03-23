@@ -64,7 +64,6 @@
 #else
 #include <sys/syslimits.h>
 #endif
-#define LLAMA_CURL_MAX_PATH_LENGTH PATH_MAX
 #define LLAMA_CURL_MAX_HEADER_LENGTH 256
 #endif // LLAMA_USE_CURL
 
