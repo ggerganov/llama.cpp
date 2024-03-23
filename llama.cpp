@@ -2934,7 +2934,7 @@ struct llama_model_loader {
                 }
             }
 
-            LLAMA_LOG_INFO("%s: additional %d GGUFs metadata loaded.\n",  __func__, n_split);
+            LLAMA_LOG_INFO("%s: additional %d GGUFs metadata loaded.\n",  __func__, n_split - 1);
         }
 
         n_kv      = gguf_get_n_kv(meta);
