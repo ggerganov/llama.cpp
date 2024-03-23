@@ -58,6 +58,31 @@ inline static void GGML_I32x8_VEC_ZERO(int32x8_t *target)
 			: "zmm8", "k1", "memory");
 }
 
+// perform an eight wide Fused Multiply Add of an I16x8 times scalar S into I32x8.
+inline static void GGML_I16x8_S_FMA_I32x8 (int16x8_t *src, int32_t scale, int32x8_t *dest)
+{
+  uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
+  uint32_t mask=0x000000FF;
+  int32_t scaleVec[4] = {scale, scale, scale, scale};
+
+  __asm__ __volatile__ (
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm0\n\t"        // use an upscaling operator to clear our value.
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm1\n\t"        // use an upscaling operator to clear our value.
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm2\n\t"        // use an upscaling operator to clear our value.
+			"kmov\t%[M],\t%%k1\n\t"                              // we will only be working with 8 values at a time. le sigh.
+			"vmovaps\t\t%[SRC]%{int16%},\t%%zmm0%{%%k1%}\n\t"    // load the item we will be summing from. upscale it from int16.
+			"vbroadcastI32x4\t%[SCALE],\t%%zmm1\n\t"             // load the item we will be multiplying by.
+                        "vmovaps\t\t%[RES],\t%%zmm2%{%%k1%}\n\t"             // load the item we will be summing onto.
+			"vpmadd231d\t%%zmm0,\t%%zmm1,\t%%zmm2%{%%k1%}\n\t"   // perform our multiply-add.
+			"vmovaps\t\t%%zmm2,\t%[RES]%{%%k1}\n\t"              // save the result.
+			: [RES]   "+m" (*target)
+			: [Z]     "m"  (zero),
+			  [M]     "r"  (mask),
+			  [SRC]   "m"  (src),
+			  [SCALE] "m"  (scaleVec)
+			: "zmm0", "zmm1", "zmm2", "k1", "memory");
+}
+
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
 
   /* interpret X and Y as vectors. */
@@ -124,7 +149,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
       for (int l = 0; l < 8; ++l) ((int32_t *)&aux32)[l] += scale * ((int16_t *)&aux16)[l];
       q8 += 8; a += 8;
       for (int l = 0; l < 8; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
-      for (int l = 0; l < 8; ++l) ((int32_t *)&aux32)[l] += scale * ((int16_t *)&aux16)[l];
+      GGML_I16x8_S_FMA_I32x8 (aux16, scale, aux32);
+      //      for (int l = 0; l < 8; ++l) ((int32_t *)&aux32)[l] += scale * ((int16_t *)&aux16)[l];
       q8 += 8; a += 8;
     }
     const float d = GGML_FP16_TO_FP32(x[i].d) * y[i].d;
