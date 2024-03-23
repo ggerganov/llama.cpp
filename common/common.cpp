@@ -1705,20 +1705,6 @@ void llama_batch_add(
 
 #ifdef LLAMA_USE_CURL
 
-static std::string llama_download_hide_password_in_url(const std::string & url) {
-    std::size_t protocol_pos = url.find("://");
-    if (protocol_pos == std::string::npos) {
-        return url;  // Malformed URL
-    }
-
-    std::size_t at_pos = url.find('@', protocol_pos + 3);
-    if (at_pos == std::string::npos) {
-        return url;  // No password in URL
-    }
-
-    return url.substr(0, protocol_pos + 3) + "********" + url.substr(at_pos);
-}
-
 static bool llama_download_file(CURL * curl, const char * url, const char * path) {
     bool force_download = false;
 
@@ -1854,6 +1840,21 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
 
         //  display download progress
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+
+        // helper function to hide password in URL
+        auto llama_download_hide_password_in_url = [](const std::string & url) -> std::string {
+            std::size_t protocol_pos = url.find("://");
+            if (protocol_pos == std::string::npos) {
+                return url;  // Malformed URL
+            }
+
+            std::size_t at_pos = url.find('@', protocol_pos + 3);
+            if (at_pos == std::string::npos) {
+                return url;  // No password in URL
+            }
+
+            return url.substr(0, protocol_pos + 3) + "********" + url.substr(at_pos);
+        };
 
         // start the download
         fprintf(stderr, "%s: downloading from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__,
