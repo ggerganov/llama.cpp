@@ -171,8 +171,8 @@ int main(int argc, char ** argv) {
     for (auto & chunk : chunks) {
         auto inp = ::llama_tokenize(ctx, chunk.textdata, true, false);
         if (inp.size() > n_batch) {
-            // error: chunk size exceeds batch size
-            fprintf(stderr, "%s: error: chunk size (%zu) exceeds batch size (%zu), increase batch size and re-run\n",__func__, inp.size(), n_batch);
+            fprintf(stderr, "%s: error: chunk size (%lld) exceeds batch size (%lld), increase batch size and re-run\n",
+                    __func__, (long long int) inp.size(), (long long int) n_batch);
             return 1;
         }
         // add eos if not present
