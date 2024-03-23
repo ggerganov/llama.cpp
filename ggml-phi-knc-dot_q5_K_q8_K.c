@@ -4,6 +4,8 @@
 // For size_t
 #include <stdio.h>
 
+// Yes, we have to tell this header to actually export stuff.
+#define GGML_COMMON_IMPL_C
 // For block_q5_K and block_q8_K
 #include "ggml-common.h"
 
