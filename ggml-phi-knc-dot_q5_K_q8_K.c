@@ -39,7 +39,7 @@ inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
 			: [RES]  "+m"  (*target)
 			: [Z]    "m"   (zero),
 			  [M]    "r"   (mask)
-			: "zmm8", "k1", memory);
+			: "zmm8", "k1", "memory");
 }
 
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
