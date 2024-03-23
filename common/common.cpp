@@ -2000,8 +2000,8 @@ struct llama_model * llama_load_model_from_url(
         }
 
         // Wait for all downloads to complete
-        for(auto &f : futures_download) {
-            if(!f.get()) {
+        for (auto & f : futures_download) {
+            if (!f.get()) {
                 return NULL;
             }
         }
