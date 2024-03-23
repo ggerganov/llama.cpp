@@ -36,7 +36,8 @@
   # It's necessary to consistently use backendStdenv when building with CUDA support,
   # otherwise we get libstdc++ errors downstream.
   effectiveStdenv ? if useCuda then cudaPackages.backendStdenv else stdenv,
-  enableStatic ? effectiveStdenv.hostPlatform.isStatic
+  enableStatic ? effectiveStdenv.hostPlatform.isStatic,
+  precompileMetalShaders ? false
 }@inputs:
 
 let
@@ -166,12 +167,12 @@ effectiveStdenv.mkDerivation (
     '';
 
     # With PR#6015 https://github.com/ggerganov/llama.cpp/pull/6015,
-    # `default.metallib` is compiled with Metal compiler from XCode
+    # `default.metallib` may be compiled with Metal compiler from XCode
     # and we need to escape sandbox on MacOS to access Metal compiler.
     # `xcrun` is used find the path of the Metal compiler, which is varible
     # and not on $PATH
     # see https://github.com/ggerganov/llama.cpp/pull/6118 for discussion
-    __noChroot = effectiveStdenv.isDarwin && useMetalKit;
+    __noChroot = effectiveStdenv.isDarwin && useMetalKit && precompileMetalShaders;
 
     nativeBuildInputs =
       [
@@ -189,7 +190,7 @@ effectiveStdenv.mkDerivation (
       ]
       ++ optionals (effectiveStdenv.hostPlatform.isGnu && enableStatic) [
         glibc.static
-      ] ++ optionals (effectiveStdenv.isDarwin && useMetalKit) [
+      ] ++ optionals (effectiveStdenv.isDarwin && useMetalKit && precompileMetalShaders) [
         xcrunHost
       ];
 
@@ -235,7 +236,10 @@ effectiveStdenv.mkDerivation (
         # Should likely use `rocmPackages.clr.gpuTargets`.
         "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
       ]
-      ++ optionals useMetalKit [ (lib.cmakeFeature "CMAKE_C_FLAGS" "-D__ARM_FEATURE_DOTPROD=1") ];
+      ++ optionals useMetalKit [
+        (lib.cmakeFeature "CMAKE_C_FLAGS" "-D__ARM_FEATURE_DOTPROD=1")
+        (cmakeBool "LLAMA_METAL_EMBED_LIBRARY" (!precompileMetalShaders))
+      ];
 
     # TODO(SomeoneSerge): It's better to add proper install targets at the CMake level,
     # if they haven't been added yet.
