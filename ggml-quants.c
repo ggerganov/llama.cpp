@@ -9757,12 +9757,12 @@ void ggml_vec_dot_iq1_m_q8_K  (int n, float * restrict s, size_t bs, const void 
     UNUSED(by);
     UNUSED(bs);
 
-    const block_iq1_s * restrict x = vx;
+    const block_iq1_m * restrict x = vx;
     const block_q8_K  * restrict y = vy;
 
     const int nb = n / QK_K;
 
-#if defined __ARM_NEON
+#if defined z__ARM_NEON
 
     ggml_int8x16x4_t q1b;
     ggml_int8x16x4_t q8b;
@@ -9807,7 +9807,7 @@ void ggml_vec_dot_iq1_m_q8_K  (int n, float * restrict s, size_t bs, const void 
 
     *s = sumf;
 
-#elif defined __AVX2__
+#elif defined z__AVX2__
 
     __m256 accum = _mm256_setzero_ps();
     float accum1 = 0;
@@ -9850,31 +9850,47 @@ void ggml_vec_dot_iq1_m_q8_K  (int n, float * restrict s, size_t bs, const void 
 
 #else
 
+    iq1m_scale_t scale;
+
+    int sum1[2], sum2[2], delta[4];
+
     float sumf = 0;
     for (int i = 0; i < nb; i++) {
 
         const int8_t   * q8 = y[i].qs;
         const uint8_t  * qs = x[i].qs;
-        const uint16_t * qh = x[i].qh;
+        const uint8_t  * qh = x[i].qh;
+        const uint16_t * sc = (const uint16_t *)x[i].scales;
 
-        int sumi = 0, sumi1 = 0;
+        scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+
+        int sumi1 = 0, sumi2 = 0;
         for (int ib = 0; ib < QK_K/32; ++ib) {
-            const int ls = 2*((qh[ib] >> 12) & 7) + 1;
-            const int delta = qh[ib] & 0x8000 ? -1 : 1;
-            int lsum = 0;
+            delta[0] = qh[0] & 0x08 ? -1 : 1;
+            delta[1] = qh[0] & 0x80 ? -1 : 1;
+            delta[2] = qh[1] & 0x08 ? -1 : 1;
+            delta[3] = qh[1] & 0x80 ? -1 : 1;
+            sum1[0] = sum1[1] = sum2[0] = sum2[1] = 0;
             for (int l = 0; l < 4; ++l) {
-                const int8_t * grid = (const int8_t *)(iq1s_grid + (qs[l] | (((qh[ib] >> 3*l) & 7) << 8)));
+                const int8_t * grid = (const int8_t *)(iq1s_grid + (qs[l] | (((uint16_t)qh[l/2] << (8 - 4*(l%2))) & 0x700)));
+                int lsum1 = 0, lsum2 = 0;
                 for (int j = 0; j < 8; ++j) {
-                    lsum += q8[j] * grid[j];
+                    lsum1 += q8[j] * grid[j];
+                    lsum2 += q8[j];
                 }
                 q8 += 8;
+                sum1[l/2] += lsum1;
+                sum2[l/2] += lsum2*delta[l];
             }
-            sumi  += ls * lsum;
-            sumi1 += ls * delta * (y[i].bsums[2*ib+0] + y[i].bsums[2*ib+1]);
+            const int ls1 = 2*((sc[ib/2] >> (6*(ib%2)+0)) & 0x7) + 1;
+            const int ls2 = 2*((sc[ib/2] >> (6*(ib%2)+3)) & 0x7) + 1;
+            sumi1 += sum1[0] * ls1 + sum1[1] * ls2;
+            sumi2 += sum2[0] * ls1 + sum2[1] * ls2;
             qs += 4;
+            qh += 2;
         }
 
-        sumf += GGML_FP16_TO_FP32(x[i].d) * y[i].d * (sumi + IQ1S_DELTA * sumi1);
+        sumf += GGML_FP16_TO_FP32(scale.fp16) * y[i].d * (sumi1 + IQ1M_DELTA * sumi2);
     }
 
     *s = sumf;
