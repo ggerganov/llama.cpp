@@ -4,6 +4,9 @@
 // For size_t
 #include <stdio.h>
 
+// For block_q5_K and block_q8_K
+#include "ggml-common.h"
+
 /* A forward declaration, to keep GCC happy. */
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc);
 
