@@ -50,6 +50,7 @@ models-mnt
 /embedding
 /gguf
 /gguf-llama-simple
+/gguf-split
 /gritlm
 /imatrix
 /infill
