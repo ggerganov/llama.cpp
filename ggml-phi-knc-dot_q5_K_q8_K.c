@@ -97,17 +97,17 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     int is = 0;
     for (int j = 0; j < QK_K/32; ++j) {
       int32_t scale = scales[is++];
-      for (int l = 0; l < 8; ++l) ((int16_t *)aux16)[l] = q8[l] * a[l];
-      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)aux16)[l];
+      for (int l = 0; l < 8; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
+      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)&aux16)[l];
       q8 += 8; a += 8;
-      for (int l = 0; l < 8; ++l) ((int16_t *)aux16)[l] = q8[l] * a[l];
-      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)aux16)[l];
+      for (int l = 0; l < 8; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
+      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)&aux16)[l];
       q8 += 8; a += 8;
-      for (int l = 0; l < 8; ++l) ((int16_t *)aux16)[l] = q8[l] * a[l];
-      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)aux16)[l];
+      for (int l = 0; l < 8; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
+      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)&aux16)[l];
       q8 += 8; a += 8;
-      for (int l = 0; l < 8; ++l) ((int16_t *)aux16)[l] = q8[l] * a[l];
-      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)aux16)[l];
+      for (int l = 0; l < 8; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
+      for (int l = 0; l < 8; ++l) aux32[l] += scale * ((int16_t *)&aux16)[l];
       q8 += 8; a += 8;
     }
     const float d = GGML_FP16_TO_FP32(x[i].d) * y[i].d;
