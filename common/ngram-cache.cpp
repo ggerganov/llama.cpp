@@ -1,5 +1,4 @@
 #include "ngram-cache.h"
-#include "log.h"
 
 #include <fstream>
 
@@ -39,7 +38,6 @@ void llama_ngram_cache_update(llama_ngram_cache & ngram_cache, int ngram_min, in
                 const int64_t eta_min  = eta_ms / (60*1000);
                 const int64_t eta_s    = (eta_ms - 60*1000*eta_min) / 1000;
 
-                fprintf(stderr, "%s: %" PRId64 "/%" PRId64 " done, ETA: %02" PRId64 ":%02" PRId64 "\n", __func__, n_done, n_todo, eta_min, eta_s);
             }
         }
     }
@@ -186,7 +184,7 @@ void llama_ngram_cache_draft(
             break;
         }
 
-        LOG(" - draft candidate: token=%d\n", drafted_token);
+        // LOG(" - draft candidate: token=%d\n", drafted_token);
         draft.push_back(drafted_token);
     }
 }
