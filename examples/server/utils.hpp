@@ -95,8 +95,8 @@ static inline void server_log(const char *level, const char *function, int line,
 
         const std::string str = ss.str();
         printf("%.*s\n", (int)str.size(), str.data());
-        fflush(stdout);
     }
+    fflush(stdout);
 }
 
 //
