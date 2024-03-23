@@ -297,7 +297,7 @@ ifeq "${K1OM}" ""
 	#MK_CFLAGS   += -mssse3
 	#MK_CXXFLAGS += -mssse3
 else
-	OBJS         += ggml-phi-knc.o
+	OBJS         += ggml-phi-knc.o ggml-phi-knc-dot_q5_K_q8_K.o
 	MK_CFLAGS    += -march=knc -mtune=knc
 endif
 
