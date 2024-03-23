@@ -43,6 +43,21 @@ inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
 			: "zmm8", "k1", "memory");
 }
 
+inline static void GGML_I32x8_VEC_ZERO(int32x8_t *target)
+{
+  uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
+  uint32_t mask=0x000000FF;
+
+  __asm__ __volatile__ (
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
+			"kmov\t%[M],\t%%k1\n\t"
+                        "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
+			: [RES]  "+m"  (*target)
+			: [Z]    "m"   (zero),
+			  [M]    "r"   (mask)
+			: "zmm8", "k1", "memory");
+}
+
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
 
   /* interpret X and Y as vectors. */
@@ -73,7 +88,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     const uint8_t * restrict q4 = x[i].qs;
     const uint8_t * restrict hm = x[i].qh;
     const  int8_t * restrict q8 = y[i].qs;
-    memset(aux32, 0, 8*sizeof(int32_t));
+    GGML_I32x8_VEC_ZERO(&aux32);
+
     int8_t * restrict a = aux8;
     uint8_t m = 1;
     for (int j = 0; j < QK_K/64; ++j) {
