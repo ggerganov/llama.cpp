@@ -16,8 +16,8 @@ The project is under active development, and we are [looking for feedback and co
 
 **Command line options:**
 
-- `--threads N`, `-t N`: Set the number of threads to use during generation.
-- `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation.
+- `--threads N`, `-t N`: Set the number of threads to use during generation. Not used if model layers are offloaded to GPU. The server is using batching, this parameter is used only if one token is to be processed on CPU backend.
+- `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation. Not used if model layers are offloaded to GPU.
 - `--threads-http N`: number of threads in the http server pool to process requests (default: `max(std::thread::hardware_concurrency() - 1, --parallel N + 2)`)
 - `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 - `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf).
@@ -26,7 +26,8 @@ The project is under active development, and we are [looking for feedback and co
 - `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 - `-mg i, --main-gpu i`: When using multiple GPUs this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default GPU 0 is used. Requires cuBLAS.
 - `-ts SPLIT, --tensor-split SPLIT`: When using multiple GPUs this option controls how large tensors should be split across all GPUs. `SPLIT` is a comma-separated list of non-negative values that assigns the proportion of data that each GPU should get in order. For example, "3,2" will assign 60% of the data to GPU 0 and 40% to GPU 1. By default the data is split in proportion to VRAM but this may not be optimal for performance. Requires cuBLAS.
-- `-b N`, `--batch-size N`: Set the batch size for prompt processing. Default: `512`.
+- `-b N`, `--batch-size N`: Set the batch size for prompt processing. Default: `2048`.
+- `-ub N`, `--ubatch-size N`: physical maximum batch size. Default: `512`.
 - `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
 - `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 - `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
@@ -57,7 +58,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
 - `--metrics`: enable prometheus `/metrics` compatible endpoint (default: disabled)
 - `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name (default: template taken from model's metadata). We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
-- `--log-disable`: Output logs to stdout only, default: enabled.
+- `--log-disable`: Output logs to stdout only, not to `llama.log`. default: enabled.
 - `--log-format FORMAT`: Define the log output to FORMAT: json or text (default: json)
 
 **If compiled with `LLAMA_SERVER_SSL=ON`**
