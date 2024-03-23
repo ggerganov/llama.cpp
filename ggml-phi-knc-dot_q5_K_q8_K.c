@@ -36,8 +36,8 @@ inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
 			"kmov\t%[M],\t%%k1\n\t"
                         "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
 			: [RES]  "+m"  (*target)
-			: [Z]    "m"   (zero)
-			: [M]    "r"   (mask)
+			: [Z]    "m"   (zero),
+			  [M]    "r"   (mask)
 			: "r9", "zmm8", "k1");
 }
 
@@ -83,10 +83,10 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     for (int j = 0; j < QK_K/16; ++j) {
       const float dl = d * sc[j];
       for (int l = 0; l < 16; ++l) aux16[l] = q8[l] * a[l];
-      for (int l = 0; l <  8; ++l) ((float *)sums)[l] += dl * (aux16[l] + aux16[8+l]);
+      for (int l = 0; l <  8; ++l) ((float *)&sums)[l] += dl * (aux16[l] + aux16[8+l]);
       q8 += 16; a += 16;
     }
   }
-  for (int l = 0; l < 8; ++l) sumf += ((float *)sums)[l];
+  for (int l = 0; l < 8; ++l) sumf += ((float *)&sums)[l];
   *s = sumf;
 }
