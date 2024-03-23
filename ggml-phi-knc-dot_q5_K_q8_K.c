@@ -30,7 +30,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
 {
   uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
-  uint32_t mask=0x0000000F;
+  uint32_t mask=0x000000FF;
 
   __asm__ __volatile__ (
                         "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
@@ -39,7 +39,7 @@ inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
 			: [RES]  "+m"  (*target)
 			: [Z]    "m"   (zero),
 			  [M]    "r"   (mask)
-			: "r9", "zmm8", "k1");
+			: "zmm8", "k1", memory);
 }
 
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
@@ -62,10 +62,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
   int8_t  aux8[QK_K];
   int16_t aux16[8];
-  float32x8_t sums;
+  float32x8_t sums __attribute__((aligned(64)));
   int32_t aux32[8];
-
-  //memset(sums, 0, 8*sizeof(float));
 
   GGML_F32x8_VEC_ZERO(&sums);
 
