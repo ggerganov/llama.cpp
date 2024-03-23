@@ -58,7 +58,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
   uint32_t utmp[4];
   int8_t aux8[QK_K];
   //  int16_t aux16[16];
-  int16x16_t aux16;
+  int16x16_t aux16 __attribute__((aligned(64)));
   float32x8_t sums __attribute__((aligned(64)));
 
   /* use a vector operation to clear these floats. */
@@ -87,8 +87,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int j = 0; j < QK_K/16; ++j) {
       const float dl = d * sc[j];
-      for (int l = 0; l < 16; ++l) ((int16 *)&aux16)[l] = q8[l] * a[l];
-      for (int l = 0; l <  8; ++l) ((float *)&sums)[l] += dl * (((int16 *)&aux16)[l] + ((int16 *)&aux16)[8+l]);
+      for (int l = 0; l < 16; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
+      for (int l = 0; l <  8; ++l) ((float *)&sums)[l] += dl * (((int16_t *)&aux16)[l] + ((int16_t *)&aux16)[8+l]);
       q8 += 16; a += 16;
     }
   }
