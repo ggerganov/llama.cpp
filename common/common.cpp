@@ -64,6 +64,7 @@
 #else
 #include <sys/syslimits.h>
 #endif
+#define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
 #define LLAMA_CURL_MAX_HEADER_LENGTH 256
 #endif // LLAMA_USE_CURL
 
@@ -1960,7 +1961,7 @@ struct llama_model * llama_load_model_from_url(
 
     if (n_split > 1) {
         char split_prefix[PATH_MAX] = {0};
-        char split_url_prefix[PATH_MAX] = {0};
+        char split_url_prefix[LLAMA_CURL_MAX_URL_LENGTH] = {0};
 
         // Verify the first split file format
         // and extract split URL and PATH prefixes
@@ -1985,7 +1986,7 @@ struct llama_model * llama_load_model_from_url(
                 char split_path[PATH_MAX] = {0};
                 llama_split_path(split_path, sizeof(split_path), split_prefix, download_idx, n_split);
 
-                char split_url[2084] = {0}; // Maximum URL Length in Chrome: 2083
+                char split_url[LLAMA_CURL_MAX_URL_LENGTH] = {0};
                 llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
                 auto * curl = curl_easy_init();
