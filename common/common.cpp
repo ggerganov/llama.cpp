@@ -1963,6 +1963,7 @@ struct llama_model * llama_load_model_from_url(
         char split_url_prefix[PATH_MAX] = {0};
 
         // Verify the first split file format
+        // and extract split URL and PATH prefixes
         {
             if (!llama_split_prefix(split_prefix, sizeof(split_prefix), path_model, 0, n_split)) {
                 fprintf(stderr, "\n%s: unexpected model file name: %s"
@@ -1984,7 +1985,7 @@ struct llama_model * llama_load_model_from_url(
                 char split_path[PATH_MAX] = {0};
                 llama_split_path(split_path, sizeof(split_path), split_prefix, download_idx, n_split);
 
-                char split_url[2084] = {0};
+                char split_url[2084] = {0}; // Maximum URL Length in Chrome: 2083
                 llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
                 auto * curl = curl_easy_init();
