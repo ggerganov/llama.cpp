@@ -1946,6 +1946,7 @@ struct llama_model * llama_load_model_from_url(
         auto * ctx_gguf = gguf_init_from_file(path_model, gguf_params);
         if (!ctx_gguf) {
             fprintf(stderr, "\n%s:  failed to load input GGUF from %s\n", __func__, path_model);
+            curl_easy_cleanup(curl);
             return NULL;
         }
 
