@@ -6,9 +6,6 @@
 // For memcpy.
 #include <string.h>
 
-// No, we have an SIMD unit.
-// #define GGML_SIMD
-
 // This SIMD unit can work with 32 float32s at once.
 #define GGML_F32_STEP 32
 // We can fit 16 of these float32s in a single vector register.
@@ -27,7 +24,7 @@ inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 
   __asm__ __volatile__ (
                         "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
-                        "vmovaps\t\t%%zmm8,\t%[RES]\n\t"
+                        "vmovnraps\t\t%%zmm8,\t%[RES]\n\t"
                        : [RES]  "+m"  (*target)
                        : [Z]    "m"   (zero)
                        : "zmm8");
