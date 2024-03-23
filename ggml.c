@@ -16059,12 +16059,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_TYPE_CPU);
 #endif // GGML_USE_VULKAN
 
-#ifdef GGML_USE_SYCL
-    bool skip_cpu = ggml_sycl_compute_forward(params, tensor);
-    if (skip_cpu) {
-        return;
-    }
-#endif // GGML_USE_SYCL
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
