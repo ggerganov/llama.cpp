@@ -4307,7 +4307,7 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
                             model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
@@ -4333,8 +4333,7 @@ static bool llm_load_tensors(
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
 
-                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd}, false);
-
+                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd});
 
                         GGML_ASSERT(hparams.n_expert      > 0);
                         GGML_ASSERT(hparams.n_expert_used > 0);
@@ -6335,7 +6334,6 @@ struct llm_build_context {
 
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
 
-
         // multiply by embedding_multiplier_scale of 78.38367176906169
         inpL = ggml_scale(ctx0, inpL, 78.38367176906169f);
 
@@ -6346,7 +6344,6 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
         for (int il = 0; il < n_layer; ++il) {
-        //for (int il = 0; il < 1; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
             // norm
@@ -6452,9 +6449,6 @@ struct llm_build_context {
                 ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exp, n_expert, selected_experts, i, cur);
                 cb(cur_gate, "ffn_moe_gate", il);
 
-                //cur_gate = ggml_silu(ctx0, cur_gate);
-                //cb(cur_gate, "ffn_moe_silu", il);
-
                 //GeLU
                 cur_gate = ggml_gelu(ctx0, cur_gate);
                 cb(cur_gate, "ffn_moe_gelu", il);
@@ -6478,7 +6472,6 @@ struct llm_build_context {
             }
 
             cur = moe_out;
-
 
             // Grok
             // if layer_out_norm is present then apply it before adding the input
@@ -6514,7 +6507,6 @@ struct llm_build_context {
         // lm_head
         cur = ggml_mul_mat(ctx0, model.output, cur);
 
-
         // Grok
         // multiply logits by output_multiplier_scale of 0.5773502691896257
 
@@ -6526,7 +6518,6 @@ struct llm_build_context {
 
         return gf;
     }
-
 
     struct ggml_cgraph * build_starcoder() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
