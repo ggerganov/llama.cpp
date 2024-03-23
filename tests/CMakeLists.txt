@@ -46,6 +46,7 @@ llama_test(test-tokenizer-0-llama.cpp  NAME test-tokenizer-0-llama              
 llama_test(test-tokenizer-0-falcon.cpp NAME test-tokenizer-0-falcon                           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
 
 llama_test(test-tokenizer-0-deepseek-coder.cpp NAME test-tokenizer-0-deepseek-coder           ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-coder.gguf)
+llama_test(test-tokenizer-0-deepseek-llm.cpp   NAME test-tokenizer-0-deepseek-llm             ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-llm.gguf)
 
 llama_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-llama                            ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
 llama_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-baichuan                         ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-baichuan.gguf)
