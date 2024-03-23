@@ -3474,6 +3474,11 @@ void dequantize_row_iq1_s(const block_iq1_s * restrict x, float * restrict y, in
     }
 }
 
+typedef union {
+    ggml_fp16_t fp16;
+    uint16_t    u16;
+} iq1m_scale_t;
+
 void dequantize_row_iq1_m(const block_iq1_m * restrict x, float * restrict y, int k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
@@ -3481,16 +3486,19 @@ void dequantize_row_iq1_m(const block_iq1_m * restrict x, float * restrict y, in
     float delta[4];
     uint16_t idx[4];
 
+    iq1m_scale_t scale;
+
     for (int i = 0; i < nb; i++) {
 
-        const float d1 = GGML_FP16_TO_FP32(x[i].d);
-        const float d2 = d1 / 16;
+        const uint16_t * sc = (const uint16_t *)x[i].scales;
+        scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+        const float d = GGML_FP16_TO_FP32(scale.fp16);
         const uint8_t * qs = x[i].qs;
         const uint8_t * qh = x[i].qh;
 
         for (int ib = 0; ib < QK_K/32; ++ib) {
-            const float dl1 = d1 * (2*(x[i].scales[ib] & 0x0f) +  1);
-            const float dl2 = d2 * (2*(x[i].scales[ib] & 0xf0) + 16);
+            const float dl1 = d * (2*((sc[ib/2] >> (6*(ib%2)+0)) & 0x7) + 1);
+            const float dl2 = d * (2*((sc[ib/2] >> (6*(ib%2)+3)) & 0x7) + 1);
             idx[0] = qs[0] | ((qh[0] << 8) & 0x700);
             idx[1] = qs[1] | ((qh[0] << 4) & 0x700);
             idx[2] = qs[2] | ((qh[1] << 8) & 0x700);
@@ -11700,7 +11708,7 @@ static int iq1_sort_helper(const void * left, const void * right) {
 
 #define IQ1S_BLOCK_SIZE 32
 #define IQ1M_BLOCK_SIZE 16
-static void quantize_row_iq1_impl(enum ggml_type type, const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights,
+static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights,
         float    * scales,
         float    * weight,
         float    * sumx,
@@ -11722,9 +11730,11 @@ static void quantize_row_iq1_impl(enum ggml_type type, const float * restrict x,
     GGML_ASSERT(kneighbors_q2xs && "forgot to call ggml_quantize_init()?");
     GGML_ASSERT(n%QK_K == 0);
 
+    block_iq1_s * y = vy;
+
     const int nbl = n/QK_K;
 
-    const int block_size = type == GGML_TYPE_IQ1_S ? IQ1S_BLOCK_SIZE : IQ1M_BLOCK_SIZE;
+    const int block_size = IQ1S_BLOCK_SIZE;
 
     const float x_p[3] = {-1 + IQ1S_DELTA,  IQ1S_DELTA, 1 + IQ1S_DELTA};
     const float x_m[3] = {-1 - IQ1S_DELTA, -IQ1S_DELTA, 1 - IQ1S_DELTA};
@@ -11734,18 +11744,9 @@ static void quantize_row_iq1_impl(enum ggml_type type, const float * restrict x,
 
     for (int ibl = 0; ibl < nbl; ++ibl) {
 
-        if (type == GGML_TYPE_IQ1_S) {
-            block_iq1_s * y = vy;
-            y[ibl].d = GGML_FP32_TO_FP16(0.f);
-            memset(y[ibl].qs, 0, QK_K/8);
-            memset(y[ibl].qh, 0, QK_K/16);
-        } else {
-            block_iq1_m * y = vy;
-            y[ibl].d = GGML_FP32_TO_FP16(0.f);
-            memset(y[ibl].qs, 0, QK_K/8);
-            memset(y[ibl].qh, 0, QK_K/16);
-            memset(y[ibl].scales, 0, QK_K/32);
-        }
+        y[ibl].d = GGML_FP32_TO_FP16(0.f);
+        memset(y[ibl].qs, 0, QK_K/8);
+        memset(y[ibl].qh, 0, QK_K/16);
 
         float max_scale = 0;
 
@@ -11785,7 +11786,6 @@ static void quantize_row_iq1_impl(enum ggml_type type, const float * restrict x,
                 }
             }
             float best_score = 0, scale = max;
-            // TODO: we need two shifts per block for IQ1_M.
             int besti1 = -1, besti2 = -1, best_shift = 0;
             for (int i1 = 0; i1 <= block_size; ++i1) {
                 for (int i2 = i1; i2 <= block_size; ++i2) {
@@ -11838,20 +11838,12 @@ static void quantize_row_iq1_impl(enum ggml_type type, const float * restrict x,
                 }
                 if (sumqx > 0 && sumq2 > 0) scale = sumqx/sumq2;
             }
-            if (type == GGML_TYPE_IQ1_S) {
-                block_iq1_s * y = vy;
-                uint16_t h = 0;
-                for (int k = 0; k < block_size/8; ++k) {
-                    y[ibl].qs[(block_size/8)*ib + k] = index[k] & 255;
-                    h |= (index[k] >> 8) << 3*k;
-                }
-                y[ibl].qh[ib] = h;
-            } else {
-                block_iq1_m * y = vy;
-                y[ibl].qs[2*ib + 0] = index[0] & 255;
-                y[ibl].qs[2*ib + 1] = index[1] & 255;
-                y[ibl].qh[ib] = (index[0] >> 8) | ((index[1] >> 8) << 4);
+            uint16_t h = 0;
+            for (int k = 0; k < block_size/8; ++k) {
+                y[ibl].qs[(block_size/8)*ib + k] = index[k] & 255;
+                h |= (index[k] >> 8) << 3*k;
             }
+            y[ibl].qh[ib] = h;
             GGML_ASSERT(scale >= 0);
             scales[ib] = scale;
             shifts[ib] = best_shift;
@@ -11862,33 +11854,14 @@ static void quantize_row_iq1_impl(enum ggml_type type, const float * restrict x,
             continue;
         }
 
-        if (type == GGML_TYPE_IQ1_S) {
-            float d = max_scale/15;
-            block_iq1_s * y = vy;
-            y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
-            float id = 1/d;
-            for (int ib = 0; ib < QK_K/block_size; ++ib) {
-                int l = nearest_int(0.5f*(id*scales[ib]-1));
-                l = MAX(0, MIN(7, l));
-                if (shifts[ib] == -1) l |= 8;
-                y[ibl].qh[ib] |= (l << 12);
-            }
-        } else {
-            block_iq1_m * y = vy;
-            float d = max_scale/31;
-            y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
-            float id = 1/d;
-            for (int ib = 0; ib < QK_K/block_size; ib += 2) {
-                int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
-                l1 = MAX(0, MIN(15, l1));
-                int l2 = nearest_int(0.5f*(id*scales[ib+1]-1));
-                l2 = MAX(0, MIN(15, l2));
-                y[ibl].scales[ib/2] = l1 | (l2 << 4);
-                // TODO: we need two shifts per block for IQ1_M.
-                // For now we use the same shift for both groups of 8 in the block, thus wasting 1 pet per 16 weights.
-                if (shifts[ib+0] == -1) y[ibl].qh[ib+0] |= 0x88;
-                if (shifts[ib+1] == -1) y[ibl].qh[ib+1] |= 0x88;
-            }
+        float d = max_scale/15;
+        y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
+        float id = 1/d;
+        for (int ib = 0; ib < QK_K/block_size; ++ib) {
+            int l = nearest_int(0.5f*(id*scales[ib]-1));
+            l = MAX(0, MIN(7, l));
+            if (shifts[ib] == -1) l |= 8;
+            y[ibl].qh[ib] |= (l << 12);
         }
     }
 }
@@ -11906,7 +11879,7 @@ size_t quantize_iq1_s(const float * restrict src, void * restrict dst, int nrow,
     int nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
     for (int row = 0; row < nrow; ++row) {
-        quantize_row_iq1_impl(GGML_TYPE_IQ1_S, src, qrow, n_per_row, quant_weights, scales, weight, sumx, sumw, pairs, L, index, shifts);
+        quantize_row_iq1_s_impl(src, qrow, n_per_row, quant_weights, scales, weight, sumx, sumw, pairs, L, index, shifts);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq1_s);
     }
@@ -11947,9 +11920,11 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
 
     float sumqx[4], sumq2[4];
 
+    iq1m_scale_t s;
+
     for (int ibl = 0; ibl < nbl; ++ibl) {
 
-        y[ibl].d = GGML_FP32_TO_FP16(0.f);
+        //y[ibl].d = GGML_FP32_TO_FP16(0.f);
         memset(y[ibl].qs, 0, QK_K/8);
         memset(y[ibl].qh, 0, QK_K/16);
         memset(y[ibl].scales, 0, QK_K/32);
@@ -12120,18 +12095,30 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
             continue;
         }
 
-        float d = max_scale/31;
-        y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
+        uint16_t * sc = (uint16_t *)y[ibl].scales;
+        float d = max_scale/15;
         float id = 1/d;
-        for (int ib = 0; ib < QK_K/block_size; ib += 2) {
-            int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
-            l1 = MAX(0, MIN(15, l1));
-            int l2 = nearest_int(0.5f*(id*scales[ib+1]-1));
-            l2 = MAX(0, MIN(15, l2));
-            y[ibl].scales[ib/2] = l1 | (l2 << 4);
-            y[ibl].qh[ib+0] |= masks[shifts[ib+0]];
-            y[ibl].qh[ib+1] |= masks[shifts[ib+1]];
+        for (int ib = 0; ib < QK_K/block_size; ++ib) {
+            int l = nearest_int(0.5f*(id*scales[ib+0]-1));
+            l = MAX(0, MIN(7, l));
+            sc[ib/4] |= (l << 3*(ib%4));
+            y[ibl].qh[ib] |= masks[shifts[ib]];
         }
+        s.fp16 = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
+        sc[0] |= ((s.u16 & 0x000f) << 12);
+        sc[1] |= ((s.u16 & 0x00f0) <<  8);
+        sc[2] |= ((s.u16 & 0x0f00) <<  4);
+        sc[3] |= ((s.u16 & 0xf000) <<  0);
+        //y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
+        //for (int ib = 0; ib < QK_K/block_size; ib += 2) {
+        //    int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
+        //    l1 = MAX(0, MIN(7, l1));
+        //    int l2 = nearest_int(0.5f*(id*scales[ib+1]-1));
+        //    l2 = MAX(0, MIN(7, l2));
+        //    y[ibl].scales[ib/2] = l1 | (l2 << 4);
+        //    y[ibl].qh[ib+0] |= masks[shifts[ib+0]];
+        //    y[ibl].qh[ib+1] |= masks[shifts[ib+1]];
+        //}
     }
 }
 
