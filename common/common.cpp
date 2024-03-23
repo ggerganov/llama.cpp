@@ -1766,7 +1766,7 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
             llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
 
             // Convert header field name to lowercase
-            for(size_t i = 0; i < n_items && buffer[i] != ':'; ++i) {
+            for (size_t i = 0; i < n_items && buffer[i] != ':'; ++i) {
                 buffer[i] = tolower(buffer[i]);
             }
 
