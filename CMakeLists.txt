@@ -369,7 +369,9 @@ if (LLAMA_CUBLAS)
         enable_language(CUDA)
 
         set(GGML_HEADERS_CUDA ggml-cuda.h)
-        set(GGML_SOURCES_CUDA ggml-cuda.cu)
+
+        file(GLOB GGML_SOURCES_CUDA "ggml-cuda/*.cu")
+        list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
 
         add_compile_definitions(GGML_USE_CUBLAS)
         if (LLAMA_CUDA_FORCE_DMMV)
