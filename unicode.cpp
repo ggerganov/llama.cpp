@@ -10,8 +10,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <locale>
-#include <codecvt>
 
 static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
@@ -320,17 +318,5 @@ std::vector<std::wstring> get_deepseek_llm_regex() {
     return deepseek_llm_regex;
 }
 
-inline std::wstring from_utf8(const std::string & s)
-{
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-    return conv.from_bytes(s);
-}
 
-inline std::string to_utf8(const std::wstring & ws)
-{
-    // code to convert from utf32/utf16 to utf8
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
-    std::string utf8 = converter.to_bytes(ws);
-    return utf8;
-}
 
