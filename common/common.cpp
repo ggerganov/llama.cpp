@@ -963,6 +963,22 @@ static bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg,
         }
         return true;
     }
+    if (arg == "-lcs" || arg == "--lookup-cache-static") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.lookup_cache_static = argv[i];
+        return true;
+    }
+    if (arg == "-lcd" || arg == "--lookup-cache-dynamic") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.lookup_cache_dynamic = argv[i];
+        return true;
+    }
     if (arg == "--save-all-logits" || arg == "--kl-divergence-base") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1436,6 +1452,10 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        Hugging Face model file (default: unused)\n");
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
+    printf("  -lcs FNAME, --lookup-cache-static FNAME\n");
+    printf("                        path to static lookup cache to use for lookup decoding (not updated by generation)\n");
+    printf("  -lcd FNAME, --lookup-cache-dynamic FNAME\n");
+    printf("                        path to dynamic lookup cache to use for lookup decoding (updated by generation)\n");
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                        advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                        types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");

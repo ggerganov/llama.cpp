@@ -58,6 +58,9 @@ models-mnt
 /llava-cli
 /lookahead
 /lookup
+/lookup-create
+/lookup-merge
+/lookup-stats
 /main
 /metal
 /passkey

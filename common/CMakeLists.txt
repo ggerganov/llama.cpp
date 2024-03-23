@@ -65,6 +65,8 @@ add_library(${TARGET} STATIC
     json.hpp
     train.h
     train.cpp
+    ngram-cache.h
+    ngram-cache.cpp
     )
 
 if (BUILD_SHARED_LIBS)
