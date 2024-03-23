@@ -184,7 +184,6 @@ void llama_ngram_cache_draft(
             break;
         }
 
-        // LOG(" - draft candidate: token=%d\n", drafted_token);
         draft.push_back(drafted_token);
     }
 }
