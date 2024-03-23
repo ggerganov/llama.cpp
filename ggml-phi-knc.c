@@ -1,6 +1,6 @@
-// For size_t
 #include <stdint.h>
 
+// For size_t
 #include <stdio.h>
 
 // For memcpy.
