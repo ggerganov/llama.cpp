@@ -35,7 +35,6 @@ jobs:
         include:
           - build_type: Release
             sanitizer: ""
-            disabled_on_pr: true
       fail-fast: false # While -DLLAMA_SANITIZE_THREAD=ON is broken
 
     container:
