@@ -4,6 +4,7 @@
 #include "ggml-quants.h"
 #include "ggml-impl.h"
 
+// FIXME: why do we import this twice?
 #define GGML_COMMON_IMPL_C
 #include "ggml-common.h"
 
@@ -18,6 +19,11 @@
 // disable "possible loss of data" to avoid warnings for hundreds of casts
 // we should just be careful :)
 #pragma warning(disable: 4244 4267)
+#endif
+
+// hand assembled replacement functions are cool.
+#if defined(__k1om__)
+#include <ggml-phi-knc-dot_q5_K_q8_K.h>
 #endif
 
 #define UNUSED GGML_UNUSED
@@ -6866,6 +6872,9 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 }
 #endif
 
+#if defined(__k1om__)
+/* We get this from elsewhere. */
+#else
 #if QK_K == 256
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
     assert(n % QK_K == 0);
@@ -7290,7 +7299,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 #endif
 }
 
-#else
+#else /* QK_K != 256 */
 
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     assert(n % QK_K == 0);
@@ -7559,8 +7568,9 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     *s = sumf;
 #endif
 }
-#endif
+#endif /* end QK_K != 256 */
 
+#endif /* defined(__k1om__) */
 
 #if QK_K == 256
 void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
