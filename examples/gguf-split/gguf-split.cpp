@@ -26,10 +26,6 @@ enum split_operation : uint8_t {
     SPLIT_OP_MERGE,
 };
 
-static const char * const LLM_KV_SPLIT_NO            = "split.no";
-static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
-static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
-
 struct split_params {
     split_operation operation = SPLIT_OP_SPLIT;
     int n_split_tensors = 128;

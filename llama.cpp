@@ -14839,9 +14839,9 @@ int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int 
     std::string str_postfix(postfix);
 
     // check if dest ends with postfix
-    int size_prefix = str_split_path.size() - str_postfix.size();
+    int size_prefix = str_split_path.size() - str_postfix.size() ;
     if (size_prefix > 0 && str_split_path.find(str_postfix, size_prefix) != std::string::npos) {
-        snprintf(dest, std::min((size_t) size_prefix, maxlen), "%s", split_path);
+        snprintf(dest, std::min((size_t) size_prefix + 1, maxlen), "%s", split_path);
         return size_prefix;
     }
 
