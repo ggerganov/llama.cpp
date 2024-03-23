@@ -6,7 +6,13 @@
 
 // Yes, we have to tell this header to actually export stuff.
 #define GGML_COMMON_IMPL_C
-// For block_q5_K and block_q8_K
+#include "ggml-common.h"
+#include "ggml-quants.h"
+#include "ggml-impl.h"
+
+// FIXME: why do we have to import this twice?
+#define GGML_COMMON_IMPL_C
+// For block_q5_K and block_q8_K. only given the second time.
 #include "ggml-common.h"
 
 /* A forward declaration, to keep GCC happy. */
