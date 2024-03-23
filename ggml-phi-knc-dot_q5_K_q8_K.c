@@ -22,6 +22,7 @@
 #define GGML_F32_EPR 16
 
 typedef float float32x8_t __attribute__((vector_size (64)));
+typedef int16 int16x16_t __attribute__((vector_size (64)));
 
 /* A forward declaration, to keep GCC happy. */
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc);
@@ -56,15 +57,19 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
   uint32_t utmp[4];
   int8_t aux8[QK_K];
-  int16_t aux16[16];
+  //  int16_t aux16[16];
+  int16x16_t aux16;
   float32x8_t sums __attribute__((aligned(64)));
 
   /* use a vector operation to clear these floats. */
   GGML_F32x8_VEC_ZERO(&sums);
 
   float sumf = 0;
+
   for (int i = 0; i < nb; ++i) {
+    // quants, 4 low bits.
     const uint8_t * restrict q4 = x[i].qs;
+    // quants, 1 high bit.
     const uint8_t * restrict hm = x[i].qh;
     const  int8_t * restrict q8 = y[i].qs;
     int8_t * restrict a = aux8;
@@ -82,8 +87,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     for (int j = 0; j < QK_K/16; ++j) {
       const float dl = d * sc[j];
-      for (int l = 0; l < 16; ++l) aux16[l] = q8[l] * a[l];
-      for (int l = 0; l <  8; ++l) ((float *)&sums)[l] += dl * (aux16[l] + aux16[8+l]);
+      for (int l = 0; l < 16; ++l) ((int16 *)&aux16)[l] = q8[l] * a[l];
+      for (int l = 0; l <  8; ++l) ((float *)&sums)[l] += dl * (((int16 *)&aux16)[l] + ((int16 *)&aux16)[8+l]);
       q8 += 16; a += 16;
     }
   }
