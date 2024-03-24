@@ -393,6 +393,7 @@ static json oaicompat_completion_params_parse(
     }
 
     // Handle "logprobs" field
+    // TODO: The response format of this option is not yet OAI-compatible, but seems like no one really using it; We may need to fix it in the future
     if (body.contains("logprobs")) {
         llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
     } else if (body.contains("top_logprobs")) {
