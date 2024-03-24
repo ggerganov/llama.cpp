@@ -12,11 +12,13 @@ struct retrieval_params {
 
 static void retrieval_params_print_usage(int argc, char** argv, gpt_params & gpt_params, retrieval_params & params) {
     gpt_print_usage(argc, argv, gpt_params);
+    printf("retrieval options:\n");
     printf("  --context-file FNAME files containing context to embed.\n");
     printf("                        specify multiple files by providing --context-file option multiple times.\n");
     printf("  --chunk-size N        minimum length of embedded text chunk (default:%d)\n", params.chunk_size);
     printf("  --chunk-separator STRING\n");
     printf("                        string to separate chunks (default: \"\\n\")\n");
+    printf("\n");
 }
 
 static void retrieval_params_parse(int argc, char ** argv, gpt_params & gpt_params, retrieval_params & retrieval_params) {

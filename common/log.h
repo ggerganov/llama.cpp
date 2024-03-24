@@ -566,6 +566,7 @@ inline void log_print_usage()
     printf("  --log-new             Create a separate new log file on start. "
                                    "Each log file will have unique name: \"<name>.<ID>.log\"\n");
     printf("  --log-append          Don't truncate the old log file.\n");
+    printf("\n");
 }
 
 #define log_dump_cmdline(argc, argv) log_dump_cmdline_impl(argc, argv)
