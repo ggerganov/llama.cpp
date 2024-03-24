@@ -376,10 +376,10 @@ static json oaicompat_completion_params_parse(
     // Handle "response_format" field
     if (body.contains("response_format")) {
         json response_format      = json_value(body, "response_format", json::object());
-        std::string response_type = json_value(response_format, "type", std::string("unknown"));
+        std::string response_type = json_value(response_format, "type", std::string());
         if (response_type == "json_object") {
             llama_params["json_schema"] = json_value(response_format, "schema", json::object());
-        } else {
+        } else if (!response_type.empty()) {
             throw std::runtime_error("response_format type not supported: " + response_type);
         }
     }
