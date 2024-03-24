@@ -1,0 +1,183 @@
+# Benchmark
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      gpu-series:
+        description: 'Azure GPU series to run with'
+        required: true
+        type: choice
+        options:
+          - Standard_NC4as_T4_v3
+          - Standard_NC64as_T4_v3
+          - Standard_NC24ads_A100_v4
+          - Standard_NC48ads_A100_v4
+          - Standard_ND96asr_A100_v4
+          - Standard_NC40ads_H100_v5
+          - Standard_NC80adis_H100_v5
+  push:
+    branches:
+      - master
+    paths: ['.github/workflows/bench.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/bench/**.*']
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/bench.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/bench/**.*']
+  schedule:
+    -  cron: '04 2 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench-server-baseline:
+    runs-on: Standard_NC4as_T4_v3
+    env:
+      RUNNER_LABEL: Standard_NC4as_T4_v3 # FIXME Do not find a way to not duplicate it
+    if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.event.push.ref == 'refs/heads/master' }}
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install python env
+        id: pipenv
+        run: |
+          cd examples/server/bench
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Prometheus
+        id: install_prometheus
+        run: |
+          wget --quiet https://github.com/prometheus/prometheus/releases/download/v2.51.0/prometheus-2.51.0.linux-amd64.tar.gz
+          tar xzf prometheus*.tar.gz --strip-components=1
+          ./prometheus --config.file=examples/server/bench/prometheus.yml &
+          while ! nc -z localhost 9090; do
+            sleep 0.1
+          done
+
+      - name: Install k6
+        id: k6_installation
+        run: |
+          cd examples/server/bench
+          wget --quiet https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz
+          tar xzf k6*.tar.gz --strip-components=1
+
+      - name: Build
+        id: cmake_build
+        run: |
+          set -eux
+          mkdir build
+          cd build
+          cmake .. \
+              -DLLAMA_NATIVE=OFF \
+              -DLLAMA_BUILD_SERVER=ON \
+              -DLLAMA_CURL=ON \
+              -DLLAMA_CUBLAS=ON \
+              -DCUDAToolkit_ROOT=/usr/local/cuda \
+              -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+              -DCMAKE_CUDA_ARCHITECTURES=75 \
+              -DLLAMA_FATAL_WARNINGS=OFF \
+              -DLLAMA_ALL_WARNINGS=OFF \
+              -DCMAKE_BUILD_TYPE=Release;
+          cmake --build . --config Release -j $(nproc) --target server
+
+      - name: Download the dataset
+        id: download_dataset
+        run: |
+          cd examples/server/bench
+          wget --quiet https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
+
+      - name: Server bench
+        id: server_bench
+        run: |
+          set -eux
+
+          cd examples/server/bench
+          source venv/bin/activate
+          BENCH_K6_BIN_PATH=./k6 python bench.py \
+              --runner-label ${{ env.RUNNER_LABEL }} \
+              --name ${{ github.job }} \
+              --branch ${{ github.head_ref || github.ref_name }} \
+              --commit ${{ github.sha }} \
+              --scenario script.js \
+              --duration 10m \
+              --hf-repo ggml-org/models	 \
+              --hf-file phi-2/ggml-model-q4_0.gguf \
+              --model-path-prefix /models \
+              --parallel 8 \
+              -ngl 33 \
+              --batch-size 2048 \
+              --ubatch-size	256 \
+              --ctx-size 16384 \
+              --n-prompts 1000 \
+              --max-prompt-tokens 1024 \
+              --max-tokens 2048
+
+          cat results.github.env >> $GITHUB_ENV
+
+      - name: Commit status
+        uses: Sibz/github-status-action@v1
+        with:
+          authToken: ${{secrets.GITHUB_TOKEN}}
+          context: bench-server-baseline
+          description: |
+            ${{ env.BENCH_RESULTS }}
+          state: 'success'
+
+      - name: Upload benchmark images
+        uses: devicons/public-upload-to-imgur@v2.2.2
+        id: imgur_step
+        with:
+          client_id: ${{secrets.IMGUR_CLIENT_ID}}
+          path: |
+            examples/server/bench/prompt_tokens_seconds.png
+            examples/server/bench/predicted_tokens_seconds.png
+            examples/server/bench/kv_cache_usage_ratio.png
+            examples/server/bench/requests_processing.png
+            examples/server/bench/requests_deferred.png
+
+      - name: Comment PR
+        uses: mshick/add-pr-comment@v2
+        id: comment_pr
+        if: ${{ github.event.pull_request != '' }}
+        with:
+          message-id: bench-${{ github.job }}-${{ env.RUNNER_LABEL }}
+          message: |
+            📈 **llama.cpp server** benchmark for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+            <p align="center">
+                <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[0] }}" alt="prompt_tokens_seconds" />
+                <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[1] }}" alt="predicted_tokens_seconds"/>
+            </p>
+            <details>
+                <summary>Details</summary>
+                <p align="center">
+                    <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[2] }}" alt="kv_cache_usage_ratio" />
+                    <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[3] }}" alt="requests_processing"/>
+                    <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[4] }}" alt="requests_deferred"/>
+                </p>
+            </detail>
+
+      - name: Upload results
+        if: ${{ github.event.pull_request }}
+        uses: edunad/actions-image@v2.0.0
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: 'examples/server/bench/*.png'
+          title: |
+            llama.cpp server benchmark results for ${{ github.job }} on ${{ env.RUNNER_LABEL }}: ${{ env.LLAMACPP_TOKENS_SECOND_AVG}}tk/s
+          annotationLevel: 'success'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          compression-level: 9
+          path: |
+            examples/server/bench/**/.png
+            examples/server/bench/**/.json
+            examples/server/bench/**/.log
