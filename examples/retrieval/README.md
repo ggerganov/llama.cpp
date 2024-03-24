@@ -17,7 +17,7 @@ make -j && ./retrieval --model ./models/bge-base-en-v1.5-f16.gguf --top-k 3 --co
 ```
 which chunks & embeds all given files and starts a loop requesting query inputs:
 ```
-Enter query: 
+Enter query:
 ```
 and on query input, top k chunks are shown along with file name, chunk position within file and original text
 ```
