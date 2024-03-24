@@ -465,7 +465,7 @@ FILE * ggml_fopen(const char * fname, const char * mode) {
     wchar_t * wfname = ggml_mbstowcs(fname);
     if (wfname) {
         // convert mode (ANSI)
-        wchar_t * wmode = GGML_MALLOC(strlen(mode) + 1);
+        wchar_t * wmode = GGML_MALLOC((strlen(mode) + 1) * sizeof(wchar_t));
         wchar_t * wmode_p = wmode;
         do {
             *wmode_p++ = (wchar_t)*mode;
