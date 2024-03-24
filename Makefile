@@ -522,7 +522,6 @@ ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 endif # LLAMA_VULKAN
 
 ifdef LLAMA_HIPBLAS
-
 	ifeq ($(wildcard /opt/rocm),)
 		ROCM_PATH	?= /usr
 		GPU_TARGETS ?= $(shell $(shell which amdgpu-arch))
@@ -551,8 +550,13 @@ ifdef LLAMA_CUDA_NO_PEER_COPY
 	HIPFLAGS 	+= -DGGML_CUDA_NO_PEER_COPY
 endif # LLAMA_CUDA_NO_PEER_COPY
 	OBJS        += ggml-cuda.o
-ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+	OBJS        += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
+
+ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
+	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
+
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
