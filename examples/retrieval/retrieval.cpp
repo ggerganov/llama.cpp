@@ -190,10 +190,6 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-    }
-
     printf("processing files:\n");
     for (auto & context_file : retrieval_params.context_files) {
         printf("%s\n", context_file.c_str());
