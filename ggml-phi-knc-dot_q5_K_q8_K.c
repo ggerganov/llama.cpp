@@ -147,7 +147,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
   float32x16_t sums __attribute__((aligned(128)));
   int8x16_t aux8[QK_K/16] __attribute__((aligned(32)));
-  int16x16_t aux16 __attribute__((aligned(64)));
+  int16x16_t aux16[QK_K/16] __attribute__((aligned(64)));
   int32x16_t aux32 __attribute__((aligned(128)));
 
   GGML_F32x16_VEC_ZERO(&sums);
@@ -188,15 +188,19 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     for (int j = 0; j < QK_K/16; ++j) sumi += y[i].bsums[j] * mins[j/2];
     int is = 0;
     for (int j = 0; j < QK_K/32; ++j) {
-      int32_t scale = scales[is++];
-      for (int l = 0; l < 16; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
-      GGML_I16x16_S_FMA_I32x16 (&aux16, scale, &aux32);
+      for (int l = 0; l < 16; ++l) ((int16_t *)&aux16[j*2])[l] = q8[l] * a[l];
       q8 += 16; a += 16;
-      for (int l = 0; l < 16; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
-      // FIXME: while comparing FMA output to the original output, the original had an error. hunt it down.
-      GGML_I16x16_S_FMA_I32x16 (&aux16, scale, &aux32);
+      for (int l = 0; l < 16; ++l) ((int16_t *)&aux16[(j*2)+1])[l] = q8[l] * a[l];
       q8 += 16; a += 16;
     }
+
+    // FIXME: while comparing FMA output to the original output, the original had an error. hunt it down.
+    for (int j = 0; j < QK_K/32; ++j) {
+      int32_t scale = scales[is++];
+      GGML_I16x16_S_FMA_I32x16 (&aux16[j*2], scale, &aux32);
+      GGML_I16x16_S_FMA_I32x16 (&aux16[(j*2)+1], scale, &aux32);
+    }
+
     const float d = GGML_FP16_TO_FP32(x[i].d) * y[i].d;
     for (int l = 0; l < 16; ++l) ((float *)&sums)[l] += d * ((int32_t *)&aux32)[l];
     const float dmin = GGML_FP16_TO_FP32(x[i].dmin) * y[i].d;
