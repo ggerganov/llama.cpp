@@ -547,7 +547,7 @@ if (LLAMA_HIPBLAS)
     add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
     add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
-    set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+    set_source_files_properties(${GGML_SOURCES_ROCM} PROPERTIES LANGUAGE CXX)
 
     if (LLAMA_STATIC)
         message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
