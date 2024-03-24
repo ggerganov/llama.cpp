@@ -30,6 +30,7 @@ typedef int32_t int32x16_t __attribute__((vector_size (128)));
 /* A forward declaration, to keep GCC happy. */
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc);
 
+/* clear a vector of 8 floats. */
 inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
 {
   uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
@@ -45,6 +46,7 @@ inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
 			: "zmm8", "k1", "memory");
 }
 
+/* clear a vector of 8 int32_ts. */
 inline static void GGML_I32x8_VEC_ZERO(int32x8_t *target)
 {
   uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
@@ -60,7 +62,8 @@ inline static void GGML_I32x8_VEC_ZERO(int32x8_t *target)
 			: "zmm8", "k1", "memory");
 }
 
-inline static void GGML_I32x16_VEC_ZERO(int32x8_t *target)
+/* clear a vector of 16 int32_ts. */
+inline static void GGML_I32x16_VEC_ZERO(int32x16_t *target)
 {
   uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
 
@@ -73,7 +76,7 @@ inline static void GGML_I32x16_VEC_ZERO(int32x8_t *target)
 			: "zmm8", "k1", "memory");
 }
 
-// perform an eight wide Fused Multiply Add of an I16x8 times scalar S into I32x8.
+// perform a Fused Multiply Add of an I16x8 times scalar S into I32x8.
 inline static void GGML_I16x8_S_FMA_I32x8 (int16x8_t *src, int32_t scale, int32x8_t *dest)
 {
   uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
@@ -95,8 +98,8 @@ inline static void GGML_I16x8_S_FMA_I32x8 (int16x8_t *src, int32_t scale, int32x
 			: "zmm0", "zmm1", "zmm2", "k1", "memory");
 }
 
-// perform an eight wide Fused Multiply Add of an I16x16 times scalar S into I32x16.
-inline static void GGML_I16x16_S_FMA_I32x16 (int16x8_t *src, int32_t scale, int32x8_t *dest)
+// perform a Fused Multiply Add of an I16x16 times scalar S into I32x16.
+inline static void GGML_I16x16_S_FMA_I32x16 (int16x16_t *src, int32_t scale, int32x16_t *dest)
 {
   int32_t scaleVec[4] = {scale, scale, scale, scale};
 
@@ -131,8 +134,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
   const uint8_t * mins   = (const uint8_t*)&utmp[2];
 
   int8_t aux8[QK_K];
-  int16x16_t aux16 __attribute__((aligned(128)));
-  float32x16_t sums __attribute__((aligned(64)));
+  float32x16_t sums __attribute__((aligned(128)));
+  int16x16_t aux16 __attribute__((aligned(64)));
   int32x16_t aux32 __attribute__((aligned(128)));
 
   GGML_F32x16_VEC_ZERO(&sums);
@@ -142,8 +145,6 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     const uint8_t * restrict q4 = x[i].qs;
     const uint8_t * restrict hm = x[i].qh;
     const  int8_t * restrict q8 = y[i].qs;
-
-    GGML_I32x16_VEC_ZERO(&aux32);
 
     int8_t * restrict a = aux8;
     uint8_t m = 1;
@@ -164,17 +165,20 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     utmp[0] &= kmask1;
     
     int sumi = 0;
+
+    GGML_I32x16_VEC_ZERO(&aux32);
+
     for (int j = 0; j < QK_K/16; ++j) sumi += y[i].bsums[j] * mins[j/2];
     a = aux8;
     int is = 0;
     for (int j = 0; j < QK_K/32; ++j) {
       int32_t scale = scales[is++];
       for (int l = 0; l < 16; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
-      GGML_I16x8_S_FMA_I32x16 (&aux16, scale, &aux32);
+      GGML_I16x16_S_FMA_I32x16 (&aux16, scale, &aux32);
       q8 += 16; a += 16;
       /* FIXME: while comparing FMA output to normal output, the original had an error. hunt it down. */
       for (int l = 0; l < 16; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
-      GGML_I16x8_S_FMA_I32x16 (&aux16, scale, &aux32);
+      GGML_I16x16_S_FMA_I32x16 (&aux16, scale, &aux32);
       q8 += 16; a += 16;
     }
     const float d = GGML_FP16_TO_FP32(x[i].d) * y[i].d;
