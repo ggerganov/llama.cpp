@@ -38,7 +38,7 @@ inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
   uint32_t mask=0x000000FF;
 
   __asm__ __volatile__ (
-                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
+                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
                         "kmov\t%[M],\t%%k1\n\t"
                         "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
                         : [RES]  "+m"  (*target)
@@ -54,7 +54,7 @@ inline static void GGML_I32x8_VEC_ZERO(int32x8_t *target)
   uint32_t mask=0x000000FF;
 
   __asm__ __volatile__ (
-                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
                         "kmov\t%[M],\t%%k1\n\t"
                         "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
                         : [RES]  "+m"  (*target)
@@ -69,7 +69,7 @@ inline static void GGML_I32x16_VEC_ZERO(int32x16_t *target)
   uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
 
   __asm__ __volatile__ (
-                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
                         "vmovaps\t\t%%zmm8,\t%[RES]\n\t"
                         : [RES]  "+m"  (*target)
                         : [Z]    "m"   (zero)
@@ -93,7 +93,7 @@ inline static void GGML_I16x8_S_FMA_I32x8 (int16x8_t *src, int32_t scale, int32x
                         : [RES]   "+m" (*dest)
                         : [Z]     "m"  (zero),
                           [M]     "r"  (mask),
-                          [SRC]   "m"  (src),
+                          [SRC]   "m"  (*src),
                           [SCALE] "m"  (scaleVec)
                         : "zmm0", "zmm1", "zmm2", "k1", "memory");
 }
