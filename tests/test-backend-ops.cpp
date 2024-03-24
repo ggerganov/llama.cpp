@@ -2261,7 +2261,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_leaky_relu());
 
 #if 1
-    for (int hs : { 128, 64, 80, }) {
+    for (int hs : { 128, 256, 64, 80, }) {
         for (int nh : { 32, }) {
             for (int kv : { 512, 1024, 2048, 4096, }) {
                 for (int nb : { 1, 2, 4, 8, 512, 1024, 2048, }) {
