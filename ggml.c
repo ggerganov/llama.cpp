@@ -291,8 +291,6 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #include "ggml-opencl.h"
 #elif defined(GGML_USE_VULKAN)
 #include "ggml-vulkan.h"
-#elif defined(GGML_USE_SYCL)
-#include "ggml-sycl.h"
 #endif
 
 // floating point type used to accumulate sums
@@ -2698,8 +2696,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         ggml_cl_init();
 #elif defined(GGML_USE_VULKAN)
         ggml_vk_init_cpu_assist();
-#elif defined(GGML_USE_SYCL)
-        ggml_init_sycl();
 #endif
 
         ggml_setup_op_has_task_pass();
@@ -16115,12 +16111,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_TYPE_CPU);
 #endif // GGML_USE_VULKAN
 
-#ifdef GGML_USE_SYCL
-    bool skip_cpu = ggml_sycl_compute_forward(params, tensor);
-    if (skip_cpu) {
-        return;
-    }
-#endif // GGML_USE_SYCL
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
