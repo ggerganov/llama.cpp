@@ -112,6 +112,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         // this is necessary to guarantee equal number of "ncall" for each tensor
         for (int ex = 0; ex < n_as; ++ex) {
             src0 = t->src[2 + ex];
+            wname = src0->name;
             auto& e = m_stats[wname];
             if (e.values.empty()) {
                 e.values.resize(src1->ne[0], 0);
