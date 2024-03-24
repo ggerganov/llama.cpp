@@ -521,7 +521,9 @@ if (LLAMA_HIPBLAS)
     message(STATUS "HIP and hipBLAS found")
 
     set(GGML_HEADERS_ROCM ggml-cuda.h)
-    set(GGML_SOURCES_ROCM ggml-cuda.cu)
+
+    file(GLOB GGML_SOURCES_ROCM "ggml-cuda/*.cu")
+    list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
 
     add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
 
