@@ -1,6 +1,8 @@
 #include "ngram-cache.h"
+#include "common.h"
 #include "log.h"
 
+#include <cstdint>
 #include <fstream>
 
 void llama_ngram_cache_update(llama_ngram_cache & ngram_cache, int ngram_min, int ngram_max,
