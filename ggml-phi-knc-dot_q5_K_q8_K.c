@@ -22,9 +22,10 @@
 #define GGML_F32_EPR 16
 
 typedef float float32x8_t __attribute__((vector_size (64)));
+typedef float float32x16_t __attribute__((vector_size (128)));
 typedef int16_t int16x8_t __attribute__((vector_size (32)));
-typedef int32_t int32x8_t __attribute__((vector_size (64)));
 typedef int16_t int16x16_t __attribute__((vector_size (64)));
+typedef int32_t int32x8_t __attribute__((vector_size (64)));
 typedef int32_t int32x16_t __attribute__((vector_size (128)));
 
 /* A forward declaration, to keep GCC happy. */
@@ -37,13 +38,13 @@ inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
   uint32_t mask=0x000000FF;
 
   __asm__ __volatile__ (
-                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
-			"kmov\t%[M],\t%%k1\n\t"
+                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
+                        "kmov\t%[M],\t%%k1\n\t"
                         "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
-			: [RES]  "+m"  (*target)
-			: [Z]    "m"   (zero),
-			  [M]    "r"   (mask)
-			: "zmm8", "k1", "memory");
+                        : [RES]  "+m"  (*target)
+                        : [Z]    "m"   (zero),
+                          [M]    "r"   (mask)
+                        : "zmm8", "k1", "memory");
 }
 
 /* clear a vector of 8 int32_ts. */
@@ -53,13 +54,13 @@ inline static void GGML_I32x8_VEC_ZERO(int32x8_t *target)
   uint32_t mask=0x000000FF;
 
   __asm__ __volatile__ (
-                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
-			"kmov\t%[M],\t%%k1\n\t"
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
+                        "kmov\t%[M],\t%%k1\n\t"
                         "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
-			: [RES]  "+m"  (*target)
-			: [Z]    "m"   (zero),
-			  [M]    "r"   (mask)
-			: "zmm8", "k1", "memory");
+                        : [RES]  "+m"  (*target)
+                        : [Z]    "m"   (zero),
+                          [M]    "r"   (mask)
+                        : "zmm8", "k1", "memory");
 }
 
 /* clear a vector of 16 int32_ts. */
@@ -68,12 +69,11 @@ inline static void GGML_I32x16_VEC_ZERO(int32x16_t *target)
   uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
 
   __asm__ __volatile__ (
-                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t"        // use an upscaling operator to clear our value.
-			"kmov\t%[M],\t%%k1\n\t"
-                        "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
-			: [RES]  "+m"  (*target)
-			: [Z]    "m"   (zero)
-			: "zmm8", "k1", "memory");
+                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
+                        "vmovaps\t\t%%zmm8,\t%[RES]\n\t"
+                        : [RES]  "+m"  (*target)
+                        : [Z]    "m"   (zero)
+                        : "zmm8", "memory");
 }
 
 // perform a Fused Multiply Add of an I16x8 times scalar S into I32x8.
@@ -84,18 +84,18 @@ inline static void GGML_I16x8_S_FMA_I32x8 (int16x8_t *src, int32_t scale, int32x
   int32_t scaleVec[4] = {scale, scale, scale, scale};
 
   __asm__ __volatile__ (
-			"kmov\t%[M],\t%%k1\n\t"                              // we will only be working with 8 values at a time. le sigh.
-			"vmovdqa32\t\t%[SRC]%{sint16%},\t%%zmm0%{%%k1%}\n\t" // load the item we will be summing from. upscale it from int16.
-			"vbroadcastI32x4\t%[SCALE],\t%%zmm1\n\t"             // load the item we will be multiplying by.
+                        "kmov\t%[M],\t%%k1\n\t"                              // we will only be working with 8 values at a time. le sigh.
+                        "vmovdqa32\t\t%[SRC]%{sint16%},\t%%zmm0%{%%k1%}\n\t" // load the item we will be summing from. upscale it from int16.
+                        "vbroadcastI32x4\t%[SCALE],\t%%zmm1\n\t"             // load the item we will be multiplying by.
                         "vmovdqa32\t\t%[RES],\t%%zmm2%{%%k1%}\n\t"           // load the item we will be summing onto.
-			"vpmadd231d\t%%zmm0,\t%%zmm1,\t%%zmm2%{%%k1%}\n\t"   // perform our multiply-add.
-			"vmovdqa32\t\t%%zmm2,\t%[RES]%{%%k1}\n\t"            // save the result.
-			: [RES]   "+m" (*dest)
-			: [Z]     "m"  (zero),
-			  [M]     "r"  (mask),
-			  [SRC]   "m"  (src),
-			  [SCALE] "m"  (scaleVec)
-			: "zmm0", "zmm1", "zmm2", "k1", "memory");
+                        "vpmadd231d\t%%zmm0,\t%%zmm1,\t%%zmm2%{%%k1%}\n\t"   // perform our multiply-add.
+                        "vmovdqa32\t\t%%zmm2,\t%[RES]%{%%k1}\n\t"            // save the result.
+                        : [RES]   "+m" (*dest)
+                        : [Z]     "m"  (zero),
+                          [M]     "r"  (mask),
+                          [SRC]   "m"  (src),
+                          [SCALE] "m"  (scaleVec)
+                        : "zmm0", "zmm1", "zmm2", "k1", "memory");
 }
 
 // perform a Fused Multiply Add of an I16x16 times scalar S into I32x16.
@@ -104,15 +104,15 @@ inline static void GGML_I16x16_S_FMA_I32x16 (int16x16_t *src, int32_t scale, int
   int32_t scaleVec[4] = {scale, scale, scale, scale};
 
   __asm__ __volatile__ (
-			"vmovdqa32\t\t%[SRC]%{sint16%},\t%%zmm0\n\t" // load the item we will be summing from. upscale it from int16.
-			"vbroadcastI32x4\t%[SCALE],\t%%zmm1\n\t"     // load the item we will be multiplying by.
+                        "vmovdqa32\t\t%[SRC]%{sint16%},\t%%zmm0\n\t" // load the item we will be summing from. upscale it from int16.
+                        "vbroadcastI32x4\t%[SCALE],\t%%zmm1\n\t"     // load the item we will be multiplying by.
                         "vmovdqa32\t\t%[RES],\t%%zmm2\n\t"           // load the item we will be summing onto.
-			"vpmadd231d\t%%zmm0,\t%%zmm1,\t%%zmm2\n\t"   // perform our multiply-add.
-			"vmovdqa32\t\t%%zmm2,\t%[RES]\n\t"           // save the result.
-			: [RES]   "+m" (*dest)
-			: [SRC]   "m"  (src),
-			  [SCALE] "m"  (scaleVec)
-			: "zmm0", "zmm1", "zmm2", "k1", "memory");
+                        "vpmadd231d\t%%zmm0,\t%%zmm1,\t%%zmm2\n\t"   // perform our multiply-add.
+                        "vmovdqa32\t\t%%zmm2,\t%[RES]\n\t"           // save the result.
+                        : [RES]   "+m" (*dest)
+                        : [SRC]   "m"  (*src),
+                          [SCALE] "m"  (scaleVec)
+                        : "zmm0", "zmm1", "zmm2", "memory");
 }
 
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
@@ -176,8 +176,8 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
       for (int l = 0; l < 16; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
       GGML_I16x16_S_FMA_I32x16 (&aux16, scale, &aux32);
       q8 += 16; a += 16;
-      /* FIXME: while comparing FMA output to normal output, the original had an error. hunt it down. */
       for (int l = 0; l < 16; ++l) ((int16_t *)&aux16)[l] = q8[l] * a[l];
+      // FIXME: while comparing FMA output to the original output, the original had an error. hunt it down.
       GGML_I16x16_S_FMA_I32x16 (&aux16, scale, &aux32);
       q8 += 16; a += 16;
     }
