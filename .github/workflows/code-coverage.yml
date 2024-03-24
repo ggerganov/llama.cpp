@@ -5,6 +5,10 @@ env:
   GGML_NLOOP: 3
   GGML_N_THREADS: 1
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   run:
     runs-on: ubuntu-20.04

@@ -12,7 +12,7 @@
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 // https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11
 enum error_type {
@@ -95,8 +95,8 @@ static inline void server_log(const char *level, const char *function, int line,
 
         const std::string str = ss.str();
         printf("%.*s\n", (int)str.size(), str.data());
-        fflush(stdout);
     }
+    fflush(stdout);
 }
 
 //
@@ -373,8 +373,19 @@ static json oaicompat_completion_params_parse(
     llama_params["tfs_z"]             = json_value(body,   "tfs_z",             default_sparams.tfs_z);
     llama_params["n_keep"]            = json_value(body,   "n_keep",            0);
 
-    if (body.count("grammar") != 0) {
+    if (body.contains("grammar")) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
+    }
+
+    if (body.contains("response_format")) {
+        auto response_format = json_value(body, "response_format", json::object());
+        if (response_format.contains("type")) {
+            if (response_format["type"] == "json_object") {
+                llama_params["json_schema"] = json_value(response_format, "schema", json::object());
+            } else {
+                throw std::runtime_error("response_format type not supported: " + response_format["type"].dump());
+            }
+        }
     }
 
     // Handle 'stop' field

@@ -11,6 +11,7 @@
 *.gcda
 *.dot
 *.bat
+*.tmp
 *.metallib
 *.etag
 *.lastModified
@@ -49,6 +50,7 @@ models-mnt
 /embedding
 /gguf
 /gguf-llama-simple
+/gguf-split
 /gritlm
 /imatrix
 /infill
@@ -57,6 +59,9 @@ models-mnt
 /llava-cli
 /lookahead
 /lookup
+/lookup-create
+/lookup-merge
+/lookup-stats
 /main
 /metal
 /passkey
