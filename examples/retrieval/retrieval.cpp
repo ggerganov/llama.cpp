@@ -314,10 +314,9 @@ int main(int argc, char ** argv) {
 
         struct llama_batch query_batch = llama_batch_init(n_batch, 0, 1);
         batch_add_seq(query_batch, query_tokens, 0);
-        float * query_emb = new float[n_embd];
-        batch_decode(ctx, query_batch, query_emb, 1, n_embd);
-        std::vector<float> query_embedding(query_emb, query_emb + n_embd);
-        delete[] query_emb;
+        std::vector<float> query_emb(n_embd, 0);
+        batch_decode(ctx, query_batch, query_emb.data(), 1, n_embd);
+        std::vector<float> query_embedding(query_emb.data(), query_emb.data() + n_embd);
         llama_batch_clear(query_batch);
 
         // similarities tuple vector (chunk index, similarity)
