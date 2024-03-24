@@ -171,7 +171,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 
 void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 
-bool gpt_params_find_arg(int argc, char ** argv, gpt_params & params, int & i, bool & invalid_param);
+bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
 
 std::string get_system_info(const gpt_params & params);
 
