@@ -11,14 +11,12 @@ struct retrieval_params {
 };
 
 static void retrieval_params_print_usage(int argc, char** argv, gpt_params & gpt_params, retrieval_params & params) {
-    fprintf(stderr, "usage: retrieval [options]\n");
-    fprintf(stderr, "options:\n");
-    printf("  --context-files FNAME1 FNAME2...\n");
-    printf("                        files containing context to embed.\n");
+    gpt_print_usage(argc, argv, gpt_params);
+    printf("  --context-file FNAME files containing context to embed.\n");
+    printf("                        specify multiple files by providing --context-file option multiple times.\n");
     printf("  --chunk-size N        minimum length of embedded text chunk (default:%d)\n", params.chunk_size);
     printf("  --chunk-separator STRING\n");
     printf("                        string to separate chunks (default: \"\\n\")\n");
-    gpt_print_usage(argc, argv, gpt_params);
 }
 
 static void retrieval_params_parse(int argc, char ** argv, gpt_params & gpt_params, retrieval_params & retrieval_params) {
@@ -34,26 +32,20 @@ static void retrieval_params_parse(int argc, char ** argv, gpt_params & gpt_para
                 exit(1);
             }
             // option was parsed by gpt_params_find_arg
-        } else if (arg == "--context-files") {
+        } else if (arg == "--context-file") {
             if (++i >= argc) {
                 fprintf(stderr, "error: missing argument for --context-files\n");
                 retrieval_params_print_usage(argc, argv, gpt_params, retrieval_params);
                 exit(1);
             }
-            while(true) {
-                std::ifstream file(argv[i]);
-                if (!file) {
-                    fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                    retrieval_params_print_usage(argc, argv, gpt_params, retrieval_params);
-                    exit(1);
-                }
-                // store the external file name in params
-                retrieval_params.context_files.push_back(argv[i]);
-                if (i + 1 >= argc || argv[i + 1][0] == '-') {
-                    break;
-                }
-                i++;
+            std::ifstream file(argv[i]);
+            if (!file) {
+                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+                retrieval_params_print_usage(argc, argv, gpt_params, retrieval_params);
+                exit(1);
             }
+            // store the external file name in params
+            retrieval_params.context_files.push_back(argv[i]);
         } else if (arg == "--chunk-size") {
             if (++i >= argc) {
                 fprintf(stderr, "error: missing argument for --chunk-size\n");
