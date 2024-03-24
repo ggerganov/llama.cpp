@@ -16,9 +16,6 @@ extern "C" {
 #define GGML_SYCL_MAX_DEVICES       48
 #define GGML_SYCL_NAME "SYCL"
 
-GGML_API void   ggml_init_sycl(void);
-GGML_API bool   ggml_sycl_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor);
-
 // backend API
 GGML_API ggml_backend_t ggml_backend_sycl_init(int device);
 

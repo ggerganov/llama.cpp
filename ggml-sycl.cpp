@@ -12921,7 +12921,7 @@ int get_work_group_size(int user_device_id) {
     return prop.get_max_work_group_size();
 }
 
-void ggml_init_sycl() try {
+static void ggml_init_sycl() try {
     static bool initialized = false;
 
     if (!initialized) {
@@ -16417,6 +16417,7 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
 };
 
 ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device_index) {
+    ggml_init_sycl();
     if (device_index>=g_device_count or device_index<0) {
         printf("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
             device_index, g_device_count-1);
@@ -16786,6 +16787,7 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_split_buffer_type_interface 
 };
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * tensor_split) {
+    ggml_init_sycl();
     // FIXME: this is not thread safe
     static std::map<std::array<float, GGML_SYCL_MAX_DEVICES>, struct ggml_backend_buffer_type> buft_map;
 
@@ -17153,7 +17155,7 @@ static ggml_guid_t ggml_backend_sycl_guid() {
 }
 
 GGML_CALL ggml_backend_t ggml_backend_sycl_init(int device) {
-    ggml_init_sycl(); // TODO: remove from ggml.c
+    ggml_init_sycl();
 
     check_allow_gpu_index(device);
 
