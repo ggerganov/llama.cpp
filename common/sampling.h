@@ -132,7 +132,7 @@ llama_token llama_sampling_sample(
         int idx = 0);
 
 // Prepares and adjusts the set of token candidates for sampling based on penalties, biases, and sampling parameters.
-llama_token_data_array llama_sampling_configure_token_candidates(
+llama_token_data_array llama_sampling_prepare(
         struct llama_sampling_context * ctx_sampling,
         struct llama_context * ctx_main,
         struct llama_context * ctx_cfg,

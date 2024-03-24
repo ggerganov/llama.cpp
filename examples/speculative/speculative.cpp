@@ -219,7 +219,7 @@ int main(int argc, char ** argv) {
                 if (params.sparams.temp > 0) {
                     // stochastic verification
 
-                    llama_token_data_array dist_tgt = llama_sampling_configure_token_candidates(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft], true, NULL);
+                    llama_token_data_array dist_tgt = llama_sampling_prepare(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft], true, NULL);
                     llama_sample_softmax(ctx_tgt, &dist_tgt);
                     float p_tgt = 0, p_dft = 0;
 

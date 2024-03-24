@@ -174,7 +174,7 @@ static llama_token llama_sampling_sample_impl(
     const float   mirostat_eta    = params.mirostat_eta;
 
     std::vector<float> original_logits;
-    auto cur_p = llama_sampling_configure_token_candidates(ctx_sampling, ctx_main, ctx_cfg, idx, !is_resampling, &original_logits);
+    auto cur_p = llama_sampling_prepare(ctx_sampling, ctx_main, ctx_cfg, idx, !is_resampling, &original_logits);
     if (!is_resampling) {
         GGML_ASSERT(!original_logits.empty());
     }
@@ -245,7 +245,7 @@ static llama_token llama_sampling_sample_impl(
     return id;
 }
 
-static llama_token_data_array llama_sampling_configure_token_candidates_impl(
+static llama_token_data_array llama_sampling_prepare_impl(
                   struct llama_sampling_context * ctx_sampling,
                   struct llama_context * ctx_main,
                   struct llama_context * ctx_cfg,
@@ -329,14 +329,14 @@ llama_token llama_sampling_sample(
     return llama_sampling_sample_impl(ctx_sampling, ctx_main, ctx_cfg, idx, false);
 }
 
-llama_token_data_array llama_sampling_configure_token_candidates(
+llama_token_data_array llama_sampling_prepare(
                   struct llama_sampling_context * ctx_sampling,
                   struct llama_context * ctx_main,
                   struct llama_context * ctx_cfg,
                   const int idx,
                   bool apply_grammar,
                   std::vector<float> * original_logits) {
-    return llama_sampling_configure_token_candidates_impl(ctx_sampling,ctx_main, ctx_cfg, idx, apply_grammar, original_logits);
+    return llama_sampling_prepare_impl(ctx_sampling,ctx_main, ctx_cfg, idx, apply_grammar, original_logits);
 }
 
 void llama_sampling_accept(
