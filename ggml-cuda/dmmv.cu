@@ -1,5 +1,6 @@
 #include "dmmv.cuh"
 #include "dequantize.cuh"
+#include "convert.cuh"
 
 // dmmv = dequantize_mul_mat_vec
 #ifndef GGML_CUDA_DMMV_X
