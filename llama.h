@@ -275,13 +275,15 @@ extern "C" {
 
     // model quantization parameters
     typedef struct llama_model_quantize_params {
-        int32_t nthread;             // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype ftype;      // quantize to this llama_ftype
-        bool allow_requantize;       // allow quantizing non-f32/f16 tensors
-        bool quantize_output_tensor; // quantize output.weight
-        bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-        bool pure;                   // quantize all tensors to the default type
-        void * imatrix;              // pointer to importance matrix data
+        int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+        enum llama_ftype ftype;              // quantize to this llama_ftype
+        enum ggml_type output_tensor_type;   // output tensor type
+        enum ggml_type token_embedding_type; // itoken embeddings tensor type
+        bool allow_requantize;               // allow quantizing non-f32/f16 tensors
+        bool quantize_output_tensor;         // quantize output.weight
+        bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+        bool pure;                           // quantize all tensors to the default type
+        void * imatrix;                      // pointer to importance matrix data
     } llama_model_quantize_params;
 
     // grammar types
@@ -959,6 +961,16 @@ extern "C" {
                                  size_t   n_beams,
                                 int32_t   n_past,
                                 int32_t   n_predict);
+
+    /// @details Build a split GGUF final path for this chunk.
+    ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"
+    //  Returns the split_path length.
+    LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count);
+
+    /// @details Extract the path prefix from the split_path if and only if the split_no and split_count match.
+    ///          llama_split_prefix(split_prefix, 64, "/models/ggml-model-q4_0-00002-of-00004.gguf", 2, 4) => split_prefix = "/models/ggml-model-q4_0"
+    //  Returns the split_prefix length.
+    LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
 
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);

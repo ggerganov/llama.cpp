@@ -3,6 +3,7 @@
 
 #include "ggml-impl.h"
 #include "ggml-quants.h"
+#include "ggml.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -43,6 +44,10 @@
 
 #if defined(_WIN32)
 
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+    #define NOMINMAX
+#endif
 #include <windows.h>
 
 typedef volatile LONG atomic_int;
@@ -286,8 +291,6 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #include "ggml-opencl.h"
 #elif defined(GGML_USE_VULKAN)
 #include "ggml-vulkan.h"
-#elif defined(GGML_USE_SYCL)
-#include "ggml-sycl.h"
 #endif
 
 // floating point type used to accumulate sums
@@ -429,6 +432,57 @@ int64_t ggml_cycles_per_ms(void) {
 #define ggml_perf_cycles()        0
 #define ggml_perf_cycles_per_ms() 0
 #endif
+
+//
+// cross-platform UTF-8 file paths
+//
+
+#ifdef _WIN32
+static wchar_t * ggml_mbstowcs(const char * mbs) {
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, mbs, -1, NULL, 0);
+    if (!wlen) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    wchar_t * wbuf = GGML_MALLOC(wlen * sizeof(wchar_t));
+    wlen = MultiByteToWideChar(CP_UTF8, 0, mbs, -1, wbuf, wlen);
+    if (!wlen) {
+        GGML_FREE(wbuf);
+        errno = EINVAL;
+        return NULL;
+    }
+
+    return wbuf;
+}
+#endif
+
+FILE * ggml_fopen(const char * fname, const char * mode) {
+#ifdef _WIN32
+    FILE * file = NULL;
+
+    // convert fname (UTF-8)
+    wchar_t * wfname = ggml_mbstowcs(fname);
+    if (wfname) {
+        // convert mode (ANSI)
+        wchar_t * wmode = GGML_MALLOC((strlen(mode) + 1) * sizeof(wchar_t));
+        wchar_t * wmode_p = wmode;
+        do {
+            *wmode_p++ = (wchar_t)*mode;
+        } while (*mode++);
+
+        // open file
+        file = _wfopen(wfname, wmode);
+
+        GGML_FREE(wfname);
+        GGML_FREE(wmode);
+    }
+
+    return file;
+#else
+    return fopen(fname, mode);
+#endif
+}
 
 //
 // cache line
@@ -2642,8 +2696,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         ggml_cl_init();
 #elif defined(GGML_USE_VULKAN)
         ggml_vk_init_cpu_assist();
-#elif defined(GGML_USE_SYCL)
-        ggml_init_sycl();
 #endif
 
         ggml_setup_op_has_task_pass();
@@ -16059,12 +16111,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_TYPE_CPU);
 #endif // GGML_USE_VULKAN
 
-#ifdef GGML_USE_SYCL
-    bool skip_cpu = ggml_sycl_compute_forward(params, tensor);
-    if (skip_cpu) {
-        return;
-    }
-#endif // GGML_USE_SYCL
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
@@ -18739,7 +18785,7 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
 
     // write binary data
     {
-        FILE * fout = fopen(fname, "wb");
+        FILE * fout = ggml_fopen(fname, "wb");
 
         if (!fout) {
             fprintf(stderr, "%s: failed to open %s\n", __func__, fname);
@@ -18877,7 +18923,7 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
 
     // read file into data
     {
-        FILE * fin = fopen(fname, "rb");
+        FILE * fin = ggml_fopen(fname, "rb");
         if (!fin) {
             fprintf(stderr, "%s: failed to open %s\n", __func__, fname);
             return result;
@@ -19213,7 +19259,7 @@ static void ggml_graph_dump_dot_leaf_edge(FILE * fp, struct ggml_tensor * node, 
 void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph * gf, const char * filename) {
     char color[16];
 
-    FILE * fp = fopen(filename, "w");
+    FILE * fp = ggml_fopen(filename, "w");
     GGML_ASSERT(fp);
 
     fprintf(fp, "digraph G {\n");
@@ -20531,7 +20577,7 @@ struct gguf_context * gguf_init_empty(void) {
 }
 
 struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
-    FILE * file = fopen(fname, "rb");
+    FILE * file = ggml_fopen(fname, "rb");
     if (!file) {
         return NULL;
     }
@@ -21486,7 +21532,7 @@ static void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf *
 }
 
 void gguf_write_to_file(const struct gguf_context * ctx, const char * fname, bool only_meta) {
-    FILE * file = fopen(fname, "wb");
+    FILE * file = ggml_fopen(fname, "wb");
     if (!file) {
         GGML_ASSERT(false && "failed to open file for writing");
     }

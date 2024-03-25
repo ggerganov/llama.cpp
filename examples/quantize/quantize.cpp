@@ -189,6 +189,18 @@ static void prepare_imatrix(const std::string& imatrix_file,
     }
 }
 
+static ggml_type parse_ggml_type(const char * arg) {
+    ggml_type result = GGML_TYPE_COUNT;
+    for (int j = 0; j < GGML_TYPE_COUNT; ++j) {
+        auto type = ggml_type(j);
+        const auto * name = ggml_type_name(type);
+        if (name && strcmp(arg, name) == 0) {
+            result = type; break;
+        }
+    }
+    return result;
+}
+
 int main(int argc, char ** argv) {
     if (argc < 3) {
         usage(argv[0]);
@@ -203,6 +215,18 @@ int main(int argc, char ** argv) {
     for (; arg_idx < argc && strncmp(argv[arg_idx], "--", 2) == 0; arg_idx++) {
         if (strcmp(argv[arg_idx], "--leave-output-tensor") == 0) {
             params.quantize_output_tensor = false;
+        } else if (strcmp(argv[arg_idx], "--output-tensor-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.output_tensor_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--token-embedding-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.token_embedding_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
             params.allow_requantize = true;
         } else if (strcmp(argv[arg_idx], "--pure") == 0) {
