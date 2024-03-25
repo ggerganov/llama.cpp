@@ -18,20 +18,23 @@ on:
   schedule:
     -  cron: '0 0 * * *'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   server:
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        # TODO: temporary disabled due to linux kernel issues
+        #sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        sanitizer: [UNDEFINED]
         build_type: [Debug]
         include:
           - build_type: Release
             sanitizer: ""
-          - build_type: Debug
-            sanitizer: THREAD
-            disabled_on_pr: true
       fail-fast: false # While -DLLAMA_SANITIZE_THREAD=ON is broken
 
     container:

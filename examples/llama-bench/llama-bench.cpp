@@ -114,10 +114,10 @@ static std::string get_cpu_info() {
 static std::string get_gpu_info() {
     std::string id;
 #ifdef GGML_USE_CUBLAS
-    int count = ggml_cuda_get_device_count();
+    int count = ggml_backend_cuda_get_device_count();
     for (int i = 0; i < count; i++) {
         char buf[128];
-        ggml_cuda_get_device_description(i, buf, sizeof(buf));
+        ggml_backend_cuda_get_device_description(i, buf, sizeof(buf));
         id += buf;
         if (i < count - 1) {
             id += "/";
@@ -248,6 +248,9 @@ static ggml_type ggml_type_from_name(const std::string & s) {
     }
     if (s == "q5_1") {
         return GGML_TYPE_Q5_1;
+    }
+    if (s == "iq4_nl") {
+        return GGML_TYPE_IQ4_NL;
     }
 
     return GGML_TYPE_COUNT;
