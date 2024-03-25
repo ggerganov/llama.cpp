@@ -9775,7 +9775,6 @@ void ggml_vec_dot_iq1_m_q8_K  (int n, float * restrict s, size_t bs, const void 
 
     ggml_int8x16x4_t q1b;
     ggml_int8x16x4_t q8b;
-    ggml_int8x16x4_t delta;
 
     iq1m_scale_t scale;
 
