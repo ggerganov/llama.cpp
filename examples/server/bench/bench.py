@@ -1,5 +1,4 @@
 import argparse
-import base64
 import json
 import os
 import re
@@ -13,6 +12,8 @@ import traceback
 from contextlib import closing
 from datetime import datetime
 
+import matplotlib
+import matplotlib.dates
 import matplotlib.pyplot as plt
 import requests
 
@@ -109,6 +110,10 @@ def main(args_in: list[str] | None = None) -> None:
         for metric in metrics:
             resp = requests.get(f"http://localhost:9090/api/v1/query_range",
                                 params={'query': 'llamacpp:' + metric, 'start': start_time, 'end': end_time, 'step': 2})
+
+            with open(f"{metric}.json", 'w') as metric_json:
+                metric_json.write(resp.text)
+
             if resp.status_code != 200:
                 print(f"bench: unable to extract prometheus metric {metric}: {resp.text}")
             else:
@@ -131,6 +136,8 @@ def main(args_in: list[str] | None = None) -> None:
                            f"parallel={args.parallel} ctx-size={args.ctx_size} ngl={args.n_gpu_layers} batch-size={args.batch_size} ubatch-size={args.ubatch_size}\n"
                            f"pp={args.max_prompt_tokens} pp+tg={args.max_tokens}\n"
                            f"branch={args.branch} commit={args.commit}", fontsize=14, wrap=True)
+                plt.gca().xaxis.set_major_locator(matplotlib.dates.MinuteLocator())
+                plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y%m%d %H:%M:%S"))
                 plt.gcf().autofmt_xdate()
 
                 # Remove borders
