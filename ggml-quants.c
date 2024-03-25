@@ -11992,6 +11992,7 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
     float sumqx[4], sumq2[4];
 
     iq1m_scale_t s;
+    const float * xx;
 
     for (int ibl = 0; ibl < nbl; ++ibl) {
 
@@ -12126,7 +12127,6 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
                 scale = -scale;
                 best_k = best_k == 0 ? 3 : best_k == 1 ? 2 : best_k == 2 ? 1 : 0;
             }
-            const float * xx;
             bool all_on_grid = true;
             for (int k = 0; k < block_size/8; ++k) {
                 if (k == 0) xx = best_k < 2 ? x_p : x_m;
@@ -12173,13 +12173,33 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
         uint16_t * sc = (uint16_t *)y[ibl].scales;
         float d = max_scale/15;
         float id = 1/d;
+        float sumqx_f = 0, sumq2_f = 0;
         for (int ib = 0; ib < QK_K/block_size; ++ib) {
             int l = nearest_int(0.5f*(id*scales[ib+0]-1));
             l = MAX(0, MIN(7, l));
             sc[ib/4] |= (l << 3*(ib%4));
             y[ibl].qh[ib] |= masks[shifts[ib]];
+            const float * xb = xbl + block_size*ib;
+            if (quant_weights) {
+                const float * qw = quant_weights + QK_K*ibl + block_size*ib;
+                for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+            } else {
+                for (int i = 0; i < block_size; ++i) weight[i] = xb[i]*xb[i];
+            }
+            for (int k = 0; k < block_size/8; ++k) {
+                if (k == 0) xx = shifts[ib] < 2 ? x_p : x_m;
+                else xx = shifts[ib]%2 == 0 ? x_p : x_m;
+                const int8_t * pg = (const int8_t *)(kgrid_q2xs + y[ibl].qs[2*ib+k] + ((y[ibl].qh[ib] << (8 - 4*k)) & 0x700));
+                for (int j = 0; j < 8; ++j) {
+                    float w = weight[8*k + j];
+                    float q = xx[(pg[j] - 1)/2]*(2*l+1);
+                    sumqx_f += w*q*xb[8*k+j];
+                    sumq2_f += w*q*q;
+                }
+            }
         }
-        s.fp16 = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
+        if (sumq2_f > 0) d = sumqx_f/sumq2_f;
+        s.fp16 = GGML_FP32_TO_FP16(d*1.1125f); // 1.1125f is another fudge factor. Don't ask me why it is needed.
         sc[0] |= ((s.u16 & 0x000f) << 12);
         sc[1] |= ((s.u16 & 0x00f0) <<  8);
         sc[2] |= ((s.u16 & 0x0f00) <<  4);
