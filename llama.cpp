@@ -61,6 +61,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cctype>
 #include <cfloat>
 #include <cinttypes>
 #include <climits>
@@ -71,7 +72,6 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <cwctype>
 #include <forward_list>
 #include <fstream>
 #include <functional>
@@ -10706,7 +10706,7 @@ struct llm_tokenizer_wpm {
         std::vector<std::string> words;
         while (r < new_str.size()) {
             // if is whitespace
-            if (isspace(new_str[r])) {
+            if (isspace(new_str[r], std::locale::classic())) {
                 if (r > l) words.push_back(new_str.substr(l, (r - l)));
                 l = r + 1;
                 r = l;
@@ -10731,7 +10731,11 @@ struct llm_tokenizer_wpm {
     }
 
     bool is_ascii_punct(uint32_t code) {
-        return code < 256 && ispunct(code);
+        if (code > 0xFF) {
+            return false;
+        }
+        auto c = char(static_cast<unsigned char>(code));
+        return ispunct(c, std::locale::classic());
     }
 
     bool is_chinese_char(uint32_t cpt) {
