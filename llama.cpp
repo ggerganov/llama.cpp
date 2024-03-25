@@ -1950,6 +1950,7 @@ struct llama_control_vector {
     }
 
     ~llama_control_vector() {
+        LLAMA_LOG_ERROR("Kill the control vector\n");
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
         }
@@ -13994,9 +13995,9 @@ int32_t llama_model_apply_lora_from_file(const struct llama_model * model, const
 }
 
 static bool llama_control_vector_init(struct llama_control_vector & cvec, const llama_model & model) {
-    GGML_ASSERT(cvec.tensors.empty());
-    GGML_ASSERT(cvec.ctxs.empty());
-    GGML_ASSERT(cvec.bufs.empty());
+    cvec.tensors.clear();
+    cvec.ctxs.clear();
+    cvec.bufs.clear();
 
     // count layer buffer types
     std::map<ggml_backend_buffer_type_t, int> buft_layer_count;
@@ -14062,10 +14063,9 @@ int32_t llama_control_vector_apply(struct llama_context * lctx, const float * da
         return 1;
     }
 
-    if (cvec.tensors.empty()) {
-        if (!llama_control_vector_init(cvec, model)) {
-            return 1;
-        }
+    if (!llama_control_vector_init(cvec, model)) {
+        LLAMA_LOG_ERROR("%s: FUCKING  BITCH\n", __func__);
+        return 1;
     }
 
     cvec.layer_start = il_start;
