@@ -390,7 +390,7 @@ ifdef LLAMA_BLIS
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
-#	$(error LLAMA_CUBLAS is deprecated. Use LLAMA_CUDA instead.)
+# LLAMA_CUBLAS is deprecated and will be removed in the future
 	LLAMA_CUDA := 1
 endif
 
