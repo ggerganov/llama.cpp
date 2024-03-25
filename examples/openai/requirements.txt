@@ -1,0 +1,7 @@
+fastapi[all]
+gguf
+jinja2
+jsonargparse
+pydantic
+sse-starlette
+uvicorn[all]
