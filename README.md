@@ -17,10 +17,12 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
+- Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
 - Multi-GPU pipeline parallelizm support https://github.com/ggerganov/llama.cpp/pull/6017
 - Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
 - Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
 - Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
+- Support loading sharded model, using `gguf-split` CLI https://github.com/ggerganov/llama.cpp/pull/6187
 
 ----
 
@@ -165,6 +167,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
+- [RecurseChat](https://recurse.chat/) (proprietary)
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)

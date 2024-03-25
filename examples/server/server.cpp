@@ -30,7 +30,7 @@
 #include <signal.h>
 #include <memory>
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 bool server_verbose = false;
 bool server_log_json = true;
@@ -847,9 +847,16 @@ struct server_context {
         slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
         slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
         slot.params.seed               = json_value(data, "seed",              default_params.seed);
-        if (data.contains("json_schema") && !data.contains("grammar")) {
+        slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
+        slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
+
+        // process "json_schema" and "grammar"
+        if (data.contains("json_schema") && data.contains("grammar")) {
+            send_error(task, "Either \"json_schema\" or \"grammar\" can be specified, but not both", ERROR_TYPE_INVALID_REQUEST);
+            return false;
+        } else if (data.contains("json_schema") && !data.contains("grammar")) {
             try {
-                auto schema                = json_value(data, "json_schema",       json::object());
+                auto schema                = json_value(data, "json_schema", json::object());
                 slot.sparams.grammar       = json_schema_to_grammar(schema);
             } catch (const std::exception & e) {
                 send_error(task, std::string("\"json_schema\": ") + e.what(), ERROR_TYPE_INVALID_REQUEST);
@@ -858,8 +865,6 @@ struct server_context {
         } else {
             slot.sparams.grammar       = json_value(data, "grammar",           default_sparams.grammar);
         }
-        slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
-        slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
         if (slot.params.cache_prompt && slot.ga_n != 1) {
             LOG_WARNING("cache_prompt is not supported with group-attention", {});
@@ -1247,7 +1252,7 @@ struct server_context {
             {"penalize_nl",               slot.sparams.penalize_nl},
             {"stop",                      slot.params.antiprompt},
             {"n_predict",                 slot.params.n_predict}, // TODO: fix duplicate key n_predict
-            {"n_keep",                    params.n_keep},
+            {"n_keep",                    slot.params.n_keep},
             {"ignore_eos",                ignore_eos},
             {"stream",                    slot.params.stream},
             {"logit_bias",                slot.sparams.logit_bias},
@@ -1758,7 +1763,7 @@ struct server_context {
         }
 
         // process in chunks of params.n_batch
-        int32_t n_batch = llama_n_batch(ctx);
+        int32_t n_batch  = llama_n_batch(ctx);
         int32_t n_ubatch = llama_n_ubatch(ctx);
 
         // next, batch any pending prompts without exceeding n_batch
@@ -2208,7 +2213,11 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  -m FNAME, --model FNAME\n");
     printf("                            model path (default: %s)\n", params.model.c_str());
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
-    printf("                            model download url (default: %s)\n", params.model_url.c_str());
+    printf("                            model download url (default: unused)\n");
+    printf("  -hfr REPO, --hf-repo REPO\n");
+    printf("                            Hugging Face model repository (default: unused)\n");
+    printf("  -hff FILE, --hf-file FILE\n");
+    printf("                            Hugging Face model file (default: unused)\n");
     printf("  -a ALIAS, --alias ALIAS\n");
     printf("                            set an alias for the model, will be added as `model` field in completion response\n");
     printf("  --lora FNAME              apply LoRA adapter (implies --no-mmap)\n");
@@ -2225,7 +2234,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  -to N, --timeout N        server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     printf("  --embeddings              enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N       number of slots for process requests (default: %d)\n", params.n_parallel);
-    printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
+    printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: enabled)\n");
     printf("  -spf FNAME, --system-prompt-file FNAME\n");
     printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
     printf("  -ctk TYPE, --cache-type-k TYPE\n");
@@ -2337,6 +2346,18 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             params.model_url = argv[i];
+        } else if (arg == "-hfr" || arg == "--hf-repo") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.hf_repo = argv[i];
+        } else if (arg == "-hff" || arg == "--hf-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.hf_file = argv[i];
         } else if (arg == "-a" || arg == "--alias") {
             if (++i >= argc) {
                 invalid_param = true;

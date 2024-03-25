@@ -90,7 +90,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         FAILURE,
-        "invalid type type",
+        "invalid type",
         R"""({
             "type": 123
         })""",
@@ -193,21 +193,27 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
     });
 
     test({
-        FAILURE,
+        SUCCESS,
         "non-string const",
         R"""({
             "const": 123
         })""",
-        ""
+        R"""(
+            root ::= "123"
+            space ::= " "?
+        )"""
     });
 
     test({
-        FAILURE,
+        SUCCESS,
         "non-string enum",
         R"""({
-            "enum": [123]
+            "enum": ["red", "amber", "green", null, 42, ["foo"]]
         })""",
-        ""
+        R"""(
+            root ::= "\"red\"" | "\"amber\"" | "\"green\"" | "null" | "42" | "[\"foo\"]"
+            space ::= " "?
+        )"""
     });
 
     test({
@@ -378,20 +384,18 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         SUCCESS,
-        "required props",
+        "required props in original order",
         R"""({
             "type": "object",
             "properties": {
-                "a": {
-                "type": "string"
-                },
-                "b": {
-                "type": "string"
-                }
+                "b": {"type": "string"},
+                "c": {"type": "string"},
+                "a": {"type": "string"}
             },
             "required": [
                 "a",
-                "b"
+                "b",
+                "c"
             ],
             "additionalProperties": false,
             "definitions": {}
@@ -399,7 +403,8 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             a-kv ::= "\"a\"" space ":" space string
             b-kv ::= "\"b\"" space ":" space string
-            root ::= "{" space a-kv "," space b-kv "}" space
+            c-kv ::= "\"c\"" space ":" space string
+            root ::= "{" space b-kv "," space c-kv "," space a-kv "}" space
             space ::= " "?
             string ::=  "\"" (
                     [^"\\] |
@@ -458,13 +463,13 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         SUCCESS,
-        "required + optional props",
+        "required + optional props each in original order",
         R"""({
             "properties": {
-                "a": {"type": "string"},
                 "b": {"type": "string"},
-                "c": {"type": "string"},
-                "d": {"type": "string"}
+                "a": {"type": "string"},
+                "d": {"type": "string"},
+                "c": {"type": "string"}
             },
             "required": ["a", "b"],
             "additionalProperties": false
@@ -473,14 +478,14 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             a-kv ::= "\"a\"" space ":" space string
             b-kv ::= "\"b\"" space ":" space string
             c-kv ::= "\"c\"" space ":" space string
-            c-rest ::= ( "," space d-kv )?
             d-kv ::= "\"d\"" space ":" space string
-            root ::= "{" space a-kv "," space b-kv ( "," space ( c-kv c-rest | d-kv ) )? "}" space
+            d-rest ::= ( "," space c-kv )?
+            root ::= "{" space b-kv "," space a-kv ( "," space ( d-kv d-rest | c-kv ) )? "}" space
             space ::= " "?
             string ::=  "\"" (
                     [^"\\] |
                     "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-                    )* "\"" space
+                )* "\"" space
         )"""
     });
 
@@ -648,16 +653,16 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "$ref": "#/definitions/MyType",
             "definitions": {
                 "MyType": {
-                "type": "object",
-                "properties": {
-                    "a": {
-                    "type": "string"
-                    }
-                },
-                "required": [
-                    "a"
-                ],
-                "additionalProperties": false
+                    "type": "object",
+                    "properties": {
+                        "a": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "a"
+                    ],
+                    "additionalProperties": false
                 }
             }
         })""",
@@ -683,10 +688,10 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             ],
             "definitions": {
                 "foo": {
-                "properties": {"a": {"type": "number"}}
+                    "properties": {"a": {"type": "number"}}
                 },
                 "bar": {
-                "properties": {"b": {"type": "number"}}
+                    "properties": {"b": {"type": "number"}}
                 }
             },
             "type": "object"
@@ -720,16 +725,16 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             ],
             "definitions": {
                 "foo": {
-                "properties": {"a": {"type": "number"}}
+                    "properties": {"a": {"type": "number"}}
                 },
                 "bar": {
-                "properties": {"b": {"type": "number"}}
+                    "properties": {"b": {"type": "number"}}
                 },
                 "bam": {
-                "properties": {"c": {"type": "number"}}
+                    "properties": {"c": {"type": "number"}}
                 },
                 "baz": {
-                "properties": {"d": {"type": "number"}}
+                    "properties": {"d": {"type": "number"}}
                 }
             },
             "type": "object"
@@ -757,15 +762,15 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
                 "properties": {
                     "number": {
                     "type": "object",
-                    "properties": {
-                        "root": {
-                        "type": "number"
-                        }
-                    },
-                    "required": [
-                        "root"
-                    ],
-                    "additionalProperties": false
+                        "properties": {
+                            "root": {
+                                "type": "number"
+                            }
+                        },
+                        "required": [
+                            "root"
+                        ],
+                        "additionalProperties": false
                     }
                 },
                 "required": [
@@ -794,27 +799,40 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 }
 
 int main() {
+    fprintf(stderr, "LLAMA_NODE_AVAILABLE = %s\n", getenv("LLAMA_NODE_AVAILABLE") ? "true" : "false");
+    fprintf(stderr, "LLAMA_PYTHON_AVAILABLE = %s\n", getenv("LLAMA_PYTHON_AVAILABLE") ? "true" : "false");
+
     test_all("C++", [](const TestCase & tc) {
         try {
-            tc.verify(json_schema_to_grammar(nlohmann::json::parse(tc.schema)));
+            tc.verify(json_schema_to_grammar(nlohmann::ordered_json::parse(tc.schema)));
             tc.verify_status(SUCCESS);
         } catch (const std::runtime_error & ex) {
             fprintf(stderr, "Error: %s\n", ex.what());
             tc.verify_status(FAILURE);
         }
     });
-    test_all("Python", [](const TestCase & tc) {
-        write("test-json-schema-input.tmp", tc.schema);
-        tc.verify_status(std::system(
-            "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
-        tc.verify(read("test-grammar-output.tmp"));
-    });
-    test_all("JavaScript", [](const TestCase & tc) {
-        write("test-json-schema-input.tmp", tc.schema);
-        tc.verify_status(std::system(
-            "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
-        tc.verify(read("test-grammar-output.tmp"));
-    });
+
+    if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python --version") == 0)) {
+        test_all("Python", [](const TestCase & tc) {
+            write("test-json-schema-input.tmp", tc.schema);
+            tc.verify_status(std::system(
+                "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+            tc.verify(read("test-grammar-output.tmp"));
+        });
+    } else {
+        fprintf(stderr, "\033[33mWARNING: Python not found, skipping Python JSON schema -> grammar tests.\n\033[0m");
+    }
+
+    if (getenv("LLAMA_NODE_AVAILABLE") || (std::system("node --version") == 0)) {
+        test_all("JavaScript", [](const TestCase & tc) {
+            write("test-json-schema-input.tmp", tc.schema);
+            tc.verify_status(std::system(
+                "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+            tc.verify(read("test-grammar-output.tmp"));
+        });
+    } else {
+        fprintf(stderr, "\033[33mWARNING: Node not found, skipping JavaScript JSON schema -> grammar tests.\n\033[0m");
+    }
 
     test_all("Check Expectations Validity", [](const TestCase & tc) {
         if (tc.expected_status == SUCCESS) {

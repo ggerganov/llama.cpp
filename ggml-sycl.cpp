@@ -740,11 +740,7 @@ namespace dpct
 
         sycl::queue &default_queue()
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return out_of_order_queue();
-#else
             return in_order_queue();
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         void queues_wait_and_throw()
@@ -763,11 +759,7 @@ namespace dpct
 
         sycl::queue *create_queue(bool enable_exception_handler = false)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return create_out_of_order_queue(enable_exception_handler);
-#else
             return create_in_order_queue(enable_exception_handler);
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         sycl::queue *create_queue(sycl::context context, sycl::device device,
@@ -1075,11 +1067,6 @@ namespace dpct
         static pointer_access_attribute get_pointer_attribute(sycl::queue &q,
                                                               const void *ptr)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return mem_mgr::instance().is_device_ptr(ptr)
-                       ? pointer_access_attribute::device_only
-                       : pointer_access_attribute::host_only;
-#else
             switch (sycl::get_pointer_type(ptr, q.get_context()))
             {
             case sycl::usm::alloc::unknown:
@@ -1090,7 +1077,6 @@ namespace dpct
             case sycl::usm::alloc::host:
                 return pointer_access_attribute::host_device;
             }
-#endif
         }
 
         template <typename ArgT>
@@ -1273,11 +1259,7 @@ namespace dpct
 
         static inline void *dpct_malloc(size_t size, sycl::queue &q)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return mem_mgr::instance().mem_alloc(size * sizeof(byte_t));
-#else
             return sycl::malloc_device(size, q.get_device(), q.get_context());
-#endif // DPCT_USM_LEVEL_NONE
         }
 
 #define PITCH_DEFAULT_ALIGN(x) (((x) + 31) & ~(0x1F))
@@ -1301,25 +1283,7 @@ namespace dpct
         static inline sycl::event dpct_memset(sycl::queue &q, void *dev_ptr,
                                               valueT value, size_t size)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            auto &mm = mem_mgr::instance();
-            assert(mm.is_device_ptr(dev_ptr));
-            auto alloc = mm.translate_ptr(dev_ptr);
-            size_t offset = (valueT *)dev_ptr - (valueT *)alloc.alloc_ptr;
-
-            return q.submit([&](sycl::handler &cgh)
-                            {
-    auto r = sycl::range<1>(size);
-    auto o = sycl::id<1>(offset);
-    auto new_buffer = alloc.buffer.reinterpret<valueT>(
-        sycl::range<1>(alloc.size / sizeof(valueT)));
-    sycl::accessor<valueT, 1, sycl::access_mode::write,
-                sycl::access::target::device>
-        acc(new_buffer, cgh, r, o);
-    cgh.fill(acc, value); });
-#else
             return q.fill(dev_ptr, value, size);
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         /**
@@ -1413,72 +1377,8 @@ namespace dpct
         {
             if (!size)
                 return sycl::event{};
-#ifdef DPCT_USM_LEVEL_NONE
-            auto &mm = mem_mgr::instance();
-            auto real_direction = deduce_memcpy_direction(q, to_ptr, from_ptr, direction);
-
-            switch (real_direction)
-            {
-            case host_to_host:
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    cgh.host_task([=] { std::memcpy(to_ptr, from_ptr, size); }); });
-            case host_to_device:
-            {
-                auto alloc = mm.translate_ptr(to_ptr);
-                size_t offset = (byte_t *)to_ptr - alloc.alloc_ptr;
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    auto r = sycl::range<1>(size);
-    auto o = sycl::id<1>(offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                        sycl::access::target::device>
-        acc(alloc.buffer, cgh, r, o);
-    cgh.copy(from_ptr, acc); });
-            }
-            case device_to_host:
-            {
-                auto alloc = mm.translate_ptr(from_ptr);
-                size_t offset = (byte_t *)from_ptr - alloc.alloc_ptr;
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    auto r = sycl::range<1>(size);
-    auto o = sycl::id<1>(offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                        sycl::access::target::device>
-        acc(alloc.buffer, cgh, r, o);
-    cgh.copy(acc, to_ptr); });
-            }
-            case device_to_device:
-            {
-                auto to_alloc = mm.translate_ptr(to_ptr);
-                auto from_alloc = mm.translate_ptr(from_ptr);
-                size_t to_offset = (byte_t *)to_ptr - to_alloc.alloc_ptr;
-                size_t from_offset = (byte_t *)from_ptr - from_alloc.alloc_ptr;
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    auto r = sycl::range<1>(size);
-    auto to_o = sycl::id<1>(to_offset);
-    auto from_o = sycl::id<1>(from_offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                        sycl::access::target::device>
-        to_acc(to_alloc.buffer, cgh, r, to_o);
-    sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                        sycl::access::target::device>
-        from_acc(from_alloc.buffer, cgh, r, from_o);
-    cgh.copy(from_acc, to_acc); });
-            }
-            default:
-                throw std::runtime_error("dpct_memcpy: invalid direction value");
-            }
-#else
             return q.memcpy(to_ptr, from_ptr, size, dep_events);
             GGML_UNUSED(direction);
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         // Get actual copy range and make sure it will not exceed range.
@@ -1618,45 +1518,15 @@ namespace dpct
                 break;
             }
             case device_to_device:
-#ifdef DPCT_USM_LEVEL_NONE
-            {
-                auto &mm = mem_mgr::instance();
-                auto to_alloc = mm.translate_ptr(to_surface);
-                auto from_alloc = mm.translate_ptr(from_surface);
-                size_t to_offset = (byte_t *)to_surface - to_alloc.alloc_ptr;
-                size_t from_offset = (byte_t *)from_surface - from_alloc.alloc_ptr;
-                event_list.push_back(q.submit([&](sycl::handler &cgh)
-                                              {
-    cgh.depends_on(dep_events);
-    auto to_o = sycl::id<1>(to_offset);
-    auto from_o = sycl::id<1>(from_offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                        sycl::access::target::device>
-        to_acc(to_alloc.buffer, cgh,
-                get_copy_range(size, to_slice, to_range.get(0)), to_o);
-    sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                        sycl::access::target::device>
-        from_acc(from_alloc.buffer, cgh,
-                get_copy_range(size, from_slice, from_range.get(0)), from_o);
-    cgh.parallel_for<class dpct_memcpy_3d_detail_usmnone>(
-        size,
-        [=](sycl::id<3> id) {
-            to_acc[get_offset(id, to_slice, to_range.get(0))] =
-                from_acc[get_offset(id, from_slice, from_range.get(0))];
-        }); }));
-            }
-#else
-                event_list.push_back(q.submit([&](sycl::handler &cgh)
-                                              {
-    cgh.depends_on(dep_events);
-    cgh.parallel_for<class dpct_memcpy_3d_detail>(
-        size,
-        [=](sycl::id<3> id) {
-            to_surface[get_offset(id, to_slice, to_range.get(0))] =
-                from_surface[get_offset(id, from_slice, from_range.get(0))];
-        }); }));
-#endif
-            break;
+                event_list.push_back(q.submit([&](sycl::handler &cgh){
+                cgh.depends_on(dep_events);
+                cgh.parallel_for<class dpct_memcpy_3d_detail>(
+                    size,
+                    [=](sycl::id<3> id) {
+                        to_surface[get_offset(id, to_slice, to_range.get(0))] =
+                            from_surface[get_offset(id, from_slice, from_range.get(0))];
+                    }); }));
+                break;
             default:
                 throw std::runtime_error("dpct_memcpy: invalid direction value");
             }
@@ -1754,11 +1624,7 @@ namespace dpct
         {
             if (ptr)
             {
-#ifdef DPCT_USM_LEVEL_NONE
-                detail::mem_mgr::instance().mem_free(ptr);
-#else
                 sycl::free(ptr, q.get_context());
-#endif // DPCT_USM_LEVEL_NONE
             }
         }
 
@@ -1766,11 +1632,7 @@ namespace dpct
         inline auto get_memory(const void *x)
         {
             T *new_x = reinterpret_cast<T *>(const_cast<void *>(x));
-#ifdef DPCT_USM_LEVEL_NONE
-            return dpct::get_buffer<std::remove_cv_t<T>>(new_x);
-#else
             return new_x;
-#endif
         }
 
         template <typename T>
@@ -2222,72 +2084,8 @@ namespace dpct
     {
         if (!size)
             return sycl::event{};
-#ifdef DPCT_USM_LEVEL_NONE
-        auto &mm = mem_mgr::instance();
-        auto real_direction = deduce_memcpy_direction(q, to_ptr, from_ptr, direction);
-
-        switch (real_direction)
-        {
-        case host_to_host:
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        cgh.host_task([=] { std::memcpy(to_ptr, from_ptr, size); }); });
-        case host_to_device:
-        {
-            auto alloc = mm.translate_ptr(to_ptr);
-            size_t offset = (byte_t *)to_ptr - alloc.alloc_ptr;
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        auto r = sycl::range<1>(size);
-        auto o = sycl::id<1>(offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                            sycl::access::target::device>
-            acc(alloc.buffer, cgh, r, o);
-        cgh.copy(from_ptr, acc); });
-        }
-        case device_to_host:
-        {
-            auto alloc = mm.translate_ptr(from_ptr);
-            size_t offset = (byte_t *)from_ptr - alloc.alloc_ptr;
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        auto r = sycl::range<1>(size);
-        auto o = sycl::id<1>(offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                            sycl::access::target::device>
-            acc(alloc.buffer, cgh, r, o);
-        cgh.copy(acc, to_ptr); });
-        }
-        case device_to_device:
-        {
-            auto to_alloc = mm.translate_ptr(to_ptr);
-            auto from_alloc = mm.translate_ptr(from_ptr);
-            size_t to_offset = (byte_t *)to_ptr - to_alloc.alloc_ptr;
-            size_t from_offset = (byte_t *)from_ptr - from_alloc.alloc_ptr;
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        auto r = sycl::range<1>(size);
-        auto to_o = sycl::id<1>(to_offset);
-        auto from_o = sycl::id<1>(from_offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                            sycl::access::target::device>
-            to_acc(to_alloc.buffer, cgh, r, to_o);
-        sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                            sycl::access::target::device>
-            from_acc(from_alloc.buffer, cgh, r, from_o);
-        cgh.copy(from_acc, to_acc); });
-        }
-        default:
-            throw std::runtime_error("dpct_memcpy: invalid direction value");
-        }
-#else
         return q.memcpy(to_ptr, from_ptr, size, dep_events);
         GGML_UNUSED(direction);
-#endif // DPCT_USM_LEVEL_NONE
     }
 
     // Get actual copy range and make sure it will not exceed range.
@@ -2427,34 +2225,6 @@ namespace dpct
             break;
         }
         case device_to_device:
-#ifdef DPCT_USM_LEVEL_NONE
-        {
-            auto &mm = mem_mgr::instance();
-            auto to_alloc = mm.translate_ptr(to_surface);
-            auto from_alloc = mm.translate_ptr(from_surface);
-            size_t to_offset = (byte_t *)to_surface - to_alloc.alloc_ptr;
-            size_t from_offset = (byte_t *)from_surface - from_alloc.alloc_ptr;
-            event_list.push_back(q.submit([&](sycl::handler &cgh)
-                                          {
-        cgh.depends_on(dep_events);
-        auto to_o = sycl::id<1>(to_offset);
-        auto from_o = sycl::id<1>(from_offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                            sycl::access::target::device>
-            to_acc(to_alloc.buffer, cgh,
-                    get_copy_range(size, to_slice, to_range.get(0)), to_o);
-        sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                            sycl::access::target::device>
-            from_acc(from_alloc.buffer, cgh,
-                    get_copy_range(size, from_slice, from_range.get(0)), from_o);
-        cgh.parallel_for<class dpct_memcpy_3d_detail_usmnone>(
-            size,
-            [=](sycl::id<3> id) {
-                to_acc[get_offset(id, to_slice, to_range.get(0))] =
-                    from_acc[get_offset(id, from_slice, from_range.get(0))];
-            }); }));
-        }
-#else
             event_list.push_back(q.submit([&](sycl::handler &cgh)
                                           {
         cgh.depends_on(dep_events);
@@ -2464,7 +2234,6 @@ namespace dpct
                 to_surface[get_offset(id, to_slice, to_range.get(0))] =
                     from_surface[get_offset(id, from_slice, from_range.get(0))];
             }); }));
-#endif
         break;
         default:
             throw std::runtime_error("dpct_memcpy: invalid direction value");
@@ -2655,9 +2424,6 @@ namespace dpct
                            void *c[], library_data_t c_type, int ldc,
                            int batch_size, library_data_t scaling_type)
     {
-#ifdef DPCT_USM_LEVEL_NONE
-        throw std::runtime_error("this API is unsupported when USM level is none");
-#else
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
         {
@@ -2792,7 +2558,6 @@ namespace dpct
         default:
             throw std::runtime_error("the combination of data type is unsupported");
         }
-#endif
     }
 
     /// Computes a batch of matrix-matrix product with general matrices.
@@ -3131,24 +2896,9 @@ namespace dpct
             template <size_t D = Dimension>
             typename std::enable_if<D == 1, T>::type &operator[](size_t index) {
                 init();
-        #ifdef DPCT_USM_LEVEL_NONE
-                return dpct::get_buffer<typename std::enable_if<D == 1, T>::type>(
-                        _device_ptr)
-                    .template get_access<sycl::access_mode::read_write>()[index];
-        #else
                 return _device_ptr[index];
-        #endif // DPCT_USM_LEVEL_NONE
             }
 
-        #ifdef DPCT_USM_LEVEL_NONE
-            /// Get sycl::accessor for the device memory object when usm is not used.
-            accessor_t get_access(sycl::handler &cgh) {
-                return get_buffer(_device_ptr)
-                    .template reinterpret<T, Dimension>(_range)
-                    .template get_access<detail::memory_traits<Memory, T>::mode,
-                                        detail::memory_traits<Memory, T>::target>(cgh);
-            }
-        #else
             /// Get dpct::accessor with dimension info for the device memory object
             /// when usm is used and dimension is greater than 1.
             template <size_t D = Dimension>
@@ -3156,7 +2906,6 @@ namespace dpct
             get_access(sycl::handler &cgh) {
                 return dpct_accessor_t((T *)_device_ptr, _range);
             }
-        #endif // DPCT_USM_LEVEL_NONE
 
         private:
             device_memory(value_t *memory_ptr, size_t size)
@@ -3201,15 +2950,6 @@ namespace dpct
 
             /// Default constructor
             device_memory() : base(1) {}
-
-        #ifdef DPCT_USM_LEVEL_NONE
-            /// Get sycl::accessor for the device memory object when usm is not used.
-            accessor_t get_access(sycl::handler &cgh) {
-                auto buf = get_buffer(base::get_ptr())
-                            .template reinterpret<T, 1>(sycl::range<1>(1));
-                return accessor_t(buf, cgh);
-            }
-        #endif // DPCT_USM_LEVEL_NONE
         };
         } // namespace detail
 
@@ -13181,7 +12921,7 @@ int get_work_group_size(int user_device_id) {
     return prop.get_max_work_group_size();
 }
 
-void ggml_init_sycl() try {
+static void ggml_init_sycl() try {
     static bool initialized = false;
 
     if (!initialized) {
@@ -16677,6 +16417,7 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
 };
 
 ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device_index) {
+    ggml_init_sycl();
     if (device_index>=g_device_count or device_index<0) {
         printf("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
             device_index, g_device_count-1);
@@ -17046,6 +16787,7 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_split_buffer_type_interface 
 };
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * tensor_split) {
+    ggml_init_sycl();
     // FIXME: this is not thread safe
     static std::map<std::array<float, GGML_SYCL_MAX_DEVICES>, struct ggml_backend_buffer_type> buft_map;
 
@@ -17379,6 +17121,13 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
     UNUSED(backend);
 }
 
+GGML_CALL static bool ggml_backend_sycl_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
+    const int min_batch_size = 32;
+    return op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS;
+    GGML_UNUSED(backend);
+}
+
+
 static ggml_backend_i ggml_backend_sycl_interface = {
     /* .get_name                = */ ggml_backend_sycl_name,
     /* .free                    = */ ggml_backend_sycl_free,
@@ -17392,7 +17141,7 @@ static ggml_backend_i ggml_backend_sycl_interface = {
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_sycl_graph_compute,
     /* .supports_op             = */ ggml_backend_sycl_supports_op,
-    /* .offload_op              = */ NULL,
+    /* .offload_op              = */ ggml_backend_sycl_offload_op,
     /* .event_new               = */ NULL,
     /* .event_free              = */ NULL,
     /* .event_record            = */ NULL,
@@ -17406,7 +17155,7 @@ static ggml_guid_t ggml_backend_sycl_guid() {
 }
 
 GGML_CALL ggml_backend_t ggml_backend_sycl_init(int device) {
-    ggml_init_sycl(); // TODO: remove from ggml.c
+    ggml_init_sycl();
 
     check_allow_gpu_index(device);
 

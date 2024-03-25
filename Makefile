@@ -1,8 +1,8 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
-	simple batched batched-bench save-load-state server gguf llama-bench libllava.a llava-cli baby-llama beam-search  \
-	speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm tests/test-c.o
+	simple batched batched-bench save-load-state server gguf gguf-split llama-bench libllava.a llava-cli baby-llama beam-search  \
+	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
@@ -452,9 +452,9 @@ ifdef LLAMA_CUDA_PEER_MAX_BATCH_SIZE
 else
 	MK_NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128
 endif # LLAMA_CUDA_PEER_MAX_BATCH_SIZE
-#ifdef LLAMA_CUDA_CUBLAS
-#	MK_NVCCFLAGS += -DGGML_CUDA_CUBLAS
-#endif # LLAMA_CUDA_CUBLAS
+ifdef LLAMA_CUDA_NO_PEER_COPY
+	MK_NVCCFLAGS += -DGGML_CUDA_NO_PEER_COPY
+endif # LLAMA_CUDA_NO_PEER_COPY
 ifdef LLAMA_CUDA_CCBIN
 	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
@@ -535,6 +535,9 @@ endif # LLAMA_HIP_UMA
 ifdef LLAMA_CUDA_FORCE_DMMV
 	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
 endif # LLAMA_CUDA_FORCE_DMMV
+ifdef LLAMA_CUDA_NO_PEER_COPY
+	HIPFLAGS 	+= -DGGML_CUDA_NO_PEER_COPY
+endif # LLAMA_CUDA_NO_PEER_COPY
 	OBJS        += ggml-cuda.o
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
@@ -673,6 +676,9 @@ json-schema-to-grammar.o: common/json-schema-to-grammar.cpp common/json-schema-t
 train.o: common/train.cpp common/train.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+ngram-cache.o: common/ngram-cache.cpp common/ngram-cache.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
@@ -680,7 +686,7 @@ libllama.a: llama.o ggml.o $(OBJS) $(COMMON_DEPS)
 	ar rcs libllama.a llama.o ggml.o $(OBJS) $(COMMON_DEPS)
 
 clean:
-	rm -vrf *.o tests/*.o *.so *.a *.dll benchmark-matmult common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -vrf *.o tests/*.o *.so *.a *.dll benchmark-matmult lookup-create lookup-merge lookup-stats common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
 	find examples pocs -type f -name "*.o" -delete
 
 #
@@ -798,6 +804,10 @@ export-lora: examples/export-lora/export-lora.cpp ggml.o common/common.h $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
+retrieval: examples/retrieval/retrieval.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
 speculative: examples/speculative/speculative.cpp ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -810,9 +820,15 @@ lookahead: examples/lookahead/lookahead.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-lookup: examples/lookup/lookup.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+lookup: examples/lookup/lookup.cpp ggml.o llama.o ngram-cache.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c examples/lookup/lookup-create.cpp -o $(call GET_OBJ_FILE, examples/lookup/lookup-create.cpp)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, examples/lookup/lookup-create.cpp) -o lookup-create $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c examples/lookup/lookup-merge.cpp -o $(call GET_OBJ_FILE, examples/lookup/lookup-merge.cpp)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, examples/lookup/lookup-merge.cpp) -o lookup-merge $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c examples/lookup/lookup-stats.cpp -o $(call GET_OBJ_FILE, examples/lookup/lookup-stats.cpp)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, examples/lookup/lookup-stats.cpp) -o lookup-stats $(LDFLAGS)
 
 passkey: examples/passkey/passkey.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)

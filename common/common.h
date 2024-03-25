@@ -88,18 +88,22 @@ struct gpt_params {
     // // sampling parameters
     struct llama_sampling_params sparams;
 
-    std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
-    std::string model_url         = ""; // model url to download
-    std::string model_draft       = "";                              // draft model for speculative decoding
-    std::string model_alias       = "unknown"; // model alias
-    std::string prompt            = "";
-    std::string prompt_file       = "";  // store the external prompt file name
-    std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
-    std::string input_prefix      = "";  // string to prefix user inputs with
-    std::string input_suffix      = "";  // string to suffix user inputs with
+    std::string model                = "models/7B/ggml-model-f16.gguf"; // model path
+    std::string model_draft          = "";  // draft model for speculative decoding
+    std::string model_alias          = "unknown"; // model alias
+    std::string model_url            = "";  // model url to download
+    std::string hf_repo              = "";  // HF repo
+    std::string hf_file              = "";  // HF file
+    std::string prompt               = "";
+    std::string prompt_file          = "";  // store the external prompt file name
+    std::string path_prompt_cache    = "";  // path to file for saving/loading prompt eval state
+    std::string input_prefix         = "";  // string to prefix user inputs with
+    std::string input_suffix         = "";  // string to suffix user inputs with
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
-    std::string logdir            = "";  // directory in which to save YAML log files
-    std::string logits_file       = "";  // file for saving *all* logits
+    std::string logdir               = "";  // directory in which to save YAML log files
+    std::string lookup_cache_static  = ""; // path of static ngram cache file for lookup decoding
+    std::string lookup_cache_dynamic = ""; // path of dynamic ngram cache file for lookup decoding
+    std::string logits_file          = "";  // file for saving *all* logits
 
     std::vector<llama_model_kv_override> kv_overrides;
 
@@ -139,7 +143,7 @@ struct gpt_params {
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
-    bool cont_batching     = false; // insert new sequences for decoding on-the-fly
+    bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
@@ -167,6 +171,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 
 void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 
+bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
+
 std::string get_system_info(const gpt_params & params);
 
 std::string gpt_random_prompt(std::mt19937 & rng);
@@ -192,8 +198,8 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
-struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model,
-                                                         struct llama_model_params     params);
+struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const struct llama_model_params & params);
 
 // Batch utils
 
@@ -302,3 +308,10 @@ struct llama_control_vector_load_info {
 // Load control vectors, scale each by strength, and add them together.
 // On error, returns {-1, empty}
 llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos);
+
+//
+// Split utils
+//
+static const char * const LLM_KV_SPLIT_NO            = "split.no";
+static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
+static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
