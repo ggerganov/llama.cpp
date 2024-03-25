@@ -1,25 +1,31 @@
 # llama.cpp/examples/retrieval
 
-Demonstration of simple retrieval technique based on cosin similarity
+Demonstration of simple retrieval technique based on cosine similarity
 
 More info:
 https://github.com/ggerganov/llama.cpp/pull/6193
 
 ### How to use
+
 `retieval.cpp` has parameters of its own:
 - `--context-file`: file to be embedded - state this option multiple times to embed multiple files
 - `--chunk-size`: minimum size of each text chunk to be embedded
 - `--chunk-separator`: STRING to divide chunks by. newline by default
 
-`retrieval` example can be tested as below
+`retrieval` example can be tested as follows:
+
 ```bash
 make -j && ./retrieval --model ./models/bge-base-en-v1.5-f16.gguf --top-k 3 --context-file README.md --context-file License --chunk-size 100 --chunk-separator .
 ```
-which chunks & embeds all given files and starts a loop requesting query inputs:
+
+This chunks and embeds all given files and starts a loop requesting query inputs:
+
 ```
 Enter query:
 ```
-and on query input, top k chunks are shown along with file name, chunk position within file and original text
+
+On each query input, top k chunks are shown along with file name, chunk position within file and original text:
+
 ```
 Enter query: describe the mit license
 batch_decode: n_tokens = 6, n_seq = 1
