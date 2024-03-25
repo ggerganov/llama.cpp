@@ -9779,6 +9779,9 @@ void ggml_vec_dot_iq1_m_q8_K  (int n, float * restrict s, size_t bs, const void 
 
     iq1m_scale_t scale;
 
+    uint32_t aux32;
+    const uint8_t * aux8 = (const uint8_t *)&aux32;
+
     float sumf = 0;
     for (int i = 0; i < nb; ++i) {
 
@@ -9809,13 +9812,11 @@ void ggml_vec_dot_iq1_m_q8_K  (int n, float * restrict s, size_t bs, const void 
             const int32x4_t p2 = vpaddq_s32(ggml_vdotq_s32(mzero, q1b.val[2], q8b.val[2]), ggml_vdotq_s32(mzero, q1b.val[3], q8b.val[3]));
             const int32x4_t p12 = vpaddq_s32(p1, p2);
 
-            delta.val[0] = deltas.val[((qh[0] & 0x08) >> 3) | ((qh[0] & 0x80) >> 6)];
-            delta.val[1] = deltas.val[((qh[1] & 0x08) >> 3) | ((qh[1] & 0x80) >> 6)];
-            delta.val[2] = deltas.val[((qh[2] & 0x08) >> 3) | ((qh[2] & 0x80) >> 6)];
-            delta.val[3] = deltas.val[((qh[3] & 0x08) >> 3) | ((qh[3] & 0x80) >> 6)];
+            const uint32_t * qh32 = (const uint32_t *)qh; // we are 4-byte aligned, so we can do that
+            aux32 = ((qh32[0] >> 3) & 0x01010101) | ((qh32[0] >> 6) & 0x02020202);
 
-            const int32x4_t p3 = vpaddq_s32(ggml_vdotq_s32(mzero, delta.val[0], q8b.val[0]), ggml_vdotq_s32(mzero, delta.val[1], q8b.val[1]));
-            const int32x4_t p4 = vpaddq_s32(ggml_vdotq_s32(mzero, delta.val[2], q8b.val[2]), ggml_vdotq_s32(mzero, delta.val[3], q8b.val[3]));
+            const int32x4_t p3 = vpaddq_s32(ggml_vdotq_s32(mzero, deltas.val[aux8[0]], q8b.val[0]), ggml_vdotq_s32(mzero, deltas.val[aux8[1]], q8b.val[1]));
+            const int32x4_t p4 = vpaddq_s32(ggml_vdotq_s32(mzero, deltas.val[aux8[2]], q8b.val[2]), ggml_vdotq_s32(mzero, deltas.val[aux8[3]], q8b.val[3]));
             const int32x4_t p34 = vpaddq_s32(p3, p4);
 
             int32x4_t scales_4 = {sc[ib/2] >> 0, sc[ib/2] >> 3, sc[ib/2] >> 6, sc[ib/2] >> 9};
