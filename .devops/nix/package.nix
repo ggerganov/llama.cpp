@@ -10,7 +10,7 @@
   git,
   python3,
   mpi,
-  openblas, # TODO: Use the generic `blas` so users could switch between alternative implementations
+  blas,
   cudaPackages,
   darwin,
   rocmPackages,
@@ -181,6 +181,7 @@ effectiveStdenv.mkDerivation (
       ++ optionals useMpi [ mpi ]
       ++ optionals useOpenCL [ clblast ]
       ++ optionals useRocm rocmBuildInputs
+      ++ optionals useBlas [ blas ]
       ++ optionals useVulkan vulkanBuildInputs;
 
     cmakeFlags =
@@ -216,8 +217,7 @@ effectiveStdenv.mkDerivation (
         # Should likely use `rocmPackages.clr.gpuTargets`.
         "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
       ]
-      ++ optionals useMetalKit [ (lib.cmakeFeature "CMAKE_C_FLAGS" "-D__ARM_FEATURE_DOTPROD=1") ]
-      ++ optionals useBlas [ (lib.cmakeFeature "LLAMA_BLAS_VENDOR" "OpenBLAS") ];
+      ++ optionals useMetalKit [ (lib.cmakeFeature "CMAKE_C_FLAGS" "-D__ARM_FEATURE_DOTPROD=1") ];
 
     # TODO(SomeoneSerge): It's better to add proper install targets at the CMake level,
     # if they haven't been added yet.
