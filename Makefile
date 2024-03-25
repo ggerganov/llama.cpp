@@ -663,10 +663,13 @@ ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
-unicode.o: unicode.cpp unicodedata.cpp unicode.h unicodedata.h
+unicode.o: unicode.cpp unicode.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o
+unicodedata.o: unicodedata.cpp unicodedata.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicodedata.o
 
 llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
