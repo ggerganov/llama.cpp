@@ -10,11 +10,7 @@ on:
         type: choice
         options:
           - Standard_NC4as_T4_v3
-          - Standard_NC64as_T4_v3
           - Standard_NC24ads_A100_v4
-          - Standard_NC48ads_A100_v4
-          - Standard_ND96asr_A100_v4
-          - Standard_NC40ads_H100_v5
           - Standard_NC80adis_H100_v5
   push:
     branches:
