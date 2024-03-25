@@ -1164,6 +1164,54 @@ static __device__ __forceinline__ float vec_dot_iq1_s_q8_1(
 #endif
 }
 
+static __device__ __forceinline__ float vec_dot_iq1_m_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs) {
+#if QK_K == 256
+    const block_iq1_m * bq1 = (const block_iq1_m *) vbq;
+
+    const int ib32 = iqs;
+    int   sumi[2] = {0, 0};
+    float sumf[2] = {0.f, 0.f};
+#if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
+    const int * q8 = (const int *)bq8_1[ib32].qs;
+    for (int l = 0; l < 4; ++l) {
+        const int * grid = (const int *)(iq1s_grid_gpu + (bq1->qs[4*ib32+l] | (((bq1->qh[2*ib32+l/2] >> 4*(l%2)) & 7) << 8)));
+        int grid0 = grid[0] & 0x0f0f0f0f;
+        int grid1 = (grid[0] >> 4) & 0x0f0f0f0f;
+        sumi[l/2] = __dp4a(q8[2*l+1], grid1, __dp4a(q8[2*l+0], grid0, sumi[l/2]));
+        const float delta = (bq1->qh[2*ib32+l/2] >> 4*(l%2)) & 0x08 ? -1-IQ1M_DELTA : -1+IQ1M_DELTA;
+        const int sumy = __dp4a(q8[2*l+1], 0x01010101, __dp4a(q8[2*l+0], 0x01010101, 0));
+        sumf[l/2] += delta*sumy;
+    }
+#else
+    const int8_t * q8 = bq8_1[ib32].qs;
+    for (int l = 0; l < 4; ++l) {
+        const uint8_t * grid = (const uint8_t *)(iq1s_grid_gpu + (bq1->qs[4*ib32+l] | (((bq1->qh[ib32] >> 3*l) & 7) << 8)));
+        int sumy = 0;
+        for (int j = 0; j < 4; ++j) {
+            sumi[l/2] += q8[j] * (grid[j] & 0xf) + q8[j+4] * (grid[j] >> 4);
+            sumy += q8[j] + q8[j+4];
+        }
+        const float delta = (bq1->qh[2*ib32+l/2] >> 4*(l%2)) & 0x08 ? -1-IQ1M_DELTA : -1+IQ1M_DELTA;
+        sumf[l/2] += delta*sumy;
+        q8 += 8;
+    }
+#endif
+    typedef union {
+        half     f16;
+        uint16_t u16;
+    } iq1m_scale_t;
+    iq1m_scale_t scale;
+    const uint16_t * sc = (const uint16_t *)bq1->scales;
+    scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+    const float d = (float)scale.f16 * __low2float (bq8_1[ib32].ds);
+    return d * ((sumi[0] + sumf[0]) * (2*((sc[ib32/2] >> 6*(ib32%2)) & 0x7) + 1) + (sumi[1] + sumf[1]) * (2*((sc[ib32/2] >> (6*(ib32%2)+3)) & 0x7) + 1));
+#else
+    assert(false);
+    return 0.f;
+#endif
+}
+
 #if __CUDA_ARCH__ >= MIN_CC_DP4A // lowest compute capability for integer intrinsics
 static __device__ __forceinline__ void get_int_from_table_16(const uint32_t & q4, const uint8_t * values,
         int & val1, int & val2) {
