@@ -16,7 +16,6 @@ import numpy as np
 import openai
 from behave import step
 from behave.api.async_step import async_run_until_complete
-from huggingface_hub import hf_hub_download
 from prometheus_client import parser
 
 
@@ -24,24 +23,29 @@ from prometheus_client import parser
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
+    context.n_gpu_layer = None
     if 'PORT' in os.environ:
         context.server_port = int(os.environ['PORT'])
         print(f"$PORT set, overriding server port with to {context.server_port}")
     if 'FQDN' in os.environ:
         context.server_fqdn = os.environ['FQDN']
         print(f"$FQDN set, overriding server fqdn with to {context.server_fqdn}")
+    if 'N_GPU_LAYERS' in os.environ:
+        context.n_gpu_layer = int(os.environ['N_GPU_LAYERS'])
+        print(f"$N_GPU_LAYERS set, overriding n_gpu_layer with to {context.n_gpu_layer}")
 
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
     context.model_alias = None
     context.model_file = None
+    context.model_hf_repo = None
+    context.model_hf_file = None
     context.model_url = None
     context.n_batch = None
     context.n_ubatch = None
     context.n_ctx = None
     context.n_ga = None
     context.n_ga_w = None
-    context.n_gpu_layer = None
     context.n_predict = None
     context.n_prompts = 0
     context.n_server_predict = None
@@ -56,6 +60,7 @@ def step_server_config(context, server_fqdn, server_port):
     context.seed = None
     context.server_seed = None
     context.user_api_key = None
+    context.response_format = None
 
     context.tasks_result = []
     context.concurrent_tasks = []
@@ -64,9 +69,9 @@ def step_server_config(context, server_fqdn, server_port):
 
 @step('a model file {hf_file} from HF repo {hf_repo}')
 def step_download_hf_model(context, hf_file, hf_repo):
-    context.model_file = hf_hub_download(repo_id=hf_repo, filename=hf_file)
-    if context.debug:
-        print(f"model file: {context.model_file}")
+    context.model_hf_repo = hf_repo
+    context.model_hf_file = hf_file
+    context.model_file = os.path.basename(hf_file)
 
 
 @step('a model file {model_file}')
@@ -266,6 +271,11 @@ def step_max_tokens(context, max_tokens):
     context.n_predict = max_tokens
 
 
+@step('a response format {response_format}')
+def step_response_format(context, response_format):
+    context.response_format = json.loads(response_format)
+
+
 @step('streaming is {enable_streaming}')
 def step_streaming(context, enable_streaming):
     context.enable_streaming = enable_streaming == 'enabled'
@@ -381,6 +391,9 @@ async def step_oai_chat_completions(context, api_error):
                                             enable_streaming=context.enable_streaming
                                             if hasattr(context, 'enable_streaming') else None,
 
+                                            response_format=context.response_format
+                                            if hasattr(context, 'response_format') else None,
+
                                             seed=await completions_seed(context),
 
                                             user_api_key=context.user_api_key
@@ -440,6 +453,8 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'n_predict') else None,
                               enable_streaming=context.enable_streaming
                               if hasattr(context, 'enable_streaming') else None,
+                              response_format=context.response_format
+                              if hasattr(context, 'response_format') else None,
                               seed=await completions_seed(context),
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
@@ -460,6 +475,8 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'n_predict') else None,
                               enable_streaming=context.enable_streaming
                               if hasattr(context, 'enable_streaming') else None,
+                              response_format=context.response_format
+                              if hasattr(context, 'response_format') else None,
                               seed=context.seed
                               if hasattr(context, 'seed') else
                               context.server_seed
@@ -742,6 +759,7 @@ async def oai_chat_completions(user_prompt,
                                model=None,
                                n_predict=None,
                                enable_streaming=None,
+                               response_format=None,
                                seed=None,
                                user_api_key=None,
                                expect_api_error=None):
@@ -767,6 +785,8 @@ async def oai_chat_completions(user_prompt,
         "stream": enable_streaming,
         "seed": seed
     }
+    if response_format is not None:
+        payload['response_format'] = response_format
     completion_response = {
         'content': '',
         'timings': {
@@ -827,6 +847,7 @@ async def oai_chat_completions(user_prompt,
                 model=model,
                 max_tokens=n_predict,
                 stream=enable_streaming,
+                response_format=payload.get('response_format'),
                 seed=seed
             )
         except openai.error.AuthenticationError as e:
@@ -1059,6 +1080,10 @@ def start_server_background(context):
         server_args.extend(['--model', context.model_file])
     if context.model_url:
         server_args.extend(['--model-url', context.model_url])
+    if context.model_hf_repo:
+        server_args.extend(['--hf-repo', context.model_hf_repo])
+    if context.model_hf_file:
+        server_args.extend(['--hf-file', context.model_hf_file])
     if context.n_batch:
         server_args.extend(['--batch-size', context.n_batch])
     if context.n_ubatch:

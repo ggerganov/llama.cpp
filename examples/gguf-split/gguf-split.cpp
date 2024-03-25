@@ -1,31 +1,30 @@
 #include "llama.h"
-#include "ggml.h"
 #include "common.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <cstdlib>
 #include <fstream>
-#include <ios>
 #include <string>
 #include <vector>
 
 #include <stdio.h>
-#include <fcntl.h>
 #include <string.h>
+#include <climits>
+#include <stdexcept>
+
+#if defined(_WIN32)
+    #include <windows.h>
+    #ifndef PATH_MAX
+        #define PATH_MAX MAX_PATH
+    #endif
+    #include <io.h>
+#endif
 
 enum split_operation : uint8_t {
     SPLIT_OP_SPLIT,
     SPLIT_OP_MERGE,
 };
-
-static const char * const LLM_KV_GENERAL_SPLIT_I_SPLIT = "general.split";
-static const char * const LLM_KV_GENERAL_SPLIT_N_SPLIT = "general.split_count";
-
-static const int SPLIT_FILENAME_MAX = 256;
-
-static const char * const SPLIT_FILENAME_FORMAT = "%s-%05d-of-%05d.gguf";
 
 struct split_params {
     split_operation operation = SPLIT_OP_SPLIT;
@@ -116,13 +115,13 @@ static bool split_params_parse(int argc, const char ** argv, split_params & para
     try {
         if (!split_params_parse_ex(argc, argv, params)) {
             split_print_usage(argv[0]);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
     catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
         split_print_usage(argv[0]);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     return result;
 }
@@ -132,12 +131,6 @@ static void zeros(std::ofstream & file, size_t n) {
     for (size_t i = 0; i < n; ++i) {
         file.write(&zero, 1);
     }
-}
-
-static std::string split_file_name(const std::string & path, int i_split, int n_split) {
-    char f_split[SPLIT_FILENAME_MAX] = {0};
-    snprintf(f_split, sizeof(f_split), SPLIT_FILENAME_FORMAT, path.c_str(), i_split + 1, n_split);
-    return std::string(f_split);
 }
 
 struct split_strategy {
@@ -180,8 +173,9 @@ struct split_strategy {
         if (i_split == 0) {
             gguf_set_kv(ctx_out, ctx_gguf);
         }
-        gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_I_SPLIT, i_split);
-        gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_N_SPLIT, n_split);
+        gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_NO, i_split);
+        gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_COUNT, n_split);
+        gguf_set_val_i32(ctx_out, LLM_KV_SPLIT_TENSORS_COUNT, n_tensors);
 
         // populate the original tensors, so we get an initial metadata
         for (int i = i_split * params.n_split_tensors; i < n_tensors && i < (i_split + 1) * params.n_split_tensors; ++i) {
@@ -189,10 +183,11 @@ struct split_strategy {
             gguf_add_tensor(ctx_out, meta);
         }
 
-        auto split_name = split_file_name(params.output, i_split, n_split);
+        char split_path[PATH_MAX] = {0};
+        llama_split_path(split_path, sizeof(split_path), params.output.c_str(), i_split, n_split);
 
-        fprintf(stderr, "%s: %s ...", __func__, split_name.c_str());
-        fout = std::ofstream(split_name, std::ios::binary);
+        fprintf(stderr, "%s: %s ...", __func__, split_path);
+        fout = std::ofstream(split_path, std::ios::binary);
         fout.exceptions(std::ofstream::failbit); // fail fast on write errors
 
         auto meta_size = gguf_get_meta_size(ctx_out);
@@ -250,19 +245,23 @@ static void gguf_split(const split_params & split_params) {
     std::ifstream f_input(split_params.input.c_str(), std::ios::binary);
     if (!f_input.is_open()) {
         fprintf(stderr, "%s:  failed to open input GGUF from %s\n", __func__, split_params.input.c_str());
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     auto * ctx_gguf = gguf_init_from_file(split_params.input.c_str(), params);
     if (!ctx_gguf) {
         fprintf(stderr, "%s:  failed to load input GGUF from %s\n", __func__, split_params.input.c_str());
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     split_strategy strategy(split_params, f_input, ctx_gguf, ctx_meta);
+
+    char first_split_path[PATH_MAX] = {0};
+    llama_split_path(first_split_path, sizeof(first_split_path),
+                     split_params.output.c_str(), strategy.i_split, strategy.n_split);
     fprintf(stderr, "%s: %s -> %s (%d tensors per file)\n",
             __func__, split_params.input.c_str(),
-            split_file_name(split_params.output, strategy.i_split, strategy.n_split).c_str(),
+            first_split_path,
             split_params.n_split_tensors);
 
     strategy.split_start();
@@ -298,7 +297,9 @@ static void gguf_merge(const split_params & split_params) {
     std::vector<ggml_context *> ctx_metas;
     std::vector<gguf_context *> ctx_ggufs;
 
-    std::string split_prefix;
+    char split_path[PATH_MAX] = {0};
+    strncpy(split_path, split_params.input.c_str(), sizeof(split_path) - 1);
+    char split_prefix[PATH_MAX] = {0};
 
     // First pass to find KV and tensors metadata
     for (int i_split = 0; i_split < n_split; i_split++) {
@@ -309,87 +310,64 @@ static void gguf_merge(const split_params & split_params) {
             /*.ctx      = */ &ctx_meta,
         };
 
-        auto split_name = split_params.input;
         if (i_split > 0) {
-            split_name = split_file_name(split_prefix, i_split, n_split);
+            llama_split_path(split_path, sizeof(split_path), split_prefix, i_split, n_split);
         }
-        fprintf(stderr, "%s: reading metadata %s ...", __func__, split_name.c_str());
+        fprintf(stderr, "%s: reading metadata %s ...", __func__, split_path);
 
-        auto * ctx_gguf = gguf_init_from_file(split_name.c_str(), params);
+        auto * ctx_gguf = gguf_init_from_file(split_path, params);
         if (!ctx_gguf) {
             fprintf(stderr, "\n%s:  failed to load input GGUF from %s\n", __func__, split_params.input.c_str());
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         ctx_ggufs.push_back(ctx_gguf);
         ctx_metas.push_back(ctx_meta);
 
         if (i_split == 0) {
-            auto key_n_split = gguf_find_key(ctx_gguf, LLM_KV_GENERAL_SPLIT_N_SPLIT);
+            auto key_n_split = gguf_find_key(ctx_gguf, LLM_KV_SPLIT_COUNT);
             if (key_n_split < 0) {
                 fprintf(stderr,
                         "\n%s: input file does not contain %s metadata\n",
                         __func__,
-                        LLM_KV_GENERAL_SPLIT_N_SPLIT);
+                        LLM_KV_SPLIT_COUNT);
                 gguf_free(ctx_gguf);
+                ggml_free(ctx_meta);
                 gguf_free(ctx_out);
                 fout.close();
-                exit(1);
+                exit(EXIT_FAILURE);
             }
 
-            n_split = gguf_get_val_u8(ctx_gguf, key_n_split);
+            n_split = gguf_get_val_u16(ctx_gguf, key_n_split);
             if (n_split < 1) {
                 fprintf(stderr,
                         "\n%s: input file does not contain a valid split count %d\n",
                         __func__,
                         n_split);
                 gguf_free(ctx_gguf);
+                ggml_free(ctx_meta);
                 gguf_free(ctx_out);
                 fout.close();
-                exit(1);
+                exit(EXIT_FAILURE);
+            }
+
+            // Verify the file naming and extract split_prefix
+            if (!llama_split_prefix(split_prefix, sizeof (split_prefix), split_path, i_split, n_split)) {
+                fprintf(stderr, "\n%s: unexpected input file name: %s"
+                                " i_split=%d"
+                                " n_split=%d\n", __func__,
+                        split_path, i_split, n_split);
+                gguf_free(ctx_gguf);
+                ggml_free(ctx_meta);
+                gguf_free(ctx_out);
+                fout.close();
+                exit(EXIT_FAILURE);
             }
 
             // Do not trigger merge if we try to merge again the output
-            gguf_set_val_u8(ctx_out, LLM_KV_GENERAL_SPLIT_N_SPLIT, 0);
+            gguf_set_val_u16(ctx_gguf, LLM_KV_SPLIT_COUNT, 0);
 
             // Set metadata from the first split
             gguf_set_kv(ctx_out, ctx_gguf);
-        }
-
-        // Verify the file naming
-        {
-            int i_split_file = 0;
-            int n_split_file = 0;
-            const char * i_split_format = "-00000-of-00000.gguf";
-
-            if (split_name.size() < strlen(i_split_format)) {
-                fprintf(stderr, "\n%s: unexpected input file name: %s\n", __func__, split_params.input.c_str());
-                for (auto * _ctx_gguf : ctx_ggufs) {
-                    gguf_free(_ctx_gguf);
-                }
-                gguf_free(ctx_out);
-                fout.close();
-                exit(1);
-            }
-
-            split_prefix = split_name.substr(0, split_name.size() - strlen(i_split_format));
-
-            const char * split_name_c_str = split_name.c_str();
-            int n_part = sscanf(&split_name_c_str[0] + split_prefix.size(), "-%d-of-%d", &i_split_file, &n_split_file);
-
-            if (n_part != 2 || i_split_file - 1 != i_split || n_split_file != n_split) {
-                fprintf(stderr, "\n%s: unexpected input file name: %s"
-                                " i_split=%d i_split_file=%d"
-                                " n_split=%d n_split_file=%d\n", __func__,
-                        split_params.input.c_str(),
-                        i_split, i_split_file,
-                        n_split, n_split_file);
-                for (auto * _ctx_gguf : ctx_ggufs) {
-                    gguf_free(_ctx_gguf);
-                }
-                gguf_free(ctx_out);
-                fout.close();
-                exit(1);
-            }
         }
 
         auto n_tensors = gguf_get_n_tensors(ctx_gguf);
@@ -411,18 +389,19 @@ static void gguf_merge(const split_params & split_params) {
 
     // Write tensors data
     for (int i_split = 0; i_split < n_split; i_split++) {
-        auto split_name = split_file_name(split_prefix, i_split, n_split);
-        std::ifstream f_input(split_name.c_str(), std::ios::binary);
+        llama_split_path(split_path, sizeof(split_path), split_prefix, i_split, n_split);
+        std::ifstream f_input(split_path, std::ios::binary);
         if (!f_input.is_open()) {
-            fprintf(stderr, "%s:  failed to open input GGUF from %s\n", __func__, split_name.c_str());
-            for (auto * _ctx_gguf : ctx_ggufs) {
-                gguf_free(_ctx_gguf);
+            fprintf(stderr, "%s:  failed to open input GGUF from %s\n", __func__, split_path);
+            for (uint32_t i = 0; i < ctx_ggufs.size(); i++) {
+                gguf_free(ctx_ggufs[i]);
+                ggml_free(ctx_metas[i]);
             }
             gguf_free(ctx_out);
             fout.close();
-            exit(1);
+            exit(EXIT_FAILURE);
         }
-        fprintf(stderr, "%s: writing tensors %s ...", __func__, split_name.c_str());
+        fprintf(stderr, "%s: writing tensors %s ...", __func__, split_path);
 
         auto * ctx_gguf = ctx_ggufs[i_split];
         auto * ctx_meta = ctx_metas[i_split];
@@ -481,8 +460,8 @@ int main(int argc, const char ** argv) {
             break;
         case SPLIT_OP_MERGE: gguf_merge(params);
             break;
-        default:split_print_usage(argv[0]);
-            exit(1);
+        default: split_print_usage(argv[0]);
+            exit(EXIT_FAILURE);
     }
 
     return 0;
