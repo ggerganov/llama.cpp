@@ -10686,7 +10686,7 @@ struct llm_tokenizer_wpm {
             if (type == CODEPOINT_TYPE_ACCENT_MARK || type == CODEPOINT_TYPE_CONTROL) {
                 continue;
             }
-            code = to_lower(code);
+            code = unicode_tolower(code);
             if (type == CODEPOINT_TYPE_WHITESPACE) {
                 code = ' ';
             }
@@ -10718,16 +10718,6 @@ struct llm_tokenizer_wpm {
             words.push_back(new_str.substr(l, (r - l)));
         }
         return words;
-    }
-
-    uint32_t to_lower(uint32_t code) {
-        static const std::locale locale("en_US.UTF-8");
-#if defined(_WIN32)
-        if (code > 0xFFFF) {
-            return code;
-        }
-#endif
-        return std::tolower(wchar_t(code), locale);
     }
 
     bool is_ascii_punct(uint32_t code) {

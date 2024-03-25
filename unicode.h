@@ -24,3 +24,5 @@ int unicode_cpt_type(const std::string & utf8);
 std::string unicode_byte_to_utf8(uint8_t byte);
 uint8_t unicode_utf8_to_byte(const std::string & utf8);
 
+// simple tolower that only implements one-to-one mapping, not one-to-many
+char32_t unicode_tolower(char32_t cp);

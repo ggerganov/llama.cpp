@@ -271,3 +271,7 @@ uint8_t unicode_utf8_to_byte(const std::string & utf8) {
     return map.at(utf8);
 }
 
+char32_t unicode_tolower(char32_t cp) {
+    auto it = unicode_map_lowercase.find(cp);
+    return it == unicode_map_lowercase.end() ? cp : it->second;
+}
