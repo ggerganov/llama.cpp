@@ -11968,7 +11968,7 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
     const int      * kmap_q2xs       = iq2_data[gindex].map;
     const uint16_t * kneighbors_q2xs = iq2_data[gindex].neighbours;
 
-    GGML_ASSERT(quant_weights   && "missing quantization weights");
+    //GGML_ASSERT(quant_weights   && "missing quantization weights");
     GGML_ASSERT(kgrid_q2xs      && "forgot to call ggml_quantize_init()?");
     GGML_ASSERT(kmap_q2xs       && "forgot to call ggml_quantize_init()?");
     GGML_ASSERT(kneighbors_q2xs && "forgot to call ggml_quantize_init()?");
@@ -12006,8 +12006,12 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
 
         for (int ib = 0; ib < QK_K/block_size; ++ib) {
             const float * xb = xbl + block_size*ib;
-            const float * qw = quant_weights + QK_K*ibl + block_size*ib;
-            for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+            if (quant_weights) {
+                const float * qw = quant_weights + QK_K*ibl + block_size*ib;
+                for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+            } else {
+                for (int i = 0; i < block_size; ++i) weight[i] = xb[i]*xb[i];
+            }
             float max = fabsf(xb[0]);
             for (int i = 1; i < block_size; ++i) max = MAX(max, fabsf(xb[i]));
             if (!max) {

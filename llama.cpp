@@ -12919,6 +12919,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if (!params->pure && ggml_is_quantized(default_type)) {
                 new_type = llama_tensor_get_type(qs, new_type, tensor, ftype);
             }
+            else if (params->token_embedding_type < GGML_TYPE_COUNT && strcmp(tensor->name, "token_embd.weight") == 0) {
+                new_type = params->token_embedding_type;
+            }
+            else if (params->output_tensor_type < GGML_TYPE_COUNT && strcmp(tensor->name, "output.weight") == 0) {
+                new_type = params->output_tensor_type;
+            }
 
             // If we've decided to quantize to the same type the tensor is already
             // in then there's nothing to do.
@@ -12951,7 +12957,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                  new_type == GGML_TYPE_IQ2_XS  ||
                  new_type == GGML_TYPE_IQ2_S   ||
                  new_type == GGML_TYPE_IQ1_S   ||
-                 new_type == GGML_TYPE_IQ1_M   ||
+                (new_type == GGML_TYPE_IQ1_M && strcmp(tensor->name, "token_embd.weight") && strcmp(tensor->name, "output.weight"))  ||
                 (new_type == GGML_TYPE_Q2_K && params->ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && strcmp(tensor->name, "token_embd.weight") != 0)) && !imatrix) {
                 LLAMA_LOG_ERROR("\n\n============================================================\n");
                 LLAMA_LOG_ERROR("Missing importance matrix for tensor %s in a very low-bit quantization\n", tensor->name);
