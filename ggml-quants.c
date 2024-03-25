@@ -12177,16 +12177,6 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
         sc[1] |= ((s.u16 & 0x00f0) <<  8);
         sc[2] |= ((s.u16 & 0x0f00) <<  4);
         sc[3] |= ((s.u16 & 0xf000) <<  0);
-        //y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
-        //for (int ib = 0; ib < QK_K/block_size; ib += 2) {
-        //    int l1 = nearest_int(0.5f*(id*scales[ib+0]-1));
-        //    l1 = MAX(0, MIN(7, l1));
-        //    int l2 = nearest_int(0.5f*(id*scales[ib+1]-1));
-        //    l2 = MAX(0, MIN(7, l2));
-        //    y[ibl].scales[ib/2] = l1 | (l2 << 4);
-        //    y[ibl].qh[ib+0] |= masks[shifts[ib+0]];
-        //    y[ibl].qh[ib+1] |= masks[shifts[ib+1]];
-        //}
     }
 }
 
