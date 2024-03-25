@@ -15,19 +15,18 @@
 // For block_q5_K and block_q8_K. only given the second time.
 #include "ggml-common.h"
 
-
 // This SIMD unit can work with 32 float32s at once.
 #define GGML_F32_STEP 32
 // We can fit 16 of these float32s in a single vector register.
 #define GGML_F32_EPR 16
 
-typedef float float32x8_t __attribute__((vector_size (64)));
-typedef float float32x16_t __attribute__((vector_size (128)));
-typedef int8_t int8x16_t __attribute__((vector_size (32)));
-typedef int16_t int16x8_t __attribute__((vector_size (32)));
-typedef int16_t int16x16_t __attribute__((vector_size (64)));
-typedef int32_t int32x8_t __attribute__((vector_size (64)));
-typedef int32_t int32x16_t __attribute__((vector_size (128)));
+typedef float float32x8_t __attribute__((vector_size (32)));
+typedef float float32x16_t __attribute__((vector_size (64)));
+typedef int8_t int8x16_t __attribute__((vector_size (16)));
+typedef int16_t int16x8_t __attribute__((vector_size (16)));
+typedef int16_t int16x16_t __attribute__((vector_size (32)));
+typedef int32_t int32x8_t __attribute__((vector_size (32)));
+typedef int32_t int32x16_t __attribute__((vector_size (64)));
 
 /* A forward declaration, to keep GCC happy. */
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc);
@@ -145,10 +144,10 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
   const uint8_t * scales = (const uint8_t*)&utmp[0];
   const uint8_t * mins   = (const uint8_t*)&utmp[2];
 
-  float32x16_t sums __attribute__((aligned(128)));
-  int8x16_t aux8[QK_K/16] __attribute__((aligned(32)));
-  int16x16_t aux16[QK_K/16] __attribute__((aligned(64)));
-  int32x16_t aux32 __attribute__((aligned(128)));
+  float32x16_t sums __attribute__((aligned(64)));
+  int8x16_t aux8[QK_K/16] __attribute__((aligned(16)));
+  int16x16_t aux16[QK_K/16] __attribute__((aligned(32)));
+  int32x16_t aux32 __attribute__((aligned(64)));
 
   GGML_F32x16_VEC_ZERO(&sums);
 
