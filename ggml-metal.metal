@@ -4520,7 +4520,7 @@ void kernel_mul_mv_iq1_m_f32_impl(
         device const block_iq1_m * xr = x + ibl;
         device const uint8_t  * qs = xr->qs + 4 * ib;
         device const uint8_t  * qh = xr->qh + 2 * ib;
-        device const uint16_t * sc = (device const uint16_t *)xr->scales + ib/2;
+        device const uint16_t * sc = (device const uint16_t *)xr->scales;
 
         for (int row = 0; row < N_DST; row++) {
 
@@ -4540,8 +4540,8 @@ void kernel_mul_mv_iq1_m_f32_impl(
             }
             const float delta1 = sumy[0] * (qh[0] & 0x08 ? -1 - IQ1M_DELTA : -1 + IQ1M_DELTA) + sumy[1] * (qh[0] & 0x80 ? -1 - IQ1M_DELTA : -1 + IQ1M_DELTA);
             const float delta2 = sumy[2] * (qh[1] & 0x08 ? -1 - IQ1M_DELTA : -1 + IQ1M_DELTA) + sumy[3] * (qh[1] & 0x80 ? -1 - IQ1M_DELTA : -1 + IQ1M_DELTA);
-            sumf[row] += (float)scale.f16 * ((sum[0] + delta1) * (2*((sc[0] >> (6*(ib%2)+0)) & 7) + 1) +
-                                             (sum[1] + delta2) * (2*((sc[0] >> (6*(ib%2)+3)) & 7) + 1));
+            sumf[row] += (float)scale.f16 * ((sum[0] + delta1) * (2*((sc[ib/2] >> (6*(ib%2)+0)) & 7) + 1) +
+                                             (sum[1] + delta2) * (2*((sc[ib/2] >> (6*(ib%2)+3)) & 7) + 1));
 
             sc += nb*sizeof(block_iq1_m)/2;
             qs += nb*sizeof(block_iq1_m);
