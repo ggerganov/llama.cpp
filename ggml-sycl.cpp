@@ -15355,18 +15355,16 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
             min_compute_capability = g_device_caps[i].cc;
         }
     }
-    
-    
+
     bool use_dequantize_mul_mat_vec = (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16) 
-                                            && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
-                                            && src0->ne[0] % GGML_SYCL_DMMV_X == 0 && src1->ne[1] == 1;
+                                      && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
+                                      && src0->ne[0] % GGML_SYCL_DMMV_X == 0 && src1->ne[1] == 1;
     bool use_mul_mat_vec_q = min_compute_capability >= VER_4VEC && ggml_is_quantized(src0->type)
                              && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
                              && src1->ne[1] <= XMX_MAX_BATCH_SIZE;
-    bool use_mul_mat_q =   ggml_sycl_supports_mmq(src0->type) && src1->type == GGML_TYPE_F32 
+    bool use_mul_mat_q =   ggml_sycl_supports_mmq(src0->type) && src1->type == GGML_TYPE_F32
                            && dst->type == GGML_TYPE_F32;
-                             
-                             
+
 #ifdef SYCL_USE_XMX
     const bool use_xmx = true;
 #else
@@ -15405,13 +15403,12 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     } else if (use_mul_mat_vec_q){
         // use ggml_sycl_op_mul_mat_vec_q 
         // GGML_SYCL_DEBUG("ggml_sycl_mul_mat ggml_sycl_op_mul_mat_vec_q path\n");
-        ggml_sycl_op_mul_mat(src0, src1, dst, ggml_sycl_op_mul_mat_vec_q, true);
-    
+        ggml_sycl_op_mul_mat(src0, src1, dst, ggml_sycl_op_mul_mat_vec_q, true);    
     } else if (use_mul_mat_q){
-    
+
         if (use_xmx && min_compute_capability >= VER_GEN9 && src1->ne[1] > XMX_MAX_BATCH_SIZE) {
                 use_mul_mat_q = false;
-            }
+        }
 
         if (use_mul_mat_q) {
             // GGML_SYCL_DEBUG("ggml_sycl_mul_mat ggml_sycl_op_mul_mat_q path\n");
