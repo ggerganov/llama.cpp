@@ -369,7 +369,9 @@ if (LLAMA_CUBLAS)
         enable_language(CUDA)
 
         set(GGML_HEADERS_CUDA ggml-cuda.h)
-        set(GGML_SOURCES_CUDA ggml-cuda.cu)
+
+        file(GLOB GGML_SOURCES_CUDA "ggml-cuda/*.cu")
+        list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
 
         add_compile_definitions(GGML_USE_CUBLAS)
         if (LLAMA_CUDA_FORCE_DMMV)
@@ -519,7 +521,9 @@ if (LLAMA_HIPBLAS)
     message(STATUS "HIP and hipBLAS found")
 
     set(GGML_HEADERS_ROCM ggml-cuda.h)
-    set(GGML_SOURCES_ROCM ggml-cuda.cu)
+
+    file(GLOB GGML_SOURCES_ROCM "ggml-cuda/*.cu")
+    list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
 
     add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
 
@@ -543,7 +547,7 @@ if (LLAMA_HIPBLAS)
     add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
     add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
-    set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+    set_source_files_properties(${GGML_SOURCES_ROCM} PROPERTIES LANGUAGE CXX)
 
     if (LLAMA_STATIC)
         message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
