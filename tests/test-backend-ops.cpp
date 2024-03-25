@@ -2091,6 +2091,13 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         }
     }
 
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  64, 2,  128, { 8,  1}, {1, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  83, 2,  128, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  64, 2,   64, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  83, 2,   64, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32,  64, 45, 128, { 8,  1}, {4, 1}));
+    test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32, 128, 45,  64, { 8,  1}, {4, 1}));
+
     for (ggml_type type_a : all_types) {
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
             for (int n_mats : {2, 4, 8}) {
@@ -2222,8 +2229,8 @@ static void usage(char ** argv) {
 
 int main(int argc, char ** argv) {
     test_mode mode = MODE_TEST;
-    const char * op_name = NULL;
-    const char * backend = NULL;
+    const char * op_name_filter = NULL;
+    const char * backend_filter = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "test") == 0) {
@@ -2232,14 +2239,14 @@ int main(int argc, char ** argv) {
             mode = MODE_PERF;
         } else if (strcmp(argv[i], "-o") == 0) {
             if (i + 1 < argc) {
-                op_name = argv[++i];
+                op_name_filter = argv[++i];
             } else {
                 usage(argv);
                 return 1;
             }
         } else if (strcmp(argv[i], "-b") == 0) {
             if (i + 1 < argc) {
-                backend = argv[++i];
+                backend_filter = argv[++i];
             } else {
                 usage(argv);
                 return 1;
@@ -2258,7 +2265,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < ggml_backend_reg_get_count(); i++) {
         printf("Backend %zu/%zu (%s)\n", i + 1, ggml_backend_reg_get_count(), ggml_backend_reg_get_name(i));
 
-        if (backend != NULL && strcmp(backend, ggml_backend_reg_get_name(i)) != 0) {
+        if (backend_filter != NULL && strcmp(backend_filter, ggml_backend_reg_get_name(i)) != 0) {
             printf("  Skipping\n");
             n_ok++;
             continue;
@@ -2266,9 +2273,17 @@ int main(int argc, char ** argv) {
 
         ggml_backend_t backend = ggml_backend_reg_init_backend(i, NULL);
         GGML_ASSERT(backend != NULL);
+
+        if (backend_filter == NULL && ggml_backend_is_cpu(backend)) {
+            printf("  Skipping CPU backend\n");
+            ggml_backend_free(backend);
+            n_ok++;
+            continue;
+        }
+
         printf("  Backend name: %s\n", ggml_backend_name(backend));
 
-        bool ok = test_backend(backend, mode, op_name);
+        bool ok = test_backend(backend, mode, op_name_filter);
 
         printf("  Backend %s: ", ggml_backend_name(backend));
         if (ok) {

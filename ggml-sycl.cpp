@@ -16,6 +16,7 @@
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <float.h>
 #include <limits>
 #include <stdint.h>
@@ -24,10 +25,9 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
-
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <regex>
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
@@ -81,6 +81,30 @@ Following definition copied from DPCT head files, which are used by ggml-sycl.cp
 #else
 #define __dpct_noinline__ __attribute__((noinline))
 #endif
+
+
+std::string get_device_type_name(const sycl::device &Device) {
+    auto DeviceType = Device.get_info<sycl::info::device::device_type>();
+    switch (DeviceType) {
+    case sycl::info::device_type::cpu:
+        return "cpu";
+    case sycl::info::device_type::gpu:
+        return "gpu";
+    case sycl::info::device_type::host:
+        return "host";
+    case sycl::info::device_type::accelerator:
+        return "acc";
+    default:
+        return "unknown";
+    }
+}
+
+std::string get_device_backend_and_type(const sycl::device &device) {
+    std::stringstream device_type;
+    sycl::backend backend = device.get_backend();
+    device_type <<  backend << ":" << get_device_type_name(device);
+    return device_type.str();
+}
 
 namespace dpct
 {
@@ -202,24 +226,29 @@ namespace dpct
             // Version string has the following format:
             // a. OpenCL<space><major.minor><space><vendor-specific-information>
             // b. <major.minor>
+            // c. <AmdGcnArchName> e.g gfx1030
             std::string ver;
             ver = dev.get_info<sycl::info::device::version>();
             std::string::size_type i = 0;
-            while (i < ver.size())
-            {
-                if (isdigit(ver[i]))
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (isdigit(ver[i]))
+                break;
+              i++;
             }
             major = std::stoi(&(ver[i]));
-            while (i < ver.size())
-            {
-                if (ver[i] == '.')
-                    break;
-                i++;
+            while (i < ver.size()) {
+              if (ver[i] == '.')
+                break;
+              i++;
             }
-            i++;
-            minor = std::stoi(&(ver[i]));
+            if (i < ver.size()) {
+              // a. and b.
+              i++;
+              minor = std::stoi(&(ver[i]));
+            } else {
+              // c.
+              minor = 0;
+            }
         }
 
         template <typename tag, typename T>
@@ -711,11 +740,7 @@ namespace dpct
 
         sycl::queue &default_queue()
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return out_of_order_queue();
-#else
             return in_order_queue();
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         void queues_wait_and_throw()
@@ -734,11 +759,7 @@ namespace dpct
 
         sycl::queue *create_queue(bool enable_exception_handler = false)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return create_out_of_order_queue(enable_exception_handler);
-#else
             return create_in_order_queue(enable_exception_handler);
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         sycl::queue *create_queue(sycl::context context, sycl::device device,
@@ -937,17 +958,67 @@ namespace dpct
 
     private:
         mutable std::recursive_mutex m_mutex;
+        static bool compare_dev(sycl::device &device1, sycl::device &device2)
+        {
+            dpct::device_info prop1;
+            dpct::get_device_info(prop1, device1);
+            dpct::device_info prop2;
+            dpct::get_device_info(prop2, device2);
+            return prop1.get_max_compute_units() > prop2.get_max_compute_units();
+        }
+        static int convert_backend_index(std::string & backend) {
+            if (backend == "ext_oneapi_level_zero:gpu") return 0;
+            if (backend == "opencl:gpu") return 1;
+            if (backend == "ext_oneapi_cuda:gpu") return 2;
+            if (backend == "ext_oneapi_hip:gpu") return 3;
+            if (backend == "opencl:cpu") return 4;
+            if (backend == "opencl:acc") return 5;
+            printf("convert_backend_index: can't handle backend=%s\n", backend.c_str());
+            GGML_ASSERT(false);
+        }
+        static bool compare_backend(std::string &backend1, std::string &backend2) {
+            return convert_backend_index(backend1) < convert_backend_index(backend2);
+        }
         dev_mgr()
         {
             sycl::device default_device =
                 sycl::device(sycl::default_selector_v);
             _devs.push_back(std::make_shared<device_ext>(default_device));
 
-            std::vector<sycl::device> sycl_all_devs =
-                sycl::device::get_devices(sycl::info::device_type::all);
+            std::vector<sycl::device> sycl_all_devs;
             // Collect other devices except for the default device.
             if (default_device.is_cpu())
                 _cpu_device = 0;
+
+            auto Platforms = sycl::platform::get_platforms();
+            // Keep track of the number of devices per backend
+            std::map<sycl::backend, size_t> DeviceNums;
+            std::map<std::string, std::vector<sycl::device>> backend_devices;
+
+            while (!Platforms.empty()) {
+                auto Platform = Platforms.back();
+                Platforms.pop_back();
+                auto devices = Platform.get_devices();
+                std::string backend_type = get_device_backend_and_type(devices[0]);
+                for (const auto &device : devices) {
+                    backend_devices[backend_type].push_back(device);
+                }
+            }
+
+            std::vector<std::string> keys;
+            for(auto it = backend_devices.begin(); it != backend_devices.end(); ++it) {
+                keys.push_back(it->first);
+            }
+            std::sort(keys.begin(), keys.end(), compare_backend);
+
+            for (auto &key : keys) {
+                std::vector<sycl::device> devs = backend_devices[key];
+                std::sort(devs.begin(), devs.end(), compare_dev);
+                for (const auto &dev : devs) {
+                    sycl_all_devs.push_back(dev);
+                }
+            }
+
             for (auto &dev : sycl_all_devs)
             {
                 if (dev == default_device)
@@ -996,11 +1067,6 @@ namespace dpct
         static pointer_access_attribute get_pointer_attribute(sycl::queue &q,
                                                               const void *ptr)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return mem_mgr::instance().is_device_ptr(ptr)
-                       ? pointer_access_attribute::device_only
-                       : pointer_access_attribute::host_only;
-#else
             switch (sycl::get_pointer_type(ptr, q.get_context()))
             {
             case sycl::usm::alloc::unknown:
@@ -1011,7 +1077,6 @@ namespace dpct
             case sycl::usm::alloc::host:
                 return pointer_access_attribute::host_device;
             }
-#endif
         }
 
         template <typename ArgT>
@@ -1194,11 +1259,7 @@ namespace dpct
 
         static inline void *dpct_malloc(size_t size, sycl::queue &q)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            return mem_mgr::instance().mem_alloc(size * sizeof(byte_t));
-#else
             return sycl::malloc_device(size, q.get_device(), q.get_context());
-#endif // DPCT_USM_LEVEL_NONE
         }
 
 #define PITCH_DEFAULT_ALIGN(x) (((x) + 31) & ~(0x1F))
@@ -1222,25 +1283,7 @@ namespace dpct
         static inline sycl::event dpct_memset(sycl::queue &q, void *dev_ptr,
                                               valueT value, size_t size)
         {
-#ifdef DPCT_USM_LEVEL_NONE
-            auto &mm = mem_mgr::instance();
-            assert(mm.is_device_ptr(dev_ptr));
-            auto alloc = mm.translate_ptr(dev_ptr);
-            size_t offset = (valueT *)dev_ptr - (valueT *)alloc.alloc_ptr;
-
-            return q.submit([&](sycl::handler &cgh)
-                            {
-    auto r = sycl::range<1>(size);
-    auto o = sycl::id<1>(offset);
-    auto new_buffer = alloc.buffer.reinterpret<valueT>(
-        sycl::range<1>(alloc.size / sizeof(valueT)));
-    sycl::accessor<valueT, 1, sycl::access_mode::write,
-                sycl::access::target::device>
-        acc(new_buffer, cgh, r, o);
-    cgh.fill(acc, value); });
-#else
             return q.fill(dev_ptr, value, size);
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         /**
@@ -1334,72 +1377,8 @@ namespace dpct
         {
             if (!size)
                 return sycl::event{};
-#ifdef DPCT_USM_LEVEL_NONE
-            auto &mm = mem_mgr::instance();
-            auto real_direction = deduce_memcpy_direction(q, to_ptr, from_ptr, direction);
-
-            switch (real_direction)
-            {
-            case host_to_host:
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    cgh.host_task([=] { std::memcpy(to_ptr, from_ptr, size); }); });
-            case host_to_device:
-            {
-                auto alloc = mm.translate_ptr(to_ptr);
-                size_t offset = (byte_t *)to_ptr - alloc.alloc_ptr;
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    auto r = sycl::range<1>(size);
-    auto o = sycl::id<1>(offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                        sycl::access::target::device>
-        acc(alloc.buffer, cgh, r, o);
-    cgh.copy(from_ptr, acc); });
-            }
-            case device_to_host:
-            {
-                auto alloc = mm.translate_ptr(from_ptr);
-                size_t offset = (byte_t *)from_ptr - alloc.alloc_ptr;
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    auto r = sycl::range<1>(size);
-    auto o = sycl::id<1>(offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                        sycl::access::target::device>
-        acc(alloc.buffer, cgh, r, o);
-    cgh.copy(acc, to_ptr); });
-            }
-            case device_to_device:
-            {
-                auto to_alloc = mm.translate_ptr(to_ptr);
-                auto from_alloc = mm.translate_ptr(from_ptr);
-                size_t to_offset = (byte_t *)to_ptr - to_alloc.alloc_ptr;
-                size_t from_offset = (byte_t *)from_ptr - from_alloc.alloc_ptr;
-                return q.submit([&](sycl::handler &cgh)
-                                {
-    cgh.depends_on(dep_events);
-    auto r = sycl::range<1>(size);
-    auto to_o = sycl::id<1>(to_offset);
-    auto from_o = sycl::id<1>(from_offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                        sycl::access::target::device>
-        to_acc(to_alloc.buffer, cgh, r, to_o);
-    sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                        sycl::access::target::device>
-        from_acc(from_alloc.buffer, cgh, r, from_o);
-    cgh.copy(from_acc, to_acc); });
-            }
-            default:
-                throw std::runtime_error("dpct_memcpy: invalid direction value");
-            }
-#else
             return q.memcpy(to_ptr, from_ptr, size, dep_events);
             GGML_UNUSED(direction);
-#endif // DPCT_USM_LEVEL_NONE
         }
 
         // Get actual copy range and make sure it will not exceed range.
@@ -1539,45 +1518,15 @@ namespace dpct
                 break;
             }
             case device_to_device:
-#ifdef DPCT_USM_LEVEL_NONE
-            {
-                auto &mm = mem_mgr::instance();
-                auto to_alloc = mm.translate_ptr(to_surface);
-                auto from_alloc = mm.translate_ptr(from_surface);
-                size_t to_offset = (byte_t *)to_surface - to_alloc.alloc_ptr;
-                size_t from_offset = (byte_t *)from_surface - from_alloc.alloc_ptr;
-                event_list.push_back(q.submit([&](sycl::handler &cgh)
-                                              {
-    cgh.depends_on(dep_events);
-    auto to_o = sycl::id<1>(to_offset);
-    auto from_o = sycl::id<1>(from_offset);
-    sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                        sycl::access::target::device>
-        to_acc(to_alloc.buffer, cgh,
-                get_copy_range(size, to_slice, to_range.get(0)), to_o);
-    sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                        sycl::access::target::device>
-        from_acc(from_alloc.buffer, cgh,
-                get_copy_range(size, from_slice, from_range.get(0)), from_o);
-    cgh.parallel_for<class dpct_memcpy_3d_detail_usmnone>(
-        size,
-        [=](sycl::id<3> id) {
-            to_acc[get_offset(id, to_slice, to_range.get(0))] =
-                from_acc[get_offset(id, from_slice, from_range.get(0))];
-        }); }));
-            }
-#else
-                event_list.push_back(q.submit([&](sycl::handler &cgh)
-                                              {
-    cgh.depends_on(dep_events);
-    cgh.parallel_for<class dpct_memcpy_3d_detail>(
-        size,
-        [=](sycl::id<3> id) {
-            to_surface[get_offset(id, to_slice, to_range.get(0))] =
-                from_surface[get_offset(id, from_slice, from_range.get(0))];
-        }); }));
-#endif
-            break;
+                event_list.push_back(q.submit([&](sycl::handler &cgh){
+                cgh.depends_on(dep_events);
+                cgh.parallel_for<class dpct_memcpy_3d_detail>(
+                    size,
+                    [=](sycl::id<3> id) {
+                        to_surface[get_offset(id, to_slice, to_range.get(0))] =
+                            from_surface[get_offset(id, from_slice, from_range.get(0))];
+                    }); }));
+                break;
             default:
                 throw std::runtime_error("dpct_memcpy: invalid direction value");
             }
@@ -1675,11 +1624,7 @@ namespace dpct
         {
             if (ptr)
             {
-#ifdef DPCT_USM_LEVEL_NONE
-                detail::mem_mgr::instance().mem_free(ptr);
-#else
                 sycl::free(ptr, q.get_context());
-#endif // DPCT_USM_LEVEL_NONE
             }
         }
 
@@ -1687,11 +1632,7 @@ namespace dpct
         inline auto get_memory(const void *x)
         {
             T *new_x = reinterpret_cast<T *>(const_cast<void *>(x));
-#ifdef DPCT_USM_LEVEL_NONE
-            return dpct::get_buffer<std::remove_cv_t<T>>(new_x);
-#else
             return new_x;
-#endif
         }
 
         template <typename T>
@@ -2143,72 +2084,8 @@ namespace dpct
     {
         if (!size)
             return sycl::event{};
-#ifdef DPCT_USM_LEVEL_NONE
-        auto &mm = mem_mgr::instance();
-        auto real_direction = deduce_memcpy_direction(q, to_ptr, from_ptr, direction);
-
-        switch (real_direction)
-        {
-        case host_to_host:
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        cgh.host_task([=] { std::memcpy(to_ptr, from_ptr, size); }); });
-        case host_to_device:
-        {
-            auto alloc = mm.translate_ptr(to_ptr);
-            size_t offset = (byte_t *)to_ptr - alloc.alloc_ptr;
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        auto r = sycl::range<1>(size);
-        auto o = sycl::id<1>(offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                            sycl::access::target::device>
-            acc(alloc.buffer, cgh, r, o);
-        cgh.copy(from_ptr, acc); });
-        }
-        case device_to_host:
-        {
-            auto alloc = mm.translate_ptr(from_ptr);
-            size_t offset = (byte_t *)from_ptr - alloc.alloc_ptr;
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        auto r = sycl::range<1>(size);
-        auto o = sycl::id<1>(offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                            sycl::access::target::device>
-            acc(alloc.buffer, cgh, r, o);
-        cgh.copy(acc, to_ptr); });
-        }
-        case device_to_device:
-        {
-            auto to_alloc = mm.translate_ptr(to_ptr);
-            auto from_alloc = mm.translate_ptr(from_ptr);
-            size_t to_offset = (byte_t *)to_ptr - to_alloc.alloc_ptr;
-            size_t from_offset = (byte_t *)from_ptr - from_alloc.alloc_ptr;
-            return q.submit([&](sycl::handler &cgh)
-                            {
-        cgh.depends_on(dep_events);
-        auto r = sycl::range<1>(size);
-        auto to_o = sycl::id<1>(to_offset);
-        auto from_o = sycl::id<1>(from_offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                            sycl::access::target::device>
-            to_acc(to_alloc.buffer, cgh, r, to_o);
-        sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                            sycl::access::target::device>
-            from_acc(from_alloc.buffer, cgh, r, from_o);
-        cgh.copy(from_acc, to_acc); });
-        }
-        default:
-            throw std::runtime_error("dpct_memcpy: invalid direction value");
-        }
-#else
         return q.memcpy(to_ptr, from_ptr, size, dep_events);
         GGML_UNUSED(direction);
-#endif // DPCT_USM_LEVEL_NONE
     }
 
     // Get actual copy range and make sure it will not exceed range.
@@ -2348,34 +2225,6 @@ namespace dpct
             break;
         }
         case device_to_device:
-#ifdef DPCT_USM_LEVEL_NONE
-        {
-            auto &mm = mem_mgr::instance();
-            auto to_alloc = mm.translate_ptr(to_surface);
-            auto from_alloc = mm.translate_ptr(from_surface);
-            size_t to_offset = (byte_t *)to_surface - to_alloc.alloc_ptr;
-            size_t from_offset = (byte_t *)from_surface - from_alloc.alloc_ptr;
-            event_list.push_back(q.submit([&](sycl::handler &cgh)
-                                          {
-        cgh.depends_on(dep_events);
-        auto to_o = sycl::id<1>(to_offset);
-        auto from_o = sycl::id<1>(from_offset);
-        sycl::accessor<byte_t, 1, sycl::access_mode::write,
-                            sycl::access::target::device>
-            to_acc(to_alloc.buffer, cgh,
-                    get_copy_range(size, to_slice, to_range.get(0)), to_o);
-        sycl::accessor<byte_t, 1, sycl::access_mode::read,
-                            sycl::access::target::device>
-            from_acc(from_alloc.buffer, cgh,
-                    get_copy_range(size, from_slice, from_range.get(0)), from_o);
-        cgh.parallel_for<class dpct_memcpy_3d_detail_usmnone>(
-            size,
-            [=](sycl::id<3> id) {
-                to_acc[get_offset(id, to_slice, to_range.get(0))] =
-                    from_acc[get_offset(id, from_slice, from_range.get(0))];
-            }); }));
-        }
-#else
             event_list.push_back(q.submit([&](sycl::handler &cgh)
                                           {
         cgh.depends_on(dep_events);
@@ -2385,7 +2234,6 @@ namespace dpct
                 to_surface[get_offset(id, to_slice, to_range.get(0))] =
                     from_surface[get_offset(id, from_slice, from_range.get(0))];
             }); }));
-#endif
         break;
         default:
             throw std::runtime_error("dpct_memcpy: invalid direction value");
@@ -2576,9 +2424,6 @@ namespace dpct
                            void *c[], library_data_t c_type, int ldc,
                            int batch_size, library_data_t scaling_type)
     {
-#ifdef DPCT_USM_LEVEL_NONE
-        throw std::runtime_error("this API is unsupported when USM level is none");
-#else
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
         {
@@ -2713,7 +2558,6 @@ namespace dpct
         default:
             throw std::runtime_error("the combination of data type is unsupported");
         }
-#endif
     }
 
     /// Computes a batch of matrix-matrix product with general matrices.
@@ -3052,24 +2896,9 @@ namespace dpct
             template <size_t D = Dimension>
             typename std::enable_if<D == 1, T>::type &operator[](size_t index) {
                 init();
-        #ifdef DPCT_USM_LEVEL_NONE
-                return dpct::get_buffer<typename std::enable_if<D == 1, T>::type>(
-                        _device_ptr)
-                    .template get_access<sycl::access_mode::read_write>()[index];
-        #else
                 return _device_ptr[index];
-        #endif // DPCT_USM_LEVEL_NONE
             }
 
-        #ifdef DPCT_USM_LEVEL_NONE
-            /// Get sycl::accessor for the device memory object when usm is not used.
-            accessor_t get_access(sycl::handler &cgh) {
-                return get_buffer(_device_ptr)
-                    .template reinterpret<T, Dimension>(_range)
-                    .template get_access<detail::memory_traits<Memory, T>::mode,
-                                        detail::memory_traits<Memory, T>::target>(cgh);
-            }
-        #else
             /// Get dpct::accessor with dimension info for the device memory object
             /// when usm is used and dimension is greater than 1.
             template <size_t D = Dimension>
@@ -3077,7 +2906,6 @@ namespace dpct
             get_access(sycl::handler &cgh) {
                 return dpct_accessor_t((T *)_device_ptr, _range);
             }
-        #endif // DPCT_USM_LEVEL_NONE
 
         private:
             device_memory(value_t *memory_ptr, size_t size)
@@ -3122,15 +2950,6 @@ namespace dpct
 
             /// Default constructor
             device_memory() : base(1) {}
-
-        #ifdef DPCT_USM_LEVEL_NONE
-            /// Get sycl::accessor for the device memory object when usm is not used.
-            accessor_t get_access(sycl::handler &cgh) {
-                auto buf = get_buffer(base::get_ptr())
-                            .template reinterpret<T, 1>(sycl::range<1>(1));
-                return accessor_t(buf, cgh);
-            }
-        #endif // DPCT_USM_LEVEL_NONE
         };
         } // namespace detail
 
@@ -3197,6 +3016,11 @@ static int g_work_group_size = 0;
 #define GGML_SYCL_MMV_Y 1
 #endif
 
+enum ggml_sycl_backend_gpu_mode {
+    SYCL_UNSET_GPU_MODE = -1,
+    SYCL_SINGLE_GPU_MODE = 0,
+    SYCL_MUL_GPU_MODE
+};
 
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
@@ -3396,8 +3220,27 @@ class sycl_gpu_mgr {
         int work_group_size = 0;
         std::string gpus_list = "";
 
+        /*
+        Use all GPUs with same top max compute units
+        */
         sycl_gpu_mgr() {
             detect_sycl_gpu_list_with_max_cu();
+            get_allow_gpus();
+            create_context_with_gpus();
+        }
+
+        /*
+        Only use the assigned GPU
+        */
+        sycl_gpu_mgr(int main_gpu_id) {
+            sycl::device device = dpct::dev_mgr::instance().get_device(main_gpu_id);
+            dpct::device_info prop;
+            dpct::get_device_info(prop, device);
+            gpus.push_back(main_gpu_id);
+            devices.push_back(device);
+            work_group_size = prop.get_max_work_group_size();
+            max_compute_units = prop.get_max_compute_units();
+
             get_allow_gpus();
             create_context_with_gpus();
         }
@@ -3417,7 +3260,7 @@ class sycl_gpu_mgr {
                 gpus_list += std::to_string(gpus[i]);
                 gpus_list += ",";
             }
-            if (gpus_list.length() > 2) {
+            if (gpus_list.length() > 1) {
                 gpus_list.pop_back();
             }
         }
@@ -3446,7 +3289,7 @@ class sycl_gpu_mgr {
                 dpct::device_info prop;
                 dpct::get_device_info(prop, device);
                 if (max_compute_units == prop.get_max_compute_units() &&
-                    prop.get_major_version() == 1) {
+                    is_ext_oneapi_device(device)) {
                     gpus.push_back(id);
                     devices.push_back(device);
                     work_group_size = prop.get_max_work_group_size();
@@ -3466,8 +3309,8 @@ class sycl_gpu_mgr {
                 if (gpus[i] == id)
                     return i;
             }
-            assert(false);
-            return -1;
+            printf("miss to get device index by id=%d\n", id);
+            GGML_ASSERT(false);
         }
 
         int get_next_index(int id) {
@@ -3476,8 +3319,16 @@ class sycl_gpu_mgr {
                 if (gpus[i] == id)
                     return i;
             }
-            assert(false);
-            return -1;
+            GGML_ASSERT(false);
+        }
+
+        bool is_ext_oneapi_device(const sycl::device &dev) {
+            sycl::backend dev_backend = dev.get_backend();
+            if (dev_backend == sycl::backend::ext_oneapi_level_zero ||
+                dev_backend == sycl::backend::ext_oneapi_cuda ||
+                dev_backend == sycl::backend::ext_oneapi_hip)
+                return true;
+            return false;
         }
 };
 
@@ -3486,10 +3337,13 @@ static int g_device_count = -1;
 static int g_all_sycl_device_count = -1;
 static int g_main_device = -1;
 static int g_main_device_id = -1;
+static bool g_ggml_backend_sycl_buffer_type_initialized = false;
 
 static std::array<float, GGML_SYCL_MAX_DEVICES> g_default_tensor_split = {};
 
 static float g_tensor_split[GGML_SYCL_MAX_DEVICES] = {0};
+
+static ggml_sycl_backend_gpu_mode g_ggml_sycl_backend_gpu_mode = SYCL_UNSET_GPU_MODE;
 
 struct sycl_device_capabilities {
     int     cc;                 // compute capability
@@ -12994,17 +12848,20 @@ bool ggml_sycl_loaded(void) {
     return g_sycl_loaded;
 }
 
-void print_device_detail(int id) {
+void print_device_detail(int id, sycl::device &device, std::string device_type) {
+
     dpct::device_info prop;
     SYCL_CHECK(CHECK_TRY_ERROR(
-        dpct::get_device_info(prop, dpct::dev_mgr::instance().get_device(id))));
-    sycl::device cur_device = dpct::dev_mgr::instance().get_device(id);
+        dpct::get_device_info(prop, device)));
+
     std::string version;
     version += std::to_string(prop.get_major_version());
     version += ".";
     version += std::to_string(prop.get_minor_version());
 
-    fprintf(stderr, "|%2d|%45s|%18s|%17d|%14d|%13d|%15lu|\n", id,
+    device_type = std::regex_replace(device_type, std::regex("ext_oneapi_"), "");
+
+    fprintf(stderr, "|%2d|%18s|%45s|%10s|%11d|%8d|%7d|%15lu|\n", id, device_type.c_str(),
             prop.get_name(), version.c_str(), prop.get_max_compute_units(),
             prop.get_max_work_group_size(), prop.get_max_sub_group_size(),
             prop.get_global_mem_size());
@@ -13012,19 +12869,35 @@ void print_device_detail(int id) {
 
 void ggml_backend_sycl_print_sycl_devices() {
     int device_count = dpct::dev_mgr::instance().device_count();
+    std::map<std::string, size_t> DeviceNums;
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
-    fprintf(stderr, "|ID| Name                                        |compute capability|Max compute units|Max work group|Max sub group|Global mem size|\n");
-    fprintf(stderr, "|--|---------------------------------------------|------------------|-----------------|--------------|-------------|---------------|\n");
+    fprintf(stderr, "|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |\n");
+    fprintf(stderr, "|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|\n");
+    fprintf(stderr, "|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|\n");
     for (int id = 0; id < device_count; ++id) {
-        print_device_detail(id);
+        sycl::device device = dpct::dev_mgr::instance().get_device(id);
+        sycl::backend backend = device.get_backend();
+        std::string backend_type = get_device_backend_and_type(device);
+        int type_id=DeviceNums[backend_type]++;
+        std::stringstream device_type;
+        device_type << "[" <<  backend_type << ":" << std::to_string(type_id) << "]";
+        print_device_detail(id, device, device_type.str());
     }
 }
 
 void print_gpu_device_list() {
-    fprintf(stderr, "detect %d SYCL GPUs: [%s] with Max compute units:%d\n",
-            g_sycl_gpu_mgr->get_gpu_count(),
-            g_sycl_gpu_mgr->gpus_list.c_str(),
-            g_sycl_gpu_mgr->max_compute_units);
+    GGML_ASSERT(g_sycl_gpu_mgr);
+
+    char* hint=NULL;
+    if (g_ggml_sycl_backend_gpu_mode == SYCL_SINGLE_GPU_MODE) {
+        hint = "use %d SYCL GPUs: [%s] with Max compute units:%d\n";
+    } else {
+        hint = "detect %d SYCL GPUs: [%s] with top Max compute units:%d\n";
+    }
+    fprintf(stderr, hint,
+        g_sycl_gpu_mgr->get_gpu_count(),
+        g_sycl_gpu_mgr->gpus_list.c_str(),
+        g_sycl_gpu_mgr->max_compute_units);
 }
 
 int get_sycl_env(const char *env_name, int default_val) {
@@ -13048,7 +12921,7 @@ int get_work_group_size(int user_device_id) {
     return prop.get_max_work_group_size();
 }
 
-void ggml_init_sycl() try {
+static void ggml_init_sycl() try {
     static bool initialized = false;
 
     if (!initialized) {
@@ -13060,23 +12933,6 @@ void ggml_init_sycl() try {
 #else
         fprintf(stderr, "%s: GGML_SYCL_F16: no\n", __func__);
 #endif
-        if (CHECK_TRY_ERROR(g_all_sycl_device_count =
-                            dpct::dev_mgr::instance().device_count()) != 0) {
-            initialized = true;
-            g_sycl_loaded = false;
-            return;
-        }
-        GGML_ASSERT(g_all_sycl_device_count <= GGML_SYCL_MAX_DEVICES);
-        ggml_backend_sycl_print_sycl_devices();
-
-        if (!g_sycl_gpu_mgr) g_sycl_gpu_mgr = new sycl_gpu_mgr();
-
-        g_device_count = g_sycl_gpu_mgr->get_gpu_count();
-        g_work_group_size = g_sycl_gpu_mgr->work_group_size;
-
-        print_gpu_device_list();
-
-        int64_t total_vram = 0;
 
 /* NOT REMOVE, keep it for next optimize for XMX.
 #if defined(SYCL_USE_XMX)
@@ -13085,51 +12941,74 @@ void ggml_init_sycl() try {
         fprintf(stderr, "%s: SYCL_USE_XMX: no\n", __func__);
 #endif
 */
-        for (int id = 0; id < GGML_SYCL_MAX_DEVICES; ++id) {
-            g_device_caps[id].vmm = 0;
-            g_device_caps[id].device_id = -1;
-            g_device_caps[id].cc = 0;
-            g_tensor_split[id] = 0;
-            g_default_tensor_split[id] = 0;
+
+        if (CHECK_TRY_ERROR(g_all_sycl_device_count =
+                            dpct::dev_mgr::instance().device_count()) != 0) {
+            initialized = true;
+            g_sycl_loaded = false;
+            return;
         }
-
-        for (int i = 0; i < g_device_count; ++i) {
-            int device_id = g_sycl_gpu_mgr->gpus[i];
-            g_device_caps[i].vmm = 0;
-
-            dpct::device_info prop;
-            SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
-                prop, dpct::dev_mgr::instance().get_device(device_id))));
-
-            g_default_tensor_split[i] = total_vram;
-            total_vram += prop.get_global_mem_size();
-
-            g_device_caps[i].cc =
-                100 * prop.get_major_version() + 10 * prop.get_minor_version();
-        }
-
-        for (int i = 0; i < g_device_count; ++i) {
-            g_default_tensor_split[i] /= total_vram;
-        }
-
-        for (int i = 0; i < g_device_count; ++i) {
-            SYCL_CHECK(ggml_sycl_set_device(i));
-
-            // create sycl streams
-            for (int is = 0; is < MAX_STREAMS; ++is) {
-                SYCL_CHECK(CHECK_TRY_ERROR(
-                    g_syclStreams[i][is] =
-                        dpct::get_current_device().create_queue(
-                            g_sycl_gpu_mgr->get_co_ctx(), dpct::get_current_device())));
-            }
-
-            const dpct::queue_ptr stream = g_syclStreams[i][0];
-            // create sycl handle
-            SYCL_CHECK(CHECK_TRY_ERROR(g_sycl_handles[i] = stream));
-        }
-
+        GGML_ASSERT(g_all_sycl_device_count <= GGML_SYCL_MAX_DEVICES);
+        ggml_backend_sycl_print_sycl_devices();
         initialized = true;
         g_sycl_loaded = true;
+    }
+}
+catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
+}
+
+void ggml_init_by_gpus(int device_count) try {
+    g_device_count = device_count;
+    g_work_group_size = g_sycl_gpu_mgr->work_group_size;
+
+    int64_t total_vram = 0;
+
+    print_gpu_device_list();
+
+    for (int id = 0; id < GGML_SYCL_MAX_DEVICES; ++id) {
+        g_device_caps[id].vmm = 0;
+        g_device_caps[id].device_id = -1;
+        g_device_caps[id].cc = 0;
+        g_tensor_split[id] = 0;
+        g_default_tensor_split[id] = 0;
+    }
+
+    for (int i = 0; i < g_device_count; ++i) {
+        int device_id = g_sycl_gpu_mgr->gpus[i];
+        g_device_caps[i].vmm = 0;
+
+        dpct::device_info prop;
+        SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
+            prop, dpct::dev_mgr::instance().get_device(device_id))));
+
+        g_default_tensor_split[i] = total_vram;
+        total_vram += prop.get_global_mem_size();
+
+        g_device_caps[i].cc =
+            100 * prop.get_major_version() + 10 * prop.get_minor_version();
+    }
+
+    for (int i = 0; i < g_device_count; ++i) {
+        g_default_tensor_split[i] /= total_vram;
+    }
+
+    for (int i = 0; i < g_device_count; ++i) {
+        SYCL_CHECK(ggml_sycl_set_device(i));
+
+        // create sycl streams
+        for (int is = 0; is < MAX_STREAMS; ++is) {
+            SYCL_CHECK(CHECK_TRY_ERROR(
+                g_syclStreams[i][is] =
+                    dpct::get_current_device().create_queue(
+                        g_sycl_gpu_mgr->get_co_ctx(), dpct::get_current_device())));
+        }
+
+        const dpct::queue_ptr stream = g_syclStreams[i][0];
+        // create sycl handle
+        SYCL_CHECK(CHECK_TRY_ERROR(g_sycl_handles[i] = stream));
     }
 }
 catch (sycl::exception const &exc) {
@@ -16537,22 +16416,25 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
     /* .is_host          = */ nullptr,
 };
 
-ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device) {
+ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device_index) {
+    ggml_init_sycl();
+    if (device_index>=g_device_count or device_index<0) {
+        printf("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
+            device_index, g_device_count-1);
+        GGML_ASSERT(device_index<g_device_count);
+    }
     static struct ggml_backend_buffer_type ggml_backend_sycl_buffer_types[GGML_SYCL_MAX_DEVICES];
 
-    static bool ggml_backend_sycl_buffer_type_initialized = false;
-
-    if (!ggml_backend_sycl_buffer_type_initialized) {
+    if (!g_ggml_backend_sycl_buffer_type_initialized) {
         for (int i = 0; i < g_device_count; i++) {
             ggml_backend_sycl_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_sycl_buffer_type_interface,
                 /* .context  = */ new ggml_backend_sycl_buffer_type_context{i, GGML_SYCL_NAME + std::to_string(g_sycl_gpu_mgr->gpus[i])},
             };
         }
-        ggml_backend_sycl_buffer_type_initialized = true;
+        g_ggml_backend_sycl_buffer_type_initialized = true;
     }
-
-    return &ggml_backend_sycl_buffer_types[device];
+    return &ggml_backend_sycl_buffer_types[device_index];
 }
 
 // sycl split buffer type
@@ -16905,6 +16787,7 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_split_buffer_type_interface 
 };
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * tensor_split) {
+    ggml_init_sycl();
     // FIXME: this is not thread safe
     static std::map<std::array<float, GGML_SYCL_MAX_DEVICES>, struct ggml_backend_buffer_type> buft_map;
 
@@ -17238,19 +17121,32 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
     UNUSED(backend);
 }
 
+GGML_CALL static bool ggml_backend_sycl_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
+    const int min_batch_size = 32;
+    return op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS;
+    GGML_UNUSED(backend);
+}
+
+
 static ggml_backend_i ggml_backend_sycl_interface = {
     /* .get_name                = */ ggml_backend_sycl_name,
     /* .free                    = */ ggml_backend_sycl_free,
     /* .get_default_buffer_type = */ ggml_backend_sycl_get_default_buffer_type,
     /* .set_tensor_async        = */ ggml_backend_sycl_set_tensor_async,
     /* .get_tensor_async        = */ ggml_backend_sycl_get_tensor_async,
-    /* .cpy_tensor_async        = */ ggml_backend_sycl_cpy_tensor_async,
+    /* .cpy_tensor_async        = */ NULL, //ggml_backend_sycl_cpy_tensor_async, // TODO: update for the new interface
     /* .synchronize             = */ ggml_backend_sycl_synchronize,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_sycl_graph_compute,
     /* .supports_op             = */ ggml_backend_sycl_supports_op,
+    /* .offload_op              = */ ggml_backend_sycl_offload_op,
+    /* .event_new               = */ NULL,
+    /* .event_free              = */ NULL,
+    /* .event_record            = */ NULL,
+    /* .event_wait              = */ NULL,
+    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_sycl_guid() {
@@ -17259,7 +17155,7 @@ static ggml_guid_t ggml_backend_sycl_guid() {
 }
 
 GGML_CALL ggml_backend_t ggml_backend_sycl_init(int device) {
-    ggml_init_sycl(); // TODO: remove from ggml.c
+    ggml_init_sycl();
 
     check_allow_gpu_index(device);
 
@@ -17300,11 +17196,42 @@ GGML_API GGML_CALL int ggml_backend_sycl_get_device_index(int device_id) {
     return g_sycl_gpu_mgr->get_index(device_id);
 }
 
+GGML_API GGML_CALL int ggml_backend_sycl_get_device_id(int device_index) {
+    return g_sycl_gpu_mgr->gpus[device_index];
+}
+
+GGML_API GGML_CALL void ggml_backend_sycl_set_single_device_mode(int main_gpu_id) {
+    GGML_ASSERT(main_gpu_id<g_all_sycl_device_count);
+    fprintf(stderr, "ggml_backend_sycl_set_single_device: use single device: [%d]\n", main_gpu_id);
+    if (g_sycl_gpu_mgr) {
+        delete g_sycl_gpu_mgr;
+    }
+    g_sycl_gpu_mgr = new sycl_gpu_mgr(main_gpu_id);
+    g_ggml_sycl_backend_gpu_mode = SYCL_SINGLE_GPU_MODE;
+    ggml_init_by_gpus(g_sycl_gpu_mgr->get_gpu_count());
+    g_ggml_backend_sycl_buffer_type_initialized = false;
+}
+
+GGML_API GGML_CALL void ggml_backend_sycl_set_mul_device_mode() {
+    if (g_ggml_sycl_backend_gpu_mode == SYCL_MUL_GPU_MODE) {
+        return;
+    }
+
+    fprintf(stderr, "ggml_backend_sycl_set_mul_device_mode: true\n");
+
+    if (g_sycl_gpu_mgr) {
+        delete g_sycl_gpu_mgr;
+    }
+    g_sycl_gpu_mgr = new sycl_gpu_mgr();
+    g_ggml_sycl_backend_gpu_mode = SYCL_MUL_GPU_MODE;
+    ggml_init_by_gpus(g_sycl_gpu_mgr->get_gpu_count());
+    g_ggml_backend_sycl_buffer_type_initialized = false;
+}
+
 extern "C" int ggml_backend_sycl_reg_devices();
 
 int ggml_backend_sycl_reg_devices() {
-    if (!g_sycl_gpu_mgr) g_sycl_gpu_mgr = new sycl_gpu_mgr();
-    g_device_count = g_sycl_gpu_mgr->get_gpu_count();
+    ggml_backend_sycl_set_mul_device_mode();
     assert(g_device_count>0);
     for (int i = 0; i < g_device_count; i++) {
         int id = g_sycl_gpu_mgr->gpus[i];

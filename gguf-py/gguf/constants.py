@@ -32,6 +32,7 @@ class Keys:
         FILE_TYPE            = "general.file_type"
 
     class LLM:
+        VOCAB_SIZE            = "{arch}.vocab_size"
         CONTEXT_LENGTH        = "{arch}.context_length"
         EMBEDDING_LENGTH      = "{arch}.embedding_length"
         BLOCK_COUNT           = "{arch}.block_count"
@@ -41,6 +42,7 @@ class Keys:
         EXPERT_COUNT          = "{arch}.expert_count"
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
         POOLING_TYPE          = "{arch}.pooling_type"
+        LOGIT_SCALE           = "{arch}.logit_scale"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -98,6 +100,7 @@ class MODEL_ARCH(IntEnum):
     LLAMA      = auto()
     FALCON     = auto()
     BAICHUAN   = auto()
+    GROK       = auto()
     GPT2       = auto()
     GPTJ       = auto()
     GPTNEOX    = auto()
@@ -121,6 +124,7 @@ class MODEL_ARCH(IntEnum):
     STARCODER2 = auto()
     MAMBA      = auto()
     XVERSE     = auto()
+    COMMAND_R  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -165,6 +169,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.LLAMA:          "llama",
     MODEL_ARCH.FALCON:         "falcon",
     MODEL_ARCH.BAICHUAN:       "baichuan",
+    MODEL_ARCH.GROK:           "grok",
     MODEL_ARCH.GPT2:           "gpt2",
     MODEL_ARCH.GPTJ:           "gptj",
     MODEL_ARCH.GPTNEOX:        "gptneox",
@@ -188,6 +193,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.STARCODER2:     "starcoder2",
     MODEL_ARCH.MAMBA:          "mamba",
     MODEL_ARCH.XVERSE:         "xverse",
+    MODEL_ARCH.COMMAND_R:      "command-r",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -248,6 +254,28 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_EXP,
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
+    ],
+    MODEL_ARCH.GROK: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.ATTN_OUT_NORM,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.LAYER_OUT_NORM,
     ],
     MODEL_ARCH.GPTNEOX: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -596,6 +624,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.COMMAND_R: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     # TODO
 }
 
@@ -683,6 +723,11 @@ class GGMLQuantizationType(IntEnum):
     IQ3_S   = 21
     IQ2_S   = 22
     IQ4_XS  = 23
+    I8      = 24
+    I16     = 25
+    I32     = 26
+    I64     = 27
+    F64     = 28
 
 
 class GGUFEndian(IntEnum):
@@ -749,6 +794,11 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.IQ3_S:   (256, 2 + QK_K // 4 + QK_K // 8 + QK_K // 32 + 4),
     GGMLQuantizationType.IQ2_S:   (256, 2 + QK_K // 4 + QK_K // 16),
     GGMLQuantizationType.IQ4_XS:  (256, 2 + 2 + QK_K // 2 + QK_K // 64),
+    GGMLQuantizationType.I8:      (1, 1),
+    GGMLQuantizationType.I16:     (1, 2),
+    GGMLQuantizationType.I32:     (1, 4),
+    GGMLQuantizationType.I64:     (1, 8),
+    GGMLQuantizationType.F64:     (1, 8),
 }
 
 
@@ -768,6 +818,7 @@ KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
 KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
+KEY_VOCAB_SIZE            = Keys.LLM.VOCAB_SIZE
 KEY_CONTEXT_LENGTH        = Keys.LLM.CONTEXT_LENGTH
 KEY_EMBEDDING_LENGTH      = Keys.LLM.EMBEDDING_LENGTH
 KEY_BLOCK_COUNT           = Keys.LLM.BLOCK_COUNT

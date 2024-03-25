@@ -59,9 +59,10 @@ extern "C" {
     typedef int32_t llama_seq_id;
 
     enum llama_vocab_type {
-        LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
-        LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
-        LLAMA_VOCAB_TYPE_WPM = 2, // WordPiece
+        LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
+        LLAMA_VOCAB_TYPE_SPM  = 1, // SentencePiece
+        LLAMA_VOCAB_TYPE_BPE  = 2, // Byte Pair Encoding
+        LLAMA_VOCAB_TYPE_WPM  = 3, // WordPiece
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -234,7 +235,8 @@ extern "C" {
     struct llama_context_params {
         uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
-        uint32_t n_batch;           // prompt processing maximum batch size
+        uint32_t n_batch;           // logical maximum batch size that can be submitted to llama_decode
+        uint32_t n_ubatch;          // physical maximum batch size
         uint32_t n_seq_max;         // max number of sequences (i.e. distinct states for recurrent models)
         uint32_t n_threads;         // number of threads to use for generation
         uint32_t n_threads_batch;   // number of threads to use for batch processing
@@ -273,13 +275,15 @@ extern "C" {
 
     // model quantization parameters
     typedef struct llama_model_quantize_params {
-        int32_t nthread;             // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype ftype;      // quantize to this llama_ftype
-        bool allow_requantize;       // allow quantizing non-f32/f16 tensors
-        bool quantize_output_tensor; // quantize output.weight
-        bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-        bool pure;                   // quantize all tensors to the default type
-        void * imatrix;              // pointer to importance matrix data
+        int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+        enum llama_ftype ftype;              // quantize to this llama_ftype
+        enum ggml_type output_tensor_type;   // output tensor type
+        enum ggml_type token_embedding_type; // itoken embeddings tensor type
+        bool allow_requantize;               // allow quantizing non-f32/f16 tensors
+        bool quantize_output_tensor;         // quantize output.weight
+        bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+        bool pure;                           // quantize all tensors to the default type
+        void * imatrix;                      // pointer to importance matrix data
     } llama_model_quantize_params;
 
     // grammar types
@@ -377,6 +381,7 @@ extern "C" {
 
     LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
@@ -385,6 +390,7 @@ extern "C" {
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
     LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
+    LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
 
     // Get the model's RoPE frequency scaling factor
     LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
@@ -432,10 +438,24 @@ extern "C" {
     // Returns 0 on success
     LLAMA_API int32_t llama_model_apply_lora_from_file(
             const struct llama_model * model,
-                      const char * path_lora,
-                           float   scale,
-                      const char * path_base_model,
-                         int32_t   n_threads);
+                          const char * path_lora,
+                               float   scale,
+                          const char * path_base_model,
+                             int32_t   n_threads);
+
+    // Apply a loaded control vector to a llama_context, or if data is NULL, clear
+    // the currently loaded vector.
+    // n_embd should be the size of a single layer's control, and data should point
+    // to an n_embd x n_layers buffer starting from layer 1.
+    // il_start and il_end are the layer range the vector should apply to (both inclusive)
+    // See llama_control_vector_load in common to load a control vector.
+    LLAMA_API int32_t llama_control_vector_apply(
+            struct llama_context * lctx,
+                     const float * data,
+                          size_t   len,
+                         int32_t   n_embd,
+                         int32_t   il_start,
+                         int32_t   il_end);
 
     //
     // KV cache
@@ -649,6 +669,11 @@ extern "C" {
 
     // Set abort callback
     LLAMA_API void llama_set_abort_callback(struct llama_context * ctx, ggml_abort_callback abort_callback, void * abort_callback_data);
+
+    // Wait until all computations are finished
+    // This is automatically done when using one of the functions below to obtain the computation results
+    // and is not necessary to call it explicitly in most cases
+    LLAMA_API void llama_synchronize(struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_decode()
     // The logits for the last token are stored in the last row
@@ -936,6 +961,16 @@ extern "C" {
                                  size_t   n_beams,
                                 int32_t   n_past,
                                 int32_t   n_predict);
+
+    /// @details Build a split GGUF final path for this chunk.
+    ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"
+    //  Returns the split_path length.
+    LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count);
+
+    /// @details Extract the path prefix from the split_path if and only if the split_no and split_count match.
+    ///          llama_split_prefix(split_prefix, 64, "/models/ggml-model-q4_0-00002-of-00004.gguf", 2, 4) => split_prefix = "/models/ggml-model-q4_0"
+    //  Returns the split_prefix length.
+    LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
 
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
