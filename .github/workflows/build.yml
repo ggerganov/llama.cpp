@@ -803,7 +803,7 @@ jobs:
 
     defaults:
       run:
-        shell: cmd
+        shell: bash
 
     env:
       WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/62641e01-1e8d-4ace-91d6-ae03f7f8a71f/w_BaseKit_p_2024.0.0.49563_offline.exe
