@@ -3018,7 +3018,6 @@ struct llama_model_loader {
                 case GGML_TYPE_IQ2_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ2_S;   break;
                 case GGML_TYPE_IQ3_XXS: ftype = LLAMA_FTYPE_MOSTLY_IQ3_XXS; break;
                 case GGML_TYPE_IQ1_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ1_S;   break;
-                case GGML_TYPE_IQ1_XS:  ftype = LLAMA_FTYPE_MOSTLY_IQ1_S;   break;
                 case GGML_TYPE_IQ4_NL:  ftype = LLAMA_FTYPE_MOSTLY_IQ4_NL;  break;
                 case GGML_TYPE_IQ4_XS:  ftype = LLAMA_FTYPE_MOSTLY_IQ4_XS;  break;
                 case GGML_TYPE_IQ3_S:   ftype = LLAMA_FTYPE_MOSTLY_IQ3_S;   break;
@@ -3414,6 +3413,7 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_IQ3_XS: return "IQ3_XS - 3.3 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ3_XXS:return "IQ3_XXS - 3.0625 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ1_S  :return "IQ1_S - 1.5625 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ1_XS :return "IQ1_S mix - 1.6-17 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ4_NL: return "IQ4_NL - 4.5 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ4_XS: return "IQ4_XS - 4.25 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ3_S:  return "IQ3_S - 3.4375 bpw";
