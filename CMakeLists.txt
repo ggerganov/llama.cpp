@@ -89,8 +89,8 @@ endif()
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
 option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
-option(LLAMA_CUBLAS                          "llama: use CUDA"                                  OFF)
-#option(LLAMA_CUDA_CUBLAS                     "llama: use cuBLAS for prompt processing"          OFF)
+option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
+option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
 option(LLAMA_CUDA_FORCE_MMQ                  "llama: use mmq kernels instead of cuBLAS"         OFF)
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
@@ -360,11 +360,16 @@ if (LLAMA_QKK_64)
 endif()
 
 if (LLAMA_CUBLAS)
+    message(WARNING "LLAMA_CUBLAS is deprecated and will be removed in the future.\nUse LLAMA_CUDA instead")
+    set(LLAMA_CUDA ON)
+endif()
+
+if (LLAMA_CUDA)
     cmake_minimum_required(VERSION 3.17)
 
     find_package(CUDAToolkit)
     if (CUDAToolkit_FOUND)
-        message(STATUS "cuBLAS found")
+        message(STATUS "CUDA found")
 
         enable_language(CUDA)
 
@@ -373,7 +378,7 @@ if (LLAMA_CUBLAS)
         file(GLOB GGML_SOURCES_CUDA "ggml-cuda/*.cu")
         list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
 
-        add_compile_definitions(GGML_USE_CUBLAS)
+        add_compile_definitions(GGML_USE_CUDA)
         if (LLAMA_CUDA_FORCE_DMMV)
             add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
@@ -422,7 +427,7 @@ if (LLAMA_CUBLAS)
     message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
     else()
-        message(WARNING "cuBLAS not found")
+        message(WARNING "CUDA not found")
     endif()
 endif()
 
@@ -525,7 +530,7 @@ if (LLAMA_HIPBLAS)
     file(GLOB GGML_SOURCES_ROCM "ggml-cuda/*.cu")
     list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
 
-    add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+    add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUDA)
 
     if (LLAMA_HIP_UMA)
         add_compile_definitions(GGML_HIP_UMA)
@@ -830,7 +835,7 @@ endif()
 
 set(CUDA_CXX_FLAGS "")
 
-if (LLAMA_CUBLAS)
+if (LLAMA_CUDA)
     set(CUDA_FLAGS -use_fast_math)
 
     if (LLAMA_FATAL_WARNINGS)
@@ -1055,7 +1060,7 @@ endif()
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
 
-if (LLAMA_CUBLAS)
+if (LLAMA_CUDA)
     list(APPEND CUDA_CXX_FLAGS ${ARCH_FLAGS})
     list(JOIN CUDA_CXX_FLAGS " " CUDA_CXX_FLAGS_JOINED)  # pass host compiler flags as a single argument
     if (NOT CUDA_CXX_FLAGS_JOINED STREQUAL "")
