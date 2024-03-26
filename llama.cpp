@@ -12449,7 +12449,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS) {
                 if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_Q5_K;
-                else new_type = GGML_TYPE_IQ4_XS;
+                else new_type = GGML_TYPE_Q4_K;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
                     ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M) {
@@ -12484,7 +12484,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ2_XXS;
         }
         if (name.find("attn_k.weight") != std::string::npos) {
-            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_IQ4_XS;
+            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_Q4_K;
             else if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_IQ3_S;
             else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_XXS;
             else if (qs.model.hparams.n_gqa() >= 8) new_type = GGML_TYPE_IQ2_S;
@@ -12493,14 +12493,14 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         }
         else if (name.find("attn_v.weight") != std::string::npos) {
             if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_Q5_K;
-            else if (qs.model.hparams.n_gqa() >= 8 || qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_IQ4_XS;
+            else if (qs.model.hparams.n_gqa() >= 8 || qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q4_K;
             else if (qs.model.hparams.n_gqa() >= 4 || qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_S;
             else if (qs.model.hparams.n_gqa() >= 2) new_type = GGML_TYPE_IQ3_XXS;
             else new_type = GGML_TYPE_Q2_K;
             ++qs.i_attention_wv;
         }
         else if (name.find("attn_output.weight") != std::string::npos) {
-            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_IQ4_XS;
+            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_Q4_K;
             else if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_IQ3_S;
             else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_XXS;
             else new_type = GGML_TYPE_IQ2_XXS;
