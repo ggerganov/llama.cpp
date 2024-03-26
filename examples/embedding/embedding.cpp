@@ -61,7 +61,7 @@ int main(int argc, char ** argv) {
     }
 
     params.embedding = true;
-    // For BERT models, batch size must be equal to ubatch size
+    // For non-causal models, batch size must be equal to ubatch size
     params.n_ubatch = params.n_batch;
 
     print_build_info();
