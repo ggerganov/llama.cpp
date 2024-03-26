@@ -190,7 +190,7 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
 
       - name: Extract image url
-        id: extrac_image_url
+        id: extract_image_url
         continue-on-error: true
         run: |
           set -eux
