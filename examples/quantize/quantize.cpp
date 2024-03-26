@@ -111,14 +111,14 @@ static void usage(const char * executable) {
     exit(1);
 }
 
-static void load_imatrix(const std::string& imatrix_file, std::unordered_map<std::string, std::vector<float>>& imatrix_data) {
+static void load_imatrix(const std::string & imatrix_file, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
     std::ifstream in(imatrix_file.c_str(), std::ios::binary);
     if (!in) {
-        printf("%s: failed to open %s\n",__func__,imatrix_file.c_str());
+        printf("%s: failed to open %s\n",__func__, imatrix_file.c_str());
         return;
     }
     int n_entries;
-    in.read((char*)&n_entries, sizeof(n_entries));
+    in.read((char *)&n_entries, sizeof(n_entries));
     if (in.fail() || n_entries < 1) {
         printf("%s: no data in file %s\n", __func__, imatrix_file.c_str());
         return;
@@ -128,25 +128,25 @@ static void load_imatrix(const std::string& imatrix_file, std::unordered_map<std
         std::vector<char> name_as_vec(len+1);
         in.read((char *)name_as_vec.data(), len);
         if (in.fail()) {
-            printf("%s: failed reading name for entry %d from %s\n",__func__,i+1,imatrix_file.c_str());
+            printf("%s: failed reading name for entry %d from %s\n", __func__, i+1, imatrix_file.c_str());
             return;
         }
         name_as_vec[len] = 0;
         std::string name{name_as_vec.data()};
-        auto& e = imatrix_data[std::move(name)];
+        auto & e = imatrix_data[std::move(name)];
         int ncall;
-        in.read((char*)&ncall, sizeof(ncall));
+        in.read((char *)&ncall, sizeof(ncall));
         int nval;
         in.read((char *)&nval, sizeof(nval));
         if (in.fail() || nval < 1) {
-            printf("%s: failed reading number of values for entry %d\n",__func__,i);
+            printf("%s: failed reading number of values for entry %d\n", __func__, i);
             imatrix_data = {};
             return;
         }
         e.resize(nval);
-        in.read((char*)e.data(), nval*sizeof(float));
+        in.read((char *)e.data(), nval*sizeof(float));
         if (in.fail()) {
-            printf("%s: failed reading data for entry %d\n",__func__,i);
+            printf("%s: failed reading data for entry %d\n", __func__, i);
             imatrix_data = {};
             return;
         }
@@ -154,13 +154,13 @@ static void load_imatrix(const std::string& imatrix_file, std::unordered_map<std
             for (auto& v : e) v /= ncall;
         }
     }
-    printf("%s: loaded %d importance matrix entries from %s\n",__func__,int(imatrix_data.size()),imatrix_file.c_str());
+    printf("%s: loaded %d importance matrix entries from %s\n", __func__, int(imatrix_data.size()), imatrix_file.c_str());
 }
 
-static void prepare_imatrix(const std::string& imatrix_file,
-        const std::vector<std::string>& included_weights,
-        const std::vector<std::string>& excluded_weights,
-        std::unordered_map<std::string, std::vector<float>>& imatrix_data) {
+static void prepare_imatrix(const std::string & imatrix_file,
+        const std::vector<std::string> & included_weights,
+        const std::vector<std::string> & excluded_weights,
+        std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
     if (!imatrix_file.empty()) {
         load_imatrix(imatrix_file, imatrix_data);
     }
@@ -205,7 +205,7 @@ static ggml_type parse_ggml_type(const char * arg) {
     return result;
 }
 
-static bool parse_kv_override(const char * data, std::vector<llama_model_kv_override>& overrides) {
+static bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides) {
     const char* sep = strchr(data, '=');
     if (sep == nullptr || sep - data >= 128) {
         fprintf(stderr, "%s: malformed KV override '%s'\n", __func__, data);
@@ -219,27 +219,22 @@ static bool parse_kv_override(const char * data, std::vector<llama_model_kv_over
         sep += 4;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
         kvo.int_value = std::atol(sep);
-    }
-    else if (strncmp(sep, "float:", 6) == 0) {
+    } else if (strncmp(sep, "float:", 6) == 0) {
         sep += 6;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
         kvo.float_value = std::atof(sep);
-    }
-    else if (strncmp(sep, "bool:", 5) == 0) {
+    } else if (strncmp(sep, "bool:", 5) == 0) {
         sep += 5;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
         if (std::strcmp(sep, "true") == 0) {
             kvo.bool_value = true;
-        }
-        else if (std::strcmp(sep, "false") == 0) {
+        } else if (std::strcmp(sep, "false") == 0) {
             kvo.bool_value = false;
-        }
-        else {
+        } else {
             fprintf(stderr, "%s: invalid boolean value for KV override '%s'\n", __func__, data);
             return false;
         }
-    }
-    else {
+    } else {
         fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
         return false;
     }
@@ -344,8 +339,7 @@ int main(int argc, char ** argv) {
         if (ftype_str == "COPY") {
             params.only_copy = true;
         }
-    }
-    else {
+    } else {
         fname_out = argv[arg_idx];
         arg_idx++;
 

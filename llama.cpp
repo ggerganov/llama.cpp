@@ -12809,20 +12809,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     gguf_set_kv     (ctx_out, ml.meta);
     gguf_set_val_u32(ctx_out, "general.quantization_version", GGML_QNT_VERSION);
     gguf_set_val_u32(ctx_out, "general.file_type", ftype);
+
     if (params->kv_overrides) {
-        const std::vector<llama_model_kv_override>& overrides = *(const std::vector<llama_model_kv_override>*)params->kv_overrides;
-        for (auto& o : overrides) {
+        const std::vector<llama_model_kv_override> & overrides = *(const std::vector<llama_model_kv_override> *)params->kv_overrides;
+        for (auto & o : overrides) {
             if (o.key[0] == 0) break;
             if (o.tag == LLAMA_KV_OVERRIDE_TYPE_FLOAT) {
                 gguf_set_val_f32(ctx_out, o.key, o.float_value);
-            }
-            else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_INT) {
+            } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_INT) {
                 gguf_set_val_i32(ctx_out, o.key, o.int_value);
-            }
-            else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_BOOL) {
+            } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_BOOL) {
                 gguf_set_val_bool(ctx_out, o.key, o.bool_value);
-            }
-            else {
+            } else {
                 LLAMA_LOG_WARN("%s: unknown KV override type for key %s\n", __func__, o.key);
             }
         }
@@ -12836,21 +12834,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // TODO: avoid hardcoded tensor names - use the TN_* constants
         if (name.find("attn_v.weight") != std::string::npos || name.find("attn_qkv.weight") != std::string::npos) {
             ++qs.n_attention_wv;
-        }
-        else if (name.find("ffn_down") != std::string::npos) {
+        } else if (name.find("ffn_down") != std::string::npos) {
             ++qs.n_ffn_down;
-        }
-        else if (name.find("ffn_gate") != std::string::npos) {
+        } else if (name.find("ffn_gate") != std::string::npos) {
             ++qs.n_ffn_gate;
-        }
-        else if (name.find("ffn_up") != std::string::npos) {
+        } else if (name.find("ffn_up") != std::string::npos) {
             ++qs.n_ffn_up;
-        }
-        else if (name == LLM_TN(model.arch)(LLM_TENSOR_OUTPUT, "weight")) {
+        } else if (name == LLM_TN(model.arch)(LLM_TENSOR_OUTPUT, "weight")) {
             qs.has_output = true;
         }
     }
-    if (qs.n_attention_wv != qs.n_ffn_down || (uint32_t)qs.n_attention_wv != model.hparams.n_layer) {
+    if (qs.n_attention_wv != qs.n_ffn_down || (uint32_t) qs.n_attention_wv != model.hparams.n_layer) {
         LLAMA_LOG_WARN("%s ============ Strange model: n_attention_wv = %d, n_ffn_down = %d, hparams.n_layer = %d\n",
                 __func__, qs.n_attention_wv, qs.n_ffn_down, model.hparams.n_layer);
     }
