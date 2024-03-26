@@ -41,6 +41,7 @@ jobs:
     env:
       RUNNER_LABEL: Standard_NC4as_T4_v3 # FIXME Do not find a way to not duplicate it
       N_USERS: 8
+      DURATION: 10m
     if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.event.push.ref == 'refs/heads/master' }}
     steps:
       - name: Clone
@@ -113,7 +114,7 @@ jobs:
               --branch ${{ github.head_ref || github.ref_name }} \
               --commit ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha }} \
               --scenario script.js \
-              --duration ${{ github.event.inputs.duration || "10m" }} \
+              --duration ${{ github.event.inputs.duration || env.DURATION }} \
               --hf-repo ggml-org/models	 \
               --hf-file phi-2/ggml-model-q4_0.gguf \
               --model-path-prefix /models \
