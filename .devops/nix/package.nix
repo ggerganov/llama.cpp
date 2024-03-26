@@ -73,6 +73,9 @@ let
   # It'd be nice to migrate to buildPythonPackage, as well as ensure this repo
   # is PEP 517-compatible, and ensure the correct .dist-info is generated.
   # https://peps.python.org/pep-0517/
+  #
+  # TODO: Package up each Python script or service appropriately, by making
+  # them into "entrypoints"
   llama-python = python3.withPackages (
     ps: [
       ps.numpy
@@ -161,11 +164,6 @@ effectiveStdenv.mkDerivation (
         --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
       substituteInPlace ./ggml-metal.m \
         --replace '[bundle pathForResource:@"default" ofType:@"metallib"];' "@\"$out/bin/default.metallib\";"
-
-      # TODO: Package up each Python script or service appropriately.
-      # If we were to migrate to buildPythonPackage and prepare the `pyproject.toml`,
-      # we could make those *.py into setuptools' entrypoints
-      substituteInPlace ./*.py --replace "/usr/bin/env python" "${llama-python}/bin/python"
     '';
 
     # With PR#6015 https://github.com/ggerganov/llama.cpp/pull/6015,
