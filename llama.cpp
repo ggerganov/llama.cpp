@@ -12486,7 +12486,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         if (name.find("attn_k.weight") != std::string::npos) {
             if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_IQ4_XS;
             else if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_IQ3_S;
-            else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_XXS;	
+            else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_XXS;
             else if (qs.model.hparams.n_gqa() >= 8) new_type = GGML_TYPE_IQ2_S;
             else if (qs.model.hparams.n_gqa() >= 4) new_type = GGML_TYPE_IQ2_XS;
             else if (qs.model.hparams.n_gqa() >= 2) new_type = GGML_TYPE_IQ2_XXS;
