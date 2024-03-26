@@ -10,6 +10,7 @@
 #include <vector>
 #include <sstream>
 #include <random>
+#include <unordered_map>
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
@@ -491,19 +492,123 @@ static json oaicompat_completion_params_parse(
     //    function_str = default_tool_formatter(body["functions"]);
        function_str = rubra_format_function_call_str(body["functions"]);
     }
-
+    printf("\n=============Formatting Input from OPENAI format...============\n");
     if (function_str != "") {
         const std::vector<json> expand_messages = [&]() {
-            std::vector<json> temp_vec = body["messages"];
-            if (body["messages"][0]["role"] == "system") {
-                std::string old_content = temp_vec[0]["content"];
-                temp_vec[0]["content"] = old_content + "\n" + function_str;
+            // std::vector<json> temp_vec = body["messages"];
+            // if (body["messages"][0]["role"] == "system") {
+            //     std::string old_content = temp_vec[0]["content"];
+            //     temp_vec[0]["content"] = old_content + "\n" + function_str;
+            // }
+            // else {
+            //     json function_call;
+            //     function_call["role"] = "system";
+            //     function_call["content"] = "You are a helpful assistant.\n" + function_str;
+            //     temp_vec.push_back(function_call);
+            // }
+            std::vector<json> temp_vec;
+            std::unordered_map<std::string, std::string> func_observation_map;
+            for (size_t i = 0; i < body["messages"].size(); ++i) {
+                printf("body[\"messages\"][%d][\"role\"] = %s\n", i, body["messages"][i]["role"].get<std::string>().c_str());
+                printf("Message: %s\n", body["messages"][i].dump().c_str());
+                printf("%d\n", body["messages"][i].contains("tool_calls"));
+
+                if (body["messages"][i]["role"] != "tool" and func_observation_map.size() > 0) {
+                    // insert the observation from the tool call before the next message
+                    std::string observation_str = "";
+                    for (const auto& [key, value] : func_observation_map) {
+                        if (observation_str != "") {
+                            observation_str += ", ";
+                        }
+                        observation_str += value;
+                    }
+                    observation_str = std::string("<<observation>>") + "[" + observation_str + "]";
+                    json observation_call;
+                    observation_call["role"] = "observation";
+                    observation_call["content"] = observation_str;
+                    temp_vec.push_back(observation_call);
+                    func_observation_map.clear();
+                }
+
+                if (i == 0){
+                    if (body["messages"][0]["role"] == "system") {
+                        std::string old_content = body["messages"][0]["content"];
+                        json function_call;
+                        function_call["role"] = "system";
+                        function_call["content"] = old_content + "\n" + function_str;
+                        temp_vec.push_back(function_call);
+                    }
+                    else { // insert a system message of tool definition before the first message
+                        json function_call;
+                        function_call["role"] = "system";
+                        function_call["content"] = "You are a helpful assistant.\n" + function_str;
+                        temp_vec.push_back(function_call);
+                        temp_vec.push_back(body["messages"][0]);
+                    }
+                }
+                // else if (body["messages"][i]["role"] == "assistant" and (body["messages"][i]["content"].is_null() or body["messages"][i]["content"]=="") and !body["messages"][i]["tool_calls"].is_null() and !body["messages"][i]["tool_calls"].empty()){
+                else if (body["messages"][i]["role"] == "assistant" and body["messages"][i].contains("tool_calls")){
+                    printf("Tool call detected\n");
+                    // convert OpenAI function call format to Rubra format
+                    std::string tool_call_str = "";
+                    printf("Tool calls: %s\n", body["messages"][i]["tool_calls"].dump().c_str());
+                    for (const auto & tool_call : body["messages"][i]["tool_calls"]) {
+                        printf("Tool call id: %s\n", tool_call["id"].get<std::string>().c_str());
+                        std::string func_str = "";
+                        func_observation_map[tool_call["id"].get<std::string>()] = ""; // initialize with empty value and later should be updated with the actual value from "tool_call" role message
+                        json args = json::parse(tool_call["function"]["arguments"].get<std::string>()); // TODO: catch the exceptions 
+                        for (auto& arg : args.items()) {
+                            if (func_str != "") {
+                                func_str += ", ";
+                            }
+                            func_str += arg.key() + "=" + arg.value().dump();
+                        }
+                        func_str = tool_call["function"]["name"].get<std::string>() + "(" + func_str + ")";
+                        if (tool_call_str != "") {
+                            tool_call_str += ", ";
+                        }
+                        tool_call_str += func_str;
+                    }
+                    tool_call_str = std::string("<<functions>>") + "[" + tool_call_str + "]";
+                    printf("Tool call string: %s\n", tool_call_str.c_str());
+
+                    json function_call;
+                    function_call["role"] = "function";
+                    function_call["content"] = tool_call_str;
+                    temp_vec.push_back(function_call);
+                }
+                else if (body["messages"][i]["role"] == "tool") {
+                    printf("Observation detected\n");
+                    printf(body["messages"][i].dump().c_str());
+                    std::string tool_call_id = body["messages"][i]["tool_call_id"].get<std::string>();
+                    if (func_observation_map.find(tool_call_id) != func_observation_map.end()) {
+                        func_observation_map[tool_call_id] = body["messages"][i]["content"].get<std::string>();
+                    } else {
+                        LOG_ERROR("Tool call id not found in the map", {{"tool_call_id", tool_call_id}});
+                        // TODO: the input is not valid in this case, should return an error
+                    }
+
+                }
+                else {
+                    temp_vec.push_back(body["messages"][i]);
+                }
+                
             }
-            else {
-                json function_call;
-                function_call["role"] = "system";
-                function_call["content"] = "You are a helpful assistant.\n" + function_str;
-                temp_vec.push_back(function_call);
+            if (func_observation_map.size() > 0) {
+                // insert the observation from the tool call before the next message
+                std::string observation_str = "";
+                for (const auto& [key, value] : func_observation_map) {
+                    if (observation_str != "") {
+                        observation_str += ", ";
+                    }
+                    observation_str += value;
+                }
+                observation_str = std::string("<<observation>>") + "[" + observation_str + "]";
+                json observation_call;
+                observation_call["role"] = "observation";
+                observation_call["content"] = observation_str;
+                temp_vec.push_back(observation_call);
+                func_observation_map.clear();
             }
             return temp_vec;
         }();

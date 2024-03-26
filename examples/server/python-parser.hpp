@@ -39,7 +39,7 @@ static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, con
     if (strcmp(type, "call") == 0) {
         
         json call = {
-            {"id", calls.size()},
+            {"id", std::to_string(calls.size())},
             {"name", ""},
             {"args", json::array()},
             {"kwargs", json::object()}
