@@ -32,7 +32,7 @@ let package = Package(
                 "ggml.c",
                 "llama.cpp",
                 "unicode.cpp",
-                "unicodedata.cpp",
+                "unicode-data.cpp",
                 "ggml-alloc.c",
                 "ggml-backend.c",
                 "ggml-quants.c",
