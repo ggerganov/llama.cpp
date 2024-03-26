@@ -12,6 +12,15 @@ on:
           - Standard_NC4as_T4_v3
           - Standard_NC24ads_A100_v4
           - Standard_NC80adis_H100_v5
+      sha:
+        description: 'Commit SHA1 to build'
+        required: false
+        type: string
+      duration:
+        description: 'Duration of the bench'
+        type: string
+        default: 10m
+
   push:
     branches:
       - master
@@ -31,6 +40,7 @@ jobs:
     runs-on: Standard_NC4as_T4_v3
     env:
       RUNNER_LABEL: Standard_NC4as_T4_v3 # FIXME Do not find a way to not duplicate it
+      N_USERS: 8
     if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.event.push.ref == 'refs/heads/master' }}
     steps:
       - name: Clone
@@ -38,6 +48,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
 
       - name: Install python env
         id: pipenv
@@ -100,13 +111,13 @@ jobs:
               --runner-label ${{ env.RUNNER_LABEL }} \
               --name ${{ github.job }} \
               --branch ${{ github.head_ref || github.ref_name }} \
-              --commit ${{ github.sha }} \
+              --commit ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha }} \
               --scenario script.js \
-              --duration 10m \
+              --duration ${{ github.event.inputs.duration || "10m" }} \
               --hf-repo ggml-org/models	 \
               --hf-file phi-2/ggml-model-q4_0.gguf \
               --model-path-prefix /models \
-              --parallel 8 \
+              --parallel ${{ env.N_USERS }} \
               -ngl 33 \
               --batch-size 2048 \
               --ubatch-size	256 \
@@ -125,7 +136,7 @@ jobs:
           name: benchmark-results
           compression-level: 9
           path: |
-            examples/server/bench/*.png
+            examples/server/bench/*.jpg
             examples/server/bench/*.json
             examples/server/bench/*.log
 
@@ -133,6 +144,7 @@ jobs:
         uses: Sibz/github-status-action@v1
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
+          sha: ${{ inputs.sha || github.event.pull_request.head.sha || github.sha }}
           context: bench-server-baseline
           description: |
             ${{ env.BENCH_RESULTS }}
@@ -145,10 +157,10 @@ jobs:
         with:
           client_id: ${{secrets.IMGUR_CLIENT_ID}}
           path: |
-            examples/server/bench/prompt_tokens_seconds.png
-            examples/server/bench/predicted_tokens_seconds.png
-            examples/server/bench/kv_cache_usage_ratio.png
-            examples/server/bench/requests_processing.png
+            examples/server/bench/prompt_tokens_seconds.jpg
+            examples/server/bench/predicted_tokens_seconds.jpg
+            examples/server/bench/kv_cache_usage_ratio.jpg
+            examples/server/bench/requests_processing.jpg
 
       - name: Extract mermaid
         id: set_mermaid
@@ -176,24 +188,40 @@ jobs:
           echo "$REQUESTS_PROCESSING" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
+      - name: Extract image url
+        id: extrac_image_url
+        continue-on-error: true
+        run: |
+          set -eux
+
+          echo "IMAGE_O=${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[0] }}" >> $GITHUB_ENV
+          echo "IMAGE_1=${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[1] }}" >> $GITHUB_ENV
+          echo "IMAGE_2=${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[2] }}" >> $GITHUB_ENV
+          echo "IMAGE_3=${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[3] }}" >> $GITHUB_ENV
+
       - name: Comment PR
         uses: mshick/add-pr-comment@v2
         id: comment_pr
         if: ${{ github.event.pull_request != '' }}
-        continue-on-error: true
         with:
           message-id: bench-${{ github.job }}-${{ env.RUNNER_LABEL }}
           message: |
-            📈 **llama.cpp server** benchmark for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
 
+            - Concurrent users: ${{ env.N_USERS }}
+            - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(90)=${{ env.HTTP_REQ_DURATION_P_90_ }}ms        passes=${{ env.HTTP_REQ_FAILED_FAILS }}reqs fails=${{ env.HTTP_REQ_FAILED_PASSES }}reqs
+            - Prompt processing (pp): avg=${{ env.LLAMACPP_PROMPT_TOKENS_AVG }}tk/s p(90)=${{ env.LLAMACPP_PROMPT_TOKENS_P_90_ }}tk/s **total=${{ env.LLAMACPP_PROMPT_TOKENS_TOTAL_COUNTER_RATE }}tk/s**
+            - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(90)=${{ env.LLAMACPP_TOKENS_SECOND_P_90_ }}tk/s **total=${{ env.LLAMACPP_COMPLETION_TOKENS_TOTAL_COUNTER_RATE }}tk/s**
+            - Finish reason         : stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }}reqs truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
             - ${{ env.BENCH_GRAPH_XLABEL }}
-            - req_avg=${{ env.HTTP_REQ_DURATION_AVG }} pp_avg=${{ env.LLAMACPP_PROMPT_TOKENS_AVG }} tks_avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}
-            
-            
+
+
             <p align="center">
-            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[0] }}" alt="prompt_tokens_seconds" />
+            
+            <img width="100%" height="100%" src="${{ env.IMAGE_O] }}" alt="prompt_tokens_seconds" />
 
             <details>
+
                 <summary>More</summary>
 
             ```mermaid
@@ -202,7 +230,7 @@ jobs:
 
             </details>
 
-            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[1] }}" alt="predicted_tokens_seconds"/>
+            <img width="100%" height="100%" src="${{ env.IMAGE_1 }}" alt="predicted_tokens_seconds"/>
 
             <details>
                 <summary>More</summary>
@@ -214,10 +242,14 @@ jobs:
             </details>
 
             </p>
+
             <details>
-                <summary>Details</summary>
-                <p align="center">
-            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[2] }}" alt="kv_cache_usage_ratio" />
+
+            <summary>Details</summary>
+
+            <p align="center">
+
+            <img width="100%" height="100%" src="${{ env.IMAGE_2 }}" alt="kv_cache_usage_ratio" />
 
             <details>
                 <summary>More</summary>
@@ -228,7 +260,7 @@ jobs:
 
             </details>
 
-            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[3] }}" alt="requests_processing"/>
+            <img width="100%" height="100%" src="${{ env.IMAGE_3 }}" alt="requests_processing"/>
 
             <details>
                 <summary>More</summary>
@@ -238,6 +270,6 @@ jobs:
             ```
 
             </details>
-            
+
             </p>
             </details>

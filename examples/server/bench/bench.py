@@ -70,7 +70,7 @@ def main(args_in: list[str] | None = None) -> None:
                 for metric_name in data['metrics']:
                     for metric_metric in data['metrics'][metric_name]:
                         value = data['metrics'][metric_name][metric_metric]
-                        if isinstance(value, float):
+                        if isinstance(value, float) or isinstance(value, int):
                             value = round(value, 2)
                             data['metrics'][metric_name][metric_metric]=value
                             github_env.write(
@@ -149,11 +149,11 @@ def main(args_in: list[str] | None = None) -> None:
                 plt.gca().spines["right"].set_alpha(0.0)
                 plt.gca().spines["left"].set_alpha(0.3)
 
-                # Save the plot as a PNG image
-                plt.savefig(f'{metric}.png')
+                # Save the plot as a jpg image
+                plt.savefig(f'{metric}.jpg', dpi=60)
                 plt.close()
 
-                # Mermaid format in case image failed
+                # Mermaid format in case images upload failed
                 with (open(f"{metric}.mermaid", 'w') as mermaid_f):
                     mermaid = (
                     f"""---
