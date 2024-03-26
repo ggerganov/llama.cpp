@@ -697,7 +697,7 @@ static json format_final_response_oaicompat(const json & request, json result, c
                 printf("format_final_response_oaicompat: tool_call: %s\n", tool_call.dump().c_str());
                 oai_format_tool_calls.push_back(tool_call);
             }
-            choices = json::array({json{{"finish_reason", finish_reason},
+            choices = json::array({json{{"finish_reason", "tool_calls"},
                                         {"index", 0},
                                         {"message", json{{"tool_calls", oai_format_tool_calls},
                                                          {"role", "assistant"}}}}});
