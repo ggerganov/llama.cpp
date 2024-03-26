@@ -4375,7 +4375,6 @@ static bool llm_load_tensors(
 
     LLAMA_LOG_INFO("%s: ggml ctx size = %7.2f MiB\n", __func__, model.ctxs.size()*ctx_size/1024.0/1024.0);
 
-    bool init_mapping_prefetch = true;
     // create tensors for the weights
     {
         const int64_t n_embd       = hparams.n_embd;
@@ -5230,7 +5229,6 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_XVERSE:
                 {
-                    init_mapping_prefetch = false;
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
@@ -5289,7 +5287,7 @@ static bool llm_load_tensors(
 
     ml.done_getting_tensors();
 
-    ml.init_mappings(init_mapping_prefetch, use_mlock ? &model.mlock_mmaps : nullptr);
+    ml.init_mappings(true, use_mlock ? &model.mlock_mmaps : nullptr);
     model.mappings.reserve(ml.mappings.size());
 
     // create the backend buffers

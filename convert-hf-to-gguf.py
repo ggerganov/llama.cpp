@@ -212,7 +212,6 @@ class Model(ABC):
         try:
             return cls._model_classes[arch]
         except KeyError:
-            print(f"{cls._model_classes}")
             raise NotImplementedError(f'Architecture {arch!r} not supported!') from None
 
     def _is_model_safetensors(self) -> bool:
