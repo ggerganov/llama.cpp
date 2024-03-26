@@ -15417,9 +15417,11 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
             // GGML_SYCL_DEBUG("ggml_sycl_mul_mat ggml_sycl_op_mul_mat_sycl path\n");
             ggml_sycl_op_mul_mat(src0, src1, dst, ggml_sycl_op_mul_mat_sycl, false);
         }
-    } else {
+    } else if (src0->type == GGML_TYPE_F32){
         // GGML_SYCL_DEBUG("ggml_sycl_op_mul_mat\n");
         ggml_sycl_op_mul_mat(src0, src1, dst, ggml_sycl_op_mul_mat_sycl, false);
+    } else {
+        GGML_ASSERT(false);
     }
 }
 
