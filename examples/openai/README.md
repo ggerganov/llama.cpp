@@ -1,14 +1,44 @@
-# examples.openai: OpenAI API-compatible server
+# examples.openai: OpenAI API-compatible server + agent / tools examples
 
 A simple Python server that sits above the C++ [../server](examples/server) and offers improved OAI compatibility.
 
 ## Usage
 
+Run a simple test:
+
 ```bash
-python -m examples.openai -m some-model.gguf
-
-
+# Spawns a Python server (which spawns a C++ Server) then hits it w/ a tool-calling request
+examples/openai/test.sh
 ```
+
+To simply run the Python server (+ C++ server under the hood):
+
+```bash
+python -m examples.openai
+```
+
+## Tools usage (WIP)
+
+```bash
+git clone https://github.com/NousResearch/Hermes-Function-Calling examples/openai/hermes_function_calling
+```
+
+Then edit `examples/agents/hermes_function_calling/utils.py`:
+
+```py
+log_folder = os.environ.get('LOG_FOLDER', os.path.join(script_dir, "inference_logs"))
+```
+
+Then run tools in a sandbox:
+
+```bash
+REQUIREMENTS_FILE=<( cat examples/agents/hermes_function_calling/requirements.txt | grep -vE "bitsandbytes|flash-attn" ) \
+  examples/agents/run_sandboxed_tools.sh \
+    examples/agents/hermes_function_calling/functions.py \
+    -e LOG_FOLDER=/data/inference_logs
+```
+
+TODO: reactor that reads OpenAPI definitions and does the tool calling
 
 ## Features
 

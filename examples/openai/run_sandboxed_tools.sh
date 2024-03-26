@@ -2,9 +2,9 @@
 #
 # Runs a Python script in a sandboxed environment and makes its functions available as a web service.
 #
-# git submodule add https://github.com/NousResearch/Hermes-Function-Calling examples/agents/hermes_function_calling
-# python examples/agents/fastify.py examples/agents/hermes_function_calling/functions.py
-# REQUIREMENTS_FILE=<( cat examples/agents/hermes_function_calling/requirements.txt | grep -vE "bitsandbytes|flash-attn" ) examples/agents/run_sandboxed_tools.sh examples/agents/hermes_function_calling/functions.py -e LOG_FOLDER=/data/inference_logs
+# git submodule add https://github.com/NousResearch/Hermes-Function-Calling examples/openai/hermes_function_calling
+# python examples/openai/fastify.py examples/openai/hermes_function_calling/functions.py
+# REQUIREMENTS_FILE=<( cat examples/openai/hermes_function_calling/requirements.txt | grep -vE "bitsandbytes|flash-attn" ) examples/agents/run_sandboxed_tools.sh examples/agents/hermes_function_calling/functions.py -e LOG_FOLDER=/data/inference_logs
 set -euo pipefail
 
 script="$( realpath "$1" )"

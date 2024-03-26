@@ -1,9 +1,14 @@
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Json
+
+class ToolCall(BaseModel):
+    name: str
+    arguments: Dict[str, Any]
 
 class Message(BaseModel):
     role: str
-    content: str
+    content: Optional[str]
+    tool_calls: Optional[list[ToolCall]] = None
 
 class ToolFunction(BaseModel):
     name: str

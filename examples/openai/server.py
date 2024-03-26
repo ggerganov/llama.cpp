@@ -1,35 +1,39 @@
+# https://gist.github.com/ochafik/a3d4a5b9e52390544b205f37fb5a0df3
+# pip install "fastapi[all]" "uvicorn[all]" sse-starlette jsonargparse jinja2 pydantic
+
 import json, sys, subprocess, atexit
 from pathlib import Path
 
-# sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from examples.openai.llama_cpp_server_api import LlamaCppServerCompletionRequest
-from examples.json_schema_to_grammar import SchemaConverter
-
-from typing import Optional
-import httpx
-from fastapi import Depends, FastAPI, Request, Response
-from starlette.responses import StreamingResponse
-from fastapi.responses import JSONResponse
-from jsonargparse import CLI
-
-from examples.openai.ts_converter import SchemaToTypeScriptConverter
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
-from examples.openai.api import Message, Tool, ToolFunction, ResponseFormat, ChatCompletionRequest
-from examples.openai.chat_format import ChatFormat, ToolStyle
+from examples.openai.api import Message, ChatCompletionRequest
+from examples.openai.prompting import ChatFormat, make_grammar, make_tools_prompt
 
-def _add_system_prompt(messages: list['Message'], system_prompt: str):
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+import httpx
+from starlette.responses import StreamingResponse
+from typing import Annotated, Optional
+import typer
+from typeguard import typechecked
+
+@typechecked
+def _add_system_prompt(messages: list[Message], system_prompt: Message) -> list[Message]:
+    assert system_prompt.role == "system"
     # TODO: add to last system message, or create a new one just before the last user message
     system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
     if system_message is not None:
         (i, m) = system_message
-        messages[i].content = m.content + '\n' + system_prompt
+        return messages[:i] + [Message(role="system", content=m.content + '\n' + system_prompt.content)] + messages[i+1:]
     else:
-        messages.insert(0, Message(role="system", content=system_prompt))
-    return messages
+        return [Message(role="system", content=system_prompt)] + messages
 
 def main(
-    model: Path = Path("/Users/ochafik/AI/Models/Hermes-2-Pro-Mistral-7B.Q8_0.gguf"),
+    model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
+    # model: Path = Path("/Users/ochafik/AI/Models/Hermes-2-Pro-Mistral-7B.Q8_0.gguf"),
+    # model_url: Annotated[Optional[str], typer.Option("--model-url", "-mu")] = None,
     host: str = "localhost",
     port: int = 8080,
     main_server_endpoint: Optional[str] = None,
@@ -48,7 +52,7 @@ def main(
             "./server", "-m", model,
             "--host", main_server_host, "--port", f'{main_server_port}',
             '-ctk', 'q4_0', '-ctv', 'f16',
-            "-c", f"8192",
+            "-c", f"{2*8192}",
             # "-c", f"{context_length}",
         ])
         atexit.register(server_process.kill)
@@ -70,110 +74,10 @@ def main(
             response_schema = None
 
         messages = chat_request.messages
-        parser=None
-        grammar=None
-
-        converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
-
-        response_rule = converter.visit(response_schema, "response") if response_schema else None
-          
-        
-        delimiter = '<%$[SAMPLE]$%>'
-        empty_prompt = chat_format.render([], add_generation_prompt=True)
-        planted_prompt = chat_format.render([{"role": "assistant", "content": delimiter}], add_generation_prompt=False)
-        assert planted_prompt.startswith(empty_prompt), f"Planted prompt does not start with empty prompt: {planted_prompt} vs {empty_prompt}"
-        [prefix, suffix] = planted_prompt[len(empty_prompt):].split(delimiter)
-
         if chat_request.tools:
-            if chat_format.tool_style in (ToolStyle.DEFAULT, ToolStyle.NOUS_RESEARCH_HERMES):
-                messages = _add_system_prompt(messages, '\n'.join([
-                    'Here are the tools available:',
-                    '<tools>',
-                    *(tool.model_dump_json() for tool in chat_request.tools),
-                    '</tools>',
-                ]))
+            messages = _add_system_prompt(messages, make_tools_prompt(chat_format, chat_request.tools))
 
-                tool_rules = [
-                    converter.visit(
-                        dict(
-                            type="object",
-                            properties=dict(
-                                name=dict(const=tool.function.name),
-                                arguments=tool.function.parameters,
-                            ),
-                            required=['name', 'arguments']
-                        ),
-                        f'{tool.function.name}-tool-call'
-                    )
-                    for tool in chat_request.tools
-                ]
-
-                # Constrain the output to be a non-tool-call message (constrained to a JSON schema or not)
-                # OR a tool-call message respecting the schema of any of the tools
-                converter._add_rule(
-                    "root", 
-                    converter._format_literal(prefix) + " (" +
-                        (response_rule or converter.not_literal("<tool_call>")) + " | " +
-                        converter._format_literal("<tool_call>") + " (" +
-                        ' | '.join(tool_rules) +
-                        ") " + converter._format_literal("</tool_call>") +
-                    ") " + converter._format_literal(suffix))
-                grammar = converter.format_grammar()
-                
-                def parse(s: str):
-                    if '<tool_call>'.startswith(s):
-                        if s.startswith('<tool_call>') and s.endswith('</tool_call>' + suffix):
-                            s = s[len('<tool_call>'):-len('</tool_call>' + suffix)]
-                            return {"role": "assistant", "tool_calls": [json.loads(s)]}
-                        return None
-                    else:
-                        return {"role": "assistant", "content": s}
-                
-                parser = parse
-
-            elif chat_format.tool_style == ToolStyle.FUNCTIONARY_V2:
-                
-                ts_converter = SchemaToTypeScriptConverter()
-                
-                messages = _add_system_prompt(messages, '\n'.join([
-                    '// Supported function definitions that should be called when necessary.'
-                    'namespace functions {',
-                    *[
-                        '// ' + tool.function.description.replace('\n', '\n// ') + '\n' + ''
-                        'type ' + tool.function.name + ' = (_: ' + ts_converter.visit(tool.function.parameters) + ") => any;\n"
-                        for tool in chat_request.tools
-                    ],
-                    '} // namespace functions',
-                ]))
-
-                # Only allowing a single tool call at a time for now.
-                # Note that if there were more, they'd be separated by a '<|from|>assistant' literal
-                converter._add_rule(
-                    "root", 
-                    converter._format_literal(prefix) + " (" +
-                        (response_rule or converter.not_literal("<|recipient|>")) + " | " +
-                        (' | '.join(
-                            converter._format_literal(f"<|recipient|>{tool.function.name}\n<|content|>") + " " +
-                            converter.visit(tool.function.parameters, tool.function.name + '-args')
-                            for tool in chat_request.tools
-                        )) +
-                        ") " +
-                    ") " + converter._format_literal(suffix))
-                grammar = converter.format_grammar()
-            else:
-                raise NotImplementedError(f'Unsupported tool_style: {chat_format.tool_style}')
-
-        elif response_schema:
-            converter._add_rule('root', response_rule)
-            grammar = converter.format_grammar()
-
-            def parse(s):
-                if s.endswith(suffix):
-                    s = s[:-len(suffix)]
-                    return {"role": "assistant", "content": s}
-                return None
-            
-            parser = parse
+        (grammar, parser) = make_grammar(chat_format, chat_request.tools, response_schema)
 
         if chat_format.strict_user_assistant_alternation:
             print("TODO: merge system messages into user messages")
@@ -182,11 +86,9 @@ def main(
         # TODO: Test whether the template supports formatting tool_calls
             
         prompt = chat_format.render(messages, add_generation_prompt=True)
-        # print(prompt)
-        # print(grammar)
         print(json.dumps(dict(
-            prompt=prompt,
             stream=chat_request.stream,
+            prompt=prompt,
             grammar=grammar,
         ), indent=2))
         async with httpx.AsyncClient() as client:
@@ -195,14 +97,23 @@ def main(
                 json=LlamaCppServerCompletionRequest(
                     prompt=prompt,
                     stream=chat_request.stream,
-                    n_predict=100,
+                    n_predict=300,
                     grammar=grammar,
                 ).model_dump(),
                 headers=headers,
                 timeout=None)
         
-        return StreamingResponse(generate_chunks(response), media_type="text/event-stream") if chat_request.stream \
-            else JSONResponse(response.json())
+        if chat_request.stream:
+            # TODO: Remove suffix from streamed response using partial parser.
+            assert not chat_request.tools and not chat_request.response_format, "Streaming not supported yet with tools or response_format"
+            return StreamingResponse(generate_chunks(response), media_type="text/event-stream")
+        else:
+            result = response.json()
+            print(json.dumps(result, indent=2))
+            message = parser(result["content"])
+            assert message is not None, f"Failed to parse response: {response.text}"
+            return JSONResponse(message.model_dump())
+            # return JSONResponse(response.json())
 
     async def generate_chunks(response):
         async for chunk in response.aiter_bytes():
@@ -211,5 +122,4 @@ def main(
     uvicorn.run(app, host=host, port=port)
 
 if __name__ == "__main__":
-    CLI(main)
-
+    typer.run(main)

@@ -1,3 +1,0 @@
-jsonargparse
-pydantic
-typer[all]
