@@ -15359,8 +15359,9 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     bool use_dequantize_mul_mat_vec = (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16)
                                       && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
                                       && src0->ne[0] % GGML_SYCL_DMMV_X == 0 && src1->ne[1] == 1;
-    bool use_mul_mat_vec_q = min_compute_capability >= VER_4VEC && ggml_is_quantized(src0->type)
-                             && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
+    bool use_mul_mat_vec_q = min_compute_capability >= VER_4VEC && (ggml_is_quantized(src0->type) 
+                             || src0->type == GGML_TYPE_F16) && src1->type == GGML_TYPE_F32 
+                             && dst->type == GGML_TYPE_F32;
     bool use_mul_mat_q = min_compute_capability >= VER_4VEC && ggml_is_quantized(src0->type)
                          && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
                          && ggml_sycl_supports_mmq(src0->type);
