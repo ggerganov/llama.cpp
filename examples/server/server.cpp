@@ -747,7 +747,8 @@ struct server_context {
         {
             const int32_t n_batch = llama_n_batch(ctx);
 
-            batch = llama_batch_init(n_batch, 0, params.n_parallel);
+            // only a single seq_id per token is needed
+            batch = llama_batch_init(n_batch, 0, 1);
         }
 
         metrics.init();

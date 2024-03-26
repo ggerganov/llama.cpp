@@ -10,6 +10,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Recent API changes
 
+- [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
 - [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
 - [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_seq_max()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
 - [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
@@ -629,6 +630,15 @@ Building the program with BLAS support may lead to some performance improvements
   You can get a list of platforms and devices from the `clinfo -l` command, etc.
 
 - #### Vulkan
+
+> [!WARNING]
+>
+> Vulkan support has been broken in https://github.com/ggerganov/llama.cpp/pull/6122
+> due to relying on `GGML_OP_GET_ROWS` which is not yet properly supported by the Vulkan backend,
+> but should be fixed relatively soon (possibly in https://github.com/ggerganov/llama.cpp/pull/6155
+> (ref: https://github.com/ggerganov/llama.cpp/pull/6122#issuecomment-2015327635)).
+>
+> Meanwhile, if you want to use the Vulkan backend, you should use the commit right before the breaking change, https://github.com/ggerganov/llama.cpp/commit/55c1b2a3bbd470e9e2a3a0618b92cf64a885f806
 
   **With docker**:
 
