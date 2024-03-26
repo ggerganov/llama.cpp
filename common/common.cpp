@@ -2650,12 +2650,7 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
 
     // calculate size of ctx needed for tensors, ensure tensors are f32, and find max layer
     {
-        struct ggml_init_params meta_params = {
-            /* .mem_size   = */ ggml_tensor_overhead() * 128 + ggml_graph_overhead(),
-            /* .mem_buffer = */ nullptr,
-            /* .no_alloc   = */ true,
-        };
-        ggml_context * meta_ctx = ggml_init(meta_params);
+        ggml_context * meta_ctx = nullptr;
         struct gguf_init_params meta_gguf_params = {
             /* .no_alloc = */ true,
             /* .ctx      = */ &meta_ctx,
@@ -2720,13 +2715,7 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
     }
 
     // load and scale tensors into final control vector context
-    struct ggml_init_params ggml_params = {
-        /* .mem_size   = */ ggml_tensor_overhead() * n_tensors + n_bytes,
-        /* .mem_buffer = */ nullptr,
-        /* .no_alloc   = */ false,
-    };
-    struct ggml_context * ctx = ggml_init(ggml_params);
-
+    struct ggml_context * ctx = nullptr;
     struct gguf_init_params params = {
         /*.no_alloc = */ false,
         /*.ctx      = */ &ctx,
