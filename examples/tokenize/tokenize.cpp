@@ -149,7 +149,7 @@ static void write_utf8_cstr_to_stdout(const char * str, bool & invalid_utf8) {
 
         // MultiByteToWideChar reports an error if str is empty, don't report
         // them as invalid_utf8.
-        if (strlen(str) == 0) {
+        if (*str == 0) {
             return;
         }
         int length_needed = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str, strlen(str), NULL, 0);
