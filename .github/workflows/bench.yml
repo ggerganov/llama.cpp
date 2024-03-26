@@ -117,6 +117,18 @@ jobs:
 
           cat results.github.env >> $GITHUB_ENV
 
+          # Remove dataset as we do not want it in the artefact
+          rm ShareGPT_V3_unfiltered_cleaned_split.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          compression-level: 9
+          path: |
+            examples/server/bench/*.png
+            examples/server/bench/*.json
+            examples/server/bench/*.log
+
       - name: Commit status
         uses: Sibz/github-status-action@v1
         with:
@@ -128,6 +140,7 @@ jobs:
 
       - name: Upload benchmark images
         uses: devicons/public-upload-to-imgur@v2.2.2
+        continue-on-error: true # Important as it looks unstable: 503
         id: imgur_step
         with:
           client_id: ${{secrets.IMGUR_CLIENT_ID}}
@@ -136,44 +149,95 @@ jobs:
             examples/server/bench/predicted_tokens_seconds.png
             examples/server/bench/kv_cache_usage_ratio.png
             examples/server/bench/requests_processing.png
-            examples/server/bench/requests_deferred.png
+
+      - name: Extract mermaid
+        id: set_mermaid
+        run: |
+          set -eux
+
+          cd examples/server/bench
+          PROMPT_TOKENS_SECONDS=$(cat prompt_tokens_seconds.mermaid)
+          echo "PROMPT_TOKENS_SECONDS<<EOF" >> $GITHUB_ENV
+          echo "$PROMPT_TOKENS_SECONDS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          PREDICTED_TOKENS_SECONDS=$(cat predicted_tokens_seconds.mermaid)
+          echo "PREDICTED_TOKENS_SECONDS<<EOF" >> $GITHUB_ENV
+          echo "$PREDICTED_TOKENS_SECONDS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          KV_CACHE_USAGE_RATIO=$(cat kv_cache_usage_ratio.mermaid)
+          echo "KV_CACHE_USAGE_RATIO<<EOF" >> $GITHUB_ENV
+          echo "$KV_CACHE_USAGE_RATIO" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          REQUESTS_PROCESSING=$(cat requests_processing.mermaid)
+          echo "REQUESTS_PROCESSING<<EOF" >> $GITHUB_ENV
+          echo "$REQUESTS_PROCESSING" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Comment PR
         uses: mshick/add-pr-comment@v2
         id: comment_pr
         if: ${{ github.event.pull_request != '' }}
+        continue-on-error: true
         with:
           message-id: bench-${{ github.job }}-${{ env.RUNNER_LABEL }}
           message: |
             📈 **llama.cpp server** benchmark for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+
+            - ${{ env.BENCH_GRAPH_XLABEL }}
+            - req_avg=${{ env.HTTP_REQ_DURATION_AVG }} pp_avg=${{ env.LLAMACPP_PROMPT_TOKENS_AVG }} tks_avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}
+            
+            
             <p align="center">
-                <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[0] }}" alt="prompt_tokens_seconds" />
-                <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[1] }}" alt="predicted_tokens_seconds"/>
+            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[0] }}" alt="prompt_tokens_seconds" />
+
+            <details>
+                <summary>More</summary>
+
+            ```mermaid
+            ${{ env.PROMPT_TOKENS_SECONDS }}
+            ```
+
+            </details>
+
+            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[1] }}" alt="predicted_tokens_seconds"/>
+
+            <details>
+                <summary>More</summary>
+
+            ```mermaid
+            ${{ env.PREDICTED_TOKENS_SECONDS }}
+            ```
+
+            </details>
+
             </p>
             <details>
                 <summary>Details</summary>
                 <p align="center">
-                    <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[2] }}" alt="kv_cache_usage_ratio" />
-                    <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[3] }}" alt="requests_processing"/>
-                    <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[4] }}" alt="requests_deferred"/>
-                </p>
-            </detail>
+            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[2] }}" alt="kv_cache_usage_ratio" />
 
-      - name: Upload results
-        if: ${{ github.event.pull_request }}
-        uses: edunad/actions-image@v2.0.0
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          path: 'examples/server/bench/*.png'
-          title: |
-            llama.cpp server benchmark results for ${{ github.job }} on ${{ env.RUNNER_LABEL }}: ${{ env.LLAMACPP_TOKENS_SECOND_AVG}}tk/s
-          annotationLevel: 'success'
+            <details>
+                <summary>More</summary>
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          compression-level: 9
-          path: |
-            examples/server/bench/*.png
-            examples/server/bench/*.json
-            examples/server/bench/*.log
+            ```mermaid
+            ${{ env.KV_CACHE_USAGE_RATIO }}
+            ```
+
+            </details>
+
+            <img width="100%" height="100%" src="${{ fromJSON(steps.imgur_step.outputs.imgur_urls)[3] }}" alt="requests_processing"/>
+
+            <details>
+                <summary>More</summary>
+
+            ```mermaid
+            ${{ env.REQUESTS_PROCESSING }}
+            ```
+
+            </details>
+            
+            </p>
+            </details>

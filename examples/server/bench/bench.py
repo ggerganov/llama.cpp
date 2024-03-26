@@ -101,6 +101,12 @@ def main(args_in: list[str] | None = None) -> None:
         while is_server_listening(args.host, args.port):
             time.sleep(0.1)
 
+    title = (f"llama.cpp {args.name} on {args.runner_label}\n "
+             f"duration={args.duration} {iterations} iterations")
+    xlabel = (f"{args.hf_repo}/{args.hf_file}\n"
+              f"parallel={args.parallel} ctx-size={args.ctx_size} ngl={args.n_gpu_layers} batch-size={args.batch_size} ubatch-size={args.ubatch_size} pp={args.max_prompt_tokens} pp+tg={args.max_tokens}\n"
+              f"branch={args.branch} commit={args.commit}")
+
     # Prometheus
     end_time = time.time()
     if is_server_listening("0.0.0.0", 9090):
@@ -121,23 +127,20 @@ def main(args_in: list[str] | None = None) -> None:
                 values = metric_data['data']['result'][0]['values']
                 timestamps, metric_values = zip(*values)
                 metric_values = [float(value) for value in metric_values]
-                timestamps = [datetime.fromtimestamp(int(ts)) for ts in timestamps]
+                timestamps_dt = [datetime.fromtimestamp(int(ts)) for ts in timestamps]
                 plt.figure(figsize=(16, 10), dpi=80)
-                plt.plot(timestamps, metric_values, label=metric)
+                plt.plot(timestamps_dt, metric_values, label=metric)
                 plt.xticks(rotation=0, fontsize=14, horizontalalignment='center', alpha=.7)
                 plt.yticks(fontsize=12, alpha=.7)
 
-                plt.title(f"llama.cpp {args.name} on {args.runner_label}\n"
-                          f"duration={args.duration} {iterations} iterations",
+                ylabel = f"llamacpp:{metric}"
+                plt.title(title,
                           fontsize=14, wrap=True)
                 plt.grid(axis='both', alpha=.3)
-                plt.ylabel(f"llamacpp:{metric}", fontsize=22)
-                plt.xlabel(f"{args.hf_repo}/{args.hf_file}\n"
-                           f"parallel={args.parallel} ctx-size={args.ctx_size} ngl={args.n_gpu_layers} batch-size={args.batch_size} ubatch-size={args.ubatch_size}\n"
-                           f"pp={args.max_prompt_tokens} pp+tg={args.max_tokens}\n"
-                           f"branch={args.branch} commit={args.commit}", fontsize=14, wrap=True)
+                plt.ylabel(ylabel, fontsize=22)
+                plt.xlabel(xlabel, fontsize=14, wrap=True)
                 plt.gca().xaxis.set_major_locator(matplotlib.dates.MinuteLocator())
-                plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y%m%d %H:%M:%S"))
+                plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y-%m-%d %H:%M:%S"))
                 plt.gcf().autofmt_xdate()
 
                 # Remove borders
@@ -149,6 +152,27 @@ def main(args_in: list[str] | None = None) -> None:
                 # Save the plot as a PNG image
                 plt.savefig(f'{metric}.png')
                 plt.close()
+
+                # Mermaid format in case image failed
+                with (open(f"{metric}.mermaid", 'w') as mermaid_f):
+                    mermaid = (
+                    f"""---
+config:
+    xyChart:
+        titleFontSize: 12
+        width: 900
+        height: 600
+    themeVariables:
+        xyChart:
+            titleColor: "#000000"
+---
+xychart-beta
+    title "{title}"
+    y-axis "llamacpp:{metric}"
+    x-axis "llamacpp:{metric}" {int(min(timestamps))} --> {int(max(timestamps))}
+    line [{', '.join([str(round(float(value))) for value in metric_values])}]
+                    """)
+                    mermaid_f.write(mermaid)
 
     # 140 chars max for commit status description
     bench_results = {
@@ -168,6 +192,11 @@ def main(args_in: list[str] | None = None) -> None:
     with open("results.github.env", 'a') as github_env:
         github_env.write(f"BENCH_RESULTS={json.dumps(bench_results, indent=None, separators=(',', ':') )}\n")
         github_env.write(f"BENCH_ITERATIONS={iterations}\n")
+
+        title = title.replace('\n', ' ')
+        xlabel = xlabel.replace('\n', ' ')
+        github_env.write(f"BENCH_GRAPH_TITLE={title}\n")
+        github_env.write(f"BENCH_GRAPH_XLABEL={xlabel}\n")
 
 
 def start_benchmark(args):
