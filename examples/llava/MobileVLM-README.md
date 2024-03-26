@@ -124,7 +124,7 @@ llama_print_timings:       total time =   34570.79 ms
 ## Orin compile and run
 ### compile
 ```sh
-make LLAMA_CUBLAS=1 CUDA_DOCKER_ARCH=sm_87 LLAMA_CUDA_F16=1 -j 32
+make LLAMA_CUDA=1 CUDA_DOCKER_ARCH=sm_87 LLAMA_CUDA_F16=1 -j 32
 ```
 
 ### run on Orin

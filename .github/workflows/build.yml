@@ -728,13 +728,13 @@ jobs:
           path: |
             llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
 
-  windows-latest-cmake-cublas:
+  windows-latest-cmake-cuda:
     runs-on: windows-latest
 
     strategy:
       matrix:
         cuda: ['12.2.0', '11.7.1']
-        build: ['cublas']
+        build: ['cuda']
 
     steps:
       - name: Clone
@@ -755,7 +755,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
+          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUDA=ON -DBUILD_SHARED_LIBS=ON
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Determine tag name
@@ -911,7 +911,7 @@ jobs:
       - macOS-latest-make
       - macOS-latest-cmake
       - windows-latest-cmake
-      - windows-latest-cmake-cublas
+      - windows-latest-cmake-cuda
       - macOS-latest-cmake-arm64
       - macOS-latest-cmake-x64
 

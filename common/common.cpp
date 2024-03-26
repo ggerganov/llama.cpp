@@ -48,12 +48,12 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-#if (defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL))
-#define GGML_USE_CUBLAS_SYCL
+#if (defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL))
+#define GGML_USE_CUDA_SYCL
 #endif
 
-#if (defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)) || defined(GGML_USE_VULKAN)
-#define GGML_USE_CUBLAS_SYCL_VULKAN
+#if (defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL)) || defined(GGML_USE_VULKAN)
+#define GGML_USE_CUDA_SYCL_VULKAN
 #endif
 
 #if defined(LLAMA_USE_CURL)
@@ -861,9 +861,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.main_gpu = std::stoi(argv[i]);
-#ifndef GGML_USE_CUBLAS_SYCL
-        fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the main GPU has no effect.\n");
-#endif // GGML_USE_CUBLAS_SYCL
+#ifndef GGML_USE_CUDA_SYCL
+        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL. Setting the main GPU has no effect.\n");
+#endif // GGML_USE_CUDA_SYCL
         return true;
     }
     if (arg == "--split-mode" || arg == "-sm") {
@@ -889,9 +889,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#ifndef GGML_USE_CUBLAS_SYCL
-        fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUBLAS_SYCL
+#ifndef GGML_USE_CUDA_SYCL
+        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL. Setting the split mode has no effect.\n");
+#endif // GGML_USE_CUDA_SYCL
         return true;
     }
     if (arg == "--tensor-split" || arg == "-ts") {
@@ -917,9 +917,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
                 params.tensor_split[i] = 0.0f;
             }
         }
-#ifndef GGML_USE_CUBLAS_SYCL_VULKAN
-        fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL/Vulkan. Setting a tensor split has no effect.\n");
-#endif // GGML_USE_CUBLAS_SYCL
+#ifndef GGML_USE_CUDA_SYCL_VULKAN
+        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting a tensor split has no effect.\n");
+#endif // GGML_USE_CUDA_SYCL_VULKAN
         return true;
     }
     if (arg == "--no-mmap") {
@@ -2387,7 +2387,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "cpu_has_avx512: %s\n",      ggml_cpu_has_avx512()      ? "true" : "false");
     fprintf(stream, "cpu_has_avx512_vbmi: %s\n", ggml_cpu_has_avx512_vbmi() ? "true" : "false");
     fprintf(stream, "cpu_has_avx512_vnni: %s\n", ggml_cpu_has_avx512_vnni() ? "true" : "false");
-    fprintf(stream, "cpu_has_cublas: %s\n",      ggml_cpu_has_cublas()      ? "true" : "false");
+    fprintf(stream, "cpu_has_cuda: %s\n",        ggml_cpu_has_cuda()        ? "true" : "false");
     fprintf(stream, "cpu_has_vulkan: %s\n",      ggml_cpu_has_vulkan()      ? "true" : "false");
     fprintf(stream, "cpu_has_clblast: %s\n",     ggml_cpu_has_clblast()     ? "true" : "false");
     fprintf(stream, "cpu_has_kompute: %s\n",     ggml_cpu_has_kompute()     ? "true" : "false");

@@ -7,7 +7,7 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#ifdef GGML_USE_CUBLAS
+#ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
 #endif
 
@@ -968,7 +968,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
     }
 
-#ifdef GGML_USE_CUBLAS
+#ifdef GGML_USE_CUDA
     new_clip->backend = ggml_backend_cuda_init(0);
     printf("%s: CLIP using CUDA backend\n", __func__);
 #endif
