@@ -617,6 +617,12 @@ static json format_error_response(const std::string & message, const enum error_
 }
 
 static void from_json(const json& j, llama_control_vector_load_info& l) {
-  j.at("strength").get_to(l.strength);
-  j.at("fname").get_to(l.fname);
+    j.at("strength").get_to(l.strength);
+    j.at("fname").get_to(l.fname);
 }
+
+struct llama_control_vector_load_option {
+    std::string name;
+    std::string fname;
+    bool is_dir;
+};
