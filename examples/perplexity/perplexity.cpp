@@ -552,6 +552,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
             const int batch_size  = std::min(end - batch_start, n_batch);
+
             int n_outputs = 0;
 
             batch.n_tokens = 0;
@@ -568,11 +569,12 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
                 for (int k = 0; k < batch_size; ++k) {
                     const int idx = seq*n_ctx + k;
-                    batch.token[idx] = tokens[seq_start + k];
-                    batch.pos[idx] = j*n_batch + k;
-                    batch.n_seq_id[idx] = 1;
-                    batch.seq_id[idx][0] = seq;
-                    batch.logits[idx] = batch.pos[idx] >= first ? 1 : 0;
+                    batch.token   [idx]    = tokens[seq_start + k];
+                    batch.pos     [idx]    = j*n_batch + k;
+                    batch.n_seq_id[idx]    = 1;
+                    batch.seq_id  [idx][0] = seq;
+                    batch.logits  [idx]    = batch.pos[idx] >= first ? 1 : 0;
+
                     n_outputs += batch.logits[idx] != 0;
                 }
                 batch.n_tokens += batch_size;
@@ -608,6 +610,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
         for (int seq = 0; seq < n_seq_batch; seq++) {
             const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits_ith(ctx, seq*n_ctx + first);
+
             llama_token * tokens_data = tokens.data() + start + seq*n_ctx + first;
             if (!params.logits_file.empty()) {
                 process_logits(logits_stream, n_vocab, all_logits,

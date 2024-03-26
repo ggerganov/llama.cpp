@@ -6103,6 +6103,7 @@ struct llm_build_context {
     struct ggml_cgraph * build_llama() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
+        // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
@@ -6532,6 +6533,7 @@ struct llm_build_context {
     struct ggml_cgraph * build_grok() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
+        // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
 
         const int64_t n_embd_head = hparams.n_embd_head_v;
@@ -9467,7 +9469,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                     data[n_outputs++] = i;
                 }
             }
-            // the graph needs the have been passed the correct number of outputs
+            // the graph needs to have been passed the correct number of outputs
             GGML_ASSERT(lctx.n_outputs == n_outputs);
         } else if (lctx.n_outputs == 1) {
             // only keep last output
@@ -9707,11 +9709,13 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
             return 0;
         }
     }
+
     float * output_base = (float *) ggml_backend_buffer_get_base(lctx.buf_output);
 
-    lctx.output_size = n_outputs_max;
     lctx.logits = has_logits ? output_base               : nullptr;
     lctx.embd   = has_embd   ? output_base + logits_size : nullptr;
+
+    lctx.output_size = n_outputs_max;
     lctx.logits_size = logits_size;
     lctx.embd_size   = embd_size;
 
@@ -9822,11 +9826,13 @@ static int llama_decode_internal(
         // keep last output only
         n_outputs = 1;
     }
+
     // reserve output buffer
     if (llama_output_reserve(lctx, n_outputs) < n_outputs) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_outputs);
         return -2;
     };
+
     // set output mappings
     if (batch_all.logits) {
         int32_t i_logits = 0;
@@ -10022,8 +10028,8 @@ static int llama_decode_internal(
             const int32_t n_outputs_new = lctx.n_outputs;
 
             if (n_outputs_new) {
-                GGML_ASSERT(n_outputs_prev+n_outputs_new <= n_outputs);
-                GGML_ASSERT((n_outputs_prev+n_outputs_new)*n_vocab <= (int64_t) lctx.logits_size);
+                GGML_ASSERT( n_outputs_prev + n_outputs_new <= n_outputs);
+                GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_vocab <= (int64_t) lctx.logits_size);
                 ggml_backend_tensor_get_async(backend_res, res, logits_out, 0, n_outputs_new*n_vocab*sizeof(float));
             }
         }
@@ -10042,8 +10048,8 @@ static int llama_decode_internal(
                         const int32_t n_outputs_new = lctx.n_outputs;
 
                         if (n_outputs_new) {
-                            GGML_ASSERT(n_outputs_prev+n_outputs_new <= n_outputs);
-                            GGML_ASSERT((n_outputs_prev+n_outputs_new)*n_embd <= (int64_t) lctx.embd_size);
+                            GGML_ASSERT( n_outputs_prev + n_outputs_new <= n_outputs);
+                            GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_embd <= (int64_t) lctx.embd_size);
                             ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_outputs_new*n_embd*sizeof(float));
                         }
                     } break;
@@ -14541,6 +14547,7 @@ void llama_kv_cache_update(struct llama_context * ctx) {
 size_t llama_get_state_size(const struct llama_context * ctx) {
     const auto & cparams = ctx->cparams;
     const auto & hparams = ctx->model.hparams;
+
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
     const size_t s_rng_size        = sizeof(size_t);
@@ -14639,7 +14646,7 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
         std::ostringstream rng_ss;
         rng_ss << ctx->rng;
 
-        const std::string & rng_str = rng_ss.str();
+        const std::string & rng_str  = rng_ss.str();
         const size_t        rng_size = rng_str.size();
 
         GGML_ASSERT(rng_size <= LLAMA_MAX_RNG_STATE);
@@ -14657,6 +14664,7 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
         // copy output ids
         {
             std::vector<int32_t> output_pos;
+
             const size_t    n_batch = ctx->cparams.n_batch;
             const auto & output_ids = ctx->output_ids;
 
@@ -14727,6 +14735,7 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
 
         if (kv_buf_size) {
             const size_t pre_kv_buf_size = data_ctx->get_size_written();
+
             std::vector<uint8_t> tmp_buf;
             for (int il = 0; il < (int) n_layer; ++il) {
                 const size_t k_size = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa*kv_head);

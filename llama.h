@@ -677,7 +677,7 @@ extern "C" {
 
     // Token logits obtained from the last call to llama_decode()
     // The logits for which llama_batch.logits[i] != 0 are stored contiguously
-    // in the order they have in the batch.
+    // in the order they have appeared in the batch.
     // Rows: number of tokens for which llama_batch.logits[i] != 0
     // Cols: n_vocab
     LLAMA_API float * llama_get_logits(struct llama_context * ctx);
@@ -690,7 +690,7 @@ extern "C" {
     // Get all output token embeddings.
     // when pooling_type == LLAMA_POOLING_TYPE_NONE or when using a generative model,
     // the embeddings for which llama_batch.logits[i] != 0 are stored contiguously
-    // in the order they have in the batch.
+    // in the order they have appeared in the batch.
     // shape: [n_outputs*n_embd]
     // Otherwise, returns NULL.
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
