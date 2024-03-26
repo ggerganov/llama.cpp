@@ -373,7 +373,7 @@ static __global__ void dequantize_block_iq2_xxs(const void * __restrict__ vx, ds
     const uint8_t signs = ksigns_iq2xs[(aux32 >> 7*il) & 127];
     for (int j = 0; j < 8; ++j) y[j] = d * grid[j] * (signs & kmask_iq2xs[j] ? -1.f : 1.f);
 #else
-    assert(false);
+    NO_DEVICE_CODE;
 #endif
 
 }
@@ -395,7 +395,7 @@ static __global__ void dequantize_block_iq2_xs(const void * __restrict__ vx, dst
     const uint8_t signs = ksigns_iq2xs[q2[il] >> 9];
     for (int j = 0; j < 8; ++j) y[j] = d * grid[j] * (signs & kmask_iq2xs[j] ? -1.f : 1.f);
 #else
-    assert(false);
+    NO_DEVICE_CODE;
 #endif
 
 }
@@ -416,7 +416,7 @@ static __global__ void dequantize_block_iq2_s(const void * __restrict__ vx, dst_
     const uint8_t signs = x[i].qs[QK_K/8+4*ib+il];
     for (int j = 0; j < 8; ++j) y[j] = d * grid[j] * (signs & kmask_iq2xs[j] ? -1.f : 1.f);
 #else
-    assert(false);
+    NO_DEVICE_CODE;
 #endif
 
 }
@@ -444,7 +444,7 @@ static __global__ void dequantize_block_iq3_xxs(const void * __restrict__ vx, ds
         y[j+4] = d * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
     }
 #else
-    assert(false);
+    NO_DEVICE_CODE;
 #endif
 
 }
@@ -470,7 +470,7 @@ static __global__ void dequantize_block_iq3_s(const void * __restrict__ vx, dst_
         y[j+4] = d * grid2[j] * (signs & kmask_iq2xs[j+4] ? -1.f : 1.f);
     }
 #else
-    assert(false);
+    NO_DEVICE_CODE;
 #endif
 
 }
@@ -496,7 +496,7 @@ static __global__ void dequantize_block_iq1_s(const void * __restrict__ vx, dst_
         y[j] = d * (q[j] + delta);
     }
 #else
-    assert(false);
+    NO_DEVICE_CODE;
 #endif
 
 }
@@ -526,7 +526,7 @@ static __global__ void dequantize_block_iq1_m(const void * __restrict__ vx, dst_
         y[j] = d * (q[j] + delta);
     }
 #else
-    assert(false);
+    NO_DEVICE_CODE;
 #endif
 
 }

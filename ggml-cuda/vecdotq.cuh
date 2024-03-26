@@ -961,8 +961,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xxs_q8_1(
     return d * (sumi1 + sumi2);
 #endif
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 }
 
@@ -1001,13 +1000,11 @@ static __device__ __forceinline__ float vec_dot_iq2_xs_q8_1(
     return d * ((0.5f + ls1) * sumi1 + (0.5f + ls2) * sumi2);
 #else
     GGML_UNUSED(ksigns64);
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 #else
     GGML_UNUSED(ksigns64);
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 }
 
@@ -1049,13 +1046,11 @@ static __device__ __forceinline__ float vec_dot_iq2_s_q8_1(
     return d * ((0.5f + ls1) * sumi1 + (0.5f + ls2) * sumi2);
 #else
     GGML_UNUSED(ksigns64);
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 #else
     GGML_UNUSED(ksigns64);
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 }
 
@@ -1085,12 +1080,10 @@ static __device__ __forceinline__ float vec_dot_iq3_xxs_q8_1(
     const float d = (float)bq2->d * (0.5f + aux32) * __low2float(bq8_1[ib32].ds) * 0.5f;
     return d * sumi;
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 }
 
@@ -1119,12 +1112,10 @@ static __device__ __forceinline__ float vec_dot_iq3_s_q8_1(
     const float d = (float)bq2->d * (1 + 2*((bq2->scales[ib32/2] >> 4*(ib32%2)) & 0xf)) * __low2float(bq8_1[ib32].ds);
     return d * sumi;
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 }
 
@@ -1159,8 +1150,7 @@ static __device__ __forceinline__ float vec_dot_iq1_s_q8_1(
     const float m = d1q * __high2float(bq8_1[ib32].ds);
     return d * sumi + m * delta;
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 }
 
@@ -1203,8 +1193,7 @@ static __device__ __forceinline__ float vec_dot_iq1_m_q8_1(
     const float d = (float)scale.f16 * __low2float (bq8_1[ib32].ds);
     return d * ((sumi[0] + sumf[0]) * (2*((sc[ib32/2] >> 6*(ib32%2)) & 0x7) + 1) + (sumi[1] + sumf[1]) * (2*((sc[ib32/2] >> (6*(ib32%2)+3)) & 0x7) + 1));
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 }
 
@@ -1267,27 +1256,6 @@ static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
     const block_iq4_xs * bq4 = (const block_iq4_xs *) vbq;
     const uint8_t * values = (const uint8_t *)kvalues_iq4nl;
 
-    //// iqs is 0...7
-    //const int ib64 = iqs/2;
-    //const int il = iqs%2;
-    //const int32_t  * q8_1 = (const int *)bq8_1[2*ib64+0].qs + 2*il;
-    //const int32_t  * q8_2 = (const int *)bq8_1[2*ib64+1].qs + 2*il;
-    //const uint32_t * q4_1 = (const uint32_t *)bq4->qs + 8*ib64 + 2*il;
-    //const uint32_t * q4_2 = q4_1 + 4;
-    //const int8_t ls1 = (bq4->scales_l[ib64] & 0xf) | (((bq4->scales_h >> (4*ib64+0)) & 3) << 4);
-    //const int8_t ls2 = (bq4->scales_l[ib64] >>  4) | (((bq4->scales_h >> (4*ib64+2)) & 3) << 4);
-    //const float d1 = (float)bq4->d * (ls1 - 32) * __low2float(bq8_1[2*ib64+0].ds);
-    //const float d2 = (float)bq4->d * (ls2 - 32) * __low2float(bq8_1[2*ib64+1].ds);
-    //int v1, v2;
-    //int sumi1 = 0, sumi2 = 0;
-    //for (int j = 0; j < 2; ++j) {
-    //    get_int_from_table_16(q4_1[j], values, v1, v2);
-    //    sumi1 = __dp4a(v2, q8_1[j+4], __dp4a(v1, q8_1[j+0], sumi1));
-    //    get_int_from_table_16(q4_2[j], values, v1, v2);
-    //    sumi2 = __dp4a(v2, q8_2[j+4], __dp4a(v1, q8_2[j+0], sumi2));
-    //}
-    //return d1 * sumi1 + d2 * sumi2;
-
     // iqs is 0...7
     const int ib32 = iqs;
     const int32_t  * q8 = (const int *)bq8_1[ib32].qs;
@@ -1303,24 +1271,8 @@ static __device__ __forceinline__ float vec_dot_iq4_xs_q8_1(
     }
     return d * (sumi1 + sumi2);
 
-    //// iqs is 0...15
-    //const int ib32 = iqs/2;
-    //const int il = iqs%2;
-    //const int32_t  * q8 = (const int *)bq8_1[ib32].qs + 2*il;
-    //const uint32_t * q4 = (const uint32_t *)bq4->qs + 4*ib32 + 2*il;
-    //const int8_t ls = ((bq4->scales_l[ib32/2] >> 4*(ib32%2)) & 0xf) | (((bq4->scales_h >> 2*ib32) & 3) << 4);
-    //const float d = (float)bq4->d * (ls - 32) * __low2float(bq8_1[ib32].ds);
-    //int v1, v2;
-    //int sumi1 = 0, sumi2 = 0;
-    //for (int j = 0; j < 2; ++j) {
-    //    get_int_from_table_16(q4[j], values, v1, v2);
-    //    sumi1 = __dp4a(v1, q8[j+0], sumi1);
-    //    sumi2 = __dp4a(v2, q8[j+4], sumi2);
-    //}
-    //return d * (sumi1 + sumi2);
 #else
-    assert(false);
-    return 0.f;
+    NO_DEVICE_CODE;
 #endif
 #else
     return vec_dot_iq4_xs_q8_1(vbq, bq8_1, iqs);
