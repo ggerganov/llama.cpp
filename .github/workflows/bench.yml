@@ -215,7 +215,6 @@ jobs:
             - Finish reason         : stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }}reqs truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
             - ${{ env.BENCH_GRAPH_XLABEL }}
 
-
             <p align="center">
             
             <img width="100%" height="100%" src="${{ env.IMAGE_O] }}" alt="prompt_tokens_seconds" />
