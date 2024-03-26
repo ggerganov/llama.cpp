@@ -2640,6 +2640,8 @@ float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n)
 //
 
 static llama_control_vector_data llama_control_vector_load_one(const llama_control_vector_load_info & load_info) {
+    auto start = ggml_time_ms();
+    printf("control vector load_one...\n");
     int32_t n_tensors;
 
     size_t n_bytes = 0;
@@ -2684,7 +2686,6 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
                     fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
                     gguf_free(meta_ctx_gguf);
                     ggml_free(meta_ctx);
-                    return result;
                 }
             }
 
@@ -2751,10 +2752,14 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
     gguf_free(ctx_gguf);
     ggml_free(ctx);
 
+    auto end = ggml_time_ms();
+    printf("control vector load_one took %ums\n", end - start);
     return result;
 }
 
 llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos) {
+    auto start = ggml_time_ms();
+    printf("control vector load...\n");
     llama_control_vector_data result = { -1, {} };
 
     for (const auto & info : load_infos) {
@@ -2764,7 +2769,7 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
             return result;
         }
         if (result.n_embd != -1 && (result.n_embd != cur.n_embd || result.data.size() != cur.data.size())) {
-            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
+            printf("%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
             return result;
         }
 
@@ -2778,8 +2783,10 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
     }
 
     if (result.n_embd == -1) {
-        fprintf(stderr, "%s: no vectors passed\n", __func__);
+        printf("%s: no vectors passed\n", __func__);
     }
 
+    auto end = ggml_time_ms();
+    printf("control vector load time: %ums\n", end-start);
     return result;
 }
