@@ -11,19 +11,30 @@ using json = nlohmann::json; // Use an alias for easier access
 
 
 static json parseValue(const std::string& content) {
-    // Check for numerical value
-    if (!content.empty() && std::all_of(content.begin(), content.end(), ::isdigit)) {
-        return std::stoi(content);
-    }
     // Check for boolean
-    if (content == "True" || content == "true") {
+    if (content == "true" || content == "True") {
         return true;
-    } else if (content == "False" || content == "false") {
+    } else if (content == "false" || content == "False") {
         return false;
     }
-    if ((content.size() >= 2 && content.front() == '"' && content.back() == '"') ||
-        (content.size() >= 2 && content.front() == '\'' && content.back() == '\'')) {
+    // Check for quoted string
+    if ((content.size() >= 2 && (content.front() == '"' && content.back() == '"')) ||
+        (content.size() >= 2 && (content.front() == '\'' && content.back() == '\''))) {
         return content.substr(1, content.size() - 2);
+    }
+    // Attempt to parse as number (int or float)
+    try {
+        size_t processed;
+        // Try integer first
+        int i = std::stoi(content, &processed);
+        if (processed == content.size()) return i;
+        // Then try floating point
+        double d = std::stod(content, &processed);
+        if (processed == content.size()) return d;
+    } catch (const std::invalid_argument& e) {
+        // Not a number, ignore
+    } catch (const std::out_of_range& e) {
+        // Number out of range, ignore
     }
     // TODO: for array, dict, object, function, should further add logic to parse them recursively.
     return content;
@@ -34,7 +45,7 @@ static json parseValue(const std::string& content) {
 static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, const char* source_code, uint32_t indent = 0) {
     auto type = ts_node_type(node);
 
-    printf("type: %s\n", type);
+    // printf("type: %s\n", type);
     // Only interested in call_expression nodes at the outermost level
     if (strcmp(type, "call") == 0) {
         
@@ -92,12 +103,11 @@ static std::vector<json> parsePythonFunctionCalls(std::string source_string) {
     std::vector<json> calls;
     std::string delimiter = "<<functions>>";
     std::string source_code;
-    printf("source_string: %s\n", source_string.c_str());
+    printf("Parsing source_string: %s\n", source_string.c_str());
     size_t startPos = source_string.find(delimiter);
     if (startPos != std::string::npos) {
         source_code = source_string.substr(startPos + delimiter.length());
     } else {
-        printf("no functions\n");
         return calls;
     }
     TSParser *parser = ts_parser_new();

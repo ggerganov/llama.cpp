@@ -509,9 +509,6 @@ static json oaicompat_completion_params_parse(
             std::vector<json> temp_vec;
             std::unordered_map<std::string, std::string> func_observation_map;
             for (size_t i = 0; i < body["messages"].size(); ++i) {
-                printf("body[\"messages\"][%d][\"role\"] = %s\n", i, body["messages"][i]["role"].get<std::string>().c_str());
-                printf("Message: %s\n", body["messages"][i].dump().c_str());
-                printf("%d\n", body["messages"][i].contains("tool_calls"));
 
                 if (body["messages"][i]["role"] != "tool" and func_observation_map.size() > 0) {
                     // insert the observation from the tool call before the next message
@@ -548,12 +545,9 @@ static json oaicompat_completion_params_parse(
                 }
                 // else if (body["messages"][i]["role"] == "assistant" and (body["messages"][i]["content"].is_null() or body["messages"][i]["content"]=="") and !body["messages"][i]["tool_calls"].is_null() and !body["messages"][i]["tool_calls"].empty()){
                 else if (body["messages"][i]["role"] == "assistant" and body["messages"][i].contains("tool_calls")){
-                    printf("Tool call detected\n");
                     // convert OpenAI function call format to Rubra format
                     std::string tool_call_str = "";
-                    printf("Tool calls: %s\n", body["messages"][i]["tool_calls"].dump().c_str());
                     for (const auto & tool_call : body["messages"][i]["tool_calls"]) {
-                        printf("Tool call id: %s\n", tool_call["id"].get<std::string>().c_str());
                         std::string func_str = "";
                         func_observation_map[tool_call["id"].get<std::string>()] = ""; // initialize with empty value and later should be updated with the actual value from "tool_call" role message
                         json args = json::parse(tool_call["function"]["arguments"].get<std::string>()); // TODO: catch the exceptions 
@@ -570,7 +564,6 @@ static json oaicompat_completion_params_parse(
                         tool_call_str += func_str;
                     }
                     tool_call_str = std::string("<<functions>>") + "[" + tool_call_str + "]";
-                    printf("Tool call string: %s\n", tool_call_str.c_str());
 
                     json function_call;
                     function_call["role"] = "function";
@@ -578,8 +571,6 @@ static json oaicompat_completion_params_parse(
                     temp_vec.push_back(function_call);
                 }
                 else if (body["messages"][i]["role"] == "tool") {
-                    printf("Observation detected\n");
-                    printf(body["messages"][i].dump().c_str());
                     std::string tool_call_id = body["messages"][i]["tool_call_id"].get<std::string>();
                     if (func_observation_map.find(tool_call_id) != func_observation_map.end()) {
                         func_observation_map[tool_call_id] = body["messages"][i]["content"].get<std::string>();
