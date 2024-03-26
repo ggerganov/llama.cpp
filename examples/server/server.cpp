@@ -2218,9 +2218,9 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --lora FNAME              apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-base FNAME         optional model to use as a base for the layers modified by the LoRA adapter\n");
     printf("  --control-vector FNAME\n");
-    printf("                        add a control vector\n");
+    printf("                            add a control vector\n");
     printf("  --control-vector-scaled FNAME S\n");
-    printf("                        add a control vector with user defined scaling S\n");
+    printf("                            add a control vector with user defined scaling S\n");
     printf("  --control-vector-layer-range START END\n");
     printf("                        layer range to apply the control vector(s) to, start and end inclusive\n");
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
