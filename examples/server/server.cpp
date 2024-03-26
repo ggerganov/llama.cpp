@@ -3202,8 +3202,6 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_set_control_vectors = [&ctx_server, &res_error, &handle_get_control_vectors](const httplib::Request & req, httplib::Response & res) {
-        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-
         json data = json::parse(req.body);
         std::vector<llama_control_vector_load_info> vec_params;
 
@@ -3215,12 +3213,14 @@ int main(int argc, char ** argv) {
             }
         } else {
             std::cerr << "No vectors passed\n";
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
             res_error(res, format_error_response("No vectors passed", ERROR_TYPE_SERVER));
             return;
         }
         const auto cvec = llama_control_vector_load(vec_params);
         if (cvec.n_embd == -1) {
             std::cerr << "Could not load control vector\n";
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
             res_error(res, format_error_response("Could not load control vector", ERROR_TYPE_SERVER));
             return;
         }
@@ -3239,6 +3239,7 @@ int main(int argc, char ** argv) {
                                              ctx_server.params.control_vector_layer_end);
         if (err) {
             std::cerr << "Could not apply control vector\n";
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
             res_error(res, format_error_response("Could not apply control vector", ERROR_TYPE_SERVER));
             return;
         }
