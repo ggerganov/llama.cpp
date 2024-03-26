@@ -1265,6 +1265,12 @@ if (LLAMA_METAL)
             GROUP_READ
             WORLD_READ
         DESTINATION ${CMAKE_INSTALL_BINDIR})
+    if (NOT LLAMA_METAL_EMBED_LIBRARY)
+        install(
+            FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+    endif()
 endif()
 
 #
