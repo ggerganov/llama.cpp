@@ -15360,10 +15360,10 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
                                       && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
                                       && src0->ne[0] % GGML_SYCL_DMMV_X == 0 && src1->ne[1] == 1;
     bool use_mul_mat_vec_q = min_compute_capability >= VER_4VEC && ggml_is_quantized(src0->type)
-                             && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
-                             && src1->ne[1] <= XMX_MAX_BATCH_SIZE;
-    bool use_mul_mat_q =   ggml_sycl_supports_mmq(src0->type) && src1->type == GGML_TYPE_F32
-                           && dst->type == GGML_TYPE_F32;
+                             && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
+    bool use_mul_mat_q = min_compute_capability >= VER_4VEC && ggml_is_quantized(src0->type)
+                         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
+                         && ggml_sycl_supports_mmq(src0->type);
 
 #ifdef SYCL_USE_XMX
     const bool use_xmx = true;
