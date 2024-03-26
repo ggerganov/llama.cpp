@@ -706,6 +706,7 @@ class GGMLQuantizationType(IntEnum):
     I32     = 26
     I64     = 27
     F64     = 28
+    IQ1_M   = 29
 
 
 class GGUFEndian(IntEnum):
