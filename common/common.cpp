@@ -2673,8 +2673,8 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
                     uint32_t layer = std::stoi(name.substr(dotpos + 1));
                     if (layer == 0) {
                         fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                        ggml_free(meta_ctx);
                         gguf_free(meta_ctx_gguf);
+                        ggml_free(meta_ctx);
                         return result;
                     }
                     if (layer > max_direction_layer) {
@@ -2682,8 +2682,8 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
                     }
                 } catch (...) {
                     fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                    ggml_free(meta_ctx);
                     gguf_free(meta_ctx_gguf);
+                    ggml_free(meta_ctx);
                     return result;
                 }
             }
@@ -2691,22 +2691,22 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
             struct ggml_tensor * tensor_meta = ggml_get_tensor(meta_ctx, name.c_str());
             if (tensor_meta->type != GGML_TYPE_F32 || ggml_n_dims(tensor_meta) != 1) {
                 fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                ggml_free(meta_ctx);
                 gguf_free(meta_ctx_gguf);
+                ggml_free(meta_ctx);
                 return result;
             }
             if (result.n_embd == -1) {
                 result.n_embd = ggml_nelements(tensor_meta);
             } else if (ggml_nelements(tensor_meta) != result.n_embd) {
                 fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, load_info.fname.c_str());
-                ggml_free(meta_ctx);
                 gguf_free(meta_ctx_gguf);
+                ggml_free(meta_ctx);
                 return result;
             }
             n_bytes += ggml_nbytes(tensor_meta);
         }
-        ggml_free(meta_ctx);
         gguf_free(meta_ctx_gguf);
+        ggml_free(meta_ctx);
     }
 
     if (n_tensors == 0) {
