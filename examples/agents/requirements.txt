@@ -1,0 +1,3 @@
+jsonargparse
+pydantic
+typer[all]

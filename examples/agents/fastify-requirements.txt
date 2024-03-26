@@ -1,0 +1,5 @@
+fastapi[all]
+pydantic
+sse-starlette
+uvicorn[all]
+typer[all]

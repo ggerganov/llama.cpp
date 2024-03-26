@@ -1,3 +1,6 @@
 [submodule "kompute"]
 	path = kompute
 	url = https://github.com/nomic-ai/kompute.git
+[submodule "examples/agents/hermes_function_calling"]
+	path = examples/agents/hermes_function_calling
+	url = https://github.com/NousResearch/Hermes-Function-Calling
