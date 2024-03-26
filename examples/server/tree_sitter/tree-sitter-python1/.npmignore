@@ -1,0 +1,17 @@
+bindings/c
+bindings/go
+bindings/python
+bindings/rust
+bindings/swift
+Cargo.toml
+Makefile
+examples
+pyproject.toml
+setup.py
+test
+.editorconfig
+.github
+.gitignore
+.gitattributes
+.gitmodules
+.npmignore
