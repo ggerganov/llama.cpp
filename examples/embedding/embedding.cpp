@@ -116,8 +116,8 @@ int main(int argc, char ** argv) {
     for (const auto & prompt : prompts) {
         auto inp = ::llama_tokenize(ctx, prompt, true, false);
         if (inp.size() > n_batch) {
-            fprintf(stderr, "%s: error: number of tokens in input line (%lld) exceeds batch size (%lld), increase batch size and re-run\n",
-                    __func__, (long long int) inp.size(), (long long int) n_batch);
+            fprintf(stderr, "%s: error: number of tokens in input line (%ld) exceeds batch size (%ld), increase batch size and re-run\n",
+                    __func__, inp.size(), n_batch);
             return 1;
         }
         inputs.push_back(inp);
