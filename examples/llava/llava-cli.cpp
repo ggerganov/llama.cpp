@@ -211,7 +211,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 static struct llama_model * llava_init(gpt_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
-    
+
     llama_model_params model_params = llama_model_params_from_gpt_params(*params);
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
@@ -219,15 +219,15 @@ static struct llama_model * llava_init(gpt_params * params) {
         return NULL;
     }
     return model;
-}       
-            
+}
+
 static struct llava_context * llava_init_context(gpt_params * params, llama_model * model) {
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
-    }   
+    }
 
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
