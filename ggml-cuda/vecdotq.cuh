@@ -1197,10 +1197,6 @@ static __device__ __forceinline__ float vec_dot_iq1_m_q8_1(
         q8 += 8;
     }
 #endif
-    typedef union {
-        half     f16;
-        uint16_t u16;
-    } iq1m_scale_t;
     iq1m_scale_t scale;
     const uint16_t * sc = (const uint16_t *)bq1->scales;
     scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);

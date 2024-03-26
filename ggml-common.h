@@ -385,6 +385,12 @@ typedef struct {
 } block_iq1_m;
 static_assert(sizeof(block_iq1_m) == QK_K/8 + QK_K/16 + QK_K/32, "wrong iq1_m block size/padding");
 
+// Used by IQ1_M quants
+typedef union {
+    ggml_half f16;
+    uint16_t  u16;
+} iq1m_scale_t;
+
 // Non-linear quants
 #define QK4_NL 32
 typedef struct {

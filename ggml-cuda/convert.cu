@@ -501,11 +501,6 @@ static __global__ void dequantize_block_iq1_s(const void * __restrict__ vx, dst_
 
 }
 
-typedef union {
-    half     f16;
-    uint16_t u16;
-} iq1m_scale_t;
-
 template<typename dst_t>
 static __global__ void dequantize_block_iq1_m(const void * __restrict__ vx, dst_t * __restrict__ yy) {
 

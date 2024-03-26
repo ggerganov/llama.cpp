@@ -4456,11 +4456,6 @@ void kernel_mul_mv_iq1_s_f32_impl(
     }
 }
 
-typedef union {
-    half     f16;
-    uint16_t u16;
-} iq1m_scale_t;
-
 void kernel_mul_mv_iq1_m_f32_impl(
         device const  void * src0,
         device const float * src1,
