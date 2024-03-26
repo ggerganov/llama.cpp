@@ -3184,6 +3184,7 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_get_control_vectors = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+      res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
       json vectors = json::array();
 
       for (const auto & vec : ctx_server.params.control_vectors) {
