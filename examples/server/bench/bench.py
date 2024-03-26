@@ -170,7 +170,7 @@ xychart-beta
     title "{title}"
     y-axis "llamacpp:{metric}"
     x-axis "llamacpp:{metric}" {int(min(timestamps))} --> {int(max(timestamps))}
-    line [{', '.join([str(round(float(value))) for value in metric_values])}]
+    line [{', '.join([str(round(float(value), 2)) for value in metric_values])}]
                     """)
                     mermaid_f.write(mermaid)
 

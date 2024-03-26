@@ -222,7 +222,7 @@ jobs:
 
             <details>
 
-                <summary>More</summary>
+            <summary>More</summary>
 
             ```mermaid
             ${{ env.PROMPT_TOKENS_SECONDS }}
