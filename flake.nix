@@ -145,6 +145,7 @@
             # the same path you would with an overlay.
             legacyPackages = {
               llamaPackages = pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesWindows = pkgs.pkgsCross.mingwW64.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
               llamaPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
               llamaPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
             };
@@ -155,9 +156,7 @@
               {
                 default = config.legacyPackages.llamaPackages.llama-cpp;
                 vulkan = config.packages.default.override { useVulkan = true; };
-                windows = config.legacyPackages.llamaPackages.llama-cpp.override {
-                  stdenv = pkgs.pkgsCross.mingwW64.stdenv;
-                };
+                windows = config.legacyPackages.llamaPackagesWindows.llama-cpp;
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
                 opencl = config.packages.default.override { useOpenCL = true; };
