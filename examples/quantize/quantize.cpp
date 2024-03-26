@@ -87,13 +87,17 @@ static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftyp
 //
 [[noreturn]]
 static void usage(const char * executable) {
-    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] [--imatrix] [--include-weights] [--exclude-weights] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
+    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] [--imatrix] [--include-weights] [--exclude-weights] [--output-tensor-type] [--token-embedding-type] [--override-kv] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
     printf("  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     printf("  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
     printf("  --pure: Disable k-quant mixtures and quantize all tensors to the same type\n");
     printf("  --imatrix file_name: use data in file_name as importance matrix for quant optimizations\n");
     printf("  --include-weights tensor_name: use importance matrix for this/these tensor(s)\n");
     printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
+    printf("  --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor\n");
+    printf("  --token-embedding-type ggml_type: use this ggml_type for the token embeddings tensor\n");
+    printf("  --override-kv KEY=TYPE:VALUE\n");
+    printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
@@ -201,6 +205,48 @@ static ggml_type parse_ggml_type(const char * arg) {
     return result;
 }
 
+static bool parse_kv_override(const char * data, std::vector<llama_model_kv_override>& overrides) {
+    const char* sep = strchr(data, '=');
+    if (sep == nullptr || sep - data >= 128) {
+        fprintf(stderr, "%s: malformed KV override '%s'\n", __func__, data);
+        return false;
+    }
+    llama_model_kv_override kvo;
+    std::strncpy(kvo.key, data, sep - data);
+    kvo.key[sep - data] = 0;
+    sep++;
+    if (strncmp(sep, "int:", 4) == 0) {
+        sep += 4;
+        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+        kvo.int_value = std::atol(sep);
+    }
+    else if (strncmp(sep, "float:", 6) == 0) {
+        sep += 6;
+        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
+        kvo.float_value = std::atof(sep);
+    }
+    else if (strncmp(sep, "bool:", 5) == 0) {
+        sep += 5;
+        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
+        if (std::strcmp(sep, "true") == 0) {
+            kvo.bool_value = true;
+        }
+        else if (std::strcmp(sep, "false") == 0) {
+            kvo.bool_value = false;
+        }
+        else {
+            fprintf(stderr, "%s: invalid boolean value for KV override '%s'\n", __func__, data);
+            return false;
+        }
+    }
+    else {
+        fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
+        return false;
+    }
+    overrides.emplace_back(std::move(kvo));
+    return true;
+}
+
 int main(int argc, char ** argv) {
     if (argc < 3) {
         usage(argv[0]);
@@ -211,6 +257,7 @@ int main(int argc, char ** argv) {
     int arg_idx = 1;
     std::string imatrix_file;
     std::vector<std::string> included_weights, excluded_weights;
+    std::vector<llama_model_kv_override> kv_overrides;
 
     for (; arg_idx < argc && strncmp(argv[arg_idx], "--", 2) == 0; arg_idx++) {
         if (strcmp(argv[arg_idx], "--leave-output-tensor") == 0) {
@@ -225,6 +272,10 @@ int main(int argc, char ** argv) {
             if (arg_idx < argc-1) {
                 params.token_embedding_type = parse_ggml_type(argv[++arg_idx]);
             } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--override-kv") == 0) {
+            if (arg_idx == argc-1 || !parse_kv_override(argv[++arg_idx], kv_overrides)) {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
@@ -266,6 +317,11 @@ int main(int argc, char ** argv) {
     prepare_imatrix(imatrix_file, included_weights, excluded_weights, imatrix_data);
     if (!imatrix_data.empty()) {
         params.imatrix = &imatrix_data;
+    }
+    if (!kv_overrides.empty()) {
+        kv_overrides.emplace_back();
+        kv_overrides.back().key[0] = 0;
+        params.kv_overrides = &kv_overrides;
     }
 
     llama_backend_init();

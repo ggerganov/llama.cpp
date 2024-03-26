@@ -284,6 +284,7 @@ extern "C" {
         bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                           // quantize all tensors to the default type
         void * imatrix;                      // pointer to importance matrix data
+        void * kv_overrides;                 // pointer to vector containing overrides
     } llama_model_quantize_params;
 
     // grammar types
