@@ -369,6 +369,7 @@ extern "C" {
         GGML_TYPE_I32     = 26,
         GGML_TYPE_I64     = 27,
         GGML_TYPE_F64     = 28,
+        GGML_TYPE_IQ1_M   = 29,
         GGML_TYPE_COUNT,
     };
 
@@ -408,6 +409,7 @@ extern "C" {
         GGML_FTYPE_MOSTLY_IQ3_S   = 20, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ2_S   = 21, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ4_XS  = 22, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ1_M   = 23, // except 1d tensors
     };
 
     // available tensor operations:
@@ -748,6 +750,7 @@ extern "C" {
     GGML_API GGML_CALL bool ggml_is_transposed(const struct ggml_tensor * tensor);
     GGML_API GGML_CALL bool ggml_is_contiguous(const struct ggml_tensor * tensor);
     GGML_API GGML_CALL bool ggml_is_permuted  (const struct ggml_tensor * tensor);
+    GGML_API GGML_CALL bool ggml_is_empty     (const struct ggml_tensor * tensor);
     GGML_API           bool ggml_is_scalar    (const struct ggml_tensor * tensor);
     GGML_API           bool ggml_is_vector    (const struct ggml_tensor * tensor);
     GGML_API           bool ggml_is_matrix    (const struct ggml_tensor * tensor);
@@ -2354,7 +2357,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_fp16_va    (void);
     GGML_API int ggml_cpu_has_wasm_simd  (void);
     GGML_API int ggml_cpu_has_blas       (void);
-    GGML_API int ggml_cpu_has_cublas     (void);
+    GGML_API int ggml_cpu_has_cuda       (void);
     GGML_API int ggml_cpu_has_clblast    (void);
     GGML_API int ggml_cpu_has_vulkan     (void);
     GGML_API int ggml_cpu_has_kompute    (void);
