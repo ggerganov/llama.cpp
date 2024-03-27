@@ -61,7 +61,10 @@ enum server_task_type {
     SERVER_TASK_TYPE_COMPLETION,
     SERVER_TASK_TYPE_CANCEL,
     SERVER_TASK_TYPE_NEXT_RESPONSE,
-    SERVER_TASK_TYPE_METRICS
+    SERVER_TASK_TYPE_METRICS,
+    SERVER_TASK_TYPE_SLOT_SAVE,
+    SERVER_TASK_TYPE_SLOT_RESTORE,
+    SERVER_TASK_TYPE_SLOT_ERASE,
 };
 
 struct server_task {
@@ -1612,6 +1615,142 @@ struct server_context {
                     }
                     queue_results.send(res);
                 } break;
+            case SERVER_TASK_TYPE_SLOT_SAVE:
+                {
+                    int id_slot = task.data["id_slot"];
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    const size_t token_count = slot->cache_tokens.size();
+                    const int64_t t_start = ggml_time_us();
+
+                    std::string filename = task.data["filename"];
+                    size_t state_size = llama_get_seq_size(ctx, slot->id + 1);
+                    std::vector<uint8_t> state_data(state_size + sizeof(size_t) + token_count * sizeof(llama_token));
+                    size_t nwrite = llama_copy_seq_data(ctx, state_data.data(), slot->id + 1);
+                    GGML_ASSERT(nwrite <= state_size);
+
+                    // write the cached token count of the slot->cache_tokens.size()
+                    memcpy(state_data.data() + nwrite, &token_count, sizeof(size_t));
+                    nwrite += sizeof(size_t);
+
+                    // write the cached tokens (loop)
+                    for (size_t i = 0; i < token_count; i++) {
+                        const llama_token token = slot->cache_tokens[i];
+                        memcpy(state_data.data() + nwrite, &token, sizeof(llama_token));
+                        nwrite += sizeof(llama_token);
+                    }
+                    GGML_ASSERT(nwrite <= state_data.size());
+
+                    std::ofstream outfile(filename, std::ios::binary);
+                    outfile.write(reinterpret_cast<const char *>(state_data.data()), nwrite);
+                    outfile.close();
+
+                    const int64_t t_end = ggml_time_us();
+                    const double t_save_ms = (t_end - t_start) / 1000.0;
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",   id_slot },
+                        { "filename",  filename },
+                        { "n_saved",   token_count }, // tokens saved
+                        { "n_written", nwrite },      // bytes written
+                        { "timings", {
+                            { "save_ms", t_save_ms }
+                        } }
+                    };
+                    queue_results.send(result);
+                } break;
+            case SERVER_TASK_TYPE_SLOT_RESTORE:
+                {
+                    int id_slot = task.data["id_slot"];
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    const int64_t t_start = ggml_time_us();
+
+                    std::string filename = task.data["filename"]; // TODO: restrict to files in path specified in server params?
+                    std::ifstream infile(filename, std::ios::binary);
+                    if (!infile.is_open()) {
+                        send_error(task, "Failed to open file", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    std::vector<uint8_t> state_data((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
+                    infile.close();
+
+                    size_t nread = llama_set_seq_data(ctx, state_data.data(), slot->id + 1);
+                    GGML_ASSERT(nread <= state_data.size());
+
+                    // restore cached token values
+                    size_t token_count = 0;
+                    if (nread + sizeof(size_t) <= state_data.size()) {
+                        token_count = *reinterpret_cast<size_t *>(state_data.data() + nread);
+                        nread += sizeof(size_t);
+                    }
+                    slot->cache_tokens.resize(token_count);
+                    GGML_ASSERT(nread + (token_count * sizeof(llama_token)) <= state_data.size());
+
+                    // tokens are of type llama_token (an integer)
+                    for (size_t i = 0; i < token_count; i++) {
+                        if (nread + sizeof(llama_token) <= state_data.size()) {
+                            slot->cache_tokens[i] = *reinterpret_cast<llama_token *>(state_data.data() + nread);
+                            nread += sizeof(llama_token);
+                        }
+                    }
+                    GGML_ASSERT(nread <= state_data.size());
+
+                    const int64_t t_end = ggml_time_us();
+                    const double t_restore_ms = (t_end - t_start) / 1000.0;
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",    id_slot },
+                        { "filename",   filename },
+                        { "n_restored", token_count }, // tokens restored
+                        { "n_read",     nread },       // bytes read
+                        { "timings", {
+                            { "restore_ms", t_restore_ms }
+                        } }
+                    };
+                    queue_results.send(result);
+                } break;
+            case SERVER_TASK_TYPE_SLOT_ERASE:
+                {
+                    int id_slot = task.data["id_slot"];
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    // Erase token cache
+                    const size_t n_erased = slot->cache_tokens.size();
+                    llama_kv_cache_seq_rm(ctx, slot->id + 1, -1, -1);
+                    slot->cache_tokens.clear();
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",  id_slot },
+                        { "n_erased", n_erased }
+                    };
+                    queue_results.send(result);
+                } break;
         }
     }
 
@@ -3157,6 +3296,85 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
+    const auto handle_slot_save = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        json request_data = json::parse(req.body);
+        int id_slot = request_data["id_slot"];
+        std::string filename = request_data["filename"];
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_SAVE;
+        task.data = {
+            { "id_slot", id_slot },
+            { "filename", filename },
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slot_restore = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        json request_data = json::parse(req.body);
+        int id_slot = request_data["id_slot"];
+        std::string filename = request_data["filename"];
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_RESTORE;
+        task.data = {
+            { "id_slot", id_slot },
+            { "filename", filename },
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slot_erase = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        json request_data = json::parse(req.body);
+        int id_slot = request_data["id_slot"];
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_ERASE;
+        task.data = {
+            { "id_slot", id_slot },
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data, "application/json");
+        }
+    };
+
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
@@ -3519,6 +3737,9 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/embeddings",       handle_embeddings);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
+    svr->Post("/slot/save",           handle_slot_save);
+    svr->Post("/slot/restore",        handle_slot_restore);
+    svr->Post("/slot/erase",          handle_slot_erase);
 
     //
     // Start the server

@@ -623,6 +623,20 @@ extern "C" {
                const llama_token * tokens,
                           size_t   n_token_count);
 
+    LLAMA_API size_t llama_get_seq_size(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id);
+
+    LLAMA_API size_t llama_copy_seq_data(
+            struct llama_context * ctx,
+                         uint8_t * dst,
+                    llama_seq_id   seq_id);
+
+    LLAMA_API size_t llama_set_seq_data(
+            struct llama_context * ctx,
+                   const uint8_t * src,
+                    llama_seq_id   dest_seq_id);
+
     //
     // Decoding
     //
