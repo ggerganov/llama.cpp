@@ -632,6 +632,10 @@ extern "C" {
                          uint8_t * dst,
                     llama_seq_id   seq_id);
 
+    // Copy the sequence data (originally copied with `llama_copy_seq_data`) into a sequence.
+    // Returns:
+    //  - Positive: Ok
+    //  - Zero: Failed to load
     LLAMA_API size_t llama_set_seq_data(
             struct llama_context * ctx,
                    const uint8_t * src,

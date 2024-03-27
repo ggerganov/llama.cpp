@@ -15227,7 +15227,9 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
     uint32_t size_t_size;
     memcpy(&size_t_size, inp, sizeof(size_t_size));
     inp += sizeof(size_t_size);
-    GGML_ASSERT(size_t_size == sizeof(size_t));
+    if (size_t_size != sizeof(size_t)) {
+        return 0;
+    }
 
     // Read the cell count
     uint32_t cell_count;
@@ -15243,6 +15245,18 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
     uint32_t n_embd_v_gqa_ref;
     memcpy(&n_embd_v_gqa_ref, inp, sizeof(n_embd_v_gqa_ref));
     inp += sizeof(n_embd_v_gqa_ref);
+
+    // Sanity check model compatibility
+    const auto& hparams = ctx->model.hparams;
+    const uint32_t n_layer = hparams.n_layer;
+    const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa() + hparams.n_embd_k_s();
+    const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa() + hparams.n_embd_v_s();
+    if (n_layer != n_layer_ref) {
+        return 0;
+    }
+    if (n_embd_v_gqa != n_embd_v_gqa_ref) {
+        return 0;
+    }
 
     // Allocate the new cells for the slot
     {
@@ -15274,10 +15288,6 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
         llama_batch_free(batch);
     }
 
-    const auto& hparams = ctx->model.hparams;
-    const uint32_t n_layer = hparams.n_layer;
-    const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa() + hparams.n_embd_k_s();
-    const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa() + hparams.n_embd_v_s();
     const uint32_t kv_size = kv_self.size;
     const uint32_t kv_head = kv_self.head;
     GGML_ASSERT(n_layer == n_layer_ref);
