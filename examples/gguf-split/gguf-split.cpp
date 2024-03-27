@@ -172,15 +172,11 @@ struct split_strategy {
     struct ggml_context * ctx_meta = NULL;
     const int n_tensors;
 
-    const int n_split;
-    int i_split = 0;
+    // one ctx_out per one output file
+    std::vector<struct gguf_context *> ctx_outs;
 
-    int i_tensor = 0;
-
-    std::vector<uint8_t> read_data;
-
-    struct gguf_context * ctx_out;
-    std::ofstream fout;
+    // temporary buffer for reading in tensor data
+    std::vector<uint8_t> read_buf;
 
     split_strategy(const split_params & params,
             std::ifstream & f_input,
@@ -190,93 +186,141 @@ struct split_strategy {
         f_input(f_input),
         ctx_gguf(ctx_gguf),
         ctx_meta(ctx_meta),
-        n_tensors(gguf_get_n_tensors(ctx_gguf)),
-        n_split(std::ceil(1. * n_tensors / params.n_split_tensors)) {
+        n_tensors(gguf_get_n_tensors(ctx_gguf)) {
+
+        // because we need to know list of tensors for each file in advance, we will build all the ctx_out for all output splits
+        int i_split = -1;
+        struct gguf_context * ctx_out = NULL;
+        auto new_ctx_out = [&]() {
+            i_split++;
+            if (ctx_out != NULL) {
+                ctx_outs.push_back(ctx_out);
+            }
+            ctx_out = gguf_init_empty();
+            // Save all metadata in first split only
+            if (i_split == 0) {
+                gguf_set_kv(ctx_out, ctx_gguf);
+            }
+            gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_NO, i_split);
+            gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_COUNT, 0); // placeholder
+            gguf_set_val_i32(ctx_out, LLM_KV_SPLIT_TENSORS_COUNT, n_tensors);
+        };
+
+        // initialize ctx_out for the first split
+        new_ctx_out();
+
+        // process tensors one by one
+        size_t curr_tensors_size = 0; // current size by counting only tensors size (without metadata)
+        for (int i = 0; i < n_tensors; ++i) {
+            struct ggml_tensor * t = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
+            // calculate the "imaginary" size including this tensor
+            size_t n_bytes = ggml_nbytes(t);
+            //n_bytes += GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT);
+            size_t next_tensors_size = curr_tensors_size + n_bytes;
+            size_t next_metadata_size = gguf_get_meta_size(ctx_out)
+                + GGUF_DEFAULT_ALIGNMENT
+                + sizeof(struct ggml_tensor *); // not sure if we're missing something
+            if (should_split(i, next_tensors_size + next_metadata_size)) {
+                new_ctx_out();
+                curr_tensors_size = n_bytes;
+            } else {
+                curr_tensors_size = next_tensors_size;
+            }
+            gguf_add_tensor(ctx_out, t);
         }
 
-    bool should_split() {
+        // push the last ctx_out
+        ctx_outs.push_back(ctx_out);
+
+        // set the correct n_split for all ctx_out
+        for (auto & ctx : ctx_outs) {
+            gguf_set_val_u16(ctx, LLM_KV_SPLIT_COUNT, ctx_outs.size());
+        }
+    }
+
+    ~split_strategy() {
+        for (auto & ctx_out : ctx_outs) {
+            gguf_free(ctx_out);
+        }
+    }
+
+    bool should_split(int i_tensor, size_t next_size) {
         if (params.n_bytes_split > 0) {
             // split by max size per file
-            size_t curr_size = fout.tellp();
-            if (i_tensor >= n_tensors - 1) {
-                return false;
-            }
-            // get size of next tensor
-            const char * t_name = gguf_get_tensor_name(ctx_gguf, i_tensor + 1);
-            struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
-            size_t next_size = curr_size + ggml_nbytes(t);
             return next_size > params.n_bytes_split;
         } else {
             // split by number of tensors per file
-            return i_tensor < n_tensors && i_tensor % params.n_split_tensors == 0;
+            return i_tensor > 0 && i_tensor < n_tensors && i_tensor % params.n_split_tensors == 0;
         }
     }
 
-    void split_start() {
-        ctx_out = gguf_init_empty();
-
-        // Save all metadata in first split only
-        if (i_split == 0) {
-            gguf_set_kv(ctx_out, ctx_gguf);
+    void print_info() {
+        printf("n_split: %ld\n", ctx_outs.size());
+        int i_split = 0;
+        for (auto & ctx_out : ctx_outs) {
+            // re-calculate the real gguf size for each split (= metadata size + total size of all tensors)
+            size_t total_size = gguf_get_meta_size(ctx_out);
+            for (int i = 0; i < gguf_get_n_tensors(ctx_out); ++i) {
+                struct ggml_tensor * t = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_out, i));
+                total_size += ggml_nbytes(t);
+            }
+            total_size = total_size / 1024 / 1024; // convert to megabytes
+            printf("split %05d: n_tensors = %d, total_size = %ldM\n", i_split + 1, gguf_get_n_tensors(ctx_out), total_size);
+            i_split++;
         }
-        gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_NO, i_split);
-        gguf_set_val_u16(ctx_out, LLM_KV_SPLIT_COUNT, n_split);
-        gguf_set_val_i32(ctx_out, LLM_KV_SPLIT_TENSORS_COUNT, n_tensors);
-
-        // populate the original tensors, so we get an initial metadata
-        for (int i = i_split * params.n_split_tensors; i < n_tensors && i < (i_split + 1) * params.n_split_tensors; ++i) {
-            struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
-            gguf_add_tensor(ctx_out, meta);
-        }
-
-        char split_path[PATH_MAX] = {0};
-        llama_split_path(split_path, sizeof(split_path), params.output.c_str(), i_split, n_split);
-
-        fprintf(stderr, "%s: %s ...", __func__, split_path);
-        fout = std::ofstream(split_path, std::ios::binary);
-        fout.exceptions(std::ofstream::failbit); // fail fast on write errors
-
-        auto meta_size = gguf_get_meta_size(ctx_out);
-
-        // placeholder for the meta data
-        ::zeros(fout, meta_size);
-
-        i_split++;
     }
 
-    void next_tensor() {
-        const char * t_name = gguf_get_tensor_name(ctx_gguf, i_tensor);
-        struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
-        auto n_bytes = ggml_nbytes(t);
+    void write() {
+        int i_split = 0;
+        int n_split = ctx_outs.size();
+        for (auto & ctx_out : ctx_outs) {
+            // construct file path
+            char split_path[PATH_MAX] = {0};
+            llama_split_path(split_path, sizeof(split_path), params.output.c_str(), i_split, n_split);
 
-        if (read_data.size() < n_bytes) {
-            read_data.resize(n_bytes);
+            // open the output file
+            printf("Writing file %s ... ", split_path);
+            fflush(stdout);
+            std::ofstream fout = std::ofstream(split_path, std::ios::binary);
+            fout.exceptions(std::ofstream::failbit); // fail fast on write errors
+
+            // write metadata
+            std::vector<uint8_t> data(gguf_get_meta_size(ctx_out));
+            gguf_get_meta_data(ctx_out, data.data());
+            fout.write((const char *)data.data(), data.size());
+
+            // write tensors
+            for (int i = 0; i < gguf_get_n_tensors(ctx_out); ++i) {
+                // read tensor meta and prepare buffer
+                const char * t_name = gguf_get_tensor_name(ctx_out, i);
+                struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
+                auto n_bytes = ggml_nbytes(t);
+                read_buf.resize(n_bytes);
+
+                // calculate offset
+                auto i_tensor_in = gguf_find_tensor(ctx_gguf, t_name); // idx of tensor in the input file
+                auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor_in);
+
+                // copy tensor from input to output file
+                copy_file_to_file(f_input, fout, offset, n_bytes);
+                zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
+            }
+
+            printf("done\n");
+            // close the file
+            fout.close();
+            i_split++;
         }
-
-        auto offset = gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, i_tensor);
-        f_input.seekg(offset);
-        f_input.read((char *)read_data.data(), n_bytes);
-
-        t->data = read_data.data();
-
-        // write tensor data + padding
-        fout.write((const char *)t->data, n_bytes);
-        zeros(fout, GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT) - n_bytes);
-
-        i_tensor++;
     }
 
-    void split_end() {
-        // go back to beginning of file and write the updated metadata
-        fout.seekp(0);
-        std::vector<uint8_t> data(gguf_get_meta_size(ctx_out));
-        gguf_get_meta_data(ctx_out, data.data());
-        fout.write((const char *)data.data(), data.size());
-
-        fout.close();
-        gguf_free(ctx_out);
-
-        fprintf(stderr, "\033[3Ddone\n");
+    void copy_file_to_file(std::ifstream & f_in, std::ofstream & f_out, const size_t in_offset, const size_t len) {
+        // TODO: prevent copying buffer to user space then write it back
+        if (read_buf.size() < len) {
+            read_buf.resize(len);
+        }
+        f_in.seekg(in_offset);
+        f_in.read((char *)read_buf.data(), len);
+        f_out.write((const char *)read_buf.data(), len);
     }
 };
 
@@ -300,32 +344,20 @@ static void gguf_split(const split_params & split_params) {
         exit(EXIT_FAILURE);
     }
 
+    // prepare the strategy
     split_strategy strategy(split_params, f_input, ctx_gguf, ctx_meta);
+    int n_split = strategy.ctx_outs.size();
+    strategy.print_info();
 
-    char first_split_path[PATH_MAX] = {0};
-    llama_split_path(first_split_path, sizeof(first_split_path),
-                     split_params.output.c_str(), strategy.i_split, strategy.n_split);
-    fprintf(stderr, "%s: %s -> %s (%d tensors per file)\n",
-            __func__, split_params.input.c_str(),
-            first_split_path,
-            split_params.n_split_tensors);
+    // write all output splits
+    strategy.write();
 
-    strategy.split_start();
-
-    while (strategy.i_tensor < strategy.n_tensors) {
-        strategy.next_tensor();
-        if (strategy.should_split()) {
-            strategy.split_end();
-            strategy.split_start();
-        }
-    }
-    strategy.split_end();
-
+    // done, clean up
     gguf_free(ctx_gguf);
     f_input.close();
 
     fprintf(stderr, "%s: %d gguf split written with a total of %d tensors.\n",
-            __func__, strategy.n_split, strategy.n_tensors);
+            __func__, n_split, strategy.n_tensors);
 }
 
 static void gguf_merge(const split_params & split_params) {
