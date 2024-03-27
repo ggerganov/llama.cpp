@@ -211,7 +211,8 @@ class Params:
 
     @staticmethod
     def loadHFTransformerJson(model: LazyModel, config_path: Path) -> Params:
-        config = json.load(open(config_path))
+        with open(config_path) as f:
+            config = json.load(f)
 
         rope_scaling_type = f_rope_scale = n_orig_ctx = rope_finetuned = None
         rope_scaling = config.get("rope_scaling")
@@ -265,7 +266,8 @@ class Params:
     # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1}
     @staticmethod
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
-        config = json.load(open(config_path))
+        with open(config_path) as f:
+            config = json.load(f)
 
         n_experts      = None
         n_experts_used = None
@@ -361,7 +363,9 @@ class BpeVocab(Vocab):
     name = "bpe"
 
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None):
-        bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
+        with open(fname_tokenizer, encoding="utf-8") as f:
+            bpe_tokenizer = json.load(f)
+
         if isinstance(bpe_tokenizer.get('model'), dict):
             self.vocab = bpe_tokenizer["model"]["vocab"]
         else:
@@ -369,14 +373,16 @@ class BpeVocab(Vocab):
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
             # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
-            added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
+            with open(fname_added_tokens, encoding="utf-8") as f:
+                added_tokens = json.load(f)
         else:
             # Fall back to trying to find the added tokens in tokenizer.json
             tokenizer_json_file = fname_tokenizer.parent / 'tokenizer.json'
             if not tokenizer_json_file.is_file():
                 added_tokens = {}
             else:
-                tokenizer_json = json.load(open(tokenizer_json_file, encoding="utf-8"))
+                with open(tokenizer_json_file, encoding="utf-8") as f:
+                    tokenizer_json = json.load(f)
                 added_tokens = dict(
                     (item['content'], item['id'])
                     for item in tokenizer_json.get('added_tokens', [])
@@ -424,7 +430,8 @@ class SentencePieceVocab(Vocab):
         self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
-            added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
+            with open(fname_added_tokens, encoding="utf-8") as f:
+                added_tokens = json.load(f)
         else:
             added_tokens = {}
 
@@ -818,10 +825,10 @@ class LazyUnpickler(pickle.Unpickler):
 
         def load(offset: int, elm_count: int) -> NDArray:
             dtype = data_type.dtype
-            fp = self.zip_file.open(info)
-            fp.seek(offset * dtype.itemsize)
-            size = elm_count * dtype.itemsize
-            data = fp.read(size)
+            with self.zip_file.open(info) as fp:
+                fp.seek(offset * dtype.itemsize)
+                size = elm_count * dtype.itemsize
+                data = fp.read(size)
             assert len(data) == size
             return np.frombuffer(data, dtype)
         description = f'storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}'
