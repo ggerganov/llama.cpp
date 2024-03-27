@@ -44,6 +44,9 @@ ARCH = gguf.MODEL_ARCH.LLAMA
 
 DEFAULT_CONCURRENCY = 8
 
+ADDED_TOKENS_FILE = 'added_tokens.json'
+FAST_TOKENIZER_FILE = 'tokenizer.json'
+
 #
 # data types
 #
@@ -367,32 +370,42 @@ class BpeVocab(Vocab):
     tokenizer_model = "gpt2"
     name = "bpe"
 
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None):
-        with open(fname_tokenizer, encoding="utf-8") as f:
-            bpe_tokenizer = json.load(f)
+    def __init__(self, base_path: Path):
+        added_tokens: dict[str, int] = {}
 
-        if isinstance(bpe_tokenizer.get('model'), dict):
-            self.vocab = bpe_tokenizer["model"]["vocab"]
+        if (fname_tokenizer := base_path / 'vocab.json').exists():
+            # "slow" tokenizer
+            with open(fname_tokenizer, encoding="utf-8") as f:
+                self.vocab = json.load(f)
+
+            try:
+                # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
+                with open(base_path / ADDED_TOKENS_FILE, encoding="utf-8") as f:
+                    added_tokens = json.load(f)
+            except FileNotFoundError:
+                pass
         else:
-            self.vocab = bpe_tokenizer
-        added_tokens: dict[str, int]
-        if fname_added_tokens is not None:
-            # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
-            with open(fname_added_tokens, encoding="utf-8") as f:
-                added_tokens = json.load(f)
-        else:
-            # Fall back to trying to find the added tokens in tokenizer.json
-            tokenizer_json_file = fname_tokenizer.parent / 'tokenizer.json'
-            if not tokenizer_json_file.is_file():
-                added_tokens = {}
-            else:
-                with open(tokenizer_json_file, encoding="utf-8") as f:
-                    tokenizer_json = json.load(f)
-                added_tokens = dict(
-                    (item['content'], item['id'])
-                    for item in tokenizer_json.get('added_tokens', [])
-                    # Added tokens here can be duplicates of the main vocabulary.
-                    if item['content'] not in self.vocab)
+            # "fast" tokenizer
+            fname_tokenizer = base_path / FAST_TOKENIZER_FILE
+
+            # if this fails, FileNotFoundError propagates to caller
+            with open(fname_tokenizer, encoding="utf-8") as f:
+                tokenizer_json = json.load(f)
+
+            tokenizer_model: dict[str, Any] = tokenizer_json['model']
+            if (
+                tokenizer_model['type'] != 'BPE' or tokenizer_model.get('byte_fallback', False)
+                or tokenizer_json['decoder']['type'] != 'ByteLevel'
+            ):
+                raise FileNotFoundError('Cannot find GPT-2 BPE tokenizer')
+
+            self.vocab = tokenizer_model["vocab"]
+
+            if (added := tokenizer_json.get('added_tokens')) is not None:
+                # Added tokens here can be duplicates of the main vocabulary.
+                added_tokens = {item['content']: item['id']
+                                for item in added
+                                if item['content'] not in self.vocab}
 
         vocab_size   = len(self.vocab)
         expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
@@ -432,15 +445,20 @@ class SentencePieceVocab(Vocab):
     tokenizer_model = "llama"
     name = "spm"
 
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None):
-        self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
-        added_tokens: dict[str, int]
-        if fname_added_tokens is not None:
-            with open(fname_added_tokens, encoding="utf-8") as f:
-                added_tokens = json.load(f)
-        else:
-            added_tokens = {}
+    def __init__(self, base_path: Path):
+        added_tokens: dict[str, int] = {}
+        if (fname_tokenizer := base_path / 'tokenizer.model').exists():
+            # normal location
+            try:
+                with open(base_path / ADDED_TOKENS_FILE, encoding="utf-8") as f:
+                    added_tokens = json.load(f)
+            except FileNotFoundError:
+                pass
+        elif not (fname_tokenizer := base_path.parent / 'tokenizer.model').exists():
+            # not found in alternate location either
+            raise FileNotFoundError('Cannot find tokenizer.model')
 
+        self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         vocab_size = self.sentencepiece_tokenizer.vocab_size()
 
         new_tokens       = {id: piece for piece, id in added_tokens.items() if id >= vocab_size}
@@ -494,27 +512,40 @@ class SentencePieceVocab(Vocab):
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
-class HfVocab(Vocab):
+class LlamaHfVocab(Vocab):
     tokenizer_model = "llama"
     name = "hfft"
 
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None = None):
+    def __init__(self, base_path: Path):
+        fname_tokenizer = base_path / FAST_TOKENIZER_FILE
+        # if this fails, FileNotFoundError propagates to caller
+        with open(fname_tokenizer, encoding='utf-8') as f:
+            tokenizer_json = json.load(f)
+
+        # pre-check so we know if we need transformers
+        tokenizer_model: dict[str, Any] = tokenizer_json['model']
+        if (
+            tokenizer_model['type'] != 'BPE' or not tokenizer_model.get('byte_fallback', False)
+            or tokenizer_json['decoder']['type'] != 'Sequence'
+        ):
+            raise FileNotFoundError('Cannot find Llama BPE tokenizer')
+
         try:
             from transformers import AutoTokenizer
         except ImportError as e:
             raise ImportError(
-                "To use HfVocab, please install the `transformers` package. "
+                "To use LlamaHfVocab, please install the `transformers` package. "
                 "You can install it with `pip install transformers`."
             ) from e
 
-        print("fname_tokenizer:", fname_tokenizer)
         # Allow the tokenizer to default to slow or fast versions.
         # Explicitly set tokenizer to use local paths.
         self.tokenizer = AutoTokenizer.from_pretrained(
-            fname_tokenizer,
-            cache_dir=fname_tokenizer,
+            base_path,
+            cache_dir=base_path,
             local_files_only=True,
         )
+        assert self.tokenizer.is_fast  # assume tokenizer.json is used
 
         # Initialize lists and dictionaries for added tokens
         self.added_tokens_list = []
@@ -594,7 +625,7 @@ class HfVocab(Vocab):
         yield from self.added_tokens()
 
     def __repr__(self) -> str:
-        return f"<HfVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+        return f"<LlamaHfVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
 #
@@ -1315,32 +1346,10 @@ def load_some_model(path: Path) -> ModelPlus:
 
 
 class VocabFactory:
-    _FILES = {"spm": "tokenizer.model", "bpe": "vocab.json", "hfft": "tokenizer.json"}
+    _VOCAB_CLASSES: list[type[Vocab]] = [SentencePieceVocab, BpeVocab, LlamaHfVocab]
 
     def __init__(self, path: Path):
         self.path = path
-        self.file_paths = self._detect_files()
-        print(f"Found vocab files: {self.file_paths}")
-
-    def _detect_files(self) -> dict[str, Path | None]:
-        def locate(file: str) -> Path | None:
-            if (path := self.path / file).exists():
-                return path
-            if (path := self.path.parent / file).exists():
-                return path
-            return None
-
-        return {vt: locate(f) for vt, f in self._FILES.items()}
-
-    def _select_file(self, vocab_types: list[str]) -> tuple[str, Path]:
-        for vtype in vocab_types:
-            try:
-                path = self.file_paths[vtype]
-            except KeyError:
-                raise ValueError(f"Unsupported vocabulary type {vtype}") from None
-            if path is not None:
-                return vtype, path
-        raise FileNotFoundError(f"Could not find any of {[self._FILES[vt] for vt in vocab_types]}")
 
     def _create_special_vocab(self, vocab: BaseVocab, model_parent_path: Path) -> gguf.SpecialVocab:
         load_merges = vocab.name == "bpe"
@@ -1353,23 +1362,25 @@ class VocabFactory:
         )
 
     def _create_vocab_by_path(self, vocab_types: list[str]) -> Vocab:
-        vocab_type, path = self._select_file(vocab_types)
-        print(f"Loading vocab file {path!r}, type {vocab_type!r}")
+        vocab_classes: dict[str, type[Vocab]] = {cls.name: cls for cls in self._VOCAB_CLASSES}
+        selected_vocabs: dict[str, type[Vocab]] = {}
+        for vtype in vocab_types:
+            try:
+                selected_vocabs[vtype] = vocab_classes[vtype]
+            except KeyError:
+                raise ValueError(f"Unsupported vocabulary type {vtype}") from None
 
-        added_tokens_path = path.parent / "added_tokens.json"
-        if vocab_type == "bpe":
-            return BpeVocab(
-                path, added_tokens_path if added_tokens_path.exists() else None
-            )
-        if vocab_type == "spm":
-            return SentencePieceVocab(
-                path, added_tokens_path if added_tokens_path.exists() else None
-            )
-        if vocab_type == "hfft":
-            return HfVocab(
-                path.parent, added_tokens_path if added_tokens_path.exists() else None
-            )
-        raise ValueError(vocab_type)
+        for vtype, cls in selected_vocabs.items():
+            try:
+                vocab = cls(self.path)
+                break
+            except FileNotFoundError:
+                pass  # ignore unavailable tokenizers
+        else:
+            raise FileNotFoundError(f"Could not find a tokenizer matching any of {vocab_types}")
+
+        print(f"Loaded vocab file {vocab.fname_tokenizer!r}, type {vocab.name!r}")
+        return vocab
 
     def load_vocab(self, vocab_types: list[str] | None, model_parent_path: Path) -> tuple[BaseVocab, gguf.SpecialVocab]:
         vocab: BaseVocab
