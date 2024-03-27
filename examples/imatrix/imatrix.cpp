@@ -424,6 +424,7 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params, bool
                 tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
+            // TODO: use batch.logits to save computations instead of relying on logits_all == true
             if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return false;

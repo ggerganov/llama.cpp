@@ -390,14 +390,20 @@ ifdef LLAMA_BLIS
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
+# LLAMA_CUBLAS is deprecated and will be removed in the future
+	LLAMA_CUDA := 1
+endif
+
+ifdef LLAMA_CUDA
 	ifneq ('', '$(wildcard /opt/cuda)')
 		CUDA_PATH ?= /opt/cuda
 	else
 		CUDA_PATH ?= /usr/local/cuda
 	endif
-	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include
+	MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include
 	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
+	OBJS         += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
 	MK_NVCCFLAGS += -use_fast_math
 ifdef LLAMA_FATAL_WARNINGS
 	MK_NVCCFLAGS += -Werror all-warnings
@@ -458,13 +464,24 @@ endif # LLAMA_CUDA_NO_PEER_COPY
 ifdef LLAMA_CUDA_CCBIN
 	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
-ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml-common.h
+
 ifdef JETSON_EOL_MODULE_DETECT
-	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+define NVCC_COMPILE
+	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUDA -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+endef # NVCC_COMPILE
 else
+define NVCC_COMPILE
 	$(NVCC) $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+endef # NVCC_COMPILE
 endif # JETSON_EOL_MODULE_DETECT
-endif # LLAMA_CUBLAS
+
+ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
+	$(NVCC_COMPILE)
+
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
+	$(NVCC_COMPILE)
+
+endif # LLAMA_CUDA
 
 ifdef LLAMA_CLBLAST
 
@@ -510,7 +527,6 @@ ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 endif # LLAMA_VULKAN
 
 ifdef LLAMA_HIPBLAS
-
 	ifeq ($(wildcard /opt/rocm),)
 		ROCM_PATH	?= /usr
 		GPU_TARGETS ?= $(shell $(shell which amdgpu-arch))
@@ -522,7 +538,7 @@ ifdef LLAMA_HIPBLAS
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
-	MK_CPPFLAGS += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+	MK_CPPFLAGS += -DGGML_USE_HIPBLAS -DGGML_USE_CUDA
 ifdef LLAMA_HIP_UMA
 	MK_CPPFLAGS += -DGGML_HIP_UMA
 endif # LLAMA_HIP_UMA
@@ -539,8 +555,13 @@ ifdef LLAMA_CUDA_NO_PEER_COPY
 	HIPFLAGS 	+= -DGGML_CUDA_NO_PEER_COPY
 endif # LLAMA_CUDA_NO_PEER_COPY
 	OBJS        += ggml-cuda.o
-ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+	OBJS        += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
+
+ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
+	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
+
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
@@ -593,7 +614,7 @@ override NVCCFLAGS := $(MK_NVCCFLAGS) $(NVCCFLAGS)
 override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
 
 # identify CUDA host compiler
-ifdef LLAMA_CUBLAS
+ifdef LLAMA_CUDA
 GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
 include scripts/get-flags.mk
 CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
@@ -618,7 +639,7 @@ $(info I NVCCFLAGS: $(NVCCFLAGS))
 $(info I LDFLAGS:   $(LDFLAGS))
 $(info I CC:        $(shell $(CC)   --version | head -n 1))
 $(info I CXX:       $(shell $(CXX)  --version | head -n 1))
-ifdef LLAMA_CUBLAS
+ifdef LLAMA_CUDA
 $(info I NVCC:      $(shell $(NVCC) --version | tail -n 1))
 CUDA_VERSION := $(shell $(NVCC) --version | grep -oP 'release (\K[0-9]+\.[0-9])')
 ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
@@ -628,8 +649,15 @@ $(error I ERROR: For CUDA versions < 11.7 a target CUDA architecture must be exp
 endif # CUDA_POWER_ARCH
 endif # CUDA_DOCKER_ARCH
 endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
-endif # LLAMA_CUBLAS
+endif # LLAMA_CUDA
 $(info )
+
+ifdef LLAMA_CUBLAS
+$(info !!!!)
+$(info LLAMA_CUBLAS is deprecated and will be removed in the future. Use LLAMA_CUDA instead.)
+$(info !!!!)
+$(info )
+endif
 
 #
 # Build library
@@ -650,7 +678,10 @@ ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 unicode.o: unicode.cpp unicode.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o
+unicode-data.o: unicode-data.cpp unicode-data.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
 
 llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -687,6 +718,7 @@ libllama.a: llama.o ggml.o $(OBJS) $(COMMON_DEPS)
 
 clean:
 	rm -vrf *.o tests/*.o *.so *.a *.dll benchmark-matmult lookup-create lookup-merge lookup-stats common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -vrf ggml-cuda/*.o
 	find examples pocs -type f -name "*.o" -delete
 
 #
