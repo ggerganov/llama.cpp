@@ -18,13 +18,13 @@
   vulkan-headers,
   vulkan-loader,
   clblast,
-  useBlas ? builtins.all (x: !x) [
+    useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
     useOpenCL
     useRocm
     useVulkan
-  ],
+  ] && blas.meta.available,
   useCuda ? config.cudaSupport,
   useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
   useMpi ? false, # Increases the runtime closure size by ~700M
@@ -200,7 +200,7 @@ effectiveStdenv.mkDerivation (
       ++ optionals useMpi [ mpi ]
       ++ optionals useOpenCL [ clblast ]
       ++ optionals useRocm rocmBuildInputs
-      ++ optionals (useBlas && blas.meta.available) [ blas ]
+      ++ optionals useBlas [ blas ]
       ++ optionals useVulkan vulkanBuildInputs;
 
     cmakeFlags =
