@@ -200,7 +200,7 @@ effectiveStdenv.mkDerivation (
       ++ optionals useMpi [ mpi ]
       ++ optionals useOpenCL [ clblast ]
       ++ optionals useRocm rocmBuildInputs
-      ++ optionals useBlas [ blas ]
+      ++ optionals (useBlas && builtins.elem effectiveStdenv.hostPlatform.system blas.meta.platforms) [ blas ]
       ++ optionals useVulkan vulkanBuildInputs;
 
     cmakeFlags =
