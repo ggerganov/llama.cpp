@@ -24,7 +24,7 @@
     useOpenCL
     useRocm
     useVulkan
-  ],
+  ] && blas.meta.available,
   useCuda ? config.cudaSupport,
   useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
   useMpi ? false, # Increases the runtime closure size by ~700M
@@ -67,10 +67,15 @@ let
     strings.optionalString (suffices != [ ])
       ", accelerated with ${strings.concatStringsSep ", " suffices}";
 
+  executableSuffix = effectiveStdenv.hostPlatform.extensions.executable;
+
   # TODO: package the Python in this repository in a Nix-like way.
   # It'd be nice to migrate to buildPythonPackage, as well as ensure this repo
   # is PEP 517-compatible, and ensure the correct .dist-info is generated.
   # https://peps.python.org/pep-0517/
+  #
+  # TODO: Package up each Python script or service appropriately, by making
+  # them into "entrypoints"
   llama-python = python3.withPackages (
     ps: [
       ps.numpy
@@ -159,11 +164,6 @@ effectiveStdenv.mkDerivation (
         --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
       substituteInPlace ./ggml-metal.m \
         --replace '[bundle pathForResource:@"default" ofType:@"metallib"];' "@\"$out/bin/default.metallib\";"
-
-      # TODO: Package up each Python script or service appropriately.
-      # If we were to migrate to buildPythonPackage and prepare the `pyproject.toml`,
-      # we could make those *.py into setuptools' entrypoints
-      substituteInPlace ./*.py --replace "/usr/bin/env python" "${llama-python}/bin/python"
     '';
 
     # With PR#6015 https://github.com/ggerganov/llama.cpp/pull/6015,
@@ -244,8 +244,8 @@ effectiveStdenv.mkDerivation (
     # TODO(SomeoneSerge): It's better to add proper install targets at the CMake level,
     # if they haven't been added yet.
     postInstall = ''
-      mv $out/bin/main $out/bin/llama
-      mv $out/bin/server $out/bin/llama-server
+      mv $out/bin/main${executableSuffix} $out/bin/llama${executableSuffix}
+      mv $out/bin/server${executableSuffix} $out/bin/llama-server${executableSuffix}
       mkdir -p $out/include
       cp $src/llama.h $out/include/
     '';
