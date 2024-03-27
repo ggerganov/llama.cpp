@@ -293,6 +293,7 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #include "ggml-vulkan.h"
 #endif
 
+
 // floating point type used to accumulate sums
 typedef double ggml_float;
 
@@ -10668,39 +10669,6 @@ static void ggml_compute_forward_group_norm(
 
 // ggml_compute_forward_mul_mat
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-// helper function to determine if it is better to use BLAS or not
-// for large matrices, BLAS is faster
-static bool ggml_compute_forward_mul_mat_use_blas(struct ggml_tensor * dst) {
-    const struct ggml_tensor * src0 = dst->src[0];
-    const struct ggml_tensor * src1 = dst->src[1];
-
-    //const int64_t ne00 = src0->ne[0];
-    //const int64_t ne01 = src0->ne[1];
-
-    const int64_t ne10 = src1->ne[0];
-
-    const int64_t ne0 = dst->ne[0];
-    const int64_t ne1 = dst->ne[1];
-
-    // NOTE: with GGML_OP_MUL_MAT_ID we don't want to go through the BLAS branch because it will dequantize (to_float)
-    //       all the experts for each batch element and the processing would become incredibly slow
-    // TODO: find the optimal values for these
-    if (dst->op != GGML_OP_MUL_MAT_ID &&
-        ggml_is_contiguous(src0) &&
-        ggml_is_contiguous(src1) &&
-      //src0->type == GGML_TYPE_F32 &&
-        src1->type == GGML_TYPE_F32 &&
-        (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
-
-        /*printf("BLAS: %d %d %d %d %d\n", ne0, ne1, ne10, ne00, ne01);*/
-        return true;
-    }
-
-    return false;
-}
-#endif
-
 static void ggml_compute_forward_mul_mat(
         const struct ggml_compute_params * params,
               struct ggml_tensor * dst) {
@@ -10752,73 +10720,6 @@ static void ggml_compute_forward_mul_mat(
         if (params->ith == 0 && params->type == GGML_TASK_TYPE_COMPUTE) {
             ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         }
-        return;
-    }
-#endif
-
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    if (ggml_compute_forward_mul_mat_use_blas(dst)) {
-        const int64_t ne_plane      = ne01*ne00;
-        const size_t  desired_wsize = ne13*ne12*ne_plane*sizeof(float);
-        UNUSED(desired_wsize);
-
-        if (params->type == GGML_TASK_TYPE_INIT) {
-            if (type != GGML_TYPE_F32) {
-                assert(params->wsize >= desired_wsize);
-                // parallelize by src0 rows
-                for (int64_t i13 = 0; i13 < ne13; i13++) {
-                    for (int64_t i12 = 0; i12 < ne12; i12++) {
-                        // broadcast src0 into src1 across 2nd,3rd dimension
-                        const int64_t i03 = i13/r3;
-                        const int64_t i02 = i12/r2;
-
-                        const void           *       x        = (char *)  src0->data    + i02*nb02          + i03*nb03;
-                              float          * const wdata    = (float *) params->wdata + i13*ne12*ne_plane + i12*ne_plane;
-                              ggml_to_float_t  const to_float = type_traits[type].to_float;
-
-                        for (int64_t i01 = ith; i01 < ne01; i01 += nth) {
-                            to_float((const char *) x + i01*nb01, wdata + i01*ne00, ne00);
-                        }
-                    }
-                }
-            }
-            return;
-        }
-
-        if (params->type == GGML_TASK_TYPE_FINALIZE) {
-            return;
-        }
-
-        // perform sgemm, parallelization controlled by blas lib
-        if (ith != 0) {
-            return;
-        }
-
-        //const int64_t tgemm0 = ggml_perf_time_us();
-        for (int64_t i13 = 0; i13 < ne13; i13++) {
-            for (int64_t i12 = 0; i12 < ne12; i12++) {
-                const int64_t i03 = i13/r3;
-                const int64_t i02 = i12/r2;
-
-                const void  * x = (char *)            src0->data + i02*nb02 + i03*nb03;
-                const float * y = (float *) ((char *) src1->data + i12*nb12 + i13*nb13);
-                      float * d = (float *) ((char *)  dst->data + i12*nb2  + i13*nb3);
-
-                if (type != GGML_TYPE_F32) {
-                    x = (float *) params->wdata + i13*ne12*ne_plane + i12*ne_plane;
-                }
-
-                cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-                          ne1, ne01, ne10,
-                         1.0f,    y, ne10,
-                                  x, ne00,
-                         0.0f,    d, ne01);
-            }
-        }
-        //printf("cblas_sgemm = %.3f ms, %lld flops\n", (ggml_perf_time_us() - tgemm0)/1000.0, ne13*ne12*ne1*ne01*ne10*2);
-
-        //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
-
         return;
     }
 #endif
@@ -18464,17 +18365,6 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
 #if defined(GGML_USE_CLBLAST)
                     if (ggml_cl_can_mul_mat(node->src[0], node->src[1], node)) {
                         cur = ggml_cl_mul_mat_get_wsize(node->src[0], node->src[1], node);
-                    } else
-#endif
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                    if (ggml_compute_forward_mul_mat_use_blas(node)) {
-                        if (node->src[0]->type != GGML_TYPE_F32) {
-                            // here we need memory for fully dequantized matrix from src0
-                            // take into account that src0 can be broadcasted into src1[2,3]
-                            cur = ggml_type_size(GGML_TYPE_F32)
-                                * node->src[0]->ne[0]*node->src[0]->ne[1]
-                                * node->src[1]->ne[2]*node->src[1]->ne[3];
-                        }
                     } else
 #endif
                     if (node->src[1]->type != vec_dot_type) {

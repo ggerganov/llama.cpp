@@ -640,7 +640,9 @@ GGML_CALL static size_t ggml_backend_cpu_buffer_type_get_alignment(ggml_backend_
 }
 
 GGML_CALL static bool ggml_backend_cpu_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
-    return ggml_backend_is_cpu(backend);
+    // HACK
+    static ggml_guid blas_guid = { 0x12, 0xa8, 0xae, 0xf4, 0xc0, 0x1e, 0x61, 0x97, 0x8f, 0xeb, 0x33, 0x04, 0xa1, 0x33, 0x51, 0x2d };
+    return ggml_backend_is_cpu(backend) || ggml_guid_matches(backend->guid, &blas_guid);
 
     GGML_UNUSED(buft);
 }
@@ -1093,15 +1095,16 @@ static int ggml_backend_sched_backend_id(ggml_backend_sched_t sched, ggml_backen
     return -1;
 }
 
-static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, const struct ggml_tensor * tensor) {
+static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, const struct ggml_tensor * tensor, const struct ggml_tensor * op) {
     ggml_backend_buffer_t buffer = tensor->buffer;
     if (buffer == NULL) {
         return -1;
     }
 
-    // find highest prio backend that supports the buffer type
+    // find highest prio backend that supports the buffer type and the op
     for (int i = 0; i < sched->n_backends; i++) {
-        if (ggml_backend_buft_supports_backend(buffer->buft, sched->backends[i])) {
+        if (ggml_backend_buft_supports_backend(buffer->buft, sched->backends[i]) &&
+            ggml_backend_supports_op(sched->backends[i], op)) {
             return i;
         }
     }
@@ -1122,12 +1125,17 @@ static char causes[GGML_DEFAULT_GRAPH_SIZE*16 + GGML_SCHED_MAX_SPLITS*GGML_SCHED
 #define GET_CAUSE(node) ""
 #endif
 
+//#define DEBUG_PASS1
+//#define DEBUG_PASS2
+//#define DEBUG_PASS3
+//#define DEBUG_PASS4
+
 // returns the backend that should be used for the node based on the current locations
 static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, struct ggml_tensor * tensor) {
     // TODO: use supports_op to check if the backend supports the op
 
     // assign pre-allocated nodes to their backend
-    int cur_backend_id = ggml_backend_sched_backend_from_buffer(sched, tensor);
+    int cur_backend_id = ggml_backend_sched_backend_from_buffer(sched, tensor, tensor);
     if (cur_backend_id != -1) {
         SET_CAUSE(tensor, "1.dst");
         return cur_backend_id;
@@ -1135,7 +1143,7 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
 
     // view_src
     if (tensor->view_src != NULL) {
-        cur_backend_id = ggml_backend_sched_backend_from_buffer(sched, tensor->view_src);
+        cur_backend_id = ggml_backend_sched_backend_from_buffer(sched, tensor->view_src, tensor);
         if (cur_backend_id != -1) {
             SET_CAUSE(tensor, "1.vsrc");
             return cur_backend_id;
@@ -1157,7 +1165,7 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
             continue;
         }
         if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
-            int src_backend_id = ggml_backend_sched_backend_from_buffer(sched, src);
+            int src_backend_id = ggml_backend_sched_backend_from_buffer(sched, src, tensor);
             // check if a backend with higher prio wants to offload the op
             if (src_backend_id == sched->n_backends - 1) {
                 for (int b = 0; b < src_backend_id; b++) {
@@ -1219,10 +1227,25 @@ static void ggml_backend_sched_print_assignments(ggml_backend_sched_t sched, str
     }
 }
 
-//#define DEBUG_PASS1
-//#define DEBUG_PASS2
-//#define DEBUG_PASS3
-//#define DEBUG_PASS4
+static int set_if_supports(ggml_backend_sched_t sched, struct ggml_tensor * node, int cur_backend_id, int * node_backend_id) {
+    if (ggml_backend_supports_op(sched->backends[cur_backend_id], node)) {
+        *node_backend_id = cur_backend_id;
+        SET_CAUSE(node, "2.2");
+    } else {
+        for (int b = 0; b < sched->n_backends; b++) {
+            if (b == cur_backend_id) {
+                continue;
+            }
+            if (ggml_backend_supports_op(sched->backends[b], node)) {
+                *node_backend_id = b;
+                cur_backend_id = b;
+                SET_CAUSE(node, "2.2");
+                break;
+            }
+        }
+    }
+    return cur_backend_id;
+}
 
 // assigns backends to ops and splits the graph into subgraphs that can be computed on the same backend
 static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
@@ -1302,9 +1325,8 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
                 } else {
                     cur_backend_id = *node_backend_id;
                 }
-            } else {
-                *node_backend_id = cur_backend_id;
-                SET_CAUSE(node, "2.2");
+            } else if (cur_backend_id != -1) {
+                cur_backend_id = set_if_supports(sched, node, cur_backend_id, node_backend_id);
             }
         }
     }
@@ -1324,9 +1346,8 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
                 } else {
                     cur_backend_id = *node_backend_id;
                 }
-            } else {
-                *node_backend_id = cur_backend_id;
-                SET_CAUSE(node, "2.1");
+            } else if (cur_backend_id != -1) {
+                cur_backend_id = set_if_supports(sched, node, cur_backend_id, node_backend_id);
             }
         }
     }
@@ -1341,9 +1362,8 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             int * node_backend_id = &tensor_backend_id(node);
             if (*node_backend_id != -1) {
                 cur_backend_id = *node_backend_id;
-            } else {
-                *node_backend_id = cur_backend_id;
-                SET_CAUSE(node, "2.4");
+            } else if (cur_backend_id != -1) {
+                cur_backend_id = set_if_supports(sched, node, cur_backend_id, node_backend_id);
             }
         }
     }
@@ -1358,9 +1378,8 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             int * node_backend_id = &tensor_backend_id(node);
             if (*node_backend_id != -1) {
                 cur_backend_id = *node_backend_id;
-            } else {
-                *node_backend_id = cur_backend_id;
-                SET_CAUSE(node, "2.3");
+            } else if (cur_backend_id != -1) {
+                cur_backend_id = set_if_supports(sched, node, cur_backend_id, node_backend_id);
             }
         }
     }

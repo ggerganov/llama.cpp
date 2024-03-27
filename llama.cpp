@@ -19,6 +19,10 @@
 #   include "ggml-kompute.h"
 #endif
 
+#if defined(GGML_USE_OPENBLAS) || defined(GGML_USE_ACCELERATE)
+#  include "ggml-blas.h"
+#endif
+
 #ifdef GGML_USE_METAL
 #  include "ggml-metal.h"
 #endif
@@ -9275,17 +9279,17 @@ static struct ggml_cgraph * llama_build_graph(
 
         // norm may be automatically assigned to the backend of the previous layer, increasing data transfer between backends
         // FIXME: fix in ggml_backend_sched
-        const bool full_offload = lctx.model.n_gpu_layers > (int)lctx.model.hparams.n_layer;
-        if (batch.n_tokens < 32 || full_offload) {
-            if (il != -1 && strcmp(name, "norm") == 0) {
-                for (auto * backend : lctx.backends) {
-                    if (ggml_backend_buft_supports_backend(lctx.model.buft_layer[il].buft, backend)) {
-                        ggml_backend_sched_set_tensor_backend(lctx.sched, cur, backend);
-                        break;
-                    }
-                }
-            }
-        }
+        //const bool full_offload = lctx.model.n_gpu_layers > (int)lctx.model.hparams.n_layer;
+        //if (batch.n_tokens < 32 || full_offload) {
+        //    if (il != -1 && strcmp(name, "norm") == 0) {
+        //        for (auto * backend : lctx.backends) {
+        //            if (ggml_backend_buft_supports_backend(lctx.model.buft_layer[il].buft, backend)) {
+        //                ggml_backend_sched_set_tensor_backend(lctx.sched, cur, backend);
+        //                break;
+        //            }
+        //        }
+        //    }
+        //}
     };
 
     struct ggml_cgraph * result = NULL;
@@ -14015,6 +14019,16 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(backend);
         }
 #endif
+
+#if defined(GGML_USE_OPENBLAS) || defined(GGML_USE_ACCELERATE)
+        ggml_backend_t backend_blas = ggml_backend_blas_init();
+        if (backend_blas == nullptr) {
+            LLAMA_LOG_WARN("%s: failed to initialize BLAS backend\n", __func__);
+        } else {
+            ctx->backends.push_back(backend_blas);
+        }
+#endif
+
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
             LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
