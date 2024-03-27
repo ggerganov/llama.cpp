@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../ggml.h"
-#include "../ggml-cuda.h"
+#include "ggml.h"
+#include "ggml-cuda.h"
+
 #include <memory>
 
 #if defined(GGML_USE_HIPBLAS)
@@ -11,7 +12,7 @@
 #define GGML_COMMON_DECL_CUDA
 #define GGML_COMMON_IMPL_CUDA
 #endif
-#include "../ggml-common.h"
+#include "ggml-common.h"
 
 #include <cstdio>
 #include <array>
@@ -229,6 +230,12 @@ typedef half2 dfloat2;
 typedef float dfloat; // dequantize float
 typedef float2 dfloat2;
 #endif //GGML_CUDA_F16
+
+// dmmv = dequantize_mul_mat_vec
+// TODO: remove this?
+#ifndef GGML_CUDA_DMMV_X
+#define GGML_CUDA_DMMV_X 32
+#endif
 
 [[noreturn]]
 static __device__ void no_device_code(
