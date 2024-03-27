@@ -387,7 +387,7 @@ class BpeVocab(Vocab):
                     (item['content'], item['id'])
                     for item in tokenizer_json.get('added_tokens', [])
                     # Added tokens here can be duplicates of the main vocabulary.
-                    if item['content'] not in bpe_tokenizer)
+                    if item['content'] not in self.vocab)
 
         vocab_size   = len(self.vocab)
         expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
