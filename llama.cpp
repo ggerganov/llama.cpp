@@ -15290,8 +15290,6 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
 
     const uint32_t kv_size = kv_self.size;
     const uint32_t kv_head = kv_self.head;
-    GGML_ASSERT(n_layer == n_layer_ref);
-    GGML_ASSERT(n_embd_v_gqa == n_embd_v_gqa_ref);
 
     // For each layer, read the keys for each cell, one row is one cell, read as one contiguous blo
     for (int il = 0; il < (int)n_layer; ++il) {
@@ -15300,7 +15298,10 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
         memcpy(&k_size_row_ref, inp, sizeof(k_size_row_ref));
         inp += sizeof(k_size_row_ref);
         const size_t k_size_row = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa);
-        GGML_ASSERT(k_size_row == k_size_row_ref);
+        if (k_size_row != k_size_row_ref) {
+            llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
+            return 0;
+        }
 
         // Read and set the keys for the whole cell range
         ggml_backend_tensor_set(kv_self.k_l[il], inp, kv_head * k_size_row, cell_count * k_size_row);
@@ -15315,7 +15316,10 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
         inp += sizeof(v_size_el_ref);
 
         const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
-        GGML_ASSERT(v_size_el == v_size_el_ref);
+        if (v_size_el != v_size_el_ref) {
+            llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
+            return 0;
+        }
 
         // For each row in the transposed matrix, read the values for the whole cell range
         for (uint32_t j = 0; j < n_embd_v_gqa; ++j) {

@@ -1693,7 +1693,7 @@ struct server_context {
 
                     size_t nread = llama_set_seq_data(ctx, state_data.data(), slot->id + 1);
                     if (nread == 0) {
-                        send_error(task, "Unable to restore slot, no available space in KV cache", ERROR_TYPE_INVALID_REQUEST);
+                        send_error(task, "Unable to restore slot, no available space in KV cache or invalid slot save file", ERROR_TYPE_INVALID_REQUEST);
                         break;
                     }
                     GGML_ASSERT(nread <= state_data.size());
