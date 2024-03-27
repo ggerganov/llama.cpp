@@ -336,11 +336,11 @@ class BpeVocab:
     name = "bpe"
 
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None):
-        self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
-        if isinstance(self.bpe_tokenizer.get('model'), dict):
-            self.vocab = self.bpe_tokenizer["model"]["vocab"]
+        bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
+        if isinstance(bpe_tokenizer.get('model'), dict):
+            self.vocab = bpe_tokenizer["model"]["vocab"]
         else:
-            self.vocab = self.bpe_tokenizer
+            self.vocab = bpe_tokenizer
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
             # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
@@ -356,7 +356,7 @@ class BpeVocab:
                     (item['content'], item['id'])
                     for item in tokenizer_json.get('added_tokens', [])
                     # Added tokens here can be duplicates of the main vocabulary.
-                    if item['content'] not in self.bpe_tokenizer)
+                    if item['content'] not in bpe_tokenizer)
 
         vocab_size   = len(self.vocab)
         expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
@@ -371,7 +371,6 @@ class BpeVocab:
         self.vocab_size_base      = vocab_size
         self.vocab_size           = self.vocab_size_base + len(self.added_tokens_list)
         self.fname_tokenizer      = fname_tokenizer
-        self.fname_added_tokens   = fname_added_tokens
 
     def bpe_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         reverse_vocab = {id: encoded_tok for encoded_tok, id in self.vocab.items()}
@@ -419,7 +418,6 @@ class SentencePieceVocab:
         self.vocab_size_base    = vocab_size
         self.vocab_size         = self.vocab_size_base + len(self.added_tokens_list)
         self.fname_tokenizer    = fname_tokenizer
-        self.fname_added_tokens = fname_added_tokens
 
     def sentencepiece_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.sentencepiece_tokenizer
@@ -506,8 +504,7 @@ class HfVocab:
         self.vocab_size_base = self.tokenizer.vocab_size
         self.vocab_size      = self.vocab_size_base + len(self.added_tokens_list)
 
-        self.fname_tokenizer    = fname_tokenizer
-        self.fname_added_tokens = fname_added_tokens
+        self.fname_tokenizer = fname_tokenizer
 
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         reverse_vocab = {
