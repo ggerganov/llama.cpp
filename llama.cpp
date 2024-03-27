@@ -15111,12 +15111,13 @@ size_t llama_get_seq_size(struct llama_context* ctx, llama_seq_id seq_id) {
 
 size_t llama_copy_seq_data(struct llama_context * ctx, uint8_t * dst, llama_seq_id seq_id) {
     llama_data_buffer_context data_ctx(dst);
+    const auto& kv_self = ctx->kv_self;
+    GGML_ASSERT(!kv_self.recurrent); // not implemented
 
     // Save the size of size_t as a uint32_t for safety check
     const uint32_t size_t_size = sizeof(size_t);
     data_ctx.write(&size_t_size, sizeof(size_t_size));
 
-    const auto& kv_self = ctx->kv_self;
     std::vector<std::pair<uint32_t, uint32_t>> cell_ranges; // ranges, from inclusive, to exclusive
     uint32_t cell_count = 0;
 
@@ -15215,6 +15216,7 @@ size_t llama_copy_seq_data(struct llama_context * ctx, uint8_t * dst, llama_seq_
 
 size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama_seq_id dest_seq_id) {
     auto & kv_self = ctx->kv_self;
+    GGML_ASSERT(!kv_self.recurrent); // not implemented
 
     // Wipe the slot
     llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
@@ -15243,26 +15245,34 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
     inp += sizeof(n_embd_v_gqa_ref);
 
     // Allocate the new cells for the slot
-    llama_batch batch = llama_batch_init(cell_count, 0, 1);
-    batch.n_tokens = cell_count;
-    for (uint32_t i = 0; i < cell_count; ++i) {
-        llama_pos pos;
-        memcpy(&pos, inp, sizeof(pos));
-        inp += sizeof(pos);
+    {
+        llama_batch batch = llama_batch_init(cell_count, 0, 1);
+        batch.n_tokens = cell_count;
+        for (uint32_t i = 0; i < cell_count; ++i) {
+            llama_pos pos;
+            memcpy(&pos, inp, sizeof(pos));
+            inp += sizeof(pos);
 
-        batch.pos[i] = pos;
-        batch.n_seq_id[i] = 1;
-        batch.seq_id[i][0] = dest_seq_id;
+            batch.pos[i] = pos;
+            batch.n_seq_id[i] = 1;
+            batch.seq_id[i][0] = dest_seq_id;
+        }
+        if (!llama_kv_cache_find_slot(kv_self, batch)) {
+            llama_batch_free(batch);
+            return 0;
+        }
+
+        // DEBUG CHECK: kv_self.head should be our first cell, kv_self.head + cell_count - 1 should be our last cell (verify seq_id and pos values)
+        // Assume that this is one contiguous block of cells
+        GGML_ASSERT(kv_self.head + cell_count <= kv_self.size);
+        GGML_ASSERT(kv_self.cells[kv_self.head].pos == batch.pos[0]);
+        GGML_ASSERT(kv_self.cells[kv_self.head + cell_count - 1].pos == batch.pos[cell_count - 1]);
+        GGML_ASSERT(kv_self.cells[kv_self.head].has_seq_id(dest_seq_id));
+        GGML_ASSERT(kv_self.cells[kv_self.head + cell_count - 1].has_seq_id(dest_seq_id));
+
+        // Cleanup
+        llama_batch_free(batch);
     }
-    llama_kv_cache_find_slot(kv_self, batch);
-
-    // DEBUG CHECK: kv_self.head should be our first cell, kv_self.head + cell_count - 1 should be our last cell (verify seq_id and pos values)
-    // Assume that this is one contiguous block of cells
-    GGML_ASSERT(kv_self.head + cell_count <= kv_self.size);
-    GGML_ASSERT(kv_self.cells[kv_self.head].pos == batch.pos[0]);
-    GGML_ASSERT(kv_self.cells[kv_self.head + cell_count - 1].pos == batch.pos[cell_count - 1]);
-    GGML_ASSERT(kv_self.cells[kv_self.head].has_seq_id(dest_seq_id));
-    GGML_ASSERT(kv_self.cells[kv_self.head + cell_count - 1].has_seq_id(dest_seq_id));
 
     const auto& hparams = ctx->model.hparams;
     const uint32_t n_layer = hparams.n_layer;
@@ -15304,9 +15314,6 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
             inp += cell_count * v_size_el;
         }
     }
-
-    // Cleanup
-    llama_batch_free(batch);
 
     const size_t nread = inp - src;
     return nread;
