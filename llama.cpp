@@ -15196,7 +15196,7 @@ size_t llama_copy_seq_data(struct llama_context * ctx, uint8_t * dst, llama_seq_
         // Write element size
         const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
         data_ctx.write(&v_size_el, sizeof(v_size_el));
-        
+
         // For each row, we get the element values of each cell
         for (uint32_t j = 0; j < n_embd_v_gqa; ++j) {
             // Read each range of cells of v_size_el length each into tmp_buf and write out
@@ -15215,7 +15215,7 @@ size_t llama_copy_seq_data(struct llama_context * ctx, uint8_t * dst, llama_seq_
 
 size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama_seq_id dest_seq_id) {
     auto & kv_self = ctx->kv_self;
-    
+
     // Wipe the slot
     llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
 
@@ -15226,7 +15226,7 @@ size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama
     memcpy(&size_t_size, inp, sizeof(size_t_size));
     inp += sizeof(size_t_size);
     GGML_ASSERT(size_t_size == sizeof(size_t));
-    
+
     // Read the cell count
     uint32_t cell_count;
     memcpy(&cell_count, inp, sizeof(cell_count));
