@@ -178,7 +178,7 @@ int main(int argc, char ** argv) {
     float * out = emb + p * n_embd;
     batch_decode(ctx, batch, out, s, n_embd);
 
-    // print the first part of the embeddings or for a single prompt, the full embedding 
+    // print the first part of the embeddings or for a single prompt, the full embedding
     fprintf(stdout, "\n");
     for (int j = 0; j < n_prompts; j++) {
         fprintf(stdout, "embedding %d: ", j);
