@@ -287,8 +287,6 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #endif
 #elif defined(GGML_USE_CLBLAST)
 #include "ggml-opencl.h"
-#elif defined(GGML_USE_SYCL)
-#include "ggml-sycl.h"
 #endif
 
 // floating point type used to accumulate sums
@@ -2715,8 +2713,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
 #if defined(GGML_USE_CLBLAST)
         ggml_cl_init();
-#elif defined(GGML_USE_SYCL)
-        ggml_init_sycl();
 #endif
 
         ggml_setup_op_has_task_pass();
@@ -16126,12 +16122,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         return;
     }
 
-#ifdef GGML_USE_SYCL
-    bool skip_cpu = ggml_sycl_compute_forward(params, tensor);
-    if (skip_cpu) {
-        return;
-    }
-#endif // GGML_USE_SYCL
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
