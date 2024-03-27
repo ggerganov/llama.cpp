@@ -230,7 +230,7 @@ class Model(ABC):
     def _set_vocab_gpt2(self):
         dir_model = self.dir_model
         hparams = self.hparams
-        tokens: list[bytearray] = []
+        tokens: list[str] = []
         toktypes: list[int] = []
 
         from transformers import AutoTokenizer
@@ -243,8 +243,7 @@ class Model(ABC):
 
         for i in range(vocab_size):
             if i not in reverse_vocab:
-                pad_token = f"[PAD{i}]".encode('utf-8')
-                tokens.append(bytearray(pad_token))
+                tokens.append(f"[PAD{i}]")
                 toktypes.append(gguf.TokenType.USER_DEFINED)
             elif reverse_vocab[i] in added_vocab:
                 tokens.append(reverse_vocab[i])
@@ -266,7 +265,7 @@ class Model(ABC):
     def _set_vocab_qwen(self):
         dir_model = self.dir_model
         hparams = self.hparams
-        tokens: list[bytearray] = []
+        tokens: list[str] = []
         toktypes: list[int] = []
 
         from transformers import AutoTokenizer
@@ -291,8 +290,7 @@ class Model(ABC):
 
         for i in range(vocab_size):
             if i not in reverse_vocab:
-                pad_token = f"[PAD{i}]".encode("utf-8")
-                tokens.append(bytearray(pad_token))
+                tokens.append(f"[PAD{i}]")
                 toktypes.append(gguf.TokenType.USER_DEFINED)
             elif reverse_vocab[i] in added_vocab:
                 tokens.append(reverse_vocab[i])
