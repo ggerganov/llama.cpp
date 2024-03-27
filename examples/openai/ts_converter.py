@@ -1,5 +1,5 @@
 from typing import Any, List, Set, Tuple, Union
-from jsonargparse import CLI
+import json
 
 class SchemaToTypeScriptConverter:
     # TODO: comments for arguments!
@@ -14,11 +14,14 @@ class SchemaToTypeScriptConverter:
     # // where to get weather.
     # location: string,
     # }) => any;
-    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str, additional_properties: Union[bool, Any]):
-        return "{" + ', '.join(
+    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], additional_properties: Union[bool, Any]):
+        return "{" + ', '.join([
             f'{prop_name}{"" if prop_name in required else "?"}: {self.visit(prop_schema)}'
             for prop_name, prop_schema in properties
-        ) + "}"
+        ] + (
+            [f"[key: string]: {self.visit(additional_properties)}"]
+            if additional_properties is not None else []
+        )) + "}"
     
     def visit(self, schema: dict):
         def print_constant(v):

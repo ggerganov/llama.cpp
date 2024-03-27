@@ -3,21 +3,26 @@
 
 import json, sys, subprocess, atexit
 from pathlib import Path
+import time
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from examples.openai.llama_cpp_server_api import LlamaCppServerCompletionRequest
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
-from examples.openai.api import Message, ChatCompletionRequest
+from examples.openai.api import ChatCompletionResponse, Choice, Message, ChatCompletionRequest, Usage
 from examples.openai.prompting import ChatFormat, make_grammar, make_tools_prompt
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import httpx
+import random
 from starlette.responses import StreamingResponse
 from typing import Annotated, Optional
 import typer
 from typeguard import typechecked
+
+def generate_id(prefix):
+    return f"{prefix}{random.randint(0, 1 << 32)}"
 
 def main(
     model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
@@ -68,17 +73,13 @@ def main(
 
         (grammar, parser) = make_grammar(chat_format, chat_request.tools, response_schema)
 
-        if chat_format.strict_user_assistant_alternation:
-            print("TODO: merge system messages into user messages")
-            # new_messages = []
-
         # TODO: Test whether the template supports formatting tool_calls
             
         prompt = chat_format.render(messages, add_generation_prompt=True)
         print(json.dumps(dict(
             stream=chat_request.stream,
             prompt=prompt,
-            grammar=grammar,
+            # grammar=grammar,
         ), indent=2))
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -87,7 +88,7 @@ def main(
                     prompt=prompt,
                     stream=chat_request.stream,
                     n_predict=300,
-                    grammar=grammar,
+                    # grammar=grammar,
                 ).model_dump(),
                 headers=headers,
                 timeout=None)
@@ -98,11 +99,35 @@ def main(
             return StreamingResponse(generate_chunks(response), media_type="text/event-stream")
         else:
             result = response.json()
+            if 'content' not in result:
+                # print(json.dumps(result, indent=2))
+                return JSONResponse(result)
+
             print(json.dumps(result, indent=2))
+            # print(json.dumps(result.get('content'), indent=2))
             message = parser(result["content"])
-            assert message is not None, f"Failed to parse response: {response.text}"
-            return JSONResponse(message.model_dump())
-            # return JSONResponse(response.json())
+            assert message is not None, f"Failed to parse response:\n{response.text}\n\n"
+
+            prompt_tokens=result['timings']['prompt_n']
+            completion_tokens=result['timings']['predicted_n']
+            return JSONResponse(ChatCompletionResponse(
+                id=generate_id('chatcmpl-'),
+                object="chat.completion",
+                created=int(time.time()),
+                model=chat_request.model,
+                choices=[Choice(
+                    index=0,
+                    message=message,
+                    
+                    finish_reason="stop" if message.tool_calls is None else "tool_calls",
+                )],
+                usage=Usage(
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=prompt_tokens + completion_tokens,
+                ),
+                system_fingerprint='...'
+            ).model_dump())
 
     async def generate_chunks(response):
         async for chunk in response.aiter_bytes():

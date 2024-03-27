@@ -2,13 +2,14 @@ from enum import Enum
 import jinja2
 import json
 from pathlib import Path
-import sys
+import random
 import re
+import sys
 from typing import Optional, Tuple, Callable
 from typeguard import typechecked
 
 from examples.json_schema_to_grammar import SchemaConverter
-from examples.openai.api import Tool, Message
+from examples.openai.api import Tool, Message, FunctionCall, ToolCall
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
 from examples.openai.ts_converter import SchemaToTypeScriptConverter
 
@@ -42,7 +43,7 @@ class ChatFormat:
             (i, m) = system_message
             return messages[:i] + [Message(role="system", content=m.content + '\n' + system_prompt.content)] + messages[i+1:]
         else:
-            return [Message(role="system", content=system_prompt)] + messages
+            return [system_prompt] + messages
 
     @staticmethod
     def from_gguf(metadata: GGUFKeyValues):
@@ -69,7 +70,7 @@ class ChatFormat:
                     i += 1
             # print(f'new_messages={json.dumps(new_messages, indent=2)}')
             messages = new_messages
-        print(f'messages={messages}')
+        # print(f'messages={messages}')
         
         return self.template.render(
             messages=messages,
@@ -175,10 +176,15 @@ def _outputs_tool_call_tags(style: ToolsPromptStyle) -> bool:
         ToolsPromptStyle.TOOLS_HERMES_2_PRO,
     )
 
-_tool_call_re = re.compile('<tool_call>(.*?)</tool_call>', re.DOTALL)
-                
+_tool_call_re = re.compile(
+    '<tool_call>(.*?)</tool_call>', re.DOTALL)
+_recipient_content_re = re.compile(r'(?:(?:<\|(?:stop|from)\|>)+ *assistant\n<\|recipient\|>|^) *([^ <|>\n]+) *\n<\|content\|>(.*?)(?:$|<\|stop\|>\s*$|(?=(?:<\|(?:stop|from)\|>)+ *assistant\n))', re.DOTALL)
+
+def gen_callid():
+    return f'call_{random.randint(0, 1000000)}'
+
 @typechecked
-def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Optional[dict], indent=2) -> Tuple[Optional[str], Callable[[str], Optional[Message]]]:
+def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Optional[dict], indent=2) -> Tuple[Optional[str], Callable[[str], Optional[list[Message]]]]:
 
     converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
 
@@ -190,6 +196,13 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
     planted_prompt = chat_format.render([user_msg, Message(role="assistant", content=delimiter)], add_generation_prompt=False).strip()
     assert planted_prompt.startswith(empty_prompt), f"Planted prompt does not start with empty prompt: {planted_prompt} vs {empty_prompt}"
     [prefix, suffix] = planted_prompt[len(empty_prompt):].split(delimiter)
+
+    def strip_suffix(s: str) -> str:
+        if s.endswith(suffix):
+            return s[:-len(suffix)]
+        else:
+            print(f"Expected suffix ({suffix}) not found: {s}")
+            return s
 
     if tools:
         if _outputs_tool_call_tags(chat_format.tool_style):
@@ -221,6 +234,8 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
             
             @typechecked
             def parse(s: str) -> Optional[Message]:
+                s = strip_suffix(s)
+
                 # ls = s.lstrip()
                 parts = _tool_call_re.split(s)
                 if len(parts) == 1:
@@ -232,10 +247,21 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
                         if i % 2 == 0:
                             content.append(part)
                         else:
-                            tool_calls.append(json.loads(part))
+                            tool_calls.append(
+                                ToolCall(
+                                    id=gen_callid(),
+                                    function=FunctionCall(**json.loads(part))))
                             
                     content = ''.join(content).strip()
                     return Message(role="assistant", content=None if content == '' else content, tool_calls=tool_calls)
+                            
+                # if '<tool_call>'.startswith(ls) or ls.startswith('<tool_call>'):
+                #     if ls.startswith('<tool_call>') and ls.endswith('</tool_call>' + suffix):
+                #         tool_call = ls[len('<tool_call>'):-len('</tool_call>' + suffix)]
+                #         return Message(role="assistant", content=None, tool_calls=[json.loads(tool_call)])
+                #     return None
+                # else:
+                #     return Message(role="assistant", content=s)
             
             return (converter.format_grammar(), parse)
 
@@ -256,7 +282,30 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
     
             @typechecked
             def parse(s: str) -> Optional[Message]:
-                raise NotImplementedError(f'TODO: parse tool_style {chat_format.tool_style}: {s}')
+                s = strip_suffix(s)
+                
+                parts = _recipient_content_re.split(s)
+                if len(parts) == 1:
+                    return Message(role="assistant", content=s)
+                else:
+                    text_content = []
+                    tool_calls: list[ToolCall] = []
+                    for i in range((len(parts) - 1) // 3):
+                        assert parts[i * 3].strip() == '', f'Unexpected content before tool call: {parts[i * 3]}'
+                        recipient = parts[i * 3 + 1].strip()
+                        content = parts[i * 3 + 2]
+                        if recipient == 'all':
+                            text_content.append(content)
+                        else:
+                            tool_calls.append(
+                                ToolCall(
+                                    id=gen_callid(),
+                                    function=FunctionCall(name=recipient, arguments=json.loads(content))))
+                    
+                    assert parts[-1].strip() == '', f'Unexpected content after tool calls: {parts[-1]}'
+
+                    content = '\n'.join(text_content).strip()
+                    return Message(role="assistant", content=None if content == '' else content, tool_calls=tool_calls if tool_calls else None)
 
             return (converter.format_grammar(), parse)
 
@@ -265,8 +314,8 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
 
         @typechecked
         def parse(s: str) -> Optional[Message]:
-            if response_rule.endswith(suffix):
-                return Message(role="assistant", content=s[:-len(suffix)])
+            s = strip_suffix(s)
+            return Message(role="assistant", content=s)
             
         return (converter.format_grammar(), parse)
 
@@ -275,9 +324,8 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
 
         @typechecked
         def parse(s: str) -> Optional[Message]:
-            if s.endswith(suffix):
-                return Message(role="assistant", content=s[:-len(suffix)])
-            return None
+            s = strip_suffix(s)
+            return Message(role="assistant", content=s)
 
         return (None, parse)
         
