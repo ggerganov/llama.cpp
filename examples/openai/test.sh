@@ -12,7 +12,8 @@ function cleanup() {
 trap cleanup EXIT
 
 echo "# Starting the server"
-python -m examples.openai --model ~/AI/Models/Hermes-2-Pro-Mistral-7B.Q8_0.gguf &
+python -m examples.openai --model ~/AI/Models/mixtral-8x7b-instruct-v0.1.Q8_0.gguf  &
+# python -m examples.openai --model ~/AI/Models/Hermes-2-Pro-Mistral-7B.Q8_0.gguf &
 SERVER_PID=$!
 
 sleep 5
@@ -73,7 +74,7 @@ curl http://localhost:8080/v1/chat/completions \
       }],
     "messages": [
       {"role": "system", "content": "Do not make assumptions about what values to plug into functions. Ask for clarification if a user request is ambiguous."},
-      {"role": "user", "content": "what is the weather going to be like in San Francisco and Glasgow over the next 4 days. Give the temperatyre in celsius for both locations."}
+      {"role": "user", "content": "what is the weather going to be like in San Francisco and Glasgow over the next 4 days."}
     ]
   }'
 

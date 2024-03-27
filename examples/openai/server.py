@@ -19,17 +19,6 @@ from typing import Annotated, Optional
 import typer
 from typeguard import typechecked
 
-@typechecked
-def _add_system_prompt(messages: list[Message], system_prompt: Message) -> list[Message]:
-    assert system_prompt.role == "system"
-    # TODO: add to last system message, or create a new one just before the last user message
-    system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
-    if system_message is not None:
-        (i, m) = system_message
-        return messages[:i] + [Message(role="system", content=m.content + '\n' + system_prompt.content)] + messages[i+1:]
-    else:
-        return [Message(role="system", content=system_prompt)] + messages
-
 def main(
     model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
     # model: Path = Path("/Users/ochafik/AI/Models/Hermes-2-Pro-Mistral-7B.Q8_0.gguf"),
@@ -75,7 +64,7 @@ def main(
 
         messages = chat_request.messages
         if chat_request.tools:
-            messages = _add_system_prompt(messages, make_tools_prompt(chat_format, chat_request.tools))
+            messages = chat_format.add_system_prompt(messages, make_tools_prompt(chat_format, chat_request.tools))
 
         (grammar, parser) = make_grammar(chat_format, chat_request.tools, response_schema)
 

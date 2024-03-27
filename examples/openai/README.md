@@ -56,6 +56,10 @@ The new examples/openai/server.py:
 
 ## TODO
 
+- Support tool result messages
+
+- Reactor / 
+
 - Embedding endpoint w/ distinct server subprocess
 
 - Automatic/manual session caching
