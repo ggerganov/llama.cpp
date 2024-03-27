@@ -62,12 +62,12 @@ static size_t split_str_to_n_bytes(std::string str) {
         sscanf(str.c_str(), "%d", &n);
         n_bytes = n * 1024 * 1024 * 1024; // gigabytes
     } else {
-        throw std::invalid_argument("error: supported units are M (megabytes) or G (gigabytes), but got " + str.back());
+        throw std::invalid_argument("error: supported units are M (megabytes) or G (gigabytes), but got: " + std::string(1, str.back()));
     }
     return n_bytes;
 }
 
-static bool split_params_parse_ex(int argc, const char ** argv, split_params & params) {
+static void split_params_parse_ex(int argc, const char ** argv, split_params & params) {
     std::string arg;
     const std::string arg_prefix = "--";
     bool invalid_param = false;
@@ -138,24 +138,17 @@ static bool split_params_parse_ex(int argc, const char ** argv, split_params & p
     }
 
     if (argc - arg_idx < 2) {
-        printf("%s: bad arguments\n", argv[0]);
-        split_print_usage(argv[0]);
-        return false;
+        throw std::invalid_argument("error: bad arguments");
     }
 
     params.input = argv[arg_idx++];
     params.output = argv[arg_idx++];
-
-    return true;
 }
 
 static bool split_params_parse(int argc, const char ** argv, split_params & params) {
     bool result = true;
     try {
-        if (!split_params_parse_ex(argc, argv, params)) {
-            split_print_usage(argv[0]);
-            exit(EXIT_FAILURE);
-        }
+        split_params_parse_ex(argc, argv, params);
     }
     catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
@@ -501,10 +494,6 @@ static void gguf_merge(const split_params & split_params) {
 }
 
 int main(int argc, const char ** argv) {
-    if (argc < 3) {
-        split_print_usage(argv[0]);
-    }
-
     split_params params;
     split_params_parse(argc, argv, params);
 
