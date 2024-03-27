@@ -67,7 +67,7 @@ static size_t split_str_to_n_bytes(std::string str) {
         throw std::invalid_argument("error: supported units are M (megabytes) or G (gigabytes), but got: " + std::string(1, str.back()));
     }
     if (n <= 0) {
-        throw std::invalid_argument("error: size must be a negative value");
+        throw std::invalid_argument("error: size must be a positive value");
     }
     return n_bytes;
 }
