@@ -2742,19 +2742,23 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            char *name = argv[i];
+            std::string name = argv[i];
+
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            size_t slen = strlen(argv[i]);
+            std::string fname = argv[i];
+
+            size_t slen = fname.length();
             bool is_dir = slen < 5 || strncmp(argv[i] + slen - 5, ".gguf", 5) != 0;
 
-            // Append path separator for dirs
-            std::string fname = argv[i];
+            // Append path separator for dir names
             if (is_dir && argv[i][slen - 1] != '/')
                 fname += '/';
-            sparams.control_vector_load_options.push_back({ argv[i-1], fname, is_dir });
+            if (is_dir && argv[i-1][slen - 1] != '/')
+                name += '/';
+            sparams.control_vector_load_options.push_back({ name, fname, is_dir });
             break;
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
@@ -3260,8 +3264,13 @@ int main(int argc, char ** argv) {
                             }
                             if (opt.is_dir && v.fname.rfind(opt.name, 0) == 0) {
                                 std::cout << "file exact match\n";
-                                // opt.fname already includes '/' (or '\') while opt.name doesn't
-                                real_fname = opt.fname + v.fname.substr(opt.name.length() + 1);
+                                real_fname = opt.fname + v.fname.substr(opt.name.length());
+#if defined(_WIN32)
+                                std::replace(real_fname.begin(), real_fname.end(), '/', '\\');
+#endif
+                                size_t len = real_fname.length();
+                                if (len < 5 || real_fname.compare(len - 5, 5, ".gguf") != 0)
+                                    real_fname += ".gguf";
                                 break;
                             }
                         }
