@@ -16,6 +16,7 @@ import re
 import signal
 import struct
 import sys
+import textwrap
 import time
 import zipfile
 from abc import ABC, abstractmethod
@@ -188,8 +189,10 @@ class Params:
             n_layer = next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
 
         if n_layer < 1:
-            raise Exception("failed to guess 'n_layer'. This model is unknown or unsupported.\n"
-                            "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
+            raise KeyError(textwrap.dedent("""\
+                failed to guess 'n_layer'. This model is unknown or unsupported.
+                Suggestion: provide 'config.json' of the model in the same directory containing model files.""",
+            ))
 
         n_head = n_embd // 128 # guessed
         n_mult = 256           # guessed
@@ -234,8 +237,10 @@ class Params:
         elif "max_position_embeddings" in config:
             n_ctx = config["max_position_embeddings"]
         else:
-            raise Exception("failed to guess 'n_ctx'. This model is unknown or unsupported.\n"
-                            "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
+            raise KeyError(textwrap.dedent("""\
+                failed to guess 'n_ctx'. This model is unknown or unsupported.
+                Suggestion: provide 'config.json' of the model in the same directory containing model files.""",
+            ))
 
         n_experts      = None
         n_experts_used = None
@@ -394,7 +399,8 @@ class BpeVocab(Vocab):
         actual_ids   = sorted(added_tokens.values())
         if expected_ids != actual_ids:
             expected_end_id = vocab_size + len(actual_ids) - 1
-            raise Exception(f"Expected the {len(actual_ids)} added token ID(s) to be sequential in the range {vocab_size} - {expected_end_id}; got {actual_ids}")
+            raise ValueError(f"Expected the {len(actual_ids)} added token ID(s) to be sequential in the range "
+                             f"{vocab_size} - {expected_end_id}; got {actual_ids}")
 
         items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
         self.added_tokens_dict    = added_tokens
@@ -908,7 +914,7 @@ def lazy_load_safetensors_file(fp: IO[bytes], path: Path) -> ModelPlus:
 def must_read(fp: IO[bytes], length: int) -> bytes:
     ret = fp.read(length)
     if len(ret) < length:
-        raise Exception("unexpectedly reached end of file")
+        raise EOFError("unexpectedly reached end of file")
     return ret
 
 
@@ -998,7 +1004,7 @@ def check_vocab_size(params: Params, vocab: BaseVocab, pad_vocab: bool = False) 
     if vocab.vocab_size < params.n_vocab:
         msg += " Add the --pad-vocab option and try again."
 
-    raise Exception(msg)
+    raise ValueError(msg)
 
 
 class OutputFile:
@@ -1193,7 +1199,7 @@ def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileT
 
     name_to_type = {name: lazy_tensor.data_type for (name, lazy_tensor) in model.items()}
 
-    raise Exception(f"Unexpected combination of types: {name_to_type}")
+    raise ValueError(f"Unexpected combination of types: {name_to_type}")
 
 
 def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
@@ -1230,8 +1236,7 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
             if skip_unknown:
                 print(f"Unexpected tensor name: {name} - skipping")
                 continue
-            else:
-                raise Exception(f"Unexpected tensor name: {name}. Use --skip-unknown to ignore it (e.g. LLaVA)")
+            raise ValueError(f"Unexpected tensor name: {name}. Use --skip-unknown to ignore it (e.g. LLaVA)")
 
         if tensor_type in should_skip:
             print(f"skipping tensor {name_new}")
@@ -1294,9 +1299,9 @@ def load_some_model(path: Path) -> ModelPlus:
             globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt", "pytorch_model.bin"]
             files = [file for glob in globs for file in path.glob(glob)]
         if not files:
-            raise Exception(f"Can't find model in directory {path}")
+            raise FileNotFoundError(f"Can't find model in directory {path}")
         if len(files) > 1:
-            raise Exception(f"Found multiple models in {path}, not sure which to pick: {files}")
+            raise ValueError(f"Found multiple models in {path}, not sure which to pick: {files}")
         path = files[0]
 
     paths = find_multifile_paths(path)
@@ -1448,10 +1453,12 @@ def main(args_in: list[str] | None = None) -> None:
     params = Params.load(model_plus)
     if params.n_ctx == -1:
         if args.ctx is None:
-            raise Exception("The model doesn't have a context size, and you didn't specify one with --ctx\n"
-                            "Please specify one with --ctx:\n"
-                            " - LLaMA v1: --ctx 2048\n"
-                            " - LLaMA v2: --ctx 4096\n")
+            parser.error(textwrap.dedent("""\
+                The model doesn't have a context size, and you didn't specify one with --ctx
+                Please specify one with --ctx:
+                 - LLaMA v1: --ctx 2048
+                 - LLaMA v2: --ctx 4096""",
+            ))
         params.n_ctx = args.ctx
 
     if args.outtype:
