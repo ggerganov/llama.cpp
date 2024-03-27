@@ -66,6 +66,9 @@ static size_t split_str_to_n_bytes(std::string str) {
     } else {
         throw std::invalid_argument("error: supported units are M (megabytes) or G (gigabytes), but got: " + std::string(1, str.back()));
     }
+    if (n <= 0) {
+        throw std::invalid_argument("error: size must be a negative value");
+    }
     return n_bytes;
 }
 
@@ -200,6 +203,10 @@ struct split_strategy {
         auto new_ctx_out = [&]() {
             i_split++;
             if (ctx_out != NULL) {
+                if (gguf_get_n_tensors(ctx_out) == 0) {
+                    fprintf(stderr, "error: one of splits have 0 tensors. Maybe size or tensors limit is too small\n");
+                    exit(EXIT_FAILURE);
+                }
                 ctx_outs.push_back(ctx_out);
             }
             ctx_out = gguf_init_empty();
