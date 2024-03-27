@@ -226,13 +226,10 @@ struct split_strategy {
         size_t curr_tensors_size = 0; // current size by counting only tensors size (without metadata)
         for (int i = 0; i < n_tensors; ++i) {
             struct ggml_tensor * t = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
-            // calculate the "imaginary" size including this tensor
+            // calculate the "imaginary" size = the current size + next tensor size
             size_t n_bytes = GGML_PAD(ggml_nbytes(t), GGUF_DEFAULT_ALIGNMENT);
             size_t next_tensors_size = curr_tensors_size + n_bytes;
-            size_t next_metadata_size = gguf_get_meta_size(ctx_out)
-                + GGUF_DEFAULT_ALIGNMENT
-                + sizeof(struct ggml_tensor *); // not sure if we're missing something
-            if (should_split(i, next_tensors_size + next_metadata_size)) {
+            if (should_split(i, next_tensors_size)) {
                 new_ctx_out();
                 curr_tensors_size = n_bytes;
             } else {
