@@ -12,7 +12,7 @@
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 // https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11
 enum error_type {
@@ -95,8 +95,8 @@ static inline void server_log(const char *level, const char *function, int line,
 
         const std::string str = ss.str();
         printf("%.*s\n", (int)str.size(), str.data());
-        fflush(stdout);
     }
+    fflush(stdout);
 }
 
 //
@@ -352,39 +352,71 @@ static json oaicompat_completion_params_parse(
     // https://platform.openai.com/docs/api-reference/chat/create
     llama_sampling_params default_sparams;
     llama_params["model"]             = json_value(body,   "model",             std::string("unknown"));
-    llama_params["prompt"]            = format_chat(model, chat_template,       body["messages"]);
-    llama_params["cache_prompt"]      = json_value(body,   "cache_prompt",      false);
-    llama_params["temperature"]       = json_value(body,   "temperature",       0.0);
-    llama_params["top_k"]             = json_value(body,   "top_k",             default_sparams.top_k);
-    llama_params["top_p"]             = json_value(body,   "top_p",             1.0);
-    llama_params["n_predict"]         = json_value(body,   "max_tokens",        -1);
-    llama_params["logit_bias"]        = json_value(body,   "logit_bias",        json::object());
     llama_params["frequency_penalty"] = json_value(body,   "frequency_penalty", 0.0);
+    llama_params["logit_bias"]        = json_value(body,   "logit_bias",        json::object());
+    llama_params["n_predict"]         = json_value(body,   "max_tokens",        -1);
     llama_params["presence_penalty"]  = json_value(body,   "presence_penalty",  0.0);
     llama_params["seed"]              = json_value(body,   "seed",              LLAMA_DEFAULT_SEED);
     llama_params["stream"]            = json_value(body,   "stream",            false);
-    llama_params["mirostat"]          = json_value(body,   "mirostat",          default_sparams.mirostat);
-    llama_params["mirostat_tau"]      = json_value(body,   "mirostat_tau",      default_sparams.mirostat_tau);
-    llama_params["mirostat_eta"]      = json_value(body,   "mirostat_eta",      default_sparams.mirostat_eta);
-    llama_params["penalize_nl"]       = json_value(body,   "penalize_nl",       default_sparams.penalize_nl);
-    llama_params["typical_p"]         = json_value(body,   "typical_p",         default_sparams.typical_p);
-    llama_params["repeat_last_n"]     = json_value(body,   "repeat_last_n",     default_sparams.penalty_last_n);
-    llama_params["ignore_eos"]        = json_value(body,   "ignore_eos",        false);
-    llama_params["tfs_z"]             = json_value(body,   "tfs_z",             default_sparams.tfs_z);
+    llama_params["temperature"]       = json_value(body,   "temperature",       0.0);
+    llama_params["top_p"]             = json_value(body,   "top_p",             1.0);
 
-    if (body.count("grammar") != 0) {
-        llama_params["grammar"] = json_value(body, "grammar", json::object());
-    }
+    // Apply chat template to the list of messages
+    llama_params["prompt"] = format_chat(model, chat_template, body["messages"]);
 
-    // Handle 'stop' field
+    // Handle "stop" field
     if (body.contains("stop") && body["stop"].is_string()) {
         llama_params["stop"] = json::array({body["stop"].get<std::string>()});
     } else {
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
+    // Some chat templates don't use EOS token to stop generation
+    // We must add their end sequences to list of stop words
+    llama_params["stop"].push_back("<|im_end|>"); // chatml
+    llama_params["stop"].push_back("<end_of_turn>"); // gemma
 
-    // Ensure there is ChatML-specific end sequence among stop words
-    llama_params["stop"].push_back("<|im_end|>");
+    // Handle "response_format" field
+    if (body.contains("response_format")) {
+        json response_format      = json_value(body, "response_format", json::object());
+        std::string response_type = json_value(response_format, "type", std::string());
+        if (response_type == "json_object") {
+            llama_params["json_schema"] = json_value(response_format, "schema", json::object());
+        } else if (!response_type.empty() && response_type != "text") {
+            throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
+        }
+    }
+
+    // Handle "n" field
+    int n_choices = json_value(body, "n", 1);
+    if (n_choices != 1) {
+        throw std::runtime_error("Only one completion choice is allowed");
+    }
+
+    // Handle "logprobs" field
+    // TODO: The response format of this option is not yet OAI-compatible, but seems like no one really using it; We may need to fix it in the future
+    if (body.contains("logprobs")) {
+        llama_params["n_probs"] = json_value(body, "top_logprobs", 20);
+    } else if (body.contains("top_logprobs")) {
+        throw std::runtime_error("top_logprobs requires logprobs to be set to true");
+    }
+
+    // Params supported by OAI but unsupported by llama.cpp
+    static const std::vector<std::string> unsupported_params { "tools", "tool_choice" };
+    for (auto & param : unsupported_params) {
+        if (body.contains(param)) {
+            throw std::runtime_error("Unsupported param: " + param);
+        }
+    }
+
+    // Copy remaining properties to llama_params
+    // This allows user to use llama.cpp-specific params like "mirostat", "tfs_z",... via OAI endpoint.
+    // See "launch_slot_with_task()" for a complete list of params supported by llama.cpp
+    for (const auto & item : body.items()) {
+        // Exception: if "n_predict" is present, we overwrite the value specified earlier by "max_tokens"
+        if (!llama_params.contains(item.key()) || item.key() == "n_predict") {
+            llama_params[item.key()] = item.value();
+        }
+    }
 
     return llama_params;
 }

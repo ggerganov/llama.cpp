@@ -420,7 +420,7 @@ GGML_CALL static void ggml_backend_registry_init(void) {
     ggml_backend_register("CPU", ggml_backend_reg_cpu_init, ggml_backend_cpu_buffer_type(), NULL);
 
     // add forward decls here to avoid including the backend headers
-#ifdef GGML_USE_CUBLAS
+#ifdef GGML_USE_CUDA
     extern GGML_CALL void ggml_backend_cuda_reg_devices(void);
     ggml_backend_cuda_reg_devices();
 #endif
@@ -1015,7 +1015,7 @@ static bool ggml_is_view_op(enum ggml_op op) {
 #endif
 
 #ifndef GGML_SCHED_MAX_SPLIT_INPUTS
-#define GGML_SCHED_MAX_SPLIT_INPUTS 4
+#define GGML_SCHED_MAX_SPLIT_INPUTS GGML_MAX_SRC
 #endif
 
 #ifndef GGML_SCHED_MAX_COPIES

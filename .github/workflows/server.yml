@@ -18,6 +18,10 @@ on:
   schedule:
     -  cron: '0 0 * * *'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   server:
     runs-on: ubuntu-latest
@@ -31,7 +35,6 @@ jobs:
         include:
           - build_type: Release
             sanitizer: ""
-            disabled_on_pr: true
       fail-fast: false # While -DLLAMA_SANITIZE_THREAD=ON is broken
 
     container:
