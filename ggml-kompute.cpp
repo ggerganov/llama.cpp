@@ -1430,6 +1430,10 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
             struct ggml_tensor * dst = gf->nodes[i];
             GGML_ASSERT(dst->data != nullptr);
 
+            if (ggml_is_empty(dst)) {
+                continue;
+            }
+
             switch (dst->op) {
                 case GGML_OP_NONE:
                 case GGML_OP_RESHAPE:

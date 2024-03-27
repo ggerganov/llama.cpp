@@ -17,6 +17,10 @@ on:
     types: [opened, synchronize, reopened]
     paths: ['**/*.nix', 'flake.lock']
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   nix-build-aarch64:
     runs-on: ubuntu-latest
