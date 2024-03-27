@@ -23,7 +23,7 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
-from convert import HfVocab
+from convert import LlamaHfVocab
 
 
 ###### MODEL DEFINITIONS ######
@@ -370,12 +370,8 @@ class Model(ABC):
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _set_vocab_hf(self):
-        path = self.dir_model
-        added_tokens_path = self.dir_model
-        vocab = HfVocab(
-            path, added_tokens_path if added_tokens_path.exists() else None
-        )
+    def _set_vocab_llama_hf(self):
+        vocab = LlamaHfVocab(self.dir_model)
         tokens = []
         scores = []
         toktypes = []
@@ -1097,7 +1093,7 @@ class MiniCPMModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
 
     def set_vocab(self):
-        self._set_vocab_hf()
+        self._set_vocab_llama_hf()
 
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
@@ -1698,11 +1694,8 @@ class BertModel(Model):
             self.gguf_writer.add_pooling_type(pooling_type)
 
     def set_vocab(self):
-        path = self.dir_model
-        added_tokens_path = self.dir_model if self.dir_model.exists() else None
-
         # use huggingface vocab to get all tokens
-        vocab = HfVocab(path, added_tokens_path)
+        vocab = LlamaHfVocab(self.dir_model, ignore_nonllama=True)
         tokens, scores, toktypes = zip(*vocab.all_tokens())
         assert len(tokens) == vocab.vocab_size
         self.vocab_size = vocab.vocab_size
