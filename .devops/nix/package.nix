@@ -18,7 +18,7 @@
   vulkan-headers,
   vulkan-loader,
   clblast,
-    useBlas ? builtins.all (x: !x) [
+  useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
     useOpenCL
