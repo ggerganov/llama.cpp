@@ -32,6 +32,7 @@ struct split_params {
     int n_split_tensors = 128;
     std::string input;
     std::string output;
+    bool dry_run = false;
 };
 
 static void split_print_usage(const char * executable) {
@@ -48,6 +49,7 @@ static void split_print_usage(const char * executable) {
     printf("  --merge                 merge multiple GGUF to a single GGUF\n");
     printf("  --split-max-tensors     max tensors in each split (default: %d)\n", default_params.n_split_tensors);
     printf("  --split-max-size N(M|G) max size per split\n");
+    printf("  --dry-run               only print out a split plan and exit, without writing any new files\n");
     printf("\n");
 }
 
@@ -90,6 +92,10 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
             fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
             fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
             exit(0);
+        }
+        if (arg == "--dry-run") {
+            arg_found = true;
+            params.dry_run = true;
         }
 
         if (is_op_set) {
@@ -214,8 +220,7 @@ struct split_strategy {
         for (int i = 0; i < n_tensors; ++i) {
             struct ggml_tensor * t = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
             // calculate the "imaginary" size including this tensor
-            size_t n_bytes = ggml_nbytes(t);
-            //n_bytes += GGML_PAD(n_bytes, GGUF_DEFAULT_ALIGNMENT);
+            size_t n_bytes = GGML_PAD(ggml_nbytes(t), GGUF_DEFAULT_ALIGNMENT);
             size_t next_tensors_size = curr_tensors_size + n_bytes;
             size_t next_metadata_size = gguf_get_meta_size(ctx_out)
                 + GGUF_DEFAULT_ALIGNMENT
@@ -314,7 +319,7 @@ struct split_strategy {
     }
 
     void copy_file_to_file(std::ifstream & f_in, std::ofstream & f_out, const size_t in_offset, const size_t len) {
-        // TODO: prevent copying buffer to user space then write it back
+        // TODO: detect OS and use copy_file_range() here for better performance
         if (read_buf.size() < len) {
             read_buf.resize(len);
         }
@@ -349,8 +354,10 @@ static void gguf_split(const split_params & split_params) {
     int n_split = strategy.ctx_outs.size();
     strategy.print_info();
 
-    // write all output splits
-    strategy.write();
+    if (!split_params.dry_run) {
+        // write all output splits
+        strategy.write();
+    }
 
     // done, clean up
     gguf_free(ctx_gguf);
