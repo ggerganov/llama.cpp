@@ -15382,7 +15382,7 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
         // KQ + KQV multi-batch
         // GGML_SYCL_DEBUG("ggml_sycl_mul_mat_batched_sycl\n");
         ggml_sycl_mul_mat_batched_sycl(src0, src1, dst);
-    }else if (src0->type == GGML_TYPE_F32) {
+    } else if (src0->type == GGML_TYPE_F32) {
         // GGML_SYCL_DEBUG("ggml_sycl_op_mul_mat\n");
         ggml_sycl_op_mul_mat(src0, src1, dst, ggml_sycl_op_mul_mat_sycl, false);
     } else if (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16) {
