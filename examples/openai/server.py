@@ -30,27 +30,28 @@ def main(
     # model_url: Annotated[Optional[str], typer.Option("--model-url", "-mu")] = None,
     host: str = "localhost",
     port: int = 8080,
-    main_server_endpoint: Optional[str] = None,
-    main_server_host: str = "localhost",
-    main_server_port: Optional[int] = 8081,
+    cpp_server_endpoint: Optional[str] = None,
+    cpp_server_host: str = "localhost",
+    cpp_server_port: Optional[int] = 8081,
 ):
     import uvicorn
 
     metadata = GGUFKeyValues(model)
     context_length = metadata[Keys.LLM.CONTEXT_LENGTH]
     chat_format = ChatFormat.from_gguf(metadata)
-    print(chat_format)
+    # print(chat_format)
 
-    if not main_server_endpoint:
+    if not cpp_server_endpoint:
+        sys.stderr.write(f"# Starting C++ server with model {model} on {cpp_server_host}:{cpp_server_port}\n")
         server_process = subprocess.Popen([
             "./server", "-m", model,
-            "--host", main_server_host, "--port", f'{main_server_port}',
+            "--host", cpp_server_host, "--port", f'{cpp_server_port}',
             '-ctk', 'q4_0', '-ctv', 'f16',
             "-c", f"{2*8192}",
             # "-c", f"{context_length}",
-        ])
+        ], stdout=sys.stderr)
         atexit.register(server_process.kill)
-        main_server_endpoint = f"http://{main_server_host}:{main_server_port}"
+        cpp_server_endpoint = f"http://{cpp_server_host}:{cpp_server_port}"
 
     app = FastAPI()
 
@@ -74,21 +75,17 @@ def main(
         (grammar, parser) = make_grammar(chat_format, chat_request.tools, response_schema)
 
         # TODO: Test whether the template supports formatting tool_calls
-            
+        sys.stderr.write(f'\n{grammar}\n\n')
+
         prompt = chat_format.render(messages, add_generation_prompt=True)
-        print(json.dumps(dict(
-            stream=chat_request.stream,
-            prompt=prompt,
-            # grammar=grammar,
-        ), indent=2))
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{main_server_endpoint}/completions",
+                f"{cpp_server_endpoint}/completions",
                 json=LlamaCppServerCompletionRequest(
                     prompt=prompt,
                     stream=chat_request.stream,
                     n_predict=300,
-                    # grammar=grammar,
+                    grammar=grammar,
                 ).model_dump(),
                 headers=headers,
                 timeout=None)
@@ -103,7 +100,7 @@ def main(
                 # print(json.dumps(result, indent=2))
                 return JSONResponse(result)
 
-            print(json.dumps(result, indent=2))
+            sys.stderr.write(json.dumps(result, indent=2) + "\n")
             # print(json.dumps(result.get('content'), indent=2))
             message = parser(result["content"])
             assert message is not None, f"Failed to parse response:\n{response.text}\n\n"
@@ -118,7 +115,6 @@ def main(
                 choices=[Choice(
                     index=0,
                     message=message,
-                    
                     finish_reason="stop" if message.tool_calls is None else "tool_calls",
                 )],
                 usage=Usage(

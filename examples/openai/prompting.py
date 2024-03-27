@@ -128,10 +128,12 @@ def make_tools_prompt(chat_format: ChatFormat, tools: list[Tool], indent=2) -> M
                 '',
                 '''Use the following json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"}''',
                 '',
-                '''For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:''',
+                # '''For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:''',
+                '''To call each function, give its name and arguments within <tool_call></tool_call> XML tags as follows:''',
                 '''<tool_call>''',
                 '''{"arguments": <args-dict>, "name": <function-name>}''',
                 '''</tool_call>''',
+                '''This is not hypothetical, you're not asked what you would do. If you need a tool called, just call it.''',
             ])
         )
     
@@ -201,17 +203,21 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
         if s.endswith(suffix):
             return s[:-len(suffix)]
         else:
-            print(f"Expected suffix ({suffix}) not found: {s}")
+            sys.stderr.write(f"Expected suffix ({suffix}) not found: {s}\n")
             return s
 
     if tools:
         if _outputs_tool_call_tags(chat_format.tool_style):
+
+            escapes_underscores = chat_format.tool_style != ToolsPromptStyle.TOOLS_HERMES_2_PRO
+
             tool_rules = [
                 converter.visit(
                     dict(
                         type="object",
                         properties=dict(
-                            name=dict(const=tool.function.name),
+                            name=dict(type="string", pattern='^' + tool.function.name.replace('_', f'\\?_') + '$') if escapes_underscores \
+                                else dict(const=tool.function.name),
                             arguments=tool.function.parameters,
                         ),
                         required=['name', 'arguments']
@@ -221,22 +227,45 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
                 for tool in tools
             ]
 
-            # Constrain the output to be a non-tool-call message (constrained to a JSON schema or not)
-            # OR a tool-call message respecting the schema of any of the tools
+            def format_literal(s: str) -> str:
+                if escapes_underscores:
+                    return ' "\\\\"? "_" '.join((converter._format_literal(part) for part in s.split('_')))
+                else:
+                    return converter._format_literal(s)
+
+            tool_call_rule = converter._add_rule(
+                'tool_call',
+                format_literal("<tool_call>") + " (" +
+                ' | '.join(tool_rules) +
+                ") " + format_literal("</tool_call>"))
+            
+            # Ideally we'd want a negative lookahead of /<tool\\?_call>/, but it's just too hard to express in GBNF for now.
+            # So we just over-constrain the content rule to not contain literals dangerously getting close to <tool_call>
+            content_rule = converter._add_rule('content', '[^<] | "<" [^t<]? | "<t" [^o<]?')
+            # content_rule = converter._add_rule('content', converter.not_literal('<tool_call>'))
             converter._add_rule(
-                "root", 
-                converter._format_literal(prefix) + " (" +
-                    (response_rule or converter.not_literal("<tool_call>")) + " | " +
-                    converter._format_literal("<tool_call>") + " (" +
-                    ' | '.join(tool_rules) +
-                    ") " + converter._format_literal("</tool_call>") +
-                ")") # + converter._format_literal(suffix))
+                'root',
+                f'{content_rule}* ({tool_call_rule}+ {content_rule}*)?')
+          
+            # # Constrain the output to be a non-tool-call message (constrained to a JSON schema or not)
+            # # OR a tool-call message respecting the schema of any of the tools
+            # converter._add_rule(
+            #     "root", 
+            #     converter._format_literal(prefix) + " (" +
+            #         (response_rule or converter.not_literal("<tool_call>")) + " | " +
+            #         converter._format_literal("<tool_call>") + " (" +
+            #         ' | '.join(tool_rules) +
+            #         ") " + converter._format_literal("</tool_call>") +
+            #     ")") # + converter._format_literal(suffix))
             
             @typechecked
             def parse(s: str) -> Optional[Message]:
                 s = strip_suffix(s)
 
-                # ls = s.lstrip()
+                if r'<tool\_call>' in s:
+                    # Some weird escaping of underscores is happening w/ Mixtral 8x7B Instruct
+                    s = s.replace(r'\_', '_')
+
                 parts = _tool_call_re.split(s)
                 if len(parts) == 1:
                     return Message(role="assistant", content=s)
@@ -247,13 +276,17 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
                         if i % 2 == 0:
                             content.append(part)
                         else:
+                            try:
+                                fc = json.loads(part)
+                            except json.JSONDecodeError:
+                                raise ValueError(f'Failed to parse tool call as JSON: {part}\nFull string: {s}')
                             tool_calls.append(
                                 ToolCall(
                                     id=gen_callid(),
-                                    function=FunctionCall(**json.loads(part))))
+                                    function=FunctionCall(**fc)))
                             
-                    content = ''.join(content).strip()
-                    return Message(role="assistant", content=None if content == '' else content, tool_calls=tool_calls)
+                    content = '(...)'.join(content).strip()
+                    return Message(role="assistant", content=content if content else None, tool_calls=tool_calls)
                             
                 # if '<tool_call>'.startswith(ls) or ls.startswith('<tool_call>'):
                 #     if ls.startswith('<tool_call>') and ls.endswith('</tool_call>' + suffix):
@@ -268,17 +301,54 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
         elif chat_format.tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
             # Only allowing a single tool call at a time for now.
             # Note that if there were more, they'd be separated by a '<|from|>assistant' literal
+
+            tool_rules = [
+                converter._add_rule(
+                    tool.function.name + '-call',
+                    converter._format_literal(tool.function.name) + ' ' + converter._format_literal('\n<|content|>\n') + ' ' +
+                    converter.visit(tool.function.parameters, tool.function.name + '-args') + ' ' +
+                    converter._format_literal('\n'))
+                # converter.visit(
+                #     dict(
+                #         type="object",
+                #         properties=dict(
+                #             name=dict(const=tool.function.name),
+                #             arguments=tool.function.parameters,
+                #         ),
+                #         required=['name', 'arguments']
+                #     ),
+                #     f'{tool.function.name}-tool-call'
+                # )
+                for i, tool in enumerate(tools)
+            ]
+
+            not_from_rule = converter._add_rule('not_from', converter.not_literal("<|from|>"))
+            content_without_start_rule = converter._add_rule('content_without_start', converter._format_literal("all\n<|content|>") + ' ' + not_from_rule + '*')
+            start_rule = converter._add_rule('start', converter._format_literal('<|from|>assistant\n<|recipient|>'))
+            content_rule = converter._add_rule('content', start_rule + ' ' + content_without_start_rule)
+            tool_call_without_start_rule = converter._add_rule(
+                'tool_call_without_start',
+                ' | '.join(tool_rules))
+                #   + ' ' +
+                # converter.not_literal("all", dotall=False) + ' ' + converter._format_literal('\n<|content|>\n') + ' ' + not_from_rule + '*')
+            tool_call_rule = converter._add_rule('tool_call', f'{start_rule} {tool_call_without_start_rule}')
+            # converter._add_rule('root', f'({content_without_start_rule} ({content_rule})* ({tool_call_rule}+ {content_rule}*)? | {tool_call_without_start_rule} (* {tool_call_rule}{content_rule}*')
             converter._add_rule(
-                "root", 
-                converter._format_literal(prefix) + " (" +
-                    (response_rule or converter.not_literal("<|recipient|>")) + " | " +
-                    (' | '.join(
-                        converter._format_literal(f"<|recipient|>{tool.function.name}\n<|content|>") + " " +
-                        converter.visit(tool.function.parameters, tool.function.name + '-args')
-                        for tool in tools
-                    )) +
-                    ") " +
-                ")") # + converter._format_literal(suffix))
+                'root',
+                f'{content_without_start_rule}   {content_rule}*   ({tool_call_rule}+ {content_rule}*)? | '
+                f'{tool_call_without_start_rule} {tool_call_rule}* {content_rule}*')
+
+            # converter._add_rule(
+            #     "root", 
+            #     converter._format_literal(prefix) + " (" +
+            #         (response_rule or converter.not_literal("<|recipient|>")) + " | " +
+            #         (' | '.join(
+            #             converter._format_literal(f"<|recipient|>{tool.function.name}\n<|content|>") + " " +
+            #             converter.visit(tool.function.parameters, tool.function.name + '-args')
+            #             for tool in tools
+            #         )) +
+            #         ") " +
+            #     ")") # + converter._format_literal(suffix))
     
             @typechecked
             def parse(s: str) -> Optional[Message]:
@@ -297,17 +367,25 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
                         if recipient == 'all':
                             text_content.append(content)
                         else:
+                            try:
+                                arguments = json.loads(content)
+                            except json.JSONDecodeError:
+                                raise ValueError(f'Failed to parse tool call content as JSON: {content}')
                             tool_calls.append(
                                 ToolCall(
                                     id=gen_callid(),
-                                    function=FunctionCall(name=recipient, arguments=json.loads(content))))
+                                    function=FunctionCall(name=recipient, arguments=arguments)))
+                            
                     
-                    assert parts[-1].strip() == '', f'Unexpected content after tool calls: {parts[-1]}'
+                    assert parts[-1].strip() in ('', '<|stop|>'), f'Unexpected content after tool calls: {parts[-1]}\nFull string: {s}'
 
                     content = '\n'.join(text_content).strip()
-                    return Message(role="assistant", content=None if content == '' else content, tool_calls=tool_calls if tool_calls else None)
+                    return Message(role="assistant", content=content if content else None, tool_calls=tool_calls if tool_calls else None)
 
             return (converter.format_grammar(), parse)
+        
+        else:
+            raise ValueError(f"Unsupported tool call style: {chat_format.tool_style}")
 
     elif response_schema:
         converter._add_rule("root", response_rule + ' ' + converter._format_literal(suffix))
