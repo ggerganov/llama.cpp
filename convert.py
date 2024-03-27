@@ -1340,7 +1340,7 @@ class VocabFactory:
             n_vocab=n_vocab,
         )
 
-    def _create_vocab_by_path(self, vocab_types: list[str]) -> BaseVocab:
+    def _create_vocab_by_path(self, vocab_types: list[str]) -> Vocab:
         vocab_type, path = self._select_file(vocab_types)
         print(f"Loading vocab file {path!r}, type {vocab_type!r}")
 
@@ -1359,9 +1359,9 @@ class VocabFactory:
             )
         raise ValueError(vocab_type)
 
-    def load_vocab(self, vocab_types: list[str], model_parent_path: Path) -> tuple[BaseVocab, gguf.SpecialVocab]:
+    def load_vocab(self, vocab_types: list[str] | None, model_parent_path: Path) -> tuple[BaseVocab, gguf.SpecialVocab]:
         vocab: BaseVocab
-        if len(vocab_types) == 1 and "no_vocab" in vocab_types:
+        if vocab_types is None:
             vocab = NoVocab()
         else:
             vocab = self._create_vocab_by_path(vocab_types)
@@ -1418,10 +1418,8 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
 
     args = parser.parse_args(args_in)
-    if args.no_vocab:
-        if args.vocab_only:
-            raise ValueError("--vocab-only does not make sense with --no-vocab")
-        args.vocab_type = "no_vocab"
+    if args.no_vocab and args.vocab_only:
+        raise ValueError("--vocab-only does not make sense with --no-vocab")
 
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
@@ -1461,7 +1459,8 @@ def main(args_in: list[str] | None = None) -> None:
     model_parent_path = model_plus.paths[0].parent
     vocab_path = Path(args.vocab_dir or args.model or model_parent_path)
     vocab_factory = VocabFactory(vocab_path)
-    vocab, special_vocab = vocab_factory.load_vocab(args.vocab_type.split(","), model_parent_path)
+    vocab_types = None if args.no_vocab else args.vocab_type.split(",")
+    vocab, special_vocab = vocab_factory.load_vocab(vocab_types, model_parent_path)
 
     if args.vocab_only:
         assert isinstance(vocab, Vocab)
