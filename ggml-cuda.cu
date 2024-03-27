@@ -2384,15 +2384,10 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_op_argsort(ctx, dst);
             break;
         case GGML_OP_FLASH_ATTN_EXT:
+            ggml_cuda_flash_attn_ext(ctx, dst);
             break;
         default:
             return false;
-    }
-
-    if (tensor->op == GGML_OP_FLASH_ATTN_EXT) {
-        ggml_cuda_flash_attn_ext(ctx, tensor->src[0], tensor->src[1], tensor->src[2], tensor->src[3], tensor);
-    } else {
-        func(ctx, tensor->src[0], tensor->src[1], tensor);
     }
 
     cudaError_t err = cudaGetLastError();
