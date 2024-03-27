@@ -335,7 +335,7 @@ class BpeVocab:
     tokenizer_model = "gpt2"
     name = "bpe"
 
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None):
         self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
         if isinstance(self.bpe_tokenizer.get('model'), dict):
             self.vocab = self.bpe_tokenizer["model"]["vocab"]
@@ -358,9 +358,9 @@ class BpeVocab:
                     # Added tokens here can be duplicates of the main vocabulary.
                     if item['content'] not in self.bpe_tokenizer)
 
-        vocab_size: int = len(self.vocab)
-        expected_ids    = list(range(vocab_size, vocab_size + len(added_tokens)))
-        actual_ids      = sorted(added_tokens.values())
+        vocab_size   = len(self.vocab)
+        expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
+        actual_ids   = sorted(added_tokens.values())
         if expected_ids != actual_ids:
             expected_end_id = vocab_size + len(actual_ids) - 1
             raise Exception(f"Expected the {len(actual_ids)} added token ID(s) to be sequential in the range {vocab_size} - {expected_end_id}; got {actual_ids}")
@@ -368,8 +368,8 @@ class BpeVocab:
         items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
         self.added_tokens_dict    = added_tokens
         self.added_tokens_list    = [text for (text, idx) in items]
-        self.vocab_size_base: int = vocab_size
-        self.vocab_size: int      = self.vocab_size_base + len(self.added_tokens_list)
+        self.vocab_size_base      = vocab_size
+        self.vocab_size           = self.vocab_size_base + len(self.added_tokens_list)
         self.fname_tokenizer      = fname_tokenizer
         self.fname_added_tokens   = fname_added_tokens
 
@@ -396,7 +396,7 @@ class SentencePieceVocab:
     tokenizer_model = "llama"
     name = "spm"
 
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None):
         self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
@@ -404,7 +404,7 @@ class SentencePieceVocab:
         else:
             added_tokens = {}
 
-        vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
+        vocab_size = self.sentencepiece_tokenizer.vocab_size()
 
         new_tokens       = {id: piece for piece, id in added_tokens.items() if id >= vocab_size}
         expected_new_ids = list(range(vocab_size, vocab_size + len(new_tokens)))
@@ -414,7 +414,7 @@ class SentencePieceVocab:
             raise ValueError(f"Expected new token IDs {expected_new_ids} to be sequential; got {actual_new_ids}")
 
         # Token pieces that were added to the base vocabulary.
-        self.added_tokens_dict = added_tokens
+        self.added_tokens_dict  = added_tokens
         self.added_tokens_list  = [new_tokens[id] for id in actual_new_ids]
         self.vocab_size_base    = vocab_size
         self.vocab_size         = self.vocab_size_base + len(self.added_tokens_list)
@@ -425,7 +425,7 @@ class SentencePieceVocab:
         tokenizer = self.sentencepiece_tokenizer
         for i in range(tokenizer.vocab_size()):
             piece = tokenizer.id_to_piece(i)
-            text: bytes = piece.encode("utf-8")
+            text         = piece.encode("utf-8")
             score: float = tokenizer.get_score(i)
 
             toktype = gguf.TokenType.NORMAL
@@ -462,7 +462,7 @@ class HfVocab:
     tokenizer_model = "llama"
     name = "hfft"
 
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None = None) -> None:
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None = None):
         try:
             from transformers import AutoTokenizer
         except ImportError as e:
@@ -610,7 +610,7 @@ def bf16_to_fp32(bf16_arr: np.ndarray[Any, np.dtype[np.uint16]]) -> NDArray:
 
 
 class UnquantizedTensor(Tensor):
-    def __init__(self, ndarray: NDArray) -> None:
+    def __init__(self, ndarray: NDArray):
         assert isinstance(ndarray, np.ndarray)
         self.ndarray = ndarray
         self.data_type = NUMPY_TYPE_TO_DATA_TYPE[ndarray.dtype]
@@ -698,7 +698,7 @@ def merge_sharded(models: list[LazyModel]) -> LazyModel:
     names = {name: None for model in models for name in model}
 
     def convert(name: str) -> LazyTensor:
-        lazy_tensors: list[LazyTensor] = [model[name] for model in models]
+        lazy_tensors = [model[name] for model in models]
         if len(lazy_tensors) == 1:
             # only one file; don't go through this procedure since there might
             # be quantized tensors
@@ -719,7 +719,7 @@ def merge_sharded(models: list[LazyModel]) -> LazyModel:
 
         def load() -> UnquantizedTensor:
             ndarrays = [load_unquantized(tensor) for tensor in lazy_tensors]
-            concatenated: NDArray = np.concatenate(ndarrays, axis=axis)
+            concatenated = np.concatenate(ndarrays, axis=axis)
             return UnquantizedTensor(concatenated)
         description = 'concatenated[[' + '] | ['.join(lt.description for lt in lazy_tensors) + ']]'
         return LazyTensor(load, concatenated_shape, lazy_tensors[0].data_type, description)
@@ -831,7 +831,7 @@ class LazyUnpickler(pickle.Unpickler):
     def rebuild_from_type_v2(func, new_type, args, state):
         return func(*args)
 
-    CLASSES: dict[tuple[str, str], Any] = {
+    CLASSES = {
         # getattr used here as a workaround for mypy not being smart enough to determine
         # the staticmethods have a __func__ attribute.
         ('torch._tensor', '_rebuild_from_type_v2'): getattr(rebuild_from_type_v2, '__func__'),
@@ -983,7 +983,7 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE) -> None:
+    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
     def add_meta_arch(self, params: Params) -> None:
@@ -1186,7 +1186,7 @@ def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyM
 
 def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) -> LazyModel:
     tmap = gguf.TensorNameMap(ARCH, params.n_layer)
-    should_skip: set[gguf.MODEL_TENSOR] = set(gguf.MODEL_TENSOR_SKIP.get(ARCH, []))
+    should_skip = set(gguf.MODEL_TENSOR_SKIP.get(ARCH, []))
 
     tmp = model
 
@@ -1231,7 +1231,7 @@ def nth_multifile_path(path: Path, n: int) -> Path | None:
     the nth path in the model.
     '''
     # Support the following patterns:
-    patterns: list[tuple[str, str]] = [
+    patterns = [
         # - x.00.pth, x.01.pth, etc.
         (r'\.[0-9]{2}\.pth$', f'.{n:02}.pth'),
         # - x-00001-of-00002.bin, x-00002-of-00002.bin, etc.
