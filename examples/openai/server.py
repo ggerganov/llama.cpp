@@ -84,7 +84,7 @@ def main(
                 json=LlamaCppServerCompletionRequest(
                     prompt=prompt,
                     stream=chat_request.stream,
-                    n_predict=300,
+                    n_predict=1000,
                     grammar=grammar,
                 ).model_dump(),
                 headers=headers,

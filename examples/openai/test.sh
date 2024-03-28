@@ -16,13 +16,13 @@ echo "# Starting the server" >&2
 args=(
     # --cpp_server_endpoint "http://localhost:8081"
     
-    # --model ~/AI/Models/functionary-medium-v2.2.q4_0.gguf
+    --model ~/AI/Models/functionary-medium-v2.2.q4_0.gguf
     
     # --model ~/AI/Models/mixtral-8x7b-instruct-v0.1.Q8_0.gguf
     # --model ~/AI/Models/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf
 
     # --model ~/AI/Models/Hermes-2-Pro-Mistral-7B.Q8_0.gguf
-    --model ~/AI/Models/Hermes-2-Pro-Mistral-7B.Q4_K_M.gguf
+    # --model ~/AI/Models/Hermes-2-Pro-Mistral-7B.Q4_K_M.gguf
 )
 python -m examples.openai "${args[@]}" &
 SERVER_PID=$!

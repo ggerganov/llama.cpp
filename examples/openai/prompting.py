@@ -323,7 +323,9 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
             ]
 
             not_from_rule = converter._add_rule('not_from', converter.not_literal("<|from|>"))
-            content_without_start_rule = converter._add_rule('content_without_start', converter._format_literal("all\n<|content|>") + ' ' + not_from_rule + '*')
+            content_without_start_rule = converter._add_rule(
+                'content_without_start',
+                converter._format_literal("all\n<|content|>") + ' ' + not_from_rule + '*')
             start_rule = converter._add_rule('start', converter._format_literal('<|from|>assistant\n<|recipient|>'))
             content_rule = converter._add_rule('content', start_rule + ' ' + content_without_start_rule)
             tool_call_without_start_rule = converter._add_rule(
