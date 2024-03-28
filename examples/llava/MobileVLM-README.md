@@ -253,7 +253,7 @@ llama_print_timings:        eval time =     166.65 ms /    11 runs   (   15.15 m
 llama_print_timings:       total time =    1365.47 ms /   243 tokens
 ```
 
-## Running on Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz
+## Running on Intel(R) Core(TM) i7-10750H
 ### Operating system 
 Ubuntu22.04
 ### compile
