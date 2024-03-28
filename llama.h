@@ -623,20 +623,20 @@ extern "C" {
                const llama_token * tokens,
                           size_t   n_token_count);
 
-    LLAMA_API size_t llama_get_seq_size(
+    LLAMA_API size_t llama_state_seq_get_size(
             struct llama_context * ctx,
                     llama_seq_id   seq_id);
 
-    LLAMA_API size_t llama_copy_seq_data(
+    LLAMA_API size_t llama_state_seq_get_data(
             struct llama_context * ctx,
                          uint8_t * dst,
                     llama_seq_id   seq_id);
 
-    // Copy the sequence data (originally copied with `llama_copy_seq_data`) into a sequence.
+    // Copy the sequence data (originally copied with `llama_state_seq_get_data`) into a sequence.
     // Returns:
     //  - Positive: Ok
     //  - Zero: Failed to load
-    LLAMA_API size_t llama_set_seq_data(
+    LLAMA_API size_t llama_state_seq_set_data(
             struct llama_context * ctx,
                    const uint8_t * src,
                     llama_seq_id   dest_seq_id);

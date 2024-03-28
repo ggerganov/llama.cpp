@@ -15059,7 +15059,7 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
     return true;
 }
 
-size_t llama_get_seq_size(struct llama_context* ctx, llama_seq_id seq_id) {
+size_t llama_state_seq_get_size(struct llama_context* ctx, llama_seq_id seq_id) {
     // save the size of size_t as a uint32_t for safety check
     const size_t size_t_size_size = sizeof(uint32_t);
 
@@ -15109,7 +15109,7 @@ size_t llama_get_seq_size(struct llama_context* ctx, llama_seq_id seq_id) {
     return s_total;
 }
 
-size_t llama_copy_seq_data(struct llama_context * ctx, uint8_t * dst, llama_seq_id seq_id) {
+size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama_seq_id seq_id) {
     llama_data_buffer_context data_ctx(dst);
     const auto& kv_self = ctx->kv_self;
     GGML_ASSERT(!kv_self.recurrent); // not implemented
@@ -15214,7 +15214,7 @@ size_t llama_copy_seq_data(struct llama_context * ctx, uint8_t * dst, llama_seq_
     return data_ctx.get_size_written();
 }
 
-size_t llama_set_seq_data(struct llama_context * ctx, const uint8_t * src, llama_seq_id dest_seq_id) {
+size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src, llama_seq_id dest_seq_id) {
     auto & kv_self = ctx->kv_self;
     GGML_ASSERT(!kv_self.recurrent); // not implemented
 

@@ -1630,9 +1630,9 @@ struct server_context {
 
                     std::string filename = task.data["filename"];
                     std::string filepath = task.data["filepath"];
-                    size_t state_size = llama_get_seq_size(ctx, slot->id + 1);
+                    size_t state_size = llama_state_seq_get_size(ctx, slot->id + 1);
                     std::vector<uint8_t> state_data(state_size + sizeof(size_t) + token_count * sizeof(llama_token));
-                    size_t nwrite = llama_copy_seq_data(ctx, state_data.data(), slot->id + 1);
+                    size_t nwrite = llama_state_seq_get_data(ctx, state_data.data(), slot->id + 1);
                     GGML_ASSERT(nwrite <= state_size);
 
                     // write the cached token count of the slot->cache_tokens.size()
@@ -1691,7 +1691,7 @@ struct server_context {
                     std::vector<uint8_t> state_data((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
                     infile.close();
 
-                    size_t nread = llama_set_seq_data(ctx, state_data.data(), slot->id + 1);
+                    size_t nread = llama_state_seq_set_data(ctx, state_data.data(), slot->id + 1);
                     if (nread == 0) {
                         send_error(task, "Unable to restore slot, no available space in KV cache or invalid slot save file", ERROR_TYPE_INVALID_REQUEST);
                         break;
