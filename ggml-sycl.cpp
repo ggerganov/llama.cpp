@@ -2968,7 +2968,7 @@ namespace dpct
 #include "ggml-common.h"
 
 static int g_ggml_sycl_debug=0;
-#define GGML_SYCL_DEBUG(...) do{if(g_ggml_sycl_debug) printf(__VA_ARGS__);}while(0)
+#define GGML_SYCL_DEBUG(...) do{if(g_ggml_sycl_debug) fprintf(stderr, __VA_ARGS__);}while(0)
 
 #define CHECK_TRY_ERROR(expr)                                                  \
   [&]() {                                                                      \
@@ -12868,6 +12868,7 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
 }
 
 void ggml_backend_sycl_print_sycl_devices() {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_print_sycl_devices\n");
     int device_count = dpct::dev_mgr::instance().device_count();
     std::map<std::string, size_t> DeviceNums;
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
@@ -12925,7 +12926,9 @@ static void ggml_init_sycl() try {
     static bool initialized = false;
 
     if (!initialized) {
+        fprintf(stderr, "[SYCL] call ggml_init_sycl\n");
         g_ggml_sycl_debug = get_sycl_env("GGML_SYCL_DEBUG", 0);
+
         fprintf(stderr, "%s: GGML_SYCL_DEBUG: %d\n", __func__, g_ggml_sycl_debug);
 
 #if defined(GGML_SYCL_F16)
@@ -16039,6 +16042,7 @@ bool ggml_sycl_compute_forward(struct ggml_compute_params * params, struct ggml_
 }
 
 GGML_API GGML_CALL void   ggml_sycl_get_gpu_list(int *id_list, int max_len) try {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_sycl_get_gpu_list\n");
     for(int i=0;i<max_len;i++) id_list[i] = -1;
 
     if (!g_sycl_gpu_mgr) {
@@ -16073,6 +16077,7 @@ catch (sycl::exception const &exc) {
 
 GGML_API GGML_CALL void ggml_sycl_get_device_description(int device, char *description,
                                       size_t description_size) try {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_sycl_get_device_description\n");
     dpct::device_info prop;
     int device_id = g_sycl_gpu_mgr->gpus[device];
     SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
@@ -16087,6 +16092,7 @@ catch (sycl::exception const &exc) {
 
 GGML_CALL void ggml_backend_sycl_get_device_memory(int device, size_t *free,
                                                    size_t *total) try {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_memory\n");
     ggml_sycl_set_device(device);
 
     /*
@@ -16438,7 +16444,8 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
 };
 
 ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device_index) {
-    ggml_init_sycl();
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_buffer_type\n");
+
     if (device_index>=g_device_count or device_index<0) {
         printf("ggml_backend_sycl_buffer_type error: device_index:%d is out of range [0, %d], miss to call ggml_backend_sycl_set_single_device()\n",
             device_index, g_device_count-1);
@@ -16808,6 +16815,7 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_split_buffer_type_interface 
 };
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_sycl_split_buffer_type(const float * tensor_split) {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_split_buffer_type\n");
     ggml_init_sycl();
     // FIXME: this is not thread safe
     static std::map<std::array<float, GGML_SYCL_MAX_DEVICES>, struct ggml_backend_buffer_type> buft_map;
@@ -16880,6 +16888,7 @@ static ggml_backend_buffer_t ggml_backend_sycl_host_buffer_type_alloc_buffer(ggm
 }
 
 ggml_backend_buffer_type_t ggml_backend_sycl_host_buffer_type() {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_host_buffer_type\n");
     static struct ggml_backend_buffer_type ggml_backend_sycl_buffer_type_host = {
         /* .iface    = */ {
             /* .get_name         = */ ggml_backend_sycl_host_buffer_type_name,
@@ -17176,6 +17185,7 @@ static ggml_guid_t ggml_backend_sycl_guid() {
 }
 
 GGML_CALL ggml_backend_t ggml_backend_sycl_init(int device) {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_init\n");
     ggml_init_sycl();
 
     check_allow_gpu_index(device);
@@ -17202,6 +17212,7 @@ bool ggml_backend_is_sycl(ggml_backend_t backend) {
 }
 
 GGML_CALL int ggml_backend_sycl_get_device_count() {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_count\n");
     if (!g_sycl_gpu_mgr) g_sycl_gpu_mgr = new sycl_gpu_mgr();
     return g_sycl_gpu_mgr->get_gpu_count();
 }
@@ -17214,16 +17225,21 @@ GGML_CALL static ggml_backend_t ggml_backend_reg_sycl_init(const char * params, 
 }
 
 GGML_API GGML_CALL int ggml_backend_sycl_get_device_index(int device_id) {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_index\n");
     return g_sycl_gpu_mgr->get_index(device_id);
 }
 
 GGML_API GGML_CALL int ggml_backend_sycl_get_device_id(int device_index) {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_id\n");
     return g_sycl_gpu_mgr->gpus[device_index];
 }
 
 GGML_API GGML_CALL void ggml_backend_sycl_set_single_device_mode(int main_gpu_id) {
-    GGML_ASSERT(main_gpu_id<g_all_sycl_device_count);
+    ggml_init_sycl();
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_set_single_device_mode\n");
     fprintf(stderr, "ggml_backend_sycl_set_single_device: use single device: [%d]\n", main_gpu_id);
+    GGML_ASSERT(main_gpu_id<g_all_sycl_device_count);
+
     if (g_sycl_gpu_mgr) {
         delete g_sycl_gpu_mgr;
     }
@@ -17234,6 +17250,9 @@ GGML_API GGML_CALL void ggml_backend_sycl_set_single_device_mode(int main_gpu_id
 }
 
 GGML_API GGML_CALL void ggml_backend_sycl_set_mul_device_mode() {
+    ggml_init_sycl();
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_set_mul_device_mode\n");
+
     if (g_ggml_sycl_backend_gpu_mode == SYCL_MUL_GPU_MODE) {
         return;
     }
