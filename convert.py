@@ -192,10 +192,10 @@ class Params:
             n_layer = next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
 
         if n_layer < 1:
-            raise KeyError(textwrap.dedent("""\
+            msg = """\
                 failed to guess 'n_layer'. This model is unknown or unsupported.
-                Suggestion: provide 'config.json' of the model in the same directory containing model files.""",
-            ))
+                Suggestion: provide 'config.json' of the model in the same directory containing model files."""
+            raise KeyError(textwrap.dedent(msg))
 
         n_head = n_embd // 128 # guessed
         n_mult = 256           # guessed
@@ -240,10 +240,10 @@ class Params:
         elif "max_position_embeddings" in config:
             n_ctx = config["max_position_embeddings"]
         else:
-            raise KeyError(textwrap.dedent("""\
+            msg = """\
                 failed to guess 'n_ctx'. This model is unknown or unsupported.
-                Suggestion: provide 'config.json' of the model in the same directory containing model files.""",
-            ))
+                Suggestion: provide 'config.json' of the model in the same directory containing model files."""
+            raise KeyError(textwrap.dedent(msg))
 
         n_experts      = None
         n_experts_used = None
@@ -1009,8 +1009,8 @@ def check_vocab_size(params: Params, vocab: BaseVocab, pad_vocab: bool = False) 
     # Handle special case where the model's vocab size is not set
     if params.n_vocab == -1:
         raise ValueError(
-            f"The model's vocab size is set to -1 in params.json. Please update it manually." +
-            (f' Maybe {vocab.vocab_size}?' if isinstance(vocab, Vocab) else ''),
+            "The model's vocab size is set to -1 in params.json. Please update it manually."
+            + (f" Maybe {vocab.vocab_size}?" if isinstance(vocab, Vocab) else ""),
         )
     if not isinstance(vocab, Vocab):
         return  # model has no vocab
@@ -1466,12 +1466,12 @@ def main(args_in: list[str] | None = None) -> None:
     params = Params.load(model_plus)
     if params.n_ctx == -1:
         if args.ctx is None:
-            parser.error(textwrap.dedent("""\
+            msg = """\
                 The model doesn't have a context size, and you didn't specify one with --ctx
                 Please specify one with --ctx:
                  - LLaMA v1: --ctx 2048
-                 - LLaMA v2: --ctx 4096""",
-            ))
+                 - LLaMA v2: --ctx 4096"""
+            parser.error(textwrap.dedent(msg))
         params.n_ctx = args.ctx
 
     if args.outtype:
