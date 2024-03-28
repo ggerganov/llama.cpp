@@ -17263,11 +17263,15 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
                     return false;
                 }
                 ggml_type a_type = a->type;
+                // No support in mmvq or other methods
+                if (a_type == GGML_TYPE_IQ1_M || a_type == GGML_TYPE_IQ4_NL || a_type == GGML_TYPE_IQ4_XS)
+                    return false;
 
+                // Support in mmvq
                 if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ3_XXS ||
-                    a_type == GGML_TYPE_IQ1_S   || a_type == GGML_TYPE_IQ4_NL || a_type == GGML_TYPE_IQ3_S   ||
-                    a_type == GGML_TYPE_IQ2_S   || a_type == GGML_TYPE_IQ4_XS) {
-                    if (b->ne[1] == 1 && ggml_nrows(b) > 1) {
+                    a_type == GGML_TYPE_IQ1_S   || a_type == GGML_TYPE_IQ3_S  || a_type == GGML_TYPE_IQ2_S   ) {
+                    // condition for using mmvq
+                    if (b->ne[1] > 1 || a->ne[0] % GGML_SYCL_DMMV_X != 0) {
                         return false;
                     }
                 }
