@@ -17,6 +17,8 @@
 #  include "ggml-sycl.h"
 #elif defined(GGML_USE_KOMPUTE)
 #   include "ggml-kompute.h"
+#elif defined(GGML_USE_CANN)
+#   include "ggml-cann.h"
 #endif
 
 #ifdef GGML_USE_METAL
@@ -1548,6 +1550,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
     if (buft == nullptr) {
         LLAMA_LOG_WARN("%s: cannot use GPU %d, check `vulkaninfo --summary`\n", __func__, gpu);
     }
+#elif defined(GGML_USE_CANN)
+    buft = ggml_backend_cann_buffer_type(gpu);
 #endif
 
     if (buft == nullptr) {
@@ -1588,6 +1592,8 @@ static size_t llama_get_device_count() {
     return ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
     return ggml_backend_vk_get_device_count();
+#elif defined(GGML_USE_CANN)
+    return ggml_backend_cann_get_device_count();
 #else
     return 1;
 #endif
@@ -1608,6 +1614,11 @@ static size_t llama_get_device_memory(int device) {
     size_t total;
     size_t free;
     ggml_backend_vk_get_device_memory(device, &total, &free);
+    return free;
+#elif defined(GGML_USE_CANN)
+    size_t total;
+    size_t free;
+    ggml_backend_cann_get_device_memory(device, &total, &free);
     return free;
 #else
     return 1;
@@ -13725,6 +13736,8 @@ size_t llama_max_devices(void) {
     return GGML_SYCL_MAX_DEVICES;
 #elif defined(GGML_USE_VULKAN)
     return GGML_VK_MAX_DEVICES;
+#elif defined(GGML_USE_CANN)
+    return GGML_CANN_MAX_DEVICES;
 #else
     return 1;
 #endif
@@ -13740,8 +13753,8 @@ bool llama_supports_mlock(void) {
 
 bool llama_supports_gpu_offload(void) {
 #if defined(GGML_USE_CUDA) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE)
-    // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
+    defined(GGML_USE_SYCL)   || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_CANN)
+
     return true;
 #else
     return false;
@@ -14014,6 +14027,30 @@ struct llama_context * llama_new_context_with_model(
             }
             ctx->backends.push_back(backend);
         }
+#elif defined(GGML_USE_CANN)
+    // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
+    // TODO: ggml_backend_cann is not support split tensor now, just leave code here.
+    if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+        ggml_backend_t backend = ggml_backend_cann_init(model->main_gpu);
+        if (backend == nullptr) {
+            LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, model->main_gpu);
+            llama_free(ctx);
+            return nullptr;
+        }
+        ctx->backends.push_back(backend);
+    } else {
+        // LLAMA_SPLIT_MODE_LAYER requires a backend for each GPU
+        // TODO: currently, CANN can't use multi-gpus, just leave code here for further cann version.
+        for (int32_t device = 0; device < ggml_backend_cann_get_device_count(); ++device) {
+            ggml_backend_t backend = ggml_backend_cann_init(device);
+            if (backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize CANN%d backend\n", __func__, device);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
+        }
+    }
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {

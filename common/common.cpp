@@ -56,6 +56,10 @@
 #define GGML_USE_CUDA_SYCL_VULKAN
 #endif
 
+#if (defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL)) || defined(GGML_USE_CANN)
+#define GGML_USE_CUDA_SYCL_CANN
+#endif
+
 #if defined(LLAMA_USE_CURL)
 #ifdef __linux__
 #include <linux/limits.h>
@@ -861,9 +865,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.main_gpu = std::stoi(argv[i]);
-#ifndef GGML_USE_CUDA_SYCL
-        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL. Setting the main GPU has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL
+#ifndef GGML_USE_CUDA_SYCL_CANN
+        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/CANN. Setting the main GPU has no effect.\n");
+#endif // GGML_USE_CUDA_SYCL_CANN
         return true;
     }
     if (arg == "--split-mode" || arg == "-sm") {

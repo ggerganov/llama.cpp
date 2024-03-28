@@ -2539,17 +2539,17 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 }
             }
 #else
-            LOG_WARNING("llama.cpp was compiled without CUDA. It is not possible to set a tensor split.\n", {});
+            LOG_WARNING("llama.cpp was compiled without CUDA/SYCL. It is not possible to set a tensor split.\n", {});
 #endif // GGML_USE_CUDA
         } else if (arg == "--main-gpu" || arg == "-mg") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-#if defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL)
+#if defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL) || defined(GGML_USE_CANN)
             params.main_gpu = std::stoi(argv[i]);
 #else
-            LOG_WARNING("llama.cpp was compiled without CUDA. It is not possible to set a main GPU.", {});
+            LOG_WARNING("llama.cpp was compiled without cuBLAS/SYCL/CANN. It is not possible to set a main GPU.", {});
 #endif
         } else if (arg == "--lora") {
             if (++i >= argc) {
