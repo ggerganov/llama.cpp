@@ -20,17 +20,6 @@ After building, run: `./llava-cli` to see the usage. For example:
     -p "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: <image>\nWho is the author of this book? Answer the question using a single word or phrase. ASSISTANT:"
 ```
 
-## GGUF model
-If you just want to use it, fetch the gguf format weight from here:
-for MobileVLM-1.7B
-```
-git clone https://huggingface.co/guinmoon/MobileVLM-1.7B-GGUF
-```
-for MobileVLM_V2-1.7B
-```
-git clone https://huggingface.co/ZiangWu/MobileVLM_V2-1.7B-GGUF
-```
-
 ## Model conversion
 
 - Clone `mobileVLM-1.7B` and `clip-vit-large-patch14-336` locally:
