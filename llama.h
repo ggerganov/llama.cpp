@@ -60,9 +60,9 @@ extern "C" {
 
     enum llama_vocab_type {
         LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
-        LLAMA_VOCAB_TYPE_SPM  = 1, // SentencePiece
-        LLAMA_VOCAB_TYPE_BPE  = 2, // Byte Pair Encoding
-        LLAMA_VOCAB_TYPE_WPM  = 3, // WordPiece
+        LLAMA_VOCAB_TYPE_SPM  = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
+        LLAMA_VOCAB_TYPE_BPE  = 2, // GPT-2 tokenizer based on byte-level BPE
+        LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
     };
 
     // note: these values should be synchronized with ggml_rope
