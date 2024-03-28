@@ -140,10 +140,10 @@ static std::string get_gpu_info() {
     }
 #endif
 #ifdef GGML_USE_CANN
-    int count = ggml_cann_get_device_count();
-    for (int i = 0; i < count; i++) {
+    uint32_t count = ggml_backend_cann_get_device_count();
+    for (uint32_t i = 0; i < count; i++) {
         char buf[128];
-        ggml_cann_get_device_description(i, buf, sizeof(buf));
+        ggml_backend_cann_get_device_description(i, buf, sizeof(buf));
         id += buf;
         if (i < count - 1) {
             id += "/";
