@@ -14986,6 +14986,9 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
     SYCL_CHECK(ggml_sycl_set_device(g_main_device));
     dpct::queue_ptr main_stream = g_syclStreams[g_main_device][0];
 
+    bool no_mixed_dtypes = main_stream->get_backend() == sycl::backend::ext_oneapi_cuda ||
+                           main_stream->get_backend() == sycl::backend::ext_oneapi_hip;
+
     SYCL_CHECK(
         CHECK_TRY_ERROR(g_sycl_handles[g_main_device] = main_stream));
 
@@ -15016,24 +15019,38 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
 
     dpct::library_data_t cu_compute_type = dpct::library_data_t::real_float;
     dpct::library_data_t cu_data_type = dpct::library_data_t::real_float;
+    if (no_mixed_dtypes) {
+        cu_compute_type = dpct::library_data_t::real_half;
+        cu_data_type = dpct::library_data_t::real_half;
+    }
 
     // dst strides
     size_t nbd2 = dst->nb[2];
     size_t nbd3 = dst->nb[3];
 
+    const float alpha_f32 = 1.0f;
+    const float beta_f32 = 0.0f;
+
     const sycl::half alpha_f16 = 1.0f;
     const sycl::half beta_f16 = 0.0f;
 
-    const float alpha_f32 = 1.0f;
-    const float beta_f32  = 0.0f;
-
     const void * alpha = &alpha_f32;
     const void * beta  = &beta_f32;
+    if (no_mixed_dtypes) {
+        alpha = &alpha_f16;
+        beta  = &beta_f16;
+    }
 
     // TODO: Renable (dst->op_params[0] =! GGML_PREC_DEFAULT) pathway
-    // oneMKL open source supports half, half, float, float: datatypes
+    // when oneMKL open source supports half, half, float, float: datatypes
 
     dst_t = (char *) dst_ddf;
+    if (no_mixed_dtypes) {
+        dst_t = (char *) dst_f16.alloc(ne_dst);
+
+        nbd2 /= sizeof(float) / sizeof(sycl::half);
+        nbd3 /= sizeof(float) / sizeof(sycl::half);
+    }
 
     GGML_ASSERT(ne12 % ne02 == 0);
     GGML_ASSERT(ne13 % ne03 == 0);
@@ -15119,6 +15136,10 @@ static void ggml_sycl_mul_mat_batched_sycl(const ggml_tensor *src0,
     }
 #endif
 
+    if (no_mixed_dtypes) {
+        const to_fp32_sycl_t to_fp32_sycl = ggml_get_to_fp32_sycl(GGML_TYPE_F16);
+        to_fp32_sycl(dst_f16.get(), dst_ddf, ne_dst, main_stream);
+    }
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
