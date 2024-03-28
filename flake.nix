@@ -168,9 +168,14 @@
               };
 
             # Packages exposed in `.#checks` will be built by the CI and by
-            # `nix flake check`. Currently we expose all packages, but we could
-            # make more granular choices
-            checks = config.packages;
+            # `nix flake check`.
+            #
+            # We could test all outputs e.g. as `checks = confg.packages`.
+            #
+            # TODO: Build more once https://github.com/ggerganov/llama.cpp/issues/6346 has been addressed
+            checks = {
+              inherit (config.packages) default vulkan;
+            };
           };
       };
 }
