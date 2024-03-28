@@ -45,8 +45,8 @@ int main(int argc, char ** argv) {
 
     // save state (rng, logits, embedding and kv_cache) to file
     {
-        std::vector<uint8_t> state_mem(llama_get_state_size(ctx));
-        const size_t written = llama_copy_state_data(ctx, state_mem.data());
+        std::vector<uint8_t> state_mem(llama_state_get_size(ctx));
+        const size_t written = llama_state_get_data(ctx, state_mem.data());
 
         FILE *fp_write = fopen("dump_state.bin", "wb");
         fwrite(state_mem.data(), 1, written, fp_write);
@@ -98,13 +98,13 @@ int main(int argc, char ** argv) {
 
     // load state (rng, logits, embedding and kv_cache) from file
     {
-        std::vector<uint8_t> state_mem(llama_get_state_size(ctx2));
+        std::vector<uint8_t> state_mem(llama_state_get_size(ctx2));
 
         FILE * fp_read = fopen("dump_state.bin", "rb");
         const size_t read = fread(state_mem.data(), 1, state_mem.size(), fp_read);
         fclose(fp_read);
 
-        if (read != llama_set_state_data(ctx2, state_mem.data())) {
+        if (read != llama_state_set_data(ctx2, state_mem.data())) {
             fprintf(stderr, "\n%s : failed to read state\n", __func__);
             llama_free(ctx2);
             llama_free_model(model);
@@ -158,13 +158,13 @@ int main(int argc, char ** argv) {
 
     // load state (rng, logits, embedding and kv_cache) from file
     {
-        std::vector<uint8_t> state_mem(llama_get_state_size(ctx3));
+        std::vector<uint8_t> state_mem(llama_state_get_size(ctx3));
 
         FILE * fp_read = fopen("dump_state.bin", "rb");
         const size_t read = fread(state_mem.data(), 1, state_mem.size(), fp_read);
         fclose(fp_read);
 
-        if (read != llama_set_state_data(ctx3, state_mem.data())) {
+        if (read != llama_state_set_data(ctx3, state_mem.data())) {
             fprintf(stderr, "\n%s : failed to read state\n", __func__);
             llama_free(ctx3);
             llama_free_model(model);

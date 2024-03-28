@@ -14570,7 +14570,7 @@ void llama_kv_cache_update(struct llama_context * ctx) {
 
 
 // Returns the *maximum* size of the state
-size_t llama_get_state_size(const struct llama_context * ctx) {
+size_t llama_state_get_size(const struct llama_context * ctx) {
     const auto & cparams = ctx->cparams;
     const auto & hparams = ctx->model.hparams;
 
@@ -14658,15 +14658,15 @@ struct llama_data_file_context : llama_data_context {
  * file context:
  * llama_file file("/path", "wb");
  * llama_data_file_context data_ctx(&file);
- * llama_copy_state_data(ctx, &data_ctx);
+ * llama_state_get_data(ctx, &data_ctx);
  *
  * buffer context:
  * std::vector<uint8_t> buf(max_size, 0);
  * llama_data_buffer_context data_ctx(&buf.data());
- * llama_copy_state_data(ctx, &data_ctx);
+ * llama_state_get_data(ctx, &data_ctx);
  *
 */
-static void llama_copy_state_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
+static void llama_state_get_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
     // copy rng
     {
         std::ostringstream rng_ss;
@@ -14810,15 +14810,15 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
     }
 }
 
-size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
+size_t llama_state_get_data(struct llama_context * ctx, uint8_t * dst) {
     llama_data_buffer_context data_ctx(dst);
-    llama_copy_state_data_internal(ctx, &data_ctx);
+    llama_state_get_data_internal(ctx, &data_ctx);
 
     return data_ctx.get_size_written();
 }
 
 // Sets the state reading from the specified source address
-size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
+size_t llama_state_set_data(struct llama_context * ctx, const uint8_t * src) {
     const uint8_t * inp = src;
 
     // set rng
@@ -14970,14 +14970,14 @@ size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
     }
 
     const size_t nread    = inp - src;
-    const size_t max_size = llama_get_state_size(ctx);
+    const size_t max_size = llama_state_get_size(ctx);
 
     GGML_ASSERT(nread <= max_size);
 
     return nread;
 }
 
-static bool llama_load_session_file_internal(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+static bool llama_state_load_file_internal(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
     llama_file file(path_session, "rb");
 
     // sanity checks
@@ -15015,7 +15015,7 @@ static bool llama_load_session_file_internal(struct llama_context * ctx, const c
     // restore the context state
     {
         const size_t n_state_size_cur = file.size - file.tell();
-        const size_t n_state_size_max = llama_get_state_size(ctx);
+        const size_t n_state_size_max = llama_state_get_size(ctx);
 
         if (n_state_size_cur > n_state_size_max) {
             LLAMA_LOG_ERROR("%s : the state size in session file is too big! max %zu, got %zu\n", __func__, n_state_size_max, n_state_size_cur);
@@ -15025,22 +15025,22 @@ static bool llama_load_session_file_internal(struct llama_context * ctx, const c
         std::vector<uint8_t> state_data(n_state_size_max);
         file.read_raw(state_data.data(), n_state_size_cur);
 
-        llama_set_state_data(ctx, state_data.data());
+        llama_state_set_data(ctx, state_data.data());
     }
 
     return true;
 }
 
-bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+bool llama_state_load_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
     try {
-        return llama_load_session_file_internal(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+        return llama_state_load_file_internal(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("error loading session file: %s\n", err.what());
         return false;
     }
 }
 
-bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
+bool llama_state_save_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
     llama_file file(path_session, "wb");
 
     file.write_u32(LLAMA_SESSION_MAGIC);
@@ -15054,7 +15054,7 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
 
     // save the context state using stream saving
     llama_data_file_context data_ctx(&file);
-    llama_copy_state_data_internal(ctx, &data_ctx);
+    llama_state_get_data_internal(ctx, &data_ctx);
 
     return true;
 }

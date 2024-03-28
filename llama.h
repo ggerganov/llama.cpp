@@ -594,30 +594,30 @@ extern "C" {
 
     // Returns the maximum size in bytes of the state (rng, logits, embedding
     // and kv_cache) - will often be smaller after compacting tokens
-    LLAMA_API size_t llama_get_state_size(const struct llama_context * ctx);
+    LLAMA_API size_t llama_state_get_size(const struct llama_context * ctx);
 
     // Copies the state to the specified destination address.
     // Destination needs to have allocated enough memory.
     // Returns the number of bytes copied
-    LLAMA_API size_t llama_copy_state_data(
+    LLAMA_API size_t llama_state_get_data(
             struct llama_context * ctx,
                          uint8_t * dst);
 
     // Set the state reading from the specified address
     // Returns the number of bytes read
-    LLAMA_API size_t llama_set_state_data(
+    LLAMA_API size_t llama_state_set_data(
             struct llama_context * ctx,
                    const uint8_t * src);
 
     // Save/load session file
-    LLAMA_API bool llama_load_session_file(
+    LLAMA_API bool llama_state_load_file(
             struct llama_context * ctx,
                       const char * path_session,
                      llama_token * tokens_out,
                           size_t   n_token_capacity,
                           size_t * n_token_count_out);
 
-    LLAMA_API bool llama_save_session_file(
+    LLAMA_API bool llama_state_save_file(
             struct llama_context * ctx,
                       const char * path_session,
                const llama_token * tokens,
