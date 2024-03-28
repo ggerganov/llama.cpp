@@ -778,6 +778,7 @@ class BaichuanModel(Model):
         r = weights.shape[0] // 3
         return weights[r * n_part:r * n_part + r, ...]
 
+
 @Model.register("XverseForCausalLM")
 class XverseModel(Model):
     model_arch = gguf.MODEL_ARCH.XVERSE
@@ -882,7 +883,7 @@ class XverseModel(Model):
                 data_torch = self._reverse_hf_permute(data_torch, head_count, head_count)
             if name.endswith(("k_proj.weight")):
                 data_torch = self._reverse_hf_permute(data_torch, head_count, head_count_kv)
-                
+
             data = data_torch.squeeze().numpy()
 
             # map tensor names
@@ -918,7 +919,8 @@ class XverseModel(Model):
             .swapaxes(1, 2)
             .reshape(weights.shape)
         )
-    
+
+
 @Model.register("FalconForCausalLM", "RWForCausalLM")
 class FalconModel(Model):
     model_arch = gguf.MODEL_ARCH.FALCON
