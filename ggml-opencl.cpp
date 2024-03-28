@@ -2234,6 +2234,11 @@ static ggml_backend_buffer_type_t ggml_backend_opencl_get_default_buffer_type(gg
 static ggml_status ggml_backend_opencl_graph_compute(ggml_backend_t backend, ggml_cgraph * graph) {
     for (int i = 0; i < graph->n_nodes; ++i) {
         ggml_tensor * node = graph->nodes[i];
+
+        if (ggml_is_empty(node)) {
+            continue;
+        }
+
         switch (node->op) {
             case GGML_OP_MUL_MAT:
                 ggml_cl_mul_mat(node->src[0], node->src[1], node, nullptr, 0);

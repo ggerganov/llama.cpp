@@ -65,7 +65,6 @@ int main(int argc, char ** argv) {
     llama_context * ctx_dft = NULL;
 
     // load the target model
-    params.logits_all = true;
     std::tie(model_tgt, ctx_tgt) = llama_init_from_gpt_params(params);
 
     // load the draft model

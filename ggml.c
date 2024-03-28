@@ -794,6 +794,18 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_Q8_K,
         .nrows                    = 1,
     },
+    [GGML_TYPE_IQ1_M] = {
+        .type_name                = "iq1_m",
+        .blck_size                = QK_K,
+        .type_size                = sizeof(block_iq1_m),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_iq1_m,
+        .from_float               = NULL,
+        .from_float_reference     = NULL,
+        .vec_dot                  = ggml_vec_dot_iq1_m_q8_K,
+        .vec_dot_type             = GGML_TYPE_Q8_K,
+        .nrows                    = 1,
+    },
     [GGML_TYPE_IQ4_NL] = {
         .type_name                = "iq4_nl",
         .blck_size                = QK4_NL,
@@ -2539,6 +2551,7 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
         case GGML_FTYPE_MOSTLY_IQ2_XS:        wtype = GGML_TYPE_IQ2_XS;   break;
         case GGML_FTYPE_MOSTLY_IQ3_XXS:       wtype = GGML_TYPE_IQ3_XXS;  break;
         case GGML_FTYPE_MOSTLY_IQ1_S:         wtype = GGML_TYPE_IQ1_S;    break;
+        case GGML_FTYPE_MOSTLY_IQ1_M:         wtype = GGML_TYPE_IQ1_M;    break;
         case GGML_FTYPE_MOSTLY_IQ4_NL:        wtype = GGML_TYPE_IQ4_NL;   break;
         case GGML_FTYPE_MOSTLY_IQ4_XS:        wtype = GGML_TYPE_IQ4_XS;   break;
         case GGML_FTYPE_MOSTLY_IQ3_S:         wtype = GGML_TYPE_IQ3_S;    break;
@@ -2594,6 +2607,16 @@ static inline bool ggml_is_padded_1d(const struct ggml_tensor * tensor) {
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
+GGML_CALL bool ggml_is_empty(const struct ggml_tensor * tensor) {
+    for (int i = 0; i < GGML_MAX_DIMS; ++i) {
+        if (tensor->ne[i] == 0) {
+            // empty if any dimension has no elements
+            return true;
+        }
+    }
+    return false;
+}
+
 bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
@@ -2608,7 +2631,7 @@ bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor
 static inline bool ggml_can_repeat(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
-    return
+    return ggml_is_empty(t0) ? ggml_is_empty(t1) :
         (t1->ne[0]%t0->ne[0] == 0) &&
         (t1->ne[1]%t0->ne[1] == 0) &&
         (t1->ne[2]%t0->ne[2] == 0) &&
@@ -2915,7 +2938,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         data_size *= ne[i];
     }
 
-    GGML_ASSERT(view_src == NULL || data_size + view_offs <= ggml_nbytes(view_src));
+    GGML_ASSERT(view_src == NULL || data_size == 0 || data_size + view_offs <= ggml_nbytes(view_src));
 
     void * data = view_src != NULL ? view_src->data : NULL;
     if (data != NULL) {
@@ -8135,6 +8158,7 @@ static void ggml_compute_forward_add(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -8417,6 +8441,7 @@ static void ggml_compute_forward_add1(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -8544,6 +8569,7 @@ static void ggml_compute_forward_acc(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -11447,6 +11473,7 @@ static void ggml_compute_forward_out_prod(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -11638,6 +11665,7 @@ static void ggml_compute_forward_set(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -11861,6 +11889,7 @@ static void ggml_compute_forward_get_rows(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -12564,6 +12593,7 @@ static void ggml_compute_forward_alibi(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -12652,6 +12682,7 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ3_XXS:
         case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:
         case GGML_TYPE_IQ4_NL:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ3_S:
@@ -16093,7 +16124,7 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
-    if (tensor->op == GGML_OP_NONE) {
+    if (tensor->op == GGML_OP_NONE || ggml_is_empty(tensor)) {
         return;
     }
 
@@ -17961,6 +17992,12 @@ static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const 
 
 static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_threads) {
     int n_tasks = 0;
+
+    if (ggml_is_empty(node)) {
+        // no need to multi-thread a no-op
+        n_tasks = 1;
+        return n_tasks;
+    }
 
     switch (node->op) {
         case GGML_OP_CPY:
@@ -20306,7 +20343,8 @@ void ggml_quantize_init(enum ggml_type type) {
         case GGML_TYPE_IQ2_XXS:
         case GGML_TYPE_IQ2_XS:
         case GGML_TYPE_IQ2_S:
-        case GGML_TYPE_IQ1_S:   iq2xs_init_impl(type); break;
+        case GGML_TYPE_IQ1_S:
+        case GGML_TYPE_IQ1_M:   iq2xs_init_impl(type); break;
         case GGML_TYPE_IQ3_XXS: iq3xs_init_impl(256); break;
         case GGML_TYPE_IQ3_S:   iq3xs_init_impl(512); break;
         default: // nothing
@@ -20331,7 +20369,8 @@ bool ggml_quantize_requires_imatrix(enum ggml_type type) {
     return
         type == GGML_TYPE_IQ2_XXS ||
         type == GGML_TYPE_IQ2_XS  ||
-        type == GGML_TYPE_IQ1_S;
+        type == GGML_TYPE_IQ1_S;//   ||
+        //type == GGML_TYPE_IQ1_M;
 }
 
 size_t ggml_quantize_chunk(
@@ -20375,6 +20414,7 @@ size_t ggml_quantize_chunk(
         case GGML_TYPE_IQ3_S:   result = quantize_iq3_s  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_IQ2_S:   result = quantize_iq2_s  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_IQ1_S:   result = quantize_iq1_s  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_IQ1_M:   result = quantize_iq1_m  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_IQ4_NL:  result = quantize_iq4_nl (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
 #if QK_K == 64
         case GGML_TYPE_IQ4_XS:  result = quantize_iq4_nl (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;

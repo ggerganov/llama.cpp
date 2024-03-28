@@ -1170,6 +1170,7 @@ add_library(llama
             llama.h
             unicode.h
             unicode.cpp
+            unicode-data.cpp
             )
 
 target_include_directories(llama PUBLIC .)
