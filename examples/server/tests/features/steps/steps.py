@@ -16,7 +16,6 @@ import numpy as np
 import openai
 from behave import step
 from behave.api.async_step import async_run_until_complete
-from huggingface_hub import hf_hub_download
 from prometheus_client import parser
 
 
@@ -24,24 +23,29 @@ from prometheus_client import parser
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
+    context.n_gpu_layer = None
     if 'PORT' in os.environ:
         context.server_port = int(os.environ['PORT'])
         print(f"$PORT set, overriding server port with to {context.server_port}")
     if 'FQDN' in os.environ:
         context.server_fqdn = os.environ['FQDN']
         print(f"$FQDN set, overriding server fqdn with to {context.server_fqdn}")
+    if 'N_GPU_LAYERS' in os.environ:
+        context.n_gpu_layer = int(os.environ['N_GPU_LAYERS'])
+        print(f"$N_GPU_LAYERS set, overriding n_gpu_layer with to {context.n_gpu_layer}")
 
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
     context.model_alias = None
     context.model_file = None
+    context.model_hf_repo = None
+    context.model_hf_file = None
     context.model_url = None
     context.n_batch = None
     context.n_ubatch = None
     context.n_ctx = None
     context.n_ga = None
     context.n_ga_w = None
-    context.n_gpu_layer = None
     context.n_predict = None
     context.n_prompts = 0
     context.n_server_predict = None
@@ -56,6 +60,7 @@ def step_server_config(context, server_fqdn, server_port):
     context.seed = None
     context.server_seed = None
     context.user_api_key = None
+    context.response_format = None
 
     context.tasks_result = []
     context.concurrent_tasks = []
@@ -64,9 +69,9 @@ def step_server_config(context, server_fqdn, server_port):
 
 @step('a model file {hf_file} from HF repo {hf_repo}')
 def step_download_hf_model(context, hf_file, hf_repo):
-    context.model_file = hf_hub_download(repo_id=hf_repo, filename=hf_file)
-    if context.debug:
-        print(f"model file: {context.model_file}\n")
+    context.model_hf_repo = hf_repo
+    context.model_hf_file = hf_file
+    context.model_file = os.path.basename(hf_file)
 
 
 @step('a model file {model_file}')
@@ -137,9 +142,12 @@ def step_start_server(context):
     if 'GITHUB_ACTIONS' in os.environ:
         max_attempts *= 2
 
+    addrs = socket.getaddrinfo(context.server_fqdn, context.server_port, type=socket.SOCK_STREAM)
+    family, typ, proto, _, sockaddr = addrs[0]
+
     while True:
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            result = sock.connect_ex((context.server_fqdn, context.server_port))
+        with closing(socket.socket(family, typ, proto)) as sock:
+            result = sock.connect_ex(sockaddr)
             if result == 0:
                 print("\x1b[33;46mserver started!\x1b[0m")
                 return
@@ -209,7 +217,7 @@ async def step_request_completion(context, api_error):
                                           user_api_key=context.user_api_key)
     context.tasks_result.append(completion)
     if context.debug:
-        print(f"Completion response: {completion}\n")
+        print(f"Completion response: {completion}")
     if expect_api_error:
         assert completion == 401, f"completion must be an 401 status code: {completion}"
 
@@ -261,6 +269,11 @@ def step_model(context, model):
 @step('{max_tokens:d} max tokens to predict')
 def step_max_tokens(context, max_tokens):
     context.n_predict = max_tokens
+
+
+@step('a response format {response_format}')
+def step_response_format(context, response_format):
+    context.response_format = json.loads(response_format)
 
 
 @step('streaming is {enable_streaming}')
@@ -354,7 +367,7 @@ def step_prompt_passkey(context, passkey, i_pos):
         prompt += context.prompt_junk_suffix
     if context.debug:
         passkey_highlight = "\x1b[33m" + passkey + "\x1b[0m"
-        print(f"Passkey challenge:\n```{prompt.replace(passkey, passkey_highlight)}```\n")
+        print(f"Passkey challenge:\n```{prompt.replace(passkey, passkey_highlight)}```")
     context.prompts.append(context.prompt_prefix + prompt + context.prompt_suffix)
     context.n_prompts = len(context.prompts)
 
@@ -363,7 +376,7 @@ def step_prompt_passkey(context, passkey, i_pos):
 @async_run_until_complete
 async def step_oai_chat_completions(context, api_error):
     if context.debug:
-        print(f"Submitting OAI compatible completions request...\n")
+        print(f"Submitting OAI compatible completions request...")
     expect_api_error = api_error == 'raised'
     completion = await oai_chat_completions(context.prompts.pop(),
                                             context.system_prompt,
@@ -377,6 +390,9 @@ async def step_oai_chat_completions(context, api_error):
 
                                             enable_streaming=context.enable_streaming
                                             if hasattr(context, 'enable_streaming') else None,
+
+                                            response_format=context.response_format
+                                            if hasattr(context, 'response_format') else None,
 
                                             seed=await completions_seed(context),
 
@@ -437,6 +453,8 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'n_predict') else None,
                               enable_streaming=context.enable_streaming
                               if hasattr(context, 'enable_streaming') else None,
+                              response_format=context.response_format
+                              if hasattr(context, 'response_format') else None,
                               seed=await completions_seed(context),
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
@@ -457,6 +475,8 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'n_predict') else None,
                               enable_streaming=context.enable_streaming
                               if hasattr(context, 'enable_streaming') else None,
+                              response_format=context.response_format
+                              if hasattr(context, 'response_format') else None,
                               seed=context.seed
                               if hasattr(context, 'seed') else
                               context.server_seed
@@ -508,12 +528,12 @@ async def step_all_embeddings_are_the_same(context):
             embedding1 = np.array(embeddings[i])
             embedding2 = np.array(embeddings[j])
             if context.debug:
-                print(f"embedding1: {embedding1[-8:]}\n")
-                print(f"embedding2: {embedding2[-8:]}\n")
+                print(f"embedding1: {embedding1[-8:]}")
+                print(f"embedding2: {embedding2[-8:]}")
             similarity = np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
             msg = f"Similarity between {i} and {j}: {similarity:.10f}"
             if context.debug:
-                print(f"{msg}\n")
+                print(f"{msg}")
             assert np.isclose(similarity, 1.0, rtol=1e-05, atol=1e-08, equal_nan=False), msg
 
 
@@ -630,7 +650,7 @@ async def step_prometheus_metrics_exported(context):
             metrics_raw = await metrics_response.text()
             metric_exported = False
             if context.debug:
-                print(f"/metrics answer:\n{metrics_raw}\n")
+                print(f"/metrics answer:\n{metrics_raw}")
             context.metrics = {}
             for metric in parser.text_string_to_metric_families(metrics_raw):
                 match metric.name:
@@ -739,6 +759,7 @@ async def oai_chat_completions(user_prompt,
                                model=None,
                                n_predict=None,
                                enable_streaming=None,
+                               response_format=None,
                                seed=None,
                                user_api_key=None,
                                expect_api_error=None):
@@ -764,6 +785,8 @@ async def oai_chat_completions(user_prompt,
         "stream": enable_streaming,
         "seed": seed
     }
+    if response_format is not None:
+        payload['response_format'] = response_format
     completion_response = {
         'content': '',
         'timings': {
@@ -824,6 +847,7 @@ async def oai_chat_completions(user_prompt,
                 model=model,
                 max_tokens=n_predict,
                 stream=enable_streaming,
+                response_format=payload.get('response_format'),
                 seed=seed
             )
         except openai.error.AuthenticationError as e:
@@ -932,7 +956,7 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
             last_match = end
         highlighted += content[last_match:]
         if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
-          print(f"Checking completion response: {highlighted}\n")
+          print(f"Checking completion response: {highlighted}")
         assert last_match > 0, f'/{re_content}/ must match ```{highlighted}```'
     if expected_predicted_n and expected_predicted_n > 0:
         assert n_predicted == expected_predicted_n, (f'invalid number of tokens predicted:'
@@ -942,7 +966,7 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
 async def gather_tasks_results(context):
     n_tasks = len(context.concurrent_tasks)
     if context.debug:
-        print(f"Waiting for all {n_tasks} tasks results...\n")
+        print(f"Waiting for all {n_tasks} tasks results...")
     for task_no in range(n_tasks):
         context.tasks_result.append(await context.concurrent_tasks.pop())
     n_completions = len(context.tasks_result)
@@ -959,7 +983,7 @@ async def wait_for_health_status(context,
                                  slots_processing=None,
                                  expected_slots=None):
     if context.debug:
-        print(f"Starting checking for health for expected_health_status={expected_health_status}\n")
+        print(f"Starting checking for health for expected_health_status={expected_health_status}")
     interval = 0.5
     counter = 0
     if 'GITHUB_ACTIONS' in os.environ:
@@ -1048,8 +1072,6 @@ def start_server_background(context):
     if 'LLAMA_SERVER_BIN_PATH' in os.environ:
         context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
     server_listen_addr = context.server_fqdn
-    if os.name == 'nt':
-        server_listen_addr = '0.0.0.0'
     server_args = [
         '--host', server_listen_addr,
         '--port', context.server_port,
@@ -1058,6 +1080,10 @@ def start_server_background(context):
         server_args.extend(['--model', context.model_file])
     if context.model_url:
         server_args.extend(['--model-url', context.model_url])
+    if context.model_hf_repo:
+        server_args.extend(['--hf-repo', context.model_hf_repo])
+    if context.model_hf_file:
+        server_args.extend(['--hf-file', context.model_hf_file])
     if context.n_batch:
         server_args.extend(['--batch-size', context.n_batch])
     if context.n_ubatch:
@@ -1088,7 +1114,10 @@ def start_server_background(context):
         server_args.append('--verbose')
     if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
         server_args.extend(['--log-format', "text"])
-    print(f"starting server with: {context.server_path} {server_args}\n")
+
+    args = [str(arg) for arg in [context.server_path, *server_args]]
+    print(f"bench: starting server with: {' '.join(args)}")
+
     flags = 0
     if 'nt' == os.name:
         flags |= subprocess.DETACHED_PROCESS
@@ -1104,16 +1133,14 @@ def start_server_background(context):
         [str(arg) for arg in [context.server_path, *server_args]],
         **pkwargs)
 
-    def log_stdout(process):
-        for line in iter(process.stdout.readline, b''):
-            print(line.decode('utf-8'), end='')
-    thread_stdout = threading.Thread(target=log_stdout, args=(context.server_process,))
+    def server_log(in_stream, out_stream):
+        for line in iter(in_stream.readline, b''):
+            print(line.decode('utf-8'), end='', file=out_stream)
+
+    thread_stdout = threading.Thread(target=server_log, args=(context.server_process.stdout, sys.stdout))
     thread_stdout.start()
 
-    def log_stderr(process):
-        for line in iter(process.stderr.readline, b''):
-            print(line.decode('utf-8'), end='', file=sys.stderr)
-    thread_stderr = threading.Thread(target=log_stderr, args=(context.server_process,))
+    thread_stderr = threading.Thread(target=server_log, args=(context.server_process.stderr, sys.stderr))
     thread_stderr.start()
 
     print(f"server pid={context.server_process.pid}, behave pid={os.getpid()}")

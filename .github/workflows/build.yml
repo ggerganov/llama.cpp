@@ -15,14 +15,133 @@ on:
     types: [opened, synchronize, reopened]
     paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
   GGML_NLOOP: 3
   GGML_N_THREADS: 1
 
 jobs:
+  macOS-latest-cmake-arm64:
+    runs-on: macos-14
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON ..
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest -L main --verbose --timeout 900
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          cp LICENSE ./build/bin/
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
+
+  macOS-latest-cmake-x64:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON ..
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest -L main --verbose --timeout 900
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          cp LICENSE ./build/bin/
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
+
   ubuntu-focal-make:
     runs-on: ubuntu-20.04
+    env:
+      LLAMA_NODE_AVAILABLE: true
+      LLAMA_PYTHON_AVAILABLE: true
 
     steps:
       - name: Clone
@@ -34,6 +153,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install build-essential gcc-8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
       - name: Build
         id: make_build
@@ -97,6 +224,17 @@ jobs:
         run: |
           cd build
           ctest -L main --verbose --timeout 900
+
+      - name: Test llama2c conversion
+        id: llama2c_test
+        run: |
+          cd build
+          echo "Fetch tokenizer"
+          wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/tok512.bin
+          echo "Fetch llama2c model"
+          wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin
+          ./bin/convert-llama2c-to-ggml --copy-vocab-from-model ./tok512.bin --llama2c-model stories260K.bin --llama2c-output-model stories260K.gguf
+          ./bin/main -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
 
 #  ubuntu-latest-cmake-sanitizer:
 #    runs-on: ubuntu-latest
@@ -590,13 +728,13 @@ jobs:
           path: |
             llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
 
-  windows-latest-cmake-cublas:
+  windows-latest-cmake-cuda:
     runs-on: windows-latest
 
     strategy:
       matrix:
         cuda: ['12.2.0', '11.7.1']
-        build: ['cublas']
+        build: ['cuda']
 
     steps:
       - name: Clone
@@ -617,7 +755,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
+          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUDA=ON -DBUILD_SHARED_LIBS=ON
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Determine tag name
@@ -662,6 +800,7 @@ jobs:
 
   windows-latest-cmake-sycl:
     runs-on: windows-latest
+
     defaults:
       run:
         shell: bash
@@ -669,7 +808,6 @@ jobs:
     env:
       WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/62641e01-1e8d-4ace-91d6-ae03f7f8a71f/w_BaseKit_p_2024.0.0.49563_offline.exe
       WINDOWS_DPCPP_MKL: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel
-
 
     steps:
       - name: Clone
@@ -684,6 +822,32 @@ jobs:
       - name: Build
         id: cmake_build
         run:  examples/sycl/win-build-sycl.bat
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
 
   ios-xcode-build:
     runs-on: macos-latest
@@ -747,7 +911,9 @@ jobs:
       - macOS-latest-make
       - macOS-latest-cmake
       - windows-latest-cmake
-      - windows-latest-cmake-cublas
+      - windows-latest-cmake-cuda
+      - macOS-latest-cmake-arm64
+      - macOS-latest-cmake-x64
 
     steps:
       - name: Clone

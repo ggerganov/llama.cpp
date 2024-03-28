@@ -39,7 +39,7 @@
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 4
+#define LLAMA_SESSION_VERSION 5
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,9 +60,9 @@ extern "C" {
 
     enum llama_vocab_type {
         LLAMA_VOCAB_TYPE_NONE = 0, // For models without vocab
-        LLAMA_VOCAB_TYPE_SPM  = 1, // SentencePiece
-        LLAMA_VOCAB_TYPE_BPE  = 2, // Byte Pair Encoding
-        LLAMA_VOCAB_TYPE_WPM  = 3, // WordPiece
+        LLAMA_VOCAB_TYPE_SPM  = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
+        LLAMA_VOCAB_TYPE_BPE  = 2, // GPT-2 tokenizer based on byte-level BPE
+        LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -117,6 +117,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ2_S         = 28, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -275,13 +276,16 @@ extern "C" {
 
     // model quantization parameters
     typedef struct llama_model_quantize_params {
-        int32_t nthread;             // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
-        enum llama_ftype ftype;      // quantize to this llama_ftype
-        bool allow_requantize;       // allow quantizing non-f32/f16 tensors
-        bool quantize_output_tensor; // quantize output.weight
-        bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
-        bool pure;                   // quantize all tensors to the default type
-        void * imatrix;              // pointer to importance matrix data
+        int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
+        enum llama_ftype ftype;              // quantize to this llama_ftype
+        enum ggml_type output_tensor_type;   // output tensor type
+        enum ggml_type token_embedding_type; // itoken embeddings tensor type
+        bool allow_requantize;               // allow quantizing non-f32/f16 tensors
+        bool quantize_output_tensor;         // quantize output.weight
+        bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+        bool pure;                           // quantize all tensors to the default type
+        void * imatrix;                      // pointer to importance matrix data
+        void * kv_overrides;                 // pointer to vector containing overrides
     } llama_model_quantize_params;
 
     // grammar types
@@ -674,23 +678,29 @@ extern "C" {
     LLAMA_API void llama_synchronize(struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_decode()
-    // The logits for the last token are stored in the last row
-    // Logits for which llama_batch.logits[i] == 0 are undefined
-    // Rows: n_tokens provided with llama_batch
+    // The logits for which llama_batch.logits[i] != 0 are stored contiguously
+    // in the order they have appeared in the batch.
+    // Rows: number of tokens for which llama_batch.logits[i] != 0
     // Cols: n_vocab
     LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 
     // Logits for the ith token. Equivalent to:
-    // llama_get_logits(ctx) + i*n_vocab
+    // llama_get_logits(ctx) + ctx->output_ids[i]*n_vocab
+    // returns NULL for invalid ids.
     LLAMA_API float * llama_get_logits_ith(struct llama_context * ctx, int32_t i);
 
-    // Get all output token embeddings
-    // shape: [n_tokens*n_embd] (1-dimensional)
+    // Get all output token embeddings.
+    // when pooling_type == LLAMA_POOLING_TYPE_NONE or when using a generative model,
+    // the embeddings for which llama_batch.logits[i] != 0 are stored contiguously
+    // in the order they have appeared in the batch.
+    // shape: [n_outputs*n_embd]
+    // Otherwise, returns NULL.
     LLAMA_API float * llama_get_embeddings(struct llama_context * ctx);
 
-    // Get the embeddings for the ith token
-    // llama_get_embeddings(ctx) + i*n_embd
+    // Get the embeddings for the ith token. Equivalent to:
+    // llama_get_embeddings(ctx) + ctx->output_ids[i]*n_embd
     // shape: [n_embd] (1-dimensional)
+    // returns NULL for invalid ids.
     LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
 
     // Get the embeddings for a sequence id
@@ -959,6 +969,16 @@ extern "C" {
                                  size_t   n_beams,
                                 int32_t   n_past,
                                 int32_t   n_predict);
+
+    /// @details Build a split GGUF final path for this chunk.
+    ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"
+    //  Returns the split_path length.
+    LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count);
+
+    /// @details Extract the path prefix from the split_path if and only if the split_no and split_count match.
+    ///          llama_split_prefix(split_prefix, 64, "/models/ggml-model-q4_0-00002-of-00004.gguf", 2, 4) => split_prefix = "/models/ggml-model-q4_0"
+    //  Returns the split_prefix length.
+    LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
 
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);

@@ -65,7 +65,6 @@ int main(int argc, char ** argv) {
     llama_context * ctx_dft = NULL;
 
     // load the target model
-    params.logits_all = true;
     std::tie(model_tgt, ctx_tgt) = llama_init_from_gpt_params(params);
 
     // load the draft model
@@ -219,7 +218,8 @@ int main(int argc, char ** argv) {
                 if (params.sparams.temp > 0) {
                     // stochastic verification
 
-                    llama_token_data_array dist_tgt = llama_sampling_probability_distribution(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft]);
+                    llama_token_data_array dist_tgt = llama_sampling_prepare(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft], true, NULL);
+                    llama_sample_softmax(ctx_tgt, &dist_tgt);
                     float p_tgt = 0, p_dft = 0;
 
                     // GGML_ASSERT(dist_tgt.size() == dist_dft.size());

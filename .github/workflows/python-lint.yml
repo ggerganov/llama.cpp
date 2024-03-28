@@ -2,6 +2,10 @@ name: flake8 Lint
 
 on: [push, pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   flake8-lint:
     runs-on: ubuntu-latest

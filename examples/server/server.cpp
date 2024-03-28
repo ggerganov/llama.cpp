@@ -1,6 +1,7 @@
 #include "utils.hpp"
 
 #include "common.h"
+#include "json-schema-to-grammar.h"
 #include "llama.h"
 #include "grammar-parser.h"
 
@@ -29,7 +30,7 @@
 #include <signal.h>
 #include <memory>
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 bool server_verbose = false;
 bool server_log_json = true;
@@ -98,6 +99,7 @@ struct slot_params {
 
     uint32_t seed      = -1; // RNG seed
     int32_t  n_keep    =  0; // number of tokens to keep from initial prompt
+    int32_t  n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
     int32_t  n_predict = -1; // new tokens to predict
 
     std::vector<std::string> antiprompt;
@@ -178,6 +180,7 @@ struct server_slot {
     llama_token sampled;
     struct llama_sampling_params sparams;
     llama_sampling_context * ctx_sampling = nullptr;
+    json json_schema;
 
     int32_t ga_i = 0;   // group-attention state
     int32_t ga_n = 1;   // group-attention factor
@@ -744,7 +747,8 @@ struct server_context {
         {
             const int32_t n_batch = llama_n_batch(ctx);
 
-            batch = llama_batch_init(n_batch, 0, params.n_parallel);
+            // only a single seq_id per token is needed
+            batch = llama_batch_init(n_batch, 0, 1);
         }
 
         metrics.init();
@@ -844,10 +848,26 @@ struct server_context {
         slot.sparams.mirostat_eta      = json_value(data, "mirostat_eta",      default_sparams.mirostat_eta);
         slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
         slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
+        slot.params.n_discard          = json_value(data, "n_discard",         default_params.n_discard);
         slot.params.seed               = json_value(data, "seed",              default_params.seed);
-        slot.sparams.grammar           = json_value(data, "grammar",           default_sparams.grammar);
         slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
         slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
+
+        // process "json_schema" and "grammar"
+        if (data.contains("json_schema") && data.contains("grammar")) {
+            send_error(task, "Either \"json_schema\" or \"grammar\" can be specified, but not both", ERROR_TYPE_INVALID_REQUEST);
+            return false;
+        } else if (data.contains("json_schema") && !data.contains("grammar")) {
+            try {
+                auto schema                = json_value(data, "json_schema", json::object());
+                slot.sparams.grammar       = json_schema_to_grammar(schema);
+            } catch (const std::exception & e) {
+                send_error(task, std::string("\"json_schema\": ") + e.what(), ERROR_TYPE_INVALID_REQUEST);
+                return false;
+            }
+        } else {
+            slot.sparams.grammar       = json_value(data, "grammar",           default_sparams.grammar);
+        }
 
         if (slot.params.cache_prompt && slot.ga_n != 1) {
             LOG_WARNING("cache_prompt is not supported with group-attention", {});
@@ -1235,7 +1255,8 @@ struct server_context {
             {"penalize_nl",               slot.sparams.penalize_nl},
             {"stop",                      slot.params.antiprompt},
             {"n_predict",                 slot.params.n_predict}, // TODO: fix duplicate key n_predict
-            {"n_keep",                    params.n_keep},
+            {"n_keep",                    slot.params.n_keep},
+            {"n_discard",                 slot.params.n_discard},
             {"ignore_eos",                ignore_eos},
             {"stream",                    slot.params.stream},
             {"logit_bias",                slot.sparams.logit_bias},
@@ -1679,7 +1700,7 @@ struct server_context {
                     // Shift context
                     const int n_keep    = slot.params.n_keep + add_bos_token;
                     const int n_left    = (int) system_tokens.size() + slot.n_past - n_keep;
-                    const int n_discard = n_left / 2;
+                    const int n_discard = slot.params.n_discard ? slot.params.n_discard : (n_left / 2);
 
                     LOG_INFO("slot context shift", {
                         {"id_slot",         slot.id},
@@ -1746,7 +1767,7 @@ struct server_context {
         }
 
         // process in chunks of params.n_batch
-        int32_t n_batch = llama_n_batch(ctx);
+        int32_t n_batch  = llama_n_batch(ctx);
         int32_t n_ubatch = llama_n_ubatch(ctx);
 
         // next, batch any pending prompts without exceeding n_batch
@@ -2196,7 +2217,11 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  -m FNAME, --model FNAME\n");
     printf("                            model path (default: %s)\n", params.model.c_str());
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
-    printf("                            model download url (default: %s)\n", params.model_url.c_str());
+    printf("                            model download url (default: unused)\n");
+    printf("  -hfr REPO, --hf-repo REPO\n");
+    printf("                            Hugging Face model repository (default: unused)\n");
+    printf("  -hff FILE, --hf-file FILE\n");
+    printf("                            Hugging Face model file (default: unused)\n");
     printf("  -a ALIAS, --alias ALIAS\n");
     printf("                            set an alias for the model, will be added as `model` field in completion response\n");
     printf("  --lora FNAME              apply LoRA adapter (implies --no-mmap)\n");
@@ -2213,7 +2238,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  -to N, --timeout N        server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     printf("  --embeddings              enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N       number of slots for process requests (default: %d)\n", params.n_parallel);
-    printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
+    printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: enabled)\n");
     printf("  -spf FNAME, --system-prompt-file FNAME\n");
     printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
     printf("  -ctk TYPE, --cache-type-k TYPE\n");
@@ -2325,6 +2350,18 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             params.model_url = argv[i];
+        } else if (arg == "-hfr" || arg == "--hf-repo") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.hf_repo = argv[i];
+        } else if (arg == "-hff" || arg == "--hf-file") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.hf_file = argv[i];
         } else if (arg == "-a" || arg == "--alias") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2477,15 +2514,15 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-#ifndef GGML_USE_CUBLAS
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUBLAS
+#ifndef GGML_USE_CUDA
+            fprintf(stderr, "warning: llama.cpp was compiled without CUDA. Setting the split mode has no effect.\n");
+#endif // GGML_USE_CUDA
         } else if (arg == "--tensor-split" || arg == "-ts") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)
+#if defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL)
             std::string arg_next = argv[i];
 
             // split string by , and /
@@ -2502,17 +2539,17 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 }
             }
 #else
-            LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n", {});
-#endif // GGML_USE_CUBLAS
+            LOG_WARNING("llama.cpp was compiled without CUDA. It is not possible to set a tensor split.\n", {});
+#endif // GGML_USE_CUDA
         } else if (arg == "--main-gpu" || arg == "-mg") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_SYCL)
+#if defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL)
             params.main_gpu = std::stoi(argv[i]);
 #else
-            LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a main GPU.", {});
+            LOG_WARNING("llama.cpp was compiled without CUDA. It is not possible to set a main GPU.", {});
 #endif
         } else if (arg == "--lora") {
             if (++i >= argc) {
@@ -3529,6 +3566,7 @@ int main(int argc, char ** argv) {
     sigemptyset (&sigint_action.sa_mask);
     sigint_action.sa_flags = 0;
     sigaction(SIGINT, &sigint_action, NULL);
+    sigaction(SIGTERM, &sigint_action, NULL);
 #elif defined (_WIN32)
     auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
         return (ctrl_type == CTRL_C_EVENT) ? (signal_handler(SIGINT), true) : false;

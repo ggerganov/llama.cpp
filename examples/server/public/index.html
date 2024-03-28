@@ -199,10 +199,10 @@
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
-    } from '/index.js';
+    } from './index.js';
 
-    import { llama } from '/completion.js';
-    import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    import { llama } from './completion.js';
+    import { SchemaConverter } from './json-schema-to-grammar.mjs';
     let selected_image = false;
     var slot_id = -1;
 
@@ -405,7 +405,7 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: document.baseURI.replace(/\/+$/, '') })) {
         const data = chunk.data;
 
         if (data.stop) {
@@ -630,14 +630,16 @@
 
       const grammarJsonSchemaPropOrder = signal('')
       const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
-      const convertJSONSchemaGrammar = () => {
+      const convertJSONSchemaGrammar = async () => {
         try {
-          const schema = JSON.parse(params.value.grammar)
-          const converter = new SchemaConverter(
-            grammarJsonSchemaPropOrder.value
+          let schema = JSON.parse(params.value.grammar)
+          const converter = new SchemaConverter({
+            prop_order: grammarJsonSchemaPropOrder.value
               .split(',')
-              .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {})
-          )
+              .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {}),
+            allow_fetch: true,
+          })
+          schema = await converter.resolveRefs(schema, 'input')
           converter.visit(schema, '')
           params.value = {
             ...params.value,

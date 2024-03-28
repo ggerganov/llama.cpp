@@ -89,8 +89,8 @@ endif()
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
 option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
-option(LLAMA_CUBLAS                          "llama: use CUDA"                                  OFF)
-#option(LLAMA_CUDA_CUBLAS                     "llama: use cuBLAS for prompt processing"          OFF)
+option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
+option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
 option(LLAMA_CUDA_FORCE_MMQ                  "llama: use mmq kernels instead of cuBLAS"         OFF)
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
@@ -99,6 +99,7 @@ option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some 
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
+option(LLAMA_CUDA_NO_PEER_COPY               "llama: do not use peer to peer copies"            OFF)
 option(LLAMA_CURL                            "llama: use libcurl to download model from an URL" OFF)
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
@@ -359,18 +360,25 @@ if (LLAMA_QKK_64)
 endif()
 
 if (LLAMA_CUBLAS)
+    message(WARNING "LLAMA_CUBLAS is deprecated and will be removed in the future.\nUse LLAMA_CUDA instead")
+    set(LLAMA_CUDA ON)
+endif()
+
+if (LLAMA_CUDA)
     cmake_minimum_required(VERSION 3.17)
 
     find_package(CUDAToolkit)
     if (CUDAToolkit_FOUND)
-        message(STATUS "cuBLAS found")
+        message(STATUS "CUDA found")
 
         enable_language(CUDA)
 
         set(GGML_HEADERS_CUDA ggml-cuda.h)
-        set(GGML_SOURCES_CUDA ggml-cuda.cu)
 
-        add_compile_definitions(GGML_USE_CUBLAS)
+        file(GLOB GGML_SOURCES_CUDA "ggml-cuda/*.cu")
+        list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
+
+        add_compile_definitions(GGML_USE_CUDA)
         if (LLAMA_CUDA_FORCE_DMMV)
             add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
@@ -387,6 +395,9 @@ if (LLAMA_CUBLAS)
         endif()
         add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
+        if (LLAMA_CUDA_NO_PEER_COPY)
+            add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+        endif()
 
         if (LLAMA_STATIC)
             if (WIN32)
@@ -416,7 +427,7 @@ if (LLAMA_CUBLAS)
     message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
     else()
-        message(WARNING "cuBLAS not found")
+        message(WARNING "CUDA not found")
     endif()
 endif()
 
@@ -515,9 +526,11 @@ if (LLAMA_HIPBLAS)
     message(STATUS "HIP and hipBLAS found")
 
     set(GGML_HEADERS_ROCM ggml-cuda.h)
-    set(GGML_SOURCES_ROCM ggml-cuda.cu)
 
-    add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+    file(GLOB GGML_SOURCES_ROCM "ggml-cuda/*.cu")
+    list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
+
+    add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUDA)
 
     if (LLAMA_HIP_UMA)
         add_compile_definitions(GGML_HIP_UMA)
@@ -531,11 +544,15 @@ if (LLAMA_HIPBLAS)
         add_compile_definitions(GGML_CUDA_FORCE_MMQ)
     endif()
 
+    if (LLAMA_CUDA_NO_PEER_COPY)
+        add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+    endif()
+
     add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
     add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
     add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
-    set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+    set_source_files_properties(${GGML_SOURCES_ROCM} PROPERTIES LANGUAGE CXX)
 
     if (LLAMA_STATIC)
         message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
@@ -818,7 +835,7 @@ endif()
 
 set(CUDA_CXX_FLAGS "")
 
-if (LLAMA_CUBLAS)
+if (LLAMA_CUDA)
     set(CUDA_FLAGS -use_fast_math)
 
     if (LLAMA_FATAL_WARNINGS)
@@ -1043,7 +1060,7 @@ endif()
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ARCH_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${ARCH_FLAGS}>")
 
-if (LLAMA_CUBLAS)
+if (LLAMA_CUDA)
     list(APPEND CUDA_CXX_FLAGS ${ARCH_FLAGS})
     list(JOIN CUDA_CXX_FLAGS " " CUDA_CXX_FLAGS_JOINED)  # pass host compiler flags as a single argument
     if (NOT CUDA_CXX_FLAGS_JOINED STREQUAL "")
@@ -1153,6 +1170,7 @@ add_library(llama
             llama.h
             unicode.h
             unicode.cpp
+            unicode-data.cpp
             )
 
 target_include_directories(llama PUBLIC .)
@@ -1248,6 +1266,12 @@ if (LLAMA_METAL)
             GROUP_READ
             WORLD_READ
         DESTINATION ${CMAKE_INSTALL_BINDIR})
+    if (NOT LLAMA_METAL_EMBED_LIBRARY)
+        install(
+            FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+    endif()
 endif()
 
 #
