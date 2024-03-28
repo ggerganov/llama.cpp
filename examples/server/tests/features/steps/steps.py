@@ -1114,7 +1114,10 @@ def start_server_background(context):
         server_args.append('--verbose')
     if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
         server_args.extend(['--log-format', "text"])
-    print(f"starting server with: {context.server_path} {server_args}")
+
+    args = [str(arg) for arg in [context.server_path, *server_args]]
+    print(f"bench: starting server with: {' '.join(args)}")
+
     flags = 0
     if 'nt' == os.name:
         flags |= subprocess.DETACHED_PROCESS
@@ -1130,16 +1133,14 @@ def start_server_background(context):
         [str(arg) for arg in [context.server_path, *server_args]],
         **pkwargs)
 
-    def log_stdout(process):
-        for line in iter(process.stdout.readline, b''):
-            print(line.decode('utf-8'), end='')
-    thread_stdout = threading.Thread(target=log_stdout, args=(context.server_process,))
+    def server_log(in_stream, out_stream):
+        for line in iter(in_stream.readline, b''):
+            print(line.decode('utf-8'), end='', file=out_stream)
+
+    thread_stdout = threading.Thread(target=server_log, args=(context.server_process.stdout, sys.stdout))
     thread_stdout.start()
 
-    def log_stderr(process):
-        for line in iter(process.stderr.readline, b''):
-            print(line.decode('utf-8'), end='', file=sys.stderr)
-    thread_stderr = threading.Thread(target=log_stderr, args=(context.server_process,))
+    thread_stderr = threading.Thread(target=server_log, args=(context.server_process.stderr, sys.stderr))
     thread_stderr.start()
 
     print(f"server pid={context.server_process.pid}, behave pid={os.getpid()}")

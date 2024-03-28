@@ -9152,8 +9152,9 @@ struct llm_build_context {
             if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
-                inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
+                cur     = ggml_get_rows(ctx0,     cur, inp_out_ids);
+                inpL    = ggml_get_rows(ctx0,    inpL, inp_out_ids);
+                ffn_inp = ggml_get_rows(ctx0, ffn_inp, inp_out_ids);
             }
 
             struct ggml_tensor * attn_out = cur;
