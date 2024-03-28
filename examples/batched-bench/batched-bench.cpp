@@ -100,7 +100,7 @@ int main(int argc, char ** argv) {
 
     ctx_params.seed      = 1234;
     ctx_params.n_ctx     = n_kv_max;
-    ctx_params.n_batch   = 512;
+    ctx_params.n_batch   = 2048;
 
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;

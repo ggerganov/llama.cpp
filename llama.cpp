@@ -107,6 +107,7 @@
 #define LLAMA_MAX_NODES   8192
 #define LLAMA_MAX_EXPERTS 8
 
+#define LLAMA_FLASH_ATTN
 
 //
 // logging
@@ -5522,23 +5523,34 @@ static void llm_build_kv_store(
 
     GGML_ASSERT(kv.size == n_ctx);
 
-    // compute the transposed [n_tokens, n_embd] V matrix
-    struct ggml_tensor * v_cur_t = ggml_transpose(ctx, ggml_reshape_2d(ctx, v_cur, n_embd_v_gqa, n_tokens));
-    //struct ggml_tensor * v_cur_t = ggml_transpose(ctx, v_cur); // TODO: reshape above is likely not needed
-    cb(v_cur_t, "v_cur_t", il);
-
     struct ggml_tensor * k_cache_view = ggml_view_1d(ctx, kv.k_l[il], n_tokens*n_embd_k_gqa,
             (ggml_row_size(kv.k_l[il]->type, n_embd_k_gqa))*kv_head);
     cb(k_cache_view, "k_cache_view", il);
 
+    // important: storing RoPE-ed version of K in the KV cache!
+    ggml_build_forward_expand(graph, ggml_cpy(ctx, k_cur, k_cache_view));
+
+#if defined(LLAMA_FLASH_ATTN)
+    // NOTE: the V cache is not transposed when using FLASH attention !!
+    struct ggml_tensor * v_cache_view = ggml_view_1d(ctx, kv.v_l[il], n_tokens*n_embd_v_gqa,
+            (ggml_row_size(kv.v_l[il]->type, n_embd_v_gqa))*kv_head);
+    cb(v_cache_view, "v_cache_view", il);
+
+    ggml_build_forward_expand(graph, ggml_cpy(ctx, v_cur, v_cache_view));
+
+    GGML_UNUSED(n_ctx);
+#else
+    // compute the transposed [n_tokens, n_embd] V matrix
+    //struct ggml_tensor * v_cur_t = ggml_transpose(ctx, ggml_reshape_2d(ctx, v_cur, n_embd_v_gqa, n_tokens));
+    struct ggml_tensor * v_cur_t = ggml_transpose(ctx, v_cur); // TODO: reshape above is likely not needed
+    cb(v_cur_t, "v_cur_t", il);
+
     struct ggml_tensor * v_cache_view = ggml_view_2d(ctx, kv.v_l[il], n_tokens, n_embd_v_gqa,
             (  n_ctx)*ggml_element_size(kv.v_l[il]),
             (kv_head)*ggml_element_size(kv.v_l[il]));
-    cb(v_cache_view, "v_cache_view", il);
 
-    // important: storing RoPE-ed version of K in the KV cache!
-    ggml_build_forward_expand(graph, ggml_cpy(ctx, k_cur,   k_cache_view));
     ggml_build_forward_expand(graph, ggml_cpy(ctx, v_cur_t, v_cache_view));
+#endif
 }
 
 static struct ggml_tensor * llm_build_norm(
@@ -5699,6 +5711,33 @@ static struct ggml_tensor * llm_build_kqv(
                 0);
     cb(k, "k", il);
 
+    struct ggml_tensor * cur;
+
+#if defined(LLAMA_FLASH_ATTN)
+    GGML_UNUSED(model);
+    GGML_UNUSED(n_ctx);
+
+    GGML_ASSERT(kq_pos == nullptr && "ALiBi is not yet supported with Flash Attention");
+
+    // split cached v into n_head heads (not transposed)
+    struct ggml_tensor * v =
+        ggml_view_3d(ctx, kv.v_l[il],
+                n_embd_head_v, n_kv, n_head_kv,
+                ggml_row_size(kv.v_l[il]->type, n_embd_k_gqa),
+                ggml_row_size(kv.v_l[il]->type, n_embd_head_k),
+                0);
+    cb(v, "v", il);
+
+    cur = ggml_flash_attn_ext(ctx, q, k, v, kq_mask, kq_scale);
+    ggml_flash_attn_ext_set_prec(cur, GGML_PREC_DEFAULT);
+    //printf("q: %4d %4d %4d %4d\n", q->ne[0], q->ne[1], q->ne[2], q->ne[3]);
+    //printf("k: %4d %4d %4d %4d\n", k->ne[0], k->ne[1], k->ne[2], k->ne[3]);
+    //printf("v: %4d %4d %4d %4d\n", v->ne[0], v->ne[1], v->ne[2], v->ne[3]);
+    //printf("m: %4d %4d %4d %4d\n", kq_mask->ne[0], kq_mask->ne[1], kq_mask->ne[2], kq_mask->ne[3]);
+    //printf("r: %4d %4d %4d %4d\n", kqv->ne[0], kqv->ne[1], kqv->ne[2], kqv->ne[3]);
+
+    cur = ggml_reshape_2d(ctx, cur, n_embd_head_k*n_head, n_tokens);
+#else
     struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
     cb(kq, "kq", il);
 
@@ -5762,8 +5801,9 @@ static struct ggml_tensor * llm_build_kqv(
     struct ggml_tensor * kqv_merged = ggml_permute(ctx, kqv, 0, 2, 1, 3);
     cb(kqv_merged, "kqv_merged", il);
 
-    struct ggml_tensor * cur = ggml_cont_2d(ctx, kqv_merged, n_embd_head_k*n_head, n_tokens);
+    cur = ggml_cont_2d(ctx, kqv_merged, n_embd_head_k*n_head, n_tokens);
     cb(cur, "kqv_merged_cont", il);
+#endif
 
     ggml_build_forward_expand(graph, cur);
 
@@ -6051,20 +6091,20 @@ struct llm_build_context {
 
     struct ggml_tensor * build_inp_KQ_mask(bool causal = true) {
         if (causal) {
-            lctx.inp_KQ_mask = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_kv, n_tokens);
+            lctx.inp_KQ_mask = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_kv,     GGML_PAD(n_tokens, GGML_KQ_MASK_PAD));
         } else {
-            lctx.inp_KQ_mask = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_tokens, n_tokens);
+            lctx.inp_KQ_mask = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_tokens, GGML_PAD(n_tokens, GGML_KQ_MASK_PAD));
         }
         cb(lctx.inp_KQ_mask, "KQ_mask", -1);
         ggml_set_input(lctx.inp_KQ_mask);
-        return lctx.inp_KQ_mask;
+        return ggml_cast(ctx0, lctx.inp_KQ_mask, GGML_TYPE_F16);
     }
 
     struct ggml_tensor * build_inp_KQ_pos() {
         lctx.inp_KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, n_kv);
         cb(lctx.inp_KQ_pos, "KQ_pos", -1);
         ggml_set_input(lctx.inp_KQ_pos);
-        return lctx.inp_KQ_pos;
+        return ggml_cast(ctx0, lctx.inp_KQ_pos, GGML_TYPE_F16);
     }
 
     struct ggml_tensor * build_inp_mean() {
@@ -9932,7 +9972,7 @@ static int llama_decode_internal(
                 // a heuristic, to avoid attending the full cache if it is not yet utilized
                 // after enough generations, the benefit from this heuristic disappears
                 // if we start defragmenting the cache, the benefit from this will be more important
-                kv_self.n = std::min(kv_self.size, std::max(32u, GGML_PAD(llama_kv_cache_cell_max(kv_self), 32)));
+                kv_self.n = std::min(kv_self.size, std::max(128u, GGML_PAD(llama_kv_cache_cell_max(kv_self), 128)));
                 //kv_self.n = llama_kv_cache_cell_max(kv_self);
             }
         }
@@ -13846,6 +13886,10 @@ struct llama_context * llama_new_context_with_model(
 
     const auto & hparams = model->hparams;
     auto       & cparams = ctx->cparams;
+
+    // the batch has to be at least GGML_KQ_MASK_PAD because we will be padding the KQ_mask
+    // this is required by GPU kernels in order to avoid out-of-bounds accesses (e.g. ggml_flash_attn_ext)
+    cparams.n_batch          = std::max((uint32_t) GGML_KQ_MASK_PAD, params.n_batch);
 
     cparams.n_seq_max        = std::max(1u, params.n_seq_max);
     cparams.n_threads        = params.n_threads;

@@ -173,6 +173,12 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_ARGSORT_F32_I32_ASC,
     GGML_METAL_KERNEL_TYPE_ARGSORT_F32_I32_DESC,
     GGML_METAL_KERNEL_TYPE_LEAKY_RELU_F32,
+    GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H64,
+    GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H80,
+    GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H96,
+    GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H112,
+    GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H128,
+    GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H256,
     GGML_METAL_KERNEL_TYPE_CPY_F32_F16,
     GGML_METAL_KERNEL_TYPE_CPY_F32_F32,
     GGML_METAL_KERNEL_TYPE_CPY_F32_Q8_0,
@@ -449,6 +455,9 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
             id<MTLFunction> metal_function = [metal_library newFunctionWithName:@"kernel_"#name]; \
             kernel->pipeline = [ctx->device newComputePipelineStateWithFunction:metal_function error:&error]; \
             [metal_function release]; \
+            GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
+                    (int) kernel->pipeline.maxTotalThreadsPerThreadgroup, \
+                    (int) kernel->pipeline.threadExecutionWidth); \
             if (error) { \
                 GGML_METAL_LOG_ERROR("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
                 [metal_library release]; \
@@ -604,6 +613,12 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_ARGSORT_F32_I32_ASC,       argsort_f32_i32_asc,    true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_ARGSORT_F32_I32_DESC,      argsort_f32_i32_desc,   true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_LEAKY_RELU_F32,            leaky_relu_f32,         true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H64,    flash_attn_ext_f16_h64,  true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H80,    flash_attn_ext_f16_h80,  true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H96,    flash_attn_ext_f16_h96,  true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H112,   flash_attn_ext_f16_h112, true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H128,   flash_attn_ext_f16_h128, true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H256,   flash_attn_ext_f16_h256, true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_CPY_F32_F16,               cpy_f32_f16,            true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_CPY_F32_F32,               cpy_f32_f32,            true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_CPY_F32_Q8_0,              cpy_f32_q8_0,           true);
@@ -734,6 +749,7 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
         case GGML_OP_TIMESTEP_EMBEDDING:
         case GGML_OP_ARGSORT:
         case GGML_OP_LEAKY_RELU:
+        case GGML_OP_FLASH_ATTN_EXT:
             return true;
         case GGML_OP_MUL_MAT:
         case GGML_OP_MUL_MAT_ID:
@@ -1277,6 +1293,8 @@ static enum ggml_status ggml_metal_graph_compute(
                     } break;
                 case GGML_OP_SOFT_MAX:
                     {
+                        GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F16);
+
                         int nth = 32; // SIMD width
 
                         id<MTLComputePipelineState> pipeline = nil;
@@ -2465,6 +2483,106 @@ static enum ggml_status ggml_metal_graph_compute(
 
                         [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                     } break;
+                case GGML_OP_FLASH_ATTN_EXT:
+                    {
+                        GGML_ASSERT(ne00 % 4 == 0);
+                        GGML_ASSERT(src0->type == GGML_TYPE_F32);
+
+                        struct ggml_tensor * src3 = gf->nodes[i]->src[3];
+
+                        GGML_ASSERT(ggml_are_same_shape(src1, src2));
+                        GGML_ASSERT(src3);
+
+                        size_t offs_src3 = 0;
+
+                        id<MTLBuffer> id_src3 = src3 ? ggml_metal_get_buffer(src3, &offs_src3) : nil;
+
+                        GGML_ASSERT(!src3 || src3->type == GGML_TYPE_F16);
+                        GGML_ASSERT(!src3 || src3->ne[1] >= GGML_PAD(src0->ne[1], 8) &&
+                                "the Flash-Attention Metal kernel requires the mask to be padded to 8 and at least n_queries big");
+
+                        const int64_t  ne30 = src3 ? src3->ne[0] : 0; GGML_UNUSED(ne30);
+                        const int64_t  ne31 = src3 ? src3->ne[1] : 0;
+                        const int64_t  ne32 = src3 ? src3->ne[2] : 0; GGML_UNUSED(ne32);
+                        const int64_t  ne33 = src3 ? src3->ne[3] : 0; GGML_UNUSED(ne33);
+
+                        const uint64_t nb30 = src3 ? src3->nb[0] : 0; GGML_UNUSED(nb30);
+                        const uint64_t nb31 = src3 ? src3->nb[1] : 0;
+                        const uint64_t nb32 = src3 ? src3->nb[2] : 0; GGML_UNUSED(nb32);
+                        const uint64_t nb33 = src3 ? src3->nb[3] : 0; GGML_UNUSED(nb33);
+
+                        const enum ggml_type src2t = src2 ? src2->type : GGML_TYPE_COUNT; GGML_UNUSED(src2t);
+
+                        float scale;
+                        memcpy(&scale, dst->op_params, sizeof(float));
+
+                        id<MTLComputePipelineState> pipeline = nil;
+
+                        switch (ne00) {
+                            case 64:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H64 ].pipeline; break;
+                            case 80:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H80 ].pipeline; break;
+                            case 96:  pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H96 ].pipeline; break;
+                            case 112: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H112].pipeline; break;
+                            case 128: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H128].pipeline; break;
+                            case 256: pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_FLASH_ATTN_EXT_F16_H256].pipeline; break;
+                            default:
+                                {
+                                    GGML_METAL_LOG_ERROR("unsupported size: %lld\n", ne00);
+                                    GGML_METAL_LOG_ERROR("add template specialization for this size\n");
+                                    GGML_ASSERT(false && "add template specialization for this size");
+                                }
+                        }
+
+                        // TODO: extend if necessary
+                        [encoder setComputePipelineState:pipeline];
+                        [encoder setBuffer:id_src0 offset:offs_src0        atIndex:0];
+                        [encoder setBuffer:id_src1 offset:offs_src1        atIndex:1];
+                        [encoder setBuffer:id_src2 offset:offs_src2        atIndex:2];
+                        [encoder setBuffer:id_src3 offset:offs_src3        atIndex:3];
+                        [encoder setBuffer:id_dst  offset:offs_dst         atIndex:4];
+                        [encoder setBytes:&ne00    length:sizeof( int64_t) atIndex:5];
+                        [encoder setBytes:&ne01    length:sizeof( int64_t) atIndex:6];
+                        [encoder setBytes:&ne02    length:sizeof( int64_t) atIndex:7];
+                        [encoder setBytes:&ne03    length:sizeof( int64_t) atIndex:8];
+                        [encoder setBytes:&nb00    length:sizeof(uint64_t) atIndex:9];
+                        [encoder setBytes:&nb01    length:sizeof(uint64_t) atIndex:10];
+                        [encoder setBytes:&nb02    length:sizeof(uint64_t) atIndex:11];
+                        [encoder setBytes:&nb03    length:sizeof(uint64_t) atIndex:12];
+                        [encoder setBytes:&ne10    length:sizeof( int64_t) atIndex:13];
+                        [encoder setBytes:&ne11    length:sizeof( int64_t) atIndex:14];
+                        [encoder setBytes:&ne12    length:sizeof( int64_t) atIndex:15];
+                        [encoder setBytes:&ne13    length:sizeof( int64_t) atIndex:16];
+                        [encoder setBytes:&nb10    length:sizeof(uint64_t) atIndex:17];
+                        [encoder setBytes:&nb11    length:sizeof(uint64_t) atIndex:18];
+                        [encoder setBytes:&nb12    length:sizeof(uint64_t) atIndex:19];
+                        [encoder setBytes:&nb13    length:sizeof(uint64_t) atIndex:20];
+                        [encoder setBytes:&ne31    length:sizeof( int64_t) atIndex:21];
+                        [encoder setBytes:&nb31    length:sizeof(uint64_t) atIndex:22];
+                        [encoder setBytes:&ne0     length:sizeof( int64_t) atIndex:23];
+                        [encoder setBytes:&ne1     length:sizeof( int64_t) atIndex:24];
+                        [encoder setBytes:&ne2     length:sizeof( int64_t) atIndex:25];
+                        [encoder setBytes:&ne3     length:sizeof( int64_t) atIndex:26];
+                        [encoder setBytes:&scale   length:sizeof(   float) atIndex:27];
+
+                        const int64_t nqptg = 8;  // queries per threadgroup    !! sync with kernel template arguments !!
+                        const int64_t ncpsg = 32; // cache values per simdgroup !! sync with kernel template arguments !!
+
+                        GGML_ASSERT(nqptg <= 32);
+                        GGML_ASSERT(nqptg  % 8  == 0);
+                        GGML_ASSERT(ncpsg  % 32 == 0);
+
+                        // simdgroups per threadgroup (a.k.a. warps)
+                        // for small batches use more simdgroups (needs more tests, to confirm if it's worth it)
+                        const int64_t nsg = ne01 <= nqptg ? MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32)) : 4;
+
+                        const size_t smem = nqptg*(ne00 + nsg*(ncpsg + nqptg))*(sizeof(float)/2);
+
+                        //printf("smem: %zu, max: %zu\n", smem, ctx->device.maxThreadgroupMemoryLength);
+                        GGML_ASSERT(smem <= ctx->device.maxThreadgroupMemoryLength);
+                        [encoder setThreadgroupMemoryLength:smem atIndex:0];
+
+                        [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nqptg - 1)/nqptg, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
+                    } break;
                 case GGML_OP_DUP:
                 case GGML_OP_CPY:
                 case GGML_OP_CONT:
@@ -2668,10 +2786,13 @@ GGML_CALL static const char * ggml_backend_metal_buffer_type_get_name(ggml_backe
     UNUSED(buft);
 }
 
-static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device) {
+static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t size_aligned) {
+#ifndef GGML_METAL_NDEBUG
 #if TARGET_OS_OSX || (TARGET_OS_IOS && __clang_major__ >= 15)
     if (@available(macOS 10.12, iOS 16.0, *)) {
-        GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
+        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, (%8.2f / %8.2f)",
+                __func__,
+                size_aligned / 1024.0 / 1024.0,
                 device.currentAllocatedSize / 1024.0 / 1024.0,
                 device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
 
@@ -2681,10 +2802,15 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device) {
             GGML_METAL_LOG_INFO("\n");
         }
     } else {
-        GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
+        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, (%8.2f)\n",
+                __func__,
+                size_aligned / 1024.0 / 1024.0,
+                device.currentAllocatedSize / 1024.0 / 1024.0);
     }
 #endif
+#endif
     UNUSED(device);
+    UNUSED(size_aligned);
 }
 
 GGML_CALL static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
@@ -2718,8 +2844,7 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buff
         return NULL;
     }
 
-    GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB", __func__, size_aligned / 1024.0 / 1024.0);
-    ggml_backend_metal_log_allocated_size(device);
+    ggml_backend_metal_log_allocated_size(device, size_aligned);
 
     return ggml_backend_buffer_init(buft, ggml_backend_metal_buffer_i, ctx, size);
 }
@@ -2806,7 +2931,7 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, 
             return false;
         }
 
-        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB", __func__, size_aligned / 1024.0 / 1024.0);
+        ggml_backend_metal_log_allocated_size(device, size_aligned);
 
         ++ctx->n_buffers;
     } else {
@@ -2829,7 +2954,8 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, 
                 return false;
             }
 
-            GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, offs = %12ld", __func__, size_step_aligned / 1024.0 / 1024.0, i);
+            ggml_backend_metal_log_allocated_size(device, size_step_aligned);
+
             if (i + size_step < size) {
                 GGML_METAL_LOG_INFO("\n");
             }
@@ -2837,8 +2963,6 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, 
             ++ctx->n_buffers;
         }
     }
-
-    ggml_backend_metal_log_allocated_size(device);
 
     return ggml_backend_buffer_init(ggml_backend_metal_buffer_type(), ggml_backend_metal_buffer_i, ctx, size);
 }
