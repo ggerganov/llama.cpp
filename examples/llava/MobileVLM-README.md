@@ -160,6 +160,7 @@ llama_print_timings:       total time =   28038.34 ms /   205 tokens
 ```
 #### llava-cli latest-version
 **input**
+
 Just the same as above.
 
 **output**(seems to be much slower)
@@ -181,6 +182,7 @@ llama_print_timings:       total time =  865441.76 ms /   204 tokens
 ### MobileVLM_V2-1.7B case
 #### llava-cli release-2005b
 **input**
+
 Just the same as above.
 
 **output**
@@ -287,6 +289,7 @@ llama_print_timings:       total time =    5990.25 ms /   202 tokens
 
 ### MobileVLM_V2-1.7B case
 **input**
+
 Just the same as above.
 
 **ouput**
@@ -341,6 +344,7 @@ llama_print_timings:       total time =    7987.23 ms /   209 tokens
 
 ### MobileVLM_V2-1.7B case
 **input**
+
 Just the same as above.
 
 **output**
