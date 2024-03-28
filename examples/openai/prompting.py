@@ -41,7 +41,7 @@ class ChatFormat:
         system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
         if system_message is not None:
             (i, m) = system_message
-            return messages[:i] + [Message(role="system", content=m.content + '\n' + system_prompt.content)] + messages[i+1:]
+            return messages[:i] + [Message(role="system", content=system_prompt.content + '\n' + m.content)] + messages[i+1:]
         else:
             return [system_prompt] + messages
 
@@ -63,8 +63,16 @@ class ChatFormat:
                     assert messages[i+1].role == 'user'
                     new_messages.append(Message(
                         role="user",
-                        content=f'[SYS]{messages[i].content}[/SYS]\n{messages[i+1].content}'))
+                        content=f'[SYS]{messages[i].content}[/SYS]\n{messages[i+1].content}'
+                    ))
                     i += 2
+                elif messages[i].role == 'assistant' and messages[i].tool_calls and messages[i].content:
+                    tc = '\n'.join(f'<tool_call>{json.dumps(tc.model_dump())}</tool_call>' for tc in messages[i].tool_calls)
+                    new_messages.append(Message(
+                        role="assistant",
+                        content=f'{messages[i].content}\n{tc}'
+                    ))
+                    i += 1
                 else:
                     new_messages.append(messages[i])
                     i += 1
@@ -72,13 +80,15 @@ class ChatFormat:
             messages = new_messages
         # print(f'messages={messages}')
         
-        return self.template.render(
+        result = self.template.render(
             messages=messages,
             eos_token=self.eos_token,
             bos_token='' if omit_bos else self.bos_token,
             raise_exception=raise_exception,
             add_generation_prompt=add_generation_prompt,
         )
+        sys.stderr.write(f'\n# RENDERED:\n\n{result}\n\n')
+        return result
 
 # While the API will be usable with a generic tools usage like OpenAI,
 # (see https://cookbook.openai.com/examples/how_to_call_functions_with_chat_models),
@@ -120,38 +130,29 @@ def make_tools_prompt(chat_format: ChatFormat, tools: list[Tool], indent=2) -> M
         return Message(
             role="system",
             content='\n'.join([
-                '''You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags.''',
+                # '''You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags.''',
                 '''You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools:''',
                 '''<tools>''',
-                *(json.dumps(tool.model_dump(), indent=indent) for tool in tools),
+                _tools_typescript_signatures(tools),
+                # _tools_schema_signatures(tools, indent=indent),
                 '''</tools>''',
                 '',
-                '''Use the following json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"}''',
-                '',
+                # '''Use the following json schema for each tool call you will make: {"properties": {"arguments": {"title": "Arguments", "type": "object"}, "name": {"title": "Name", "type": "string"}}, "required": ["arguments", "name"], "title": "FunctionCall", "type": "object"}''',
+                # '',
                 # '''For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:''',
                 '''To call each function, give its name and arguments within <tool_call></tool_call> XML tags as follows:''',
                 '''<tool_call>''',
-                '''{"arguments": <args-dict>, "name": <function-name>}''',
+                '''{"name": <function-name>, "arguments": <args-dict>}''',
                 '''</tool_call>''',
-                '''This is not hypothetical, you're not asked what you would do. If you need a tool called, just call it.''',
+                # '''This is not hypothetical, you're not asked what you would do. If you need a tool called, just call it with <tool_call>...</tool_call>.''',
             ])
         )
     
     elif chat_format.tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
-        ts_converter = SchemaToTypeScriptConverter()
-        
         return Message(
             role="system",
-            content='\n'.join([
-                '// Supported function definitions that should be called when necessary.'
-                'namespace functions {',
-                *[
-                    '// ' + tool.function.description.replace('\n', '\n// ') + '\n' + ''
-                    'type ' + tool.function.name + ' = (_: ' + ts_converter.visit(tool.function.parameters) + ") => any;\n"
-                    for tool in tools
-                ],
-                '} // namespace functions',
-            ])
+            content= '// Supported function definitions that should be called when necessary.\n' +
+                _tools_typescript_signatures(tools)
         )
     
     elif chat_format.tool_style == ToolsPromptStyle.TOOLS_HERMES_2_PRO:
@@ -170,6 +171,20 @@ def make_tools_prompt(chat_format: ChatFormat, tools: list[Tool], indent=2) -> M
     else:
         raise ValueError(f"Unsupported tool call style: {chat_format.tool_style}")
     
+def _tools_typescript_signatures(tools: list[Tool]) -> str:
+    ts_converter = SchemaToTypeScriptConverter()
+    return 'namespace functions {' + '\n'.join(
+        '// ' + tool.function.description.replace('\n', '\n// ') + '\n' + ''
+        'type ' + tool.function.name + ' = (_: ' + ts_converter.visit(tool.function.parameters) + ") => any;\n"
+        for tool in tools
+    ) + '} // namespace functions'
+
+def _tools_schema_signatures(tools: list[Tool], indent=None) -> str:
+    return '\n'.join(
+        json.dumps(tool.model_dump(), indent=indent)
+        for tool in tools
+    )
+
 @typechecked
 def _outputs_tool_call_tags(style: ToolsPromptStyle) -> bool:
     return style in (
@@ -198,6 +213,8 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
     planted_prompt = chat_format.render([user_msg, Message(role="assistant", content=delimiter)], add_generation_prompt=False).strip()
     assert planted_prompt.startswith(empty_prompt), f"Planted prompt does not start with empty prompt: {planted_prompt} vs {empty_prompt}"
     [prefix, suffix] = planted_prompt[len(empty_prompt):].split(delimiter)
+
+    allow_parallel_calls = False
 
     def strip_suffix(s: str) -> str:
         if s.endswith(suffix):
@@ -235,17 +252,19 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
 
             tool_call_rule = converter._add_rule(
                 'tool_call',
-                format_literal("<tool_call>") + " (" +
+                format_literal("<tool_call>") + " space (" +
                 ' | '.join(tool_rules) +
-                ") " + format_literal("</tool_call>"))
+                ")  space " + format_literal("</tool_call>"))# + ' space')
             
             # Ideally we'd want a negative lookahead of /<tool\\?_call>/, but it's just too hard to express in GBNF for now.
             # So we just over-constrain the content rule to not contain literals dangerously getting close to <tool_call>
-            content_rule = converter._add_rule('content', '[^<] | "<" [^t<]? | "<t" [^o<]?')
+            content_rule = converter._add_rule('content', '[^<] | "<" [^t<] | "<t" [^o<]')
             # content_rule = converter._add_rule('content', converter.not_literal('<tool_call>'))
             converter._add_rule(
                 'root',
-                f'{content_rule}* ({tool_call_rule}+ {content_rule}*)?')
+                # tool_call_rule)
+                f'{content_rule}* ({tool_call_rule}+ {content_rule}*)?' if allow_parallel_calls \
+                    else f'{content_rule}* {tool_call_rule}?')
           
             # # Constrain the output to be a non-tool-call message (constrained to a JSON schema or not)
             # # OR a tool-call message respecting the schema of any of the tools
@@ -285,7 +304,7 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
                                     id=gen_callid(),
                                     function=FunctionCall(**fc)))
                             
-                    content = '(...)'.join(content).strip()
+                    content = '\n'.join(content).strip()
                     return Message(role="assistant", content=content if content else None, tool_calls=tool_calls)
                             
                 # if '<tool_call>'.startswith(ls) or ls.startswith('<tool_call>'):
@@ -338,7 +357,8 @@ def make_grammar(chat_format: ChatFormat, tools: list[Tool], response_schema: Op
             converter._add_rule(
                 'root',
                 f'{content_without_start_rule}   {content_rule}*   ({tool_call_rule}+ {content_rule}*)? | '
-                f'{tool_call_without_start_rule} {tool_call_rule}* {content_rule}*')
+                f'{tool_call_without_start_rule} {tool_call_rule}* {content_rule}*' if allow_parallel_calls \
+                    else f'{content_without_start_rule}  {tool_call_rule}? | {tool_call_without_start_rule}')
 
             # converter._add_rule(
             #     "root", 

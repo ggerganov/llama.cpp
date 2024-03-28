@@ -59,8 +59,9 @@ def main(
     async def chat_completions(request: Request, chat_request: ChatCompletionRequest):
         headers = {
             "Content-Type": "application/json",
-            "Authorization": request.headers.get("Authorization"),
         }
+        if (auth := request.headers.get("Authorization")):
+            headers["Authorization"] = auth
 
         if chat_request.response_format is not None:
             assert chat_request.response_format.type == "json_object", f"Unsupported response format: {chat_request.response_format.type}"
@@ -75,18 +76,31 @@ def main(
         (grammar, parser) = make_grammar(chat_format, chat_request.tools, response_schema)
 
         # TODO: Test whether the template supports formatting tool_calls
-        sys.stderr.write(f'\n{grammar}\n\n')
 
         prompt = chat_format.render(messages, add_generation_prompt=True)
+        
+        sys.stderr.write(f'\n# PROMPT:\n\n{prompt}\n\n')
+        sys.stderr.write(f'\n# GRAMMAR:\n\n{grammar}\n\n')
+        
+        data = LlamaCppServerCompletionRequest(
+            **{
+                k: v
+                for k, v in chat_request.model_dump().items()
+                if k not in (
+                    "prompt",
+                    "tools",
+                    "messages",
+                    "response_format",
+                )
+            },
+            prompt=prompt,
+            grammar=grammar,
+        ).model_dump()
+        sys.stderr.write(json.dumps(data, indent=2) + "\n")
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{cpp_server_endpoint}/completions",
-                json=LlamaCppServerCompletionRequest(
-                    prompt=prompt,
-                    stream=chat_request.stream,
-                    n_predict=1000,
-                    grammar=grammar,
-                ).model_dump(),
+                json=data,
                 headers=headers,
                 timeout=None)
         
@@ -96,11 +110,11 @@ def main(
             return StreamingResponse(generate_chunks(response), media_type="text/event-stream")
         else:
             result = response.json()
+            sys.stderr.write("# RESULT:\n\n" + json.dumps(result, indent=2) + "\n\n")
             if 'content' not in result:
                 # print(json.dumps(result, indent=2))
                 return JSONResponse(result)
 
-            sys.stderr.write(json.dumps(result, indent=2) + "\n")
             # print(json.dumps(result.get('content'), indent=2))
             message = parser(result["content"])
             assert message is not None, f"Failed to parse response:\n{response.text}\n\n"

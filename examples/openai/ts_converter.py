@@ -14,12 +14,21 @@ class SchemaToTypeScriptConverter:
     # // where to get weather.
     # location: string,
     # }) => any;
+    def _desc_comment(self, schema: dict):
+        desc = schema.get("description", "").replace("\n", "\n// ") if 'description' in schema else None
+        return f'// {desc}\n' if desc else ''
+
     def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], additional_properties: Union[bool, Any]):
+        if additional_properties == True:
+            additional_properties = {}
+        elif additional_properties == False:
+            additional_properties = None
+
         return "{" + ', '.join([
-            f'{prop_name}{"" if prop_name in required else "?"}: {self.visit(prop_schema)}'
+            f'{self._desc_comment(prop_schema)}{prop_name}{"" if prop_name in required else "?"}: {self.visit(prop_schema)}'
             for prop_name, prop_schema in properties
         ] + (
-            [f"[key: string]: {self.visit(additional_properties)}"]
+            [f"{self._desc_comment(additional_properties) if additional_properties else ''}[key: string]: {self.visit(additional_properties)}"]
             if additional_properties is not None else []
         )) + "}"
     

@@ -1,5 +1,5 @@
 from typing import Any, Dict, Literal, Optional, Union
-from pydantic import BaseModel, Json
+from pydantic import BaseModel, Json, TypeAdapter
 
 class FunctionCall(BaseModel):
     name: str
@@ -31,10 +31,33 @@ class ResponseFormat(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str
     tools: Optional[list[Tool]] = None
-    messages: list[Message]
+    messages: list[Message] = None
+    prompt: Optional[str] = None
     response_format: Optional[ResponseFormat] = None
-    temperature: float = 1.0
+
     stream: bool = False
+    cache_prompt: Optional[bool] = None
+    n_predict: Optional[int] = None
+    top_k: Optional[int] = None
+    top_p: Optional[float] = None
+    min_p: Optional[float] = None
+    tfs_z: Optional[float] = None
+    typical_p: Optional[float] = None
+    temperature: float = 1.0
+    dynatemp_range: Optional[float] = None
+    dynatemp_exponent: Optional[float] = None
+    repeat_last_n: Optional[int] = None
+    repeat_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = None
+    presense_penalty: Optional[float] = None
+    mirostat: Optional[bool] = None
+    mirostat_tau: Optional[float] = None
+    mirostat_eta: Optional[float] = None
+    penalize_nl: Optional[bool] = None
+    n_keep: Optional[int] = None
+    seed: Optional[int] = None
+    n_probs: Optional[int] = None
+    min_keep: Optional[int] = None
 
 class Choice(BaseModel):
     index: int
