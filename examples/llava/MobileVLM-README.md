@@ -147,7 +147,7 @@ llama_print_timings:       total time =   34570.79 ms
 **output**
 ```sh
 encode_image_with_clip: image encoded in 18728.52 ms by CLIP (  130.06 ms per image patch)
-system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: 
+system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER:
 user_prompt: \nWhat's that? ASSISTANT:
 
  A group of llamas are standing in a green pasture.
@@ -168,7 +168,7 @@ Just the same as above.
 encode_image_with_clip: image embedding created: 144 tokens
 
 encode_image_with_clip: image encoded in 288268.88 ms by CLIP ( 2001.87 ms per image patch)
-system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: 
+system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER:
 user_prompt: \nWhat's that? ASSISTANT:
 
  It is a group of sheep standing together in a grass field.
@@ -188,7 +188,7 @@ Just the same as above.
 **output**
 ```sh
 encode_image_with_clip: image encoded in 20609.61 ms by CLIP (  143.12 ms per image patch)
-system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: 
+system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER:
 user_prompt: \nWhat's that? ASSISTANT:
 
  This image captures a lively scene of 20 llamas in motion on an expansive, grassy field. The llama is scattered across the landscape with some standing and others sitting down as if taking rest or observing their surroundings from different vantage points within this verdant setting.
@@ -256,7 +256,7 @@ llama_print_timings:       total time =    1365.47 ms /   243 tokens
 ```
 
 ## Running on Intel(R) Core(TM) i7-10750H
-### Operating system 
+### Operating system
 Ubuntu22.04
 ### compile
 ```sh
@@ -275,7 +275,7 @@ make -j32
 encode_image_with_clip: image embedding created: 144 tokens
 
 encode_image_with_clip: image encoded in  2730.94 ms by CLIP (   18.96 ms per image patch)
-system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: 
+system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER:
 user_prompt: \nWhat's that?ASSISTANT:
 
  A group of llamas are walking together in a field.
@@ -297,7 +297,7 @@ Just the same as above.
 encode_image_with_clip: image embedding created: 144 tokens
 
 encode_image_with_clip: image encoded in  3223.89 ms by CLIP (   22.39 ms per image patch)
-system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: 
+system_prompt: A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER:
 user_prompt: \nWhat's that?ASSISTANT:
 
  The image captures a tranquil scene in a park, where a group of approximately 20 llamas are gathered. The llamas, a mix of white and black, are standing in a line, their black and white patterns contrasting with the lush green grass of the park. The lamas are arranged in a line, suggesting a social order.
