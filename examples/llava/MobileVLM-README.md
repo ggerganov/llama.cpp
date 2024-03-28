@@ -134,7 +134,7 @@ llama_print_timings:       total time =   34570.79 ms
 
 ## Some result on Android with `Snapdragon 778G` chip
 ### MobileVLM-1.7B case
-#### llava-cli release-2005b
+#### llava-cli release-b2005
 **input**
 ```sh
 /data/local/tmp/llava-cli \
