@@ -7552,7 +7552,7 @@ vec_dot_iq4_nl_q8_1(const void *__restrict__ vbq,
         sumi2 = dpct::dp4a(v2, q8[l+4], sumi2);
     }
     
-    const float d = (float)bq->d * (bq8_1->ds);
+    const float d = (float)bq->d * bq8_1[ib32].ds[0];
     return d * (sumi1 + sumi2);
 }
 
