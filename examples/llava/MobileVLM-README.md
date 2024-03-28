@@ -288,6 +288,7 @@ llama_print_timings:       total time =    5990.25 ms /   202 tokens
 ### MobileVLM_V2-1.7B case
 **input**
 Just the same as above.
+
 **ouput**
 ```sh
 encode_image_with_clip: image embedding created: 144 tokens
