@@ -175,6 +175,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
 - [Msty](https://msty.app) (proprietary)
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
+- [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file)
 
 ---
 
