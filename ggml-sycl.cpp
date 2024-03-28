@@ -4581,6 +4581,8 @@ static void dequantize_block_iq1_s(const void * __restrict__ vx, dst_t * __restr
 
 }
 
+static const __dpct_inline__ int8_t kvalues_iq4nl[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
+
 template<typename dst_t>
 static void dequantize_block_iq4_nl(const void * __restrict__ vx, dst_t * __restrict__ yy,
                                      const sycl::nd_item<3> &item_ct1) {
@@ -7550,7 +7552,7 @@ vec_dot_iq4_nl_q8_1(const void *__restrict__ vbq,
         sumi2 = dpct::dp4a(v2, q8[l+4], sumi2);
     }
     
-    const float d = (float)bq->d * __low2float(bq8_1->ds);
+    const float d = (float)bq->d * (bq8_1->ds);
     return d * (sumi1 + sumi2);
 }
 
