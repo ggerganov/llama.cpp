@@ -20,13 +20,7 @@ static void print_usage_information(const char * argv0, FILE * stream) {
     fprintf(stream, "and prints the resulting tokens to standard output.\n\n");
     fprintf(stream, "It needs a model file, a prompt, and optionally other flags\n");
     fprintf(stream, "to control the behavior of the tokenizer.\n\n");
-    fprintf(stream, "Invoke '%s' like this:\n", argv0);
-    fprintf(stream, "\n");
-    fprintf(stream, "    %s MODEL_FNAME PROMPT [--ids]\n" , argv0);
-    fprintf(stream, "\n");
-    fprintf(stream, "  or this:\n");
-    fprintf(stream, "\n");
-    fprintf(stream, "    %s [options], where options are:\n", argv0);
+    fprintf(stream, "    The possible options are:\n");
     fprintf(stream, "\n");
     fprintf(stream, "    -h, --help                           print this help and exit\n");
     fprintf(stream, "    -m MODEL_PATH, --model MODEL_PATH    path to model.\n");
@@ -213,22 +207,6 @@ int main(int raw_argc, char ** raw_argv) {
     bool prompt_set = false;
     bool stdin_set = false;
 
-    // If we see an unrecognized argument, we set
-    // demand_old_style_arguments to true. It signifies we are expecting
-    // the "old style arguments", i.e. simple positional arguments for
-    // argv[1] argv[2] and possibly argv[3]:
-    //
-    // tokenize MODEL_FNAME PROMPT [--ids]
-    //
-    // As opposed to "new style arguments" which uses --model, --prompt,
-    // etc. nice flags.
-    //
-    // We use 'unknown_arg' to keep track of the first argument that we
-    // didn't recognize so we can complain to the user if we can't
-    // recognize arguments even using the old style.
-    bool demand_old_style_arguments = false;
-    const char * unknown_arg = NULL;
-
     int iarg = 1;
     for (; iarg < argc; ++iarg) {
         std::string arg{argv[iarg]};
@@ -273,40 +251,14 @@ int main(int raw_argc, char ** raw_argv) {
             disable_logging = true;
         }
         else {
-            demand_old_style_arguments = true;
-            if (unknown_arg == NULL) {
-                unknown_arg = argv[iarg].c_str();
-            }
+            fprintf(stderr, "Error: unknown option '%s'\n", argv[iarg].c_str());
+            return 1;
         }
     }
 
     //////
     // Sanity check the command line arguments.
     //////
-
-    // Old style arguments? (i.e. tokenizer MODEL_FNAME PROMPT [--ids])
-    if ((argc == 3 || argc == 4) &&
-        !prompt_set &&
-        !prompt_path_set &&
-        !model_path_set &&
-        !stdin_set) {
-        model_path = argv[1].c_str();
-        prompt_arg = argv[2].c_str();
-        if (argc == 4) {
-            if (argv[3] == "--ids") {
-                printing_ids = true;
-            } else {
-                fprintf(stderr, "Error: unknown option '%s'\n", argv[3].c_str());
-                return 1;
-            }
-        }
-        model_path_set = true;
-        prompt_set = true;
-    } else if (demand_old_style_arguments) {
-        GGML_ASSERT(unknown_arg);
-        fprintf(stderr, "Unknown argument: '%s'\n", unknown_arg);
-        return 1;
-    }
 
     // Check that we have the required stuff set.
     if (model_path_set && model_path == NULL) {
