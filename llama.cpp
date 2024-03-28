@@ -14329,6 +14329,8 @@ int32_t llama_model_apply_lora_from_file(const struct llama_model * model, const
 }
 
 static bool llama_control_vector_init(struct llama_control_vector & cvec, const llama_model & model) {
+    auto start = ggml_time_ms();
+    fprintf(stderr, "control vector init...\n");
     GGML_ASSERT(cvec.tensors.empty());
     GGML_ASSERT(cvec.ctxs.empty());
     GGML_ASSERT(cvec.bufs.empty());
@@ -14351,6 +14353,9 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
         ggml_context * ctx = ggml_init(params);
         if (!ctx) {
             LLAMA_LOG_ERROR("%s: failed to allocate context for control vector\n", __func__);
+            auto end = ggml_time_ms();
+            fprintf(stderr, "control vector init took %ums\n", end - start);
+            return true;
             return 1;
         }
         ctx_map[it.first] = ctx;
@@ -14371,6 +14376,9 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
         if (!buf) {
             LLAMA_LOG_ERROR("%s: failed to allocate buffer for control vector\n", __func__);
+            auto end = ggml_time_ms();
+            fprintf(stderr, "control vector init took %ums\n", end - start);
+            return true;
             return false;
         }
         ggml_backend_buffer_clear(buf, 0);
@@ -14378,10 +14386,14 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
         cvec.bufs.push_back(buf);
     }
 
+    auto end = ggml_time_ms();
+    fprintf(stderr, "control vector init took %ums\n", end - start);
     return true;
 }
 
 int32_t llama_control_vector_apply(struct llama_context * lctx, const float * data, size_t len, int32_t n_embd, int32_t il_start, int32_t il_end) {
+    auto start = ggml_time_ms();
+    printf("control vector apply...\n");
     const llama_model & model = lctx->model;
     llama_control_vector & cvec = lctx->cvec;
 
@@ -14389,6 +14401,8 @@ int32_t llama_control_vector_apply(struct llama_context * lctx, const float * da
         // disable the current control vector (but leave allocated for later)
         cvec.layer_start = -1;
         cvec.layer_end   = -1;
+        auto end = ggml_time_ms();
+        printf("control vector apply took %ums\n", end - start);
         return 0;
     }
 
@@ -14399,6 +14413,7 @@ int32_t llama_control_vector_apply(struct llama_context * lctx, const float * da
 
     if (cvec.tensors.empty()) {
         if (!llama_control_vector_init(cvec, model)) {
+            LLAMA_LOG_ERROR("%s: control vector init failed\n", __func__);
             return 1;
         }
     }
@@ -14415,6 +14430,8 @@ int32_t llama_control_vector_apply(struct llama_context * lctx, const float * da
         }
     }
 
+    auto end = ggml_time_ms();
+    printf("control vector apply took %ums\n", end - start);
     return 0;
 }
 
