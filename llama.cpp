@@ -3415,8 +3415,9 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_IQ2_M:  return "IQ2_M - 2.7 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ3_XS: return "IQ3_XS - 3.3 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ3_XXS:return "IQ3_XXS - 3.0625 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ1_S  :return "IQ1_S - 1.5625 bpw";
-        case LLAMA_FTYPE_MOSTLY_IQ1_M  :return "IQ1_M - 1.75 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ1_S:  return "IQ1_S - 1.5625 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ1_XS: return "IQ1_S mix - 1.6-1.7 bpw";
+        case LLAMA_FTYPE_MOSTLY_IQ1_M:  return "IQ1_M - 1.75 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ4_NL: return "IQ4_NL - 4.5 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ4_XS: return "IQ4_XS - 4.25 bpw";
         case LLAMA_FTYPE_MOSTLY_IQ3_S:  return "IQ3_S - 3.4375 bpw";
@@ -12764,6 +12765,10 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             if (arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
                 new_type = GGML_TYPE_Q8_0;
             }
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS) {
+                if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_Q5_K;
+                else new_type = GGML_TYPE_Q4_K;
+            }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
                      ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M   ||
                      ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
@@ -12781,12 +12786,48 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                 ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
                 new_type = GGML_TYPE_Q2_K;
             }
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS) {
+                if (qs.model.hparams.n_gqa() == 4 || qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_Q2_K;
+                else new_type = GGML_TYPE_IQ2_S;
+            }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M) {
                 new_type = GGML_TYPE_IQ3_S;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
                 new_type = GGML_TYPE_IQ3_S;
             }
+        }
+    } else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS) {
+        if (name.find("attn_q.weight") != std::string::npos) {
+            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_IQ2_S;
+            else if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_IQ2_XS;
+            else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ2_XXS;
+        }
+        if (name.find("attn_k.weight") != std::string::npos) {
+            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_Q4_K;
+            else if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_IQ3_S;
+            else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_XXS;
+            else if (qs.model.hparams.n_gqa() >= 8) new_type = GGML_TYPE_IQ2_S;
+            else if (qs.model.hparams.n_gqa() >= 4) new_type = GGML_TYPE_IQ2_XS;
+            else if (qs.model.hparams.n_gqa() >= 2) new_type = GGML_TYPE_IQ2_XXS;
+        }
+        else if (name.find("attn_v.weight") != std::string::npos) {
+            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_Q5_K;
+            else if (qs.model.hparams.n_gqa() >= 8 || qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q4_K;
+            else if (qs.model.hparams.n_gqa() >= 4 || qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_S;
+            else if (qs.model.hparams.n_gqa() >= 2) new_type = GGML_TYPE_IQ3_XXS;
+            else new_type = GGML_TYPE_Q2_K;
+            ++qs.i_attention_wv;
+        }
+        else if (name.find("attn_output.weight") != std::string::npos) {
+            if (qs.model.hparams.n_expert >= 8) new_type = GGML_TYPE_Q4_K;
+            else if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_IQ3_S;
+            else if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_IQ3_XXS;
+            else new_type = GGML_TYPE_IQ2_XXS;
+        }
+        else if (name.find("attn_qkv.weight") != std::string::npos) {
+            if (qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_Q4_K;
+            else new_type = GGML_TYPE_Q2_K;
         }
     } else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
                ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M    || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
@@ -13076,6 +13117,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_IQ2_M:   default_type = GGML_TYPE_IQ2_S;   break;
         case LLAMA_FTYPE_MOSTLY_IQ3_XXS: default_type = GGML_TYPE_IQ3_XXS; break;
         case LLAMA_FTYPE_MOSTLY_IQ1_S:   default_type = GGML_TYPE_IQ1_S;   break;
+        case LLAMA_FTYPE_MOSTLY_IQ1_XS:  default_type = GGML_TYPE_IQ1_S;   break;
         case LLAMA_FTYPE_MOSTLY_IQ1_M:   default_type = GGML_TYPE_IQ1_M;   break;
         case LLAMA_FTYPE_MOSTLY_IQ4_NL:  default_type = GGML_TYPE_IQ4_NL;  break;
         case LLAMA_FTYPE_MOSTLY_IQ4_XS:  default_type = GGML_TYPE_IQ4_XS;  break;
@@ -13288,8 +13330,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             }
             if ((new_type == GGML_TYPE_IQ2_XXS ||
                  new_type == GGML_TYPE_IQ2_XS  ||
-                 new_type == GGML_TYPE_IQ2_S   ||
                  new_type == GGML_TYPE_IQ1_S   ||
+                (new_type == GGML_TYPE_IQ2_S && strcmp(tensor->name, "token_embd.weight"))  ||
                 (new_type == GGML_TYPE_IQ1_M && strcmp(tensor->name, "token_embd.weight") && strcmp(tensor->name, "output.weight"))  ||
                 (new_type == GGML_TYPE_Q2_K && params->ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && strcmp(tensor->name, "token_embd.weight") != 0)) && !imatrix) {
                 LLAMA_LOG_ERROR("\n\n============================================================\n");
