@@ -3314,11 +3314,8 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
-    const auto handle_slot_save = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res) {
-        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-
+    const auto handle_slots_save = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
-        int id_slot = request_data["id_slot"];
         std::string filename = request_data["filename"];
         if (filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos || filename.find("..") != std::string::npos) {
             res_error(res, "Invalid filename");
@@ -3347,11 +3344,8 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_slot_restore = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res) {
-        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-
+    const auto handle_slots_restore = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
-        int id_slot = request_data["id_slot"];
         std::string filename = request_data["filename"];
         if (filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos || filename.find("..") != std::string::npos) {
             res_error(res, "Invalid filename");
@@ -3380,12 +3374,7 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_slot_erase = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
-        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-
-        json request_data = json::parse(req.body);
-        int id_slot = request_data["id_slot"];
-
+    const auto handle_slots_erase = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res, int id_slot) {
         server_task task;
         task.type = SERVER_TASK_TYPE_SLOT_ERASE;
         task.data = {
@@ -3402,6 +3391,32 @@ int main(int argc, char ** argv) {
             res_error(res, result.data);
         } else {
             res.set_content(result.data, "application/json");
+        }
+    };
+
+    const auto handle_slots_action = [&ctx_server, &res_error, &sparams, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        std::string id_slot_str = req.path_params.at("id_slot");
+        int id_slot;
+
+        try {
+            id_slot = std::stoi(id_slot_str);
+        } catch (const std::exception &) {
+            res_error(res, "Invalid slot ID");
+            return;
+        }
+
+        std::string action = req.get_param_value("action");
+
+        if (action == "save") {
+            handle_slots_save(req, res, id_slot);
+        } else if (action == "restore") {
+            handle_slots_restore(req, res, id_slot);
+        } else if (action == "erase") {
+            handle_slots_erase(req, res, id_slot);
+        } else {
+            res_error(res, "Invalid action");
         }
     };
 
@@ -3769,9 +3784,7 @@ int main(int argc, char ** argv) {
     svr->Post("/detokenize",          handle_detokenize);
     if (!sparams.slot_save_path.empty()) {
         // only enable slot endpoints if slot_save_path is set
-        svr->Post("/slot/save", handle_slot_save);
-        svr->Post("/slot/restore", handle_slot_restore);
-        svr->Post("/slot/erase", handle_slot_erase);
+        svr->Post("/slots/:id_slot",  handle_slots_action);
     }
 
     //
