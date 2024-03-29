@@ -10989,7 +10989,7 @@ static void ggml_compute_forward_mul_mat_id(
 
     // row groups
     const int id   = ggml_get_op_params_i32(dst, 0);
-    const int n_as = src0->ne[2]; //ggml_get_op_params_i32(dst, 1);
+    const int n_as = src0->ne[2];
 
     char * wdata_src1_end = (src1->type == vec_dot_type) ?
             (char *) params->wdata :

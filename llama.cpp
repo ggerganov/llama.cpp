@@ -1868,10 +1868,6 @@ struct llama_layer {
     struct ggml_tensor * ffn_down_exps;//[LLAMA_MAX_EXPERTS];
     struct ggml_tensor * ffn_up_exps  ;//[LLAMA_MAX_EXPERTS];
 
-    struct ggml_tensor * ffn_gate_exp[LLAMA_MAX_EXPERTS];
-    struct ggml_tensor * ffn_down_exp[LLAMA_MAX_EXPERTS];
-    struct ggml_tensor * ffn_up_exp  [LLAMA_MAX_EXPERTS];
-
     // ff bias
     struct ggml_tensor * ffn_down_b; // b2
     struct ggml_tensor * ffn_up_b;   // b3
@@ -4477,21 +4473,16 @@ static bool llm_load_tensors(
 
                             // MoE branch
                             for (uint32_t x = 0; x < hparams.n_expert; ++x) {
-                                // hack
                                 // individual tensors as views
-                                layer.ffn_gate_exp[x] = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
-                                layer.ffn_down_exp[x] = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
-                                layer.ffn_up_exp[x]   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1], layer.ffn_up_exps->nb[2]*x);
+                                ggml_tensor * ffn_gate_exp = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
+                                ggml_tensor * ffn_down_exp = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
+                                ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1], layer.ffn_up_exps->nb[2]*x);
 
-                                ggml_set_name(layer.ffn_gate_exp[x], tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
-                                ggml_set_name(layer.ffn_down_exp[x], tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
-                                ggml_set_name(layer.ffn_up_exp[x],   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
+                                ggml_set_name(ffn_gate_exp, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
+                                ggml_set_name(ffn_down_exp, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
+                                ggml_set_name(ffn_up_exp,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
 
                                 ml.n_created += 3; // hack
-
-                                //layer.ffn_gate_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), {n_embd,   n_ff});
-                                //layer.ffn_down_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), {  n_ff, n_embd});
-                                //layer.ffn_up_exp[x]   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), {n_embd,   n_ff});
                             }
                         }
                     }
