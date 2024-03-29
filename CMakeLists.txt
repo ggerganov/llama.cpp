@@ -254,15 +254,14 @@ if (LLAMA_METAL)
         endif()
 
         # Append macOS metal versioning flags
-        if(LLAMA_METAL_MACOSX_VERSION_MIN)
+        if (LLAMA_METAL_MACOSX_VERSION_MIN)
             message(STATUS "Adding -mmacosx-version-min=${LLAMA_METAL_MACOSX_VERSION_MIN} flag to metal compilation")
             list(APPEND XC_FLAGS -mmacosx-version-min=${LLAMA_METAL_MACOSX_VERSION_MIN})
         endif()
-        if(LLAMA_METAL_STD)
+        if (LLAMA_METAL_STD)
             message(STATUS "Adding -std=${LLAMA_METAL_STD} flag to metal compilation")
             list(APPEND XC_FLAGS -std=${LLAMA_METAL_STD})
         endif()
-
 
         add_custom_command(
             OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
