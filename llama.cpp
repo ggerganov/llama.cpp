@@ -1864,6 +1864,10 @@ struct llama_layer {
 
     // ff MoE
     struct ggml_tensor * ffn_gate_inp;
+    struct ggml_tensor * ffn_gate_exps;//[LLAMA_MAX_EXPERTS];
+    struct ggml_tensor * ffn_down_exps;//[LLAMA_MAX_EXPERTS];
+    struct ggml_tensor * ffn_up_exps  ;//[LLAMA_MAX_EXPERTS];
+
     struct ggml_tensor * ffn_gate_exp[LLAMA_MAX_EXPERTS];
     struct ggml_tensor * ffn_down_exp[LLAMA_MAX_EXPERTS];
     struct ggml_tensor * ffn_up_exp  [LLAMA_MAX_EXPERTS];
@@ -3170,7 +3174,7 @@ struct llama_model_loader {
                 return weight;
             }
         }
-        throw std::runtime_error(format("tensor %s not found", name));
+        throw std::runtime_error(format("tensor '%s' not found", name));
     }
 
     struct ggml_tensor * get_tensor_meta(const char * name) const {
@@ -3260,6 +3264,10 @@ struct llama_model_loader {
         *last  = 0;
         *addr = mapping->addr;
         for (ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor; tensor = ggml_get_next_tensor(ctx, tensor)) {
+            // hack to skip moe merged tensor
+            if (strlen(ggml_get_name(tensor)) == 0) {
+                continue;
+            }
             const auto & w = get_weights(ggml_get_name(tensor));
             if (w.idx != idx) {
                 continue;
@@ -3304,6 +3312,11 @@ struct llama_model_loader {
 
         std::vector<no_init<uint8_t>> read_buf;
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
+            // hack to skip moe merged tensor
+            if (strlen(ggml_get_name(cur)) == 0) {
+                continue;
+            }
+
             if (progress_callback) {
                 if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
                     return false;
@@ -4358,6 +4371,10 @@ static bool llm_load_tensors(
 
     // create one context per buffer type
     size_t ctx_size = ggml_tensor_overhead()*(ml.n_tensors + 1); // +1 for models where tok_embd is duplicated as output
+
+    // hack for moe merged tensors
+    ctx_size += ggml_tensor_overhead()*hparams.n_expert*n_layer;
+
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
     for (auto & it : buft_layer_count) {
         struct ggml_init_params params = {
@@ -4451,11 +4468,30 @@ static bool llm_load_tensors(
                             GGML_ASSERT(hparams.n_expert      > 0);
                             GGML_ASSERT(hparams.n_expert_used > 0);
 
+                            // hack to merge tensors, need to clean this up
+                            // merged tensors
+                            ggml_type type = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
+                            layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type, n_embd,   n_ff, hparams.n_expert);
+                            layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type,   n_ff, n_embd, hparams.n_expert);
+                            layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type, n_embd,   n_ff, hparams.n_expert);
+
                             // MoE branch
                             for (uint32_t x = 0; x < hparams.n_expert; ++x) {
-                                layer.ffn_gate_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), {n_embd,   n_ff});
-                                layer.ffn_down_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), {  n_ff, n_embd});
-                                layer.ffn_up_exp[x]   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), {n_embd,   n_ff});
+                                // hack
+                                // individual tensors as views
+                                layer.ffn_gate_exp[x] = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
+                                layer.ffn_down_exp[x] = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
+                                layer.ffn_up_exp[x]   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1], layer.ffn_up_exps->nb[2]*x);
+
+                                ggml_set_name(layer.ffn_gate_exp[x], tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
+                                ggml_set_name(layer.ffn_down_exp[x], tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
+                                ggml_set_name(layer.ffn_up_exp[x],   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
+
+                                ml.n_created += 3; // hack
+
+                                //layer.ffn_gate_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), {n_embd,   n_ff});
+                                //layer.ffn_down_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), {  n_ff, n_embd});
+                                //layer.ffn_up_exp[x]   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), {n_embd,   n_ff});
                             }
                         }
                     }
@@ -4500,9 +4536,10 @@ static bool llm_load_tensors(
 
                         // MoE branch
                         for (uint32_t x = 0; x < hparams.n_expert; ++x) {
-                            layer.ffn_gate_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), {n_embd,   n_ff});
-                            layer.ffn_down_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), {  n_ff, n_embd});
-                            layer.ffn_up_exp[x]   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), {n_embd,   n_ff});
+                            GGML_ASSERT(!"not implemented");
+                            //layer.ffn_gate_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), {n_embd,   n_ff});
+                            //layer.ffn_down_exp[x] = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), {  n_ff, n_embd});
+                            //layer.ffn_up_exp[x]   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), {n_embd,   n_ff});
                         }
 
                         layer.layer_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "weight", i), {n_embd});
@@ -6284,10 +6321,10 @@ struct llm_build_context {
                 for (int i = 0; i < n_expert_used; ++i) {
                     ggml_tensor * cur_expert;
 
-                    ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exp, n_expert, selected_experts, i, cur);
+                    ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, i, cur);
                     cb(cur_up, "ffn_moe_up", il);
 
-                    ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exp, n_expert, selected_experts, i, cur);
+                    ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
                     cb(cur_gate, "ffn_moe_gate", il);
 
                     cur_gate = ggml_silu(ctx0, cur_gate);
@@ -6296,7 +6333,7 @@ struct llm_build_context {
                     cur_expert = ggml_mul(ctx0, cur_up, cur_gate); // [n_tokens, n_embd]
                     cb(cur_expert, "ffn_moe_gate_par", il);
 
-                    cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exp, n_expert, selected_experts, i, cur_expert); // [n_tokens, n_embd]
+                    cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, i, cur_expert); // [n_tokens, n_embd]
                     cb(cur_expert, "ffn_moe_down", il);
 
                     cur_expert = ggml_mul(ctx0, cur_expert,
@@ -6818,10 +6855,10 @@ struct llm_build_context {
             for (int i = 0; i < n_expert_used; ++i) {
                 ggml_tensor * cur_expert;
 
-                ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exp, n_expert, selected_experts, i, cur);
+                ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, i, cur);
                 cb(cur_up, "ffn_moe_up", il);
 
-                ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exp, n_expert, selected_experts, i, cur);
+                ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
                 cb(cur_gate, "ffn_moe_gate", il);
 
                 //GeLU
@@ -6831,7 +6868,7 @@ struct llm_build_context {
                 cur_expert = ggml_mul(ctx0, cur_up, cur_gate); // [n_tokens, n_embd]
                 cb(cur_expert, "ffn_moe_gate_par", il);
 
-                cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exp, n_expert, selected_experts, i, cur_expert); // [n_tokens, n_embd]
+                cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, i, cur_expert); // [n_tokens, n_embd]
                 cb(cur_expert, "ffn_moe_down", il);
 
                 cur_expert = ggml_mul(ctx0, cur_expert,
