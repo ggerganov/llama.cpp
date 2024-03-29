@@ -162,6 +162,10 @@ class ChatTemplate(BaseModel):
                         sys.stderr.write(f'Unexpected message role: {message.role}\n')
                         current_content.append(f'[ROLE={messages[i].role}]{messages[i].content}[/ROLE]')
 
+                current_content.extend(
+                    f'<tool_call>{json.dumps(tc.model_dump())}</tool_call>'
+                    for tc in (message.tool_calls or [])
+                )
             if current_content:
                 flush()
 
