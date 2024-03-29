@@ -646,16 +646,18 @@ extern "C" {
                           size_t   n_token_count),
         "use llama_state_save_file instead");
 
+    // Get the exact size needed to copy the KV cache of a single sequence
     LLAMA_API size_t llama_state_seq_get_size(
             struct llama_context * ctx,
                     llama_seq_id   seq_id);
 
+    // Copy the KV cache of a single sequence into the specified buffer
     LLAMA_API size_t llama_state_seq_get_data(
             struct llama_context * ctx,
                          uint8_t * dst,
                     llama_seq_id   seq_id);
 
-    // Copy the sequence data (originally copied with `llama_state_seq_get_data`) into a sequence.
+    // Copy the sequence data (originally copied with `llama_state_seq_get_data`) into the specified sequence
     // Returns:
     //  - Positive: Ok
     //  - Zero: Failed to load
