@@ -128,12 +128,15 @@ def main(
     max_iterations: Optional[int] = 10,
     std_tools: Optional[bool] = False,
     auth: Optional[str] = None,
+    allow_parallel_calls: Optional[bool] = False,
     verbose: bool = False,
 
     model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
     endpoint: Optional[str] = None,
     context_length: Optional[int] = None,
     # endpoint: str = 'http://localhost:8080/v1/chat/completions',
+
+    greedy: Optional[bool] = True,
 
     n_predict: Optional[int] = 1000,
     top_k: Optional[int] = None,
@@ -157,6 +160,10 @@ def main(
     n_probs: Optional[int] = None,
     min_keep: Optional[int] = None,
 ):
+    if greedy:
+        top_k = 1
+        top_p = 0.0
+
     if not endpoint:
         server_port = 8080
         server_host = 'localhost'
@@ -167,9 +174,10 @@ def main(
             "python", "-m", "examples.openai.server",
             "--model", model,
             *(['--verbose'] if verbose else []),
-            *([f'--context_length={context_length}'] if context_length else []),
+            *(['--allow-parallel-calls'] if allow_parallel_calls else []),
+            *(['--context-length={context_length}'] if context_length else []),
+            *([])
         ]
-        print(cmd)
         server_process = subprocess.Popen(cmd, stdout=sys.stderr)
         atexit.register(server_process.kill)
         sleep(5)

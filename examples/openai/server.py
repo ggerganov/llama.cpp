@@ -31,6 +31,7 @@ def main(
     # model_url: Annotated[Optional[str], typer.Option("--model-url", "-mu")] = None,
     host: str = "localhost",
     port: int = 8080,
+    allow_parallel_calls: Optional[bool] = False,
     auth: Optional[str] = None,
     verbose: bool = False,
     context_length: Optional[int] = None,
@@ -61,14 +62,15 @@ def main(
 
         if verbose:
             sys.stderr.write(f"# Starting C++ server with model {model} on {server_host}:{server_port}\n")
-        server_process = subprocess.Popen([
+        cmd = [
             "./server", "-m", model,
             "--host", server_host, "--port", f'{server_port}',
             # TODO: pass these from JSON / BaseSettings?
             '-ctk', 'q4_0', '-ctv', 'f16',
             "-c", f"{context_length}",
             *([] if verbose else ["--log-disable"]),
-        ], stdout=sys.stderr)
+        ]
+        server_process = subprocess.Popen(cmd, stdout=sys.stderr)
         atexit.register(server_process.kill)
         endpoint = f"http://{server_host}:{server_port}/completions"
 
@@ -88,7 +90,10 @@ def main(
         else:
             response_schema = None
 
-        chat_handler = get_chat_handler(ChatHandlerArgs(chat_template=chat_template, response_schema=response_schema, tools=chat_request.tools))
+        chat_handler = get_chat_handler(
+            ChatHandlerArgs(chat_template=chat_template, response_schema=response_schema, tools=chat_request.tools),
+            allow_parallel_calls=allow_parallel_calls
+        )
         
         messages = chat_request.messages
         if chat_handler.output_format_prompt:

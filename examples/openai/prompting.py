@@ -320,8 +320,8 @@ class TemplatedToolsChatHandler(ToolCallTagsChatHandler):
         )
 
 class Hermes2ProToolsChatHandler(ToolCallTagsChatHandler):
-    def __init__(self, args: ChatHandlerArgs):
-        super().__init__(args, escapes_underscores=False, allow_parallel_calls=False)
+    def __init__(self, args: ChatHandlerArgs, allow_parallel_calls: bool):
+        super().__init__(args, escapes_underscores=False, allow_parallel_calls=allow_parallel_calls)
 
         # Hackily import https://github.com/NousResearch/Hermes-Function-Calling
         path = str(Path(__file__).parent / "hermes_function_calling")
@@ -433,7 +433,7 @@ class FunctionaryToolsChatHandler(ChatHandler):
             content = '\n'.join(text_content).strip()
             return Message(role="assistant", content=content if content else None, tool_calls=tool_calls if tool_calls else None)
 
-def _make_bespoke_schema(response_schema, tool_call_schema, allow_parallel_calls=False):
+def _make_bespoke_schema(response_schema, tool_call_schema, allow_parallel_calls):
     return {
         "type": "object",
         "properties": {
@@ -474,7 +474,7 @@ def _make_bespoke_schema(response_schema, tool_call_schema, allow_parallel_calls
     }
 
 class BespokeToolsChatHandler(ChatHandler):
-    def __init__(self, args: ChatHandlerArgs):
+    def __init__(self, args: ChatHandlerArgs, allow_parallel_calls: bool):
         super().__init__(args)
         
         # args.response_schema = args.response_schema or {}
@@ -496,7 +496,8 @@ class BespokeToolsChatHandler(ChatHandler):
                         }
                         for tool in self.args.tools
                     ]
-                }
+                },
+                allow_parallel_calls=allow_parallel_calls,
             ),
             '',
         )
@@ -523,7 +524,8 @@ class BespokeToolsChatHandler(ChatHandler):
                                 }
                             },
                             "required": ["name", "arguments"]
-                        }
+                        },
+                        allow_parallel_calls=allow_parallel_calls,
                     )
                 ),
             ])
@@ -589,7 +591,7 @@ def get_chat_handler(args: ChatHandlerArgs, allow_parallel_calls=False) -> ChatH
     elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_MISTRAL:
         return TemplatedToolsChatHandler(args, _LONG_TEMPLATE, escapes_underscores=True, allow_parallel_calls=allow_parallel_calls)
     elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_BESPOKE:
-        return BespokeToolsChatHandler(args)
+        return BespokeToolsChatHandler(args, allow_parallel_calls=allow_parallel_calls)
     elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_HERMES_2_PRO:
         return Hermes2ProToolsChatHandler(args)
     else:

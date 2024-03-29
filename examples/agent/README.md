@@ -157,6 +157,8 @@ REQUIREMENTS_FILE=<( cat examples/agents/hermes_function_calling/requirements.tx
 
 ## TODO
 
+- Wait for spawned servers to be heathly
+
 - Add model URL / HF loading support
 
 - Add Embedding endpoint + storage / retrieval tools (Faiss? ScaNN?), or spontaneous RAG
