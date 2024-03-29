@@ -11049,8 +11049,7 @@ static void ggml_compute_forward_mul_mat_id(
             continue;
         }
 
-        //const struct ggml_tensor * src0_cur = dst->src[cur_a + 2];
-        size_t src0_offset = src0->nb[2]*cur_a;
+        size_t src0_offset = cur_a*src0->nb[2];
 
         const void * wdata    = (src1->type == vec_dot_type) ? src1->data : params->wdata;
         const size_t row_size = ggml_row_size(vec_dot_type, ne10);
