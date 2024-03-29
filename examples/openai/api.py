@@ -4,7 +4,7 @@ from pydantic import BaseModel, Json, TypeAdapter
 
 class FunctionCall(BaseModel):
     name: str
-    arguments: Dict[str, Any]
+    arguments: Union[Dict[str, Any], str]
 
 class ToolCall(BaseModel):
     id: Optional[str] = None

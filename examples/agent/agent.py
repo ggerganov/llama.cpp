@@ -108,8 +108,8 @@ def completion_with_tool_usage(
                     tool_call_id=tool_call.id,
                     role="tool",
                     name=tool_call.function.name,
-                    # content=f'{tool_result}',
-                    content=f'{pretty_call} = {tool_result}',
+                    content=f'{tool_result}',
+                    # content=f'{pretty_call} = {tool_result}',
                 ))
         else:
             assert content
@@ -129,7 +129,7 @@ def main(
     max_iterations: Optional[int] = 10,
     std_tools: Optional[bool] = False,
     auth: Optional[str] = None,
-    parallel_calls: Optional[bool] = True,
+    parallel_calls: Optional[bool] = False,
     verbose: bool = False,
     style: Optional[ToolsPromptStyle] = None,
 
