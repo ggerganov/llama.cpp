@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from examples.openai.llama_cpp_server_api import LlamaCppServerCompletionRequest
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
 from examples.openai.api import ChatCompletionResponse, Choice, Message, ChatCompletionRequest, Usage
-from examples.openai.prompting import ChatHandlerArgs, ChatTemplate, get_chat_handler, ChatHandler
+from examples.openai.prompting import ChatHandlerArgs, ChatTemplate, ToolsPromptStyle, get_chat_handler, ChatHandler
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -32,6 +32,7 @@ def main(
     host: str = "localhost",
     port: int = 8080,
     parallel_calls: Optional[bool] = True,
+    style: Optional[ToolsPromptStyle] = None,
     auth: Optional[str] = None,
     verbose: bool = False,
     context_length: Optional[int] = None,
@@ -92,7 +93,8 @@ def main(
 
         chat_handler = get_chat_handler(
             ChatHandlerArgs(chat_template=chat_template, response_schema=response_schema, tools=chat_request.tools),
-            parallel_calls=parallel_calls
+            parallel_calls=parallel_calls,
+            tool_style=style,
         )
 
         messages = chat_request.messages

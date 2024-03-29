@@ -8,7 +8,6 @@ python -m examples.agent \
     --tools examples/agent/tools/example_math_tools.py \
     --goal "What is the sum of 2535 squared and 32222000403 then multiplied by one and a half. What's a third of the result?"
 ```
-<!-- --format float \ -->
 
 <details>
 <summary>Show output</summary>
@@ -37,6 +36,23 @@ python -m examples.agent \
 <summary>Show output</summary>
 
 ```bash
+💭 I will first get the current weather in San Francisco, then get the 4-day weather forecast for both San Francisco and Glasgow.
+⚙️  get_current_weather(location=San Francisco, format=fahrenheit) -> ...
+💭 I will first get the current weather in San Francisco, then get the 4-day weather forecast for both San Francisco and Glasgow.
+⚙️  get_n_day_weather_forecast(location=San Francisco, format=fahrenheit, num_days=4) -> ...
+💭 I will first get the current weather in San Francisco, then get the 4-day weather forecast for both San Francisco and Glasgow.
+⚙️  get_n_day_weather_forecast(location=Glasgow, format=celsius, num_days=4) -> ...
+The current weather in San Francisco is sunny and 87.8F. Here is the 4-day weather forecast:
+
+For San Francisco:
+- In 1 day: Cloudy, 60.8F
+- In 2 days: Sunny, 73.4F
+- In 3 days: Cloudy, 62.6F
+
+For Glasgow:
+- In 1 day: Cloudy, 16C
+- In 2 days: Sunny, 23C
+- In 3 days: Cloudy, 17C
 ```
 
 </details>

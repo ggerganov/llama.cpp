@@ -12,6 +12,7 @@ from examples.json_schema_to_grammar import SchemaConverter
 from examples.agent.tools.std_tools import StandardTools
 from examples.openai.api import ChatCompletionRequest, ChatCompletionResponse, Message, Tool, ToolFunction
 from examples.agent.utils import collect_functions, load_module
+from examples.openai.prompting import ToolsPromptStyle
 
 def _get_params_schema(fn: Callable, verbose):
     converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
@@ -130,6 +131,7 @@ def main(
     auth: Optional[str] = None,
     parallel_calls: Optional[bool] = True,
     verbose: bool = False,
+    style: Optional[ToolsPromptStyle] = None,
 
     model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
     endpoint: Optional[str] = None,
@@ -175,8 +177,8 @@ def main(
             "--model", model,
             *(['--verbose'] if verbose else []),
             *(['--parallel-calls'] if parallel_calls else []),
-            *(['--context-length={context_length}'] if context_length else []),
-            *([])
+            *([f'--context-length={context_length}'] if context_length else []),
+            *([f'--style={style.value}'] if style else []),
         ]
         server_process = subprocess.Popen(cmd, stdout=sys.stderr)
         atexit.register(server_process.kill)
@@ -196,7 +198,7 @@ def main(
     if std_tools:
         tool_functions.extend(collect_functions(StandardTools))
 
-    response_model = None#str
+    response_model = str
     if format:
         if format in types:
             response_model = types[format]
@@ -245,6 +247,7 @@ def main(
         }]
     )
     print(result if response_model else f'➡️ {result}')
+    # exit(0)
 
 if __name__ == '__main__':
     typer.run(main)

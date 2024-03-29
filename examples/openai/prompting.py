@@ -14,45 +14,45 @@ from examples.openai.api import Tool, Message, FunctionCall, ToolCall
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
 from examples.openai.ts_converter import SchemaToTypeScriptConverter
 
+_THOUGHT_KEY = "thought"
+# _THOUGHT_KEY = "thought_about_next_step_only"
+
 # While the API will be usable with a generic tools usage like OpenAI,
 # (see https://cookbook.openai.com/examples/how_to_call_functions_with_chat_models),
 # each model may need specific prompting (and/or constrained output,
 # especially for models not fine-tuned for tool usage / function calling).
-class ToolsPromptStyle(Enum):
+class ToolsPromptStyle(str, Enum):
     # Short prompt w/ <tools>schemas</tools>, <tool_call>...</tool_call> output
-    TOOLS_SHORT = 1
+    TOOLS_SHORT = "short"
 
     # Longer prompt w/ <tools>schemas</tools>, <tool_call>...</tool_call> output
-    TOOLS_LONG = 2
+    TOOLS_LONG = "long"
 
     # Bespoke constrained output format that favours thought and reasoning
     # while allowing unambiguous parsing of parallel tool calling.
-    TOOLS_BESPOKE = 3
+    TOOLS_CONSTRAINED = "thoughtful_steps"
 
     # Large prompt for https://huggingface.co/NousResearch/Hermes-2-Pro-Mistral-7B
     # <tool_call>...</tool_call> output
     # Requires:
     # - git clone https://github.com/NousResearch/Hermes-Function-Calling examples/openai/hermes_function_calling
     # - Set large context length as their prompts are super long
-    TOOLS_HERMES_2_PRO = 4
+    TOOLS_HERMES_2_PRO = "tools_hermes_2_pro"
 
     # Seems to want to escape underscores in tool names and in the <tool\_call>...</tool\_call> tags
-    TOOLS_MISTRAL = 5
+    TOOLS_MIXTRAL = "mixtral"
 
     # Short prompt w/ TypeScript definitions for https://github.com/MeetKai/functionary
     # https://github.com/MeetKai/functionary/blob/main/functionary/prompt_template/prompt_template_v2.py
     # Note: see this prior attempt to support Functionary: https://github.com/ggerganov/llama.cpp/pull/5695
-    TYPESCRIPT_FUNCTIONARY_V2 = 6
+    TYPESCRIPT_FUNCTIONARY_V2 = "functionary_v2"
 
 def raise_exception(msg: str):
     raise Exception(msg)
 
 class ChatTemplate(BaseModel):
     template: str
-
-    @property
-    def tool_style(self) -> 'ToolsPromptStyle':
-        return self._tool_style
+    inferred_tool_style: Optional['ToolsPromptStyle'] = None
 
     def __init__(self, template: str, eos_token: str, bos_token: str):
         super().__init__(template=template
@@ -65,12 +65,12 @@ class ChatTemplate(BaseModel):
         self._strict_user_assistant_alternation = "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception" in template
 
         if "<|recipient|>' + tool_call['function']['name']" in template:
-            self._tool_style = ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2
+            self.inferred_tool_style = ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2
         else:
-            self._tool_style = ToolsPromptStyle.TOOLS_BESPOKE
-            # self._tool_style = ToolsPromptStyle.TOOLS_LONG
-            # self._tool_style = ToolsPromptStyle.TOOLS_HERMES_2_PRO
-            # self._tool_style = ToolsPromptStyle.TOOLS_MISTRAL
+            self.inferred_tool_style = ToolsPromptStyle.TOOLS_CONSTRAINED
+            # self.inferred_tool_style = ToolsPromptStyle.TOOLS_LONG
+            # self.inferred_tool_style = ToolsPromptStyle.TOOLS_HERMES_2_PRO
+            # self.inferred_tool_style = ToolsPromptStyle.TOOLS_MIXTRAL
 
         # TODO: Test whether the template supports formatting tool_calls
 
@@ -399,7 +399,7 @@ def _make_bespoke_schema(response_schema, tool_call_schema, parallel_calls):
         "type": "object",
         "properties": {
             # "original_goal": {"title": "Original Goal", "type": "string"},
-            "thought_about_next_step_only": {
+            _THOUGHT_KEY: {
                 "title": "Thought about next step",
                 # "title": "Thought about how the next step brings us closer to achieving the original goal",
                 "type": "string"
@@ -430,7 +430,7 @@ def _make_bespoke_schema(response_schema, tool_call_schema, parallel_calls):
                 ]
             },
         },
-        "required": ["original_goal", "thought_about_next_step_only", "next_step"]
+        "required": ["original_goal", _THOUGHT_KEY, "next_step"]
         # "required": ["next_step"]
     }
 
@@ -505,7 +505,7 @@ class BespokeToolsChatHandler(ChatHandler):
         elif 'tool_calls' in next_step:
             return Message(
                 role="assistant",
-                content=data["thought_about_next_step_only"] if "thought_about_next_step_only" in data else None,
+                content=data.get(_THOUGHT_KEY),
                 tool_calls=[
                     ToolCall(id=gen_callid(), function=FunctionCall(**tc))
                     for tc in next_step['tool_calls']
@@ -539,20 +539,28 @@ _LONG_TEMPLATE='\n'.join([
     # 'This is not hypothetical, you're not asked what you would do. If you need a tool called, just call it with <tool_call>...</tool_call>.''',
 ])
 
-def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool) -> ChatHandler:
+def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Optional[ToolsPromptStyle] = None) -> ChatHandler:
+    tool_style = tool_style or args.chat_template.inferred_tool_style
+
     if not args.tools:
         return NoToolsChatHandler(args)
-    elif args.chat_template.tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
-        return FunctionaryToolsChatHandler(args, parallel_calls=parallel_calls)
-    elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_SHORT:
-        return TemplatedToolsChatHandler(args, _SHORT_TEMPLATE, parallel_calls=parallel_calls)
-    elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_LONG:
-        return TemplatedToolsChatHandler(args, _LONG_TEMPLATE, parallel_calls=parallel_calls)
-    elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_MISTRAL:
-        return TemplatedToolsChatHandler(args, _LONG_TEMPLATE, parallel_calls=parallel_calls, escapes_underscores=True)
-    elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_BESPOKE:
+
+    elif tool_style == ToolsPromptStyle.TOOLS_CONSTRAINED:
         return BespokeToolsChatHandler(args, parallel_calls=parallel_calls)
-    elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_HERMES_2_PRO:
+
+    elif tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
+        return FunctionaryToolsChatHandler(args, parallel_calls=parallel_calls)
+
+    elif tool_style == ToolsPromptStyle.TOOLS_SHORT:
+        return TemplatedToolsChatHandler(args, _SHORT_TEMPLATE, parallel_calls=parallel_calls)
+
+    elif tool_style == ToolsPromptStyle.TOOLS_LONG:
+        return TemplatedToolsChatHandler(args, _LONG_TEMPLATE, parallel_calls=parallel_calls)
+
+    elif tool_style == ToolsPromptStyle.TOOLS_MIXTRAL:
+        return TemplatedToolsChatHandler(args, _LONG_TEMPLATE, parallel_calls=parallel_calls, escapes_underscores=True)
+
+    elif tool_style == ToolsPromptStyle.TOOLS_HERMES_2_PRO:
         return Hermes2ProToolsChatHandler(args)
     else:
         raise ValueError(f"Unsupported tool call style: {args.chat_template.tool_style}")
