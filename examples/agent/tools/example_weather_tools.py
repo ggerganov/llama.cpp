@@ -3,7 +3,7 @@ import random
 from typing import Literal
 
 
-def _weather(w: str, temp, f):
+def _weather(w: str, temp, format):
     return f'{w}, {temp}C' if format == 'celsius' \
         else f'{w}, {(temp * 9/5) + 32}F'
 
