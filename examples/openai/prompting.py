@@ -41,8 +41,10 @@ class ChatTemplate(BaseModel):
         if "<|recipient|>' + tool_call['function']['name']" in template:
             self._tool_style = ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2
         else:
-            self._tool_style = ToolsPromptStyle.TOOLS_BESPOKE
-            # self._tool_style = ToolsPromptStyle.TOOLS_LONG
+            # self._tool_style = ToolsPromptStyle.TOOLS_BESPOKE
+
+            self._tool_style = ToolsPromptStyle.TOOLS_LONG
+            # self._tool_style = ToolsPromptStyle.TOOLS_MISTRAL
 
         # TODO: Test whether the template supports formatting tool_calls
         
@@ -87,6 +89,8 @@ class ChatTemplate(BaseModel):
             eos_token = tokens[metadata[Keys.Tokenizer.EOS_ID]])
 
     def render(self, messages: list[Message], add_generation_prompt: bool, omit_bos: bool = False):
+        sys.stderr.write(f'# strict_user_assistant_alternation={self._strict_user_assistant_alternation}\n')
+        sys.stderr.write(f'# messages=' + "\n".join(json.dumps(m.model_dump(), indent=2) for m in messages) + '\n')
         if self._strict_user_assistant_alternation and any(m.role not in ('user', 'assistant') for m in messages):
             new_messages=[]
             i = 0
@@ -105,6 +109,12 @@ class ChatTemplate(BaseModel):
                         role="assistant",
                         content=f'{messages[i].content}\n{tc}'
                     ))
+                    i += 1
+                elif messages[i].role == 'tool':
+                    new_messages.append(Message(
+                        role="user",
+                        content=f'TOOL(name={messages[i].name}, id={messages[i].tool_call_id}): {messages[i].content}',
+                    ))  
                     i += 1
                 else:
                     new_messages.append(messages[i])
@@ -408,12 +418,13 @@ class FunctionaryToolsChatHandler(ChatHandler):
             content = '\n'.join(text_content).strip()
             return Message(role="assistant", content=content if content else None, tool_calls=tool_calls if tool_calls else None)
 
-def _make_bespoke_schema(response_schema, tool_call_schema):
+def _make_bespoke_schema(response_schema, tool_call_schema, allow_parallel_calls=False):
     return {
         "type": "object",
         "properties": {
-            # "original_goal": {"title": "Original Goal", "type": "string"},
-            "thought": {
+            "original_goal": {"title": "Original Goal", "type": "string"},
+            "thought_about_next_step_only": {
+                "title": "Thought about next step",
                 # "title": "Thought about how the next step brings us closer to achieving the original goal",
                 "type": "string"
             },
@@ -421,14 +432,14 @@ def _make_bespoke_schema(response_schema, tool_call_schema):
                 "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
                 "oneOf": [
                     {
-                        "title": "Tool Calls",
+                        # "title": "Tool Calls",
                         "properties": {
                             # "type": {
                             #     "const": "tool_calls"
                             # },
                             "tool_calls": {
-                                "type": "array",
-                                "items": tool_call_schema
+                                "prefixItems": tool_call_schema if allow_parallel_calls \
+                                    else [tool_call_schema],
                             }
                         },
                         "required": ["tool_calls"]
@@ -443,7 +454,7 @@ def _make_bespoke_schema(response_schema, tool_call_schema):
                 ]
             },
         },
-        "required": ["original_goal", "thought", "next_step"]
+        "required": ["original_goal", "thought_about_next_step_only", "next_step"]
     }
 
 class BespokeToolsChatHandler(ChatHandler):
@@ -516,7 +527,7 @@ class BespokeToolsChatHandler(ChatHandler):
         elif 'tool_calls' in next_step:
             return Message(
                 role="assistant",
-                content=data["thought"],
+                content=data["thought_about_next_step_only"],
                 tool_calls=[
                     ToolCall(id=gen_callid(), function=FunctionCall(**tc))
                     for tc in next_step['tool_calls']

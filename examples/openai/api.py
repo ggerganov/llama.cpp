@@ -10,8 +10,12 @@ class ToolCall(BaseModel):
     type: Literal["function"] = "function"
     function: FunctionCall
 
+ToolCallsTypeAdapter = TypeAdapter(list[ToolCall])
+
 class Message(BaseModel):
     role: str
+    name: Optional[str] = None
+    tool_call_id: Optional[str] = None
     content: Optional[str]
     tool_calls: Optional[list[ToolCall]] = None
 
