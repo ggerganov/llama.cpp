@@ -3321,7 +3321,7 @@ int main(int argc, char ** argv) {
         json request_data = json::parse(req.body);
         std::string filename = request_data["filename"];
         if (filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos || filename.find("..") != std::string::npos) {
-            res_error(res, "Invalid filename");
+            res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
         std::string filepath = sparams.slot_save_path + filename;
@@ -3351,7 +3351,7 @@ int main(int argc, char ** argv) {
         json request_data = json::parse(req.body);
         std::string filename = request_data["filename"];
         if (filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos || filename.find("..") != std::string::npos) {
-            res_error(res, "Invalid filename");
+            res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
         std::string filepath = sparams.slot_save_path + filename;
@@ -3393,7 +3393,7 @@ int main(int argc, char ** argv) {
         if (result.error) {
             res_error(res, result.data);
         } else {
-            res.set_content(result.data, "application/json");
+            res.set_content(result.data.dump(), "application/json");
         }
     };
 
@@ -3406,7 +3406,7 @@ int main(int argc, char ** argv) {
         try {
             id_slot = std::stoi(id_slot_str);
         } catch (const std::exception &) {
-            res_error(res, "Invalid slot ID");
+            res_error(res, format_error_response("Invalid slot ID", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
 
@@ -3419,7 +3419,7 @@ int main(int argc, char ** argv) {
         } else if (action == "erase") {
             handle_slots_erase(req, res, id_slot);
         } else {
-            res_error(res, "Invalid action");
+            res_error(res, format_error_response("Invalid action", ERROR_TYPE_INVALID_REQUEST));
         }
     };
 
