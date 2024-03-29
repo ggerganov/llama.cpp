@@ -3,21 +3,11 @@
 
     This is useful in combination w/ the examples/agent/run_sandboxed_tools.sh
 '''
-import os, sys, typing, importlib.util
-from anyio import Path
 import fastapi, uvicorn
 import typer
+from typing import Type, List
 
-def load_source_as_module(source):
-    i = 0
-    while (module_name := f'mod_{i}') in sys.modules:
-        i += 1
-
-    spec = importlib.util.spec_from_file_location(module_name, source)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+from examples.agent.utils import load_module
 
 def bind_functions(app, module):
     for k in dir(module):
@@ -26,7 +16,7 @@ def bind_functions(app, module):
         if k == k.capitalize():
             continue
         v = getattr(module, k)
-        if not callable(v) or isinstance(v, typing.Type):
+        if not callable(v) or isinstance(v, Type):
             continue
         if not hasattr(v, '__annotations__'):
             continue
@@ -41,18 +31,11 @@ def bind_functions(app, module):
         except Exception as e:
             print(f'WARNING:    Failed to bind /{k}\n\t{e}')
 
-def main(files: typing.List[str], host: str = '0.0.0.0', port: int = 8000):
+def main(files: List[str], host: str = '0.0.0.0', port: int = 8000):
     app = fastapi.FastAPI()
 
     for f in files:
-        if f.endswith('.py'):
-            sys.path.insert(0, str(Path(f).parent))
-
-            module = load_source_as_module(f)
-        else:
-            module = importlib.import_module(f)
-
-        bind_functions(app, module)
+        bind_functions(app, load_module(f))
 
     uvicorn.run(app, host=host, port=port)
 

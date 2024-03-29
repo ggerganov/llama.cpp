@@ -21,39 +21,56 @@ import random
 from starlette.responses import StreamingResponse
 from typing import Annotated, Optional
 import typer
-from typeguard import typechecked
 
 def generate_id(prefix):
     return f"{prefix}{random.randint(0, 1 << 32)}"
 
 def main(
     model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
-    # model: Path = Path("/Users/ochafik/AI/Models/Hermes-2-Pro-Mistral-7B.Q8_0.gguf"),
+    template_hf_model_id_fallback: Annotated[Optional[str], typer.Option(help="If the GGUF model does not contain a chat template, get it from this HuggingFace tokenizer")] = 'meta-llama/Llama-2-7b-chat-hf',
     # model_url: Annotated[Optional[str], typer.Option("--model-url", "-mu")] = None,
     host: str = "localhost",
     port: int = 8080,
-    cpp_server_endpoint: Optional[str] = None,
-    cpp_server_host: str = "localhost",
-    cpp_server_port: Optional[int] = 8081,
+    auth: Optional[str] = None,
+    verbose: bool = False,
+    context_length: Optional[int] = None,
+    endpoint: Optional[str] = None,
+    server_host: str = "localhost",
+    server_port: Optional[int] = 8081,
 ):
     import uvicorn
 
-    metadata = GGUFKeyValues(model)
-    context_length = metadata[Keys.LLM.CONTEXT_LENGTH]
-    chat_template = ChatTemplate.from_gguf(metadata)
-    # print(chat_template)
+    if endpoint:
+        sys.stderr.write(f"# WARNING: Unsure which model we're talking to, fetching its chat template from HuggingFace tokenizer of {template_hf_model_id_fallback}\n")
+        chat_template = ChatTemplate.from_huggingface(template_hf_model_id_fallback)
+        
+    else:
+        metadata = GGUFKeyValues(model)
 
-    if not cpp_server_endpoint:
-        sys.stderr.write(f"# Starting C++ server with model {model} on {cpp_server_host}:{cpp_server_port}\n")
+        if not context_length:
+            context_length = metadata[Keys.LLM.CONTEXT_LENGTH]
+    
+        if Keys.Tokenizer.CHAT_TEMPLATE in metadata:
+            chat_template = ChatTemplate.from_gguf(metadata)
+        else:
+            sys.stderr.write(f"# WARNING: Model does not contain a chat template, fetching it from HuggingFace tokenizer of {template_hf_model_id_fallback}\n")
+            chat_template = ChatTemplate.from_huggingface(template_hf_model_id_fallback)
+
+        if verbose:
+            sys.stderr.write(f"# CHAT TEMPLATE:\n\n{chat_template}\n\n")
+
+        if verbose:
+            sys.stderr.write(f"# Starting C++ server with model {model} on {server_host}:{server_port}\n")
         server_process = subprocess.Popen([
             "./server", "-m", model,
-            "--host", cpp_server_host, "--port", f'{cpp_server_port}',
+            "--host", server_host, "--port", f'{server_port}',
+            # TODO: pass these from JSON / BaseSettings?
             '-ctk', 'q4_0', '-ctv', 'f16',
-            "-c", f"{2*8192}",
-            # "-c", f"{context_length}",
+            "-c", f"{context_length}",
+            *([] if verbose else ["--log-disable"]),
         ], stdout=sys.stderr)
         atexit.register(server_process.kill)
-        cpp_server_endpoint = f"http://{cpp_server_host}:{cpp_server_port}"
+        endpoint = f"http://{server_host}:{server_port}/completions"
 
     app = FastAPI()
 
@@ -62,8 +79,8 @@ def main(
         headers = {
             "Content-Type": "application/json",
         }
-        if (auth := request.headers.get("Authorization")):
-            headers["Authorization"] = auth
+        if (auth_value := request.headers.get("Authorization", auth)):
+            headers["Authorization"] = auth_value
 
         if chat_request.response_format is not None:
             assert chat_request.response_format.type == "json_object", f"Unsupported response format: {chat_request.response_format.type}"
@@ -79,9 +96,12 @@ def main(
 
         prompt = chat_template.render(messages, add_generation_prompt=True)
         
-        sys.stderr.write(f'\n# MESSAGES:\n\n{TypeAdapter(list[Message]).dump_json(messages)}\n\n')
-        sys.stderr.write(f'\n# PROMPT:\n\n{prompt}\n\n')
-        sys.stderr.write(f'\n# GRAMMAR:\n\n{chat_handler.grammar}\n\n')
+        
+        if verbose:
+            sys.stderr.write(f'\n# REQUEST:\n\n{chat_request.model_dump_json(indent=2)}\n\n')
+            # sys.stderr.write(f'\n# MESSAGES:\n\n{TypeAdapter(list[Message]).dump_json(messages)}\n\n')
+            sys.stderr.write(f'\n# PROMPT:\n\n{prompt}\n\n')
+            sys.stderr.write(f'\n# GRAMMAR:\n\n{chat_handler.grammar}\n\n')
         
         data = LlamaCppServerCompletionRequest(
             **{
@@ -101,7 +121,7 @@ def main(
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{cpp_server_endpoint}/completions",
+                f"{endpoint}",
                 json=data,
                 headers=headers,
                 timeout=None)
@@ -112,7 +132,8 @@ def main(
             return StreamingResponse(generate_chunks(response), media_type="text/event-stream")
         else:
             result = response.json()
-            sys.stderr.write("# RESULT:\n\n" + json.dumps(result, indent=2) + "\n\n")
+            if verbose:
+                sys.stderr.write("# RESULT:\n\n" + json.dumps(result, indent=2) + "\n\n")
             if 'content' not in result:
                 # print(json.dumps(result, indent=2))
                 return JSONResponse(result)

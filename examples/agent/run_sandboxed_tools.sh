@@ -35,23 +35,16 @@ echo "INFO: using DATA_DIR: $DATA_DIR"
 cp \
     "$SCRIPT_DIR/fastify-requirements.txt" \
     "$SCRIPT_DIR/fastify.py" \
+    "$SCRIPT_DIR/utils.py" \
     "$BUILD_DIR"
 
 mkdir -p "$DATA_DIR"
 
-PORT=${PORT:-8088}
-
-# BASE_IMAGE=pytorch/pytorch:latest
-# BASE_IMAGE=python:3.10-slim
-BASE_IMAGE=python:3.11-slim
-# torch 
-# FROM nvidia/cuda:12.1.1-runtime-ubuntu20.04 
-# RUN apt-get update && \
-#     apt-get install -y python3-pip python3-dev && \
-#     rm -rf /var/lib/apt/lists/*
+readonly PORT=${PORT:-8088}
+readonly LLAMA_IMAGE_NAME=llama.cpp/tools-base
 
 echo "
-    FROM     $BASE_IMAGE
+    FROM     ${BASE_IMAGE:-python:3.11-slim}
     RUN      apt-get update
     RUN      apt-get install -y gcc python3-dev git cmake
     RUN      pip install --upgrade pip
@@ -63,12 +56,11 @@ echo "
     RUN      pip install -r /root/fastify-requirements.txt
     COPY     script-requirements.txt  /root
     RUN      pip install -r /root/script-requirements.txt
-    COPY     fastify.py               /root
+    COPY     fastify.py utils.py      /root
 
     WORKDIR  /data
-    # ENTRYPOINT uvicorn fastify:app --reload
     ENTRYPOINT PYTHONPATH=/src python /root/fastify.py --port=$PORT '/src/$( basename "$script" )'
-" | docker build "$BUILD_DIR" -f - -t llama.cpp/tools-base
+" | docker build "$BUILD_DIR" -f - -t "$LLAMA_IMAGE_NAME"
 
 echo "#"
 echo "# Binding $script to http://localhost:$PORT/"
@@ -79,4 +71,4 @@ docker run \
     --mount "type=bind,source=$( realpath "$script_folder" ),target=/src,readonly" \
     --mount "type=bind,source=$( realpath "$DATA_DIR" ),target=/data" \
     -p "$PORT:$PORT" \
-    -it llama.cpp/tools-base
+    -it "$LLAMA_IMAGE_NAME"

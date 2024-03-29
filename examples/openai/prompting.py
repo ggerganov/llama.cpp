@@ -9,129 +9,12 @@ import re
 import sys
 from typing import Any, Dict, Literal, Optional, Tuple, Callable, Union
 from pydantic import BaseModel
-from typeguard import typechecked
+# from typeguard import typechecked
 
 from examples.json_schema_to_grammar import SchemaConverter
 from examples.openai.api import Tool, Message, FunctionCall, ToolCall
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
 from examples.openai.ts_converter import SchemaToTypeScriptConverter
-
-@typechecked
-def raise_exception(msg: str):
-    raise Exception(msg)
-
-@typechecked
-class ChatTemplate(BaseModel):
-    template: str
-
-    @property
-    def tool_style(self) -> 'ToolsPromptStyle':
-        return self._tool_style
-    
-    def __init__(self, template: str, eos_token: str, bos_token: str):
-        super().__init__(template=template
-                         )
-        env = jinja2.Environment(loader=jinja2.BaseLoader(), trim_blocks=True, lstrip_blocks=True)
-        self._template = env.from_string(template)
-        self._eos_token = eos_token
-        self._bos_token = bos_token
-
-        self._strict_user_assistant_alternation = "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception" in template
-
-        if "<|recipient|>' + tool_call['function']['name']" in template:
-            self._tool_style = ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2
-        else:
-            # self._tool_style = ToolsPromptStyle.TOOLS_BESPOKE
-
-            self._tool_style = ToolsPromptStyle.TOOLS_LONG
-            # self._tool_style = ToolsPromptStyle.TOOLS_MISTRAL
-
-        # TODO: Test whether the template supports formatting tool_calls
-        
-        delimiter = '<%$[SAMPLE]$%>'
-        user_msg = Message(role="user", content="Hey")
-        empty_prompt = self.render([user_msg], add_generation_prompt=True).strip()
-        planted_prompt = self.render([user_msg, Message(role="assistant", content=delimiter)], add_generation_prompt=False).strip()
-        assert planted_prompt.startswith(empty_prompt), f"Planted prompt does not start with empty prompt: {planted_prompt} vs {empty_prompt}"
-        [prefix, suffix] = planted_prompt[len(empty_prompt):].split(delimiter)
-
-        sys.stderr.write(f"\n# prefix={prefix}\n# suffix={suffix}\n\n")
-
-        self._prefix = prefix
-        self._suffix = suffix
-
-    def strip_suffix(self, s: str) -> str:
-        if s.endswith(self._suffix):
-            return s[:-len(self._suffix)]
-        else:
-            sys.stderr.write(f"Expected suffix ({self._suffix}) not found: {s}\n")
-            return s
-
-    def __str__(self):
-        return f"ChatTemplate(template={self.template}, eos_token={self._eos_token}, bos_token={self._bos_token})"
-
-    def add_system_prompt(self, messages: list[Message], system_prompt: Message) -> list[Message]:
-        assert system_prompt.role == "system"
-        # TODO: add to last system message, or create a new one just before the last user message
-        system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
-        if system_message is not None:
-            (i, m) = system_message
-            return messages[:i] + [Message(role="system", content=system_prompt.content + '\n' + m.content)] + messages[i+1:]
-        else:
-            return [system_prompt] + messages
-
-    @staticmethod
-    def from_gguf(metadata: GGUFKeyValues):
-        tokens = metadata[Keys.Tokenizer.LIST]
-        return ChatTemplate(
-            template = metadata[Keys.Tokenizer.CHAT_TEMPLATE],
-            bos_token = tokens[metadata[Keys.Tokenizer.BOS_ID]],
-            eos_token = tokens[metadata[Keys.Tokenizer.EOS_ID]])
-
-    def render(self, messages: list[Message], add_generation_prompt: bool, omit_bos: bool = False):
-        sys.stderr.write(f'# strict_user_assistant_alternation={self._strict_user_assistant_alternation}\n')
-        sys.stderr.write(f'# messages=' + "\n".join(json.dumps(m.model_dump(), indent=2) for m in messages) + '\n')
-        if self._strict_user_assistant_alternation and any(m.role not in ('user', 'assistant') for m in messages):
-            new_messages=[]
-            i = 0
-            n = len(messages)
-            while i < n:
-                if messages[i].role == 'system':
-                    assert messages[i+1].role == 'user'
-                    new_messages.append(Message(
-                        role="user",
-                        content=f'[SYS]{messages[i].content}[/SYS]\n{messages[i+1].content}'
-                    ))
-                    i += 2
-                elif messages[i].role == 'assistant' and messages[i].tool_calls and messages[i].content:
-                    tc = '\n'.join(f'<tool_call>{json.dumps(tc.model_dump())}</tool_call>' for tc in messages[i].tool_calls)
-                    new_messages.append(Message(
-                        role="assistant",
-                        content=f'{messages[i].content}\n{tc}'
-                    ))
-                    i += 1
-                elif messages[i].role == 'tool':
-                    new_messages.append(Message(
-                        role="user",
-                        content=f'TOOL(name={messages[i].name}, id={messages[i].tool_call_id}): {messages[i].content}',
-                    ))  
-                    i += 1
-                else:
-                    new_messages.append(messages[i])
-                    i += 1
-            # print(f'new_messages={json.dumps(new_messages, indent=2)}')
-            messages = new_messages
-        # print(f'messages={messages}')
-        
-        result = self._template.render(
-            messages=messages,
-            eos_token=self._eos_token,
-            bos_token='' if omit_bos else self._bos_token,
-            raise_exception=raise_exception,
-            add_generation_prompt=add_generation_prompt,
-        )
-        sys.stderr.write(f'\n# RENDERED:\n\n{result}\n\n')
-        return result
 
 # While the API will be usable with a generic tools usage like OpenAI,
 # (see https://cookbook.openai.com/examples/how_to_call_functions_with_chat_models),
@@ -163,6 +46,133 @@ class ToolsPromptStyle(Enum):
     # Note: see this prior attempt to support Functionary: https://github.com/ggerganov/llama.cpp/pull/5695
     TYPESCRIPT_FUNCTIONARY_V2 = 6
 
+def raise_exception(msg: str):
+    raise Exception(msg)
+
+class ChatTemplate(BaseModel):
+    template: str
+
+    @property
+    def tool_style(self) -> 'ToolsPromptStyle':
+        return self._tool_style
+    
+    def __init__(self, template: str, eos_token: str, bos_token: str):
+        super().__init__(template=template
+                         )
+        env = jinja2.Environment(loader=jinja2.BaseLoader(), trim_blocks=True, lstrip_blocks=True)
+        self._template = env.from_string(template)
+        self._eos_token = eos_token
+        self._bos_token = bos_token
+
+        self._strict_user_assistant_alternation = "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception" in template
+
+        if "<|recipient|>' + tool_call['function']['name']" in template:
+            self._tool_style = ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2
+        else:
+            self._tool_style = ToolsPromptStyle.TOOLS_BESPOKE
+            # self._tool_style = ToolsPromptStyle.TOOLS_LONG
+            # self._tool_style = ToolsPromptStyle.TOOLS_HERMES_2_PRO
+            # self._tool_style = ToolsPromptStyle.TOOLS_MISTRAL
+
+        # TODO: Test whether the template supports formatting tool_calls
+        
+        delimiter = '<%$[SAMPLE]$%>'
+        user_msg = Message(role="user", content="Hey")
+        empty_prompt = self.render([user_msg], add_generation_prompt=True).strip()
+        planted_prompt = self.render([user_msg, Message(role="assistant", content=delimiter)], add_generation_prompt=False).strip()
+        assert planted_prompt.startswith(empty_prompt), f"Planted prompt does not start with empty prompt: {planted_prompt} vs {empty_prompt}"
+        [prefix, suffix] = planted_prompt[len(empty_prompt):].split(delimiter)
+
+        # sys.stderr.write(f"\n# prefix={prefix}\n# suffix={suffix}\n\n")
+
+        self._prefix = prefix
+        self._suffix = suffix
+
+    def strip_suffix(self, s: str) -> str:
+        if s.endswith(self._suffix):
+            return s[:-len(self._suffix)]
+        else:
+            sys.stderr.write(f"Expected suffix ({self._suffix}) not found: {s}\n")
+            return s
+
+    def __str__(self):
+        return f"ChatTemplate(template={self.template}, eos_token={self._eos_token}, bos_token={self._bos_token})"
+
+    def add_system_prompt(self, messages: list[Message], system_prompt: Message) -> list[Message]:
+        assert system_prompt.role == "system"
+        # TODO: add to last system message, or create a new one just before the last user message
+        system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
+        if system_message is not None:
+            (i, m) = system_message
+            return messages[:i] + [Message(role="system", content=system_prompt.content + '\n' + m.content)] + messages[i+1:]
+        else:
+            return [system_prompt] + messages
+
+    @staticmethod
+    def from_gguf(metadata: GGUFKeyValues):
+        if Keys.Tokenizer.CHAT_TEMPLATE not in metadata:
+            raise NotImplementedError(f'Only supporting models with {Keys.Tokenizer.CHAT_TEMPLATE} entry in their GGUF key-values (TODO: add default template, maybe pick llama2\'s?)')
+        
+        tokens = metadata[Keys.Tokenizer.LIST]
+        return ChatTemplate(
+            template = metadata[Keys.Tokenizer.CHAT_TEMPLATE],
+            bos_token = tokens[metadata[Keys.Tokenizer.BOS_ID]],
+            eos_token = tokens[metadata[Keys.Tokenizer.EOS_ID]])
+
+    @staticmethod
+    def from_huggingface(model_id: str):
+        from transformers import LlamaTokenizer
+        tokenizer = LlamaTokenizer.from_pretrained(model_id)
+        return ChatTemplate(
+            template = tokenizer.chat_template or tokenizer.default_chat_template,
+            bos_token = tokenizer.bos_token,
+            eos_token = tokenizer.eos_token)
+
+    def render(self, messages: list[Message], add_generation_prompt: bool, omit_bos: bool = False):
+        # sys.stderr.write(f'# strict_user_assistant_alternation={self._strict_user_assistant_alternation}\n')
+        # sys.stderr.write(f'# messages=' + "\n".join(json.dumps(m.model_dump(), indent=2) for m in messages) + '\n')
+        if self._strict_user_assistant_alternation and any(m.role not in ('user', 'assistant') for m in messages):
+            new_messages=[]
+            i = 0
+            n = len(messages)
+            while i < n:
+                if messages[i].role == 'system':
+                    assert messages[i+1].role == 'user'
+                    new_messages.append(Message(
+                        role="user",
+                        content=f'[SYS]{messages[i].content}[/SYS]\n{messages[i+1].content}'
+                    ))
+                    i += 2
+                elif messages[i].role == 'assistant' and messages[i].tool_calls and messages[i].content:
+                    tc = '\n'.join(f'<tool_call>{json.dumps(tc.model_dump())}</tool_call>' for tc in messages[i].tool_calls)
+                    new_messages.append(Message(
+                        role="assistant",
+                        content=f'{messages[i].content}\n{tc}'
+                    ))
+                    i += 1
+                elif messages[i].role == 'tool':
+                    new_messages.append(Message(
+                        role="user",
+                        content=f'TOOL RESULT(name={messages[i].name}, id={messages[i].tool_call_id}): {messages[i].content}',
+                    ))  
+                    i += 1
+                else:
+                    new_messages.append(messages[i])
+                    i += 1
+            # print(f'new_messages={json.dumps(new_messages, indent=2)}')
+            messages = new_messages
+        # print(f'messages={messages}')
+        
+        result = self._template.render(
+            messages=messages,
+            eos_token=self._eos_token,
+            bos_token='' if omit_bos else self._bos_token,
+            raise_exception=raise_exception,
+            add_generation_prompt=add_generation_prompt,
+        )
+        # sys.stderr.write(f'\n# RENDERED:\n\n{result}\n\n')
+        return result
+
 class ChatHandlerArgs(BaseModel):
     chat_template: ChatTemplate
     response_schema: Optional[dict] = None
@@ -189,12 +199,14 @@ class NoToolsChatHandler(ChatHandler):
                 content=_please_respond_with_schema(args.response_schema)
             )
             converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
-            self.grammar = converter.visit(args.response_schema, '')
+            schema = converter.resolve_refs(args.response_schema, 'response')
+            converter.visit(schema, '')
+            self.grammar = converter.format_grammar()
         else:
             self.output_format_prompt = None
             self.grammar = None
 
-    @typechecked
+    # @typechecked
     def parse(self, s: str) -> Optional[Message]:
         return Message(role="assistant", content=s)
 
@@ -203,21 +215,24 @@ class ToolCallTagsChatHandler(ChatHandler):
         super().__init__(args)
 
         converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
-        tool_rules = [
-            converter.visit(
+        tool_rules = []
+        for tool in self.args.tools:
+            
+            parameters_schema = tool.function.parameters
+            parameters_schema = converter.resolve_refs(parameters_schema, tool.function.name)
+            
+            tool_rules.append(converter.visit(
                 dict(
                     type="object",
                     properties=dict(
                         name=dict(type="string", pattern='^' + tool.function.name.replace('_', f'\\?_') + '$') if escapes_underscores \
                             else dict(const=tool.function.name),
-                        arguments=tool.function.parameters,
+                        arguments=parameters_schema,
                     ),
                     required=['name', 'arguments']
                 ),
                 f'{tool.function.name}-tool-call'
-            )
-            for tool in self.args.tools
-        ]
+            ))
 
         def format_literal(s: str) -> str:
             if escapes_underscores:
@@ -253,7 +268,7 @@ class ToolCallTagsChatHandler(ChatHandler):
         #         ") " + converter._format_literal("</tool_call>") +
         #     ")") # + converter._format_literal(suffix))
         
-    @typechecked
+    # @typechecked
     def parse(self, s: str) -> Optional[Message]:
         s = self.args.chat_template.strip_suffix(s)
 
@@ -386,7 +401,7 @@ class FunctionaryToolsChatHandler(ChatHandler):
         #         ") " +
         #     ")") # + converter._format_literal(suffix))
     
-    @typechecked
+    # @typechecked
     def parse(self, s: str) -> Optional[Message]:
         s = self.args.chat_template.strip_suffix(s)
         
@@ -422,7 +437,7 @@ def _make_bespoke_schema(response_schema, tool_call_schema, allow_parallel_calls
     return {
         "type": "object",
         "properties": {
-            "original_goal": {"title": "Original Goal", "type": "string"},
+            # "original_goal": {"title": "Original Goal", "type": "string"},
             "thought_about_next_step_only": {
                 "title": "Thought about next step",
                 # "title": "Thought about how the next step brings us closer to achieving the original goal",
@@ -455,6 +470,7 @@ def _make_bespoke_schema(response_schema, tool_call_schema, allow_parallel_calls
             },
         },
         "required": ["original_goal", "thought_about_next_step_only", "next_step"]
+        # "required": ["next_step"]
     }
 
 class BespokeToolsChatHandler(ChatHandler):
@@ -513,7 +529,7 @@ class BespokeToolsChatHandler(ChatHandler):
             ])
         )
 
-    @typechecked
+    # @typechecked
     def parse(self, s: str) -> Optional[Message]:
         s = self.args.chat_template.strip_suffix(s)
         try:
@@ -527,7 +543,7 @@ class BespokeToolsChatHandler(ChatHandler):
         elif 'tool_calls' in next_step:
             return Message(
                 role="assistant",
-                content=data["thought_about_next_step_only"],
+                content=data["thought_about_next_step_only"] if "thought_about_next_step_only" in data else None,
                 tool_calls=[
                     ToolCall(id=gen_callid(), function=FunctionCall(**tc))
                     for tc in next_step['tool_calls']
@@ -545,7 +561,8 @@ _SHORT_TEMPLATE='\n'.join([
 
 _LONG_TEMPLATE='\n'.join([
     # '''You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags.''',
-    'You may call one or more functions to assist with the user query. Don\'t make assumptions about what values to plug into functions. Here are the available tools:',
+    # 'You may call one or more functions to assist with the user query. Don\'t make assumptions about what values to plug into functions. Here are the available tools:',
+    'Call one or more functions to assist with the user query, every time this is possible. Don\'t make assumptions about what values to plug into functions. Here are the available tools:',
     '<tools>',
     '{tools}',
     '</tools>',
@@ -564,7 +581,7 @@ def get_chat_handler(args: ChatHandlerArgs, allow_parallel_calls=False) -> ChatH
     if not args.tools:
         return NoToolsChatHandler(args)
     elif args.chat_template.tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
-        return FunctionaryToolsChatHandler(args)
+        return FunctionaryToolsChatHandler(args, allow_parallel_calls=False)
     elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_SHORT:
         return TemplatedToolsChatHandler(args, _SHORT_TEMPLATE, allow_parallel_calls=allow_parallel_calls)
     elif args.chat_template.tool_style == ToolsPromptStyle.TOOLS_LONG:

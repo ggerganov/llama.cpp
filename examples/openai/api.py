@@ -1,3 +1,4 @@
+from abc import ABC
 from typing import Any, Dict, Literal, Optional, Union
 from pydantic import BaseModel, Json, TypeAdapter
 
@@ -9,8 +10,6 @@ class ToolCall(BaseModel):
     id: Optional[str] = None
     type: Literal["function"] = "function"
     function: FunctionCall
-
-ToolCallsTypeAdapter = TypeAdapter(list[ToolCall])
 
 class Message(BaseModel):
     role: str
@@ -32,15 +31,7 @@ class ResponseFormat(BaseModel):
     type: str
     json_schema: Optional[Any] = None
 
-class ChatCompletionRequest(BaseModel):
-    model: str
-    tools: Optional[list[Tool]] = None
-    messages: list[Message] = None
-    prompt: Optional[str] = None
-    response_format: Optional[ResponseFormat] = None
-
-    stream: bool = False
-    cache_prompt: Optional[bool] = None
+class LlamaCppParams(BaseModel):
     n_predict: Optional[int] = None
     top_k: Optional[int] = None
     top_p: Optional[float] = None
@@ -63,6 +54,16 @@ class ChatCompletionRequest(BaseModel):
     n_probs: Optional[int] = None
     min_keep: Optional[int] = None
 
+class ChatCompletionRequest(LlamaCppParams):
+    model: str
+    tools: Optional[list[Tool]] = None
+    messages: list[Message] = None
+    prompt: Optional[str] = None
+    response_format: Optional[ResponseFormat] = None
+
+    stream: bool = False
+    cache_prompt: Optional[bool] = None
+
 class Choice(BaseModel):
     index: int
     message: Message
@@ -74,6 +75,10 @@ class Usage(BaseModel):
     completion_tokens: int
     total_tokens: int
 
+class CompletionError(BaseModel):
+    message: str
+    # code: int
+
 class ChatCompletionResponse(BaseModel):
     id: str
     object: Literal["chat.completion"]
@@ -82,3 +87,4 @@ class ChatCompletionResponse(BaseModel):
     choices: list[Choice]
     usage: Usage
     system_fingerprint: str
+    error: Optional[CompletionError] = None
