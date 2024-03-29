@@ -1745,7 +1745,10 @@ struct server_context {
 
                     // Erase token cache
                     const size_t n_erased = slot->cache_tokens.size();
-                    llama_kv_cache_seq_rm(ctx, slot->id + 1, -1, -1);
+                    if (!llama_kv_cache_seq_rm(ctx, slot->id + 1, -1, -1)) {
+                        send_error(task, "Failed to erase slot KV cache", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
                     slot->cache_tokens.clear();
 
                     server_task_result result;
