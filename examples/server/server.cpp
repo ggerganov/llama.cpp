@@ -3397,7 +3397,7 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_slots_action = [&ctx_server, &res_error, &sparams, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_slots_action = [&res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
 
         std::string id_slot_str = req.path_params.at("id_slot");
