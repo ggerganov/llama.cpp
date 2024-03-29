@@ -16,7 +16,7 @@ Name:           llama.cpp-clblast
 Version:        %( date "+%%Y%%m%%d" )
 Release:        1%{?dist}
 Summary:        OpenCL Inference of LLaMA model in C/C++
-License:        MIT
+License:        MIT AND Apache-2.0
 Source0:        https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.tar.gz
 BuildRequires:  coreutils make gcc-c++ git mesa-libOpenCL-devel clblast-devel
 Requires:       clblast
