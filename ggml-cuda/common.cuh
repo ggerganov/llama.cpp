@@ -231,12 +231,6 @@ typedef float dfloat; // dequantize float
 typedef float2 dfloat2;
 #endif //GGML_CUDA_F16
 
-// dmmv = dequantize_mul_mat_vec
-// TODO: remove this?
-#ifndef GGML_CUDA_DMMV_X
-#define GGML_CUDA_DMMV_X 32
-#endif
-
 [[noreturn]]
 static __device__ void no_device_code(
     const char * file_name, const int line, const char * function_name, const int arch, const char * arch_list) {
