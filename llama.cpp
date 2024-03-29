@@ -4466,17 +4466,20 @@ static bool llm_load_tensors(
 
                             // hack to merge tensors, need to clean this up
                             // merged tensors
-                            ggml_type type = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
-                            layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type, n_embd,   n_ff, hparams.n_expert);
-                            layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type,   n_ff, n_embd, hparams.n_expert);
-                            layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type, n_embd,   n_ff, hparams.n_expert);
+                            ggml_type type_gate = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
+                            ggml_type type_down = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
+                            ggml_type type_up   = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
+
+                            layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type_gate, n_embd,   n_ff, hparams.n_expert);
+                            layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, hparams.n_expert);
+                            layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, hparams.n_expert);
 
                             // MoE branch
                             for (uint32_t x = 0; x < hparams.n_expert; ++x) {
                                 // individual tensors as views
                                 ggml_tensor * ffn_gate_exp = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
                                 ggml_tensor * ffn_down_exp = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
-                                ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1], layer.ffn_up_exps->nb[2]*x);
+                                ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1],   layer.ffn_up_exps->nb[2]*x);
 
                                 ggml_set_name(ffn_gate_exp, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
                                 ggml_set_name(ffn_down_exp, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());

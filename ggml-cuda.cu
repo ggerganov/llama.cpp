@@ -401,10 +401,8 @@ GGML_CALL static void * ggml_backend_cuda_buffer_get_base(ggml_backend_buffer_t 
 GGML_CALL static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
 
-    if (tensor->view_src != NULL && tensor->view_offs == 0) {
+    if (tensor->view_src != NULL) {
         assert(tensor->view_src->buffer->buft == buffer->buft);
-        tensor->backend = tensor->view_src->backend;
-        tensor->extra = tensor->view_src->extra;
         return;
     }
 
@@ -1965,6 +1963,7 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
 static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
+    const ggml_tensor * ids  = dst->src[2];
 
     GGML_ASSERT(!ggml_backend_buffer_is_cuda_split(src0->buffer) && "mul_mat_id does not support split buffers");
 
@@ -1973,7 +1972,6 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     const size_t nb11 = src1->nb[1];
     const size_t nb1  =  dst->nb[1];
 
-    const struct ggml_tensor * ids = dst->src[2];
     const int32_t id = ((int32_t *) dst->op_params)[0];
     const int32_t n_as = src0->ne[2];
 
@@ -1991,7 +1989,8 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     char * dst_original  = (char *)  dst->data;
 
     src0_row.ne[2] = 1;
-
+    src0_row.ne[3] = 1;
+    src0_row.nb[3] = src0->nb[2];
 
     if (src1->ne[1] == 1) {
         for (int64_t i01 = 0; i01 < ids->ne[1]; i01++) {
