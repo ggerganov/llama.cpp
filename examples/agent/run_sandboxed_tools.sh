@@ -11,7 +11,7 @@ script="$( realpath "$1" )"
 script_folder="$(dirname "$script")"
 shift 1
 
-function cleanup {      
+function cleanup {
   rm -rf "$BUILD_DIR"
   echo "Deleted $BUILD_DIR"
 }

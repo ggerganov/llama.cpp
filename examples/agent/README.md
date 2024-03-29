@@ -76,7 +76,7 @@ This example relies on the new [OpenAI compatibility server](../openai).
   agent.py  →  examples.openai  →  server.cpp
             →  safe_tools.py
             → ( run_sandboxed_tools.sh :  Docker  →  fastify.py )  →  unsafe_tools.py  →  code interpreter, etc...
-``` 
+```
 
 The agent can use tools written in Python, or (soon) exposed under OpenAPI endpoints. Only has standard Python deps (e.g. no langchain)
 

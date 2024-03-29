@@ -128,7 +128,7 @@ def main(
     max_iterations: Optional[int] = 10,
     std_tools: Optional[bool] = False,
     auth: Optional[str] = None,
-    allow_parallel_calls: Optional[bool] = False,
+    parallel_calls: Optional[bool] = True,
     verbose: bool = False,
 
     model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
@@ -174,14 +174,14 @@ def main(
             "python", "-m", "examples.openai.server",
             "--model", model,
             *(['--verbose'] if verbose else []),
-            *(['--allow-parallel-calls'] if allow_parallel_calls else []),
+            *(['--parallel-calls'] if parallel_calls else []),
             *(['--context-length={context_length}'] if context_length else []),
             *([])
         ]
         server_process = subprocess.Popen(cmd, stdout=sys.stderr)
         atexit.register(server_process.kill)
         sleep(5)
-    
+
     tool_functions = []
     types = {}
     for f in tools:
@@ -195,7 +195,7 @@ def main(
 
     if std_tools:
         tool_functions.extend(collect_functions(StandardTools))
-    
+
     response_model = None#str
     if format:
         if format in types:
@@ -207,8 +207,8 @@ def main(
                 response_model = json.loads(format)
             except:
                 response_model = eval(format)
-    
-    
+
+
     result = completion_with_tool_usage(
         model="...",
         endpoint=endpoint,

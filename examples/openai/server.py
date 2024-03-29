@@ -31,7 +31,7 @@ def main(
     # model_url: Annotated[Optional[str], typer.Option("--model-url", "-mu")] = None,
     host: str = "localhost",
     port: int = 8080,
-    allow_parallel_calls: Optional[bool] = False,
+    parallel_calls: Optional[bool] = True,
     auth: Optional[str] = None,
     verbose: bool = False,
     context_length: Optional[int] = None,
@@ -44,13 +44,13 @@ def main(
     if endpoint:
         sys.stderr.write(f"# WARNING: Unsure which model we're talking to, fetching its chat template from HuggingFace tokenizer of {template_hf_model_id_fallback}\n")
         chat_template = ChatTemplate.from_huggingface(template_hf_model_id_fallback)
-        
+
     else:
         metadata = GGUFKeyValues(model)
 
         if not context_length:
             context_length = metadata[Keys.LLM.CONTEXT_LENGTH]
-    
+
         if Keys.Tokenizer.CHAT_TEMPLATE in metadata:
             chat_template = ChatTemplate.from_gguf(metadata)
         else:
@@ -92,22 +92,22 @@ def main(
 
         chat_handler = get_chat_handler(
             ChatHandlerArgs(chat_template=chat_template, response_schema=response_schema, tools=chat_request.tools),
-            allow_parallel_calls=allow_parallel_calls
+            parallel_calls=parallel_calls
         )
-        
+
         messages = chat_request.messages
         if chat_handler.output_format_prompt:
             messages = chat_template.add_system_prompt(messages, chat_handler.output_format_prompt)
 
         prompt = chat_template.render(messages, add_generation_prompt=True)
-        
-        
+
+
         if verbose:
             sys.stderr.write(f'\n# REQUEST:\n\n{chat_request.model_dump_json(indent=2)}\n\n')
             # sys.stderr.write(f'\n# MESSAGES:\n\n{TypeAdapter(list[Message]).dump_json(messages)}\n\n')
             sys.stderr.write(f'\n# PROMPT:\n\n{prompt}\n\n')
             sys.stderr.write(f'\n# GRAMMAR:\n\n{chat_handler.grammar}\n\n')
-        
+
         data = LlamaCppServerCompletionRequest(
             **{
                 k: v
@@ -130,7 +130,7 @@ def main(
                 json=data,
                 headers=headers,
                 timeout=None)
-        
+
         if chat_request.stream:
             # TODO: Remove suffix from streamed response using partial parser.
             assert not chat_request.tools and not chat_request.response_format, "Streaming not supported yet with tools or response_format"

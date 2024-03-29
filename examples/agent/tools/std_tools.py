@@ -1,15 +1,11 @@
-import atexit
 from datetime import date
 import datetime
+from pydantic import BaseModel
 import subprocess
 import sys
-from time import sleep
 import time
 import typer
-from pydantic import BaseModel, Json, TypeAdapter
-from annotated_types import MinLen
-from typing import Annotated, Callable, List, Union, Literal, Optional, Type, get_args, get_origin
-import json, requests
+from typing import Union, Optional
 
 class Duration(BaseModel):
     seconds: Optional[int] = None
@@ -50,7 +46,7 @@ class WaitForDate(BaseModel):
         sys.stderr.write(f"Waiting for {days} days and {seconds} seconds until {d}...\n")
         time.sleep(days * 86400 + seconds)
         sys.stderr.write(f"Reached the target date: {self.until}\n")
-        
+
 
 class StandardTools:
 
@@ -61,7 +57,7 @@ class StandardTools:
             This allows getting additional information, requesting disambiguation, etc.
         '''
         return typer.prompt(question)
-    
+
     @staticmethod
     def wait(_for: Union[WaitForDuration, WaitForDate]) -> None:
         '''
@@ -69,7 +65,7 @@ class StandardTools:
             This can be used to wait for a specific duration or until a specific date.
         '''
         return _for()
-    
+
     @staticmethod
     def say_out_loud(something: str) -> str:
         """

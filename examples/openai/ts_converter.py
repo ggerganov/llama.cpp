@@ -31,7 +31,7 @@ class SchemaToTypeScriptConverter:
             [f"{self._desc_comment(additional_properties) if additional_properties else ''}[key: string]: {self.visit(additional_properties)}"]
             if additional_properties is not None else []
         )) + "}"
-    
+
     def visit(self, schema: dict):
         def print_constant(v):
             return json.dumps(v)

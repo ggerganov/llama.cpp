@@ -34,7 +34,7 @@ The new [examples/openai/server.py](./server.py):
           }
           // Where T is the output JSON schema, or 'any'
         ```
-      
+
         - Option to publicise schemas to models as TypeScript signatures (as for Functionary) or JSON schema.
 
         - Supports models that require user/assistant alternance (like Mixtral Instruct) by merging system messages into user messages.
@@ -175,7 +175,7 @@ curl http://localhost:8080/v1/chat/completions \
 - Evaluate options for session caching
 
     - Pass session id & store / read from file?
-    
+
     - Support parent session ids for trees of thought?
 
     - Support precaching long prompts from CLI / read session files?
@@ -186,4 +186,4 @@ curl http://localhost:8080/v1/chat/completions \
 
     - Remove non-Python json-schema-to-grammar versions
 
-    - Reach out to frameworks to advertise new option. 
+    - Reach out to frameworks to advertise new option.
