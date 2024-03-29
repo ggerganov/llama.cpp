@@ -15343,13 +15343,13 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
         memcpy(&v_size_el_ref, inp, sizeof(v_size_el_ref));
         inp += sizeof(v_size_el_ref);
 
-        if (cell_count) {
-            const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
-            if (v_size_el != v_size_el_ref) {
-                llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
-                return 0;
-            }
+        const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
+        if (v_size_el != v_size_el_ref) {
+            llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
+            return 0;
+        }
 
+        if (cell_count) {
             // For each row in the transposed matrix, read the values for the whole cell range
             for (uint32_t j = 0; j < n_embd_v_gqa; ++j) {
                 const size_t dst_offset = (kv_head + j * kv_size) * v_size_el;
