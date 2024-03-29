@@ -16,7 +16,7 @@ Name:           llama.cpp-cuda
 Version:        %( date "+%%Y%%m%%d" )
 Release:        1%{?dist}
 Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
-License:        MIT AND Apache-2.0
+License:        MIT
 Source0:        https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.tar.gz
 BuildRequires:  coreutils make gcc-c++ git cuda-toolkit
 Requires:       cuda-toolkit
