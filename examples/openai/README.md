@@ -1,6 +1,6 @@
-# examples.agent: Interactive agent that can use Python tools!
+# examples.openai: OpenAI-compatibility layer on top of server.cpp
 
-New Python OpenAI API compatibility server, which calls into the C++ server under the hood:
+New Python OpenAI API compatibility server, which calls into / spawns the C++ server under the hood:
 
 ```bash
 python -m examples.openai.server --model model.gguf
