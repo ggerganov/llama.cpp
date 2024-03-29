@@ -198,7 +198,7 @@ def main(
     if std_tools:
         tool_functions.extend(collect_functions(StandardTools))
 
-    response_model = str
+    response_model = None #str
     if format:
         if format in types:
             response_model = types[format]

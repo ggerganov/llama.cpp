@@ -6,7 +6,8 @@ Have any LLM use local (sandboxed) tools, with a simple CLI.
 python -m examples.agent \
     --model ~/AI/Models/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf \
     --tools examples/agent/tools/example_math_tools.py \
-    --goal "What is the sum of 2535 squared and 32222000403 then multiplied by one and a half. What's a third of the result?"
+    --goal "What is the sum of 2535 squared and 32222000403 then multiplied by one and a half. What's a third of the result?" \
+    --greedy
 ```
 
 <details>
@@ -29,7 +30,8 @@ python -m examples.agent \
 ```bash
 python -m examples.agent \
     --tools examples/agent/tools/example_weather_tools.py \
-    --goal "What is the weather going to be like in San Francisco and Glasgow over the next 4 days."
+    --goal "What is the weather going to be like in San Francisco and Glasgow over the next 4 days." \
+    --greedy
 ```
 
 <details>
@@ -62,7 +64,8 @@ For Glasgow:
 python -m examples.agent \
     --model ~/AI/Models/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf \
     --std_tools \
-    --goal "Wait 10sec then say Hi out loud"
+    --goal "Wait 10sec then say Hi out loud" \
+    --greedy
 ```
 
 <details>
