@@ -5,12 +5,14 @@ import json, sys, subprocess, atexit
 from pathlib import Path
 import time
 
+from pydantic import TypeAdapter
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from examples.openai.llama_cpp_server_api import LlamaCppServerCompletionRequest
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
 from examples.openai.api import ChatCompletionResponse, Choice, Message, ChatCompletionRequest, Usage
-from examples.openai.prompting import ChatFormat, make_grammar, make_tools_prompt
+from examples.openai.prompting import ChatHandlerArgs, ChatTemplate, get_chat_handler, ChatHandler
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -38,8 +40,8 @@ def main(
 
     metadata = GGUFKeyValues(model)
     context_length = metadata[Keys.LLM.CONTEXT_LENGTH]
-    chat_format = ChatFormat.from_gguf(metadata)
-    # print(chat_format)
+    chat_template = ChatTemplate.from_gguf(metadata)
+    # print(chat_template)
 
     if not cpp_server_endpoint:
         sys.stderr.write(f"# Starting C++ server with model {model} on {cpp_server_host}:{cpp_server_port}\n")
@@ -69,18 +71,17 @@ def main(
         else:
             response_schema = None
 
-        messages = chat_request.messages
-        if chat_request.tools:
-            messages = chat_format.add_system_prompt(messages, make_tools_prompt(chat_format, chat_request.tools))
-
-        (grammar, parser) = make_grammar(chat_format, chat_request.tools, response_schema)
-
-        # TODO: Test whether the template supports formatting tool_calls
-
-        prompt = chat_format.render(messages, add_generation_prompt=True)
+        chat_handler = get_chat_handler(ChatHandlerArgs(chat_template=chat_template, response_schema=response_schema, tools=chat_request.tools))
         
+        messages = chat_request.messages
+        if chat_handler.output_format_prompt:
+            messages = chat_template.add_system_prompt(messages, chat_handler.output_format_prompt)
+
+        prompt = chat_template.render(messages, add_generation_prompt=True)
+        
+        sys.stderr.write(f'\n# MESSAGES:\n\n{TypeAdapter(list[Message]).dump_json(messages)}\n\n')
         sys.stderr.write(f'\n# PROMPT:\n\n{prompt}\n\n')
-        sys.stderr.write(f'\n# GRAMMAR:\n\n{grammar}\n\n')
+        sys.stderr.write(f'\n# GRAMMAR:\n\n{chat_handler.grammar}\n\n')
         
         data = LlamaCppServerCompletionRequest(
             **{
@@ -94,9 +95,10 @@ def main(
                 )
             },
             prompt=prompt,
-            grammar=grammar,
+            grammar=chat_handler.grammar,
         ).model_dump()
-        sys.stderr.write(json.dumps(data, indent=2) + "\n")
+        # sys.stderr.write(json.dumps(data, indent=2) + "\n")
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{cpp_server_endpoint}/completions",
@@ -116,7 +118,7 @@ def main(
                 return JSONResponse(result)
 
             # print(json.dumps(result.get('content'), indent=2))
-            message = parser(result["content"])
+            message = chat_handler.parse(result["content"])
             assert message is not None, f"Failed to parse response:\n{response.text}\n\n"
 
             prompt_tokens=result['timings']['prompt_n']

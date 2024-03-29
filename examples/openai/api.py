@@ -18,7 +18,7 @@ class Message(BaseModel):
 class ToolFunction(BaseModel):
     name: str
     description: str
-    parameters: Any
+    parameters: dict[str, Any]
 
 class Tool(BaseModel):
     type: str
