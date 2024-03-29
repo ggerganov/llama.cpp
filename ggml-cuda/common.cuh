@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../ggml.h"
-#include "../ggml-cuda.h"
+#include "ggml.h"
+#include "ggml-cuda.h"
+
 #include <memory>
 
 #if defined(GGML_USE_HIPBLAS)
@@ -11,7 +12,7 @@
 #define GGML_COMMON_DECL_CUDA
 #define GGML_COMMON_IMPL_CUDA
 #endif
-#include "../ggml-common.h"
+#include "ggml-common.h"
 
 #include <cstdio>
 #include <array>
