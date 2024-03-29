@@ -24,7 +24,7 @@ def _get_params_schema(fn: Callable, verbose):
 def completion_with_tool_usage(
         *,
         response_model: Optional[Union[Json, Type]]=None,
-        max_tool_iterations: Optional[int]=None,
+        max_iterations: Optional[int]=None,
         tools: List[Callable],
         endpoint: str,
         messages: List[Message],
@@ -61,7 +61,7 @@ def completion_with_tool_usage(
     ]
 
     i = 0
-    while (max_tool_iterations is None or i < max_tool_iterations):
+    while (max_iterations is None or i < max_iterations):
         request = ChatCompletionRequest(
             messages=messages,
             response_format=response_format,
@@ -117,8 +117,8 @@ def completion_with_tool_usage(
 
         i += 1
 
-    if max_tool_iterations is not None:
-        raise Exception(f"Failed to get a valid response after {max_tool_iterations} tool calls")
+    if max_iterations is not None:
+        raise Exception(f"Failed to get a valid response after {max_iterations} tool calls")
 
 
 def main(
@@ -205,7 +205,7 @@ def main(
         model="...",
         endpoint=endpoint,
         response_model=response_model,
-        max_tool_iterations=max_tool_iterations,
+        max_iterations=max_iterations,
         tools=tool_functions,
         auth=auth,
         verbose=verbose,
