@@ -1,0 +1,8 @@
+fastapi[all]
+gguf
+jinja2
+pydantic
+requests
+sse-starlette
+uvicorn[all]
+typer[all]
