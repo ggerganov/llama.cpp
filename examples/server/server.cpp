@@ -3377,7 +3377,7 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_slots_erase = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res, int id_slot) {
+    const auto handle_slots_erase = [&ctx_server, &res_error](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
         server_task task;
         task.type = SERVER_TASK_TYPE_SLOT_ERASE;
         task.data = {
