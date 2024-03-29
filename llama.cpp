@@ -14568,6 +14568,30 @@ void llama_kv_cache_update(struct llama_context * ctx) {
     llama_kv_cache_update_internal(*ctx);
 }
 
+// deprecated
+size_t llama_get_state_size(const struct llama_context * ctx) {
+    return llama_state_get_size(ctx);
+}
+
+// deprecated
+size_t llama_copy_state_data(struct llama_context * ctx, uint8_t * dst) {
+    return llama_state_get_data(ctx, dst);
+}
+
+// deprecated
+size_t llama_set_state_data(struct llama_context * ctx, const uint8_t * src) {
+    return llama_state_set_data(ctx, src);
+}
+
+// deprecated
+bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    return llama_state_load_file(ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+}
+
+// deprecated
+bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count) {
+    return llama_state_save_file(ctx, path_session, tokens, n_token_count);
+}
 
 // Returns the *maximum* size of the state
 size_t llama_state_get_size(const struct llama_context * ctx) {
