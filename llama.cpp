@@ -5523,6 +5523,7 @@ static void llm_build_kv_store(
     GGML_ASSERT(kv.size == n_ctx);
 
     // compute the transposed [n_tokens, n_embd] V matrix
+    assert(v_cur->ne[0] == n_embd_v_gqa && v_cur->ne[1] == n_tokens);
     struct ggml_tensor * v_cur_t = ggml_transpose(ctx, v_cur);
     cb(v_cur_t, "v_cur_t", il);
 
