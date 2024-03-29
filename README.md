@@ -177,6 +177,8 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
 - [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file)
 
+*(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
+
 ---
 
 Here is a typical run using LLaMA v2 13B on M2 Ultra:

@@ -42,7 +42,7 @@ jobs:
       RUNNER_LABEL: Standard_NC4as_T4_v3 # FIXME Do not find a way to not duplicate it
       N_USERS: 8
       DURATION: 10m
-    if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.event.push.ref == 'refs/heads/master' }}
+    if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.head_ref == 'master' || github.ref_name == 'master' || github.event.push.ref == 'refs/heads/master' }}
     steps:
       - name: Clone
         id: checkout
@@ -143,6 +143,7 @@ jobs:
 
       - name: Commit status
         uses: Sibz/github-status-action@v1
+        continue-on-error: true # If not authorized on external repo
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
           sha: ${{ inputs.sha || github.event.pull_request.head.sha || github.sha }}
