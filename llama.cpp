@@ -2121,10 +2121,6 @@ struct llama_context {
             ggml_backend_free(backend);
         }
 
-#ifdef GGML_USE_VULKAN
-        ggml_vk_free_cpu_assist();
-#endif
-
         ggml_backend_buffer_free(buf_output);
     }
 
@@ -14131,7 +14127,20 @@ struct llama_context * llama_new_context_with_model(
             }
         }
 #elif defined(GGML_USE_VULKAN)
-        if (model->n_gpu_layers > 0) {
+        if (model->split_mode == LLAMA_SPLIT_MODE_ROW) {
+            LLAMA_LOG_ERROR("%s: Row split not supported. Failed to initialize Vulkan backend\n", __func__);
+            llama_free(ctx);
+            return nullptr;
+        }
+        if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
+            ggml_backend_t backend = ggml_backend_vk_init(0);
+            if (backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
+        } else {
             for (int device = 0; device < ggml_backend_vk_get_device_count(); ++device) {
                 ggml_backend_t backend = ggml_backend_vk_init(device);
                 if (backend == nullptr) {

@@ -636,15 +636,6 @@ Building the program with BLAS support may lead to some performance improvements
 
 - #### Vulkan
 
-> [!WARNING]
->
-> Vulkan support has been broken in https://github.com/ggerganov/llama.cpp/pull/6122
-> due to relying on `GGML_OP_GET_ROWS` which is not yet properly supported by the Vulkan backend,
-> but should be fixed relatively soon (possibly in https://github.com/ggerganov/llama.cpp/pull/6155
-> (ref: https://github.com/ggerganov/llama.cpp/pull/6122#issuecomment-2015327635)).
->
-> Meanwhile, if you want to use the Vulkan backend, you should use the commit right before the breaking change, https://github.com/ggerganov/llama.cpp/commit/55c1b2a3bbd470e9e2a3a0618b92cf64a885f806
-
   **With docker**:
 
   You don't need to install Vulkan SDK. It will be installed inside the container.
