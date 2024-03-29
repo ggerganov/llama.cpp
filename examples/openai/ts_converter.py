@@ -24,13 +24,13 @@ class SchemaToTypeScriptConverter:
         elif additional_properties == False:
             additional_properties = None
 
-        return "{" + ', '.join([
+        return "{\n" + ',\n'.join([
             f'{self._desc_comment(prop_schema)}{prop_name}{"" if prop_name in required else "?"}: {self.visit(prop_schema)}'
             for prop_name, prop_schema in properties
         ] + (
             [f"{self._desc_comment(additional_properties) if additional_properties else ''}[key: string]: {self.visit(additional_properties)}"]
             if additional_properties is not None else []
-        )) + "}"
+        )) + "\n}"
 
     def visit(self, schema: dict):
         def print_constant(v):

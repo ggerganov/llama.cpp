@@ -53,14 +53,13 @@ def raise_exception(msg: str):
 class ChatTemplate(BaseModel):
     template: str
     inferred_tool_style: Optional['ToolsPromptStyle'] = None
+    eos_token: str
+    bos_token: str
 
     def __init__(self, template: str, eos_token: str, bos_token: str):
-        super().__init__(template=template
-                         )
+        super().__init__(template=template, eos_token=eos_token, bos_token=bos_token)
         env = jinja2.Environment(loader=jinja2.BaseLoader(), trim_blocks=True, lstrip_blocks=True)
         self._template = env.from_string(template)
-        self._eos_token = eos_token
-        self._bos_token = bos_token
 
         self._strict_user_assistant_alternation = "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception" in template
 
@@ -92,9 +91,6 @@ class ChatTemplate(BaseModel):
         else:
             sys.stderr.write(f"Expected suffix ({self._suffix}) not found: {s}\n")
             return s
-
-    def __str__(self):
-        return f"ChatTemplate(template={self.template}, eos_token={self._eos_token}, bos_token={self._bos_token})"
 
     def add_system_prompt(self, messages: list[Message], system_prompt: Message) -> list[Message]:
         assert system_prompt.role == "system"
@@ -194,8 +190,8 @@ class ChatTemplate(BaseModel):
 
         result = self._template.render(
             messages=messages,
-            eos_token=self._eos_token,
-            bos_token='' if omit_bos else self._bos_token,
+            eos_token=self.eos_token,
+            bos_token='' if omit_bos else self.bos_token,
             raise_exception=raise_exception,
             add_generation_prompt=add_generation_prompt,
         )
@@ -339,16 +335,13 @@ class Hermes2ProToolsChatHandler(ToolCallTagsChatHandler):
         except ImportError:
             raise ImportError(f"Please `git clone https://github.com/NousResearch/Hermes-Function-Calling {path}`")
 
-        prompt = PromptManager().generate_prompt(user_prompt=[], tools=[json.dumps(tool) for tool in args.tools])
+        prompt = PromptManager().generate_prompt(user_prompt=[], tools=[tool.model_dump_json() for tool in args.tools])
         assert len(prompt) == 1 and prompt[0]["role"] == "system"
         self.output_format_prompt = Message(**prompt[0])
 
 class FunctionaryToolsChatHandler(ChatHandler):
     def __init__(self, args: ChatHandlerArgs, parallel_calls: bool):
         super().__init__(args)
-
-        # Only allowing a single tool call at a time for now.
-        # Note that if there were more, they'd be separated by a '<|from|>assistant' literal
 
         self.output_format_prompt = Message(
             role="system",
@@ -585,19 +578,19 @@ def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Op
         return TemplatedToolsChatHandler(args, _LONG_TEMPLATE, parallel_calls=parallel_calls, escapes_underscores=True)
 
     elif tool_style == ToolsPromptStyle.TOOLS_HERMES_2_PRO:
-        return Hermes2ProToolsChatHandler(args)
+        return Hermes2ProToolsChatHandler(args, parallel_calls=parallel_calls)
     else:
         raise ValueError(f"Unsupported tool call style: {args.chat_template.tool_style}")
 
 _ts_converter = SchemaToTypeScriptConverter()
 
 def _please_respond_with_schema(schema: dict) -> str:
-    # sig = json.dumps(schema, indent=2)
-    sig = _ts_converter.visit(schema)
+    sig = json.dumps(schema, indent=2)
+    # sig = _ts_converter.visit(schema)
     return f'Please respond in JSON format with the following schema: {sig}'
 
 def _tools_typescript_signatures(tools: list[Tool]) -> str:
-    return 'namespace functions {' + '\n'.join(
+    return 'namespace functions {\n' + '\n'.join(
         '// ' + tool.function.description.replace('\n', '\n// ') + '\n' + ''
         'type ' + tool.function.name + ' = (_: ' + _ts_converter.visit(tool.function.parameters) + ") => any;\n"
         for tool in tools
