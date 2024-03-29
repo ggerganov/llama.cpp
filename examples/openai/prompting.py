@@ -171,6 +171,27 @@ class ChatTemplate(BaseModel):
 
             messages = new_messages
 
+        # JSON!
+        messages = [m.model_dump() for m in messages]
+
+        if self.inferred_tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
+            messages = [
+                {
+                    **m,
+                    "tool_calls": [
+                        {
+                            **tc,
+                            "function": {
+                                "name": tc["function"]["name"],
+                                "arguments": json.dumps(tc["function"]["arguments"]),
+                            }
+                        }
+                        for tc in m["tool_calls"]
+                    ] if m.get("tool_calls") else None
+                }
+                for m in messages
+            ]
+
         result = self._template.render(
             messages=messages,
             eos_token=self._eos_token,
