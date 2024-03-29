@@ -14,8 +14,8 @@ from examples.openai.api import Tool, Message, FunctionCall, ToolCall
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
 from examples.openai.ts_converter import SchemaToTypeScriptConverter
 
-_THOUGHT_KEY = "thought"
-# _THOUGHT_KEY = "thought_about_next_step_only"
+# _THOUGHT_KEY = "thought"
+_THOUGHT_KEY = "thought_about_next_step_only"
 
 # While the API will be usable with a generic tools usage like OpenAI,
 # (see https://cookbook.openai.com/examples/how_to_call_functions_with_chat_models),
@@ -30,7 +30,7 @@ class ToolsPromptStyle(str, Enum):
 
     # Bespoke constrained output format that favours thought and reasoning
     # while allowing unambiguous parsing of parallel tool calling.
-    TOOLS_CONSTRAINED = "thoughtful_steps"
+    TOOLS_THOUGHTFUL_STEPS = "thoughtful_steps"
 
     # Large prompt for https://huggingface.co/NousResearch/Hermes-2-Pro-Mistral-7B
     # <tool_call>...</tool_call> output
@@ -67,7 +67,7 @@ class ChatTemplate(BaseModel):
         if "<|recipient|>' + tool_call['function']['name']" in template:
             self.inferred_tool_style = ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2
         else:
-            self.inferred_tool_style = ToolsPromptStyle.TOOLS_CONSTRAINED
+            self.inferred_tool_style = ToolsPromptStyle.TOOLS_THOUGHTFUL_STEPS
             # self.inferred_tool_style = ToolsPromptStyle.TOOLS_LONG
             # self.inferred_tool_style = ToolsPromptStyle.TOOLS_HERMES_2_PRO
             # self.inferred_tool_style = ToolsPromptStyle.TOOLS_MIXTRAL
@@ -539,13 +539,16 @@ _LONG_TEMPLATE='\n'.join([
     # 'This is not hypothetical, you're not asked what you would do. If you need a tool called, just call it with <tool_call>...</tool_call>.''',
 ])
 
-def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Optional[ToolsPromptStyle] = None) -> ChatHandler:
-    tool_style = tool_style or args.chat_template.inferred_tool_style
+def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Optional[ToolsPromptStyle] = None, verbose=False) -> ChatHandler:
+    tool_style = tool_style if tool_style is not None else args.chat_template.inferred_tool_style
+
+    if verbose:
+        sys.stderr.write(f"# Using tool style: {tool_style}\n")
 
     if not args.tools:
         return NoToolsChatHandler(args)
 
-    elif tool_style == ToolsPromptStyle.TOOLS_CONSTRAINED:
+    elif tool_style == ToolsPromptStyle.TOOLS_THOUGHTFUL_STEPS:
         return BespokeToolsChatHandler(args, parallel_calls=parallel_calls)
 
     elif tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
