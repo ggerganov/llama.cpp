@@ -28,413 +28,415 @@ static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
 #endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
 }
 
-#if __CUDA_ARCH__ >= CC_VOLTA
-typedef nvcuda::wmma::fragment<nvcuda::wmma::matrix_a,    16, 16, 16, half, nvcuda::wmma::row_major> half16x16_a;
-typedef nvcuda::wmma::fragment<nvcuda::wmma::matrix_b,    16, 16, 16, half, nvcuda::wmma::row_major> half16x16_b;
-typedef nvcuda::wmma::fragment<nvcuda::wmma::matrix_b,    16, 16, 16, half, nvcuda::wmma::col_major> half16x16_bT;
-typedef nvcuda::wmma::fragment<nvcuda::wmma::accumulator, 16, 16, 16, half>                          half16x16_acc;
-#endif
-
-// based on metal version
-template<int D, int Q, int C> // D head size, Q queries per block, C cache items per block
-static __global__ void flash_attn_ext_f16(
-        const char * __restrict__ q,
-        const char * __restrict__ k,
-        const char * __restrict__ v,
+template<int D> // D == head size
+__launch_bounds__(D, 1)
+static __global__ void flash_attn_vec_ext_f16(
+        const char * __restrict__ Q,
+        const char * __restrict__ K,
+        const char * __restrict__ V,
         const char * __restrict__ mask,
         float * __restrict__ dst,
-        float scale,
-        int ne00,
-        int ne01,
-        int ne02,
-        int ne03,
-        int ne10,
-        int ne11,
-        int ne12,
-        int ne13,
-        int ne31,
-        int nb31,
-        int nb01,
-        int nb02,
-        int nb03,
-        int nb11,
-        int nb12,
-        int nb13,
-        int ne0,
-        int ne1,
-        int ne2,
-        int ne3) {
-#if __CUDA_ARCH__ >= CC_VOLTA
-    const int warp_id = threadIdx.y;
-    const int lane_id = threadIdx.x;
+        const float scale,
+        const int ne00,
+        const int ne01,
+        const int ne02,
+        const int ne03,
+        const int ne10,
+        const int ne11,
+        const int ne12,
+        const int ne13,
+        const int ne31,
+        const int nb31,
+        const int nb01,
+        const int nb02,
+        const int nb03,
+        const int nb11,
+        const int nb12,
+        const int nb13,
+        const int ne0,
+        const int ne1,
+        const int ne2,
+        const int ne3) {
+    //In this kernel Q, K, V are matrices while i, j, k are matrix indices.
+    const int gqa_ratio = ne02 / ne12; // With grouped query attention there are > 1 Q matrices per K, V matrix.
+    const float2 * Q_f2  = (const float2 *) (Q    + nb02* blockIdx.y              + nb01*blockIdx.x);
+    const half2  * K_h2  = (const half2  *) (K    + nb12*(blockIdx.y / gqa_ratio));
+    const half   * V_h   = (const half   *) (V    + nb12*(blockIdx.y / gqa_ratio)); // K and V have same shape
+    const half   * maskh = (const half   *)  mask + ne31*blockIdx.x;
 
-    const int num_warps = blockDim.y; // number of warps
-    const int iq3 = blockIdx.z;
-    const int iq2 = blockIdx.y;
-    const int iq1 = blockIdx.x * Q;
+    const int stride_KV  = nb11 / sizeof(half);
+    const int stride_KV2 = nb11 / sizeof(half2);
 
-    const int D16 = D/16;
-    const int Q16 = Q/16;
-    const int C16 = C/16;
+    constexpr int nwarps = D/WARP_SIZE;
+    const int tid = WARP_SIZE*threadIdx.y + threadIdx.x;
+    __builtin_assume(tid < D);
 
-    const int NW  = WARP_SIZE;
-    const int SH  = (C + Q); // shared memory per simdgroup in (half)
+    __shared__ half KQ[D];
+    KQ[tid] = 0.0f;
+    half2 * KQ2 = (half2 *) KQ;
 
-    const int T  = D + num_warps*SH; // shared memory size per query in (half)
-    const int T2 = T/2;              // shared memory size per query in (half2)
-    const int C2 = C/2;
-    const int D2 = D/2;
+    half kqmax = -INFINITY;
+    half kqsum = 0.0f;
 
-    extern __shared__  half __flash_attn_f16_shmem[];
-    // pq
-    half  * sq  = (half  *) (__flash_attn_f16_shmem +              0*D); // holds the query data
-    half2 * sq2 = (half2 *) (__flash_attn_f16_shmem +              0*D); // same as above but in half2
-    half  * ss  = (half  *) (__flash_attn_f16_shmem + warp_id*SH + 1*D); // scratch buffer for attention and diagonal matrix
-    half2 * ss2 = (half2 *) (__flash_attn_f16_shmem + warp_id*SH + 1*D); // same as above but in half2
+    __shared__ half kqmax_shared[WARP_SIZE];
+    __shared__ half kqsum_shared[WARP_SIZE];
+    if (threadIdx.y == 0) {
+        kqmax_shared[threadIdx.x] = -INFINITY;
+        kqsum_shared[threadIdx.x] = 0.0f;
+    }
 
-    half16x16_acc zr;
-    half16x16_acc lo[Q16][D16];
+    __syncthreads();
 
-    // load heads from Q to shared memory
+    // Convert Q to half2 and store in registers:
+    half2 Q_h2[(D/2 + WARP_SIZE - 1) / WARP_SIZE];
 #pragma unroll
-    for (int j0 = 0; j0 < Q; j0 += num_warps) {
-        const int j = j0 + warp_id;
-        if (j >= Q) {
+    for (int i0 = 0; i0 < D/2; i0 += WARP_SIZE) {
+        const int i = i0 + threadIdx.x;
+        if (i0 + WARP_SIZE > D/2 && i >= D/2) {
             break;
         }
 
-        const float2 * q2 = (const float2 *) (q + ((iq1 + j)*nb01 + iq2*nb02 + iq3*nb03));
+        Q_h2[i0/WARP_SIZE] = make_half2(scale, scale) * make_half2(Q_f2[i].x, Q_f2[i].y);
+    }
+
+    half2 VKQ = make_half2(0.0f, 0.0f); // Each thread calculates a single VKQ value.
+
+    for (int k_VKQ_0 = 0; k_VKQ_0 < ne11; k_VKQ_0 += D) {
+        // Calculate KQ tile and keep track of new maximum KQ values:
+        half kqmax_new = kqmax;
+#pragma unroll
+        for (int i_KQ_0 = 0; i_KQ_0 < D; i_KQ_0 += nwarps) {
+            const int i_KQ = i_KQ_0 + threadIdx.y;
+
+            if (256 % D != 0 && k_VKQ_0 + i_KQ >= ne11) {
+                break;
+            }
+
+            half2 sum2 = make_half2(0.0f, 0.0f);
+#pragma unroll
+            for (int k_KQ_0 = 0; k_KQ_0 < D/2; k_KQ_0 += WARP_SIZE) {
+                const int k_KQ = k_KQ_0 + threadIdx.x;
+                if (k_KQ_0 + WARP_SIZE > D/2 && k_KQ >= D/2) {
+                    break;
+                }
+
+                const half2 K_ik = K_h2[(k_VKQ_0 + i_KQ)*stride_KV2 + k_KQ];
+                sum2 += K_ik * Q_h2[k_KQ_0/WARP_SIZE];
+            }
+
+            sum2 = warp_reduce_sum(sum2);
+            half sum = __low2half(sum2) + __high2half(sum2);
+            sum += mask ? maskh[k_VKQ_0 + i_KQ] : __float2half(0.0f);
+            kqmax_new = __hmax(kqmax_new, sum);
+            if (threadIdx.x == 0) {
+                KQ[i_KQ] = sum;
+            }
+        }
+
+        kqmax_new = warp_reduce_max(kqmax_new);
+        if (threadIdx.x == 0) {
+            kqmax_shared[threadIdx.y] = kqmax_new;
+        }
+        __syncthreads();
+        kqmax_new = kqmax_shared[threadIdx.x];
+        kqmax_new = warp_reduce_max(kqmax_new);
+
+        const half KQ_max_scale = hexp(kqmax - kqmax_new);
+        kqmax = kqmax_new;
+
+        const half val = hexp(KQ[tid] - kqmax);
+        kqsum = kqsum*KQ_max_scale + val;
+        KQ[tid] = val;
+
+        VKQ *= __half2half2(KQ_max_scale);
+
+        __syncthreads();
 
 #pragma unroll
-        for (int i0 = 0; i0 < D2; i0 += NW) {
-            const int i = i0 + lane_id;
-            if (i >= D2) {
+        for (int k0 = 0; k0 < D; k0 += 2) {
+            if (256 % D != 0 && k_VKQ_0 + k0 >= ne11) {
                 break;
             }
 
-            if (iq1 + j < ne01) {
-                sq2[j*T2 + i] = __float22half2_rn(q2[i]);
-            } else {
-                sq2[j*T2 + i] = make_half2(0.0, 0.0);
-            }
+            half2 V_k;
+            reinterpret_cast<half&>(V_k.x) = V_h[(k_VKQ_0 + k0 + 0)*stride_KV + tid];
+            reinterpret_cast<half&>(V_k.y) = V_h[(k_VKQ_0 + k0 + 1)*stride_KV + tid];
+            VKQ += V_k*KQ2[k0/2];
         }
     }
 
-    nvcuda::wmma::fill_fragment(zr, 0.0);
+    kqsum = warp_reduce_sum(kqsum);
+    if (threadIdx.x == 0) {
+        kqsum_shared[threadIdx.y] = kqsum;
+    }
+    __syncthreads();
+    kqsum = kqsum_shared[threadIdx.x];
+    kqsum = warp_reduce_sum(kqsum);
 
-    // zero out lo
-    for (int j = 0; j < Q16; ++j) {
-        for (int i = 0; i < D16; ++i) {
-            nvcuda::wmma::fill_fragment(lo[j][i], 0.0);
+    dst[D*gridDim.y*blockIdx.x + D*blockIdx.y + tid] = (__low2half(VKQ) + __high2half(VKQ)) / kqsum;
+}
+
+template<int D, int ncols> // D == head size
+__launch_bounds__(ncols == 8 || D > 128 ? D : 2*D, 1)
+static __global__ void flash_attn_ext_f16(
+        const char * __restrict__ Q,
+        const char * __restrict__ K,
+        const char * __restrict__ V,
+        const char * __restrict__ mask,
+        float * __restrict__ dst,
+        const float scale,
+        const int ne00,
+        const int ne01,
+        const int ne02,
+        const int ne03,
+        const int ne10,
+        const int ne11,
+        const int ne12,
+        const int ne13,
+        const int ne31,
+        const int nb31,
+        const int nb01,
+        const int nb02,
+        const int nb03,
+        const int nb11,
+        const int nb12,
+        const int nb13,
+        const int ne0,
+        const int ne1,
+        const int ne2,
+        const int ne3) {
+    //In this kernel Q, K, V are matrices while i, j, k are matrix indices.
+    static_assert(ncols == 8 || ncols % 16 == 0, "ncols must be 8 or a multiple of 16.");
+    constexpr int frag_m = ncols == 8 ? 32 : 16;
+    constexpr int frag_n = ncols == 8 ?  8 : 16;
+    static_assert(D % frag_m == 0, "If ncols == 8 then D % frag_m must be 0.");
+    typedef nvcuda::wmma::fragment<nvcuda::wmma::matrix_a,    frag_m, frag_n, 16, half, nvcuda::wmma::row_major> frag_a_K;
+    typedef nvcuda::wmma::fragment<nvcuda::wmma::matrix_a,    frag_m, frag_n, 16, half, nvcuda::wmma::col_major> frag_a_V;
+    typedef nvcuda::wmma::fragment<nvcuda::wmma::matrix_b,    frag_m, frag_n, 16, half, nvcuda::wmma::col_major> frag_b;
+    typedef nvcuda::wmma::fragment<nvcuda::wmma::accumulator, frag_m, frag_n, 16, half>                          frag_c;
+
+    constexpr int nwarps = (D <= 128 || ncols == 8 ? D : D/2) / frag_m;
+    constexpr int nthreads = nwarps*WARP_SIZE;
+    static_assert(nthreads % D == 0, "nthreads not divisible by D.");
+    constexpr int tc_vals_per_iter = nwarps*frag_m;
+    static_assert(D % tc_vals_per_iter == 0, "D not divisible by tensor core vals per iter.");
+    const int tid = WARP_SIZE*threadIdx.y + threadIdx.x;
+    __builtin_assume(tid < nthreads);
+    constexpr int D_padded = D + 8; // Pad internal representation of KQ, KQV to reduce shared memory bank conflicts.
+
+    const int gqa_ratio = ne02 / ne12; // With grouped query attention there are > 1 Q matrices per K, V matrix.
+    const float * Q_f   = (const float *) (Q + nb02* blockIdx.y                + ncols*nb01*blockIdx.x);
+    const half  * K_h   = (const half  *) (K + nb12*(blockIdx.y / gqa_ratio));
+    const half  * V_h   = (const half  *) (V + nb12*(blockIdx.y / gqa_ratio)); // K and V have same shape
+    const half2 * mask2 = (half2       *)  mask + ncols*ne11*blockIdx.x/2;
+
+    const int stride_Q  = nb01 / sizeof(float);
+    const int stride_KV = nb11 / sizeof(half);
+
+    frag_b Q_b[D/16][ncols/frag_n];
+
+    __shared__ half KQ[ncols*D_padded]; // Buffer for temporarily holding tiles of KQ.
+    half2 * KQ2 = (half2 *) KQ;
+
+    half2    KQ_rowsum[(ncols + nwarps - 1) / nwarps] = {{0.0f,      0.0f}};
+    half2       KQ_max[(ncols + nwarps - 1) / nwarps] = {{-INFINITY, -INFINITY}};
+    half2 KQ_max_scale[(ncols + nwarps - 1) / nwarps] = {{0.0f,      0.0f}};
+
+    __shared__ half VKQ[ncols*D_padded]; // Accumulator for final VKQ slice.
+    half2 * VKQ2 = (half2 *) VKQ;
+#pragma unroll
+    for (int i0 = 0; i0 < ncols*D_padded/2; i0 += nthreads) {
+        const int i = i0 + tid;
+        if (i0 + nthreads > ncols*D_padded/2 && i >= ncols*D_padded/2) {
+            break;
         }
+
+        VKQ2[i] = make_half2(0.0f, 0.0f);
     }
 
-    // zero out shared memory SH
-    for (int j = 0; j < Q; ++j) {
-        for (int i0 = 0; i0 < SH; i0 += NW) {
-            const int i = i0 + lane_id;
-            if (i >= SH) {
-                break;
-            }
+    // Convert Q to half and apply scale, temporarily store in KQ:
+#pragma unroll
+    for (int j0 = 0; j0 < ncols; j0 += nthreads/D) {
+        const int j = j0 + tid/D;
+        const int i = tid % D;
+        KQ[j*D_padded + i] = ncols*blockIdx.x + j < ne01 ? Q_f[j*stride_Q + i] * scale : 0.0f;
+    }
 
-            ss[j*T + i] = 0.0;
+    __syncthreads();
+
+    // Load Q into tensor core fragments/registers since it will be used frequently:
+#pragma unroll
+    for (int i0 = 0; i0 < D; i0 += 16) {
+#pragma unroll
+        for (int j0 = 0; j0 < ncols; j0 += frag_n) {
+            nvcuda::wmma::load_matrix_sync(Q_b[i0/16][j0/frag_n], KQ + j0*D_padded + i0, D_padded);
         }
     }
 
     __syncthreads();
 
-    {
-        half S = __float2half(0.0f);
-        half M[Q];
+    // Iterate over ne11 == previous tokens:
+    for (int k_VKQ_0 = 0; k_VKQ_0 < ne11; k_VKQ_0 += D) {
+        const bool has_valid_data = 256 % D == 0 || k_VKQ_0 + frag_m*threadIdx.y < ne11;
 
-        for (int i = 0; i < Q; ++i) {
-            M[i] = CUDART_MIN_DENORM_FP16;
-        }
-
-        // assume K and V are same shape
-        const int ne22 = ne12;
-        const int ne23 = ne13;
-
-        const int nb21 = nb11;
-        const int nb22 = nb12;
-        const int nb23 = nb13;
-
-        // broadcast
-        const int rk2 = ne02/ne12;
-        const int rk3 = ne03/ne13;
-
-        const int rv2 = ne02/ne22;
-        const int rv3 = ne03/ne23;
-
-        // k indices
-        const int ik2 = iq2 / rk2;
-        const int ik3 = iq3 / rk3;
-
-        // v indices
-        const int iv2 = iq2 / rv2;
-        const int iv3 = iq3 / rv3;
-
-        // load the queries from shared memory into local memory
-        half16x16_a mq[Q16][D16];
-        for (int j = 0; j < Q16; ++j) {
-            for (int i = 0; i < D16; ++i) {
-                nvcuda::wmma::load_matrix_sync(mq[j][i], sq + 16*j*T + i*16, T);
+        // Calculate tile of KQ:
+#pragma unroll
+        for (int i_KQ_0 = 0; i_KQ_0 < D; i_KQ_0 += tc_vals_per_iter) {
+            frag_c KQ_c[ncols/frag_n];
+#pragma unroll
+            for (int j = 0; j < ncols/frag_n; ++j) {
+                nvcuda::wmma::fill_fragment(KQ_c[j], 0.0f);
+            }
+            if (has_valid_data) {
+#pragma unroll
+                for (int k_KQ_0 = 0; k_KQ_0 < D; k_KQ_0 += 16) {
+                    frag_a_K K_a;
+                    nvcuda::wmma::load_matrix_sync(K_a, K_h + (k_VKQ_0 + i_KQ_0 + frag_m*threadIdx.y)*stride_KV + k_KQ_0, stride_KV);
+#pragma unroll
+                    for (int j = 0; j < ncols/frag_n; ++j) {
+                        nvcuda::wmma::mma_sync(KQ_c[j], K_a, Q_b[k_KQ_0/16][j], KQ_c[j]);
+                    }
+                }
+            }
+#pragma unroll
+            for (int j0 = 0; j0 < ncols; j0 += frag_n) {
+                nvcuda::wmma::store_matrix_sync(KQ + j0*D_padded + i_KQ_0 + frag_m*threadIdx.y, KQ_c[j0/frag_n], D_padded, nvcuda::wmma::mem_col_major);
             }
         }
 
-        // pointer to the mask
-        const half * mp = mask ? (const half *) (mask + iq1*nb31) : nullptr;
+        __syncthreads();
 
-        // prepare diagonal scale matrix
-        half16x16_b mscale;
-        for (int i = 0; i < 16; ++i) {
-            ss[i*T + i] = __float2half(scale);
-        }
-        nvcuda::wmma::load_matrix_sync(mscale, ss, T);
-
-        // loop over the KV cache
-        // each simdgroup handles blocks of Q rows and C columns
-        for (int ic0 = 0; ic0 < ne11; ic0 += C*num_warps) {
-            const int ic = ic0 + warp_id*C;
-            if (ic >= ne11) {
+        // Calculate softmax for each KQ column using the current max. value.
+        // The divisor is stored in KQ_rowsum and will be applied at the end.
+#pragma unroll
+        for (int j0 = 0; j0 < ncols; j0 += nwarps) {
+            const int j = j0 + threadIdx.y;
+            if (j0 + nwarps > ncols && j >= ncols) {
                 break;
             }
 
-            // Q*K^T
-            {
+            half2 KQ_max_new = KQ_max[j0/nwarps];
 #pragma unroll
-                for (int cc = 0; cc < C16; ++cc) {
-                    half16x16_acc mqk[Q16];
-                    for (int j = 0; j < Q16; ++j) {
-                        nvcuda::wmma::fill_fragment(mqk[j], 0);
-                    }
-
-                    const half * pk = (const half *) ((const char *) k + ((ic + 16*cc)*nb11 + ik2*nb12 + ik3*nb13));
-
-                    for (int i = 0; i < D16; ++i) {
-                        half16x16_bT mk; // transposed key
-                        nvcuda::wmma::load_matrix_sync(mk, pk + i*16, nb11/sizeof(half));
-
-                        for (int j = 0; j < Q16; ++j) {
-                            nvcuda::wmma::mma_sync(mqk[j], mq[j][i], mk, mqk[j]);
-                        }
-                    }
-
-                    // mqk = mqk*scale + mask
-                    for (int j = 0; j < Q16; ++j) {
-                        half16x16_a mqka;
-                        half16x16_acc mm;
-
-                        if (mp) {
-                            nvcuda::wmma::load_matrix_sync(mm, mp + 16*j*(nb31/sizeof(half)) + ic + 16*cc, nb31/sizeof(half), nvcuda::wmma::mem_row_major);
-                        }
-
-                        // convert accumulator to matrix_a
-                        nvcuda::wmma::store_matrix_sync(      ss + 16*j*T + 16*cc, mqk[j], T, nvcuda::wmma::mem_row_major);
-                        nvcuda::wmma::load_matrix_sync (mqka, ss + 16*j*T + 16*cc, T);
-
-                        nvcuda::wmma::mma_sync(mqk[j], mqka, mscale, mp ? mm : zr);
-                        nvcuda::wmma::store_matrix_sync(ss + 16*j*T + 16*cc, mqk[j], T, nvcuda::wmma::mem_row_major);
-                    }
+            for (int k0 = 0; k0 < D/2; k0 += WARP_SIZE) {
+                const int k = k0 + threadIdx.x;
+                if (k0 + WARP_SIZE > D/2 && k >= D/2) {
+                    break;
                 }
+                KQ_max_new = __hmax2(KQ_max_new, KQ2[j*(D_padded/2) + k]);
             }
+            KQ_max_new = __half2half2(warp_reduce_max(__hmax(__low2half(KQ_max_new), __high2half(KQ_max_new))));
+            KQ_max_scale[j0/nwarps] = h2exp(KQ_max[j0/nwarps] - KQ_max_new);
+            KQ_max[j0/nwarps] = KQ_max_new;
 
-            // used to detect blocks full of -INF
-            half2 smax = make_half2(-INFINITY, -INFINITY);
-
-            // online softmax
-            for (int j = 0; j < Q; ++j) {
-                const half m = M[j];
-
-                for (int p0 = 0; p0 < C2; p0 += NW) {
-                    const int p = p0 + lane_id;
-
-                    const half2 s = ss2[j*T2 + p];
-
-                    smax = __hmax2(smax, s);
-                    M[j] = __hmax(M[j], __hmax(s.x, s.y));
+            half2 KQ_rowsum_add = make_half2(0.0f, 0.0f);
+#pragma unroll
+            for (int k0 = 0; k0 < D/2; k0 += WARP_SIZE) {
+                const int k = k0 + threadIdx.x;
+                if (k0 + WARP_SIZE > D/2 && k >= D/2) {
+                    break;
                 }
-
-                M[j] = warp_reduce_max(M[j]);
-
-                // local sum
-                half2 ls = make_half2(0.0f, 0.0f);
-                half2 M2 = make_half2(M[j], M[j]);
-
-                for (int p0 = 0; p0 < C2; p0 += NW) {
-                    const int p = p0 + lane_id;
-
-                    const half2 s = ss2[j*T2 + p];
-
-                    const half2 vs = h2exp(s - M2);
-
-                    ls += vs;
-
-                    // the P matrix from the paper (Q rows, C columns)
-                    ss2[j*T2 + p] = vs;
-                }
-
-                ls = warp_reduce_sum(ls);
-
-                const half ms = hexp(m - M[j]);
-
-                // create a QxQ diagonal matrix for rescaling the output
-                if (lane_id == j) {
-                    ss[j*T + C + j] = ms;
-
-                    S = S*ms + ls.x + ls.y;
-                }
-            }
-
-            smax = warp_reduce_max(smax);
-
-            // skip -INF blocks
-            if (__hisinf(smax.x) == -1 && __hisinf(smax.y) == -1) {
-                continue;
-            }
-
-            // O = diag(ms)*O
-            for (int j = 0; j < Q16; ++j) {
-                half16x16_a mm;
-                half16x16_b lob;
-
-                nvcuda::wmma::load_matrix_sync(mm, ss + 16*j*T + C + 16*j, T);
-
-                for (int i = 0; i < D16; ++i) {
-                    // convert accumulator to matrix_b
-                    nvcuda::wmma::store_matrix_sync(     ss + 16*j*T + C + 16*j, lo[j][i], T, nvcuda::wmma::mem_row_major);
-                    nvcuda::wmma::load_matrix_sync (lob, ss + 16*j*T + C + 16*j, T);
-
-                    nvcuda::wmma::mma_sync(lo[j][i], mm, lob, zr);
-                }
-            }
-
-            // restore zeros
-            for (int j = 0; j < Q16; ++j) {
-                nvcuda::wmma::store_matrix_sync(ss + 16*j*T + C + 16*j, zr, T, nvcuda::wmma::mem_row_major);
-            }
-
-            // O = O + (Q*K^T)*V
-            {
-                for (int cc = 0; cc < C16; ++cc) {
-                    const half * pv = (const half *) ((const char *) v + ((ic + 16*cc)*nb21 + iv2*nb22 + iv3*nb23));
-
-                    half16x16_b mv[D16];
-                    for (int i = 0; i < D16; ++i) {
-                        nvcuda::wmma::load_matrix_sync(mv[i], pv + i*16, nb21/sizeof(half));
-                    }
-
-                    half16x16_a ms[Q16];
-                    for (int j = 0; j < Q16; ++j) {
-                        nvcuda::wmma::load_matrix_sync(ms[j], ss + 16*j*T + 16*cc, T);
-                    }
-
-                    for (int j = 0; j < Q16; ++j) {
-                        for (int i = 0; i < D16; ++i) {
-                            nvcuda::wmma::mma_sync(lo[j][i], ms[j], mv[i], lo[j][i]);
-                        }
-                    }
-                }
-            }
-        }
-
-        // these are needed for reducing the results from the simdgroups (reuse the ss buffer)
-        if (lane_id < Q) {
-            ss[lane_id*T + 0] = S;
-            ss[lane_id*T + 1] = M[lane_id];
-        }
-    }
-
-    // reduce the warps sequentially
-    for (int sg = 1; sg < num_warps; ++sg) {
-        __syncthreads();
-
-        // each simdgroup stores its output to shared memory, reusing sq
-        if (warp_id == sg) {
-            for (int j = 0; j < Q16; ++j) {
-                for (int i = 0; i < D16; ++i) {
-                    nvcuda::wmma::store_matrix_sync(sq + 16*j*T + i*16, lo[j][i], T, nvcuda::wmma::mem_row_major);
-                }
-            }
-        }
-
-        __syncthreads();
-
-        // the first simdgroup accumulates the results from the other simdgroups
-        if (warp_id == 0) {
-            for (int j = lane_id; j < Q; j += NW) {
-                const half S0 = ss[j*T +         0];
-                const half S1 = ss[j*T + sg*SH + 0];
-
-                const half M0 = ss[j*T +         1];
-                const half M1 = ss[j*T + sg*SH + 1];
-
-                const half M = __hmax(M0, M1);
-
-                const half ms0 = hexp(M0 - M);
-                const half ms1 = hexp(M1 - M);
-
-                const half S = S0*ms0 + S1*ms1;
-
-                ss[j*T + 0] = S;
-                ss[j*T + 1] = M;
-
-                ss[j*T + C + j        ] = ms0;
-                ss[j*T + C + j + sg*SH] = ms1;
-            }
-
-            // O_0 = diag(ms0)*O_0 + diag(ms1)*O_1
-            for (int j = 0; j < Q16; ++j) {
-                half16x16_a ms0;
-                half16x16_a ms1;
-                half16x16_b t;
-                half16x16_acc t2;
-
-                nvcuda::wmma::load_matrix_sync(ms0, ss + 16*j*T + C + 16*j,         T);
-                nvcuda::wmma::load_matrix_sync(ms1, ss + 16*j*T + C + 16*j + sg*SH, T);
-
-                for (int i = 0; i < D16; ++i) {
-                    nvcuda::wmma::load_matrix_sync(t, sq + 16*j*T + i*16, T);
-                    nvcuda::wmma::mma_sync(t2, ms1, t, zr);
-
-                    // convert accumulator to matrix_b
-                    nvcuda::wmma::store_matrix_sync(   sq + 16*j*T + i*16, lo[j][i], T, nvcuda::wmma::mem_row_major);
-                    nvcuda::wmma::load_matrix_sync (t, sq + 16*j*T + i*16, T);
-
-                    nvcuda::wmma::mma_sync(lo[j][i], ms0, t, t2);
-                }
-            }
-        }
-    }
-
-    // store result to shared memory (reuse sq)
-    if (warp_id == 0) {
-        for (int j = 0; j < Q16; ++j) {
-            for (int i = 0; i < D16; ++i) {
-                nvcuda::wmma::store_matrix_sync(sq + 16*j*T + i*16, lo[j][i], T, nvcuda::wmma::mem_row_major);
-            }
-        }
-    }
-
-    // final rescale with 1/S and store to global memory
-    if (warp_id == 0) {
-        for (int j = 0; j < Q && iq1 + j < ne01; ++j) {
-            const half S = ss[j*T + 0];
-
-            for (int i0 = 0; i0 < D; i0 += NW) {
-                const int i = i0 + lane_id;
-                if (i >= D) {
+                if (256 % D != 0 && k_VKQ_0 + 2*k >= ne11) {
                     break;
                 }
 
-                dst[(iq3*ne2*ne1 + iq2 + (iq1 + j)*ne1)*D + i] = __half2float(sq[j*T + i] / S);
+                half2 val = KQ2[j*(D_padded/2) + k];
+                val += mask ? mask2[(j*ne11 + k_VKQ_0)/2 + k] : make_half2(0.0f, 0.0f);
+                val = h2exp(val - KQ_max[j0/nwarps]);
+                KQ_rowsum_add += val;
+                KQ2[j*(D_padded/2) + k] = val;
+            }
+            KQ_rowsum_add = warp_reduce_sum(KQ_rowsum_add);
+
+            // Scale previous KQ_rowsum to account for a potential increase in KQ_max:
+            KQ_rowsum[j0/nwarps] = KQ_max_scale[j0/nwarps]*KQ_rowsum[j0/nwarps] + KQ_rowsum_add;
+        }
+
+        __syncthreads();
+
+        frag_b KQ_b[D/16][ncols/frag_n];
+#pragma unroll
+        for (int j0 = 0; j0 < ncols; j0 += frag_n) {
+#pragma unroll
+            for (int k0 = 0; k0 < D; k0 += 16) {
+                nvcuda::wmma::load_matrix_sync(KQ_b[k0/16][j0/frag_n], KQ + j0*D_padded + k0, D_padded);
             }
         }
+
+        frag_c VKQ_c[D/tc_vals_per_iter][ncols/frag_n];
+#pragma unroll
+        for (int i_KQ_0 = 0; i_KQ_0 < D; i_KQ_0 += tc_vals_per_iter) {
+    #pragma unroll
+            for (int j = 0; j < ncols/frag_n; ++j) {
+                nvcuda::wmma::fill_fragment(VKQ_c[i_KQ_0/tc_vals_per_iter][j], 0.0f);
+            }
+
+    #pragma unroll
+            for (int k0 = 0; k0 < D; k0 += 16) {
+                if (256 % D != 0 && k_VKQ_0 + k0 >= ne11) {
+                    break;
+                }
+
+                frag_a_V v_a;
+                nvcuda::wmma::load_matrix_sync(v_a, V_h + (k_VKQ_0 + k0)*stride_KV + i_KQ_0 + frag_m*threadIdx.y, stride_KV);
+    #pragma unroll
+                for (int j = 0; j < ncols/frag_n; ++j) {
+                    nvcuda::wmma::mma_sync(VKQ_c[i_KQ_0/tc_vals_per_iter][j], v_a, KQ_b[k0/16][j], VKQ_c[i_KQ_0/tc_vals_per_iter][j]);
+                }
+            }
+        }
+
+        __syncthreads();
+
+#pragma unroll
+        for (int i_KQ_0 = 0; i_KQ_0 < D; i_KQ_0 += tc_vals_per_iter) {
+#pragma unroll
+            for (int j0 = 0; j0 < ncols; j0 += frag_n) {
+                nvcuda::wmma::store_matrix_sync(
+                    KQ + j0*D_padded + i_KQ_0 + frag_m*threadIdx.y,
+                    VKQ_c[i_KQ_0/tc_vals_per_iter][j0/frag_n],
+                    D_padded, nvcuda::wmma::mem_col_major);
+            }
+        }
+
+        __syncthreads();
+
+#pragma unroll
+        for (int j0 = 0; j0 < ncols; j0 += nwarps) {
+            const int j = j0 + threadIdx.y;
+            if (j0 + nwarps > ncols && j >= ncols) {
+                break;
+            }
+#pragma unroll
+            for (int i0 = 0; i0 < D/2; i0 += WARP_SIZE) {
+                const int i = i0 + threadIdx.x;
+                if (i0 + WARP_SIZE > D/2 && i >= D/2) {
+                    break;
+                }
+                VKQ2[j*(D_padded/2) + i] = KQ_max_scale[j0/nwarps]*VKQ2[j*(D_padded/2) + i] + KQ2[j*(D_padded/2) + i];
+            }
+        }
+
+        __syncthreads();
     }
-#else
-    NO_DEVICE_CODE;
-#endif
+
+#pragma unroll
+    for (int j0 = 0; j0 < ncols; j0 += nwarps) {
+        const int j = j0 + threadIdx.y;
+        if ((j0 + nwarps > ncols && j >= ncols) || ncols*blockIdx.x + j >= ne01) {
+            return;
+        }
+        const float KQ_rowsum_j = __low2float(KQ_rowsum[j0/nwarps]) + __high2float(KQ_rowsum[j0/nwarps]);
+#pragma unroll
+        for (int i0 = 0; i0 < D; i0 += WARP_SIZE) {
+            const int i = i0 + threadIdx.x;
+            if (i0 + WARP_SIZE > D && i >= D) {
+                break;
+            }
+            dst[D*gridDim.y*(ncols*blockIdx.x + j) + D*blockIdx.y + i] = __half2float(VKQ[j*D_padded + i]) / KQ_rowsum_j;
+        }
+    }
 }
+
 
 void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * Q = dst->src[0];
@@ -461,133 +463,586 @@ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst
     float scale;
     memcpy(&scale, KQV->op_params, sizeof(float));
 
-#define NQPB 16
-#define NCPW 128
-
-    const int nqpb = NQPB; // queries per block
-    const int ncpw = NCPW; // cache values per warp (does not work for other values)
-
-    GGML_ASSERT(NQPB <= 32);
-
-    const int nwarps_max = 8; // TODO: we don't want to launch too much warps. how much is too much?
-                              // TODO: produces wrong results for nwarps > 8 (RTX 2060) - not sure why
-    const int nwarps = Q->ne[1] <= nqpb ? std::max(2, std::min((int) K->ne[1]/ncpw, nwarps_max)) : 1;
-
-    dim3 blocks_num((Q->ne[1] + nqpb - 1) / nqpb, Q->ne[2], Q->ne[3]);
-    dim3 block_dim(32, nwarps, 1);
-
-    const size_t shmem = nqpb*(Q->ne[0] + nwarps*(ncpw + nqpb))*(sizeof(float)/2);
-
-    // increase shared memory limit to 96KB
-    //const size_t shmem_max = 96*1024;
-    //cudaFuncSetAttribute(flash_attn_ext_f16<128, NQPB, NCPW>, cudaFuncAttributeMaxDynamicSharedMemorySize, shmem_max);
-
-    switch (Q->ne[0]) {
-        case 64:
-            flash_attn_ext_f16<64, NQPB, NCPW>
-                <<<blocks_num, block_dim, shmem, main_stream>>> (
-                        (const char *) Q->data, // Query
-                        (const char *) K->data, // Key
-                        (const char *) V->data, // Value
-                        mask ? (const char *) mask->data : nullptr, // Mask
-                        (float *) KQV->data, // dst
-                        scale,
-                        Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
-                        K->ne[0], K->ne[1], K->ne[2], K->ne[3],
-                        mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
-                        Q->nb[1], Q->nb[2], Q->nb[3],
-                        K->nb[1], K->nb[2], K->nb[3],
-                        KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
-                        );
-            break;
-        case 80:
-            flash_attn_ext_f16<80, NQPB, NCPW>
-                <<<blocks_num, block_dim, shmem, main_stream>>> (
-                        (const char *) Q->data, // Query
-                        (const char *) K->data, // Key
-                        (const char *) V->data, // Value
-                        mask ? (const char *) mask->data : nullptr, // Mask
-                        (float *) KQV->data, // dst
-                        scale,
-                        Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
-                        K->ne[0], K->ne[1], K->ne[2], K->ne[3],
-                        mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
-                        Q->nb[1], Q->nb[2], Q->nb[3],
-                        K->nb[1], K->nb[2], K->nb[3],
-                        KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
-                        );
-            break;
-        case 96:
-            flash_attn_ext_f16<96, NQPB, NCPW>
-                <<<blocks_num, block_dim, shmem, main_stream>>> (
-                        (const char *) Q->data, // Query
-                        (const char *) K->data, // Key
-                        (const char *) V->data, // Value
-                        mask ? (const char *) mask->data : nullptr, // Mask
-                        (float *) KQV->data, // dst
-                        scale,
-                        Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
-                        K->ne[0], K->ne[1], K->ne[2], K->ne[3],
-                        mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
-                        Q->nb[1], Q->nb[2], Q->nb[3],
-                        K->nb[1], K->nb[2], K->nb[3],
-                        KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
-                        );
-            break;
-        case 112:
-            flash_attn_ext_f16<112, NQPB, NCPW>
-                <<<blocks_num, block_dim, shmem, main_stream>>> (
-                        (const char *) Q->data, // Query
-                        (const char *) K->data, // Key
-                        (const char *) V->data, // Value
-                        mask ? (const char *) mask->data : nullptr, // Mask
-                        (float *) KQV->data, // dst
-                        scale,
-                        Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
-                        K->ne[0], K->ne[1], K->ne[2], K->ne[3],
-                        mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
-                        Q->nb[1], Q->nb[2], Q->nb[3],
-                        K->nb[1], K->nb[2], K->nb[3],
-                        KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
-                        );
-            break;
-        case 128:
-            flash_attn_ext_f16<128, NQPB, NCPW>
-                <<<blocks_num, block_dim, shmem, main_stream>>> (
-                        (const char *) Q->data, // Query
-                        (const char *) K->data, // Key
-                        (const char *) V->data, // Value
-                        mask ? (const char *) mask->data : nullptr, // Mask
-                        (float *) KQV->data, // dst
-                        scale,
-                        Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
-                        K->ne[0], K->ne[1], K->ne[2], K->ne[3],
-                        mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
-                        Q->nb[1], Q->nb[2], Q->nb[3],
-                        K->nb[1], K->nb[2], K->nb[3],
-                        KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
-                        );
-            break;
-        case 256:
-            flash_attn_ext_f16<256, NQPB, NCPW>
-                <<<blocks_num, block_dim, shmem, main_stream>>> (
-                        (const char *) Q->data, // Query
-                        (const char *) K->data, // Key
-                        (const char *) V->data, // Value
-                        mask ? (const char *) mask->data : nullptr, // Mask
-                        (float *) KQV->data, // dst
-                        scale,
-                        Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
-                        K->ne[0], K->ne[1], K->ne[2], K->ne[3],
-                        mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
-                        Q->nb[1], Q->nb[2], Q->nb[3],
-                        K->nb[1], K->nb[2], K->nb[3],
-                        KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
-                        );
-            break;
-        default:
-            break;
+    if (Q->ne[0] % WARP_SIZE == 0 && Q->ne[1] == 1) {
+        const int nwarps = Q->ne[0] / WARP_SIZE;
+        const dim3 blocks_num(Q->ne[1], Q->ne[2], Q->ne[3]);
+        const dim3 block_dim(WARP_SIZE, nwarps, 1);
+        const int shmem = 0;
+        switch (Q->ne[0]) {
+            case 64:
+                flash_attn_vec_ext_f16<64>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            // case 80:
+            //     flash_attn_vec_ext_f16<80>
+            //         <<<blocks_num, block_dim, shmem, main_stream>>> (
+            //                 (const char *) Q->data, // Query
+            //                 (const char *) K->data, // Key
+            //                 (const char *) V->data, // Value
+            //                 mask ? ((const char *) mask->data) : nullptr, // Mask
+            //                 (float *) KQV->data, // dst
+            //                 scale,
+            //                 Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+            //                 K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+            //                 mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+            //                 Q->nb[1], Q->nb[2], Q->nb[3],
+            //                 K->nb[1], K->nb[2], K->nb[3],
+            //                 KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+            //                 );
+            //     break;
+            case 96:
+                flash_attn_vec_ext_f16<96>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            // case 112:
+            //     flash_attn_vec_ext_f16<112>
+            //         <<<blocks_num, block_dim, shmem, main_stream>>> (
+            //                 (const char *) Q->data, // Query
+            //                 (const char *) K->data, // Key
+            //                 (const char *) V->data, // Value
+            //                 mask ? ((const char *) mask->data) : nullptr, // Mask
+            //                 (float *) KQV->data, // dst
+            //                 scale,
+            //                 Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+            //                 K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+            //                 mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+            //                 Q->nb[1], Q->nb[2], Q->nb[3],
+            //                 K->nb[1], K->nb[2], K->nb[3],
+            //                 KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+            //                 );
+            //     break;
+            case 128:
+                flash_attn_vec_ext_f16<128>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 256:
+                flash_attn_vec_ext_f16<256>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            default:
+                GGML_ASSERT(false);
+                break;
+        }
+        CUDA_CHECK(cudaGetLastError());
+        return;
     }
 
+    int cols_per_block;
+    if (Q->ne[1] >= 128 && Q->ne[0] <= 128) {
+        cols_per_block = 64;
+    } else if (Q->ne[1] >= 64) {
+        cols_per_block = 32;
+    } else if (Q->ne[1] >= 32 || Q->ne[0] % 32 != 0) {
+        cols_per_block = 16;
+    } else  {
+        cols_per_block = 8;
+    }
+    const int frag_m = cols_per_block == 8 ? 32 : 16;
+    const int nwarps = (Q->ne[0] <= 128 || cols_per_block == 8 ? Q->ne[0] : Q->ne[0]/2) / frag_m;
+    const dim3 blocks_num((Q->ne[1] + cols_per_block - 1) / cols_per_block, Q->ne[2], Q->ne[3]);
+    const dim3 block_dim(WARP_SIZE, nwarps, 1);
+    const size_t shmem = 0;
+
+    switch (Q->ne[0]) {
+        case 64: switch (cols_per_block) {
+            case 8:
+                flash_attn_ext_f16<64, 8>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 16:
+                flash_attn_ext_f16<64, 16>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 32:
+                flash_attn_ext_f16<64, 32>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 64:
+                flash_attn_ext_f16<64, 64>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            default:
+                fprintf(stderr, "cols_per_block == %d not implemented.\n", cols_per_block);
+                GGML_ASSERT(false);
+                break;
+        } break;
+        case 80: switch (cols_per_block) {
+            // case 8:
+            //     fused_attn_vec_ext_f16<80, 8>
+            //         <<<blocks_num, block_dim, shmem, main_stream>>> (
+            //                 (const char *) Q->data, // Query
+            //                 (const char *) K->data, // Key
+            //                 (const char *) V->data, // Value
+            //                 mask ? ((const char *) mask->data) : nullptr, // Mask
+            //                 (float *) KQV->data, // dst
+            //                 scale,
+            //                 Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+            //                 K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+            //                 mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+            //                 Q->nb[1], Q->nb[2], Q->nb[3],
+            //                 K->nb[1], K->nb[2], K->nb[3],
+            //                 KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+            //                 );
+            //     break;
+            case 16:
+                flash_attn_ext_f16<80, 16>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 32:
+                flash_attn_ext_f16<80, 32>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 64:
+                flash_attn_ext_f16<80, 64>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            default:
+                fprintf(stderr, "cols_per_block == %d not implemented.\n", cols_per_block);
+                GGML_ASSERT(false);
+                break;
+        } break;
+        case 96: switch (cols_per_block) {
+            case 8:
+                flash_attn_ext_f16<96, 8>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 16:
+                flash_attn_ext_f16<96, 16>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 32:
+                flash_attn_ext_f16<96, 32>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 64:
+                flash_attn_ext_f16<96, 64>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            default:
+                fprintf(stderr, "cols_per_block == %d not implemented.\n", cols_per_block);
+                GGML_ASSERT(false);
+                break;
+        } break;
+        case 112: switch (cols_per_block) {
+            // case 8:
+            //     fused_attn_vec_ext_f16<112, 8>
+            //         <<<blocks_num, block_dim, shmem, main_stream>>> (
+            //                 (const char *) Q->data, // Query
+            //                 (const char *) K->data, // Key
+            //                 (const char *) V->data, // Value
+            //                 mask ? ((const char *) mask->data) : nullptr, // Mask
+            //                 (float *) KQV->data, // dst
+            //                 scale,
+            //                 Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+            //                 K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+            //                 mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+            //                 Q->nb[1], Q->nb[2], Q->nb[3],
+            //                 K->nb[1], K->nb[2], K->nb[3],
+            //                 KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+            //                 );
+            //     break;
+            case 16:
+                flash_attn_ext_f16<112, 16>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 32:
+                flash_attn_ext_f16<112, 32>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 64:
+                flash_attn_ext_f16<112, 64>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            default:
+                fprintf(stderr, "cols_per_block == %d not implemented.\n", cols_per_block);
+                GGML_ASSERT(false);
+                break;
+        } break;
+        case 128: switch (cols_per_block) {
+            case 8:
+                flash_attn_ext_f16<128, 8>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 16:
+                flash_attn_ext_f16<128, 16>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 32:
+                flash_attn_ext_f16<128, 32>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 64:
+                flash_attn_ext_f16<128, 64>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            default:
+                fprintf(stderr, "cols_per_block == %d not implemented.\n", cols_per_block);
+                GGML_ASSERT(false);
+                break;
+        } break;
+        case 256: switch (cols_per_block) {
+            case 8:
+                flash_attn_ext_f16<256, 8>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 16:
+                flash_attn_ext_f16<256, 16>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            case 32:
+                flash_attn_ext_f16<256, 32>
+                    <<<blocks_num, block_dim, shmem, main_stream>>> (
+                            (const char *) Q->data, // Query
+                            (const char *) K->data, // Key
+                            (const char *) V->data, // Value
+                            mask ? ((const char *) mask->data) : nullptr, // Mask
+                            (float *) KQV->data, // dst
+                            scale,
+                            Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+                            K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+                            mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+                            Q->nb[1], Q->nb[2], Q->nb[3],
+                            K->nb[1], K->nb[2], K->nb[3],
+                            KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+                            );
+                break;
+            // case 64:
+            //     flash_attn_ext_f16<256, 64>
+            //         <<<blocks_num, block_dim, shmem, main_stream>>> (
+            //                 (const char *) Q->data, // Query
+            //                 (const char *) K->data, // Key
+            //                 (const char *) V->data, // Value
+            //                 mask ? ((const char *) mask->data) : nullptr, // Mask
+            //                 (float *) KQV->data, // dst
+            //                 scale,
+            //                 Q->ne[0], Q->ne[1], Q->ne[2], Q->ne[3],
+            //                 K->ne[0], K->ne[1], K->ne[2], K->ne[3],
+            //                 mask ? mask->ne[1] : 0, mask ?  mask->nb[1] : 0,
+            //                 Q->nb[1], Q->nb[2], Q->nb[3],
+            //                 K->nb[1], K->nb[2], K->nb[3],
+            //                 KQV->ne[0], KQV->ne[1], KQV->ne[2], KQV->ne[3]
+            //                 );
+            //     break;
+            default:
+                fprintf(stderr, "cols_per_block == %d not implemented.\n", cols_per_block);
+                GGML_ASSERT(false);
+                break;
+        } break;
+        default:
+            GGML_ASSERT(false);
+            break;
+    }
     CUDA_CHECK(cudaGetLastError());
 }
