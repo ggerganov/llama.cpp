@@ -1734,9 +1734,9 @@ static enum ggml_status ggml_metal_graph_compute(
 
                             // some Metal matrix data types require aligned pointers
                             // ref: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf (Table 2.5)
-                            switch (src2->type) {
-                                case GGML_TYPE_F32: GGML_ASSERT(nb21 % 16 == 0); break;
-                                case GGML_TYPE_F16: GGML_ASSERT(nb21 % 8  == 0); break;
+                            switch (src0->type) {
+                                case GGML_TYPE_F32: GGML_ASSERT(nb01 % 16 == 0); break;
+                                case GGML_TYPE_F16: GGML_ASSERT(nb01 % 8  == 0); break;
                                 default: break;
                             }
 
