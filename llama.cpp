@@ -15717,15 +15717,12 @@ static int32_t llama_chat_apply_template_internal(
         // Vicuna 1.1+, Nous Capybara, etc.
         for (auto message : chat) {
             std::string role(message->role);
-            if (role == "user") {
-                ss << "USER: ";
-            } else if (role == "assistant") {
-                ss << "ASSISTANT: ";
-            }
-            ss << message->content << "\n";
             if (role == "system") {
-                // Extra newline after system message
-                ss << "\n";
+                ss << message->content << "\n\n";
+            } else if (role == "user") {
+                ss << "USER: " << message->content << "\n";
+            } else if (role == "assistant") {
+                ss << "ASSISTANT: " << message->content << "</s>\n";
             }
         }
         if (add_ass) {
@@ -15736,13 +15733,12 @@ static int32_t llama_chat_apply_template_internal(
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "system") {
-                ss << "SYSTEM: ";
+                ss << "SYSTEM: " << message->content << "\n";
             } else if (role == "user") {
-                ss << "USER: ";
+                ss << "USER: " << message->content << "\n";
             } else if (role == "assistant") {
-                ss << "ASSISTANT: ";
+                ss << "ASSISTANT: " << message->content << "</s>\n";
             }
-            ss << message->content << "\n";
         }
         if (add_ass) {
             ss << "ASSISTANT:";
