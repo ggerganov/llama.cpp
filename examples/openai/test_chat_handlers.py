@@ -165,27 +165,6 @@ if __name__ == "__main__":
         check(chat_template.potentially_supports_parallel_calls == (model_name in MODELS_WITH_PARALLEL_CALLS),
               f"{model_name} should {'not ' if model_name not in MODELS_WITH_PARALLEL_CALLS else ''} be detected as potentially supporting parallel calls")
 
-        # if model_name == 'hermes_2_pro_mistral':
-        #     print("Skipping hermes_2_pro_mistral")
-        #     continue
-        def check_finds(msgs, strings_to_find):
-            prompt = chat_template.render(msgs, add_generation_prompt=True)
-            for s in strings_to_find:
-                check(str(s) in prompt, f"Missing {s} in prompt for {model_name}:\n{prompt}")
-
-        check_finds([PROMPT_MESSAGE], (QUESTION,))
-        check_finds([ASSIST_MESSAGE], (ANSWER,))
-        check_finds([TOOL_CALL_MESSAGE], (TEST_ARG_A, TEST_ARG_B, TOOL_NAME))
-        check_finds([THOUGHTFUL_TOOL_CALL_MESSAGE], (TEST_THOUGHT, TEST_ARG_A, TEST_ARG_B, TOOL_NAME,))
-        check_finds([TOOL_MESSAGE], (TEST_SUM,))
-        if chat_template.potentially_supports_parallel_calls:
-            check_finds([TOOL_MESSAGE], (TOOL_NAME,))
-
-        print(f"\n# {model_name}\n")
-        print(f'\nTemplate:\n\n```js\n{chat_template.template}\n```\n')
-
-        print(f'\nPrompt:\n\n```js\n{chat_template.render(TEST_MESSAGES, add_generation_prompt=True)}\n```\n')
-
         argss = {
             "with tools": ChatHandlerArgs(
                 chat_template=chat_template, #ChatTemplate.from_gguf(GGUFKeyValues(model)),
@@ -199,6 +178,13 @@ if __name__ == "__main__":
             ),
         }
 
+        print(f"\n# {model_name}\n")
+
+        if chat_template.potentially_supports_parallel_calls:
+            print("\n**Might Support Parallel Tool Calls**\n")
+
+        print(f'\nTemplate:\n\n```js\n{chat_template.template}\n```\n')
+
         for style in ToolsPromptStyle:
             if (style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2) != (model_name.startswith("functionary")):
                 continue
@@ -209,16 +195,38 @@ if __name__ == "__main__":
             if model_name == "mistral_instruct_v0_1" and style not in (ToolsPromptStyle.TOOLS_THOUGHTFUL_STEPS, ToolsPromptStyle.TOOLS_MIXTRAL):
                 continue
 
-            print(f'\n## {style}\n')
+            print(f'\n## {model_name} / {style.name}\n')
 
-            for tn, args in argss.items():
+
+            for tool_situation, args in argss.items():
                 ch = get_chat_handler(args, parallel_calls=True, tool_style=style)
 
-                print(f'\n### {tn}\n')
+                print(f'\n### {model_name} / {style.name} / {tool_situation}\n')
+                
+                print(f'\nPrompt:\n\n```js\n{ch.render_prompt(TEST_MESSAGES)}\n```\n')
 
                 print(f'\nPrompt:\n\n```json\n{ch.output_format_prompt.content}\n```\n')
 
                 print(f'\nGrammar:\n\n```js\n{ch.grammar}\n```\n')
+
+                        
+                # if model_name == 'hermes_2_pro_mistral':
+                #     print("Skipping hermes_2_pro_mistral")
+                #     continue
+                def check_finds(msgs, strings_to_find):
+                    prompt = ch.render_prompt(msgs)
+                    for s in strings_to_find:
+                        check(str(s) in prompt, f"Missing {s} in prompt for {model_name}:\n{prompt}")
+
+                check_finds([PROMPT_MESSAGE], (QUESTION,))
+                check_finds([ASSIST_MESSAGE], (ANSWER,))
+                check_finds([TOOL_CALL_MESSAGE], (TEST_ARG_A, TEST_ARG_B, TOOL_NAME))
+                check_finds([THOUGHTFUL_TOOL_CALL_MESSAGE], (TEST_THOUGHT, TEST_ARG_A, TEST_ARG_B, TOOL_NAME,))
+                check_finds([TOOL_MESSAGE], (TEST_SUM,))
+                if chat_template.potentially_supports_parallel_calls:
+                    check_finds([TOOL_MESSAGE], (TOOL_NAME,))
+
+
 
     if failures:
         for f in failures:

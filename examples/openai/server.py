@@ -140,7 +140,7 @@ def main(
         if chat_handler.output_format_prompt:
             messages = chat_template.add_system_prompt(messages, chat_handler.output_format_prompt)
 
-        prompt = chat_template.render(messages, add_generation_prompt=True)
+        prompt = chat_handler.render_prompt(messages)
         
         if verbose:
             sys.stderr.write(f'\n# REQUEST:\n\n{chat_request.model_dump_json(indent=2)}\n\n')
