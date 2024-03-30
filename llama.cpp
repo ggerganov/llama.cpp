@@ -15698,7 +15698,7 @@ static int32_t llama_chat_apply_template_internal(
             }
         }
     } else if (tmpl == "openchat" || tmpl.find("GPT4 Correct ") != std::string::npos) {
-        // Openchat, Starling
+        // openchat/openchat-3.5-0106,
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "user") {
@@ -15713,27 +15713,17 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "GPT4 Correct Assistant:";
         }
-    } else if (tmpl == "vicuna" || tmpl.find("USER: ") != std::string::npos) {
-        // Vicuna 1.1+, Nous Capybara, etc.
+    } else if (tmpl == "vicuna" || (tmpl.find("ASSISTANT: ") != std::string::npos && tmpl.find("USER: ") != std::string::npos)) {
+        // eachadea/vicuna-13b-1.1 (and Orca variant)
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "system") {
-                ss << message->content << "\n\n";
-            } else if (role == "user") {
-                ss << "USER: " << message->content << "\n";
-            } else if (role == "assistant") {
-                ss << "ASSISTANT: " << message->content << "</s>\n";
-            }
-        }
-        if (add_ass) {
-            ss << "ASSISTANT:";
-        }
-    } else if (tmpl == "orca-vicuna" || tmpl.find("SYSTEM: ") != std::string::npos) {
-        // Orca-Vicuna
-        for (auto message : chat) {
-            std::string role(message->role);
-            if (role == "system") {
-                ss << "SYSTEM: " << message->content << "\n";
+                // Orca-Vicuna variant uses a system prefix
+                if (tmpl.find("SYSTEM: ") != std::string::npos) {
+                    ss << "SYSTEM: " << message->content << "\n";
+                } else {
+                    ss << message->content << "\n\n";
+                }
             } else if (role == "user") {
                 ss << "USER: " << message->content << "\n";
             } else if (role == "assistant") {
