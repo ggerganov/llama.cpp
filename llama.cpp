@@ -15697,6 +15697,22 @@ static int32_t llama_chat_apply_template_internal(
                 ss << message->content << "</s>";
             }
         }
+    } else if (tmpl == "openchat" || tmpl.find("GPT4 Correct ") != std::string::npos) {
+        // Openchat, Starling
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "user") {
+                ss << "GPT4 Correct User: ";
+            } else if (role == "assistant") {
+                ss << "GPT4 Correct Assistant: ";
+            }
+            // Not documented, but apparently the system message is prepended without prefix:
+            // https://huggingface.co/openchat/openchat_3.5/discussions/5#65448109b4a3f3a2f486fd9d
+            ss << message->content << "<|end_of_turn|>";
+        }
+        if (add_ass) {
+            ss << "GPT4 Correct Assistant: ";
+        }
     } else {
         // template not supported
         return -1;
