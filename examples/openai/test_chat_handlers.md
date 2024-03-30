@@ -66,12 +66,7 @@ Template:
 Prompt:
 
 ```js
-<s>[INST] {
-  "thought_about_next_step_only": "",
-  "next_step": {
-    "result": "Add two numbers for the purpose of this test."
-  }
-} [/INST]{
+<s>[INST] Add two numbers for the purpose of this test. [/INST]{
   "thought_about_next_step_only": "",
   "next_step": {
     "tool_calls": [
@@ -88,12 +83,7 @@ Prompt:
       }
     ]
   }
-}</s>[INST] [TOOL(name=None, id=None)]{
-  "thought_about_next_step_only": "",
-  "next_step": {
-    "result": "32222002938"
-  }
-}[/TOOL] [/INST]{
+}</s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]{
   "thought_about_next_step_only": "",
   "next_step": {
     "result": "The sum of 2535 and 32222000403 is 42."
@@ -862,12 +852,7 @@ Prompt:
 
 ```js
 <|im_start|>user
-{
-  "thought_about_next_step_only": "",
-  "next_step": {
-    "result": "Add two numbers for the purpose of this test."
-  }
-}<|im_end|>
+Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
 {
   "thought_about_next_step_only": "",
@@ -888,12 +873,7 @@ Prompt:
   }
 }<|im_end|>
 <|im_start|>tool
-{
-  "thought_about_next_step_only": "",
-  "next_step": {
-    "result": "32222002938"
-  }
-}<|im_end|>
+32222002938<|im_end|>
 <|im_start|>assistant
 {
   "thought_about_next_step_only": "",
@@ -1455,12 +1435,7 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] {
-  "thought_about_next_step_only": "",
-  "next_step": {
-    "result": "Add two numbers for the purpose of this test."
-  }
-} [/INST] {
+<s>[INST] Add two numbers for the purpose of this test. [/INST] {
   "thought_about_next_step_only": "",
   "next_step": {
     "tool_calls": [
@@ -1477,12 +1452,7 @@ Prompt:
       }
     ]
   }
-} </s><s>[INST] [TOOL(name=None, id=None)]{
-  "thought_about_next_step_only": "",
-  "next_step": {
-    "result": "32222002938"
-  }
-}[/TOOL] [/INST] {
+} </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] {
   "thought_about_next_step_only": "",
   "next_step": {
     "result": "The sum of 2535 and 32222000403 is 42."

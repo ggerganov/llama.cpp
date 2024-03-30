@@ -206,7 +206,7 @@ class ChatHandler(ABC):
     
     def render_prompt(self, messages: list[Message]) -> str:
         def normalize(m: Message):
-            if self.style == ToolsPromptStyle.TOOLS_THOUGHTFUL_STEPS:
+            if self.style == ToolsPromptStyle.TOOLS_THOUGHTFUL_STEPS and m.role == "assistant":
                 if m.tool_calls:
                     m = Message(
                         role=m.role,
