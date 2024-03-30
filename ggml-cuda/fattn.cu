@@ -579,15 +579,17 @@ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst
         return;
     }
 
-    int cols_per_block;
-    if (Q->ne[1] >= 128 && Q->ne[0] <= 128) {
-        cols_per_block = 64;
-    } else if (Q->ne[1] >= 64) {
-        cols_per_block = 32;
-    } else if (Q->ne[1] >= 32 || Q->ne[0] % 32 != 0) {
-        cols_per_block = 16;
-    } else  {
-        cols_per_block = 8;
+    int cols_per_block = 16;
+    if (Q->ne[0] % 32 == 0) {
+        if (Q->ne[1] >= 128 && Q->ne[0] <= 128) {
+            cols_per_block = 64;
+        } else if (Q->ne[1] >= 64) {
+            cols_per_block = 32;
+        } else if (Q->ne[1] >= 32 || Q->ne[0] % 32 != 0) {
+            cols_per_block = 16;
+        } else  {
+            cols_per_block = 8;
+        }
     }
     const int frag_m = cols_per_block == 8 ? 32 : 16;
     const int nwarps = (Q->ne[0] <= 128 || cols_per_block == 8 ? Q->ne[0] : Q->ne[0]/2) / frag_m;
