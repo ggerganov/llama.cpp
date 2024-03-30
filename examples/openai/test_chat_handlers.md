@@ -68,101 +68,29 @@ Prompt:
 ```js
 <s>[INST] [SYS]You are a function calling AI model.
 Here are the tools available:
-{
-  "type": "function",
-  "function": {
-    "name": "superSecretTool",
-    "description": "Adds two numbers",
-    "parameters": {
-      "properties": {
-        "a": {
-          "type": "integer"
-        },
-        "b": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "a",
-        "b"
-      ]
-    }
-  }
-}
-{
-  "type": "function",
-  "function": {
-    "name": "say",
-    "description": "Says something out loud (TTS)",
-    "parameters": {
-      "properties": {
-        "text": {
-          "description": "The text to say out loud",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ]
-    }
-  }
-}
+namespace functions {
+// Adds two numbers
+type superSecretTool = (_: {
+a: number,
+b: number
+}) => any;
+
+// Says something out loud (TTS)
+type say = (_: {
+// The text to say out loud
+text: string
+}) => any;
+} // namespace functions
 Please respond in JSON format with the following schema: {
-  "type": "object",
-  "properties": {
-    "thought_about_next_step_only": {
-      "title": "Thought about next step",
-      "type": "string"
-    },
-    "next_step": {
-      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
-      "oneOf": [
-        {
-          "properties": {
-            "tool_calls": {
-              "prefixItems": [
-                {
-                  "properties": {
-                    "name": {
-                      "title": "Name of the tool to call",
-                      "type": "string"
-                    },
-                    "arguments": {
-                      "title": "Arguments to pass to the tool",
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "arguments"
-                  ]
-                }
-              ]
-            }
-          },
-          "required": [
-            "tool_calls"
-          ]
-        },
-        {
-          "title": "Result (achieving original goal)",
-          "properties": {
-            "result": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "result"
-          ]
-        }
-      ]
-    }
-  },
-  "required": [
-    "original_goal",
-    "thought_about_next_step_only",
-    "next_step"
-  ]
+thought_about_next_step_only: string,
+next_step: {
+tool_calls: [{
+name: string,
+arguments: any
+}][]
+}|{
+result: number
+}
 }[/SYS]
 Add two numbers for the purpose of this test. [/INST]{
   "thought_about_next_step_only": "I've thought a lot about this.",
@@ -195,101 +123,29 @@ Output format prompt:
 ```json
 You are a function calling AI model.
 Here are the tools available:
-{
-  "type": "function",
-  "function": {
-    "name": "superSecretTool",
-    "description": "Adds two numbers",
-    "parameters": {
-      "properties": {
-        "a": {
-          "type": "integer"
-        },
-        "b": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "a",
-        "b"
-      ]
-    }
-  }
-}
-{
-  "type": "function",
-  "function": {
-    "name": "say",
-    "description": "Says something out loud (TTS)",
-    "parameters": {
-      "properties": {
-        "text": {
-          "description": "The text to say out loud",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ]
-    }
-  }
-}
+namespace functions {
+// Adds two numbers
+type superSecretTool = (_: {
+a: number,
+b: number
+}) => any;
+
+// Says something out loud (TTS)
+type say = (_: {
+// The text to say out loud
+text: string
+}) => any;
+} // namespace functions
 Please respond in JSON format with the following schema: {
-  "type": "object",
-  "properties": {
-    "thought_about_next_step_only": {
-      "title": "Thought about next step",
-      "type": "string"
-    },
-    "next_step": {
-      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
-      "oneOf": [
-        {
-          "properties": {
-            "tool_calls": {
-              "prefixItems": [
-                {
-                  "properties": {
-                    "name": {
-                      "title": "Name of the tool to call",
-                      "type": "string"
-                    },
-                    "arguments": {
-                      "title": "Arguments to pass to the tool",
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "arguments"
-                  ]
-                }
-              ]
-            }
-          },
-          "required": [
-            "tool_calls"
-          ]
-        },
-        {
-          "title": "Result (achieving original goal)",
-          "properties": {
-            "result": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "result"
-          ]
-        }
-      ]
-    }
-  },
-  "required": [
-    "original_goal",
-    "thought_about_next_step_only",
-    "next_step"
-  ]
+thought_about_next_step_only: string,
+next_step: {
+tool_calls: [{
+name: string,
+arguments: any
+}][]
+}|{
+result: number
+}
 }
 ```
 
@@ -337,9 +193,7 @@ thought-about-next-step-only-kv ::= "\"thought_about_next_step_only\"" space ":"
 Prompt:
 
 ```js
-<s>[INST] [SYS]Please respond in JSON format with the following schema: {
-  "type": "integer"
-}[/SYS]
+<s>[INST] [SYS]Please respond in JSON format with the following schema: number[/SYS]
 Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
@@ -348,9 +202,7 @@ Add two numbers for the purpose of this test. [/INST]I've thought a lot about th
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -514,9 +366,7 @@ tool-call ::= "<tool" "\\"? "_" "call>" space (superSecretTool-tool-call | say-t
 Prompt:
 
 ```js
-<s>[INST] [SYS]Please respond in JSON format with the following schema: {
-  "type": "integer"
-}[/SYS]
+<s>[INST] [SYS]Please respond in JSON format with the following schema: number[/SYS]
 Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
@@ -525,9 +375,7 @@ Add two numbers for the purpose of this test. [/INST]I've thought a lot about th
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -685,9 +533,7 @@ Prompt:
 ```js
 <|from|>system
 <|recipient|>all
-<|content|>Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+<|content|>Please respond in JSON format with the following schema: number
 <|from|>user
 <|recipient|>all
 <|content|>Add two numbers for the purpose of this test.
@@ -709,9 +555,7 @@ Prompt:
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -889,9 +733,7 @@ Prompt:
 
 ```js
 <|im_start|>system
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}<|im_end|>
+Please respond in JSON format with the following schema: number<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -909,9 +751,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -1086,9 +926,7 @@ Prompt:
 
 ```js
 <|im_start|>system
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}<|im_end|>
+Please respond in JSON format with the following schema: number<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -1106,9 +944,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -1134,101 +970,29 @@ Prompt:
 <|im_start|>system
 You are a function calling AI model.
 Here are the tools available:
-{
-  "type": "function",
-  "function": {
-    "name": "superSecretTool",
-    "description": "Adds two numbers",
-    "parameters": {
-      "properties": {
-        "a": {
-          "type": "integer"
-        },
-        "b": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "a",
-        "b"
-      ]
-    }
-  }
-}
-{
-  "type": "function",
-  "function": {
-    "name": "say",
-    "description": "Says something out loud (TTS)",
-    "parameters": {
-      "properties": {
-        "text": {
-          "description": "The text to say out loud",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ]
-    }
-  }
-}
+namespace functions {
+// Adds two numbers
+type superSecretTool = (_: {
+a: number,
+b: number
+}) => any;
+
+// Says something out loud (TTS)
+type say = (_: {
+// The text to say out loud
+text: string
+}) => any;
+} // namespace functions
 Please respond in JSON format with the following schema: {
-  "type": "object",
-  "properties": {
-    "thought_about_next_step_only": {
-      "title": "Thought about next step",
-      "type": "string"
-    },
-    "next_step": {
-      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
-      "oneOf": [
-        {
-          "properties": {
-            "tool_calls": {
-              "prefixItems": [
-                {
-                  "properties": {
-                    "name": {
-                      "title": "Name of the tool to call",
-                      "type": "string"
-                    },
-                    "arguments": {
-                      "title": "Arguments to pass to the tool",
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "arguments"
-                  ]
-                }
-              ]
-            }
-          },
-          "required": [
-            "tool_calls"
-          ]
-        },
-        {
-          "title": "Result (achieving original goal)",
-          "properties": {
-            "result": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "result"
-          ]
-        }
-      ]
-    }
-  },
-  "required": [
-    "original_goal",
-    "thought_about_next_step_only",
-    "next_step"
-  ]
+thought_about_next_step_only: string,
+next_step: {
+tool_calls: [{
+name: string,
+arguments: any
+}][]
+}|{
+result: number
+}
 }<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
@@ -1270,101 +1034,29 @@ Output format prompt:
 ```json
 You are a function calling AI model.
 Here are the tools available:
-{
-  "type": "function",
-  "function": {
-    "name": "superSecretTool",
-    "description": "Adds two numbers",
-    "parameters": {
-      "properties": {
-        "a": {
-          "type": "integer"
-        },
-        "b": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "a",
-        "b"
-      ]
-    }
-  }
-}
-{
-  "type": "function",
-  "function": {
-    "name": "say",
-    "description": "Says something out loud (TTS)",
-    "parameters": {
-      "properties": {
-        "text": {
-          "description": "The text to say out loud",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ]
-    }
-  }
-}
+namespace functions {
+// Adds two numbers
+type superSecretTool = (_: {
+a: number,
+b: number
+}) => any;
+
+// Says something out loud (TTS)
+type say = (_: {
+// The text to say out loud
+text: string
+}) => any;
+} // namespace functions
 Please respond in JSON format with the following schema: {
-  "type": "object",
-  "properties": {
-    "thought_about_next_step_only": {
-      "title": "Thought about next step",
-      "type": "string"
-    },
-    "next_step": {
-      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
-      "oneOf": [
-        {
-          "properties": {
-            "tool_calls": {
-              "prefixItems": [
-                {
-                  "properties": {
-                    "name": {
-                      "title": "Name of the tool to call",
-                      "type": "string"
-                    },
-                    "arguments": {
-                      "title": "Arguments to pass to the tool",
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "arguments"
-                  ]
-                }
-              ]
-            }
-          },
-          "required": [
-            "tool_calls"
-          ]
-        },
-        {
-          "title": "Result (achieving original goal)",
-          "properties": {
-            "result": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "result"
-          ]
-        }
-      ]
-    }
-  },
-  "required": [
-    "original_goal",
-    "thought_about_next_step_only",
-    "next_step"
-  ]
+thought_about_next_step_only: string,
+next_step: {
+tool_calls: [{
+name: string,
+arguments: any
+}][]
+}|{
+result: number
+}
 }
 ```
 
@@ -1413,9 +1105,7 @@ Prompt:
 
 ```js
 <|im_start|>system
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}<|im_end|>
+Please respond in JSON format with the following schema: number<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -1433,9 +1123,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -1536,9 +1224,7 @@ Prompt:
 
 ```js
 <|im_start|>system
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}<|im_end|>
+Please respond in JSON format with the following schema: number<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -1556,9 +1242,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -1722,9 +1406,7 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] [SYS]Please respond in JSON format with the following schema: {
-  "type": "integer"
-}[/SYS]
+<s>[INST] [SYS]Please respond in JSON format with the following schema: number[/SYS]
 Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
@@ -1733,9 +1415,7 @@ Add two numbers for the purpose of this test. [/INST] I've thought a lot about t
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -1899,9 +1579,7 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] [SYS]Please respond in JSON format with the following schema: {
-  "type": "integer"
-}[/SYS]
+<s>[INST] [SYS]Please respond in JSON format with the following schema: number[/SYS]
 Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
@@ -1910,9 +1588,7 @@ Add two numbers for the purpose of this test. [/INST] I've thought a lot about t
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -1937,101 +1613,29 @@ Prompt:
 ```js
 <s>[INST] [SYS]You are a function calling AI model.
 Here are the tools available:
-{
-  "type": "function",
-  "function": {
-    "name": "superSecretTool",
-    "description": "Adds two numbers",
-    "parameters": {
-      "properties": {
-        "a": {
-          "type": "integer"
-        },
-        "b": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "a",
-        "b"
-      ]
-    }
-  }
-}
-{
-  "type": "function",
-  "function": {
-    "name": "say",
-    "description": "Says something out loud (TTS)",
-    "parameters": {
-      "properties": {
-        "text": {
-          "description": "The text to say out loud",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ]
-    }
-  }
-}
+namespace functions {
+// Adds two numbers
+type superSecretTool = (_: {
+a: number,
+b: number
+}) => any;
+
+// Says something out loud (TTS)
+type say = (_: {
+// The text to say out loud
+text: string
+}) => any;
+} // namespace functions
 Please respond in JSON format with the following schema: {
-  "type": "object",
-  "properties": {
-    "thought_about_next_step_only": {
-      "title": "Thought about next step",
-      "type": "string"
-    },
-    "next_step": {
-      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
-      "oneOf": [
-        {
-          "properties": {
-            "tool_calls": {
-              "prefixItems": [
-                {
-                  "properties": {
-                    "name": {
-                      "title": "Name of the tool to call",
-                      "type": "string"
-                    },
-                    "arguments": {
-                      "title": "Arguments to pass to the tool",
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "arguments"
-                  ]
-                }
-              ]
-            }
-          },
-          "required": [
-            "tool_calls"
-          ]
-        },
-        {
-          "title": "Result (achieving original goal)",
-          "properties": {
-            "result": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "result"
-          ]
-        }
-      ]
-    }
-  },
-  "required": [
-    "original_goal",
-    "thought_about_next_step_only",
-    "next_step"
-  ]
+thought_about_next_step_only: string,
+next_step: {
+tool_calls: [{
+name: string,
+arguments: any
+}][]
+}|{
+result: number
+}
 }[/SYS]
 Add two numbers for the purpose of this test. [/INST] {
   "thought_about_next_step_only": "I've thought a lot about this.",
@@ -2064,101 +1668,29 @@ Output format prompt:
 ```json
 You are a function calling AI model.
 Here are the tools available:
-{
-  "type": "function",
-  "function": {
-    "name": "superSecretTool",
-    "description": "Adds two numbers",
-    "parameters": {
-      "properties": {
-        "a": {
-          "type": "integer"
-        },
-        "b": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "a",
-        "b"
-      ]
-    }
-  }
-}
-{
-  "type": "function",
-  "function": {
-    "name": "say",
-    "description": "Says something out loud (TTS)",
-    "parameters": {
-      "properties": {
-        "text": {
-          "description": "The text to say out loud",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ]
-    }
-  }
-}
+namespace functions {
+// Adds two numbers
+type superSecretTool = (_: {
+a: number,
+b: number
+}) => any;
+
+// Says something out loud (TTS)
+type say = (_: {
+// The text to say out loud
+text: string
+}) => any;
+} // namespace functions
 Please respond in JSON format with the following schema: {
-  "type": "object",
-  "properties": {
-    "thought_about_next_step_only": {
-      "title": "Thought about next step",
-      "type": "string"
-    },
-    "next_step": {
-      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
-      "oneOf": [
-        {
-          "properties": {
-            "tool_calls": {
-              "prefixItems": [
-                {
-                  "properties": {
-                    "name": {
-                      "title": "Name of the tool to call",
-                      "type": "string"
-                    },
-                    "arguments": {
-                      "title": "Arguments to pass to the tool",
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "arguments"
-                  ]
-                }
-              ]
-            }
-          },
-          "required": [
-            "tool_calls"
-          ]
-        },
-        {
-          "title": "Result (achieving original goal)",
-          "properties": {
-            "result": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "result"
-          ]
-        }
-      ]
-    }
-  },
-  "required": [
-    "original_goal",
-    "thought_about_next_step_only",
-    "next_step"
-  ]
+thought_about_next_step_only: string,
+next_step: {
+tool_calls: [{
+name: string,
+arguments: any
+}][]
+}|{
+result: number
+}
 }
 ```
 
@@ -2206,9 +1738,7 @@ thought-about-next-step-only-kv ::= "\"thought_about_next_step_only\"" space ":"
 Prompt:
 
 ```js
-<s>[INST] [SYS]Please respond in JSON format with the following schema: {
-  "type": "integer"
-}[/SYS]
+<s>[INST] [SYS]Please respond in JSON format with the following schema: number[/SYS]
 Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
@@ -2217,9 +1747,7 @@ Add two numbers for the purpose of this test. [/INST] I've thought a lot about t
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
@@ -2309,9 +1837,7 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] [SYS]Please respond in JSON format with the following schema: {
-  "type": "integer"
-}[/SYS]
+<s>[INST] [SYS]Please respond in JSON format with the following schema: number[/SYS]
 Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
@@ -2320,9 +1846,7 @@ Add two numbers for the purpose of this test. [/INST] I've thought a lot about t
 Output format prompt:
 
 ```json
-Please respond in JSON format with the following schema: {
-  "type": "integer"
-}
+Please respond in JSON format with the following schema: number
 ```
 
 
