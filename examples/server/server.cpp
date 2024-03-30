@@ -1630,26 +1630,8 @@ struct server_context {
 
                     std::string filename = task.data["filename"];
                     std::string filepath = task.data["filepath"];
-                    size_t state_size = llama_state_seq_get_size(ctx, slot->id + 1);
-                    std::vector<uint8_t> state_data(state_size + sizeof(size_t) + token_count * sizeof(llama_token));
-                    size_t nwrite = llama_state_seq_get_data(ctx, state_data.data(), slot->id + 1);
-                    GGML_ASSERT(nwrite <= state_size);
 
-                    // write the cached token count of the slot->cache_tokens.size()
-                    memcpy(state_data.data() + nwrite, &token_count, sizeof(size_t));
-                    nwrite += sizeof(size_t);
-
-                    // write the cached tokens (loop)
-                    for (size_t i = 0; i < token_count; i++) {
-                        const llama_token token = slot->cache_tokens[i];
-                        memcpy(state_data.data() + nwrite, &token, sizeof(llama_token));
-                        nwrite += sizeof(llama_token);
-                    }
-                    GGML_ASSERT(nwrite <= state_data.size());
-
-                    std::ofstream outfile(filepath, std::ios::binary);
-                    outfile.write(reinterpret_cast<const char *>(state_data.data()), nwrite);
-                    outfile.close();
+                    const size_t nwrite = llama_state_seq_save_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), token_count);
 
                     const int64_t t_end = ggml_time_us();
                     const double t_save_ms = (t_end - t_start) / 1000.0;
@@ -1682,39 +1664,16 @@ struct server_context {
 
                     std::string filename = task.data["filename"];
                     std::string filepath = task.data["filepath"];
-                    std::ifstream infile(filepath, std::ios::binary);
-                    if (!infile.is_open()) {
-                        send_error(task, "Failed to open file", ERROR_TYPE_INVALID_REQUEST);
-                        break;
-                    }
 
-                    std::vector<uint8_t> state_data((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
-                    infile.close();
-
-                    size_t nread = llama_state_seq_set_data(ctx, state_data.data(), slot->id + 1);
+                    slot->cache_tokens.resize(slot->n_ctx);
+                    size_t token_count = 0;
+                    size_t nread = llama_state_seq_load_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), slot->cache_tokens.size(), &token_count);
                     if (nread == 0) {
+                        slot->cache_tokens.resize(0);
                         send_error(task, "Unable to restore slot, no available space in KV cache or invalid slot save file", ERROR_TYPE_INVALID_REQUEST);
                         break;
                     }
-                    GGML_ASSERT(nread <= state_data.size());
-
-                    // restore cached token values
-                    size_t token_count = 0;
-                    if (nread + sizeof(size_t) <= state_data.size()) {
-                        token_count = *reinterpret_cast<size_t *>(state_data.data() + nread);
-                        nread += sizeof(size_t);
-                    }
                     slot->cache_tokens.resize(token_count);
-                    GGML_ASSERT(nread + (token_count * sizeof(llama_token)) <= state_data.size());
-
-                    // tokens are of type llama_token (an integer)
-                    for (size_t i = 0; i < token_count; i++) {
-                        if (nread + sizeof(llama_token) <= state_data.size()) {
-                            slot->cache_tokens[i] = *reinterpret_cast<llama_token *>(state_data.data() + nread);
-                            nread += sizeof(llama_token);
-                        }
-                    }
-                    GGML_ASSERT(nread <= state_data.size());
 
                     const int64_t t_end = ggml_time_us();
                     const double t_restore_ms = (t_end - t_start) / 1000.0;

@@ -37,9 +37,13 @@
 
 #define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
+#define LLAMA_FILE_MAGIC_GGSQ 0x67677371u // 'ggsq'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
 #define LLAMA_SESSION_VERSION 5
+
+#define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
+#define LLAMA_STATE_SEQ_VERSION 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -666,6 +670,21 @@ extern "C" {
             struct llama_context * ctx,
                    const uint8_t * src,
                     llama_seq_id   dest_seq_id);
+
+    LLAMA_API size_t llama_state_seq_save_file(
+            struct llama_context * ctx,
+                      const char * filepath,
+                    llama_seq_id   seq_id,
+               const llama_token * tokens,
+                          size_t   n_token_count);
+
+    LLAMA_API size_t llama_state_seq_load_file(
+            struct llama_context * ctx,
+                      const char * filepath,
+                    llama_seq_id   dest_seq_id,
+                     llama_token * tokens_out,
+                          size_t   n_token_capacity,
+                          size_t * n_token_count_out);
 
     //
     // Decoding

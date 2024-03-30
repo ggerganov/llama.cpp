@@ -15133,8 +15133,7 @@ size_t llama_state_seq_get_size(struct llama_context* ctx, llama_seq_id seq_id) 
     return s_total;
 }
 
-size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama_seq_id seq_id) {
-    llama_data_buffer_context data_ctx(dst);
+static size_t llama_state_seq_get_data_internal(struct llama_context * ctx, llama_data_context & data_ctx, llama_seq_id seq_id) {
     const auto & kv_self = ctx->kv_self;
     GGML_ASSERT(!kv_self.recurrent); // not implemented
 
@@ -15236,6 +15235,11 @@ size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama
     }
 
     return data_ctx.get_size_written();
+}
+
+size_t llama_state_seq_get_data(struct llama_context* ctx, uint8_t* dst, llama_seq_id seq_id) {
+    llama_data_buffer_context data_ctx(dst);
+    return llama_state_seq_get_data_internal(ctx, data_ctx, seq_id);
 }
 
 size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src, llama_seq_id dest_seq_id) {
@@ -15359,6 +15363,78 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
 
     const size_t nread = inp - src;
     return nread;
+}
+
+size_t llama_state_seq_save_file(struct llama_context * ctx, const char * filepath, llama_seq_id seq_id, const llama_token * tokens, size_t n_token_count) {
+    llama_file file(filepath, "wb");
+
+    file.write_u32(LLAMA_STATE_SEQ_MAGIC);
+    file.write_u32(LLAMA_STATE_SEQ_VERSION);
+
+    // save the prompt
+    file.write_u32((uint32_t)n_token_count);
+    file.write_raw(tokens, sizeof(llama_token) * n_token_count);
+
+    // save the context state using stream saving
+    llama_data_file_context data_ctx(&file);
+    llama_state_seq_get_data_internal(ctx, data_ctx, seq_id);
+
+    const size_t res = file.tell();
+    GGML_ASSERT(res == sizeof(uint32_t) * 3 + sizeof(llama_token) * n_token_count + data_ctx.get_size_written());
+    return res;
+}
+
+static size_t llama_state_seq_load_file_internal(struct llama_context * ctx, const char * filepath, llama_seq_id dest_seq_id, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    llama_file file(filepath, "rb");
+
+    // version checks
+    {
+        const uint32_t magic   = file.read_u32();
+        const uint32_t version = file.read_u32();
+
+        if (magic != LLAMA_STATE_SEQ_MAGIC || version != LLAMA_STATE_SEQ_VERSION) {
+            LLAMA_LOG_ERROR("%s : unknown (magic, version) for sequence state file: %08x, %08x\n", __func__, magic, version);
+            return 0;
+        }
+    }
+
+    // load the prompt
+    {
+        const uint32_t n_token_count = file.read_u32();
+
+        if (n_token_count > n_token_capacity) {
+            LLAMA_LOG_ERROR("%s : token count in sequence state file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
+            return 0;
+        }
+
+        file.read_raw(tokens_out, sizeof(llama_token) * n_token_count);
+        *n_token_count_out = n_token_count;
+    }
+
+    // restore the context state
+    {
+        const size_t state_size = file.size - file.tell();
+        std::vector<uint8_t> state_data(state_size);
+        file.read_raw(state_data.data(), state_size);
+        const size_t nread = llama_state_seq_set_data(ctx, state_data.data(), dest_seq_id);
+        if (!nread) {
+            LLAMA_LOG_ERROR("%s : failed to restore sequence state\n", __func__);
+            return 0;
+        }
+        GGML_ASSERT(nread <= state_size);
+        GGML_ASSERT(nread + sizeof(uint32_t) * 3 + sizeof(llama_token) * *n_token_count_out == file.tell());
+    }
+
+    return file.tell();
+}
+
+size_t llama_state_seq_load_file(struct llama_context * ctx, const char * filepath, llama_seq_id dest_seq_id, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+    try {
+        return llama_state_seq_load_file_internal(ctx, filepath, dest_seq_id, tokens_out, n_token_capacity, n_token_count_out);
+    } catch (const std::exception & err) {
+        LLAMA_LOG_ERROR("error loading sequence state file: %s\n", err.what());
+        return false;
+    }
 }
 
 void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch) {
