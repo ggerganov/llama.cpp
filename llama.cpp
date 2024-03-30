@@ -15714,6 +15714,7 @@ static int32_t llama_chat_apply_template_internal(
             ss << "GPT4 Correct Assistant:";
         }
     } else if (tmpl == "vicuna" || tmpl.find("USER: ") != std::string::npos) {
+        // Vicuna 1.1+, Nous Capybara, etc.
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "user") {
@@ -15726,6 +15727,22 @@ static int32_t llama_chat_apply_template_internal(
                 // Extra newline after system message
                 ss << "\n";
             }
+        }
+        if (add_ass) {
+            ss << "ASSISTANT:";
+        }
+    } else if (tmpl == "orca-vicuna" || tmpl.find("SYSTEM: ") != std::string::npos) {
+        // Orca-Vicuna
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << "SYSTEM: ";
+            } else if (role == "user") {
+                ss << "USER: ";
+            } else if (role == "assistant") {
+                ss << "ASSISTANT: ";
+            }
+            ss << message->content << "\n";
         }
         if (add_ass) {
             ss << "ASSISTANT:";
