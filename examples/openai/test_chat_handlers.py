@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
     failures = []
 
-    print(f'\nMessages:\n\n```js\n{json.dumps([m.model_dump() for m in TEST_MESSAGES], indent=2)}\n```\n')
+    print(f'\nMessages:\n\n```js\n{json.dumps([m.model_dump() for m in TEST_MESSAGES_THOUGHT], indent=2)}\n```\n')
 
     def check(b: bool, msg: str):
         if not b:
@@ -203,7 +203,7 @@ if __name__ == "__main__":
 
                 print(f'\n### {model_name} / {style.name} / {tool_situation}\n')
                 
-                print(f'\nPrompt:\n\n```js\n{ch.render_prompt(TEST_MESSAGES)}\n```\n')
+                print(f'\nPrompt:\n\n```js\n{ch.render_prompt(TEST_MESSAGES_THOUGHT)}\n```\n')
 
                 print(f'\nPrompt:\n\n```json\n{ch.output_format_prompt.content}\n```\n')
 

@@ -14,7 +14,7 @@ Messages:
     "role": "assistant",
     "name": null,
     "tool_call_id": null,
-    "content": null,
+    "content": "I've thought a lot about this.",
     "tool_calls": [
       {
         "id": "call_531873",
@@ -67,7 +67,7 @@ Prompt:
 
 ```js
 <s>[INST] Add two numbers for the purpose of this test. [/INST]{
-  "thought_about_next_step_only": "",
+  "thought_about_next_step_only": "I've thought a lot about this.",
   "next_step": {
     "tool_calls": [
       {
@@ -239,7 +239,8 @@ thought-about-next-step-only-kv ::= "\"thought_about_next_step_only\"" space ":"
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST]<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
 
 
@@ -271,7 +272,8 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST]<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
 
 
@@ -364,7 +366,8 @@ tool-call ::= "<tool" "\\"? "_" "call>" space (superSecretTool-tool-call | say-t
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST]<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
 
 
@@ -446,7 +449,8 @@ Prompt:
 <|content|>Add two numbers for the purpose of this test.
 <|from|>assistant
 <|recipient|>all
-<|content|><tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|stop|>
+<|content|>I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|stop|>
 <|from|>superSecretTool
 <|recipient|>all
 <|content|>32222002938
@@ -517,7 +521,8 @@ Prompt:
 <|content|>Add two numbers for the purpose of this test.
 <|from|>assistant
 <|recipient|>all
-<|content|><tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|stop|>
+<|content|>I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|stop|>
 <|from|>superSecretTool
 <|recipient|>all
 <|content|>32222002938
@@ -573,6 +578,7 @@ Prompt:
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
+I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|im_end|>
 <|im_start|>tool
 32222002938<|im_end|>
@@ -670,6 +676,7 @@ Prompt:
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
+I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|im_end|>
 <|im_start|>tool
 32222002938<|im_end|>
@@ -711,6 +718,7 @@ Prompt:
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
+I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|im_end|>
 <|im_start|>tool
 32222002938<|im_end|>
@@ -813,6 +821,7 @@ Prompt:
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
+I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|im_end|>
 <|im_start|>tool
 32222002938<|im_end|>
@@ -855,7 +864,7 @@ Prompt:
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
 {
-  "thought_about_next_step_only": "",
+  "thought_about_next_step_only": "I've thought a lot about this.",
   "next_step": {
     "tool_calls": [
       {
@@ -1036,6 +1045,7 @@ Prompt:
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
+I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|im_end|>
 <|im_start|>tool
 32222002938<|im_end|>
@@ -1077,6 +1087,7 @@ Prompt:
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
+I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|im_end|>
 <|im_start|>tool
 32222002938<|im_end|>
@@ -1142,6 +1153,7 @@ Prompt:
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
+I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call><|im_end|>
 <|im_start|>tool
 32222002938<|im_end|>
@@ -1190,7 +1202,8 @@ Template:
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
@@ -1278,7 +1291,8 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
@@ -1310,7 +1324,8 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
@@ -1403,7 +1418,8 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
@@ -1436,7 +1452,7 @@ Prompt:
 
 ```js
 <s>[INST] Add two numbers for the purpose of this test. [/INST] {
-  "thought_about_next_step_only": "",
+  "thought_about_next_step_only": "I've thought a lot about this.",
   "next_step": {
     "tool_calls": [
       {
@@ -1608,7 +1624,8 @@ thought-about-next-step-only-kv ::= "\"thought_about_next_step_only\"" space ":"
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
@@ -1640,7 +1657,8 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
@@ -1696,7 +1714,8 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
+<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
