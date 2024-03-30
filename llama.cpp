@@ -15243,9 +15243,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
     GGML_ASSERT(!kv_self.recurrent); // not implemented
 
     // Wipe the slot
-    if (!llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1)) {
-        return 0;
-    }
+    llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
 
     const uint8_t * inp = src;
 
