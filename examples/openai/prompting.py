@@ -148,16 +148,6 @@ class ChatTemplate(BaseModel):
             sys.stderr.write(f"Expected suffix ({self._suffix}) not found: {s}\n")
             return s
 
-    def add_system_prompt(self, messages: list[Message], system_prompt: Message) -> list[Message]:
-        assert system_prompt.role == "system"
-        # TODO: add to last system message, or create a new one just before the last user message
-        system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
-        if system_message is not None:
-            (i, m) = system_message
-            return messages[:i] + [Message(role="system", content=system_prompt.content + '\n' + m.content)] + messages[i+1:]
-        else:
-            return [system_prompt] + messages
-
     @staticmethod
     def from_gguf(metadata: GGUFKeyValues):
         if Keys.Tokenizer.CHAT_TEMPLATE not in metadata:
@@ -204,7 +194,22 @@ class ChatHandler(ABC):
     def parse(self, s: str) -> Optional[Message]:
         raise NotImplementedError()
     
+
+    def add_system_prompt(self, messages: list[Message], system_prompt: Message) -> list[Message]:
+        assert system_prompt.role == "system"
+        # TODO: add to last system message, or create a new one just before the last user message
+        system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
+        if system_message is not None:
+            (i, m) = system_message
+            return messages[:i] + [Message(role="system", content=system_prompt.content + '\n' + m.content)] + messages[i+1:]
+        else:
+            return [system_prompt] + messages
+
     def render_prompt(self, messages: list[Message]) -> str:
+
+        if self.output_format_prompt:
+            messages = self.add_system_prompt(messages, self.output_format_prompt)
+
         def normalize(m: Message):
             if self.style == ToolsPromptStyle.TOOLS_THOUGHTFUL_STEPS and m.role == "assistant":
                 if m.tool_calls:

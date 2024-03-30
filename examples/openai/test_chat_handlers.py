@@ -205,7 +205,7 @@ if __name__ == "__main__":
                 
                 print(f'\nPrompt:\n\n```js\n{ch.render_prompt(TEST_MESSAGES_THOUGHT)}\n```\n')
 
-                print(f'\nPrompt:\n\n```json\n{ch.output_format_prompt.content}\n```\n')
+                print(f'\nOutput format prompt:\n\n```json\n{ch.output_format_prompt.content}\n```\n')
 
                 print(f'\nGrammar:\n\n```js\n{ch.grammar}\n```\n')
 

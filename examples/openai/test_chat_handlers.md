@@ -66,7 +66,105 @@ Template:
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST]{
+<s>[INST] [SYS]You are a function calling AI model.
+Here are the tools available:
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+Please respond in JSON format with the following schema: {
+  "type": "object",
+  "properties": {
+    "thought_about_next_step_only": {
+      "title": "Thought about next step",
+      "type": "string"
+    },
+    "next_step": {
+      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
+      "oneOf": [
+        {
+          "properties": {
+            "tool_calls": {
+              "prefixItems": [
+                {
+                  "properties": {
+                    "name": {
+                      "title": "Name of the tool to call",
+                      "type": "string"
+                    },
+                    "arguments": {
+                      "title": "Arguments to pass to the tool",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "arguments"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "tool_calls"
+          ]
+        },
+        {
+          "title": "Result (achieving original goal)",
+          "properties": {
+            "result": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "result"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "original_goal",
+    "thought_about_next_step_only",
+    "next_step"
+  ]
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST]{
   "thought_about_next_step_only": "I've thought a lot about this.",
   "next_step": {
     "tool_calls": [
@@ -92,7 +190,7 @@ Prompt:
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 You are a function calling AI model.
@@ -239,12 +337,15 @@ thought-about-next-step-only-kv ::= "\"thought_about_next_step_only\"" space ":"
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
+<s>[INST] [SYS]Please respond in JSON format with the following schema: {
+  "type": "integer"
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -272,12 +373,59 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
+<s>[INST] [SYS]Call one or more functions to assist with the user query, every time this is possible. Don't make assumptions about what values to plug into functions. Here are the available tools:
+<tools>
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+</tools>
+
+To call each function, give its name and arguments within <tool_call></tool_call> XML tags as follows:
+<tool_call>
+{"name": <function-name>, "arguments": <args-dict>}
+</tool_call>[/SYS]
+Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Call one or more functions to assist with the user query, every time this is possible. Don't make assumptions about what values to plug into functions. Here are the available tools:
@@ -366,12 +514,15 @@ tool-call ::= "<tool" "\\"? "_" "call>" space (superSecretTool-tool-call | say-t
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
+<s>[INST] [SYS]Please respond in JSON format with the following schema: {
+  "type": "integer"
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST]I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call></s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST]The sum of 2535 and 32222000403 is 42.</s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -444,6 +595,22 @@ Template:
 Prompt:
 
 ```js
+<|from|>system
+<|recipient|>all
+<|content|>// Supported function definitions that should be called when necessary.
+namespace functions {
+// Adds two numbers
+type superSecretTool = (_: {
+a: number,
+b: number
+}) => any;
+
+// Says something out loud (TTS)
+type say = (_: {
+// The text to say out loud
+text: string
+}) => any;
+} // namespace functions
 <|from|>user
 <|recipient|>all
 <|content|>Add two numbers for the purpose of this test.
@@ -462,7 +629,7 @@ Prompt:
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 // Supported function definitions that should be called when necessary.
@@ -516,6 +683,11 @@ tool-call-without-start ::= superSecretTool-call | say-call
 Prompt:
 
 ```js
+<|from|>system
+<|recipient|>all
+<|content|>Please respond in JSON format with the following schema: {
+  "type": "integer"
+}
 <|from|>user
 <|recipient|>all
 <|content|>Add two numbers for the purpose of this test.
@@ -534,7 +706,7 @@ Prompt:
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -575,6 +747,49 @@ Template:
 Prompt:
 
 ```js
+<|im_start|>system
+Here are the tools available:
+<tools>
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+</tools><|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -589,7 +804,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Here are the tools available:
@@ -673,6 +888,10 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
+<|im_start|>system
+Please respond in JSON format with the following schema: {
+  "type": "integer"
+}<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -687,7 +906,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -715,6 +934,54 @@ space ::= " "?
 Prompt:
 
 ```js
+<|im_start|>system
+Call one or more functions to assist with the user query, every time this is possible. Don't make assumptions about what values to plug into functions. Here are the available tools:
+<tools>
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+</tools>
+
+To call each function, give its name and arguments within <tool_call></tool_call> XML tags as follows:
+<tool_call>
+{"name": <function-name>, "arguments": <args-dict>}
+</tool_call><|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -729,7 +996,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Call one or more functions to assist with the user query, every time this is possible. Don't make assumptions about what values to plug into functions. Here are the available tools:
@@ -818,6 +1085,10 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
+<|im_start|>system
+Please respond in JSON format with the following schema: {
+  "type": "integer"
+}<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -832,7 +1103,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -860,6 +1131,105 @@ space ::= " "?
 Prompt:
 
 ```js
+<|im_start|>system
+You are a function calling AI model.
+Here are the tools available:
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+Please respond in JSON format with the following schema: {
+  "type": "object",
+  "properties": {
+    "thought_about_next_step_only": {
+      "title": "Thought about next step",
+      "type": "string"
+    },
+    "next_step": {
+      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
+      "oneOf": [
+        {
+          "properties": {
+            "tool_calls": {
+              "prefixItems": [
+                {
+                  "properties": {
+                    "name": {
+                      "title": "Name of the tool to call",
+                      "type": "string"
+                    },
+                    "arguments": {
+                      "title": "Arguments to pass to the tool",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "arguments"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "tool_calls"
+          ]
+        },
+        {
+          "title": "Result (achieving original goal)",
+          "properties": {
+            "result": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "result"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "original_goal",
+    "thought_about_next_step_only",
+    "next_step"
+  ]
+}<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -895,7 +1265,7 @@ Add two numbers for the purpose of this test.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 You are a function calling AI model.
@@ -1042,6 +1412,10 @@ thought-about-next-step-only-kv ::= "\"thought_about_next_step_only\"" space ":"
 Prompt:
 
 ```js
+<|im_start|>system
+Please respond in JSON format with the following schema: {
+  "type": "integer"
+}<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -1056,7 +1430,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -1084,6 +1458,17 @@ space ::= " "?
 Prompt:
 
 ```js
+<|im_start|>system
+You are a function calling AI agent with self-recursion. You can call only one function at a time and analyse data you get from function response. You are provided with function signatures within <tools></tools> XML tags. The current date is: 2024-03-30. You may use agentic frameworks for reasoning and planning to help with user query. Please call a function and wait for function results to be provided to you in the next iteration. Don't make assumptions about what values to plug into function arguments. Once you have called a function, results will be fed back to you within <tool_response></tool_response> XML tags. Don't make assumptions about tool results if <tool_response> XML tags are not present since function hasn't been executed yet. Analyze the data once you get the results and call another function. At each iteration please continue adding the your analysis to previous summary. Your final response should directly answer the user query with an anlysis or summary of the results of function calls. Here are the available tools: <tools> ['{"type":"function","function":{"name":"superSecretTool","description":"Adds two numbers","parameters":{"properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}}', '{"type":"function","function":{"name":"say","description":"Says something out loud (TTS)","parameters":{"properties":{"text":{"description":"The text to say out loud","type":"string"}},"required":["text"]}}}'] </tools> If the provided function signatures doesn't have the function you must call, you may write executable python code in markdown syntax and call code_interpreter() function as follows: <tool_call> {"arguments": {"code_markdown": <python-code>, "name": "code_interpreter"}} </tool_call> Make sure that the json object above with code markdown block is parseable with json.loads() and the XML block with XML ElementTree. Use the following pydantic model json schema for each tool call you will make: {'properties': {'arguments': {'title': 'Arguments', 'type': 'object'}, 'name': {'title': 'Name', 'type': 'string'}}, 'required': ['arguments', 'name'], 'title': 'FunctionCall', 'type': 'object'} At the very first turn you don't have <tool_results> so you shouldn't not make up the results.
+Please keep a running summary with analysis of previous function results and summaries from previous iterations.
+Do not stop calling functions until the task has been accomplished or you've reached max iteration of 10.
+Calling multiple functions at once can overload the system and increase cost so call one function at a time please.
+If you plan to continue with analysis, always call another function.
+For each function call return a valid json object (using doulbe quotes) with function name and arguments within <tool_call></tool_call> XML tags as follows:
+<tool_call>
+{"arguments": <args-dict>, "name": <function-name>}
+</tool_call>
+<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -1098,7 +1483,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 You are a function calling AI agent with self-recursion. You can call only one function at a time and analyse data you get from function response. You are provided with function signatures within <tools></tools> XML tags. The current date is: 2024-03-30. You may use agentic frameworks for reasoning and planning to help with user query. Please call a function and wait for function results to be provided to you in the next iteration. Don't make assumptions about what values to plug into function arguments. Once you have called a function, results will be fed back to you within <tool_response></tool_response> XML tags. Don't make assumptions about tool results if <tool_response> XML tags are not present since function hasn't been executed yet. Analyze the data once you get the results and call another function. At each iteration please continue adding the your analysis to previous summary. Your final response should directly answer the user query with an anlysis or summary of the results of function calls. Here are the available tools: <tools> ['{"type":"function","function":{"name":"superSecretTool","description":"Adds two numbers","parameters":{"properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}}', '{"type":"function","function":{"name":"say","description":"Says something out loud (TTS)","parameters":{"properties":{"text":{"description":"The text to say out loud","type":"string"}},"required":["text"]}}}'] </tools> If the provided function signatures doesn't have the function you must call, you may write executable python code in markdown syntax and call code_interpreter() function as follows: <tool_call> {"arguments": {"code_markdown": <python-code>, "name": "code_interpreter"}} </tool_call> Make sure that the json object above with code markdown block is parseable with json.loads() and the XML block with XML ElementTree. Use the following pydantic model json schema for each tool call you will make: {'properties': {'arguments': {'title': 'Arguments', 'type': 'object'}, 'name': {'title': 'Name', 'type': 'string'}}, 'required': ['arguments', 'name'], 'title': 'FunctionCall', 'type': 'object'} At the very first turn you don't have <tool_results> so you shouldn't not make up the results.
@@ -1150,6 +1535,10 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
+<|im_start|>system
+Please respond in JSON format with the following schema: {
+  "type": "integer"
+}<|im_end|>
 <|im_start|>user
 Add two numbers for the purpose of this test.<|im_end|>
 <|im_start|>assistant
@@ -1164,7 +1553,7 @@ The sum of 2535 and 32222000403 is 42.<|im_end|>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -1202,12 +1591,54 @@ Template:
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<s>[INST] [SYS]Here are the tools available:
+<tools>
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+</tools>[/SYS]
+Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Here are the tools available:
@@ -1291,12 +1722,15 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<s>[INST] [SYS]Please respond in JSON format with the following schema: {
+  "type": "integer"
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -1324,12 +1758,59 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<s>[INST] [SYS]Call one or more functions to assist with the user query, every time this is possible. Don't make assumptions about what values to plug into functions. Here are the available tools:
+<tools>
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+</tools>
+
+To call each function, give its name and arguments within <tool_call></tool_call> XML tags as follows:
+<tool_call>
+{"name": <function-name>, "arguments": <args-dict>}
+</tool_call>[/SYS]
+Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Call one or more functions to assist with the user query, every time this is possible. Don't make assumptions about what values to plug into functions. Here are the available tools:
@@ -1418,12 +1899,15 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<s>[INST] [SYS]Please respond in JSON format with the following schema: {
+  "type": "integer"
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -1451,7 +1935,105 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] {
+<s>[INST] [SYS]You are a function calling AI model.
+Here are the tools available:
+{
+  "type": "function",
+  "function": {
+    "name": "superSecretTool",
+    "description": "Adds two numbers",
+    "parameters": {
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+{
+  "type": "function",
+  "function": {
+    "name": "say",
+    "description": "Says something out loud (TTS)",
+    "parameters": {
+      "properties": {
+        "text": {
+          "description": "The text to say out loud",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
+Please respond in JSON format with the following schema: {
+  "type": "object",
+  "properties": {
+    "thought_about_next_step_only": {
+      "title": "Thought about next step",
+      "type": "string"
+    },
+    "next_step": {
+      "title": "Next Step: either a result or one or more tool calls to achieve the original goal",
+      "oneOf": [
+        {
+          "properties": {
+            "tool_calls": {
+              "prefixItems": [
+                {
+                  "properties": {
+                    "name": {
+                      "title": "Name of the tool to call",
+                      "type": "string"
+                    },
+                    "arguments": {
+                      "title": "Arguments to pass to the tool",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "arguments"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "tool_calls"
+          ]
+        },
+        {
+          "title": "Result (achieving original goal)",
+          "properties": {
+            "result": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "result"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "original_goal",
+    "thought_about_next_step_only",
+    "next_step"
+  ]
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST] {
   "thought_about_next_step_only": "I've thought a lot about this.",
   "next_step": {
     "tool_calls": [
@@ -1477,7 +2059,7 @@ Prompt:
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 You are a function calling AI model.
@@ -1624,12 +2206,15 @@ thought-about-next-step-only-kv ::= "\"thought_about_next_step_only\"" space ":"
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<s>[INST] [SYS]Please respond in JSON format with the following schema: {
+  "type": "integer"
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {
@@ -1657,12 +2242,22 @@ space ::= " "?
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<s>[INST] [SYS]You are a function calling AI agent with self-recursion. You can call only one function at a time and analyse data you get from function response. You are provided with function signatures within <tools></tools> XML tags. The current date is: 2024-03-30. You may use agentic frameworks for reasoning and planning to help with user query. Please call a function and wait for function results to be provided to you in the next iteration. Don't make assumptions about what values to plug into function arguments. Once you have called a function, results will be fed back to you within <tool_response></tool_response> XML tags. Don't make assumptions about tool results if <tool_response> XML tags are not present since function hasn't been executed yet. Analyze the data once you get the results and call another function. At each iteration please continue adding the your analysis to previous summary. Your final response should directly answer the user query with an anlysis or summary of the results of function calls. Here are the available tools: <tools> ['{"type":"function","function":{"name":"superSecretTool","description":"Adds two numbers","parameters":{"properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}}', '{"type":"function","function":{"name":"say","description":"Says something out loud (TTS)","parameters":{"properties":{"text":{"description":"The text to say out loud","type":"string"}},"required":["text"]}}}'] </tools> If the provided function signatures doesn't have the function you must call, you may write executable python code in markdown syntax and call code_interpreter() function as follows: <tool_call> {"arguments": {"code_markdown": <python-code>, "name": "code_interpreter"}} </tool_call> Make sure that the json object above with code markdown block is parseable with json.loads() and the XML block with XML ElementTree. Use the following pydantic model json schema for each tool call you will make: {'properties': {'arguments': {'title': 'Arguments', 'type': 'object'}, 'name': {'title': 'Name', 'type': 'string'}}, 'required': ['arguments', 'name'], 'title': 'FunctionCall', 'type': 'object'} At the very first turn you don't have <tool_results> so you shouldn't not make up the results.
+Please keep a running summary with analysis of previous function results and summaries from previous iterations.
+Do not stop calling functions until the task has been accomplished or you've reached max iteration of 10.
+Calling multiple functions at once can overload the system and increase cost so call one function at a time please.
+If you plan to continue with analysis, always call another function.
+For each function call return a valid json object (using doulbe quotes) with function name and arguments within <tool_call></tool_call> XML tags as follows:
+<tool_call>
+{"arguments": <args-dict>, "name": <function-name>}
+</tool_call>
+[/SYS]
+Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 You are a function calling AI agent with self-recursion. You can call only one function at a time and analyse data you get from function response. You are provided with function signatures within <tools></tools> XML tags. The current date is: 2024-03-30. You may use agentic frameworks for reasoning and planning to help with user query. Please call a function and wait for function results to be provided to you in the next iteration. Don't make assumptions about what values to plug into function arguments. Once you have called a function, results will be fed back to you within <tool_response></tool_response> XML tags. Don't make assumptions about tool results if <tool_response> XML tags are not present since function hasn't been executed yet. Analyze the data once you get the results and call another function. At each iteration please continue adding the your analysis to previous summary. Your final response should directly answer the user query with an anlysis or summary of the results of function calls. Here are the available tools: <tools> ['{"type":"function","function":{"name":"superSecretTool","description":"Adds two numbers","parameters":{"properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}}', '{"type":"function","function":{"name":"say","description":"Says something out loud (TTS)","parameters":{"properties":{"text":{"description":"The text to say out loud","type":"string"}},"required":["text"]}}}'] </tools> If the provided function signatures doesn't have the function you must call, you may write executable python code in markdown syntax and call code_interpreter() function as follows: <tool_call> {"arguments": {"code_markdown": <python-code>, "name": "code_interpreter"}} </tool_call> Make sure that the json object above with code markdown block is parseable with json.loads() and the XML block with XML ElementTree. Use the following pydantic model json schema for each tool call you will make: {'properties': {'arguments': {'title': 'Arguments', 'type': 'object'}, 'name': {'title': 'Name', 'type': 'string'}}, 'required': ['arguments', 'name'], 'title': 'FunctionCall', 'type': 'object'} At the very first turn you don't have <tool_results> so you shouldn't not make up the results.
@@ -1714,12 +2309,15 @@ tool-call ::= "<tool_call>" space (superSecretTool-tool-call | say-tool-call)  s
 Prompt:
 
 ```js
-<s>[INST] Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
+<s>[INST] [SYS]Please respond in JSON format with the following schema: {
+  "type": "integer"
+}[/SYS]
+Add two numbers for the purpose of this test. [/INST] I've thought a lot about this.
 <tool_call>{"id": "call_531873", "type": "function", "function": {"name": "superSecretTool", "arguments": {"a": 2535, "b": 32222000403}}}</tool_call> </s><s>[INST] [TOOL(name=superSecretTool, id=call_531873)]32222002938[/TOOL] [/INST] The sum of 2535 and 32222000403 is 42. </s>
 ```
 
 
-Prompt:
+Output format prompt:
 
 ```json
 Please respond in JSON format with the following schema: {

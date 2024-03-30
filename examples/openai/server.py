@@ -137,8 +137,6 @@ def main(
         )
 
         messages = chat_request.messages
-        if chat_handler.output_format_prompt:
-            messages = chat_template.add_system_prompt(messages, chat_handler.output_format_prompt)
 
         prompt = chat_handler.render_prompt(messages)
         
