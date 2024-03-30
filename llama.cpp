@@ -426,9 +426,12 @@ enum llm_tensor {
     LLM_TENSOR_FFN_DOWN,
     LLM_TENSOR_FFN_UP,
     LLM_TENSOR_FFN_ACT,
-    LLM_TENSOR_FFN_DOWN_EXP,
+    LLM_TENSOR_FFN_DOWN_EXP,  // split experts for backward compatibility
     LLM_TENSOR_FFN_GATE_EXP,
     LLM_TENSOR_FFN_UP_EXP,
+    LLM_TENSOR_FFN_DOWN_EXPS, // merged experts
+    LLM_TENSOR_FFN_GATE_EXPS,
+    LLM_TENSOR_FFN_UP_EXPS,
     LLM_TENSOR_ATTN_Q_NORM,
     LLM_TENSOR_ATTN_K_NORM,
     LLM_TENSOR_LAYER_OUT_NORM,
@@ -463,6 +466,9 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_FFN_GATE_EXP,    "blk.%d.ffn_gate.%d" },
             { LLM_TENSOR_FFN_DOWN_EXP,    "blk.%d.ffn_down.%d" },
             { LLM_TENSOR_FFN_UP_EXP,      "blk.%d.ffn_up.%d" },
+            { LLM_TENSOR_FFN_GATE_EXPS,   "blk.%d.ffn_gate_exps" },
+            { LLM_TENSOR_FFN_DOWN_EXPS,   "blk.%d.ffn_down_exps" },
+            { LLM_TENSOR_FFN_UP_EXPS,     "blk.%d.ffn_up_exps" },
         },
     },
     {
@@ -4464,28 +4470,34 @@ static bool llm_load_tensors(
                             GGML_ASSERT(hparams.n_expert      > 0);
                             GGML_ASSERT(hparams.n_expert_used > 0);
 
-                            // hack to merge tensors, need to clean this up
-                            // merged tensors
-                            ggml_type type_gate = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
-                            ggml_type type_down = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
-                            ggml_type type_up   = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
+                            layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, hparams.n_expert}, false);
+                            layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, hparams.n_expert}, false);
+                            layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, hparams.n_expert}, false);
 
-                            layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type_gate, n_embd,   n_ff, hparams.n_expert);
-                            layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, hparams.n_expert);
-                            layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, hparams.n_expert);
+                            if (layer.ffn_down_exps == nullptr) {
+                                // hack to merge tensors, need to clean this up
+                                // merged tensors
+                                ggml_type type_gate = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
+                                ggml_type type_down = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
+                                ggml_type type_up   = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
 
-                            // MoE branch
-                            for (uint32_t x = 0; x < hparams.n_expert; ++x) {
-                                // individual tensors as views
-                                ggml_tensor * ffn_gate_exp = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
-                                ggml_tensor * ffn_down_exp = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
-                                ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1],   layer.ffn_up_exps->nb[2]*x);
+                                layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type_gate, n_embd,   n_ff, hparams.n_expert);
+                                layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, hparams.n_expert);
+                                layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, hparams.n_expert);
 
-                                ggml_set_name(ffn_gate_exp, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
-                                ggml_set_name(ffn_down_exp, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
-                                ggml_set_name(ffn_up_exp,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
+                                // MoE branch
+                                for (uint32_t x = 0; x < hparams.n_expert; ++x) {
+                                    // individual tensors as views
+                                    ggml_tensor * ffn_gate_exp = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
+                                    ggml_tensor * ffn_down_exp = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
+                                    ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1],   layer.ffn_up_exps->nb[2]*x);
 
-                                ml.n_created += 3; // hack
+                                    ggml_set_name(ffn_gate_exp, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
+                                    ggml_set_name(ffn_down_exp, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
+                                    ggml_set_name(ffn_up_exp,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
+
+                                    ml.n_created += 3; // hack
+                                }
                             }
                         }
                     }
@@ -12933,7 +12945,9 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             // sprinkled in the model. Hence, simply dividing i_ffn_down by n_expert does not work
             // for getting the current layer as I initially thought, and we need to resort to parsing the
             // tensor name.
-            n_layer /= n_expert;
+
+            // hack
+            //n_layer /= n_expert;
             if (sscanf(name, "blk.%d.", &i_layer) != 1) {
                 throw std::runtime_error(format("Failed to determine layer for tensor %s", name));
             }
@@ -13412,8 +13426,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // This used to be a regex, but <regex> has an extreme cost to compile times.
         bool quantize = name.rfind("weight") == name.size() - 6; // ends with 'weight'?
 
-        // quantize only 2D tensors
-        quantize &= (ggml_n_dims(tensor) == 2);
+        // quantize only 2D and 3D tensors (experts)
+        quantize &= (ggml_n_dims(tensor) >= 2);
         quantize &= params->quantize_output_tensor || name != "output.weight";
         quantize &= !params->only_copy;
 
