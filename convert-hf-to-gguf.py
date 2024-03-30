@@ -1559,6 +1559,7 @@ class InternLM2Model(Model):
         self.gguf_writer.add_add_space_prefix(add_prefix)
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        print(special_vocab)
         old_eos = special_vocab.special_token_ids["eos"]
         if "chat" in os.path.basename(self.dir_model.absolute()):
             # For the chat model, we replace the eos with '<|im_end|>'.

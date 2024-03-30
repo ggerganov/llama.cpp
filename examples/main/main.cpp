@@ -795,7 +795,9 @@ int main(int argc, char ** argv) {
             }
 
             // deal with end of text token in interactive mode
-            if (llama_sampling_last(ctx_sampling) == llama_token_eos(model)) {
+            auto last_token = llama_sampling_last(ctx_sampling);
+            if (last_token == llama_token_eos(model) || last_token == 122753)
+            {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
@@ -920,7 +922,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (!embd.empty() && embd.back() == llama_token_eos(model) && !(params.instruct || params.interactive || params.chatml)) {
+        if (!embd.empty() && (embd.back() == llama_token_eos(model) || embd.back() == 122753) && !(params.instruct || params.interactive || params.chatml)) {
             LOG_TEE(" [end of text]\n");
             break;
         }
