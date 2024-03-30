@@ -71,7 +71,7 @@ class ChatTemplate(BaseModel):
         super().__init__(template=template, eos_token=eos_token, bos_token=bos_token)
         env = jinja2.Environment(loader=jinja2.BaseLoader(), trim_blocks=True, lstrip_blocks=True)
         self._template = env.from_string(template)
-        print(template)
+        # print(template)
 
         # self.expects_strict_user_assistant_alternance = "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception" in template
 
@@ -94,13 +94,13 @@ class ChatTemplate(BaseModel):
         def succeeds(messages: list[Message], strings_to_find = ()):
             try:
                 result = test(messages)
-                print(result)
+                # print(result)
                 for s in strings_to_find:
                     if s not in result:
                         return False
                 return True
             except Exception as e:
-                print(e)
+                # print(e)
                 return False
 
         # if self.inferred_tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
