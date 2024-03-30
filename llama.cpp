@@ -15094,15 +15094,15 @@ size_t llama_state_seq_get_size(struct llama_context* ctx, llama_seq_id seq_id) 
 
     size_t s_cell_count = 0;
     size_t s_cell_data_size = 0;
-    const auto& kv_self = ctx->kv_self;
-    const auto& hparams = ctx->model.hparams;
+    const auto & kv_self = ctx->kv_self;
+    const auto & hparams = ctx->model.hparams;
 
     const uint32_t n_layer = hparams.n_layer;
     const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa() + hparams.n_embd_k_s();
     const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa() + hparams.n_embd_v_s();
 
     for (uint32_t i = 0; i < kv_self.size; ++i) {
-        const auto& cell = kv_self.cells[i];
+        const auto & cell = kv_self.cells[i];
         if (cell.seq_id.count(seq_id) > 0) {
             ++s_cell_count;
             s_cell_data_size += sizeof(llama_pos);
@@ -15135,7 +15135,7 @@ size_t llama_state_seq_get_size(struct llama_context* ctx, llama_seq_id seq_id) 
 
 size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama_seq_id seq_id) {
     llama_data_buffer_context data_ctx(dst);
-    const auto& kv_self = ctx->kv_self;
+    const auto & kv_self = ctx->kv_self;
     GGML_ASSERT(!kv_self.recurrent); // not implemented
 
     // Save the size of size_t as a uint32_t for safety check
@@ -15150,7 +15150,7 @@ size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama
     {
         uint32_t cell_range_begin = kv_self.size;
         for (uint32_t i = 0; i < kv_self.size; ++i) {
-            const auto& cell = kv_self.cells[i];
+            const auto & cell = kv_self.cells[i];
             if (cell.has_seq_id(seq_id)) {
                 ++cell_count;
                 if (cell_range_begin == kv_self.size) {
@@ -15170,7 +15170,7 @@ size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama
 
         // DEBUG CHECK: Sum of cell counts in ranges should equal the total cell count
         uint32_t cell_count_check = 0;
-        for (const auto& range : cell_ranges) {
+        for (const auto & range : cell_ranges) {
             cell_count_check += range.second - range.first;
         }
         GGML_ASSERT(cell_count == cell_count_check);
@@ -15211,7 +15211,7 @@ size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama
             const size_t range_size = range.second - range.first;
             tmp_buf.resize(range_size * k_size_row);
             ggml_backend_tensor_get(kv_self.k_l[il], tmp_buf.data(), range.first * k_size_row, range_size * k_size_row);
-            data_ctx.write(&tmp_buf[0], tmp_buf.size());
+            data_ctx.write(tmp_buf.data(), tmp_buf.size());
         }
     }
 
@@ -15230,7 +15230,7 @@ size_t llama_state_seq_get_data(struct llama_context * ctx, uint8_t * dst, llama
                 const size_t src_offset = (range.first + j * kv_size) * v_size_el;
                 tmp_buf.resize(range_size * v_size_el);
                 ggml_backend_tensor_get(kv_self.v_l[il], tmp_buf.data(), src_offset, tmp_buf.size());
-                data_ctx.write(&tmp_buf[0], tmp_buf.size());
+                data_ctx.write(tmp_buf.data(), tmp_buf.size());
             }
         }
     }
@@ -15273,7 +15273,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
     inp += sizeof(n_embd_v_gqa_ref);
 
     // Sanity check model compatibility
-    const auto& hparams = ctx->model.hparams;
+    const auto & hparams = ctx->model.hparams;
     const uint32_t n_layer = hparams.n_layer;
     const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa() + hparams.n_embd_k_s();
     const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa() + hparams.n_embd_v_s();
