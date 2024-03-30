@@ -6,8 +6,8 @@ from pathlib import Path
 import random
 import re
 import sys
-from typing import Optional
-from pydantic import BaseModel
+from typing import Annotated, Optional
+from pydantic import BaseModel, Field
 
 from examples.json_schema_to_grammar import SchemaConverter
 from examples.openai.api import Tool, Message, FunctionCall, ToolCall
@@ -52,16 +52,31 @@ def raise_exception(msg: str):
 
 class ChatTemplate(BaseModel):
     template: str
-    inferred_tool_style: Optional['ToolsPromptStyle'] = None
     eos_token: str
     bos_token: str
+    
+    inferred_tool_style: Annotated[Optional['ToolsPromptStyle'], Field(exclude=True)] = None
+    expects_stringified_function_arguments: Annotated[Optional[bool], Field(exclude=True)] = None
+    expects_strict_user_assistant_alternance: Annotated[Optional[bool], Field(exclude=True)] = None
+    formats_tool_call: Annotated[Optional[bool], Field(exclude=True)] = None
+    formats_tool_call_content: Annotated[Optional[bool], Field(exclude=True)] = None
+    formats_tool_result: Optional[bool] = None
+    formats_tool_name: Optional[bool] = None
+
+    @property
+    def potentially_supports_parallel_calls(self) -> bool:
+        return self.formats_tool_result and self.formats_tool_name
 
     def __init__(self, template: str, eos_token: str, bos_token: str):
         super().__init__(template=template, eos_token=eos_token, bos_token=bos_token)
         env = jinja2.Environment(loader=jinja2.BaseLoader(), trim_blocks=True, lstrip_blocks=True)
         self._template = env.from_string(template)
+        print(template)
 
-        self._strict_user_assistant_alternation = "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception" in template
+        # self.expects_strict_user_assistant_alternance = "{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception" in template
+
+        self.probe_template_capabilities()
+        self.extract_prefix_suffix_from_template()
 
         if "<|recipient|>' + tool_call['function']['name']" in template:
             self.inferred_tool_style = ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2
@@ -71,7 +86,50 @@ class ChatTemplate(BaseModel):
             # self.inferred_tool_style = ToolsPromptStyle.TOOLS_HERMES_2_PRO
             # self.inferred_tool_style = ToolsPromptStyle.TOOLS_MIXTRAL
 
-        # TODO: Test whether the template supports formatting tool_calls
+    def probe_template_capabilities(self):
+
+        def test(messages: list[Message]):
+            return self._template.render(messages=messages, eos_token=self.eos_token, bos_token=self.bos_token, raise_exception=raise_exception, add_generation_prompt=True)
+
+        def succeeds(messages: list[Message], strings_to_find = ()):
+            try:
+                result = test(messages)
+                print(result)
+                for s in strings_to_find:
+                    if s not in result:
+                        return False
+                return True
+            except Exception as e:
+                print(e)
+                return False
+
+        # if self.inferred_tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
+        user_msg = Message(role="user", content="Hey")
+        assistant_msg = Message(role="assistant", content="I, Robot")
+        
+        self.expects_strict_user_assistant_alternance = not succeeds([assistant_msg, user_msg]) and succeeds([user_msg, assistant_msg])
+
+        thought = "Precious thought"
+        fn_name = "callMeMaybe"
+        toolcall = ToolCall(id="call_531873", type="function", function=FunctionCall(name=fn_name, arguments={"lol": 123}))
+        toolcall_msg = Message(role="assistant", content=None, tool_calls=[toolcall])
+        tool_result = "Tool result"
+        tool_name = "additioner"
+        tool_msg = Message(role="tool", name=tool_name, content=tool_result)
+        stringified_toolcall_msg = Message(role="assistant", content=None, tool_calls=[ToolCall(function=FunctionCall(name=fn_name, arguments=json.dumps({"lol": 123})))])
+        toolcall_content_msg = Message(role="assistant", content=thought, tool_calls=toolcall_msg.tool_calls)
+
+        self.formats_tool_call = succeeds([user_msg, toolcall_msg], (fn_name,))
+        if self.formats_tool_call:
+            self.formats_tool_call_content = succeeds([user_msg, toolcall_content_msg], (thought,))
+            self.expects_stringified_function_arguments = \
+                not succeeds([user_msg, toolcall_content_msg]) and succeeds([user_msg, stringified_toolcall_msg], (fn_name,))
+
+        self.formats_tool_result = succeeds([user_msg, assistant_msg, tool_msg], (tool_result,))
+        self.formats_tool_name = succeeds([user_msg, assistant_msg, tool_msg], (tool_name,))
+        # assert self.formats_tools or self.expects_strict_user_assistant_alternance
+
+    def extract_prefix_suffix_from_template(self):
 
         delimiter = '<%$[SAMPLE]$%>'
         user_msg = Message(role="user", content="Hey")
@@ -84,6 +142,7 @@ class ChatTemplate(BaseModel):
 
         self._prefix = prefix
         self._suffix = suffix
+
 
     def strip_suffix(self, s: str) -> str:
         if s.endswith(self._suffix):
@@ -123,54 +182,88 @@ class ChatTemplate(BaseModel):
             eos_token = tokenizer.eos_token)
 
     def render(self, messages: list[Message], add_generation_prompt: bool, omit_bos: bool = False):
-        if self._strict_user_assistant_alternation and any(m.role not in ('user', 'assistant') for m in messages):
+        def normalize(m: Message):
+            if m.tool_calls:
+                if not self.formats_tool_call or not self.formats_tool_call_content:
+                    return Message(
+                        role=m.role,
+                        content='\n'.join([
+                            *([m.content] if m.content else ()),
+                            *([
+                                f'<tool_call>{json.dumps(tc.model_dump())}</tool_call>'
+                                for tc in m.tool_calls
+                            ])
+                        ])
+                    )
+                elif self.expects_stringified_function_arguments:
+                    return Message(
+                        role=m.role,
+                        content=m.content,
+                        name=m.name,
+                        tool_call_id=m.tool_call_id,
+                        tool_calls=[
+                            ToolCall(
+                                id=tc.id,
+                                type=tc.type,
+                                function=FunctionCall(
+                                    name=tc.function.name,
+                                    arguments=json.dumps(tc.function.arguments)
+                                )
+                            )
+                            for tc in m.tool_calls
+                        ],
+                    )
+                else:
+                    return m
+            elif self.expects_strict_user_assistant_alternance and m.role not in ('user', 'assistant'):
+                if m.role == "system":
+                    return Message(role="user", content=f'[SYS]{m.content}[/SYS]')
+                elif m.role == "tool":
+                    return Message(role="user", content=f'[TOOL(name={m.name}, id={m.tool_call_id})]{m.content}[/TOOL]')
+                else:
+                    sys.stderr.write(f'Unexpected message role: {message.role}\n')
+                    return Message(role="user", content=f'[{m.role.upper()}]{m.content}[/{m.role.upper()}]')
+            else:
+                return m
+    
+        messages=[normalize(m) for m in messages]
+        
+        if self.expects_strict_user_assistant_alternance:
             new_messages=[]
-            i = 0
-            n = len(messages)
             current_role = 'user'
             current_content = []
 
             def flush():
                 nonlocal current_content
                 nonlocal current_role
-                new_messages.append(Message(
-                    role=current_role,
-                    content='\n'.join(current_content)
-                ))
-                current_content = []
+
+                if self.expects_strict_user_assistant_alternance or current_content:
+                    new_messages.append(Message(
+                        role=current_role,
+                        content='\n'.join(current_content)
+                    ))
+                    current_content = []
 
             for i, message in enumerate(messages):
+                assert message.role in ('user', 'assistant')
+
                 if message.role == current_role:
-                    current_content.append(message.content)
-                elif message.role in ('user', 'assistant'):
+                    if message.content:
+                        current_content.append(message.content)
+                else:
                     flush()
                     current_role = 'assistant' if current_role == 'user' else 'user'
-                    current_content.append(message.content)
-                else:
-                    if current_role == 'assistant':
-                        flush()
-                        current_role = 'user'
-                    if message.role == 'system':
-                        current_content.append(f'[SYS]{messages[i].content}[/SYS]')
-                    elif message.role == 'tool':
-                        current_content.append(f'[TOOL RESULT(name={messages[i].name}, id={messages[i].tool_call_id}]{messages[i].content}[/TOOL RESULT]')
-                    else:
-                        sys.stderr.write(f'Unexpected message role: {message.role}\n')
-                        current_content.append(f'[ROLE={messages[i].role}]{messages[i].content}[/ROLE]')
-
-                current_content.extend(
-                    f'<tool_call>{json.dumps(tc.model_dump())}</tool_call>'
-                    for tc in (message.tool_calls or [])
-                )
+                    if message.content:
+                        current_content.append(message.content)
             if current_content:
                 flush()
-
             messages = new_messages
 
         # JSON!
         messages = [m.model_dump() for m in messages]
 
-        if self.inferred_tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
+        # if self.inferred_tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
+        if self.expects_stringified_function_arguments:
             messages = [
                 {
                     **m,
@@ -555,6 +648,10 @@ _LONG_TEMPLATE='\n'.join([
 
 def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Optional[ToolsPromptStyle] = None, verbose=False) -> ChatHandler:
     tool_style = tool_style if tool_style is not None else args.chat_template.inferred_tool_style
+
+    if parallel_calls and not args.chat_template.potentially_supports_parallel_calls:
+        sys.stderr.write(f"# WARNING: Disabled parallel_calls as model does not seem to support it (will fall back to sequential calls)\n")
+        parallel_calls = False
 
     if verbose:
         sys.stderr.write(f"# Using tool style: {tool_style}\n")
