@@ -1216,6 +1216,8 @@ class LlamaModel(Model):
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
         n_head = self.hparams.get("num_attention_heads")
         n_kv_head = self.hparams.get("num_key_value_heads")
+        n_experts = self.hparams.get("num_local_experts")
+        experts = dict()
         for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
@@ -1236,6 +1238,48 @@ class LlamaModel(Model):
 
             data = data.squeeze()
 
+            # process the experts separately
+            if name.find("block_sparse_moe.experts") != -1:
+                experts[name] = data
+                if len(experts) >= n_experts:
+                    # merge the experts into a single 3d tensor
+                    for bid in range(block_count):
+                        for wid in range(1, 4):
+                            full = True
+                            for xid in range(n_experts):
+                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
+                                if ename not in experts:
+                                    full = False
+                                    break
+                            if not full:
+                                continue
+
+                            datas = []
+                            for xid in range(n_experts):
+                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
+                                datas.append(experts[ename])
+                                del experts[ename]
+
+                            data = np.stack(datas, axis=0)
+
+                            if self.ftype == 0 and data_dtype == np.float16:
+                                data = data.astype(np.float32)
+
+                            if self.ftype == 1 and data_dtype == np.float32:
+                                data = data.astype(np.float16)
+
+                            merged_name = f"layers.{bid}.feed_forward.experts.w{wid}"
+
+                            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+                            if new_name is None:
+                                print(f"Can not map tensor {name!r}")
+                                sys.exit()
+
+                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+
+                            self.gguf_writer.add_tensor(new_name, data)
+                continue
+
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
@@ -1249,7 +1293,7 @@ class LlamaModel(Model):
             if self.ftype == 0 and data_dtype == np.float16:
                 data = data.astype(np.float32)
 
-            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            # 1d tensors need to be converted to float32
             if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
                 data = data.astype(np.float32)
 
@@ -1260,6 +1304,9 @@ class LlamaModel(Model):
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
+
+        if len(experts) > 0:
+            raise ValueError(f"Unprocessed experts: {experts.keys()}")
 
 
 @Model.register("GrokForCausalLM")
