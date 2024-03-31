@@ -2861,6 +2861,11 @@ int main(int argc, char ** argv) {
     svr->set_read_timeout (sparams.read_timeout);
     svr->set_write_timeout(sparams.write_timeout);
 
+    if (sparams.hostname.substr(0, 7) == "unix://") {
+        svr->set_address_family(AF_UNIX);
+        sparams.hostname = sparams.hostname.substr(7);
+    }
+
     if (!svr->bind_to_port(sparams.hostname, sparams.port)) {
         fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
         return 1;
