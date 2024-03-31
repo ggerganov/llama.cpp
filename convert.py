@@ -1264,6 +1264,9 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
                     if f"layers.{l}.feed_forward.experts.{e}.w{w}.weight" in model:
                         experts.append(model[f"layers.{l}.feed_forward.experts.{e}.w{w}.weight"])
                         del tmp[f"layers.{l}.feed_forward.experts.{e}.w{w}.weight"]
+                    elif f"model.layers.{l}.block_sparse_moe.experts.{e}.w{w}.weight" in model:
+                        experts.append(model[f"model.layers.{l}.block_sparse_moe.experts.{e}.w{w}.weight"])
+                        del tmp[f"model.layers.{l}.block_sparse_moe.experts.{e}.w{w}.weight"]
                     else:
                         raise ValueError(f"Expert tensor not found: layers.{l}.feed_forward.experts.{e}.w{w}.weight")
                 tmp[f"layers.{l}.feed_forward.experts.w{w}.weight"] = pack_experts_lazy(experts)
