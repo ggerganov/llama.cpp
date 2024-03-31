@@ -1,10 +1,10 @@
 #pragma once
 
+#include <codecvt>
 #include <cstdint>
+#include <locale>
 #include <string>
 #include <vector>
-#include <locale>
-#include <codecvt>
 
 #define CODEPOINT_TYPE_UNIDENTIFIED 0
 #define CODEPOINT_TYPE_DIGIT        1
@@ -45,3 +45,4 @@ inline std::string to_utf8(const std::wstring & ws)
     std::string utf8 = converter.to_bytes(ws);
     return utf8;
 }
+std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::wstring> & regex_exprs);

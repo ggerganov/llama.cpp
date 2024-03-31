@@ -5,11 +5,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <locale>
+#include <codecvt>
 
 static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
@@ -194,6 +197,207 @@ static std::unordered_map<std::string, uint8_t> unicode_utf8_to_byte_map() {
     return map;
 }
 
+static inline std::wstring unicode_wstring_from_utf8(const std::string & s)
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.from_bytes(s);
+}
+
+static inline std::string unicode_wstring_to_utf8(const std::wstring & ws)
+{
+    // code to convert from utf32/utf16 to utf8
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
+    std::string utf8 = converter.to_bytes(ws);
+    return utf8;
+}
+
+static std::vector<std::string> unicode_byte_encoding_process(const std::vector<std::string> & bpe_words) {
+    std::vector<std::string>bpe_encoded_words;
+    for (auto word : bpe_words) {
+        std::string text_utf = "";
+        auto utf_word =  unicode_cpts_from_utf8(word);
+        for (size_t i = 0; i < utf_word.size(); ++i)
+            text_utf += unicode_cpt_to_utf8(utf_word[i]);
+
+        std::string encoded_token = "";
+        for (char & c : text_utf) {
+            encoded_token += unicode_byte_to_utf8(c);
+        }
+        bpe_encoded_words.emplace_back(encoded_token);
+    }
+    return bpe_encoded_words;
+}
+
+static std::vector<std::string> unicode_custom_preprocess(const std::string & text) {
+    std::vector<std::string> bpe_words;
+
+    std::string token = "";
+    // GPT2 system regex:  's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
+    bool collecting_numeric = false;
+    bool collecting_letter = false;
+    bool collecting_special = false;
+    bool collecting_whitespace_lookahead = false;
+    bool collecting = false;
+
+    std::vector<std::string> text_utf;
+    text_utf.reserve(text.size());
+    bpe_words.reserve(text.size());
+
+    const auto cpts = unicode_cpts_from_utf8(text);
+    for (size_t i = 0; i < cpts.size(); ++i)
+        text_utf.emplace_back(unicode_cpt_to_utf8(cpts[i]));
+
+    for (int i = 0; i < (int)text_utf.size(); i++) {
+        const std::string & utf_char = text_utf[i];
+        bool split_condition = false;
+        int bytes_remain = text_utf.size() - i;
+        // forward backward lookups
+        const std::string & utf_char_next = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
+        const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
+
+        // handling contractions
+        if (!split_condition && bytes_remain >= 2) {
+            // 's|'t|'m|'d
+            if (utf_char == "\'" && (utf_char_next == "s" || utf_char_next == "t" || utf_char_next == "m" || utf_char_next == "d")) {
+                split_condition = true;
+            }
+            if (split_condition) {
+                if (token.size()) {
+                    bpe_words.emplace_back(token); // push previous content as token
+                }
+                token = utf_char + utf_char_next;
+                bpe_words.emplace_back(token);
+                token = "";
+                i++;
+                continue;
+            }
+        }
+        if (!split_condition && bytes_remain >= 3) {
+            // 're|'ve|'ll
+            if (utf_char == "\'" && (
+                (utf_char_next == "r" && utf_char_next_next == "e") ||
+                (utf_char_next == "v" && utf_char_next_next == "e") ||
+                (utf_char_next == "l" && utf_char_next_next == "l"))
+                ) {
+                split_condition = true;
+            }
+            if (split_condition) {
+                // current token + next token can be defined
+                if (token.size()) {
+                    bpe_words.emplace_back(token); // push previous content as token
+                }
+                token = utf_char + utf_char_next + utf_char_next_next;
+                bpe_words.emplace_back(token); // the contraction
+                token = "";
+                i += 2;
+                continue;
+            }
+        }
+
+        if (!split_condition && !collecting) {
+            if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
+                collecting_letter = true;
+                collecting = true;
+            }
+            else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                collecting_numeric = true;
+                collecting = true;
+            }
+            else if (
+                ((unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (unicode_cpt_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
+                (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
+                ) {
+                collecting_special = true;
+                collecting = true;
+            }
+            else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) {
+                collecting_whitespace_lookahead = true;
+                collecting = true;
+            }
+            else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE) {
+                split_condition = true;
+            }
+        }
+        else if (!split_condition && collecting) {
+            if (collecting_letter && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER) {
+                split_condition = true;
+            }
+            else if (collecting_numeric && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) {
+                split_condition = true;
+            }
+            else if (collecting_special && (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
+                split_condition = true;
+            }
+            else if (collecting_whitespace_lookahead && (unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                split_condition = true;
+            }
+        }
+
+        if (utf_char_next == "") {
+            split_condition = true; // final
+            token += utf_char;
+        }
+
+        if (split_condition) {
+            if (token.size()) {
+                bpe_words.emplace_back(token);
+            }
+            token = utf_char;
+            collecting = false;
+            collecting_letter = false;
+            collecting_numeric = false;
+            collecting_special = false;
+            collecting_whitespace_lookahead = false;
+        }
+        else {
+            token += utf_char;
+        }
+    }
+
+    return bpe_words;
+}
+
+static std::vector<size_t> unicode_regex_preprocess(const std::wstring & text, const std::vector<size_t> & offsets, const std::wstring & regex_expr) {
+    std::wregex expr(regex_expr);
+    std::vector<size_t> bpe_offsets; // stroe the offset of each word
+    bpe_offsets.reserve(offsets.size()); // Reserve memory for the approximate size
+    size_t start = 0;
+    for (auto offset : offsets) {
+        std::wcregex_iterator it(text.data() + start, text.data() + start + offset, expr);
+        std::wcregex_iterator end;
+
+        int64_t start_idx = 0;
+        while (it != end) {
+            std::wcmatch match = *it;
+            if (match.position() > start_idx) {
+                bpe_offsets.emplace_back(match.position() - start_idx);
+            }
+            bpe_offsets.emplace_back(match.length());
+            start_idx = match.position() + match.length();
+            ++it;
+        }
+
+        if (start_idx < (int64_t) offset) {
+            bpe_offsets.emplace_back(offset - start_idx);
+        }
+        start += offset;
+    }
+
+    return bpe_offsets;
+}
+
+static bool unicode_regex_matched(const std::wstring & text, const std::vector<std::wstring> & regex_exprs) {
+
+    for(auto & regex_expr: regex_exprs) {
+        std::wregex expr(regex_expr);
+        if(std::regex_match(text, expr)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 //
 // interface
 //
@@ -275,6 +479,7 @@ char32_t unicode_tolower(char32_t cp) {
     auto it = unicode_map_lowercase.find(cp);
     return it == unicode_map_lowercase.end() ? cp : it->second;
 }
+
 static const std::vector<std::wstring> gpt2_regex = {
     // //punc: \{p} and ascii puncs
     L"[\U00000021-\U0000002F\U0000003A-\U00000040\\\U0000005B-\U00000060\U0000007B-\U0000007E\U000000A1-\U000000A1\U000000A7-\U000000A7\U000000AB-\U000000AB\U000000B6-\U000000B7\U000000BB-\U000000BB\U000000BF-\U000000BF\U0000037E-\U0000037E\U00000387-\U00000387\U0000055A-\U0000055F\U00000589-\U0000058A\U000005BE-\U000005BE\U000005C0-\U000005C0\U000005C3-\U000005C3\U000005C6-\U000005C6\U000005F3-\U000005F4\U00000609-\U0000060A\U0000060C-\U0000060D\U0000061B-\U0000061B\U0000061E-\U0000061F\U0000066A-\U0000066D\U000006D4-\U000006D4\U00000700-\U0000070D\U000007F7-\U000007F9\U00000830-\U0000083E\U0000085E-\U0000085E\U00000964-\U00000965\U00000970-\U00000970\U000009FD-\U000009FD\U00000A76-\U00000A76\U00000AF0-\U00000AF0\U00000C77-\U00000C77\U00000C84-\U00000C84\U00000DF4-\U00000DF4\U00000E4F-\U00000E4F\U00000E5A-\U00000E5B\U00000F04-\U00000F12\U00000F14-\U00000F14\U00000F3A-\U00000F3D\U00000F85-\U00000F85\U00000FD0-\U00000FD4\U00000FD9-\U00000FDA\U0000104A-\U0000104F\U000010FB-\U000010FB\U00001360-\U00001368\U00001400-\U00001400\U0000166E-\U0000166E\U0000169B-\U0000169C\U000016EB-\U000016ED\U00001735-\U00001736\U000017D4-\U000017D6\U000017D8-\U000017DA\U00001800-\U0000180A\U00001944-\U00001945\U00001A1E-\U00001A1F\U00001AA0-\U00001AA6\U00001AA8-\U00001AAD\U00001B5A-\U00001B60\U00001BFC-\U00001BFF\U00001C3B-\U00001C3F\U00001C7E-\U00001C7F\U00001CC0-\U00001CC7\U00001CD3-\U00001CD3\U00002010-\U00002027\U00002030-\U00002043\U00002045-\U00002051\U00002053-\U0000205E\U0000207D-\U0000207E\U0000208D-\U0000208E\U00002308-\U0000230B\U00002329-\U0000232A\U00002768-\U00002775\U000027C5-\U000027C6\U000027E6-\U000027EF\U00002983-\U00002998\U000029D8-\U000029DB\U000029FC-\U000029FD\U00002CF9-\U00002CFC\U00002CFE-\U00002CFF\U00002D70-\U00002D70\U00002E00-\U00002E2E\U00002E30-\U00002E4F\U00002E52-\U00002E52\U00003001-\U00003003\U00003008-\U00003011\U00003014-\U0000301F\U00003030-\U00003030\U0000303D-\U0000303D\U000030A0-\U000030A0\U000030FB-\U000030FB\U0000A4FE-\U0000A4FF\U0000A60D-\U0000A60F\U0000A673-\U0000A673\U0000A67E-\U0000A67E\U0000A6F2-\U0000A6F7\U0000A874-\U0000A877\U0000A8CE-\U0000A8CF\U0000A8F8-\U0000A8FA\U0000A8FC-\U0000A8FC\U0000A92E-\U0000A92F\U0000A95F-\U0000A95F\U0000A9C1-\U0000A9CD\U0000A9DE-\U0000A9DF\U0000AA5C-\U0000AA5F\U0000AADE-\U0000AADF\U0000AAF0-\U0000AAF1\U0000ABEB-\U0000ABEB\U0000FD3E-\U0000FD3F\U0000FE10-\U0000FE19\U0000FE30-\U0000FE52\U0000FE54-\U0000FE61\U0000FE63-\U0000FE63\U0000FE68-\U0000FE68\U0000FE6A-\U0000FE6B\U0000FF01-\U0000FF03\U0000FF05-\U0000FF0A\U0000FF0C-\U0000FF0F\U0000FF1A-\U0000FF1B\U0000FF1F-\U0000FF20\U0000FF3B-\U0000FF3D\U0000FF3F-\U0000FF3F\U0000FF5B-\U0000FF5B\U0000FF5D-\U0000FF5D\U0000FF5F-\U0000FF65\U00010100-\U00010102\U0001039F-\U0001039F\U000103D0-\U000103D0\U0001056F-\U0001056F\U00010857-\U00010857\U0001091F-\U0001091F\U0001093F-\U0001093F\U00010A50-\U00010A58\U00010A7F-\U00010A7F\U00010AF0-\U00010AF6\U00010B39-\U00010B3F\U00010B99-\U00010B9C\U00010EAD-\U00010EAD\U00010F55-\U00010F59\U00011047-\U0001104D\U000110BB-\U000110BC\U000110BE-\U000110C1\U00011140-\U00011143\U00011174-\U00011175\U000111C5-\U000111C8\U000111CD-\U000111CD\U000111DB-\U000111DB\U000111DD-\U000111DF\U00011238-\U0001123D\U000112A9-\U000112A9\U0001144B-\U0001144F\U0001145A-\U0001145B\U0001145D-\U0001145D\U000114C6-\U000114C6\U000115C1-\U000115D7\U00011641-\U00011643\U00011660-\U0001166C\U0001173C-\U0001173E\U0001183B-\U0001183B\U00011944-\U00011946\U000119E2-\U000119E2\U00011A3F-\U00011A46\U00011A9A-\U00011A9C\U00011A9E-\U00011AA2\U00011C41-\U00011C45\U00011C70-\U00011C71\U00011EF7-\U00011EF8\U00011FFF-\U00011FFF\U00012470-\U00012474\U00016A6E-\U00016A6F\U00016AF5-\U00016AF5\U00016B37-\U00016B3B\U00016B44-\U00016B44\U00016E97-\U00016E9A\U00016FE2-\U00016FE2\U0001BC9F-\U0001BC9F\U0001DA87-\U0001DA8B\U0001E95E-\U0001E95F]+",
@@ -296,27 +501,31 @@ static const std::vector<std::wstring> deepseek_coder_regex = {
     //digits
     L"[\U00000030-\U00000039\U000000B2-\U000000B3\U000000B9-\U000000B9\U00000660-\U00000669\U000006F0-\U000006F9\U000007C0-\U000007C9\U00000966-\U0000096F\U000009E6-\U000009EF\U00000A66-\U00000A6F\U00000AE6-\U00000AEF\U00000B66-\U00000B6F\U00000BE6-\U00000BEF\U00000C66-\U00000C6F\U00000CE6-\U00000CEF\U00000D66-\U00000D6F\U00000DE6-\U00000DEF\U00000E50-\U00000E59\U00000ED0-\U00000ED9\U00000F20-\U00000F29\U00001040-\U00001049\U00001090-\U00001099\U00001369-\U00001371\U000017E0-\U000017E9\U00001810-\U00001819\U00001946-\U0000194F\U000019D0-\U000019DA\U00001A80-\U00001A89\U00001A90-\U00001A99\U00001B50-\U00001B59\U00001BB0-\U00001BB9\U00001C40-\U00001C49\U00001C50-\U00001C59\U00002070-\U00002070\U00002074-\U00002079\U00002080-\U00002089\U00002460-\U00002468\U00002474-\U0000247C\U00002488-\U00002490\U000024EA-\U000024EA\U000024F5-\U000024FD\U000024FF-\U000024FF\U00002776-\U0000277E\U00002780-\U00002788\U0000278A-\U00002792\U0000A620-\U0000A629\U0000A8D0-\U0000A8D9\U0000A900-\U0000A909\U0000A9D0-\U0000A9D9\U0000A9F0-\U0000A9F9\U0000AA50-\U0000AA59\U0000ABF0-\U0000ABF9\U0000FF10-\U0000FF19\U000104A0-\U000104A9\U00010A40-\U00010A43\U00010D30-\U00010D39\U00010E60-\U00010E68\U00011052-\U0001105A\U00011066-\U0001106F\U000110F0-\U000110F9\U00011136-\U0001113F\U000111D0-\U000111D9\U000112F0-\U000112F9\U00011450-\U00011459\U000114D0-\U000114D9\U00011650-\U00011659\U000116C0-\U000116C9\U00011730-\U00011739\U000118E0-\U000118E9\U00011950-\U00011959\U00011C50-\U00011C59\U00011D50-\U00011D59\U00011DA0-\U00011DA9\U00016A60-\U00016A69\U00016B50-\U00016B59\U0001D7CE-\U0001D7FF\U0001E140-\U0001E149\U0001E2F0-\U0001E2F9\U0001E950-\U0001E959\U0001F100-\U0001F10A\U0001FBF0-\U0001FBF9]"
     };
+    
+std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::wstring> & regex_exprs) {
+    std::wstring wtext = unicode_wstring_from_utf8(text);
 
-static const std::vector<std::wstring> deepseek_llm_regex = {
-    L"[\r\n]",
-    L"\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
-    L"\\s?[\u0021-\u002f\u003a-\u007e\uff01-\uff0f\uff1a-\uff5e\u2018-\u201f\u3000-\u3002]+",
-    L"\\s+$",
-    L"[\u4e00-\u9fa5\u0800-\u4e00\uac00-\ud7ff]+",
-    L"[\U00000030-\U00000039\U000000B2-\U000000B3\U000000B9-\U000000B9\U00000660-\U00000669\U000006F0-\U000006F9\U000007C0-\U000007C9\U00000966-\U0000096F\U000009E6-\U000009EF\U00000A66-\U00000A6F\U00000AE6-\U00000AEF\U00000B66-\U00000B6F\U00000BE6-\U00000BEF\U00000C66-\U00000C6F\U00000CE6-\U00000CEF\U00000D66-\U00000D6F\U00000DE6-\U00000DEF\U00000E50-\U00000E59\U00000ED0-\U00000ED9\U00000F20-\U00000F29\U00001040-\U00001049\U00001090-\U00001099\U00001369-\U00001371\U000017E0-\U000017E9\U00001810-\U00001819\U00001946-\U0000194F\U000019D0-\U000019DA\U00001A80-\U00001A89\U00001A90-\U00001A99\U00001B50-\U00001B59\U00001BB0-\U00001BB9\U00001C40-\U00001C49\U00001C50-\U00001C59\U00002070-\U00002070\U00002074-\U00002079\U00002080-\U00002089\U00002460-\U00002468\U00002474-\U0000247C\U00002488-\U00002490\U000024EA-\U000024EA\U000024F5-\U000024FD\U000024FF-\U000024FF\U00002776-\U0000277E\U00002780-\U00002788\U0000278A-\U00002792\U0000A620-\U0000A629\U0000A8D0-\U0000A8D9\U0000A900-\U0000A909\U0000A9D0-\U0000A9D9\U0000A9F0-\U0000A9F9\U0000AA50-\U0000AA59\U0000ABF0-\U0000ABF9\U0000FF10-\U0000FF19\U000104A0-\U000104A9\U00010A40-\U00010A43\U00010D30-\U00010D39\U00010E60-\U00010E68\U00011052-\U0001105A\U00011066-\U0001106F\U000110F0-\U000110F9\U00011136-\U0001113F\U000111D0-\U000111D9\U000112F0-\U000112F9\U00011450-\U00011459\U000114D0-\U000114D9\U00011650-\U00011659\U000116C0-\U000116C9\U00011730-\U00011739\U000118E0-\U000118E9\U00011950-\U00011959\U00011C50-\U00011C59\U00011D50-\U00011D59\U00011DA0-\U00011DA9\U00016A60-\U00016A69\U00016B50-\U00016B59\U0001D7CE-\U0001D7FF\U0001E140-\U0001E149\U0001E2F0-\U0001E2F9\U0001E950-\U0001E959\U0001F100-\U0001F10A\U0001FBF0-\U0001FBF9]"
-    };
+    std::vector<size_t> bpe_offsets = {wtext.size()};
 
-std::vector<std::wstring> get_gpt2_regex() {
-    return gpt2_regex;
+    for(auto & regex_expr : regex_exprs) {
+        bpe_offsets = unicode_regex_preprocess(wtext, bpe_offsets, regex_expr);
+    }
+
+    std::vector<std::string> bpe_words;
+    bpe_words.reserve(bpe_offsets.size()); // Reserve memory for the approximate size
+    size_t start = 0;
+    for(size_t & offset : bpe_offsets){
+        const auto temp_word = std::wstring(wtext, start, offset);
+
+        if(unicode_regex_matched(temp_word, regex_exprs)) {
+            bpe_words.emplace_back(unicode_wstring_to_utf8(temp_word));
+        } else {
+            auto custom_bpe_words = unicode_custom_preprocess(unicode_wstring_to_utf8(temp_word));
+            bpe_words.insert(bpe_words.end(), custom_bpe_words.begin(), custom_bpe_words.end());
+        }
+        
+        start += offset;
+    }
+
+    return unicode_byte_encoding_process(bpe_words);
 }
-
-std::vector<std::wstring> get_deepseek_coder_regex() {
-    return deepseek_coder_regex;
-}
-
-std::vector<std::wstring> get_deepseek_llm_regex() {
-    return deepseek_llm_regex;
-}
-
-
-
