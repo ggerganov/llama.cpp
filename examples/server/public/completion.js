@@ -8,6 +8,7 @@ const paramDefaults = {
 let generation_settings = null;
 
 
+
 // Completes the prompt as a generator. Recommended for most use cases.
 //
 // Example:
