@@ -518,6 +518,9 @@ size_t ggml_hash_insert        (      struct ggml_hash_set hash_set, struct ggml
 // return index, asserts if table is full
 size_t ggml_hash_find_or_insert(      struct ggml_hash_set hash_set, struct ggml_tensor * key);
 
+#define GGML_FP32_TO_BF16(x) ggml_fp32_to_bf16(x)
+#define GGML_BF16_TO_FP32(x) ggml_bf16_to_fp32(x)
+
 #ifdef __cplusplus
 }
 #endif

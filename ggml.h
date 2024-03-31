@@ -370,6 +370,7 @@ extern "C" {
         GGML_TYPE_I64     = 27,
         GGML_TYPE_F64     = 28,
         GGML_TYPE_IQ1_M   = 29,
+        GGML_TYPE_BF16    = 30,
         GGML_TYPE_COUNT,
     };
 
@@ -410,6 +411,7 @@ extern "C" {
         GGML_FTYPE_MOSTLY_IQ2_S   = 21, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ4_XS  = 22, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ1_M   = 23, // except 1d tensors
+        GGML_FTYPE_MOSTLY_BF16    = 24, // except 1d tensors
     };
 
     // available tensor operations:
@@ -2389,6 +2391,90 @@ extern "C" {
     GGML_API int ggml_cpu_has_sycl       (void);
     GGML_API int ggml_cpu_has_vsx        (void);
     GGML_API int ggml_cpu_has_matmul_int8(void);
+
+    /**
+     * Google Brain 16-bit floating point number.
+     *
+     *       ┌sign
+     *       │
+     *       │   ┌exponent
+     *       │   │
+     *       │   │      ┌mantissa
+     *       │   │      │
+     *       │┌──┴───┐┌─┴───┐
+     *     0b0000000000000000 brain16
+     *
+     * Since bf16 has the same number of exponent bits as a 32bit float,
+     * encoding and decoding numbers becomes relatively straightforward.
+     *
+     *       ┌sign
+     *       │
+     *       │   ┌exponent
+     *       │   │
+     *       │   │      ┌mantissa
+     *       │   │      │
+     *       │┌──┴───┐┌─┴───────────────────┐
+     *     0b00000000000000000000000000000000 IEEE binary32
+     *
+     * For comparison, the standard fp16 format has fewer exponent bits.
+     *
+     *       ┌sign
+     *       │
+     *       │  ┌exponent
+     *       │  │
+     *       │  │    ┌mantissa
+     *       │  │    │
+     *       │┌─┴─┐┌─┴──────┐
+     *     0b0000000000000000 IEEE binary16
+     *
+     * So be warned that converting between them, destroys several bits.
+     *
+     * @see IEEE 754-2008
+     */
+    typedef struct {
+        uint16_t x;
+    } ggml_bf16_t;
+
+    /**
+     * Converts brain16 to float32.
+     */
+    static inline float ggml_bf16_to_fp32(ggml_bf16_t h) {
+        union {
+            float f;
+            uint32_t i;
+        } u;
+        u.i = (uint32_t)h.x << 16;
+        return u.f;
+    }
+
+    /**
+     * Converts float32 to brain16.
+     *
+     * This function is binary identical to AMD Zen4 VCVTNEPS2BF16.
+     * Subnormals shall be flushed to zero, and NANs will be quiet.
+     * This code should vectorize nicely if using modern compilers.
+     */
+    static inline ggml_bf16_t ggml_fp32_to_bf16(float s) {
+        ggml_bf16_t h;
+        union {
+            float f;
+            uint32_t i;
+        } u;
+        u.f = s;
+        if ((u.i & 0x7fffffff) > 0x7f800000) { /* nan */
+            h.x = (u.i >> 16) | 64; /* force to quiet */
+            return h;
+        }
+        if (!(u.i & 0x7f800000)) { /* subnormal */
+            h.x = (u.i & 0x80000000) >> 16; /* flush to zero */
+            return h;
+        }
+        h.x = (u.i + (0x7fff + ((u.i >> 16) & 1))) >> 16;
+        return h;
+    }
+
+    GGML_API void ggml_bf16_to_fp32_row(const ggml_bf16_t * x, float * y, int n);
+    GGML_API void ggml_fp32_to_bf16_row(const float * x, ggml_bf16_t * y, int n);
 
     //
     // Internal types and functions exposed for tests and benchmarks
