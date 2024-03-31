@@ -1268,7 +1268,7 @@ class LlamaModel(Model):
                             if self.ftype == 1 and data_dtype == np.float32:
                                 data = data.astype(np.float16)
 
-                            merged_name = f"layers.{bid}.feed_forward.experts.w{wid}"
+                            merged_name = f"layers.{bid}.feed_forward.experts.w{wid}.weight"
 
                             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
                             if new_name is None:
