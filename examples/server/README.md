@@ -287,7 +287,7 @@ node index.js
     },
     {
       "prob": float,
-      "tok_str": "<second most likely tonen>"
+      "tok_str": "<second most likely token>"
     },
     ...
   ]
