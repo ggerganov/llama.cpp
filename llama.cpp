@@ -15733,22 +15733,19 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "ASSISTANT:";
         }
-    } else if (tmpl == "alpaca" || tmpl.find("### Instruction:\\n") != std::string::npos) {
-        // wxjiao/alpaca-7b, deepseek-ai/deepseek-coder-33b-instruct
+    } else if (tmpl == "deepseek" || (tmpl.find("### Instruction:") != std::string::npos && tmpl.find("<|EOT|>") != std::string::npos)) {
+        // deepseek-ai/deepseek-coder-33b-instruct
+        // Use of both U+ff5c and U+007c pipes is deliberate, based on the Jinja template
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "system") {
-                ss << message->content << "\n\n";
+                ss << "<｜begin▁of▁sentence｜>" << message->content;
             } else if (role == "user") {
-                ss << "### Instruction:\n" << message->content << "\n\n";
+                ss << "### Instruction:\n" << message->content << "\n";
             } else if (role == "assistant") {
-                ss << "### Response:\n" << message->content << "\n\n";
+                ss << "### Response:\n" << message->content << "\n<|EOT|>\n";
             }
         }
-        if (add_ass) {
-            ss << "### Response:\n";
-        }
-
     } else {
         // template not supported
         return -1;
