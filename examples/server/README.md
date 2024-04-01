@@ -59,6 +59,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 - `-n N, --n-predict N`: Set the maximum tokens to predict (default: -1)
 - `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
 - `--metrics`: enable prometheus `/metrics` compatible endpoint (default: disabled)
+- `--slot-save-path PATH`: Specifies the path where the state of slots (the prompt cache) can be stored. If not provided, the slot management endpoints will be disabled.
 - `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name (default: template taken from model's metadata). We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
 - `--log-disable`: Output logs to stdout only, not to `llama.log`. default: enabled.
 - `--log-format FORMAT`: Define the log output to FORMAT: json or text (default: json)
@@ -518,6 +519,57 @@ Available metrics:
 - `llamacpp:kv_cache_tokens`: KV-cache tokens.
 - `llamacpp:requests_processing`: Number of request processing.
 - `llamacpp:requests_deferred`: Number of request deferred.
+
+- **POST** `/slots/{id_slot}?action=save`: Save the prompt cache of the specified slot to a file.
+
+    *Options:*
+
+    `filename`: Name of the file to save the slot's prompt cache. The file will be saved in the directory specified by the `--slot-save-path` server parameter.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "filename": "slot_save_file.bin",
+    "n_saved": 1745,
+    "n_written": 14309796,
+    "timings": {
+        "save_ms": 49.865
+    }
+}
+```
+
+- **POST** `/slots/{id_slot}?action=restore`: Restore the prompt cache of the specified slot from a file.
+
+    *Options:*
+
+    `filename`: Name of the file to restore the slot's prompt cache from. The file should be located in the directory specified by the `--slot-save-path` server parameter.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "filename": "slot_save_file.bin",
+    "n_restored": 1745,
+    "n_read": 14309796,
+    "timings": {
+        "restore_ms": 42.937
+    }
+}
+```
+
+- **POST** `/slots/{id_slot}?action=erase`: Erase the prompt cache of the specified slot.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "n_erased": 1745
+}
+```
 
 ## More examples
 
