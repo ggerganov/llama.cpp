@@ -15738,8 +15738,11 @@ static int32_t llama_chat_apply_template_internal(
         // Use of both U+ff5c and U+007c pipes is deliberate, based on the Jinja template
         for (auto message : chat) {
             std::string role(message->role);
+            if (message == chat.front()) {
+                ss << "<｜begin▁of▁sentence｜>";
+            }
             if (role == "system") {
-                ss << "<｜begin▁of▁sentence｜>" << message->content;
+                ss << message->content;
             } else if (role == "user") {
                 ss << "### Instruction:\n" << message->content << "\n";
             } else if (role == "assistant") {
