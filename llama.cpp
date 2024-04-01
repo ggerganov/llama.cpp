@@ -15701,14 +15701,11 @@ static int32_t llama_chat_apply_template_internal(
         // openchat/openchat-3.5-0106,
         for (auto message : chat) {
             std::string role(message->role);
-            if (role == "user") {
-                ss << "GPT4 Correct User: ";
-            } else if (role == "assistant") {
-                ss << "GPT4 Correct Assistant: ";
+            if (message == chat.front()) {
+                ss << "<s>";
             }
-            // Not documented, but apparently the system message is prepended without prefix:
-            // https://huggingface.co/openchat/openchat_3.5/discussions/5#65448109b4a3f3a2f486fd9d
-            ss << message->content << "<|end_of_turn|>";
+            role[0] = toupper(role[0]);
+            ss << "GPT4 Correct " << role << ": " << message->content << "<|end_of_turn|>";
         }
         if (add_ass) {
             ss << "GPT4 Correct Assistant:";
