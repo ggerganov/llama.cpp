@@ -15265,6 +15265,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
     memcpy(&size_t_size, inp, sizeof(size_t_size));
     inp += sizeof(size_t_size);
     if (size_t_size != sizeof(size_t)) {
+        LLAMA_LOG_ERROR("%s: size_t size mismatch\n", __func__);
         return 0;
     }
 
@@ -15289,9 +15290,11 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
     const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa() + hparams.n_embd_k_s();
     const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa() + hparams.n_embd_v_s();
     if (n_layer != n_layer_ref) {
+        LLAMA_LOG_ERROR("%s: mismatched n_layer (%d != %d)\n", __func__, n_layer, n_layer_ref);
         return 0;
     }
     if (n_embd_v_gqa != n_embd_v_gqa_ref) {
+        LLAMA_LOG_ERROR("%s: mismatched n_embd_v_gqa (%d != %d)\n", __func__, n_embd_v_gqa, n_embd_v_gqa_ref);
         return 0;
     }
 
@@ -15310,6 +15313,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
         }
         if (!llama_kv_cache_find_slot(kv_self, batch)) {
             llama_batch_free(batch);
+            LLAMA_LOG_ERROR("%s: failed to find available cells in kv cache\n", __func__);
             return 0;
         }
 
@@ -15337,6 +15341,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
         const size_t k_size_row = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa);
         if (k_size_row != k_size_row_ref) {
             llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
+            LLAMA_LOG_ERROR("%s: mismatched key row size (%zu != %zu, layer %d)\n", __func__, k_size_row, k_size_row_ref, il);
             return 0;
         }
 
@@ -15357,6 +15362,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
         const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
         if (v_size_el != v_size_el_ref) {
             llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
+            LLAMA_LOG_ERROR("%s: mismatched value element size (%zu != %zu, layer %d)\n", __func__, v_size_el, v_size_el_ref, il);
             return 0;
         }
 
@@ -15402,7 +15408,7 @@ static size_t llama_state_seq_load_file_internal(struct llama_context * ctx, con
         const uint32_t version = file.read_u32();
 
         if (magic != LLAMA_STATE_SEQ_MAGIC || version != LLAMA_STATE_SEQ_VERSION) {
-            LLAMA_LOG_ERROR("%s : unknown (magic, version) for sequence state file: %08x, %08x\n", __func__, magic, version);
+            LLAMA_LOG_ERROR("%s: unknown (magic, version) for sequence state file: %08x, %08x\n", __func__, magic, version);
             return 0;
         }
     }
@@ -15412,7 +15418,7 @@ static size_t llama_state_seq_load_file_internal(struct llama_context * ctx, con
         const uint32_t n_token_count = file.read_u32();
 
         if (n_token_count > n_token_capacity) {
-            LLAMA_LOG_ERROR("%s : token count in sequence state file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
+            LLAMA_LOG_ERROR("%s: token count in sequence state file exceeded capacity! %u > %zu\n", __func__, n_token_count, n_token_capacity);
             return 0;
         }
 
@@ -15427,7 +15433,7 @@ static size_t llama_state_seq_load_file_internal(struct llama_context * ctx, con
         file.read_raw(state_data.data(), state_size);
         const size_t nread = llama_state_seq_set_data(ctx, state_data.data(), dest_seq_id);
         if (!nread) {
-            LLAMA_LOG_ERROR("%s : failed to restore sequence state\n", __func__);
+            LLAMA_LOG_ERROR("%s: failed to restore sequence state\n", __func__);
             return 0;
         }
         GGML_ASSERT(nread <= state_size);
