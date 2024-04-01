@@ -276,6 +276,7 @@ enum llm_kv {
     LLM_KV_EXPERT_USED_COUNT,
     LLM_KV_POOLING_TYPE,
     LLM_KV_LOGIT_SCALE,
+    LLM_KV_TIE_LM_HEAD,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -320,6 +321,7 @@ enum llm_kv {
     LLM_KV_TOKENIZER_ADD_PREFIX,
     LLM_KV_TOKENIZER_HF_JSON,
     LLM_KV_TOKENIZER_RWKV,
+
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -345,6 +347,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_EXPERT_USED_COUNT,             "%s.expert_used_count"     },
     { LLM_KV_POOLING_TYPE ,                 "%s.pooling_type"          },
     { LLM_KV_LOGIT_SCALE,                   "%s.logit_scale"           },
+    { LLM_KV_TIE_LM_HEAD,                   "%s.tie_lm_head"           },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,          "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,       "%s.attention.head_count_kv"          },
@@ -1707,6 +1710,7 @@ struct llama_hparams {
 
     bool causal_attn = true;
     bool need_kq_pos = false;
+    bool tie_lm_head = true;
 
     enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
     enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
@@ -3503,6 +3507,7 @@ static void llm_load_hparams(
     ml.get_key(LLM_KV_BLOCK_COUNT,          hparams.n_layer);
     ml.get_key(LLM_KV_EXPERT_COUNT,         hparams.n_expert,      false);
     ml.get_key(LLM_KV_EXPERT_USED_COUNT,    hparams.n_expert_used, false);
+    ml.get_key(LLM_KV_TIE_LM_HEAD,          hparams.tie_lm_head, false);
 
     GGML_ASSERT(hparams.n_expert <= LLAMA_MAX_EXPERTS);
     GGML_ASSERT(hparams.n_expert_used <= hparams.n_expert);
@@ -4375,7 +4380,9 @@ static bool llm_load_tensors(
             case LLM_ARCH_MINICPM:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                    model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
+                    if (!hparams.tie_lm_head){
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
+                    }
 
                     // output
                     {
@@ -8700,7 +8707,11 @@ struct llm_build_context {
         cb(cur, "lmhead_scaling", -1);
 
         // lm_head
-        cur = ggml_mul_mat(ctx0, model.output, cur);
+        if (hparams.tie_lm_head){
+            cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
+        }else{
+            cur = ggml_mul_mat(ctx0, model.output, cur);
+        }
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);

@@ -342,6 +342,9 @@ class GGUFWriter:
 
     def add_parallel_residual(self, use: bool) -> None:
         self.add_bool(Keys.LLM.USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
+    
+    def add_tie_lm_head(self, tie_lm_head: bool) -> None:
+        self.add_bool(Keys.LLM.TIE_LM_HEAD.format(arch=self.arch), tie_lm_head)
 
     def add_head_count(self, count: int) -> None:
         self.add_uint32(Keys.Attention.HEAD_COUNT.format(arch=self.arch), count)
