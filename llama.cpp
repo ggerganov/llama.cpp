@@ -2874,19 +2874,19 @@ struct llama_model_loader {
 
     llama_mmaps mappings;
 
-    // Holds information on a model weights
-    struct llama_tensor_weights {
+    // Holds information on a model weight
+    struct llama_tensor_weight {
         uint16_t  idx; // source file index
         size_t   offs; // tensor data offset in the original file
 
         ggml_tensor * tensor;
 
-        llama_tensor_weights(uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
+        llama_tensor_weight(uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
             const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
             offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
         }
     };
-    std::vector<llama_tensor_weights> weights;
+    std::vector<llama_tensor_weight> weights;
 
     std::unordered_map<std::string, struct llama_model_kv_override> kv_overrides;
 
@@ -2926,7 +2926,7 @@ struct llama_model_loader {
         // For subsidiary files, `meta` tensor data offset must not be used,
         // so we build a unified tensors index for weights.
         for (ggml_tensor * cur = ggml_get_first_tensor(ctx); cur; cur = ggml_get_next_tensor(ctx, cur)) {
-            weights.emplace_back(llama_tensor_weights(0, cur->name, meta, cur));
+            weights.emplace_back(llama_tensor_weight(0, cur->name, meta, cur));
         }
         files.emplace_back(new llama_file(fname.c_str(), "rb"));
         contexts.emplace_back(ctx);
@@ -2966,7 +2966,7 @@ struct llama_model_loader {
 
                 // Save tensors data offset info of the shard.
                 for (ggml_tensor * cur = ggml_get_first_tensor(ctx); cur; cur = ggml_get_next_tensor(ctx, cur)) {
-                    weights.emplace_back(llama_tensor_weights(idx, cur->name, ctx_gguf, cur));
+                    weights.emplace_back(llama_tensor_weight(idx, cur->name, ctx_gguf, cur));
                 }
                 files.emplace_back(new llama_file(split_path, "rb"));
                 contexts.emplace_back(ctx);
@@ -3170,21 +3170,29 @@ struct llama_model_loader {
         return weights.at(i).tensor->name;
     }
 
-    const llama_tensor_weights & get_weights(const char * name) const {
+    const llama_tensor_weight * get_weight(const char * name) const {
         for (const auto & weight : weights) {
             if (strcmp(name, weight.tensor->name) == 0) {
-                return weight;
+                return &weight;
             }
         }
-        throw std::runtime_error(format("tensor '%s' not found", name));
+        return nullptr;
+    }
+
+    const llama_tensor_weight & require_weight(const char * name) const {
+        const llama_tensor_weight * weight = get_weight(name);
+        if (!weight) {
+            throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name));
+        }
+        return *weight;
     }
 
     struct ggml_tensor * get_tensor_meta(const char * name) const {
-        try {
-            return get_weights(name).tensor;
-        } catch (const std::runtime_error & e) {
-            return NULL;
+        const auto * weight = get_weight(name);
+        if (!weight) {
+            return nullptr;
         }
+        return weight->tensor;
     }
 
     struct ggml_tensor * get_tensor_meta(int i) const {
@@ -3266,22 +3274,25 @@ struct llama_model_loader {
         *last  = 0;
         *addr = mapping->addr;
         for (ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor; tensor = ggml_get_next_tensor(ctx, tensor)) {
-            // hack to skip moe merged tensor
-            if (strlen(ggml_get_name(tensor)) == 0) {
-                continue;
+            try {
+                const auto * weight = get_weight(ggml_get_name(tensor));
+                if (!weight) {
+                    continue;
+                }
+                if (weight->idx != idx) {
+                    continue;
+                }
+                *first = std::min(*first, weight->offs);
+                *last  = std::max(*last,  weight->offs + ggml_nbytes(tensor));
+            } catch(...) {
+                // the tensor is not in the model
             }
-            const auto & w = get_weights(ggml_get_name(tensor));
-            if (w.idx != idx) {
-                continue;
-            }
-            *first = std::min(*first, w.offs);
-            *last  = std::max(*last,  w.offs + ggml_nbytes(tensor));
         }
     }
 
     // for backwards compatibility, does not support ggml-backend
     void load_data_for(struct ggml_tensor * cur) const {
-        const auto & w = get_weights(ggml_get_name(cur));
+        const auto & w = require_weight(ggml_get_name(cur));
 
         if (use_mmap) {
             const auto & mapping = mappings.at(w.idx);
@@ -3314,8 +3325,9 @@ struct llama_model_loader {
 
         std::vector<no_init<uint8_t>> read_buf;
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
-            // hack to skip moe merged tensor
-            if (strlen(ggml_get_name(cur)) == 0) {
+            const auto * weight = get_weight(ggml_get_name(cur));
+            if (weight == nullptr) {
+                // this can happen with split experts models
                 continue;
             }
 
@@ -3325,38 +3337,37 @@ struct llama_model_loader {
                 }
             }
 
-            const auto & w = get_weights(ggml_get_name(cur));
             size_t n_size = ggml_nbytes(cur);
 
             if (use_mmap) {
-                const auto & mapping = mappings.at(w.idx);
+                const auto & mapping = mappings.at(weight->idx);
                 ggml_backend_buffer_t buf_mmap = nullptr;
-                if (bufs_mmap.count(w.idx)) {
-                    buf_mmap = bufs_mmap.at(w.idx);
+                if (bufs_mmap.count(weight->idx)) {
+                    buf_mmap = bufs_mmap.at(weight->idx);
                 }
                 GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
                 if (buf_mmap && cur->data == nullptr) {
-                    ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + w.offs);
+                    ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + weight->offs);
                     if (lmlocks) {
-                        const auto & lmlock = lmlocks->at(w.idx);
-                        lmlock->grow_to(w.offs + ggml_nbytes(cur));
+                        const auto & lmlock = lmlocks->at(weight->idx);
+                        lmlock->grow_to(weight->offs + ggml_nbytes(cur));
                     }
 
-                    auto & mmap_used = mmaps_used[w.idx];
-                    mmap_used.first  = std::min(mmap_used.first,  w.offs);
-                    mmap_used.second = std::max(mmap_used.second, w.offs + n_size);
+                    auto & mmap_used = mmaps_used[weight->idx];
+                    mmap_used.first  = std::min(mmap_used.first,  weight->offs);
+                    mmap_used.second = std::max(mmap_used.second, weight->offs + n_size);
                 } else {
-                    ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + w.offs, 0, n_size);
+                    ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + weight->offs, 0, n_size);
                 }
             } else {
-                GGML_ASSERT(w.idx < files.size());
-                const auto & file = files.at(w.idx);
+                GGML_ASSERT(weight->idx < files.size());
+                const auto & file = files.at(weight->idx);
                 if (ggml_backend_buffer_is_host(cur->buffer)) {
-                    file->seek(w.offs, SEEK_SET);
+                    file->seek(weight->offs, SEEK_SET);
                     file->read_raw(cur->data, ggml_nbytes(cur));
                 } else {
                     read_buf.resize(ggml_nbytes(cur));
-                    file->seek(w.offs, SEEK_SET);
+                    file->seek(weight->offs, SEEK_SET);
                     file->read_raw(read_buf.data(), ggml_nbytes(cur));
                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
                 }
@@ -4374,7 +4385,7 @@ static bool llm_load_tensors(
     // create one context per buffer type
     size_t ctx_size = ggml_tensor_overhead()*(ml.n_tensors + 1); // +1 for models where tok_embd is duplicated as output
 
-    // hack for moe merged tensors
+    // for moe merged tensors
     ctx_size += ggml_tensor_overhead()*hparams.n_expert*n_layer;
 
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
@@ -4471,12 +4482,14 @@ static bool llm_load_tensors(
                             GGML_ASSERT(hparams.n_expert_used > 0);
 
                             layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, hparams.n_expert}, false);
-                            layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, hparams.n_expert}, false);
-                            layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, hparams.n_expert}, false);
+                            if (layer.ffn_gate_exps) {
+                                layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, hparams.n_expert});
+                                layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, hparams.n_expert});
+                            } else {
+                                // merge split expert into a single tensor
+                                // requires disabling mmap
+                                ml.use_mmap = false;
 
-                            if (layer.ffn_down_exps == nullptr) {
-                                // hack to merge tensors, need to clean this up
-                                // merged tensors
                                 ggml_type type_gate = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
                                 ggml_type type_down = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
                                 ggml_type type_up   = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
@@ -4485,9 +4498,12 @@ static bool llm_load_tensors(
                                 layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, hparams.n_expert);
                                 layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, hparams.n_expert);
 
-                                // MoE branch
+                                ggml_set_name(layer.ffn_gate_exps, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i).c_str());
+                                ggml_set_name(layer.ffn_down_exps, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i).c_str());
+                                ggml_set_name(layer.ffn_up_exps,   tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i).c_str());
+
                                 for (uint32_t x = 0; x < hparams.n_expert; ++x) {
-                                    // individual tensors as views
+                                    // the individual experts are loaded into a view of the merged tensor
                                     ggml_tensor * ffn_gate_exp = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
                                     ggml_tensor * ffn_down_exp = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
                                     ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1],   layer.ffn_up_exps->nb[2]*x);
@@ -4496,7 +4512,7 @@ static bool llm_load_tensors(
                                     ggml_set_name(ffn_down_exp, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
                                     ggml_set_name(ffn_up_exp,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
 
-                                    ml.n_created += 3; // hack
+                                    ml.n_created += 3;
                                 }
                             }
                         }
