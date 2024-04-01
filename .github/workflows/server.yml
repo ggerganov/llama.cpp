@@ -4,6 +4,10 @@ name: Server
 on:
   workflow_dispatch: # allows manual triggering
     inputs:
+      sha:
+        description: 'Commit SHA1 to build'
+        required: false
+        type: string
       slow_tests:
         description: 'Run slow tests'
         required: true
@@ -64,6 +68,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
 
       - name: Verify server deps
         id: verify_server_deps
