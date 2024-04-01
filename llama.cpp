@@ -15746,6 +15746,9 @@ static int32_t llama_chat_apply_template_internal(
                 ss << "### Response:\n" << message->content << "\n<|EOT|>\n";
             }
         }
+        if (add_ass) {
+            ss << "### Response:\n";
+        }
     } else {
         // template not supported
         return -1;
