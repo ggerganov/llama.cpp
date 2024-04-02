@@ -21,13 +21,9 @@
 #define GGML_F32_EPR 16
 
 /* we force an alignment, because i haven't written unaligned forms of the assembly functions, yet.. */
-typedef float float32x8_t __attribute__((vector_size (32)));
 typedef float float32x16_t __attribute__((vector_size (64), aligned(64)));
 typedef int8_t int8x16_t __attribute__((vector_size (16), aligned(16)));
 typedef uint8_t uint8x16_t __attribute__((vector_size (16), aligned(16)));
-typedef int16_t int16x8_t __attribute__((vector_size (16)));
-typedef int16_t int16x16_t __attribute__((vector_size (32)));
-typedef int32_t int32x8_t __attribute__((vector_size (32)));
 typedef int32_t int32x16_t __attribute__((vector_size (64), aligned(64)));
 
 /* A forward declaration, to keep GCC happy. */
@@ -168,6 +164,8 @@ inline static void GGML_5bit_Unpack (const uint8x16_t * q4, const uint8_t * q1, 
 			);
 }
   
+// A function for getting the dot product of two vectors, one of 5 bit resolution, and one of 8.
+// Used during inference, if your model prints "llama_model_loader: - type q5_K:  XXX tensors", and XXX is not zero. :)
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
 
   /* interpret X and Y as vectors. */
@@ -207,6 +205,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     // combine our 4 and 1 bit vector sets into an 8 bit value.
     GGML_5bit_Unpack(q4copyvec, x[i].qh, aux8);
 
+    // extract scales and mins..
     memcpy(utmp, x[i].scales, 12);
     utmp[3] = ((utmp[2] >> 4) & kmask2) | (((utmp[1] >> 6) & kmask3) << 4);
     const uint32_t uaux = utmp[1] & kmask1;
@@ -220,24 +219,17 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     GGML_I32x16_VEC_ZERO(&aux32);
 
-    for (int j = 0; j < QK_K/16; ++j) sumi += y[i].bsums[j] * mins[j/2];
-    int is = 0;
-    for (int j = 0; j < QK_K/32; ++j) {
-      for (int l = 0; l < 16; ++l) ((int16_t *)&aux16[j*2])[l] = q8[l] * a[l];
-      q8 += 16; a += 16;
-      for (int l = 0; l < 16; ++l) ((int16_t *)&aux16[(j*2)+1])[l] = q8[l] * a[l];
-      q8 += 16; a += 16;
-    }
-
     // FIXME: while comparing FMA output to the original output, the original had an error. hunt it down.
     GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16(q8copy, aux8, scales, &aux32);
 
+    int sumi = 0;
+    for (int j = 0; j < QK_K/16; ++j) sumi += y[i].bsums[j] * mins[j/2];
     const float d = GGML_FP16_TO_FP32(x[i].d) * y[i].d;
     for (int l = 0; l < 16; ++l) ((float *)&sums)[l] += d * ((int32_t *)&aux32)[l];
     const float dmin = GGML_FP16_TO_FP32(x[i].dmin) * y[i].d;
     sumf -= dmin * sumi;
   }
-  
+
   for (int l = 0; l < 16; ++l) sumf += ((float *)&sums)[l];
   *s = sumf;
 }
