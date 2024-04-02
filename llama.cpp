@@ -13534,7 +13534,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 if (it == imatrix_data->end()) {
                     LLAMA_LOG_INFO("\n====== %s: did not find weights for %s\n", __func__, tensor->name);
                 } else {
-                    if (it->second.size() == (size_t)tensor->ne[0]) {
+                    if (it->second.size() == (size_t)tensor->ne[0]*tensor->ne[2]) {
                         imatrix = it->second.data();
                     } else {
                         LLAMA_LOG_INFO("\n====== %s: imatrix size %d is different from tensor size %d for %s\n", __func__,
@@ -13575,15 +13575,24 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = work.data();
 
             const int n_per_row = tensor->ne[0];
-            const int nrows = nelements / n_per_row;
+            const int nrows = tensor->ne[1];
 
             static const int min_chunk_size = 32 * 512;
             const int chunk_size = n_per_row >= min_chunk_size ? n_per_row : n_per_row * ((min_chunk_size + n_per_row - 1)/n_per_row);
 
-            const int nchunk = (nelements + chunk_size - 1)/chunk_size;
+            const int nelements_matrix = tensor->ne[0] * tensor->ne[1];
+            const int nchunk = (nelements_matrix + chunk_size - 1)/chunk_size;
             const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
-            new_size = llama_tensor_quantize_internal(new_type, f32_data, new_data, chunk_size, nrows, n_per_row, imatrix, workers, nthread_use);
 
+            // quantize each expert separately since they have different importance matrices
+            new_size = 0;
+            for (int64_t i03 = 0; i03 < tensor->ne[2]; ++i03) {
+                const float * f32_data_03 = f32_data + i03 * nelements_matrix;
+                void * new_data_03 = (char *)new_data + ggml_row_size(new_type, n_per_row) * i03 * nrows;
+                const float * imatrix_03 = imatrix ? imatrix + i03 * n_per_row : nullptr;
+
+                new_size += llama_tensor_quantize_internal(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
+            }
             LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB\n", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
         }
         total_size_org += ggml_nbytes(tensor);
