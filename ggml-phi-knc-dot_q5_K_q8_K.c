@@ -20,112 +20,154 @@
 // We can fit 16 of these float32s in a single vector register.
 #define GGML_F32_EPR 16
 
+/* we force an alignment, because i haven't written unaligned forms of the assembly functions, yet.. */
 typedef float float32x8_t __attribute__((vector_size (32)));
-typedef float float32x16_t __attribute__((vector_size (64)));
-typedef int8_t int8x16_t __attribute__((vector_size (16)));
+typedef float float32x16_t __attribute__((vector_size (64), aligned(64)));
+typedef int8_t int8x16_t __attribute__((vector_size (16), aligned(16)));
+typedef uint8_t uint8x16_t __attribute__((vector_size (16), aligned(16)));
 typedef int16_t int16x8_t __attribute__((vector_size (16)));
 typedef int16_t int16x16_t __attribute__((vector_size (32)));
 typedef int32_t int32x8_t __attribute__((vector_size (32)));
-typedef int32_t int32x16_t __attribute__((vector_size (64)));
+typedef int32_t int32x16_t __attribute__((vector_size (64), aligned(64)));
 
 /* A forward declaration, to keep GCC happy. */
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc);
 
-/* clear a vector of 8 floats. */
-inline static void GGML_F32x8_VEC_ZERO(float32x8_t *target)
-{
-  uint8_t zero[4] __attribute__((aligned(32))) = {0,0,0,0};
-  uint32_t mask=0x000000FF;
-
-  __asm__ __volatile__ (
-                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
-                        "kmov\t%[M],\t%%k1\n\t"
-                        "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
-                        : [RES]  "+m"  (*target)
-                        : [Z]    "m"   (zero),
-                          [M]    "r"   (mask)
-                        : "zmm8", "k1", "memory");
-}
-
 /* clear a vector of 16 floats. */
 inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 {
-  uint8_t zero[4] __attribute__((aligned(32))) = {0,0,0,0};
+  uint8_t zero=0;
 
   __asm__ __volatile__ (
-                        "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
+                        "vbroadcastss\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
                         "vmovaps\t\t%%zmm8,\t%[RES]\n\t"
                         : [RES]  "+m"  (*target)
                         : [Z]    "m"   (zero)
                         : "zmm8", "memory");
 }
 
-/* clear a vector of 8 int32_ts. */
-inline static void GGML_I32x8_VEC_ZERO(int32x8_t *target)
+// This function perform two multiplies of an I8x16 and an I8x16 vector into two I16x16 vectors. then does an FMA on the scaled result of multiplying the two I16x16 vectors, adding the result into an I32x16.
+// it loops 8 times. well, actually four, with an unroll.
+inline static void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16 (int8x16_t *src11, uint8x16_t *src21, const uint8_t *scale, int32x16_t *res)
 {
-  uint8_t zero[4] __attribute__((aligned(32))) = {0,0,0,0};
-  uint32_t mask=0x000000FF;
+  uint8_t zero = 0;
 
   __asm__ __volatile__ (
-                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
-                        "kmov\t%[M],\t%%k1\n\t"
-                        "vmovaps\t\t%%zmm8,\t%[RES]%{%%k1%}\n\t"
-                        : [RES]  "+m"  (*target)
-                        : [Z]    "m"   (zero),
-                          [M]    "r"   (mask)
-                        : "zmm8", "k1", "memory");
+			"vprefetche0\t(%[SRC11])\n\t"
+			"vprefetche0\t(%[SRC21])\n\t"
+			"vprefetche0\t(%[SCALE])\n\t"
+			"mov\t$0,\t%%ecx\n\t"
+			"mov\t%[SRC11],\t%%r12\n\t"
+			"mov\t%[SRC21],\t%%r8\n\t"
+			"mov\t%[SCALE],\t%%r9\n\t"
+			"vpbroadcastd\t%[Z]%{uint8%},\t%%zmm7\n\t"     // empty our result.
+
+			"1:\n\t"
+			"inc\t%%ecx\n\t"                               // we are in our loop, increment our counter.
+			"cmp\t$4,\t%%ecx\n\t"                          // see if this is our last run-through.
+			"vmovdqa32\t\t(%%r12)%{sint8%},\t%%zmm0\n\t"   // load the item we will be multiplying from. upscale it from int8 to int32.
+			"vmovdqa32\t\t(%%r8)%{uint8%},\t%%zmm1\n\t"    // load the item we will be multiplying with. upscale it from int8 to int32.
+			"vpmulld\t%%zmm0,\t%%zmm1,\t%%zmm2\n\t"        // perform our 64 bit multiply, low side.
+			"vpbroadcastd\t(%%r9)%{uint8%},\t%%zmm6\n\t"   // load the item we will be multiplying by.
+			"vpmadd231d\t%%zmm2,\t%%zmm6,\t%%zmm7\n\t"     // perform our multiply-add.
+			"vmovdqa32\t\t16(%%r12)%{sint8%},\t%%zmm3\n\t" // load the item we will be multiplying from. upscale it from int8 to int32.
+			"vmovdqa32\t\t16(%%r8)%{uint8%},\t%%zmm4\n\t"  // load the item we will be multiplying with. upscale it from int8 to int32.
+			"vpmulld\t%%zmm3,\t%%zmm4,\t%%zmm5\n\t"        // perform our 64 bit multiply, low side.
+			"vpmadd231d\t%%zmm5,\t%%zmm6,\t%%zmm7\n\t"     // perform our multiply-add.
+			"vmovdqa32\t\t32(%%r12)%{sint8%},\t%%zmm8\n\t" // load the item we will be multiplying from. upscale it from int8 to int32.
+			"vmovdqa32\t\t32(%%r8)%{uint8%},\t%%zmm1\n\t"  // load the item we will be multiplying with. upscale it from int8 to int32.
+			"vpmulld\t%%zmm8,\t%%zmm1,\t%%zmm2\n\t"        // perform our 64 bit multiply, low side.
+			"vpbroadcastd\t1(%%r9)%{uint8%},\t%%zmm6\n\t"  // load the item we will be multiplying by.
+			"vpmadd231d\t%%zmm2,\t%%zmm6,\t%%zmm7\n\t"     // perform our multiply-add.
+			"vmovdqa32\t\t48(%%r12)%{sint8%},\t%%zmm3\n\t" // load the item we will be multiplying from. upscale it from int8 to int32.
+			"vmovdqa32\t\t48(%%r8)%{uint8%},\t%%zmm4\n\t"  // load the item we will be multiplying with. upscale it from int8 to int32.
+			"vpmulld\t%%zmm3,\t%%zmm4,\t%%zmm5\n\t"        // perform our 64 bit multiply, low side.
+			"vpmadd231d\t%%zmm5,\t%%zmm6,\t%%zmm7\n\t"     // perform our multiply-add.
+			"je\t2f\n\t"                                   // if this is the last time through our loop, jump to 2.
+			"vprefetche0\t64(%%r12)\n\t"                   // otherwise, prepare for another run-through.
+			"vprefetche0\t64(%%r8)\n\t"
+			"vprefetche2\t128(%%r12)\n\t"
+			"vprefetche2\t128(%%r8)\n\t"
+			"add\t$64,\t%%r12\n\t"
+			"add\t$64,\t%%r8\n\t"
+			"add\t$2,\t%%r9\n\t"
+			"jmp\t1b\n\t"
+			"2:\n\t"
+			"vmovdqa32\t\t%%zmm7,\t(%[RES])\n\t"           // save the result.
+			: [RES]   "+r" (res)
+			: [SRC11] "r"  (src11),
+			  [SRC21] "r"  (src21),
+			  [SCALE] "r"  (scale),
+			  [Z]     "m"  (zero)
+			: "zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "ecx", "r8", "r9", "r12", "memory");
 }
 
-/* clear a vector of 16 int32_ts. */
-inline static void GGML_I32x16_VEC_ZERO(int32x16_t *target)
+// Unpack 256 unsigned 5 bit values into an 8 bit vector.
+inline static void GGML_5bit_Unpack (const uint8x16_t * q4, const uint8_t * q1, uint8x16_t * dst)
 {
-  uint8_t zero[4] __attribute__((aligned(32))) = {0,0,0,0};
+  uint8_t lowmask = 0x0F;
+  uint32_t allmask=0xFFFFFFFF;
+  uint8_t m=1;
+  uint8_t bit5 = 0x10;
 
   __asm__ __volatile__ (
-                        "vbroadcastI32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our register.
-                        "vmovaps\t\t%%zmm8,\t%[RES]\n\t"
-                        : [RES]  "+m"  (*target)
-                        : [Z]    "m"   (zero)
-                        : "zmm8", "memory");
+			"vprefetche0\t(%[SRC1])\n\t"
+			"vprefetche0\t(%[SRC4])\n\t"
+			"vprefetche1\t64(%[SRC4])\n\t"
+			"mov\t%[SRC4],\t%%r12\n\t"                       // load the address of the head of our 4-bit list.
+			"mov\t%[DST],\t%%r8\n\t"                         // load the address of the head of our destination list.
+			"mov\t$0,%%ecx\n\t"                              // initialize our counter.
+			"vmovdqa32\t(%[SRC1])%{uint8%},\t%%zmm6\n\t"     // move 16 packed sets of single bits into the lower 8 bits of zmm6.
+			"vmovdqa32\t16(%[SRC1])%{uint8%},\t%%zmm7\n\t"   // move the next 16 packed sets of single bits into the lower 8 bits of zmm7.
+			"vpbroadcastd\t%[MASK]%{uint8%},\t%%zmm2\n\t "   // load our mask.
+			"vpbroadcastd\t%[BIT5]%{uint8},\t%%zmm9\n\t"     // load the bit we want to add (conditionally).
+			"vpbroadcastd\t%[M]%{uint8%},\t%%zmm8\n\t"       // select which bit we want to test for.
+
+			"1:\n\t"
+			"inc\t%%ecx\n\t"                                 // we are in the loop. increment the counter.
+
+			"vptestmd\t%%zmm6,\t%%zmm8,\t%%k1\n\t"           // perform our test.
+			"vptestmd\t%%zmm7,\t%%zmm8,\t%%k2\n\t"           // perform our test.
+			"vmovdqa32\t\t(%%r12)%{uint8%},\t%%zmm0\n\t"     // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+			"vpandd\t%%zmm0,\t%%zmm2,\t%%zmm4\n\t"           // apply a mask, storing the low four bits of vector zmm0 into zmm4.
+			"vpaddd\t%%zmm4,%%zmm9,%%zmm4%{%%k1%}\n\t"       // turn on bit 5 for all values that passed the prior test.
+			"vmovdqa32\t\t%%zmm4%{uint8%},\t(%%r8)\n\t"      // save our result.
+			"vmovdqa32\t\t16(%%r12)%{uint8%},\t%%zmm1\n\t"   // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+			"vpandd\t%%zmm1,\t%%zmm2,\t%%zmm5\n\t"           // apply a mask, storing the next low four bits of vector zmm1 into zmm5.
+			"vpaddd\t%%zmm5,%%zmm9,%%zmm5%{%%k2%}\n\t"       // turn on bit 5 for all values that passed the prior test.
+			"vmovdqa32\t\t%%zmm5%{uint8%},\t16(%%r8)\n\t"    // save our result.
+
+			"add\t$32,\t%%r8\n\t"
+			"cmp\t$4,\t%%ecx\n\t"
+			"vpslld\t$1,\t%%zmm8,\t%%zmm8\n\t"               // select which bit we want to test for.
+
+			"vptestmd\t%%zmm6,\t%%zmm8,\t%%k1\n\t"           // perform our test.
+			"vptestmd\t%%zmm7,\t%%zmm8,\t%%k2\n\t"           // perform our test.
+			"vpsrld\t$4,\t%%zmm0,\t%%zmm4\n\t"               // load our even 4 bit sequence into zmm4.
+			"vpaddd\t%%zmm4,%%zmm9,%%zmm4%{%%k1%}\n\t"       // turn on bit 5 for all values that passed the prior test.
+			"vmovdqa32\t\t%%zmm4%{uint8%},\t(%%r8)\n\t"      // save our result.
+			"vpsrld\t$4,\t%%zmm1,\t%%zmm5\n\t"               // load our even 4 bit sequence into zmm5.
+			"vpaddd\t%%zmm5,%%zmm9,%%zmm5%{%%k2%}\n\t"       // turn on bit 5 for all values that passed the prior test.
+			"vmovdqa32\t\t%%zmm5%{uint8%},\t16(%%r8)\n\t"    // save our result.
+
+			"je\t2f\n\t"
+
+			"vpslld\t$1,\t%%zmm8,\t%%zmm8\n\t"               // select which bit we want to test for.
+			"add\t$32,\t%%r12\n\t"
+			"add\t$32,\t%%r8\n\t"
+			"jmp\t1b\n\t"
+			"2:"
+			: [DST]  "+r" (dst)
+			: [SRC4]  "r" (q4),
+			  [SRC1]  "r" (q1),
+			  [MASK]  "m" (lowmask),
+			  [M]     "m" (m),
+			  [ALL]   "m" (allmask),
+			  [BIT5]  "m" (bit5)
+			: "zmm0", "zmm1", "zmm2", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "zmm9", "zmm10", "zmm11", "ecx", "k1", "k2", "r12", "r8", "memory"
+			);
 }
-
-// perform a Fused Multiply Add of an I16x8 times scalar S into I32x8.
-inline static void GGML_I16x8_S_FMA_I32x8 (int16x8_t *src, int32_t scale, int32x8_t *dest)
-{
-  uint32_t mask=0x000000FF;
-  int32_t scaleVec[4] = {scale, scale, scale, scale};
-
-  __asm__ __volatile__ (
-                        "kmov\t%[M],\t%%k1\n\t"                              // we will only be working with 8 values at a time. le sigh.
-                        "vmovdqa32\t\t%[SRC]%{sint16%},\t%%zmm0%{%%k1%}\n\t" // load the item we will be summing from. upscale it from int16.
-                        "vbroadcastI32x4\t%[SCALE],\t%%zmm1\n\t"             // load the item we will be multiplying by.
-                        "vmovdqa32\t\t%[RES],\t%%zmm2%{%%k1%}\n\t"           // load the item we will be summing onto.
-                        "vpmadd231d\t%%zmm0,\t%%zmm1,\t%%zmm2%{%%k1%}\n\t"   // perform our multiply-add.
-                        "vmovdqa32\t\t%%zmm2,\t%[RES]%{%%k1}\n\t"            // save the result.
-                        : [RES]   "+m" (*dest)
-                        : [M]     "r"  (mask),
-                          [SRC]   "m"  (*src),
-                          [SCALE] "m"  (scaleVec)
-                        : "zmm0", "zmm1", "zmm2", "k1", "memory");
-}
-
-// perform a Fused Multiply Add of an I16x16 times scalar S into I32x16.
-inline static void GGML_I16x16_S_FMA_I32x16 (int16x16_t *src, int32_t scale, int32x16_t *dest)
-{
-  int32_t scaleVec[4] = {scale, scale, scale, scale};
-
-  __asm__ __volatile__ (
-                        "vmovdqa32\t\t%[SRC]%{sint16%},\t%%zmm0\n\t" // load the item we will be summing from. upscale it from int16.
-                        "vbroadcastI32x4\t%[SCALE],\t%%zmm1\n\t"     // load the item we will be multiplying by.
-                        "vmovdqa32\t\t%[RES],\t%%zmm2\n\t"           // load the item we will be summing onto.
-                        "vpmadd231d\t%%zmm0,\t%%zmm1,\t%%zmm2\n\t"   // perform our multiply-add.
-                        "vmovdqa32\t\t%%zmm2,\t%[RES]\n\t"           // save the result.
-                        : [RES]   "+m" (*dest)
-                        : [SRC]   "m"  (*src),
-                          [SCALE] "m"  (scaleVec)
-                        : "zmm0", "zmm1", "zmm2", "memory");
-}
-
+  
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
 
   /* interpret X and Y as vectors. */
@@ -144,32 +186,26 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
   const uint8_t * scales = (const uint8_t*)&utmp[0];
   const uint8_t * mins   = (const uint8_t*)&utmp[2];
 
-  float32x16_t sums __attribute__((aligned(64)));
-  int8x16_t aux8[QK_K/16] __attribute__((aligned(16)));
-  int16x16_t aux16[QK_K/16] __attribute__((aligned(32)));
-  int32x16_t aux32 __attribute__((aligned(64)));
+  float32x16_t sums;
 
+  // clear sums.
   GGML_F32x16_VEC_ZERO(&sums);
 
   float sumf = 0;
   for (int i = 0; i < nb; ++i) {
-    const uint8_t * restrict q4 = x[i].qs;
-    const uint8_t * restrict hm = x[i].qh;
-    const  int8_t * restrict q8 = y[i].qs;
+    int8x16_t q8copy [QK_K];
+    int32x16_t aux32;
+    uint8x16_t q4copyvec [QK_K/32];
+    uint8x16_t aux8 [QK_K/16];
 
-    int8_t * restrict a = (int8_t * restrict)aux8;
-    uint8_t m = 1;
+    // Fill in our 8 bit vector from y[]. required, because there is no good way to align members of y[], And I haven't mastered unaligned assembly yet...
+    memcpy (q8copy, y[i].qs, QK_K);
 
-    // Fill the 8 bit vector a with our 5 bit quantization data, 64 blocks at a time.
-    for (int j = 0; j < QK_K/64; ++j) {
-      for (int l = 0; l < 32; ++l) a[l] = (int8_t)(q4[l] & 0xF);
-      for (int l = 0; l < 32; ++l) a[l] += (hm[l] & m ? 16 : 0);
-      a += 32; m <<= 1;
-      for (int l = 0; l < 32; ++l) a[l] = (int8_t)(q4[l]  >> 4);
-      for (int l = 0; l < 32; ++l) a[l] += (hm[l] & m ? 16 : 0);
-      a += 32; m <<= 1;
-      q4 += 32;
-    }
+    // Fill in our 4 bit vector from x[]. required, because there is no good way to align members of x[], And I haven't mastered unaligned assembly yet...
+    memcpy (q4copyvec, x[i].qs, QK_K/2);
+
+    // combine our 4 and 1 bit vector sets into an 8 bit value.
+    GGML_5bit_Unpack(q4copyvec, x[i].qh, aux8);
 
     memcpy(utmp, x[i].scales, 12);
     utmp[3] = ((utmp[2] >> 4) & kmask2) | (((utmp[1] >> 6) & kmask3) << 4);
@@ -194,17 +230,14 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     }
 
     // FIXME: while comparing FMA output to the original output, the original had an error. hunt it down.
-    for (int j = 0; j < QK_K/32; ++j) {
-      int32_t scale = scales[is++];
-      GGML_I16x16_S_FMA_I32x16 (&aux16[j*2], scale, &aux32);
-      GGML_I16x16_S_FMA_I32x16 (&aux16[(j*2)+1], scale, &aux32);
-    }
+    GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16(q8copy, aux8, scales, &aux32);
 
     const float d = GGML_FP16_TO_FP32(x[i].d) * y[i].d;
     for (int l = 0; l < 16; ++l) ((float *)&sums)[l] += d * ((int32_t *)&aux32)[l];
     const float dmin = GGML_FP16_TO_FP32(x[i].dmin) * y[i].d;
     sumf -= dmin * sumi;
   }
+  
   for (int l = 0; l < 16; ++l) sumf += ((float *)&sums)[l];
   *s = sumf;
 }
