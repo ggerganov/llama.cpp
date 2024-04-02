@@ -514,7 +514,7 @@ class MPTModel(Model):
     def set_vocab(self):
         try:
             self._set_vocab_gpt2()
-        except AttributeError as e:
+        except:
             self._set_vocab_sentencepiece()
             self.gguf_writer.add_add_bos_token(False)
             self.gguf_writer.add_pad_token_id(3)
