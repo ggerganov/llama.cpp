@@ -1873,9 +1873,9 @@ struct llama_layer {
 
     // ff MoE
     struct ggml_tensor * ffn_gate_inp;
-    struct ggml_tensor * ffn_gate_exps;//[LLAMA_MAX_EXPERTS];
-    struct ggml_tensor * ffn_down_exps;//[LLAMA_MAX_EXPERTS];
-    struct ggml_tensor * ffn_up_exps  ;//[LLAMA_MAX_EXPERTS];
+    struct ggml_tensor * ffn_gate_exps;
+    struct ggml_tensor * ffn_down_exps;
+    struct ggml_tensor * ffn_up_exps ;
 
     // ff bias
     struct ggml_tensor * ffn_down_b; // b2
@@ -2929,7 +2929,7 @@ struct llama_model_loader {
         // For subsidiary files, `meta` tensor data offset must not be used,
         // so we build a unified tensors index for weights.
         for (ggml_tensor * cur = ggml_get_first_tensor(ctx); cur; cur = ggml_get_next_tensor(ctx, cur)) {
-            weights.emplace_back(llama_tensor_weight(0, cur->name, meta, cur));
+            weights.emplace_back(0, cur->name, meta, cur);
         }
         files.emplace_back(new llama_file(fname.c_str(), "rb"));
         contexts.emplace_back(ctx);
@@ -2969,7 +2969,7 @@ struct llama_model_loader {
 
                 // Save tensors data offset info of the shard.
                 for (ggml_tensor * cur = ggml_get_first_tensor(ctx); cur; cur = ggml_get_next_tensor(ctx, cur)) {
-                    weights.emplace_back(llama_tensor_weight(idx, cur->name, ctx_gguf, cur));
+                    weights.emplace_back(idx, cur->name, ctx_gguf, cur);
                 }
                 files.emplace_back(new llama_file(split_path, "rb"));
                 contexts.emplace_back(ctx);
@@ -3299,7 +3299,7 @@ struct llama_model_loader {
             mmaps_used.reserve(files.size());
             for (const auto & file : files) {
                 std::unique_ptr<llama_mmap> mapping(new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa()));
-                mmaps_used.emplace_back(std::make_pair(mapping->size, 0));
+                mmaps_used.emplace_back(mapping->size, 0);
                 if (mlock_mmaps) {
                     std::unique_ptr<llama_mlock> mlock_mmap(new llama_mlock());
                     mlock_mmap->init(mapping->addr);
@@ -4345,6 +4345,7 @@ static bool llm_load_tensors(
 
     const int64_t n_layer     = hparams.n_layer;
     const int64_t i_gpu_start = std::max((int64_t) hparams.n_layer - n_gpu_layers, (int64_t) 0);
+    bool use_mmap_buffer = true;
 
     // there is very little benefit to offloading the input layer, so always keep it on the CPU
     model.buft_input = llama_default_buffer_type_cpu(true);
@@ -4536,7 +4537,7 @@ static bool llm_load_tensors(
                             } else {
                                 // merge split expert into a single tensor for compatibility with older models
                                 // requires disabling mmap
-                                ml.use_mmap = false;
+                                use_mmap_buffer = false;
 
                                 ggml_type type_gate = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
                                 ggml_type type_down = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
@@ -4606,7 +4607,7 @@ static bool llm_load_tensors(
                         } else {
                             // merge split expert into a single tensor for compatibility with older models
                             // requires disabling mmap
-                            ml.use_mmap = false;
+                            use_mmap_buffer = false;
 
                             ggml_type type_gate = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
                             ggml_type type_down = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
@@ -5431,7 +5432,7 @@ static bool llm_load_tensors(
         // only the mmap region containing the tensors in the model is mapped to the backend buffer
         // this is important for metal with apple silicon: if the entire model could be mapped to a metal buffer, then we could just use metal for all layers
         // this allows using partial offloading when the model size exceeds the metal buffer size, but not the RAM size
-        if (ml.use_mmap && buft == llama_default_buffer_type_cpu(true)) {
+        if (ml.use_mmap && use_mmap_buffer && buft == llama_default_buffer_type_cpu(true)) {
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 void * addr = nullptr;
                 size_t first, last;
@@ -5455,7 +5456,7 @@ static bool llm_load_tensors(
             }
         }
 #ifdef GGML_USE_METAL
-        else if (ml.use_mmap && buft == ggml_backend_metal_buffer_type()) {
+        else if (ml.use_mmap && use_mmap_buffer && buft == ggml_backend_metal_buffer_type()) {
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 const size_t max_size = ggml_get_max_tensor_size(ctx);
                 void * addr = nullptr;
@@ -5538,8 +5539,10 @@ static bool llm_load_tensors(
         }
     }
 
-    for (auto & mapping : ml.mappings) {
-        model.mappings.emplace_back(std::move(mapping));
+    if (use_mmap_buffer) {
+        for (auto & mapping : ml.mappings) {
+            model.mappings.emplace_back(std::move(mapping));
+        }
     }
 
     // loading time will be recalculate after the first eval, so
