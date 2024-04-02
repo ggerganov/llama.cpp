@@ -324,7 +324,7 @@ class Model(ABC):
 
         if not tokenizer_path.is_file():
             print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
-            sys.exit(1)
+            raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
         tokenizer = SentencePieceProcessor(str(tokenizer_path))
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
