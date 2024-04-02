@@ -166,7 +166,7 @@ inline static void GGML_5bit_Unpack (const uint8x16_t * q4, const uint8_t * q1, 
   
 // A function for getting the dot product of two vectors, one of 5 bit resolution, and one of 8.
 // Used during inference, if your model prints "llama_model_loader: - type q5_K:  XXX tensors", and XXX is not zero. :)
-void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
+void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
 
   /* interpret X and Y as vectors. */
   const block_q5_K * restrict x = vx;
