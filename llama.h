@@ -871,7 +871,8 @@ extern "C" {
                            float   min_temp,
                            float   max_temp,
                            float   exponent_val,
-                           float   smoothing_factor);
+                           float   smoothing_factor,
+                           float   smoothing_curve);
 
     LLAMA_API void llama_sample_temp(
             struct llama_context * ctx,
