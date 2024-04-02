@@ -12183,12 +12183,25 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
     }
 }
 
-void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp, float max_temp, float exponent_val) {
+void llama_sample_entropy(struct llama_context* ctx, llama_token_data_array* candidates_p, float min_temp, float max_temp, float exponent_val, float smoothing_factor) {
     const int64_t t_start_sample_us = ggml_time_us();
 
     // no need to do anything if there is only one (or zero) candidates
-    if(candidates_p->size <= 1) {
+    if (candidates_p->size <= 1) {
         return;
+    }
+
+    // Apply smoothing if smoothing_factor is > 0. Do not change base implementation otherwise.
+    if (smoothing_factor > 0 && candidates_p->size > 1) {
+        llama_sample_softmax(ctx, candidates_p);
+        float h = candidates_p->data[0].logit; // Find the maximum logit for h to be added after the transformation
+
+        // Apply quadratic transformation using the smoothing_factor
+        for (size_t i = 0; i < candidates_p->size; ++i) {
+            float logit_shifted = candidates_p->data[i].logit - h;
+            candidates_p->data[i].logit = -smoothing_factor * logit_shifted * logit_shifted + h;
+        }
+        llama_sample_softmax(ctx, candidates_p);
     }
 
     // Calculate maximum possible entropy
