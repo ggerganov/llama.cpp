@@ -3198,6 +3198,14 @@ struct llama_model_loader {
         return weight->tensor;
     }
 
+    struct ggml_tensor * require_tensor_meta(const char * name) const {
+        struct ggml_tensor * tensor = get_tensor_meta(name);
+        if (!tensor) {
+            throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name));
+        }
+        return tensor;
+    }
+
     struct ggml_tensor * get_tensor_meta(int i) const {
         return get_tensor_meta(get_tensor_name(i));
     }
@@ -3211,7 +3219,7 @@ struct llama_model_loader {
         return tensor;
     }
 
-    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, bool required = true) {
+    const struct ggml_tensor * check_tensor_dims(const std::string & name, const std::vector<int64_t> & ne, bool required) const {
         const struct ggml_tensor * cur = get_tensor_meta(name.c_str());
 
         if (cur == NULL) {
@@ -3223,8 +3231,8 @@ struct llama_model_loader {
 
         {
             bool is_ok = true;
-            for (size_t i = 0; i < ne.size(); ++i) {
-                if (ne[i] != cur->ne[i]) {
+            for (size_t i = 0; i < GGML_MAX_DIMS; ++i) {
+                if ((i < ne.size() && ne[i] != cur->ne[i]) || (i >= ne.size() && cur->ne[i] != 1)) {
                     is_ok = false;
                     break;
                 }
@@ -3238,7 +3246,45 @@ struct llama_model_loader {
             }
         }
 
+        return cur;
+    }
+
+    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, bool required = true) {
+        const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
+
+        if (cur == NULL) {
+            return NULL;
+        }
+
         return create_tensor_for(ctx, cur);
+    }
+
+    struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::vector<int64_t> & ne, size_t offset, bool required = true) {
+        const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
+
+        if (cur == NULL) {
+            return NULL;
+        }
+
+        if (cur->type != base->type) {
+            throw std::runtime_error(format("%s: tensor '%s' has wrong type; expected %s, got %s", __func__, name.c_str(), ggml_type_name(base->type), ggml_type_name(cur->type)));
+        }
+
+        std::array<int64_t, GGML_MAX_DIMS> dims;
+        for (size_t i = 0; i < GGML_MAX_DIMS; ++i) {
+            dims[i] = i < ne.size() ? ne[i] : 1;
+        }
+
+        struct ggml_tensor * tensor = ggml_view_4d(ctx, base,
+                                        dims[0], dims[1], dims[2], dims[3],
+                                        cur->nb[1], cur->nb[2], cur->nb[3],
+                                        offset);
+
+        ggml_set_name(tensor, name.c_str());
+
+        n_created++;
+
+        return tensor;
     }
 
     void done_getting_tensors() const {
@@ -4417,6 +4463,11 @@ static bool llm_load_tensors(
         const int64_t n_vocab      = hparams.n_vocab;
         const int64_t n_vocab_type = hparams.n_vocab_type;
         const int64_t n_ff         = hparams.n_ff;
+        const int64_t n_expert     = hparams.n_expert;
+
+        if (n_expert > 0 && hparams.n_expert_used == 0) {
+            throw std::runtime_error("model has expert layers but no expert layers are used");
+        }
 
         GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
@@ -4471,51 +4522,39 @@ static bool llm_load_tensors(
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
 
-                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd}, false);
-
-                        if (layer.ffn_gate_inp == nullptr) {
-                            GGML_ASSERT(hparams.n_expert      == 0);
-                            GGML_ASSERT(hparams.n_expert_used == 0);
-
+                        if (n_expert == 0) {
                             layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
                             layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                             layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
                         } else {
-                            GGML_ASSERT(hparams.n_expert      > 0);
-                            GGML_ASSERT(hparams.n_expert_used > 0);
+                            layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert});
 
-                            layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, hparams.n_expert}, false);
+                            layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, n_expert}, false);
                             if (layer.ffn_gate_exps) {
-                                layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, hparams.n_expert});
-                                layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, hparams.n_expert});
+                                layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, n_expert});
+                                layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, n_expert});
                             } else {
-                                // merge split expert into a single tensor
+                                // merge split expert into a single tensor for compatibility with older models
                                 // requires disabling mmap
                                 ml.use_mmap = false;
 
-                                ggml_type type_gate = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
-                                ggml_type type_down = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
-                                ggml_type type_up   = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
+                                ggml_type type_gate = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
+                                ggml_type type_down = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
+                                ggml_type type_up   = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
 
-                                layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type_gate, n_embd,   n_ff, hparams.n_expert);
-                                layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, hparams.n_expert);
-                                layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, hparams.n_expert);
+                                layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type_gate, n_embd,   n_ff, n_expert);
+                                layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, n_expert);
+                                layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, n_expert);
 
                                 ggml_set_name(layer.ffn_gate_exps, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i).c_str());
                                 ggml_set_name(layer.ffn_down_exps, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i).c_str());
                                 ggml_set_name(layer.ffn_up_exps,   tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i).c_str());
 
-                                for (uint32_t x = 0; x < hparams.n_expert; ++x) {
+                                for (uint32_t x = 0; x < n_expert; ++x) {
                                     // the individual experts are loaded into a view of the merged tensor
-                                    ggml_tensor * ffn_gate_exp = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
-                                    ggml_tensor * ffn_down_exp = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
-                                    ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1],   layer.ffn_up_exps->nb[2]*x);
-
-                                    ggml_set_name(ffn_gate_exp, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
-                                    ggml_set_name(ffn_down_exp, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
-                                    ggml_set_name(ffn_up_exp,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
-
-                                    ml.n_created += 3;
+                                    ml.create_tensor_as_view(ctx_split, layer.ffn_gate_exps, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), { n_embd, n_ff }, layer.ffn_gate_exps->nb[2]*x);
+                                    ml.create_tensor_as_view(ctx_split, layer.ffn_down_exps, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), { n_ff, n_embd }, layer.ffn_down_exps->nb[2]*x);
+                                    ml.create_tensor_as_view(ctx_split, layer.ffn_up_exps,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), { n_embd, n_ff }, layer.ffn_up_exps->nb[2]*x);
                                 }
                             }
                         }
@@ -4523,6 +4562,10 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_GROK:
                 {
+                    if (n_expert == 0) {
+                        throw std::runtime_error("Grok model cannot have zero experts");
+                    }
+
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
                     // output
@@ -4554,43 +4597,34 @@ static bool llm_load_tensors(
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
 
-                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd});
+                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert});
 
-                        GGML_ASSERT(hparams.n_expert      > 0);
-                        GGML_ASSERT(hparams.n_expert_used > 0);
-
-                        layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, hparams.n_expert}, false);
+                        layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd, n_ff, n_expert}, false);
                         if (layer.ffn_gate_exps) {
-                            layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, hparams.n_expert});
-                            layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, hparams.n_expert});
+                            layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, n_expert});
+                            layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, n_expert});
                         } else {
-                            // merge split expert into a single tensor
+                            // merge split expert into a single tensor for compatibility with older models
                             // requires disabling mmap
                             ml.use_mmap = false;
 
-                            ggml_type type_gate = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
-                            ggml_type type_down = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
-                            ggml_type type_up   = ml.get_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
+                            ggml_type type_gate = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, 0).c_str())->type;
+                            ggml_type type_down = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, 0).c_str())->type;
+                            ggml_type type_up   = ml.require_tensor_meta(tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, 0).c_str())->type;
 
-                            layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type_gate, n_embd,   n_ff, hparams.n_expert);
-                            layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, hparams.n_expert);
-                            layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, hparams.n_expert);
+                            layer.ffn_gate_exps = ggml_new_tensor_3d(ctx_split, type_gate, n_embd,   n_ff, n_expert);
+                            layer.ffn_down_exps = ggml_new_tensor_3d(ctx_split, type_down,   n_ff, n_embd, n_expert);
+                            layer.ffn_up_exps   = ggml_new_tensor_3d(ctx_split, type_up,   n_embd,   n_ff, n_expert);
 
                             ggml_set_name(layer.ffn_gate_exps, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i).c_str());
                             ggml_set_name(layer.ffn_down_exps, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i).c_str());
                             ggml_set_name(layer.ffn_up_exps,   tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i).c_str());
 
-                            for (uint32_t x = 0; x < hparams.n_expert; ++x) {
+                            for (uint32_t x = 0; x < n_expert; ++x) {
                                 // the individual experts are loaded into a view of the merged tensor
-                                ggml_tensor * ffn_gate_exp = ggml_view_2d(ctx_split, layer.ffn_gate_exps, n_embd, n_ff, layer.ffn_gate_exps->nb[1], layer.ffn_gate_exps->nb[2]*x);
-                                ggml_tensor * ffn_down_exp = ggml_view_2d(ctx_split, layer.ffn_down_exps, n_ff, n_embd, layer.ffn_down_exps->nb[1], layer.ffn_down_exps->nb[2]*x);
-                                ggml_tensor * ffn_up_exp   = ggml_view_2d(ctx_split, layer.ffn_up_exps,   n_embd, n_ff, layer.ffn_up_exps->nb[1],   layer.ffn_up_exps->nb[2]*x);
-
-                                ggml_set_name(ffn_gate_exp, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x).c_str());
-                                ggml_set_name(ffn_down_exp, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x).c_str());
-                                ggml_set_name(ffn_up_exp,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x).c_str());
-
-                                ml.n_created += 3;
+                                ml.create_tensor_as_view(ctx_split, layer.ffn_gate_exps, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), { n_embd, n_ff }, layer.ffn_gate_exps->nb[2]*x);
+                                ml.create_tensor_as_view(ctx_split, layer.ffn_down_exps, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), { n_ff, n_embd }, layer.ffn_down_exps->nb[2]*x);
+                                ml.create_tensor_as_view(ctx_split, layer.ffn_up_exps,   tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), { n_embd, n_ff }, layer.ffn_up_exps->nb[2]*x);
                             }
                         }
 
