@@ -17032,7 +17032,7 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
                     a_type == GGML_TYPE_IQ3_XXS || a_type == GGML_TYPE_IQ3_S  ||
                     a_type == GGML_TYPE_IQ1_S) {
                     return false;
-		}
+                }
 #endif
                 return true;
             } break;
