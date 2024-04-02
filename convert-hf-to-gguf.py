@@ -1351,7 +1351,7 @@ class GrokModel(Model):
                         for wid in ["linear", "linear_1", "linear_v"]:
                             full = True
                             for xid in range(n_experts):
-                                ename = f"transformer.decoder_layer.{bid}.moe.{xid}.{wid}"
+                                ename = f"transformer.decoder_layer.{bid}.moe.{xid}.{wid}.weight"
                                 if ename not in experts:
                                     full = False
                                     break
@@ -1360,7 +1360,7 @@ class GrokModel(Model):
 
                             datas = []
                             for xid in range(n_experts):
-                                ename = f"transformer.decoder_layer.{bid}.moe.{xid}.{wid}"
+                                ename = f"transformer.decoder_layer.{bid}.moe.{xid}.{wid}.weight"
                                 datas.append(experts[ename])
                                 del experts[ename]
 
