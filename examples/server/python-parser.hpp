@@ -103,7 +103,7 @@ static std::vector<json> parsePythonFunctionCalls(std::string source_string) {
     std::vector<json> calls;
     std::string delimiter = "<<functions>>";
     std::string source_code;
-    printf("Parsing source_string: %s\n", source_string.c_str());
+    printf("Parsing source_string::%s\n", source_string.c_str());
     size_t startPos = source_string.find(delimiter);
     if (startPos != std::string::npos) {
         source_code = source_string.substr(startPos + delimiter.length());

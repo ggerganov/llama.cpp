@@ -10,7 +10,6 @@
 #include <vector>
 #include <sstream>
 #include <random>
-#include <unordered_map>
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
@@ -421,7 +420,7 @@ static std::string rubra_format_function_call_str(const std::vector<json> & func
     for (const auto& def : function_definitions) {
         final_str += def + "\n";
     }
-    final_str += "Use the following format if using a tool:\n[toolname1(arg1=value1, arg2=value2, ...), toolname2(arg1=value1, arg2=value2, ...)]";
+    final_str += "Use the following format if using tools:\n<<functions>>[toolname1(arg1=value1, arg2=value2, ...), toolname2(arg1=value1, arg2=value2, ...)]";
     return final_str;
 }
 
@@ -507,7 +506,7 @@ static json oaicompat_completion_params_parse(
             //     temp_vec.push_back(function_call);
             // }
             std::vector<json> temp_vec;
-            std::unordered_map<std::string, std::string> func_observation_map;
+            nlohmann::ordered_map<std::string, std::string> func_observation_map;
             for (size_t i = 0; i < body["messages"].size(); ++i) {
 
                 if (body["messages"][i]["role"] != "tool" and func_observation_map.size() > 0) {
