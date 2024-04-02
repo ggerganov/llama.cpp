@@ -4436,7 +4436,6 @@ static void dequantize_block_q6_K(const void * __restrict__ vx, dst_t * __restri
 #endif
 }
 
-#if defined(__gnu_linux__)
 template<typename dst_t>
 static void dequantize_block_iq2_xxs(const void * __restrict__ vx, dst_t * __restrict__ yy,
                                      const sycl::nd_item<3> &item_ct1,
@@ -4581,7 +4580,6 @@ static void dequantize_block_iq1_s(const void * __restrict__ vx, dst_t * __restr
 #endif
 
 }
-#endif
 
 /*
 DPCT1110:4: The total declared local variable size in device function
@@ -9953,23 +9951,19 @@ static void dequantize_row_q6_K_sycl(const void *vx, dst_t *y, const int k,
 }
 
 
-#if defined(__gnu_linux__)
 template <typename dst_t>
 static void dequantize_row_iq2_xxs_sycl(const void *vx, dst_t *y, const int k,
                                         dpct::queue_ptr stream) {
     const int nb = k / QK_K;
     {
-        iq2xxs_grid.init(*stream);
-        ksigns_iq2xs.init(*stream);
-        kmask_iq2xs.init(*stream);
 
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq2xxs_grid_ptr_ct1 = iq2xxs_grid.get_ptr();
-            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
-            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+            auto iq2xxs_grid_ptr_ct1 = &iq2xxs_grid[0];
+            auto ksigns_iq2xs_ptr_ct1 = &ksigns_iq2xs[0];
+            auto kmask_iq2xs_ptr_ct1 = &kmask_iq2xs[0];
 
             cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 32),
@@ -9988,17 +9982,14 @@ static void dequantize_row_iq2_xs_sycl(const void *vx, dst_t *y, const int k,
                                        dpct::queue_ptr stream) {
     const int nb = k / QK_K;
     {
-        iq2xs_grid.init(*stream);
-        ksigns_iq2xs.init(*stream);
-        kmask_iq2xs.init(*stream);
 
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq2xs_grid_ptr_ct1 = iq2xs_grid.get_ptr();
-            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
-            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+            auto iq2xs_grid_ptr_ct1 = &iq2xs_grid[0];
+            auto ksigns_iq2xs_ptr_ct1 = &ksigns_iq2xs[0];
+            auto kmask_iq2xs_ptr_ct1 = &kmask_iq2xs[0];
 
             cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 32),
@@ -10017,17 +10008,14 @@ static void dequantize_row_iq3_xxs_sycl(const void *vx, dst_t *y, const int k,
                                         dpct::queue_ptr stream) {
     const int nb = k / QK_K;
     {
-        iq3xxs_grid.init(*stream);
-        ksigns_iq2xs.init(*stream);
-        kmask_iq2xs.init(*stream);
 
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq3xxs_grid_ptr_ct1 = iq3xxs_grid.get_ptr();
-            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
-            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+            auto iq3xxs_grid_ptr_ct1 = &iq3xxs_grid[0];
+            auto ksigns_iq2xs_ptr_ct1 = &ksigns_iq2xs[0];
+            auto kmask_iq2xs_ptr_ct1 = &kmask_iq2xs[0];
 
             cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 32),
@@ -10046,17 +10034,14 @@ static void dequantize_row_iq3_s_sycl(const void *vx, dst_t *y, const int k,
                                         dpct::queue_ptr stream) {
     const int nb = k / QK_K;
     {
-        iq3s_grid.init(*stream);
-        ksigns_iq2xs.init(*stream);
-        kmask_iq2xs.init(*stream);
 
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq3s_grid_ptr_ct1 = iq3s_grid.get_ptr();
-            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
-            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+            auto iq3s_grid_ptr_ct1 = &iq3s_grid[0];
+            auto ksigns_iq2xs_ptr_ct1 = &ksigns_iq2xs[0];
+            auto kmask_iq2xs_ptr_ct1 = &kmask_iq2xs[0];
 
             cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 32),
@@ -10075,17 +10060,14 @@ static void dequantize_row_iq1_s_sycl(const void *vx, dst_t *y, const int k,
                                         dpct::queue_ptr stream) {
     const int nb = k / QK_K;
     {
-        iq1s_grid_gpu.init(*stream);
-        ksigns_iq2xs.init(*stream);
-        kmask_iq2xs.init(*stream);
 
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
-            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
-            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+            auto iq1s_grid_ptr_ct1 = &iq1s_grid_gpu[0];
+            auto ksigns_iq2xs_ptr_ct1 = &ksigns_iq2xs[0];
+            auto kmask_iq2xs_ptr_ct1 = &kmask_iq2xs[0];
 
             cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 32),
@@ -10098,7 +10080,6 @@ static void dequantize_row_iq1_s_sycl(const void *vx, dst_t *y, const int k,
         });
     }
 }
-#endif
 
 template <typename src_t, typename dst_t>
 static void convert_unary_sycl(const void *__restrict__ vx,
@@ -10144,7 +10125,6 @@ static to_fp16_sycl_t ggml_get_to_fp16_sycl(ggml_type type) try {
             return dequantize_row_q5_K_sycl;
         case GGML_TYPE_Q6_K:
             return dequantize_row_q6_K_sycl;
-#if defined(__gnu_linux__)
         case GGML_TYPE_IQ2_XXS:
             return dequantize_row_iq2_xxs_sycl;
         case GGML_TYPE_IQ2_XS:
@@ -10155,7 +10135,6 @@ static to_fp16_sycl_t ggml_get_to_fp16_sycl(ggml_type type) try {
             return dequantize_row_iq3_s_sycl;
         case GGML_TYPE_IQ1_S:
             return dequantize_row_iq1_s_sycl;
-#endif
         case GGML_TYPE_F32:
             return convert_unary_sycl<float>;
         default:
@@ -10190,7 +10169,6 @@ static to_fp32_sycl_t ggml_get_to_fp32_sycl(ggml_type type) {
             return dequantize_row_q5_K_sycl;
         case GGML_TYPE_Q6_K:
             return dequantize_row_q6_K_sycl;
-#if defined(__gnu_linux__)
         case GGML_TYPE_IQ2_XXS:
             return dequantize_row_iq2_xxs_sycl;
         case GGML_TYPE_IQ2_XS:
@@ -10201,7 +10179,6 @@ static to_fp32_sycl_t ggml_get_to_fp32_sycl(ggml_type type) {
             return dequantize_row_iq3_s_sycl;
         case GGML_TYPE_IQ1_S:
             return dequantize_row_iq1_s_sycl;
-#endif
         case GGML_TYPE_F16:
             return convert_unary_sycl<sycl::half>;
         default:
@@ -10654,7 +10631,7 @@ static void mul_mat_vec_q6_K_q8_1_sycl(const void *vx, const void *vy,
     }
 }
 
-#if defined(__gnu_linux__)
+
 static void mul_mat_vec_iq2_xxs_q8_1_sycl(const void *vx, const void *vy,
                                           float *dst, const int ncols,
                                           const int nrows,
@@ -10664,15 +10641,11 @@ static void mul_mat_vec_iq2_xxs_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
     {
-        iq2xxs_grid.init(*stream);
-        ksigns_iq2xs.init(*stream);
-        kmask_iq2xs.init(*stream);
-
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq2xxs_grid_ptr_ct1 = iq2xxs_grid.get_ptr();
-            auto ksigns_iq2xs_ptr_ct1 = ksigns_iq2xs.get_ptr();
-            auto kmask_iq2xs_ptr_ct1 = kmask_iq2xs.get_ptr();
+            auto iq2xxs_grid_ptr_ct1 = &iq2xxs_grid[0];
+            auto ksigns_iq2xs_ptr_ct1 = &ksigns_iq2xs[0];
+            auto kmask_iq2xs_ptr_ct1 = &kmask_iq2xs[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -10695,12 +10668,10 @@ static void mul_mat_vec_iq2_xs_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
     {
-        iq2xs_grid.init(*stream);
-        ksigns64.init(*stream);
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq2xs_grid_ptr_ct1 = iq2xs_grid.get_ptr();
-            auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
+            auto iq2xs_grid_ptr_ct1 = &iq2xs_grid[0];
+            auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -10723,12 +10694,10 @@ static void mul_mat_vec_iq3_xxs_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
     {
-        iq3xxs_grid.init(*stream);
-        ksigns64.init(*stream);
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq3xxs_grid_ptr_ct1 = iq3xxs_grid.get_ptr();
-            auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
+            auto iq3xxs_grid_ptr_ct1 = &iq3xxs_grid[0];
+            auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -10751,12 +10720,10 @@ static void mul_mat_vec_iq3_s_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
     {
-        iq3s_grid.init(*stream);
-        ksigns64.init(*stream);
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq3s_grid_ptr_ct1 = iq3s_grid.get_ptr();
-            auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
+            auto iq3s_grid_ptr_ct1 = &iq3s_grid[0];
+            auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -10779,12 +10746,10 @@ static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, WARP_SIZE);
     {
-        iq1s_grid_gpu.init(*stream);
-        ksigns64.init(*stream);
 
         stream->submit([&](sycl::handler &cgh) {
-            auto iq1s_grid_ptr_ct1 = iq1s_grid_gpu.get_ptr();
-            auto ksigns64_ptr_ct1 = ksigns64.get_ptr();
+            auto iq1s_grid_ptr_ct1 = &iq1s_grid_gpu[0];
+            auto ksigns64_ptr_ct1 = &ksigns64[0];
 
             cgh.parallel_for(
                 sycl::nd_range<3>(block_nums * block_dims, block_dims),
@@ -10797,7 +10762,6 @@ static void mul_mat_vec_iq1_s_q8_1_sycl(const void *vx, const void *vy,
         });
     }
 }
-#endif
 
 static void ggml_mul_mat_q4_0_q8_1_sycl(const void *vx, const void *vy,
                                         float *dst, const int ncols_x,
@@ -13630,7 +13594,6 @@ inline void ggml_sycl_op_mul_mat_vec_q(
         case GGML_TYPE_Q6_K:
             mul_mat_vec_q6_K_q8_1_sycl(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
             break;
-#if defined(__gnu_linux__)
         case GGML_TYPE_IQ2_XXS:
             mul_mat_vec_iq2_xxs_q8_1_sycl(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
             break;
@@ -13646,7 +13609,6 @@ inline void ggml_sycl_op_mul_mat_vec_q(
         case GGML_TYPE_IQ1_S:
             mul_mat_vec_iq1_s_q8_1_sycl(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stream);
             break;
-#endif
         default:
             GGML_ASSERT(false);
             break;
@@ -17027,13 +16989,6 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
                     a_type == GGML_TYPE_IQ4_XS) {
                     return false;
                 }
-#if defined(__gnu_linux__)
-                if (a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS ||
-                    a_type == GGML_TYPE_IQ3_XXS || a_type == GGML_TYPE_IQ3_S  ||
-                    a_type == GGML_TYPE_IQ1_S) {
-                    return false;
-                }
-#endif
                 return true;
             } break;
         case GGML_OP_GET_ROWS:
