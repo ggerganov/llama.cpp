@@ -764,6 +764,9 @@ bench-phi-knc: bench-phi-knc.c ggml-phi-knc.o
 	$(CC) $(CFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CC) $(CFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
+ggml-phi-knc-dot_q5_K_q8_K.s: ggml-phi-knc-dot_q5_K_q8_K.c
+       $(CC) $(CFLAGS) -S $< -o $(call GET_ASM_FILE, $<)
+
 infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
