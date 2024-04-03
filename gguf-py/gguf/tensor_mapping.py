@@ -204,7 +204,8 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_GATE_INP: (
             "layers.{bid}.feed_forward.gate",           # mixtral
             "model.layers.{bid}.block_sparse_moe.gate", # mixtral
-            "transformer.decoder_layer.{bid}.router"    # Grok
+            "transformer.decoder_layer.{bid}.router",   # Grok
+            "model.layers.{bid}.moe.gate",              # qwen2moe-mergekit
         ),
 
         # Feed-forward up
@@ -234,6 +235,7 @@ class TensorNameMap:
             "layers.{bid}.feed_forward.experts.{xid}.w3",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w3", # mixtral
             "transformer.decoder_layer.{bid}.moe.{xid}.linear_v",   # Grok
+            "model.layers.{bid}.moe.mlp.{xid}.up_proj",             # qwen2moe-mergekit
         ),
 
         # AWQ-activation gate
@@ -254,7 +256,8 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_GATE_EXP: (
             "layers.{bid}.feed_forward.experts.{xid}.w1",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w1", # mixtral
-            "transformer.decoder_layer.{bid}.moe.{xid}.linear"      # Grok
+            "transformer.decoder_layer.{bid}.moe.{xid}.linear",     # Grok
+            "model.layers.{bid}.moe.mlp.{xid}.gate_proj",           # qwen2moe-mergekit
         ),
 
         # Feed-forward down
@@ -283,7 +286,7 @@ class TensorNameMap:
             "layers.{bid}.feed_forward.experts.{xid}.w2",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w2", # mixtral
             "transformer.decoder_layer.{bid}.moe.{xid}.linear_1",   # Grok
-
+            "model.layers.{bid}.moe.mlp.{xid}.down_proj",           # qwen2moe-mergekit
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
