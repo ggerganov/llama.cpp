@@ -220,7 +220,7 @@ jobs:
             <p align="center">
 
             📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_ for `${{ matrix.model }}`-`${{ matrix.ftype }}`: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
-  
+
             </p>
 
             <details>
