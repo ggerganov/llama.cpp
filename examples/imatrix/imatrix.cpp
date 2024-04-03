@@ -98,6 +98,8 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
     const float * data = is_host ? (const float *) src1->data : m_src1_data.data();
 
+    // this has been adapted to the new format of storing merged experts in a single 3d tensor
+    // ref: https://github.com/ggerganov/llama.cpp/pull/6387
     if (t->op == GGML_OP_MUL_MAT_ID) {
         const int idx  = ((int32_t *) t->op_params)[0];
         const ggml_tensor * ids = t->src[2];
@@ -111,10 +113,15 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         m_ids.resize(ggml_nbytes(ids)/sizeof(int));
         ggml_backend_tensor_get(ids, m_ids.data(), 0, ggml_nbytes(ids));
 
+        auto & e = m_stats[wname];
+
+        ++e.ncall;
+        // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
+        //       using the following line, we can correct for that if needed by replacing the line above with:
+        //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
+
         // loop over all possible experts, regardless if they are used or not in the batch
-        // this is necessary to guarantee equal number of "ncall" for each tensor
         for (int ex = 0; ex < n_as; ++ex) {
-            auto& e = m_stats[wname];
             size_t e_start = ex*src1->ne[0];
             if (e.values.empty()) {
                 e.values.resize(src1->ne[0]*n_as, 0);
@@ -123,10 +130,6 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
                 fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
                 exit(1); //GGML_ASSERT(false);
             }
-            // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
-            //       using the following line, we can correct for that if needed
-            //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
-            ++e.ncall;
             if (m_params.verbosity > 1) {
                 printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
             }
