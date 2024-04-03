@@ -1,14 +1,14 @@
 # Security Policy
 
- - [**Using LLaMA C++ Securely**](#using-LLaMA-C-securely)
+ - [**Using llama.cpp securely**](#using-llama-cpp-securely)
    - [Untrusted models](#untrusted-models)
    - [Untrusted inputs](#untrusted-inputs)
    - [Data privacy](#data-privacy)
    - [Untrusted environments or networks](#untrusted-environments-or-networks)
    - [Multi-Tenant environments](#multi-tenant-environments)
- - [**Reporting a Vulnerability**](#reporting-a-vulnerability)
+ - [**Reporting a vulnerability**](#reporting-a-vulnerability)
 
-## Using LLaMA C++ Securely
+## Using llama.cpp securely
 
 ### Untrusted models
 Be careful when running untrusted models. This classification includes models created by unknown developers or utilizing data obtained from unknown sources.
@@ -25,7 +25,7 @@ Some models accept various input formats (text, images, audio, etc.). The librar
 For maximum security when handling untrusted inputs, you may need to employ the following:
 
 * Sandboxing: Isolate the environment where the inference happens.
-* Pre-analysis: check how the model performs by default when exposed to prompt injection (e.g. using [fuzzing for prompt injection](https://github.com/FonduAI/awesome-prompt-injection?tab=readme-ov-file#tools)). This will give you leads on how hard you will have to work on the next topics.
+* Pre-analysis: Check how the model performs by default when exposed to prompt injection (e.g. using [fuzzing for prompt injection](https://github.com/FonduAI/awesome-prompt-injection?tab=readme-ov-file#tools)). This will give you leads on how hard you will have to work on the next topics.
 * Updates: Keep both LLaMA C++ and your libraries updated with the latest security patches.
 * Input Sanitation: Before feeding data to the model, sanitize inputs rigorously. This involves techniques such as:
     * Validation: Enforce strict rules on allowed characters and data types.
@@ -55,9 +55,9 @@ If you intend to run multiple models in parallel with shared memory, it is your 
 
 1. Hardware Attacks: GPUs or TPUs can also be attacked. [Researches](https://scholar.google.com/scholar?q=gpu+side+channel) has shown that side channel attacks on GPUs are possible, which can make data leak from other models or processes running on the same system at the same time.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-Beware that none of the topics under [Using LLaMA C++ Securely](#using-LLaMA-C-securely) are considered vulnerabilities of LLaMA C++.
+Beware that none of the topics under [Using llama.cpp securely](#using-llama-cpp-securely) are considered vulnerabilities of LLaMA C++.
 
 <!-- normal version -->
 However, If you have discovered a security vulnerability in this project, please report it privately. **Do not disclose it as a public issue.** This gives us time to work with you to fix the issue before public exposure, reducing the chance that the exploit will be used before a patch is released.
