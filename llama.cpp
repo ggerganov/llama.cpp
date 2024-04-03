@@ -15701,11 +15701,12 @@ static int32_t llama_chat_apply_template_internal(
         // openchat/openchat-3.5-0106,
         for (auto message : chat) {
             std::string role(message->role);
-            if (message == chat.front()) {
-                ss << "<s>";
+            if (role == "system") {
+                ss << message->content << "<|end_of_turn|>";
+            } else {
+                role[0] = toupper(role[0]);
+                ss << "GPT4 Correct " << role << ": " << message->content << "<|end_of_turn|>";
             }
-            role[0] = toupper(role[0]);
-            ss << "GPT4 Correct " << role << ": " << message->content << "<|end_of_turn|>";
         }
         if (add_ass) {
             ss << "GPT4 Correct Assistant:";
@@ -15732,12 +15733,8 @@ static int32_t llama_chat_apply_template_internal(
         }
     } else if (tmpl == "deepseek" || (tmpl.find("### Instruction:") != std::string::npos && tmpl.find("<|EOT|>") != std::string::npos)) {
         // deepseek-ai/deepseek-coder-33b-instruct
-        // Use of both U+ff5c and U+007c pipes is deliberate, based on the Jinja template
         for (auto message : chat) {
             std::string role(message->role);
-            if (message == chat.front()) {
-                ss << "<｜begin▁of▁sentence｜>";
-            }
             if (role == "system") {
                 ss << message->content;
             } else if (role == "user") {
