@@ -24,10 +24,10 @@ on:
   push:
     branches:
       - master
-    paths: ['.github/workflows/bench.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/bench/**.*']
+    paths: ['llama.cpp', 'ggml.c', 'ggml-backend.c', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
   pull_request_target:
     types: [opened, synchronize, reopened]
-    paths: ['.github/workflows/bench.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/bench/**.*']
+    paths: ['llama.cpp', 'ggml.c', 'ggml-backend.c', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
   schedule:
     -  cron: '04 2 * * *'
 
