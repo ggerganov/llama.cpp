@@ -176,6 +176,7 @@ xychart-beta
 
     # 140 chars max for commit status description
     bench_results = {
+        "i": iterations,
         "req": {
             "p90": data['metrics']["http_req_duration"]["p(90)"],
             "avg": data['metrics']["http_req_duration"]["avg"],

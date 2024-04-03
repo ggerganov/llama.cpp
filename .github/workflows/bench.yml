@@ -217,8 +217,15 @@ jobs:
         with:
           message-id: bench-server-${{ github.job }}-${{ env.RUNNER_LABEL }}-${{ matrix.model }}-${{ matrix.ftype }}
           message: |
-            <!--- Server benchmark completed (maybe not be related with the code changes) -->
-            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_ for ${{ matrix.model }} ${{ matrix.ftype }}: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+            <p align="center">
+
+            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_ for `${{ matrix.model }}`-`${{ matrix.ftype }}`: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+  
+            </p>
+
+            <details>
+
+            <summary>Expand details for performance related PR only</summary>
 
             - Concurrent users: ${{ env.N_USERS }}, duration: ${{ github.event.inputs.duration || env.DURATION }}
             - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(90)=${{ env.HTTP_REQ_DURATION_P_90_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
@@ -226,9 +233,6 @@ jobs:
             - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(90)=${{ env.LLAMACPP_TOKENS_SECOND_P_90_ }}tk/s **total=${{ env.LLAMACPP_COMPLETION_TOKENS_TOTAL_COUNTER_RATE }}tk/s**
             - ${{ env.BENCH_GRAPH_XLABEL }}
 
-            <details>
-
-            <summary>Time series</summary>
 
             <p align="center">
 
