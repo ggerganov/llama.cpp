@@ -4746,7 +4746,7 @@ static bool llm_load_tensors(
             case LLM_ARCH_MPT:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                    model.pos_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_POS_EMBD,   "weight"),   {n_embd, hparams.n_ctx_train}, false);
+                    model.pos_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_POS_EMBD,   "weight"), {n_embd, hparams.n_ctx_train}, false);
 
                     // output
                     {
@@ -7661,7 +7661,7 @@ struct llm_build_context {
                 cb(Vcur, "Vcur", il);
 
                 // Q/K Layernorm
-                if (model.layers[il].attn_q_norm){
+                if (model.layers[il].attn_q_norm) {
                     Qcur = llm_build_norm(ctx0, Qcur, hparams,
                             model.layers[il].attn_q_norm,
                             model.layers[il].attn_q_norm_b,
@@ -7674,16 +7674,14 @@ struct llm_build_context {
                             LLM_NORM, cb, il);
                     cb(Kcur, "Kcur", il);
                     
-                    Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
+                    Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
                     Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
 
                     cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
-                }
-
-                else{
+                } else {
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
                     cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                             model.layers[il].wo, model.layers[il].bo,
