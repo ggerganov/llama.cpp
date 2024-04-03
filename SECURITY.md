@@ -1,6 +1,6 @@
 # Security Policy
 
- - [**Using LLaMA C++ Securely**](#using-LLaMA-C++-securely)
+ - [**Using LLaMA C++ Securely**](#using-LLaMA-C-securely)
    - [Untrusted models](#untrusted-models)
    - [Untrusted inputs](#untrusted-inputs)
    - [Data privacy](#data-privacy)
