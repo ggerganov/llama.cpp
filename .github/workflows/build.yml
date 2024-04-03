@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -87,7 +87,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -146,7 +146,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -181,7 +181,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -203,7 +203,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -249,7 +249,7 @@ jobs:
 #    steps:
 #      - name: Clone
 #        id: checkout
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        id: depends
@@ -283,7 +283,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -311,7 +311,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -357,7 +357,7 @@ jobs:
 
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build
         id: cmake_build
@@ -398,7 +398,7 @@ jobs:
 
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build
         id: cmake_build
@@ -418,7 +418,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -449,7 +449,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -593,7 +593,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -739,7 +739,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -812,7 +812,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -854,7 +854,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build Xcode project
         run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
@@ -864,7 +864,7 @@ jobs:
 
     steps:
       - name: Clone
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up JDK
         uses: actions/setup-java@v3
@@ -887,7 +887,7 @@ jobs:
 #    runs-on: macos-12
 #    steps:
 #    - name: Clone
-#      uses: actions/checkout@v3
+#      uses: actions/checkout@v4
 #
 #    - name: Build
 #      uses: cross-platform-actions/action@v0.19.0
@@ -918,7 +918,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -978,7 +978,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |
@@ -1002,7 +1002,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |
@@ -1026,7 +1026,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |
@@ -1056,7 +1056,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -1095,7 +1095,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -1141,7 +1141,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |
