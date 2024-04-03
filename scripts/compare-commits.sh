@@ -22,9 +22,9 @@ fi
 
 make_opts=""
 
-if [[ "$backend" == "cuda" ]]; then
-    make_opts="LLAMA_CUDA=1"
-fi
+#if [[ "$backend" == "cuda" ]]; then
+#    make_opts="LLAMA_CUDA=1"
+#fi
 
 git checkout $1
 make clean && make -j32 $make_opts llama-bench

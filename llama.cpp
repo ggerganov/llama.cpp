@@ -6392,52 +6392,56 @@ struct llm_build_context {
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
 
-                ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
+                ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_expert, n_tokens]
                 cb(logits, "ffn_moe_logits", il);
 
-                ggml_tensor * probs = ggml_soft_max(ctx0, logits); // [n_tokens, num_experts]
+                ggml_tensor * probs = ggml_soft_max(ctx0, logits); // [n_expert, n_tokens]
                 cb(probs, "ffn_moe_probs", il);
 
                 // select experts
-                ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_expert_used); // [n_tokens, num_experts_per_tok]
+                ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_expert_used); // [n_expert_used, n_tokens]
                 cb(selected_experts->src[0], "ffn_moe_argsort", il);
+                cb(selected_experts, "ffn_moe_topk", il);
 
                 ggml_tensor * weights = ggml_get_rows(ctx0,
-                        ggml_reshape_3d(ctx0, probs, 1, n_expert, n_tokens), selected_experts);
+                        ggml_reshape_3d(ctx0, probs, 1, n_expert, n_tokens), selected_experts); // [1, n_expert_used, n_tokens]
                 cb(weights, "ffn_moe_weights", il);
 
-                weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens); // [n_tokens, num_experts_per_tok]
+                weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens);
 
-                ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights);
+                ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights); // [1, n_tokens]
                 cb(weights_sum, "ffn_moe_weights_sum", il);
 
-                weights = ggml_div(ctx0, weights, weights_sum); // [n_tokens, num_experts_per_tok]
+                weights = ggml_div(ctx0, weights, weights_sum); // [n_expert_used, n_tokens]
                 cb(weights, "ffn_moe_weights_norm", il);
 
-                // compute expert outputs
+                cur = ggml_reshape_3d(ctx0, cur, n_embd, 1, n_tokens);
+                ggml_tensor * up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, cur, selected_experts); // [n_ff, n_expert_used, n_tokens]
+                cb(up, "ffn_moe_up", il);
+
+                ggml_tensor * gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, cur, selected_experts); // [n_ff, n_expert_used, n_tokens]
+                cb(gate, "ffn_moe_gate", il);
+
+                gate = ggml_silu(ctx0, gate);
+                cb(gate, "ffn_moe_silu", il);
+
+                ggml_tensor * par = ggml_mul(ctx0, up, gate); // [n_ff, n_expert_used, n_tokens]
+                cb(par, "ffn_moe_gate_par", il);
+
+                ggml_tensor * experts = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, par, selected_experts); // [n_embd, n_expert_used, n_tokens]
+                cb(experts, "ffn_moe_down", il);
+
+                experts = ggml_mul(ctx0, experts,
+                        ggml_reshape_3d(ctx0, weights, 1, n_expert_used, n_tokens));
+
+                // aggregate experts
                 ggml_tensor * moe_out = nullptr;
-
                 for (int i = 0; i < n_expert_used; ++i) {
-                    ggml_tensor * cur_expert;
+                    ggml_tensor * cur_expert = ggml_view_2d(ctx0, experts, n_embd, n_tokens,
+                            experts->nb[2], i*experts->nb[1]);
 
-                    ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, i, cur);
-                    cb(cur_up, "ffn_moe_up", il);
-
-                    ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
-                    cb(cur_gate, "ffn_moe_gate", il);
-
-                    cur_gate = ggml_silu(ctx0, cur_gate);
-                    cb(cur_gate, "ffn_moe_silu", il);
-
-                    cur_expert = ggml_mul(ctx0, cur_up, cur_gate);
-                    cb(cur_expert, "ffn_moe_gate_par", il);
-
-                    cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, i, cur_expert); // [n_tokens, n_embd]
-                    cb(cur_expert, "ffn_moe_down", il);
-
-                    cur_expert = ggml_mul(ctx0, cur_expert,
-                            ggml_view_2d(ctx0, weights, 1, n_tokens, weights->nb[1], i*weights->nb[0]));
-                    cb(cur_expert, "ffn_moe_weighted", il);
+                    // FIXME: non-contiguous add broken in cuda
+                    cur_expert = ggml_cont(ctx0, cur_expert);
 
                     if (i == 0) {
                         moe_out = cur_expert;
@@ -6953,11 +6957,12 @@ struct llm_build_context {
 
             for (int i = 0; i < n_expert_used; ++i) {
                 ggml_tensor * cur_expert;
+                // FIXME
 
-                ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, i, cur);
+                ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, cur);
                 cb(cur_up, "ffn_moe_up", il);
 
-                ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
+                ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, cur);
                 cb(cur_gate, "ffn_moe_gate", il);
 
                 //GeLU
@@ -6967,7 +6972,7 @@ struct llm_build_context {
                 cur_expert = ggml_mul(ctx0, cur_up, cur_gate);
                 cb(cur_expert, "ffn_moe_gate_par", il);
 
-                cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, i, cur_expert); // [n_tokens, n_embd]
+                cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, cur_expert); // [n_tokens, n_embd]
                 cb(cur_expert, "ffn_moe_down", il);
 
                 cur_expert = ggml_mul(ctx0, cur_expert,

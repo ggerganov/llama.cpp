@@ -478,8 +478,9 @@ struct test_case {
             }
 
             double err = nmse(f1.data(), f2.data(), f1.size());
+            printf("[%s] NMSE = %.9f > %.9f \n", ggml_op_desc(t1), err, ud->max_err);
             if (err > ud->max_err) {
-                printf("[%s] NMSE = %.9f > %.9f ", ggml_op_desc(t1), err, ud->max_err);
+                //printf("[%s] NMSE = %.9f > %.9f ", ggml_op_desc(t1), err, ud->max_err);
                 //for (int i = 0; i < (int) f1.size(); i++) {
                 //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
                 //}
@@ -948,14 +949,14 @@ struct test_mul_mat_id : public test_case {
     const ggml_type type_a;
     const ggml_type type_b;
     const int n_mats;
-    const int id;
+    const int n_used;
+    const bool b; // brodcast b matrix
     const int64_t m;
     const int64_t n;
     const int64_t k;
-    const bool v; // view (non-contiguous ids)
 
     std::string vars() override {
-        return VARS_TO_STR8(type_a, type_b, n_mats, id, m, n, k, v);
+        return VARS_TO_STR7(type_a, type_b, n_mats, b, m, n, k);
     }
 
     double max_nmse_err() override {
@@ -972,20 +973,18 @@ struct test_mul_mat_id : public test_case {
     }
 
     test_mul_mat_id(ggml_type type_a = GGML_TYPE_F32, ggml_type type_b = GGML_TYPE_F32,
-            int n_mats = 2, int id = 0,
-            int64_t m = 32, int64_t n = 32, int64_t k = 32, bool v = false)
-        : type_a(type_a), type_b(type_b), n_mats(n_mats), id(id),
-            m(m), n(n), k(k), v(v) {}
+            int n_mats = 8, int n_used = 2, bool b = false,
+            int64_t m = 32, int64_t n = 32, int64_t k = 32)
+        : type_a(type_a), type_b(type_b), n_mats(n_mats), n_used(n_used), b(b),
+            m(m), n(n), k(k) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         // C^T = A * B^T: (k, m) * (k, n) => (m, n)
-        ggml_tensor * mats = ggml_new_tensor_3d(ctx, type_a, k, m, n_mats);
+        ggml_tensor * as = ggml_new_tensor_3d(ctx, type_a, k, m, n_mats);
         ggml_tensor * ids = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_mats, n);
-        if (v) {
-            ids = ggml_view_2d(ctx, ids, n_mats/2, ids->ne[1], ids->nb[1], 0);
-        }
-        ggml_tensor * b = ggml_new_tensor_2d(ctx, type_b, k, n);
-        ggml_tensor * out = ggml_mul_mat_id(ctx, mats, ids, v ? id/2 : id, b);
+        ids = ggml_view_2d(ctx, ids, n_used, n, ids->nb[1], 0);
+        ggml_tensor * b = ggml_new_tensor_3d(ctx, type_b, k, this->b ? 1 : n_used, n);
+        ggml_tensor * out = ggml_mul_mat_id(ctx, as, ids, b);
         return out;
     }
 
@@ -1858,6 +1857,92 @@ struct test_falcon : public test_llm {
     }
 };
 
+
+// Mixtral MOE
+struct test_moe : public test_case {
+    const int n_expert;
+    const int n_expert_used;
+    const int n_tokens;
+    const int n_embd;
+    const int n_ff;
+
+    std::string op_desc(ggml_tensor * t) override {
+        return "MOE";
+
+        GGML_UNUSED(t);
+    }
+
+    std::string vars() override {
+        return VARS_TO_STR5(n_expert, n_expert_used, n_tokens, n_embd, n_ff);
+    }
+
+    test_moe(int n_experts = 8, int n_experts_per_tok = 2, int n_tokens = 1, int n_embd = 4096, int n_ff = 14336)
+        : n_expert(n_experts), n_expert_used(n_experts_per_tok), n_tokens(n_tokens), n_embd(n_embd), n_ff(n_ff) {
+    }
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_type wtype = GGML_TYPE_F32;
+        ggml_tensor * ffn_gate_inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_expert);
+
+        ggml_tensor * ffn_gate_exps = ggml_new_tensor_3d(ctx, wtype, n_embd, n_ff, n_expert);
+        ggml_tensor * ffn_down_exps = ggml_new_tensor_3d(ctx, wtype, n_ff, n_embd, n_expert);
+        ggml_tensor * ffn_up_exps = ggml_new_tensor_3d(ctx, wtype, n_embd, n_ff, n_expert);
+
+        ggml_tensor * cur = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_tokens);
+
+        ggml_tensor * logits = ggml_mul_mat(ctx, ffn_gate_inp, cur); // [n_expert, n_tokens]
+
+        //ggml_tensor * probs = ggml_soft_max(ctx, logits); // [n_expert, n_tokens]
+        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, nullptr, 1.0f/sqrtf(n_embd), 0.0f);
+
+        // select experts
+        ggml_tensor * selected_experts = ggml_top_k(ctx, probs, n_expert_used); // [n_expert_used, n_tokens]
+
+        ggml_tensor * weights = ggml_get_rows(ctx,
+                ggml_reshape_3d(ctx, probs, 1, n_expert, n_tokens), selected_experts); // [1, n_expert_used, n_tokens]
+
+        weights = ggml_reshape_2d(ctx, weights, n_expert_used, n_tokens);
+
+        ggml_tensor * weights_sum = ggml_sum_rows(ctx, weights); // [1, n_tokens]
+
+        weights = ggml_div(ctx, weights, weights_sum); // [n_expert_used, n_tokens]
+
+        cur = ggml_reshape_3d(ctx, cur, n_embd, 1, n_tokens);
+        ggml_tensor * up = ggml_mul_mat_id(ctx, ffn_up_exps, selected_experts, cur); // [n_ff, n_expert_used, n_tokens]
+
+        ggml_tensor * gate = ggml_mul_mat_id(ctx, ffn_gate_exps, selected_experts, cur); // [n_ff, n_expert_used, n_tokens]
+
+        gate = ggml_silu(ctx, gate);
+
+        ggml_tensor * par = ggml_mul(ctx, up, gate); // [n_ff, n_expert_used, n_tokens]
+
+        ggml_tensor * experts = ggml_mul_mat_id(ctx, ffn_down_exps, selected_experts, par); // [n_embd, n_expert_used, n_tokens]
+
+        printf("mul: src0: %ld %ld %ld %ld\n", experts->ne[0], experts->ne[1], experts->ne[2], experts->ne[3]);
+        printf("mul: src1: %ld %ld %ld %ld\n", 1, n_expert_used, n_tokens, 1);
+        experts = ggml_mul(ctx, experts,
+                ggml_reshape_3d(ctx, weights, 1, n_expert_used, n_tokens));
+
+        // aggregate experts
+        ggml_tensor * moe_out = nullptr;
+        for (int i = 0; i < n_expert_used; ++i) {
+            ggml_tensor * cur_expert = ggml_view_2d(ctx, experts, n_embd, n_tokens,
+                    experts->nb[2], i*experts->nb[1]);
+            cur_expert = ggml_cont(ctx, cur_expert);
+            if (i == 0) {
+                moe_out = cur_expert;
+            } else {
+                moe_out = ggml_add(ctx, moe_out, cur_expert);
+            }
+        }
+
+        cur = moe_out;
+
+        return cur;
+    }
+};
+
+
 static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op_name) {
     std::vector<std::unique_ptr<test_case>> test_cases;
     std::default_random_engine rng(0);
@@ -1874,6 +1959,9 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_IQ3_XXS, GGML_TYPE_IQ1_S, GGML_TYPE_IQ1_M,
         GGML_TYPE_IQ4_NL, GGML_TYPE_IQ3_S, GGML_TYPE_IQ4_XS,
     };
+
+test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 8*1024));
+test_cases.emplace_back(new test_moe(8, 2, 32, 4096, 8*1024));
 
     // unary ops
     for (int op = 0; op < GGML_UNARY_OP_COUNT; op++) {
@@ -1944,6 +2032,10 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         }
     };
 
+    // mul: src0: 4096 2 32 1
+    // mul: src1: 1 2 32 1
+    add_test_bin_bcast(GGML_TYPE_F32, {1, 2, 32, 1}, {4096, 1, 1, 1});
+
     add_test_bin_bcast(GGML_TYPE_F32, {1, 1, 8, 1}, {1, 1, 1, 1});
     add_test_bin_bcast(GGML_TYPE_F32, {1, 1, 1, 1}, {32, 1, 1, 1});
     add_test_bin_bcast(GGML_TYPE_F32, {1, 1, 320, 320}, {1, 1, 1, 1});
@@ -2012,10 +2104,14 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     for (ggml_type type_a : all_types) {
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
             for (int n_mats : {2, 4, 8}) {
-                for (int id = 0; id < n_mats; id++) {
-                    for (bool v : {false, true}) {
-                        test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, id, 16, 16, 256, v));
-                    }
+                for (bool b : {false, true}) {
+                        // cur shape: 4096 1 32 1
+                        // ffn_up_exps shape: 4096 8192 8 1
+                        // selected_experts shape: 2 32 1 1
+                        int m = 8192;
+                        int n = 32;
+                        int k = 4096;
+                        test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, 2, b, m, n, k));
                 }
             }
         }
