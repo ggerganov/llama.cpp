@@ -42,6 +42,16 @@ jobs:
       RUNNER_LABEL: Standard_NC4as_T4_v3 # FIXME Do not find a way to not duplicate it
       N_USERS: 8
       DURATION: 10m
+
+    strategy:
+      matrix:
+        model: [phi-2]
+        ftype: [q4_0, q8_0, f16]
+        include:
+          - model: phi-2
+            ftype: q4_0
+            pr_comment_enabled: "true"
+
     if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.head_ref == 'master' || github.ref_name == 'master' || github.event.push.ref == 'refs/heads/master' }}
     steps:
       - name: Clone
@@ -116,7 +126,7 @@ jobs:
               --scenario script.js \
               --duration ${{ github.event.inputs.duration || env.DURATION }} \
               --hf-repo ggml-org/models	 \
-              --hf-file phi-2/ggml-model-q4_0.gguf \
+              --hf-file ${{ matrix.model }}/ggml-model-${{ matrix.ftype }}.gguf \
               --model-path-prefix /models \
               --parallel ${{ env.N_USERS }} \
               -ngl 33 \
@@ -146,7 +156,7 @@ jobs:
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
           sha: ${{ inputs.sha || github.event.pull_request.head.sha || github.sha }}
-          context: bench-server-baseline
+          context: bench-server-${{ github.job }}-${{ env.RUNNER_LABEL }}-${{ matrix.model }}-${{ matrix.ftype }}
           description: |
             ${{ env.BENCH_RESULTS }}
           state: 'success'
@@ -203,11 +213,12 @@ jobs:
       - name: Comment PR
         uses: mshick/add-pr-comment@v2
         id: comment_pr
-        if: ${{ github.event.pull_request != '' }}
+        if: ${{ github.event.pull_request != '' && matrix.pr_comment_enabled == 'true' }}
         with:
-          message-id: bench-${{ github.job }}-${{ env.RUNNER_LABEL }}
+          message-id: bench-server-${{ github.job }}-${{ env.RUNNER_LABEL }}-${{ matrix.model }}-${{ matrix.ftype }}
           message: |
-            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+            <!--- Server benchmark completed (maybe not be related with the code changes) -->
+            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_ for ${{ matrix.model }} ${{ matrix.ftype }}: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
 
             - Concurrent users: ${{ env.N_USERS }}, duration: ${{ github.event.inputs.duration || env.DURATION }}
             - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(90)=${{ env.HTTP_REQ_DURATION_P_90_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
