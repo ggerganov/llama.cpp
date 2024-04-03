@@ -116,13 +116,13 @@ static void load_imatrix(const std::string & imatrix_file, std::unordered_map<st
     std::ifstream in(imatrix_file.c_str(), std::ios::binary);
     if (!in) {
         printf("%s: failed to open %s\n",__func__, imatrix_file.c_str());
-        return;
+        exit(1);
     }
     int n_entries;
     in.read((char *)&n_entries, sizeof(n_entries));
     if (in.fail() || n_entries < 1) {
         printf("%s: no data in file %s\n", __func__, imatrix_file.c_str());
-        return;
+        exit(1);
     }
     for (int i = 0; i < n_entries; ++i) {
         int len; in.read((char *)&len, sizeof(len));
@@ -130,11 +130,11 @@ static void load_imatrix(const std::string & imatrix_file, std::unordered_map<st
         in.read((char *)name_as_vec.data(), len);
         if (in.fail()) {
             printf("%s: failed reading name for entry %d from %s\n", __func__, i+1, imatrix_file.c_str());
-            return;
+            exit(1);
         }
         name_as_vec[len] = 0;
         std::string name{name_as_vec.data()};
-        auto & e = imatrix_data[std::move(name)];
+        auto & e = imatrix_data[name];
         int ncall;
         in.read((char *)&ncall, sizeof(ncall));
         int nval;
@@ -142,17 +142,21 @@ static void load_imatrix(const std::string & imatrix_file, std::unordered_map<st
         if (in.fail() || nval < 1) {
             printf("%s: failed reading number of values for entry %d\n", __func__, i);
             imatrix_data = {};
-            return;
+            exit(1);
         }
         e.resize(nval);
         in.read((char *)e.data(), nval*sizeof(float));
         if (in.fail()) {
             printf("%s: failed reading data for entry %d\n", __func__, i);
             imatrix_data = {};
-            return;
+            exit(1);
         }
         if (ncall > 0) {
             for (auto& v : e) v /= ncall;
+        }
+
+        if (getenv("LLAMA_TRACE")) {
+            printf("%s: loaded data (size = %6d, ncall = %6d) for '%s'\n", __func__, int(e.size()), ncall, name.c_str());
         }
     }
     printf("%s: loaded %d importance matrix entries from %s\n", __func__, int(imatrix_data.size()), imatrix_file.c_str());
