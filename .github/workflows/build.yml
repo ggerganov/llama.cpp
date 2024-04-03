@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
@@ -132,7 +132,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
@@ -723,7 +723,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
@@ -779,7 +779,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
@@ -793,7 +793,7 @@ jobs:
 
       - name: Upload Cuda runtime
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
@@ -844,7 +844,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
@@ -937,7 +937,7 @@ jobs:
 
       - name: Download artifacts
         id: download-artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Create release
         id: create_release
@@ -1072,7 +1072,7 @@ jobs:
 #          msbuild ALL_BUILD.vcxproj -t:build -p:configuration=${{ matrix.build }} -p:platform=${{ matrix.arch }}
 #
 #      - name: Upload binaries
-#        uses: actions/upload-artifact@v1
+#        uses: actions/upload-artifact@v4
 #        with:
 #          name: llama-bin-${{ matrix.arch }}
 #          path: build/bin/${{ matrix.build }}
@@ -1127,7 +1127,7 @@ jobs:
 #
 #      - name: Upload binaries
 #        if: matrix.blas == 'ON'
-#        uses: actions/upload-artifact@v1
+#        uses: actions/upload-artifact@v4
 #        with:
 #          name: llama-blas-bin-${{ matrix.arch }}
 #          path: build/bin/${{ matrix.build }}
