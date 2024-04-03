@@ -31,7 +31,7 @@ For maximum security when handling untrusted inputs, you may need to employ the 
     * Validation: Enforce strict rules on allowed characters and data types.
     * Filtering: Remove potentially malicious scripts or code fragments.
     * Encoding: Convert special characters into safe representations.
-    * Verification: Run tooling that identifies potential script injections (e.g. [models that detect prompt injection attempts](https://python.langchain.com/docs/guides/safety/hugging_face_prompt_injection)). 
+    * Verification: Run tooling that identifies potential script injections (e.g. [models that detect prompt injection attempts](https://python.langchain.com/docs/guides/safety/hugging_face_prompt_injection)).
 
 ### Data privacy
 
