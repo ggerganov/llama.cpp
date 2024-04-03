@@ -323,7 +323,6 @@ class Model(ABC):
         toktypes: list[int] = []
 
         if not tokenizer_path.is_file():
-            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
         tokenizer = SentencePieceProcessor(str(tokenizer_path))
