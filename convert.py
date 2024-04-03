@@ -1256,7 +1256,7 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
     tmp = model
 
     # merge experts into one tensor
-    if params.n_experts > 0:
+    if params.n_experts and params.n_experts > 0:
         for i_l in range(params.n_layer):
             for w in range(1, 4):
                 experts = []
