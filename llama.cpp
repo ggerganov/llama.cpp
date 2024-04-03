@@ -12183,7 +12183,7 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
     }
 }
 
-void llama_sample_entropy(struct llama_context* ctx, llama_token_data_array* candidates_p, float min_temp, float max_temp, float exponent_val, float smoothing_factor, float smoothing_curve) {
+void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp, float max_temp, float exponent_val, float smoothing_factor, float smoothing_curve) {
     const int64_t t_start_sample_us = ggml_time_us();
 
     // no need to do anything if there is only one (or zero) candidates
