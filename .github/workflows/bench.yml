@@ -144,7 +144,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results
+          name: bench-server-${{ github.job }}-${{ env.RUNNER_LABEL }}-${{ matrix.model }}-${{ matrix.ftype }}
           compression-level: 9
           path: |
             examples/server/bench/*.jpg
