@@ -49,12 +49,23 @@ extern bool server_log_json;
 #define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
+static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra);
+
 template <typename T>
 static T json_value(const json &body, const std::string &key, const T &default_value) {
     // Fallback null to default value
-    return body.contains(key) && !body.at(key).is_null()
-        ? body.value(key, default_value)
-        : default_value;
+    if (body.contains(key) && !body.at(key).is_null()){
+        try {
+            return body.value(key, default_value);
+        }
+        catch (nlohmann::json_abi_v3_11_3::detail::type_error const&){
+            std::string message = "Wrong type supplied for parameter '" + key + "'. Expected '" + typeid(default_value).name() + "', using default value.";
+            server_log("WARN", __func__, __LINE__, message.c_str(), body);
+            return default_value;
+        }
+    } else {
+        return default_value;
+    }
 }
 
 static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra) {
