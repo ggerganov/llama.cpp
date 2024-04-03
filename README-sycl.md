@@ -285,7 +285,7 @@ cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMA
 
 1. Retrieve and prepare model
 
-You can refer to the general [*Prepare and Quantize*](README#prepare-and-quantize) guide for model prepration, or simply download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) model as example.
+You can refer to the general [*Prepare and Quantize*](README.md#prepare-and-quantize) guide for model prepration, or simply download [llama-2-7b.Q4_0.gguf](https://huggingface.co/TheBloke/Llama-2-7B-GGUF/blob/main/llama-2-7b.Q4_0.gguf) model as example.
 
 2. Enable oneAPI running environment
 
