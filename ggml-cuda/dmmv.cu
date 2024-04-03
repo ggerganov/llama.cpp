@@ -2,14 +2,6 @@
 #include "dequantize.cuh"
 #include "convert.cuh"
 
-// dmmv = dequantize_mul_mat_vec
-#ifndef GGML_CUDA_DMMV_X
-#define GGML_CUDA_DMMV_X 32
-#endif
-#ifndef GGML_CUDA_MMV_Y
-#define GGML_CUDA_MMV_Y 1
-#endif
-
 #ifndef K_QUANTS_PER_ITERATION
 #define K_QUANTS_PER_ITERATION 2
 #else
