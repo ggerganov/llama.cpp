@@ -13441,29 +13441,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // TODO: avoid hardcoded tensor names - use the TN_* constants
         if (name.find("attn_v.weight") != std::string::npos || name.find("attn_qkv.weight") != std::string::npos) {
             ++qs.n_attention_wv;
-        } else if (name.find("ffn_down") != std::string::npos) {
-            ++qs.n_ffn_down;
-        } else if (name.find("ffn_gate") != std::string::npos) {
-            ++qs.n_ffn_gate;
-        } else if (name.find("ffn_up") != std::string::npos) {
-            ++qs.n_ffn_up;
         } else if (name == LLM_TN(model.arch)(LLM_TENSOR_OUTPUT, "weight")) {
             qs.has_output = true;
         }
     }
-    // REVIEW: i do not undertand why there is logic for counting the number of layers by counting the number of tensors
-    // instead of just using the n_layer metadata
-    // without this change, it would require different logic for merged experts and split experts models,
-    // as split expert models end with a ffn_* count n_expert times higher than the real number of layers,
-    // which then is corrected in layer_info by dividing the value by n_expert
-    // this code needs to be refactored
+
     qs.n_ffn_down = qs.n_ffn_gate = qs.n_ffn_up = (int)model.hparams.n_layer;
 
-    //if (qs.n_ffn_down )
-    //if (qs.n_attention_wv != qs.n_ffn_down || (uint32_t) qs.n_attention_wv != model.hparams.n_layer) {
-    //    LLAMA_LOG_WARN("%s ============ Strange model: n_attention_wv = %d, n_ffn_down = %d, hparams.n_layer = %d\n",
-    //            __func__, qs.n_attention_wv, qs.n_ffn_down, model.hparams.n_layer);
-    //}
+    // sanity checks
+    GGML_ASSERT(qs.n_attention_wv == (int)model.hparams.n_layer && "n_attention_wv != n_layer is unexpected");
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
