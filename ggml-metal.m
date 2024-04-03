@@ -2417,7 +2417,10 @@ static enum ggml_status ggml_metal_graph_compute(
                             ne00_padded *= 2;
                         }
 
-                        const int mem_size = ne00_padded*sizeof(int32_t);
+                        // Metal kernels require the buffer size to be multiple of 16 bytes
+                        // https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/1443142-setthreadgroupmemorylength
+                        const int mem_size = GGML_PAD(ne00_padded*sizeof(int32_t), 16);
+
                         id<MTLComputePipelineState> pipeline = nil;
 
                         switch (order) {
