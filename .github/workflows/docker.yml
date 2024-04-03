@@ -46,7 +46,7 @@ jobs:
           - { tag: "server-intel", dockerfile: ".devops/server-intel.Dockerfile", platforms: "linux/amd64" }
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
