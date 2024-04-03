@@ -4789,7 +4789,7 @@ static bool llm_load_tensors(
                         layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias",   i), {n_embd}, false);
 
                         layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd}, false);
-                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias",   i), {n_embd}, false);                        
+                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias",   i), {n_embd}, false);
 
                         // AWQ ScaleActivation layer
                         layer.ffn_act = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, false);
@@ -7616,14 +7616,14 @@ struct llm_build_context {
         // positions of the tokens in the KV cache
         struct ggml_tensor * KQ_pos = build_inp_KQ_pos();
 
-        if (model.pos_embd){
+        if (model.pos_embd) {
             // inp_pos - contains the positions
             struct ggml_tensor * inp_pos = build_inp_pos();
             pos = ggml_get_rows(ctx0, model.pos_embd, inp_pos);
             cb(pos, "pos_embd", -1);
 
             inpL = ggml_add(ctx0, inpL, pos);
-            cb(inpL, "inpL", -1);            
+            cb(inpL, "inpL", -1);
         }
 
         for (int il = 0; il < n_layer; ++il) {
@@ -7673,14 +7673,13 @@ struct llm_build_context {
                             model.layers[il].attn_k_norm_b,
                             LLM_NORM, cb, il);
                     cb(Kcur, "Kcur", il);
-                    
+
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
                     Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
 
                     cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
-
                 } else {
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
                     cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
