@@ -782,6 +782,16 @@ static int stbi__sse2_available(void) {
 #endif
 #endif
 
+// LOONGARCH LSX
+#if defined(STBI_NO_SIMD) && defined(STBI_LSX)
+#undef STBI_LSX
+#endif
+
+#ifdef STBI_LSX
+#include <lsxintrin.h>
+#define STBI_SIMD_ALIGN(type, name) type name __attribute__((aligned(16)))
+#endif
+
 #ifndef STBI_SIMD_ALIGN
 #define STBI_SIMD_ALIGN(type, name) type name
 #endif
@@ -3004,6 +3014,230 @@ static void stbi__idct_simd(stbi_uc * out, int out_stride, short data[64]) {
 
 #endif // STBI_NEON
 
+#ifdef STBI_LSX
+// sse2 integer IDCT. not the fastest possible implementation but it
+// produces bit-identical results to the generic C version so it's
+// fully "transparent".
+static void stbi__idct_simd(stbi_uc * out, int out_stride, short data[64]) {
+    // This is constructed to match our regular (generic) integer IDCT exactly.
+    __m128i row0, row1, row2, row3, row4, row5, row6, row7;
+    __m128i tmp, tmp1= tmp2 = __lsx_vreplgr2vr(0);
+
+// dot product constant: even elems=x, odd elems=y
+#define dct_const(x, y) __lsx_vpackev_h(__lsx_vreplgr2vr_h((y)), __lsx_vreplgr2vr_h((x)))
+
+// out(0) = c0[even]*x + c0[odd]*y   (c0, x, y 16-bit, out 32-bit)
+// out(1) = c1[even]*x + c1[odd]*y
+#define dct_rot(out0, out1, x, y, c0, c1, tmp1, tmp2)                                                                                      \
+    __m128i c0##lo = __lsx_vilvl_h((y), (x));                                                                             \
+    __m128i c0##hi = __lsx_vilvh_h((y), (x));                                                                             \
+    tmp1 = tmp2 = __lsx_vreplgr2vr(0);         \
+    tmp1 = __lsx_vmaddwev_w_h(tmp1, c0##lo, c0);\
+    tmp2 = __lsx_vmaddwod_w_h(tmp2, c0##lo, c0); \
+    __m128i out0##_l = __lsx_vadd_w(tmp1, tmp2);                                                                             \
+    tmp1 = tmp2 = __lsx_vreplgr2vr(0);         \
+    tmp1 = __lsx_vmaddwev_w_h(tmp1, c0##hi, c0);\
+    tmp2 = __lsx_vmaddwod_w_h(tmp2, c0##hi, c0); \
+    __m128i out0##_h = __lsx_vadd_w(tmp1, tmp2);                                                                             \
+    tmp1 = tmp2 = __lsx_vreplgr2vr(0);         \
+    tmp1 = __lsx_vmaddwev_w_h(tmp1, c0##lo, c1);\
+    tmp2 = __lsx_vmaddwod_w_h(tmp2, c0##lo, c1); \
+    __m128i out1##_l = __lsx_vadd_w(tmp1, tmp2);                                                                             \
+    tmp1 = tmp2 = __lsx_vreplgr2vr(0);         \
+    tmp1 = __lsx_vmaddwev_w_h(tmp1, c0##hi, c1);\
+    tmp2 = __lsx_vmaddwod_w_h(tmp2, c0##hi, c1); \
+    __m128i out1##_h = __lsx_vadd_w(tmp1, tmp2);                                                                             \
+
+// out = in << 12  (in 16-bit, out 32-bit)
+#define dct_widen(out, in)                                                                                                     \
+    __m128i out##_l = __lsx_vsrai_w(__lsx_vilvl_h((in), __lsx_vreplgr2vr_d(0)), 4);                                        \
+    __m128i out##_h = __lsx_vsrai_w(__lsx_vilvh_h((in), __lsx_vreplgr2vr_d(0)), 4)
+
+// wide add
+#define dct_wadd(out, a, b)                                                                                                    \
+    __m128i out##_l = __lsx_vadd_w(a##_l, b##_l);                                                                             \
+    __m128i out##_h = __lsx_vadd_w(a##_h, b##_h)
+
+// wide sub
+#define dct_wsub(out, a, b)                                                                                                    \
+    __m128i out##_l = __lsx_vsub_w(a##_l, b##_l);                                                                             \
+    __m128i out##_h = __lsx_vsub_w(a##_h, b##_h)
+
+// butterfly a/b, add bias, then shift by "s" and pack
+#define dct_bfly32o(out0, out1, a, b, bias, s, tmp1, tmp2)                                                                                 \
+    {                                                                                                                          \
+        __m128i abiased_l = __lsx_vadd_w(a##_l, bias);                                                                        \
+        __m128i abiased_h = __lsx_vadd_w(a##_h, bias);                                                                        \
+        dct_wadd(sum, abiased, b);                                                                                             \
+        dct_wsub(dif, abiased, b);                                                                                             \
+        tmp1 = __lsx_vsat_w(__lsx_vsrai_w(sum_l, s), 15);                                            \
+        tmp2 = __lsx_vsat_w(__lsx_vsrai_w(sum_h, s), 15);                                            \
+        out0 = __lsx_vpickev_h(tmp2, tmp1);                                            \
+        tmp1 = __lsx_vsat_w(__lsx_vsrai_w(dif_l, s), 15);                                            \
+        tmp2 = __lsx_vsat_w(__lsx_vsrai_w(dif_h, s), 15);                                            \
+        out1 = __lsx_vpickev_h(tmp2, tmp1);                                            \
+    }
+
+// 8-bit interleave step (for transposes)
+#define dct_interleave8(a, b)                                                                                                  \
+    tmp = a;                                                                                                                   \
+    a = __lsx_vilvl_b(b, a);                                                                                               \
+    b = __lsx_vilvh_b(b, tmp)
+
+// 16-bit interleave step (for transposes)
+#define dct_interleave16(a, b)                                                                                                 \
+    tmp = a;                                                                                                                   \
+    a = __lsx_vilvl_h(b, a);                                                                                              \
+    b = __lsx_vilvh_h(b, tmp)
+
+#define dct_pass(bias, shift)                                                                                                  \
+    {                                                                                                                          \
+        /* even part */                                                                                                        \
+        dct_rot(t2e, t3e, row2, row6, rot0_0, rot0_1, tmp1, tmp2);                                                                         \
+        __m128i sum04 = __lsx_vadd_h(row0, row4);                                                                             \
+        __m128i dif04 = __lsx_vsub_h(row0, row4);                                                                             \
+        dct_widen(t0e, sum04);                                                                                                 \
+        dct_widen(t1e, dif04);                                                                                                 \
+        dct_wadd(x0, t0e, t3e);                                                                                                \
+        dct_wsub(x3, t0e, t3e);                                                                                                \
+        dct_wadd(x1, t1e, t2e);                                                                                                \
+        dct_wsub(x2, t1e, t2e);                                                                                                \
+        /* odd part */                                                                                                         \
+        dct_rot(y0o, y2o, row7, row3, rot2_0, rot2_1, tmp1, tmp2);                                                                         \
+        dct_rot(y1o, y3o, row5, row1, rot3_0, rot3_1, tmp1, tmp2);                                                                         \
+        __m128i sum17 = __lsx_vadd_h(row1, row7);                                                                             \
+        __m128i sum35 = __lsx_vadd_h(row3, row5);                                                                             \
+        dct_rot(y4o, y5o, sum17, sum35, rot1_0, rot1_1, tmp1, tmp2);                                                                       \
+        dct_wadd(x4, y0o, y4o);                                                                                                \
+        dct_wadd(x5, y1o, y5o);                                                                                                \
+        dct_wadd(x6, y2o, y5o);                                                                                                \
+        dct_wadd(x7, y3o, y4o);                                                                                                \
+        dct_bfly32o(row0, row7, x0, x7, bias, shift, tmp1, tmp2);                                                                          \
+        dct_bfly32o(row1, row6, x1, x6, bias, shift, tmp1, tmp2);                                                                          \
+        dct_bfly32o(row2, row5, x2, x5, bias, shift, tmp1, tmp2);                                                                          \
+        dct_bfly32o(row3, row4, x3, x4, bias, shift, tmp1, tmp2);                                                                          \
+    }
+
+    __m128i rot0_0 = dct_const(stbi__f2f(0.5411961f), stbi__f2f(0.5411961f) + stbi__f2f(-1.847759065f));
+    __m128i rot0_1 = dct_const(stbi__f2f(0.5411961f) + stbi__f2f(0.765366865f), stbi__f2f(0.5411961f));
+    __m128i rot1_0 = dct_const(stbi__f2f(1.175875602f) + stbi__f2f(-0.899976223f), stbi__f2f(1.175875602f));
+    __m128i rot1_1 = dct_const(stbi__f2f(1.175875602f), stbi__f2f(1.175875602f) + stbi__f2f(-2.562915447f));
+    __m128i rot2_0 = dct_const(stbi__f2f(-1.961570560f) + stbi__f2f(0.298631336f), stbi__f2f(-1.961570560f));
+    __m128i rot2_1 = dct_const(stbi__f2f(-1.961570560f), stbi__f2f(-1.961570560f) + stbi__f2f(3.072711026f));
+    __m128i rot3_0 = dct_const(stbi__f2f(-0.390180644f) + stbi__f2f(2.053119869f), stbi__f2f(-0.390180644f));
+    __m128i rot3_1 = dct_const(stbi__f2f(-0.390180644f), stbi__f2f(-0.390180644f) + stbi__f2f(1.501321110f));
+
+    // rounding biases in column/row passes, see stbi__idct_block for explanation.
+    __m128i bias_0 = __lsx_vreplgr2vr_d(0);
+    __lsx_vinsgr2vr_w(bias_0, 512, 0);
+    __m128i bias_1 = __lsx_vreplgr2vr_d(0);
+    __lsx_vinsgr2vr_w(bias_1, 65536 + (128 << 17), 0);
+
+    // load
+    row0 = __lsx_vld((const __m128i *)(data + 0 * 8), 0);
+    row1 = __lsx_vld((const __m128i *)(data + 1 * 8), 0);
+    row2 = __lsx_vld((const __m128i *)(data + 2 * 8), 0);
+    row3 = __lsx_vld((const __m128i *)(data + 3 * 8), 0);
+    row4 = __lsx_vld((const __m128i *)(data + 4 * 8), 0);
+    row5 = __lsx_vld((const __m128i *)(data + 5 * 8), 0);
+    row6 = __lsx_vld((const __m128i *)(data + 6 * 8), 0);
+    row7 = __lsx_vld((const __m128i *)(data + 7 * 8), 0);
+
+    // column pass
+    dct_pass(bias_0, 10);
+
+    {
+        // 16bit 8x8 transpose pass 1
+        dct_interleave16(row0, row4);
+        dct_interleave16(row1, row5);
+        dct_interleave16(row2, row6);
+        dct_interleave16(row3, row7);
+
+        // transpose pass 2
+        dct_interleave16(row0, row2);
+        dct_interleave16(row1, row3);
+        dct_interleave16(row4, row6);
+        dct_interleave16(row5, row7);
+
+        // transpose pass 3
+        dct_interleave16(row0, row1);
+        dct_interleave16(row2, row3);
+        dct_interleave16(row4, row5);
+        dct_interleave16(row6, row7);
+    }
+
+    // row pass
+    dct_pass(bias_1, 17);
+
+    {
+        // pack
+        __m128i vzero = __lsx_vreplgr2vr_d(0);
+        tmp1 = __lsx_vmax_h(zero, row0);
+        tmp1 = __lsx_vsat_hu(tmp1, 7);
+        tmp2 = __lsx_vmax_h(zero, row1);
+        tmp2 = __lsx_vsat_hu(tmp2, 7);
+        __m128i p0 = __lsx_vpickev_b(tmp2, tmp1); // a0a1a2a3...a7b0b1b2b3...b7
+        tmp1 = __lsx_vmax_h(zero, row2);
+        tmp1 = __lsx_vsat_hu(tmp1, 7);
+        tmp2 = __lsx_vmax_h(zero, row3);
+        tmp2 = __lsx_vsat_hu(tmp2, 7);
+        __m128i p1 = __lsx_vpickev_b(tmp2, tmp1);
+
+        tmp1 = __lsx_vmax_h(zero, row4);
+        tmp1 = __lsx_vsat_hu(tmp1, 7);
+        tmp2 = __lsx_vmax_h(zero, row5);
+        tmp2 = __lsx_vsat_hu(tmp2, 7);
+        __m128i p2 = __lsx_vpickev_b(tmp2, tmp1);
+
+        tmp1 = __lsx_vmax_h(zero, row6);
+        tmp1 = __lsx_vsat_hu(tmp1, 7);
+        tmp2 = __lsx_vmax_h(zero, row7);
+        tmp2 = __lsx_vsat_hu(tmp2, 7);
+        __m128i p3 = __lsx_vpickev_b(tmp2, tmp1);
+
+        // 8bit 8x8 transpose pass 1
+        dct_interleave8(p0, p2); // a0e0a1e1...
+        dct_interleave8(p1, p3); // c0g0c1g1...
+
+        // transpose pass 2
+        dct_interleave8(p0, p1); // a0c0e0g0...
+        dct_interleave8(p2, p3); // b0d0f0h0...
+
+        // transpose pass 3
+        dct_interleave8(p0, p2); // a0b0c0d0...
+        dct_interleave8(p1, p3); // a4b4c4d4...
+
+        // store
+        *(unsigned long *)out = __lsx_vpickve2gr_d(p0, 0);
+        out += out_stride;
+        *(unsigned long *)out = __lsx_vpickve2gr_d(__lsx_vshuf4i_w(p0, 0x4e), 0);
+        out += out_stride;
+        *(unsigned long *)out = __lsx_vpickve2gr_d(p2, 0);
+        out += out_stride;
+        *(unsigned long *)out = __lsx_vpickve2gr_d(__lsx_vshuf4i_w(p2, 0x4e), 0);
+        out += out_stride;
+        *(unsigned long *)out = __lsx_vpickve2gr_d(p1, 0);
+        out += out_stride;
+        *(unsigned long *)out = __lsx_vpickve2gr_d(__lsx_vshuf4i_w(p1, 0x4e), 0);
+        out += out_stride;
+        *(unsigned long *)out = __lsx_vpickve2gr_d(p3, 0);
+        out += out_stride;
+        *(unsigned long *)out = __lsx_vpickve2gr_d(__lsx_vshuf4i_w(p3, 0x4e), 0);
+    }
+
+#undef dct_const
+#undef dct_rot
+#undef dct_widen
+#undef dct_wadd
+#undef dct_wsub
+#undef dct_bfly32o
+#undef dct_interleave8
+#undef dct_interleave16
+#undef dct_pass
+}
+
+#endif // STBI_LSX
+
 #define STBI__MARKER_none 0xff
 // if there's a pending marker from the entropy stream, return that
 // otherwise, fetch from the stream and get a marker. if there's no
@@ -3672,7 +3906,7 @@ static stbi_uc * stbi__resample_row_hv_2(stbi_uc * out, stbi_uc * in_near, stbi_
     return out;
 }
 
-#if defined(STBI_SSE2) || defined(STBI_NEON)
+#if defined(STBI_SSE2) || defined(STBI_NEON) || defined(STBI_LSX)
 static stbi_uc * stbi__resample_row_hv_2_simd(stbi_uc * out, stbi_uc * in_near, stbi_uc * in_far, int w, int hs) {
     // need to generate 2x2 samples for every one in input
     int i = 0, t0, t1;
@@ -3764,6 +3998,58 @@ static stbi_uc * stbi__resample_row_hv_2_simd(stbi_uc * out, stbi_uc * in_near, 
         o.val[0] = vqrshrun_n_s16(even, 4);
         o.val[1] = vqrshrun_n_s16(odd, 4);
         vst2_u8(out + i * 2, o);
+#elif defined(STBI_LSX)
+        // load and perform the vertical filtering pass
+        // this uses 3*x + y = 4*x + (y - x)
+        __m128i zero = __lsx_vldi(0);
+        __m128i farb = __lsx_vldi(0);
+        __lsx_vinsgr2vr_d(farb, __lsx_vpickve2gr_d(__lsx_vld((__m128i *)(in_far + i), 0)), 0);
+        __m128i nearb = __lsx_vldi(0);
+        __lsx_vinsgr2vr_d(nearb, __lsx_vpickve2gr_d(__lsx_vld((__m128i *)(in_near + i), 0)), 0);
+        __m128i farw = __lsx_vilvl_b(zero, farb);
+        __m128i nearw = __lsx_vilvl_b(zero, nearb);
+        __m128i diff = __lsx_vsub_h(farw, nearw);
+        __m128i nears = __lsx_vslli_h(nearw, 2);
+        __m128i curr = __lsx_vadd_h(nears, diff); // current row
+
+        // horizontal filter works the same based on shifted vers of current
+        // row. "prev" is current row shifted right by 1 pixel; we need to
+        // insert the previous pixel value (from t1).
+        // "next" is current row shifted left by 1 pixel, with first pixel
+        // of next block of 8 pixels added in.
+        __m128i prv0 = __lsx_vbsll_v(curr, 2);
+        __m128i nxt0 = __lsx_vbsrl_v(curr, 2);
+        __m128i prev = __lsx_vinsgr2vr_h(prv0, t1, 0);
+        __m128i next = __lsx_vinsgr2vr_h(nxt0, 3 * in_near[i + 8] + in_far[i + 8], 7);
+
+        // horizontal filter, polyphase implementation since it's convenient:
+        // even pixels = 3*cur + prev = cur*4 + (prev - cur)
+        // odd  pixels = 3*cur + next = cur*4 + (next - cur)
+        // note the shared term.
+        __m128i bias = __lsx_vldi(0);
+        __lsx_vinsgr2vr_h(bias, 8, 0);
+        __m128i curs = __lsx_vslli_h(curr, 2);
+        __m128i prvd = __lsx_vsub_h(prev, curr);
+        __m128i nxtd = __lsx_vsub_h(next, curr);
+        __m128i curb = __lsx_vadd_h(curs, bias);
+        __m128i even = __lsx_vadd_h(prvd, curb);
+        __m128i odd = __lsx_vadd_h(nxtd, curb);
+
+        // interleave even and odd pixels, then undo scaling.
+        __m128i int0 = __lsx_vilvl_h(odd, even);
+        __m128i int1 = __lsx_vilvh_h(odd, even);
+        __m128i de0 = __lsx_vsrli_h(int0, 4);
+        __m128i de1 = __lsx_vsrli_h(int1, 4);
+
+        // pack and write output
+        __m128i tmp1, tmp2, zero = __lsx_vldi(0);
+        tmp1 = __lsx_vmax_h(zero, de0);
+        tmp1 = __lsx_vsat_hw(tmp1, 7);
+        tmp2 = __lsx_vmax_h(zero, de1);
+        tmp2 = __lsx_vsat_hw(tmp2, 7);
+        __m128i outv = __lsx_vpickev_b(tmp2, tmp1);
+        __lsx_vst(outv, (__m128i *)(out + i * 2), 0);
+
 #endif
 
         // "previous" value for next iter
@@ -3841,7 +4127,7 @@ static void stbi__YCbCr_to_RGB_row(stbi_uc * out, const stbi_uc * y, const stbi_
     }
 }
 
-#if defined(STBI_SSE2) || defined(STBI_NEON)
+#if defined(STBI_SSE2) || defined(STBI_NEON) || defined(STBI_LSX)
 static void stbi__YCbCr_to_RGB_simd(stbi_uc * out, stbi_uc const * y, stbi_uc const * pcb, stbi_uc const * pcr, int count,
                                     int step) {
     int i = 0;
@@ -3953,6 +4239,87 @@ static void stbi__YCbCr_to_RGB_simd(stbi_uc * out, stbi_uc const * y, stbi_uc co
     }
 #endif
 
+#ifdef STBI_LSX
+    // step == 3 is pretty ugly on the final interleave, and i'm not convinced
+    // it's useful in practice (you wouldn't use it for textures, for example).
+    // so just accelerate step == 4 case.
+    if (step == 4) {
+        // this is a fairly straightforward implementation and not super-optimized.
+        __m128i signflip = __lsx_vldi(0);
+        __lsx_vinsgr2vr_b(signflip, (-0x80), 0);
+        __m128i cr_const0 = __lsx_vldi(0);
+        __lsx_vinsgr2vr_h(cr_const0, (short)(1.40200f * 4096.0f + 0.5f), 0);
+        __m128i cr_const1 = __lsx_vldi(0);
+        __lsx_vinsgr2vr_h(cr_const1, (-(short)(0.71414f * 4096.0f + 0.5f)), 0);
+        __m128i cb_const0 = __lsx_vldi(0);
+        __lsx_vinsgr2vr_h(cb_const0, (-(short)(0.34414f * 4096.0f + 0.5f)), 0);
+        __m128i cb_const1 = __lsx_vldi(0);
+        __lsx_vinsgr2vr_h(cb_const1, ((short)(1.77200f * 4096.0f + 0.5f)), 0);
+        __m128i y_bias = __lsx_vldi(0);
+        __lsx_vinsgr2vr_b(y_bias, ((char)(unsigned char)128), 0);
+        __m128i xw = __lsx_vldi(0);
+        __lsx_vinsgr2vr_h(xw, (255), 0); // alpha channel
+
+        for (; i + 7 < count; i += 8) {
+            // load
+            __m128i y_bytes = __lsx_vldi(0);
+            __lsx_vinsgr2vr_d(y_bytes, *(unsigned long*)(y + i), 0);
+            __m128i cr_bytes = __lsx_vldi(0);
+            __lsx_vinsgr2vr_d(cr_bytes, *(unsigned long*)(pcr + i), 0);
+            __m128i cb_bytes = __lsx_vldi(0);
+            __lsx_vinsgr2vr_d(cb_bytes, *(unsigned long*)(pcb + i), 0);
+            __m128i cr_biased = __lsx_vxor_v(cr_bytes, signflip); // -128
+            __m128i cb_biased = __lsx_vxor_v(cb_bytes, signflip); // -128
+
+            // unpack to short (and left-shift cr, cb by 8)
+            __m128i yw = __lsx_vilvl_b(y_bytes ,y_bias);
+            __m128i crw = __lsx_vilvl_b(cr_biased, __lsx_vldi(0));
+            __m128i cbw = __lsx_vilvl_b(cb_biased, __lsx_vldi(0));
+
+            // color transform
+            __m128i yws = __lsx_vsrli_h(yw, 4);
+            __m128i cr0 = __lsx_muh_h(cr_const0, crw);
+            __m128i cb0 = __lsx_muh_h(cb_const0, cbw);
+            __m128i cb1 = __lsx_muh_h(cbw, cb_const1);
+            __m128i cr1 = __lsx_muh_h(crw, cr_const1);
+            __m128i rws = __lsx_vadd_h(cr0, yws);
+            __m128i gwt = __lsx_vadd_h(cb0, yws);
+            __m128i bws = __lsx_vadd_h(yws, cb1);
+            __m128i gws = __lsx_vadd_h(gwt, cr1);
+
+            // descale
+            __m128i rw = __lsx_vsrai_h(rws, 4);
+            __m128i bw = __lsx_vsrai_h(bws, 4);
+            __m128i gw = __lsx_vsrai_h(gws, 4);
+
+            // back to byte, set up for transpose
+            __m128i tmp1, tmp2, vzero = __lsx_vldi(0);
+           tmp1 = __lsx_vmax_h(vzero, rw);
+           tmp1 = __lsx_vsat_hu(tmp1, 7);
+           tmp2 = __lsx_vmax_h(vzero, bw);
+           tmp2 = __lsx_vsat_hu(tmp2, 7);
+            __m128i brb = __lsx_vpickev_b(tmp2, tmp1);
+           tmp1 = __lsx_vmax_h(vzero, gw);
+           tmp1 = __lsx_vsat_hu(tmp1, 7);
+           tmp2 = __lsx_vmax_h(vzero, xw);
+           tmp2 = __lsx_vsat_hu(tmp2, 7);
+            __m128i gxb = __lsx_vpickev_b(tmp2, tmp1);
+
+            // transpose to interleave channels
+            __m128i t0 = __lsx_vilvl_b(gxb, brb);
+            __m128i t1 = __lsx_vilvh_b(gxb, brb);
+            __m128i o0 = __lsx_vilvl_h(t1, t0);
+            __m128i o1 = __lsx_vilvh_h(t1, t0);
+
+            // store
+            __lsx_vst(o0, (__m128i *)(out + 0), 0);
+            __lsx_vst(o1, (__m128i *)(out + 16), 0);
+            out += 32;
+        }
+    }
+#endif
+
+
     for (; i < count; ++i) {
         int y_fixed = (y[i] << 20) + (1 << 19); // rounding
         int r, g, b;
@@ -4005,7 +4372,7 @@ static void stbi__setup_jpeg(stbi__jpeg * j) {
     }
 #endif
 
-#ifdef STBI_NEON
+#if defined(STBI_NEON) || defined(STBI_LSX)
     j->idct_block_kernel = stbi__idct_simd;
     j->YCbCr_to_RGB_kernel = stbi__YCbCr_to_RGB_simd;
     j->resample_row_hv_2_kernel = stbi__resample_row_hv_2_simd;
