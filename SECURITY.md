@@ -1,6 +1,6 @@
 # Security Policy
 
- - [**Using llama.cpp securely**](#using-llama-cpp-securely)
+ - [**Using llama.cpp securely**](#using-llamacpp-securely)
    - [Untrusted models](#untrusted-models)
    - [Untrusted inputs](#untrusted-inputs)
    - [Data privacy](#data-privacy)
@@ -57,7 +57,7 @@ If you intend to run multiple models in parallel with shared memory, it is your 
 
 ## Reporting a vulnerability
 
-Beware that none of the topics under [Using llama.cpp securely](#using-llama-cpp-securely) are considered vulnerabilities of LLaMA C++.
+Beware that none of the topics under [Using llama.cpp securely](#using-llamacpp-securely) are considered vulnerabilities of LLaMA C++.
 
 <!-- normal version -->
 However, If you have discovered a security vulnerability in this project, please report it privately. **Do not disclose it as a public issue.** This gives us time to work with you to fix the issue before public exposure, reducing the chance that the exploit will be used before a patch is released.
