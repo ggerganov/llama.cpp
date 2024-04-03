@@ -285,11 +285,13 @@ class TensorNameMap:
         MODEL_TENSOR.ATTN_Q_NORM: (
             "language_model.encoder.layers.{bid}.self_attention.q_layernorm",
             "model.layers.{bid}.self_attn.q_layernorm",                       # persimmon
+            "transformer.blocks.{bid}.attn.q_ln",                             # sea-lion
         ),
 
         MODEL_TENSOR.ATTN_K_NORM: (
             "language_model.encoder.layers.{bid}.self_attention.k_layernorm",
             "model.layers.{bid}.self_attn.k_layernorm",                       # persimmon
+            "transformer.blocks.{bid}.attn.k_ln",                             # sea-lion
         ),
 
         MODEL_TENSOR.ROPE_FREQS: (

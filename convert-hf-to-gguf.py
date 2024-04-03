@@ -510,6 +510,16 @@ class BloomModel(Model):
 class MPTModel(Model):
     model_arch = gguf.MODEL_ARCH.MPT
 
+    def set_vocab(self):
+        try:
+            self._set_vocab_gpt2()
+        except:
+            self._set_vocab_sentencepiece()
+            self.gguf_writer.add_add_bos_token(False)
+            self.gguf_writer.add_pad_token_id(3)
+            self.gguf_writer.add_eos_token_id(1)
+            self.gguf_writer.add_unk_token_id(0)
+
     def set_gguf_parameters(self):
         block_count = self.hparams["n_layers"]
         self.gguf_writer.add_name(self.dir_model.name)
@@ -523,7 +533,10 @@ class MPTModel(Model):
         self.gguf_writer.add_layer_norm_eps(1e-5)
         if self.hparams["attn_config"]["clip_qkv"] is not None:
             self.gguf_writer.add_clamp_kqv(self.hparams["attn_config"]["clip_qkv"])
-        self.gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
+        if self.hparams["attn_config"]["alibi"]:
+            self.gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
+        else:
+            self.gguf_writer.add_max_alibi_bias(0.0)
 
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers"))

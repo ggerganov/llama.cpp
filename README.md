@@ -118,6 +118,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [Mamba](https://github.com/state-spaces/mamba)
 - [x] [Xverse](https://huggingface.co/models?search=xverse)
 - [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
+- [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 
 **Multimodal models:**
 
