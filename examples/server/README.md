@@ -53,7 +53,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - `-cb`, `--cont-batching`: Enable continuous batching (a.k.a dynamic batching).  Default: disabled
 - `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots). This is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
-- `--grp-attn-n`: Set the group attention factor to extend context size through self-extend. Used together with group attention width `--grp-attn-w`. Default: `1`, which is disabled. 
+- `--grp-attn-n`: Set the group attention factor to extend context size through self-extend. Used together with group attention width `--grp-attn-w`. Default: `1`, which is disabled.
 - `--grp-attn-w`: Set the group attention width to extend context size through self-extend.  Used together with group attention factor `--grp-attn-n`. Default: `512`
 - `-n N, --n-predict N`: Set the maximum tokens to predict. Default: `-1`
 - `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
