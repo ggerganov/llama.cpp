@@ -2373,7 +2373,7 @@ namespace dpct
                 q, a_trans, b_trans, m, n, k, &alpha_float, a, lda, b, ldb, &beta_float, c, ldc);
             break;
         }
-#endif
+#endif // __INTEL_MKL__
         default:
             throw std::runtime_error("the combination of data type is unsupported");
         }
