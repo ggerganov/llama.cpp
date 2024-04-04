@@ -2189,8 +2189,6 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("                            KV cache defragmentation threshold (default: %.1f, < 0 - disabled)\n", params.defrag_thold);
     printf("  -b N, --batch-size N      logical maximum batch size (default: %d)\n", params.n_batch);
     printf("  -ub N, --ubatch-size N    physical maximum batch size (default: %d)\n", params.n_ubatch);
-    printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
-    printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_supports_mlock()) {
         printf("  --mlock                   force system to keep model in RAM rather than swapping or compressing\n");
     }

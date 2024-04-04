@@ -30,7 +30,6 @@ The project is under active development, and we are [looking for feedback and co
 - `-ts SPLIT, --tensor-split SPLIT`: When using multiple GPUs, this option controls how large tensors should be split across all GPUs. `SPLIT` is a comma-separated list of non-negative values that assigns the proportion of data that each GPU should get in order. For example, "3,2" will assign 60% of the data to GPU 0 and 40% to GPU 1. By default, the data is split in proportion to VRAM, but this may not be optimal for performance.
 - `-b N`, `--batch-size N`: Set the batch size for prompt processing. Default: `2048`
 - `-ub N`, `--ubatch-size N`: Physical maximum batch size. Default: `512`
-- `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
 - `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 - `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
 - `--numa STRATEGY`: Attempt one of the below optimization strategies that may help on some NUMA systems
