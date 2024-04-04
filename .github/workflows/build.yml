@@ -78,8 +78,8 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: |
-            llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
+          path: llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
+          name: llama-bin-macos-arm64.zip
 
   macOS-latest-cmake-x64:
     runs-on: macos-latest
@@ -134,8 +134,8 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: |
-            llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
+          path: llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
+          name: llama-bin-macos-x64.zip
 
   ubuntu-focal-make:
     runs-on: ubuntu-20.04
@@ -725,8 +725,8 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: |
-            llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
+          path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
+          name: llama-bin-win-${{ matrix.build }}-x64.zip
 
   windows-latest-cmake-cuda:
     runs-on: windows-latest
@@ -781,8 +781,8 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: |
-            llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+          path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+          name: llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
       - name: Copy and pack Cuda runtime
         run: |
@@ -795,8 +795,8 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: |
-            cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+          path: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+          name: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
   windows-latest-cmake-sycl:
     runs-on: windows-latest
@@ -846,8 +846,8 @@ jobs:
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          path: |
-            llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
+          path: llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
+          name: llama-bin-win-sycl-x64.zip
 
   ios-xcode-build:
     runs-on: macos-latest
