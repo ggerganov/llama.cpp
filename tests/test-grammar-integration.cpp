@@ -2,8 +2,12 @@
 #undef NDEBUG
 #endif
 
-#include "llama.cpp" // TODO: not great
+#define LLAMA_API_INTERNAL
+
+#include "ggml.h"
+#include "llama.h"
 #include "grammar-parser.h"
+#include "unicode.h"
 #include <cassert>
 #include <string>
 
@@ -30,7 +34,7 @@ expr ::= term ("+" term)*
 term ::= numero
 number ::= [0-9]+)""";
 
-    fprintf(stderr, "NOTE: Error message (\"error parsing grammar\") expected on following line during successful test:\n");
+    fprintf(stderr, "NOTE: Error message (\"parse: error parsing grammar: Undefined rule identifier 'numero'\") expected on following line during successful test:\n");
 
     grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
 
