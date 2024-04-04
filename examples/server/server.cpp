@@ -2213,6 +2213,8 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
         printf("                            fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1\n");
         printf("  -mg i, --main-gpu i       the GPU to use for the model (with split-mode = none),\n");
         printf("                            or for intermediate results and KV (with split-mode = row)\n");
+        printf("  -nkvo, --no-kv-offload\n");
+        printf("                            disable KV offload\n");
     }
     printf("  -m FNAME, --model FNAME\n");
     printf("                            model path (default: %s)\n", params.model.c_str());
@@ -2498,6 +2500,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                     "See main README.md for information on enabling GPU BLAS support",
                     {{"n_gpu_layers", params.n_gpu_layers}});
             }
+        } else if (arg == "-nkvo" || arg == "--no-kv-offload") {
+            params.no_kv_offload = true;
         } else if (arg == "--split-mode" || arg == "-sm") {
             if (++i >= argc) {
                 invalid_param = true;
