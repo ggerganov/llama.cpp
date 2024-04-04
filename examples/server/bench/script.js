@@ -99,6 +99,7 @@ export default function () {
     let promptEvalEndTime = null
     let prompt_tokens = 0
     let completions_tokens = 0
+    let finish_reason = null
     const res = sse.open(`${server_url}/chat/completions`, params, function (client) {
         client.on('event', function (event) {
             if (promptEvalEndTime == null) {
@@ -107,8 +108,9 @@ export default function () {
 
             let chunk = JSON.parse(event.data)
             let choice = chunk.choices[0]
-            llamacpp_completions_truncated_rate.add(choice.finish_reason === 'length')
-            llamacpp_completions_stop_rate.add(choice.finish_reason === 'stop')
+            if (choice.finish_reason) {
+                finish_reason = choice.finish_reason
+            }
 
             if (chunk.usage) {
                 prompt_tokens = chunk.usage.prompt_tokens
@@ -140,6 +142,8 @@ export default function () {
     if (completions_tokens > 0 && completion_time > 0) {
         llamacpp_tokens_second.add(completions_tokens / completion_time * 1.e3)
     }
+    llamacpp_completions_truncated_rate.add(finish_reason === 'length')
+    llamacpp_completions_stop_rate.add(finish_reason === 'stop')
 
     sleep(0.3)
 }
