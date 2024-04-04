@@ -2311,7 +2311,8 @@ class MambaModel(Model):
                 data = data.astype(np.float32)
 
             # if f16 desired, convert big float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and new_name.removesuffix(".weight").endswith((".ssm_in", ".ssm_out", "token_embd", "output")) and n_dims == 2:
+            new_weight_name = new_name[:-len(".weight")] if new_name.endswith(".weight") else ""
+            if self.ftype == 1 and data_dtype == np.float32 and new_weight_name.endswith((".ssm_in", ".ssm_out", "token_embd", "output")) and n_dims == 2:
                 data = data.astype(np.float16)
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
