@@ -91,7 +91,7 @@ number ::= [0-9]+)""";
 }
 
 static void test_complex_grammar() {
-    // Test case for a more complex grammar
+    // Test case for a more complex grammar, with both failure strings and success strings
     const std::string grammar_str = R"""(root ::= expression
 expression ::= term ws (("+"|"-") ws term)*
 term ::= factor ws (("*"|"/") ws factor)*
@@ -161,6 +161,7 @@ ws ::= [ \t\n\r]?)""";
         "123+456*789-123/456+789*123-456/789+123*456-789/123+456*789-123/456+789*123-456/",
     };
 
+    // Passing strings
     for (const auto & test_string : test_strings_pass) {
         auto decoded = decode_utf8(test_string, {});
 
@@ -196,6 +197,7 @@ ws ::= [ \t\n\r]?)""";
         grammar->stacks = original_stacks;
     }
 
+    // Failing strings
     for (const auto & test_string : test_strings_fail) {
         auto decoded = decode_utf8(test_string, {});
 
@@ -237,6 +239,5 @@ int main() {
     test_complex_grammar();
     test_failure_missing_root();
     test_failure_missing_reference();
-    // Add more test cases as needed
     return 0;
 }
