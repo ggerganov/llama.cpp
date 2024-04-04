@@ -1928,11 +1928,6 @@ struct llama_model * llama_load_model_from_url(
         return NULL;
     }
 
-    if (!curl) {
-        fprintf(stderr, "%s: error initializing libcurl\n", __func__);
-        return NULL;
-    }
-
     if (!llama_download_file(curl, model_url, path_model)) {
         return NULL;
     }
