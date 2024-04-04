@@ -149,7 +149,6 @@ class Model(ABC):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(tensor_map)
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
 
