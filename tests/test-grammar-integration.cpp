@@ -224,14 +224,14 @@ expr ::= term ("+" term)*
 term ::= numero
 number ::= [0-9]+)""";
 
-    fprintf(stderr, "NOTE: Error message (\"parse: error parsing grammar: Undefined rule identifier 'numero'\") expected on following line during successful test:\n");
+    fprintf(stderr, "Expected error:  ");
 
     grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
 
     // Ensure we did NOT parsed correctly
     assert(parsed_grammar.rules.empty());
 
-    fprintf(stderr, "End of expected error message. Test successful.\n");
+    fprintf(stderr, "End of expected error. Test successful.\n");
 }
 
 int main() {
