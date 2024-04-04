@@ -31,7 +31,7 @@ inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 
 }
 
-// Multiply each item in mvec1 with the corresponding item in mvec2, adding the result to the corresponding item in sum. optionally clear the sum before starting. 
+// Multiply each item in mvec1 with the corresponding item in mvec2, adding the result to the corresponding item in sum. optionally clear the sum before starting.
 inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x16_t *mvec2, float32x16_t *sumvec, size_t iterations, int clear)
 {
     uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
