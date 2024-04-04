@@ -266,6 +266,10 @@ namespace grammar_parser {
                     throw std::runtime_error(std::string("expecting ')' at ") + pos);
                 }
                 pos = parse_space(pos + 1, is_nested);
+            } else if (*pos == '.') { // any char
+                last_sym_start = out_elements.size();
+                out_elements.push_back({LLAMA_GRETYPE_CHAR_ANY, 0});
+                pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '*') {
                 pos = parse_space(pos + 1, is_nested);
                 handle_repetitions(0, -1);
@@ -401,6 +405,7 @@ namespace grammar_parser {
             case LLAMA_GRETYPE_CHAR_NOT:       return true;
             case LLAMA_GRETYPE_CHAR_ALT:       return true;
             case LLAMA_GRETYPE_CHAR_RNG_UPPER: return true;
+            case LLAMA_GRETYPE_CHAR_ANY:       return true;
             default:                           return false;
         }
     }
@@ -415,6 +420,7 @@ namespace grammar_parser {
                 case LLAMA_GRETYPE_CHAR_NOT:       fprintf(file, "CHAR_NOT");       break;
                 case LLAMA_GRETYPE_CHAR_RNG_UPPER: fprintf(file, "CHAR_RNG_UPPER"); break;
                 case LLAMA_GRETYPE_CHAR_ALT:       fprintf(file, "CHAR_ALT");       break;
+                case LLAMA_GRETYPE_CHAR_ANY:       fprintf(file, "CHAR_ANY");       break;
             }
             switch (elem.type) {
                 case LLAMA_GRETYPE_END:
@@ -426,6 +432,7 @@ namespace grammar_parser {
                 case LLAMA_GRETYPE_CHAR_NOT:
                 case LLAMA_GRETYPE_CHAR_RNG_UPPER:
                 case LLAMA_GRETYPE_CHAR_ALT:
+                case LLAMA_GRETYPE_CHAR_ANY:
                     fprintf(file, "(\"");
                     print_grammar_char(file, elem.value);
                     fprintf(file, "\") ");
@@ -483,11 +490,15 @@ namespace grammar_parser {
                     }
                     print_grammar_char(file, elem.value);
                     break;
+                case LLAMA_GRETYPE_CHAR_ANY:
+                    fprintf(file, ".");
+                    break;
             }
             if (is_char_element(elem)) {
                 switch (rule[i + 1].type) {
                     case LLAMA_GRETYPE_CHAR_ALT:
                     case LLAMA_GRETYPE_CHAR_RNG_UPPER:
+                    case LLAMA_GRETYPE_CHAR_ANY:
                         break;
                     default:
                         fprintf(file, "] ");
