@@ -2,13 +2,15 @@
 
 Benchmark is using [k6](https://k6.io/).
 
-##### Install k6
+##### Install k6 and sse extension
 
-Follow instruction from: https://k6.io/docs/get-started/installation/
+SSE is not supported by default in k6, you have to build k6 with the [xk6-sse](https://github.com/phymbert/xk6-sse) extension.
 
-Example for ubuntu:
+Example:
 ```shell
-snap install k6
+go install go.k6.io/xk6/cmd/xk6@latest
+xk6 build master \
+--with github.com/phymbert/xk6-sse
 ```
 
 #### Download a dataset
@@ -46,7 +48,7 @@ server --host localhost --port 8080 \
 
 For 500 chat completions request with 8 concurrent users during maximum 10 minutes, run:
 ```shell
-k6 run script.js --duration 10m --iterations 500 --vus 8
+./k6 run script.js --duration 10m --iterations 500 --vus 8
 ```
 
 The benchmark values can be overridden with:
@@ -85,4 +87,34 @@ K6 metrics might be compared against [server metrics](../README.md), with:
 
 ```shell
 curl http://localhost:8080/metrics
+```
+
+### Using the CI python script
+The `bench.py` script does several steps:
+- start the server
+- define good variable for k6
+- run k6 script
+- extract metrics from prometheus
+
+It aims to be used in the CI, but you can run it manually:
+
+```shell
+LLAMA_SERVER_BIN_PATH=../../../cmake-build-release/bin/server python bench.py \
+              --runner-label local \
+              --name local \
+              --branch `git rev-parse --abbrev-ref HEAD` \
+              --commit `git rev-parse HEAD` \
+              --scenario script.js \
+              --duration 5m \
+              --hf-repo ggml-org/models	 \
+              --hf-file phi-2/ggml-model-q4_0.gguf \
+              --model-path-prefix models \
+              --parallel 4 \
+              -ngl 33 \
+              --batch-size 2048 \
+              --ubatch-size	256 \
+              --ctx-size 4096 \
+              --n-prompts 200 \
+              --max-prompt-tokens 256 \
+              --max-tokens 256
 ```
