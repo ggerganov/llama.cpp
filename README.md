@@ -180,6 +180,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [Msty](https://msty.app) (proprietary)
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
 - [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file)(Apachev2.0 or later)
+- [Dot](https://github.com/alexpinel/Dot) (GPL)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
