@@ -1098,6 +1098,104 @@ private:
 };
 
 //
+// RWKV tokenizer
+//
+
+static std::vector<uint8_t> llama_unescape_rwkv_token(const std::string & escaped) {
+    std::vector<uint8_t> output;
+
+    // Parser state
+    bool escaping = false;
+    uint8_t hex_remaining = 0;
+    uint8_t hex_acc = 0;
+
+    // Step through characters, performing parsing
+    for (const char & c : escaped) {
+        // If we're parsing a hex code, interpret the next character
+        if (hex_remaining != 0) {
+            uint8_t value = (c >= 'a') ? (c - 'a' + 10) : (c - '0');
+            hex_acc = (hex_acc << 4) + value;
+
+            hex_remaining -= 1;
+            if (hex_remaining == 0) {
+                output.push_back(hex_acc);
+                hex_acc = 0;
+            }
+
+            continue;
+        }
+
+        // If we got an escape character, interpret it
+        if (escaping) {
+            if (c == 't') {
+                output.push_back('\t');
+            } else if (c == 'n') {
+                output.push_back('\n');
+            } else if (c == 'r') {
+                output.push_back('\r');
+            } else if (c == 'x') {
+                hex_remaining = 2;
+            } else {
+                output.push_back(c);
+            }
+
+            escaping = false;
+            continue;
+        }
+
+        if (c == '\\') {
+            escaping = true;
+            continue;
+        }
+
+        output.push_back(c);
+    }
+
+    return output;
+}
+
+struct llm_tokenizer_rwkv {
+    llm_tokenizer_rwkv(const llama_vocab & vocab): vocab(vocab) {
+        // RWKV supports arbitrary byte tokens, but the vocab struct only supports string tokens.
+        // For now, we decode the vocab here into the lookup we'll use for tokenization.
+        for (const auto & token : vocab.id_to_token) {
+            auto data = llama_unescape_rwkv_token(token.text);
+            tokens.push_back(data);
+        }
+    }
+
+    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+        uint32_t position = 0;
+
+        while (position < text.size()) {
+            // Iterate through possible tokens backwards, starting with the largest
+            for (int32_t i = (int32_t)tokens.size() - 1; i >= 0; i--) {
+                uint32_t token_size = tokens[i].size();
+
+                // If there's not enough left for this token
+                if (text.size() - position < token_size) {
+                    continue;
+                }
+
+                // If the token doesn't match the data
+                if (std::memcmp(text.data() + position, tokens[i].data(), token_size) != 0) {
+                    continue;
+                }
+
+                // Add the token and advance
+                output.push_back(i);
+                position += token_size;
+                break;
+            }
+        }
+    }
+
+    const llama_vocab & vocab;
+
+    std::vector<std::vector<uint8_t>> tokens;
+};
+
+//
 // (de-) tokenize
 //
 
@@ -1401,6 +1499,23 @@ std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, 
                     output.push_back(vocab.special_eos_id);
                 }
             } break;
+        case LLAMA_VOCAB_TYPE_RWKV:
+            {
+                for (const auto & fragment : fragment_buffer) {
+                    if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
+                        auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
+
+#ifdef PRETOKENIZERDEBUG
+                        LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+#endif
+
+                        llm_tokenizer_rwkv tokenizer(vocab);
+                        tokenizer.tokenize(raw_text, output);
+                    } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
+                        output.push_back(fragment.token);
+                    }
+                }
+            } break;
         case LLAMA_VOCAB_TYPE_NONE:
             GGML_ABORT("fatal error");
     }
@@ -1615,6 +1730,17 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
                     return _try_copy(result.data(), result.size());
                 }
                 break;
+            }
+            case LLAMA_VOCAB_TYPE_RWKV: {
+                std::vector<uint8_t> result = llama_unescape_rwkv_token(token_text);
+
+                // If we don't have enough space, return an error
+                if (result.size() > (size_t)length) {
+                    return -(int)result.size();
+                }
+
+                memcpy(buf, result.data(), result.size());
+                return (int)result.size();
             }
             default:
                 GGML_ABORT("fatal error");
