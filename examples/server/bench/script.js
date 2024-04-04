@@ -87,6 +87,7 @@ export default function () {
         ],
         "model": model,
         "stream": false,
+        "seed": 42,
         "max_tokens": max_tokens
     }
 

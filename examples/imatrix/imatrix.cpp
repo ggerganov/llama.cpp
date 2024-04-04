@@ -98,35 +98,38 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
     const float * data = is_host ? (const float *) src1->data : m_src1_data.data();
 
+    // this has been adapted to the new format of storing merged experts in a single 3d tensor
+    // ref: https://github.com/ggerganov/llama.cpp/pull/6387
     if (t->op == GGML_OP_MUL_MAT_ID) {
         const int idx  = ((int32_t *) t->op_params)[0];
-        const int n_as = ((int32_t *) t->op_params)[1];
+        const ggml_tensor * ids = t->src[2];
+        const int n_as = src0->ne[2];
 
-        // the top-k selected expert ids are stored in the src0 tensor
-        // for simplicity, always copy src0 to host, because it is small
-        // take into account that src0 is not contiguous!
-        GGML_ASSERT(src0->ne[1] == src1->ne[1]);
-        GGML_ASSERT(n_as*ggml_nrows(src0)*sizeof(int) == GGML_PAD(ggml_nbytes(src0), n_as*sizeof(int)));
-        m_ids.resize(ggml_nbytes(src0)/sizeof(int));
-        ggml_backend_tensor_get(src0, m_ids.data(), 0, ggml_nbytes(src0));
+        // the top-k selected expert ids are stored in the ids tensor
+        // for simplicity, always copy ids to host, because it is small
+        // take into account that ids is not contiguous!
+        GGML_ASSERT(ids->ne[1] == src1->ne[1]);
+        GGML_ASSERT(n_as*ggml_nrows(ids)*sizeof(int) == GGML_PAD(ggml_nbytes(ids), n_as*sizeof(int)));
+        m_ids.resize(ggml_nbytes(ids)/sizeof(int));
+        ggml_backend_tensor_get(ids, m_ids.data(), 0, ggml_nbytes(ids));
+
+        auto & e = m_stats[wname];
+
+        ++e.ncall;
+        // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
+        //       using the following line, we can correct for that if needed by replacing the line above with:
+        //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
 
         // loop over all possible experts, regardless if they are used or not in the batch
-        // this is necessary to guarantee equal number of "ncall" for each tensor
         for (int ex = 0; ex < n_as; ++ex) {
-            src0 = t->src[2 + ex];
-            wname = filter_tensor_name(src0->name);
-            auto& e = m_stats[wname];
+            size_t e_start = ex*src1->ne[0];
             if (e.values.empty()) {
-                e.values.resize(src1->ne[0], 0);
+                e.values.resize(src1->ne[0]*n_as, 0);
             }
-            else if (e.values.size() != (size_t)src1->ne[0]) {
-                fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]);
+            else if (e.values.size() != (size_t)src1->ne[0]*n_as) {
+                fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
                 exit(1); //GGML_ASSERT(false);
             }
-            // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
-            //       using the following line, we can correct for that if needed
-            //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
-            ++e.ncall;
             if (m_params.verbosity > 1) {
                 printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
             }
@@ -136,7 +139,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
                 if (excur != ex) continue;
                 const float * x = data + row * src1->ne[0];
                 for (int j = 0; j < (int)src1->ne[0]; ++j) {
-                    e.values[j] += x[j]*x[j];
+                    e.values[e_start + j] += x[j]*x[j];
                 }
             }
             if (e.ncall > m_last_call) {

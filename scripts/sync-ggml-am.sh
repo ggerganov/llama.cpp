@@ -95,6 +95,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-backend-impl.h     -> ggml-backend-impl.h
     # src/ggml-backend.c          -> ggml-backend.c
     # src/ggml-common.h           -> ggml-common.h
+    # src/ggml-cuda/*             -> ggml-cuda/
     # src/ggml-cuda.cu            -> ggml-cuda.cu
     # src/ggml-cuda.h             -> ggml-cuda.h
     # src/ggml-impl.h             -> ggml-impl.h
@@ -128,6 +129,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/src\/ggml-backend-impl\.h/ggml-backend-impl.h/g' \
         -e 's/src\/ggml-backend\.c/ggml-backend.c/g' \
         -e 's/src\/ggml-common\.h/ggml-common.h/g' \
+        -e 's/src\/ggml-cuda\//ggml-cuda\//g' \
         -e 's/src\/ggml-cuda\.cu/ggml-cuda.cu/g' \
         -e 's/src\/ggml-cuda\.h/ggml-cuda.h/g' \
         -e 's/src\/ggml-impl\.h/ggml-impl.h/g' \
