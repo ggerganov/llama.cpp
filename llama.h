@@ -1007,9 +1007,37 @@ extern "C" {
 
 struct ggml_tensor;
 
+struct llama_partial_utf8 {
+    uint32_t value;    // bit value so far (unshifted)
+    int      n_remain; // num bytes remaining; -1 indicates invalid sequence
+};
+
+struct llama_grammar {
+    const std::vector<std::vector<llama_grammar_element>>   rules;
+    std::vector<std::vector<const llama_grammar_element *>> stacks;
+
+    // buffer for partially generated UTF-8 sequence from accepted tokens
+    llama_partial_utf8                                      partial_utf8;
+};
+
+struct llama_grammar_candidate {
+    size_t               index;
+    const uint32_t     * code_points;
+    llama_partial_utf8   partial_utf8;
+};
+
 const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
     struct llama_context * ctx
 );
+
+std::vector<std::vector<const llama_grammar_element *>> llama_grammar_accept(
+        const std::vector<std::vector<llama_grammar_element>>         & rules,
+        const std::vector<std::vector<const llama_grammar_element *>> & stacks,
+        const uint32_t                                                  chr);
+
+std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
+        const std::string & src,
+        llama_partial_utf8   partial_start);
 
 #endif // LLAMA_API_INTERNAL
 
