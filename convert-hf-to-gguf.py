@@ -149,6 +149,7 @@ class Model(ABC):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
+                print(tensor_map)
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
 
@@ -2344,6 +2345,8 @@ class CommandR2Model(Model):
 
         # max_position_embeddings = 8192 in config.json but model was actually
         # trained on 128k context length
+        if "model_max_length" not in self.hparams:
+            self.hparams["model_max_length"] =  131072
         self.hparams["max_position_embeddings"] = self.hparams["model_max_length"]
 
     def set_gguf_parameters(self):
