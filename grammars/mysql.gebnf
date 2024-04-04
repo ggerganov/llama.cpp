@@ -1,0 +1,48 @@
+
+
+
+
+
+# Define a table definition
+
+
+tablename ::= [a-zA-Z_][a-zA-Z0-9_]*
+
+# Define column definitions
+columndefinitions ::= columndefinition+
+
+# Define a column definition
+columndefinition ::= columnname " " datatype
+
+# Define a column name
+columnname ::= [a-zA-Z_][a-zA-Z0-9_]*
+
+# Define a data type
+datatype ::= "INT" | "VARCHAR" | "DATE" 
+
+# Define relationship definitions
+relationshipdefinitions ::= relationshipdefinition+
+
+# Define a relationship definition
+relationshipdefinition ::= "FOREIGN KEY (" columnname ") REFERENCES " tablename " (" columnname ")"
+
+# Define ID tokens for each table
+tableidtokens ::= tableidtoken+
+
+# Define an ID token for a table
+tableidtoken ::= tablename "_id"
+
+# Define predicates for each table ID
+tableidpredicates ::= tableidpredicate+
+
+# Define predicates for a table ID
+tableidpredicate ::= tableidtoken "." columnname
+
+# Define optional whitespace between components
+ws ::= [ \t\n]+
+
+tabledefinition ::= "CREATE TABLE " tablename " (" columndefinitions ")" "\n"
+
+tabledefinitions ::= tabledefinition+
+
+root ::= tabledefinitions relationshipdefinitions
