@@ -30,12 +30,14 @@ expr ::= term ("+" term)*
 term ::= numero
 number ::= [0-9]+)""";
 
+    fprintf(stderr, "NOTE: Error message (\"error parsing grammar\") expected on following line during successful test:\n");
+
     grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
 
     // Ensure we did NOT parsed correctly
     assert(parsed_grammar.rules.empty());
 
-    fprintf(stderr, "^ If previous line displays an error, then this test passed.\n");
+    fprintf(stderr, "End of expected error message. Test successful.\n");
 }
 
 static void test_simple_grammar() {
@@ -80,7 +82,7 @@ number ::= [0-9]+)""";
 
     assert(completed_grammar);
 
-    // Clean up allocated memory    
+    // Clean up allocated memory
     llama_grammar_free(grammar);
 }
 
@@ -222,7 +224,7 @@ ws ::= [ \t\n\r]?)""";
         grammar->stacks = original_stacks;
     }
 
-    // Clean up allocated memory    
+    // Clean up allocated memory
     llama_grammar_free(grammar);
 }
 
