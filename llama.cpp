@@ -5408,8 +5408,8 @@ static bool llm_load_tensors(
                         
                         if(n_layer >= 64)
                         {
-                            layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head});
-                            layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head_kv});
+                            layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {hparams.n_embd_head_k * hparams.n_head});
+                            layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {hparams.n_embd_head_k * hparams.n_head_kv});
                         }
                         
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
@@ -9462,17 +9462,17 @@ struct llm_build_context {
 
                 if(model.layers[il].attn_q_norm)
                 {
-                    Qcur = llm_build_norm(ctx0, Qcur, hparams,
+                    Qcur = llm_build_norm(ctx0, Qcur, hparams, 
                                 model.layers[il].attn_q_norm,
                                 NULL,
                                 LLM_NORM, cb, il);
                     cb(Qcur, "Qcur", il);
-
+                    
                     Kcur = llm_build_norm(ctx0, Kcur, hparams,
                             model.layers[il].attn_k_norm,
                             NULL,
                             LLM_NORM, cb, il);
-                    cb(Kcur, "Kcur", il);
+                    cb(Kcur, "Kcur", il);                  
                 }
 
                 Qcur = ggml_rope_custom(
