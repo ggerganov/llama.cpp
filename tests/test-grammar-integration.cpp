@@ -11,39 +11,6 @@
 #include <cassert>
 #include <string>
 
-static void test_failure_missing_root() {
-    // Test case for a grammar that is missing a root rule
-    const std::string grammar_str = R"""(rot ::= expr
-expr ::= term ("+" term)*
-term ::= number
-number ::= [0-9]+)""";
-
-    grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
-
-    // Ensure we parsed correctly
-    assert(!parsed_grammar.rules.empty());
-
-    // Ensure we do NOT have a root node
-    assert(parsed_grammar.symbol_ids.find("root") == parsed_grammar.symbol_ids.end());
-}
-
-static void test_failure_missing_reference() {
-    // Test case for a grammar that is missing a referenced rule
-    const std::string grammar_str = R"""(root ::= expr
-expr ::= term ("+" term)*
-term ::= numero
-number ::= [0-9]+)""";
-
-    fprintf(stderr, "NOTE: Error message (\"parse: error parsing grammar: Undefined rule identifier 'numero'\") expected on following line during successful test:\n");
-
-    grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
-
-    // Ensure we did NOT parsed correctly
-    assert(parsed_grammar.rules.empty());
-
-    fprintf(stderr, "End of expected error message. Test successful.\n");
-}
-
 static void test_simple_grammar() {
     // Test case for a simple grammar
     const std::string grammar_str = R"""(root ::= expr
@@ -232,6 +199,39 @@ ws ::= [ \t\n\r]?)""";
 
     // Clean up allocated memory
     llama_grammar_free(grammar);
+}
+
+static void test_failure_missing_root() {
+    // Test case for a grammar that is missing a root rule
+    const std::string grammar_str = R"""(rot ::= expr
+expr ::= term ("+" term)*
+term ::= number
+number ::= [0-9]+)""";
+
+    grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
+
+    // Ensure we parsed correctly
+    assert(!parsed_grammar.rules.empty());
+
+    // Ensure we do NOT have a root node
+    assert(parsed_grammar.symbol_ids.find("root") == parsed_grammar.symbol_ids.end());
+}
+
+static void test_failure_missing_reference() {
+    // Test case for a grammar that is missing a referenced rule
+    const std::string grammar_str = R"""(root ::= expr
+expr ::= term ("+" term)*
+term ::= numero
+number ::= [0-9]+)""";
+
+    fprintf(stderr, "NOTE: Error message (\"parse: error parsing grammar: Undefined rule identifier 'numero'\") expected on following line during successful test:\n");
+
+    grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
+
+    // Ensure we did NOT parsed correctly
+    assert(parsed_grammar.rules.empty());
+
+    fprintf(stderr, "End of expected error message. Test successful.\n");
 }
 
 int main() {
