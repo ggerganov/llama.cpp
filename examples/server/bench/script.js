@@ -96,13 +96,13 @@ export default function () {
     const params = {method: 'POST', body: JSON.stringify(payload)};
 
     const startTime = new Date()
-    let promptEvalTime = null
+    let promptEvalEndTime = null
     let prompt_tokens = 0
     let completions_tokens = 0
     const res = sse.open(`${server_url}/chat/completions`, params, function (client) {
         client.on('event', function (event) {
-            if (promptEvalTime == null) {
-                promptEvalTime = new Date()
+            if (promptEvalEndTime == null) {
+                promptEvalEndTime = new Date()
             }
 
             let chunk = JSON.parse(event.data)
@@ -131,8 +131,15 @@ export default function () {
 
     const endTime = new Date()
 
-    llamacpp_tokens_second.add(completions_tokens / (endTime - promptEvalTime) * 1.e3)
-    llamacpp_prompt_processing_second.add(prompt_tokens / (promptEvalTime - startTime) * 1.e3)
+    const promptEvalTime = promptEvalEndTime - startTime
+    if (promptEvalTime > 0) {
+        llamacpp_prompt_processing_second.add(prompt_tokens / (promptEvalEndTime - startTime) * 1.e3)
+    }
+
+    const completion_time = endTime - promptEvalEndTime
+    if (completions_tokens > 0 && completion_time > 0) {
+        llamacpp_tokens_second.add(completions_tokens / completion_time * 1.e3)
+    }
 
     sleep(0.3)
 }
