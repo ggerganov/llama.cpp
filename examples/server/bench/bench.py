@@ -180,16 +180,16 @@ xychart-beta
     bench_results = {
         "i": iterations,
         "req": {
-            "p90": round(data['metrics']["http_req_duration"]["p(90)"], 2),
+            "p95": round(data['metrics']["http_req_duration"]["p(95)"], 2),
             "avg": round(data['metrics']["http_req_duration"]["avg"], 2),
         },
         "pp": {
-            "p90": round(data['metrics']["llamacpp_prompt_processing_second"]["p(90)"], 2),
+            "p95": round(data['metrics']["llamacpp_prompt_processing_second"]["p(95)"], 2),
             "avg": round(data['metrics']["llamacpp_prompt_processing_second"]["avg"], 2),
             "0": round(mean(prometheus_metrics['prompt_tokens_seconds']), 2),
         },
         "tg": {
-            "p90": round(data['metrics']["llamacpp_tokens_second"]["p(90)"], 2),
+            "p95": round(data['metrics']["llamacpp_tokens_second"]["p(95)"], 2),
             "avg": round(data['metrics']["llamacpp_tokens_second"]["avg"], 2),
             "0": round(mean(prometheus_metrics['predicted_tokens_seconds']), 2),
         },
