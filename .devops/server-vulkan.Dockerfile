@@ -20,7 +20,7 @@ WORKDIR /app
 COPY . .
 RUN mkdir build && \
     cd build && \
-    cmake .. -DLLAMA_VULKAN=1 -dLLAMA_CURL=1 && \
+    cmake .. -DLLAMA_VULKAN=1 -DLLAMA_CURL=1 && \
     cmake --build . --config Release --target server
 
 # Clean up
