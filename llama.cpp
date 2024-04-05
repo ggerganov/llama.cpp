@@ -5405,13 +5405,13 @@ static bool llm_load_tensors(
                         auto & layer = model.layers[i];
 
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
-                        
-                        if(n_layer >= 64)
+
+                        if (n_layer >= 64) 
                         {
-                            layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {hparams.n_embd_head_k * hparams.n_head});
-                            layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {hparams.n_embd_head_k * hparams.n_head_kv});
+                            layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head});
+                            layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head_kv});
                         }
-                        
+
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
                         layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
                         layer.wv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa});
@@ -9460,19 +9460,31 @@ struct llm_build_context {
                     cb(Vcur, "Vcur", il);
                 }
 
-                if(model.layers[il].attn_q_norm)
+                if (model.layers[il].attn_q_norm)
                 {
-                    Qcur = llm_build_norm(ctx0, Qcur, hparams, 
+                    
+                    Qcur = ggml_view_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens,
+                                ggml_element_size(Qcur) * n_embd_head,
+                                ggml_element_size(Qcur) * n_embd_head * n_head,
+                                0);
+                    cb(Qcur, "Qcur", il);
+                    Kcur = ggml_view_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens,
+                                ggml_element_size(Kcur) * n_embd_head,
+                                ggml_element_size(Kcur) * n_embd_head * n_head_kv,
+                                0);
+                    cb(Kcur, "Kcur", il);
+                    
+                    Qcur = llm_build_norm(ctx0, Qcur, hparams,
                                 model.layers[il].attn_q_norm,
                                 NULL,
                                 LLM_NORM, cb, il);
                     cb(Qcur, "Qcur", il);
-                    
+
                     Kcur = llm_build_norm(ctx0, Kcur, hparams,
                             model.layers[il].attn_k_norm,
                             NULL,
                             LLM_NORM, cb, il);
-                    cb(Kcur, "Kcur", il);                  
+                    cb(Kcur, "Kcur", il);
                 }
 
                 Qcur = ggml_rope_custom(
@@ -13085,9 +13097,15 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         return std::make_pair(i_layer, n_layer);
     };
 
+    // Command-R+ has such a large embedding weight tensor it overflows
+    // 32-bit signed integers. This is band-aid until quants can deal with
+    // that.
+    if (name == "token_embd.weight" && arch == LLM_ARCH_COMMAND_R && qs.model.hparams.n_layer >= 64) {
+        new_type = GGML_TYPE_F16;
+    }
     // for arches that share the same tensor between the token embeddings and the output, we quantize the token embeddings
     // with the quantization of the output tensor
-    if (name == tn(LLM_TENSOR_OUTPUT, "weight") || (!qs.has_output && name == tn(LLM_TENSOR_TOKEN_EMBD, "weight"))) {
+    else if (name == tn(LLM_TENSOR_OUTPUT, "weight") || (!qs.has_output && name == tn(LLM_TENSOR_TOKEN_EMBD, "weight"))) {
         if (qs.params->output_tensor_type < GGML_TYPE_COUNT) {
             new_type = qs.params->output_tensor_type;
         } else {
@@ -13119,6 +13137,11 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                 new_type = GGML_TYPE_IQ3_S;
             }
         }
+        
+    } else if ((arch == LLM_ARCH_COMMAND_R) &&
+               (name.find("q_norm") != std::string::npos ||
+                name.find("k_norm") != std::string::npos)) {
+        new_type = GGML_TYPE_F32;
     } else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
                ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M    || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
         if (name.find("attn_v.weight") != std::string::npos) {
