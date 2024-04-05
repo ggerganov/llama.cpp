@@ -296,6 +296,9 @@ class GGUFWriter:
     def add_author(self, author: str) -> None:
         self.add_string(Keys.General.AUTHOR, author)
 
+    def add_version(self, version: str) -> None:
+        self.add_string(Keys.General.VERSION, version)
+
     def add_tensor_data_layout(self, layout: str) -> None:
         self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
@@ -304,6 +307,9 @@ class GGUFWriter:
 
     def add_description(self, description: str) -> None:
         self.add_string(Keys.General.DESCRIPTION, description)
+
+    def add_licence(self, licence: str) -> None:
+        self.add_string(Keys.General.LICENSE, licence)
 
     def add_source_url(self, url: str) -> None:
         self.add_string(Keys.General.SOURCE_URL, url)
