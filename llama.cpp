@@ -1648,6 +1648,28 @@ static size_t llama_get_device_memory(int device) {
 #endif
 }
 
+// TODO: implement for other backends to return free memory
+static size_t llama_get_available_device_memory(int device) {
+#if defined(GGML_USE_CUDA)
+    size_t free;
+    ggml_backend_cuda_get_free_device_memory(device, &free);
+    return free;
+#elif defined(GGML_USE_SYCL)
+    size_t total;
+    size_t free;
+    ggml_backend_sycl_get_device_memory(device, &total, &free);
+    return free;
+#elif defined(GGML_USE_VULKAN)
+    size_t total;
+    size_t free;
+    ggml_backend_vk_get_device_memory(device, &total, &free);
+    return free;
+#else
+    return 1;
+    GGML_UNUSED(device);
+#endif
+}
+
 //
 // globals
 //
@@ -4327,6 +4349,32 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
 }
 
+static int llm_determine_max_ngl(const llama_model_loader & ml, const llama_model & model, const int main_gpu) {
+    const auto & hparams = model.hparams;
+
+    size_t available_gpu_memory = llama_get_available_device_memory(main_gpu);
+
+    // TODO: This is a rough, pretty inaccurate estimate, should implement using existing layer size and not guesstimating
+    size_t model_size = ml.n_bytes;
+    int32_t model_layers = hparams.n_layer;
+    size_t memory_per_layer = model_size / model_layers;
+
+    // TODO: get buffer size dynamically
+    int32_t buf_size = 400 * MiB;
+    int32_t buf_size_k = 200 * MiB;
+    int32_t buf_size_v = 200 * MiB;
+
+    int32_t total_buf_size = buf_size + buf_size_k + buf_size_v;
+
+    available_gpu_memory = available_gpu_memory - hparams.n_ctx_train; // context size
+    available_gpu_memory = available_gpu_memory - total_buf_size; // buffer size
+
+    // Calculate the maximum number of layers that can fit into the GPU memory
+    int32_t max_ngl = std::floor(static_cast<float>(available_gpu_memory) / memory_per_layer);
+
+    return max_ngl;
+}
+
 // Returns false if cancelled by progress_callback
 static bool llm_load_tensors(
         llama_model_loader & ml,
@@ -4341,6 +4389,11 @@ static bool llm_load_tensors(
     model.t_start_us = ggml_time_us();
 
     auto & hparams = model.hparams;
+
+    if (n_gpu_layers == -2) {
+        n_gpu_layers = llm_determine_max_ngl(ml, model, main_gpu);
+        LLAMA_LOG_INFO("%s: automatically set n_gpu_layers = %d\n", __func__, n_gpu_layers);
+    }
 
     model.split_mode   = split_mode;
     model.main_gpu     = main_gpu;
