@@ -1500,7 +1500,13 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
     GGML_UNREACHABLE();
 }
 
+// Validate if a filename is safe to use
+// To validate a full path, split the path by the OS-specific path separator, and validate each part with this function
 bool validate_file_name(const std::string & filename) {
+    if (!filename.length()) {
+        // Empty filename invalid
+        return false;
+    }
     if (filename.length() > 255) {
         // Limit at common largest possible filename on Linux filesystems
         // to avoid unnecessary further validation
@@ -1546,7 +1552,7 @@ bool validate_file_name(const std::string & filename) {
         }
     }
 
-    // Reject any ".." (this is stricter than checking for ../ combinations)
+    // Reject any ".." (currently stricter than necessary, it should be fine to just check for == ".." instead)
     if (filename.find("..") != std::string::npos) {
         return false;
     }
