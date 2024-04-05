@@ -2615,8 +2615,8 @@ static enum ggml_status ggml_metal_graph_compute(
 
                             // simdgroups per threadgroup (a.k.a. warps)
                             // for small batches use more simdgroups (needs more tests, to confirm if it's worth it)
-                            //const int64_t nsg = MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32));
-                            const int64_t nsg = 1;
+                            const int64_t nsg = MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32));
+                            //const int64_t nsg = 1;
 
                             const size_t smem = nqptg*(ne00 + nsg*(ncpsg + nqptg))*(sizeof(float)/2);
 
