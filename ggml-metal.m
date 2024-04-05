@@ -2573,7 +2573,7 @@ static enum ggml_status ggml_metal_graph_compute(
                         [encoder setBytes:&scale   length:sizeof(   float) atIndex:27];
 
                         // half8x8 kernel
-                        if (ne01 > 1) {
+                        if (ne01 > 1 || (ne00%128 != 0)) {
                             const int64_t nqptg = 8;  // queries per threadgroup    !! sync with kernel template arguments !!
                             const int64_t ncpsg = 32; // cache values per simdgroup !! sync with kernel template arguments !!
 
@@ -2603,8 +2603,13 @@ static enum ggml_status ggml_metal_graph_compute(
 
                             // simdgroups per threadgroup (a.k.a. warps)
                             // for small batches use more simdgroups (needs more tests, to confirm if it's worth it)
-                            //const int64_t nsg = MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32));
-                            const int64_t nsg = 8;
+                            const int64_t nsgt = MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32));
+
+                            int64_t nsg = 1;
+                            while (nsg <= nsgt) {
+                                nsg *= 2;
+                            }
+                            nsg /= 2;
 
                             // require power of 2
                             //{
