@@ -1552,6 +1552,12 @@ bool validate_file_name(const std::string & filename) {
         }
     }
 
+    // Reject any leading or trailing ' ', or any trailing '.', these are stripped on Windows and will cause a different filename
+    // Unicode and other whitespace is not affected, only 0x20 space
+    if (filename.front() == ' ' || filename.back() == ' ' || filename.back() == '.') {
+        return false;
+    }
+
     // Reject any ".." (currently stricter than necessary, it should be fine to just check for == ".." instead)
     if (filename.find("..") != std::string::npos) {
         return false;
