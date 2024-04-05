@@ -16,6 +16,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cinttypes>
+#include <codecvt>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -27,7 +28,6 @@
 #ifndef NOMINMAX
 #   define NOMINMAX
 #endif
-#include <codecvt>
 #include <locale>
 #include <windows.h>
 #include <fcntl.h>
@@ -1528,6 +1528,7 @@ bool validate_file_name(const std::string & filename) {
     // - Unicode equivalents of illegal characters
     // - UTF-16 surrogate pairs
     // - UTF-8 replacement character
+    // - Byte order mark (BOM)
     // - Illegal characters: / \ : * ? " < > |
     for (char32_t c : filename_utf32) {
         if (c <= 0x1F // Control characters (C0)
@@ -1538,6 +1539,7 @@ bool validate_file_name(const std::string & filename) {
             || c == 0x2216 // Set Minus (backslash equivalent)
             || (c >= 0xD800 && c <= 0xDFFF) // UTF-16 surrogate pairs
             || c == 0xFFFD // Replacement Character (UTF-8)
+            || c == 0xFEFF // Byte Order Mark (BOM)
             || c == '/' || c == '\\' || c == ':' || c == '*' // Illegal characters
             || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
             return false;
