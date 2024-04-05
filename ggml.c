@@ -20335,7 +20335,7 @@ size_t ggml_quantize_chunk(
                    int   nrows,
                    int   n_per_row,
            const float * imatrix) {
-    const int n = nrows * n_per_row;
+    const size_t n = (size_t) nrows * n_per_row;
 
     if (ggml_quantize_requires_imatrix(type)) {
         GGML_ASSERT(imatrix != NULL);
