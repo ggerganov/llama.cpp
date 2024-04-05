@@ -42,7 +42,7 @@ static json parseValue(const std::string& content) {
 
 
 // Recursive function to parse and create JSON for the outer function calls
-static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, const char* source_code, uint32_t indent = 0) {
+static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, const char* source_code, json tool_name_map, uint32_t indent = 0) {
     auto type = ts_node_type(node);
 
     // printf("type: %s\n", type);
@@ -60,8 +60,14 @@ static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, con
         TSNode argumentsNode = ts_node_child(node, 1); // The arguments node
         
         // Extract the function name
-        call["name"] = std::string(source_code + ts_node_start_byte(functionNode), ts_node_end_byte(functionNode) - ts_node_start_byte(functionNode));
+        std::string func_name = std::string(source_code + ts_node_start_byte(functionNode), ts_node_end_byte(functionNode) - ts_node_start_byte(functionNode));
+        if (tool_name_map.find(func_name) != tool_name_map.end()){
+            call["name"] = tool_name_map[func_name];
+        } else {
+            call["name"] = func_name;
+        }
         
+        printf("function name: %s\n", call["name"].dump().c_str());
         unsigned int numArgs = ts_node_named_child_count(argumentsNode);
         for (unsigned int i = 0; i < numArgs; ++i) {
             TSNode argNode = ts_node_named_child(argumentsNode, i);
@@ -94,11 +100,11 @@ static void parseFunctionCalls(const TSNode& node, std::vector<json>& calls, con
     unsigned int numChildren = ts_node_child_count(node);
     for (unsigned int i = 0; i < numChildren; ++i) {
         TSNode child = ts_node_child(node, i);
-        parseFunctionCalls(child, calls, source_code, indent+1);
+        parseFunctionCalls(child, calls, source_code, tool_name_map, indent+1);
     }
 }
 
-static std::vector<json> parsePythonFunctionCalls(std::string source_string) {
+static std::vector<json> parsePythonFunctionCalls(std::string source_string, json tool_name_map) {
     // Parse Python function calls from the source code and return a JSON array
     std::vector<json> calls;
     std::string delimiter = "<<functions>>";
@@ -124,7 +130,7 @@ static std::vector<json> parsePythonFunctionCalls(std::string source_string) {
         return calls;
     }
 
-    parseFunctionCalls(root_node, calls, source_code_cstr, 0);
+    parseFunctionCalls(root_node, calls, source_code_cstr,tool_name_map, 0);
 
     ts_tree_delete(tree);
     ts_parser_delete(parser);

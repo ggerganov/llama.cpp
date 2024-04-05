@@ -10,6 +10,8 @@
 #include <vector>
 #include <sstream>
 #include <random>
+#include <unordered_map>
+#include <algorithm>
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
@@ -337,8 +339,9 @@ static json probs_vector_to_json(const llama_context * ctx, const std::vector<co
 //
 
 
-static std::string rubra_format_function_call_str(const std::vector<json> & functions) {
+static std::string rubra_format_function_call_str(const std::vector<json> & functions, json & tool_name_map) {
     std::string final_str = "You have access to the following tools:\n";
+    printf("rubra_format_function_call_str parsing...\n");
     json type_mapping = {
         {"string", "str"},
         {"integer", "int"},
@@ -352,10 +355,15 @@ static std::string rubra_format_function_call_str(const std::vector<json> & func
     std::vector<std::string> function_definitions;
     for (const auto & function : functions) {
         const auto &spec = function.contains("function") ? function["function"] : function;
-        const std::string func_name = spec.value("name", "");
-        const std::string description = spec.value("description", "");
-        const auto& parameters = spec.contains("parameters") ? spec["parameters"].value("properties", json({})) : json({});
-        const auto& required_params = spec.contains("parameters") ? spec["parameters"].value("required", std::vector<std::string>()) : std::vector<std::string>();
+        std::string func_name = spec.value("name", "");
+        if (func_name.find('-') != std::string::npos) {
+            const std::string origin_func_name = func_name;
+            std::replace(func_name.begin(), func_name.end(), '-', '_'); // replace "-" with "_" because - is invalid in python func name
+            tool_name_map[func_name] = origin_func_name;
+        }
+        const std::string description = spec.contains("description") ? spec["description"].get<std::string>() : "";
+        const auto& parameters = spec.contains("parameters") && spec["parameters"].contains("properties")? spec["parameters"].value("properties", json({})) : json({});
+        const auto& required_params = spec.contains("parameters") && spec["parameters"].contains("properties")? spec["parameters"].value("required", std::vector<std::string>()) : std::vector<std::string>();
 
         std::vector<std::string> func_args;
         for (auto it = parameters.begin(); it != parameters.end(); ++it) {
@@ -481,15 +489,16 @@ static json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     std::string function_str = "";
+    json tool_name_map;
 
     if (body.contains("tools") && !body["tools"].empty()) {
         // function_str = default_tool_formatter(body["tool"]);
-        function_str = rubra_format_function_call_str(body["tools"]);
+        function_str = rubra_format_function_call_str(body["tools"], tool_name_map);
     }
     // If 'tool' is not set or empty, check 'functions'
     else if (body.contains("functions") && !body["functions"].empty()) {
     //    function_str = default_tool_formatter(body["functions"]);
-       function_str = rubra_format_function_call_str(body["functions"]);
+       function_str = rubra_format_function_call_str(body["functions"], tool_name_map);
     }
     printf("\n=============Formatting Input from OPENAI format...============\n");
     if (function_str != "") {
@@ -607,6 +616,7 @@ static json oaicompat_completion_params_parse(
     else {
         llama_params["prompt"] = format_chat(model, chat_template, body["messages"]);
     }
+    llama_params["tool_name_map"] = tool_name_map;
 
     // Map OpenAI parameters to llama.cpp parameters
     //
@@ -661,9 +671,8 @@ static json format_final_response_oaicompat(const json & request, json result, c
     int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
     std::string content      = json_value(result, "content", std::string(""));
 
-    std::vector<json> parsed_content = parsePythonFunctionCalls(content);
+    std::vector<json> parsed_content = parsePythonFunctionCalls(content, request["tool_name_map"]);
     
-
     std::string finish_reason = "length";
     if (stopped_word || stopped_eos) {
         finish_reason = "stop";
@@ -732,7 +741,7 @@ static json format_final_response_oaicompat(const json & request, json result, c
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(json result, const std::string & completion_id) {
+static std::vector<json> format_partial_response_oaicompat(json request ,json result, const std::string & completion_id) {
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
         return std::vector<json>({result});
     }
@@ -745,6 +754,66 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
     bool stopped_limit  = json_value(result, "stopped_limit", false);
     std::string content = json_value(result, "content",       std::string(""));
 
+    std::vector<json> parsed_content = parsePythonFunctionCalls(content, request["tool_name_map"]);
+    std::time_t t = std::time(0);
+    if (!parsed_content.empty()) {
+        std::vector<json> res;
+        json choices1 = json::array({json{{"finish_reason", nullptr},
+                                            {"index", 0},
+                                            {"delta", json{{"role", "assistant"}}}}});
+        
+        json ret = json{
+            {"choices", choices1},
+            {"created", t},
+            {"id",      completion_id},
+            {"model",   modelname},
+            {"object",  "chat.completion.chunk"}
+        };
+        res.push_back(ret);
+
+        for (size_t i = 0; i < parsed_content.size(); ++i) {
+                const auto &pc = parsed_content[i];
+                // Use 'pc' and 'i' as needed
+                json tool_call1;
+                tool_call1["id"] = pc["id"];
+                tool_call1["type"] = "function";
+                tool_call1["index"] = i;
+                tool_call1["function"] = json{
+                    {"name" , pc["name"]},
+                    {"arguments" , ""},
+                };
+                json ret1 = json{
+                    {"choices", json::array({json{{"finish_reason", nullptr},
+                                            {"index", 0},
+                                            {"delta", json{{"tool_calls", std::vector<json>{tool_call1}}}}}})
+                                            },
+                    {"created", t},
+                    {"id",      completion_id},
+                    {"model",   modelname},
+                    {"object",  "chat.completion.chunk"}
+                };
+                res.push_back(ret1);
+                json tool_call2;
+                tool_call2["index"] = i;
+                tool_call2["function"] = json{
+                    {"name" , ""},
+                    {"arguments" , pc["kwargs"].dump()},
+                };
+                json ret2 = json{
+                    {"choices", json::array({json{{"finish_reason", nullptr},
+                                            {"index", 0},
+                                            {"delta", json{{"tool_calls", std::vector<json>{tool_call2}}}}}})
+                                            },
+                    {"created", t},
+                    {"id",      completion_id},
+                    {"model",   modelname},
+                    {"object",  "chat.completion.chunk"}
+                };
+                res.push_back(ret2);
+            }
+        return res;
+    }
+
     std::string finish_reason;
     if (stopped_word || stopped_eos) {
         finish_reason = "stop";
@@ -753,7 +822,7 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
         finish_reason = "length";
     }
 
-    std::time_t t = std::time(0);
+    
 
     json choices;
 

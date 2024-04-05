@@ -3230,7 +3230,6 @@ int main(int argc, char ** argv) {
     const auto handle_chat_completions = [&ctx_server, &sparams, &res_error](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), sparams.chat_template);
-
         const int id_task = ctx_server.queue_tasks.get_new_id();
 
         ctx_server.queue_results.add_waiting_task_id(id_task);
@@ -3249,12 +3248,26 @@ int main(int argc, char ** argv) {
             }
             ctx_server.queue_results.remove_waiting_task_id(id_task);
         } else {
-            const auto chunked_content_provider = [id_task, &ctx_server, completion_id](size_t, httplib::DataSink & sink) {
+            const auto chunked_content_provider = [id_task, &ctx_server, completion_id, data](size_t, httplib::DataSink & sink) {
+                std::string all_content = "";
                 while (true) {
                     server_task_result result = ctx_server.queue_results.recv(id_task);
-                    if (!result.error) {
-                        std::vector<json> result_array = format_partial_response_oaicompat(result.data, completion_id);
 
+                    std::string this_content = json_value(result.data, "content", std::string(""));
+                    // TODO: this block is just a hacky solution to enable function calling in streaming -- by concat the streaming chunks.
+                    // Ideally: If the first a few tokens is <<functions>>, it should keep waiting for all chunks, otherwise do normal stream logic.
+                    if (this_content != "") {
+                        all_content += this_content;
+                        continue;
+                    } else {
+                        if (all_content != "") {
+                            result.data["content"] = all_content;
+                            all_content = "";
+                        }
+                    }
+
+                    if (!result.error) {
+                        std::vector<json> result_array = format_partial_response_oaicompat(data, result.data, completion_id);
                         for (auto it = result_array.begin(); it != result_array.end(); ++it) {
                             if (!it->empty()) {
                                 const std::string str =
