@@ -2344,14 +2344,14 @@ class CommandR2Model(Model):
 
         # max_position_embeddings = 8192 in config.json but model was actually
         # trained on 128k context length
-
         self.hparams["max_position_embeddings"] = self.hparams["model_max_length"]
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         self.gguf_writer.add_logit_scale(self.hparams["logit_scale"])
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
-        
+
+
 ###### CONVERSION LOGIC ######
 
 
