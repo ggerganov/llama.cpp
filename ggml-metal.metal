@@ -2516,7 +2516,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
     threadgroup half4 * sr4 = (threadgroup half4 *) (shared + sgitg*D  + Q*T); // scratch buffer for the results
 
     // store the result for all queries in local memory in 8x8 matrices (the O matrix from the paper)
-    half4 lo[Q][D4];
+    half4 lo[Q][D4/NW];
 
     // load heads from Q to shared memory
     for (short j = sgitg; j < Q; j += nsg) {
@@ -2534,7 +2534,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
     // zero out lo
     for (short j = 0; j < Q; ++j) {
         for (short i = tiisg; i < D4; i += NW) {
-            lo[j][i] = 0.0h;
+            lo[j][i/NW] = 0.0h;
         }
     }
 
@@ -2711,7 +2711,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
 
                 for (short i = tiisg; i < D4; i += NW) {
                     //simdgroup_multiply(lo[j][i], mm, lo[j][i]);
-                    lo[j][i] = lo[j][i]*mm;
+                    lo[j][i/NW] = lo[j][i/NW]*mm;
                 }
             }
 
@@ -2722,7 +2722,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
 
                     for (short i = tiisg; i < D4; i += NW) {
                         for (short j = 0; j < Q; ++j) {
-                            lo[j][i] += pv4[i]*ss[j*T + cc];
+                            lo[j][i/NW] += pv4[i]*ss[j*T + cc];
                         }
                     }
                 }
@@ -2743,7 +2743,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
     // store results to shared memory
     for (short j = 0; j < Q; ++j) {
         for (short i = tiisg; i < D4; i += NW) {
-            sr4[i] = lo[j][i];
+            sr4[i] = lo[j][i/NW];
         }
     }
 
@@ -2805,10 +2805,10 @@ kernel void kernel_flash_attn_ext_vec_f16(
     }
 }
 
-template [[host_name("kernel_flash_attn_ext_vec_f16_h64" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<64,  1, 32>;
-template [[host_name("kernel_flash_attn_ext_vec_f16_h80" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<80,  1, 32>;
-template [[host_name("kernel_flash_attn_ext_vec_f16_h96" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<96,  1, 32>;
-template [[host_name("kernel_flash_attn_ext_vec_f16_h112")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<112, 1, 32>;
+template [[host_name("kernel_flash_attn_ext_vec_f16_h64" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<128, 2, 32>;
+template [[host_name("kernel_flash_attn_ext_vec_f16_h80" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<128, 3, 32>;
+template [[host_name("kernel_flash_attn_ext_vec_f16_h96" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<128, 4, 32>;
+template [[host_name("kernel_flash_attn_ext_vec_f16_h112")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<128, 5, 32>;
 template [[host_name("kernel_flash_attn_ext_vec_f16_h128")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<128, 1, 32>;
 template [[host_name("kernel_flash_attn_ext_vec_f16_h256")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<256, 1, 32>;
 
