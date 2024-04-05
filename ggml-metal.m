@@ -2615,13 +2615,23 @@ static enum ggml_status ggml_metal_graph_compute(
 
                             // simdgroups per threadgroup (a.k.a. warps)
                             // for small batches use more simdgroups (needs more tests, to confirm if it's worth it)
-                            const int64_t nsg = MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32));
+                            //const int64_t nsg = MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32));
+                            const int64_t nsg = 8;
 
-                            const size_t smem = nqptg*(ne00 + nsg*(ncpsg + nqptg))*(sizeof(float)/2);
+                            // require power of 2
+                            //{
+                            //    int64_t nsgm = 1;
+                            //    while (nsgm < nsg) {
+                            //        nsgm *= 2;
+                            //    }
+                            //    GGML_ASSERT(nsg == nsgm);
+                            //}
+
+                            const size_t smem = (nqptg*(ne00 + nsg*(ncpsg + nqptg)) + nsg*ne00)*(sizeof(float)/2);
 
                             //printf("smem: %zu, max: %zu\n", smem, ctx->device.maxThreadgroupMemoryLength);
                             GGML_ASSERT(smem <= ctx->device.maxThreadgroupMemoryLength);
-                            [encoder setThreadgroupMemoryLength:smem atIndex:0];
+                            [encoder setThreadgroupMemoryLength:GGML_PAD(smem, 16) atIndex:0];
 
                             [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nqptg - 1)/nqptg, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
                         }
