@@ -214,6 +214,14 @@ mulmat_head = """#version 450
 #extension GL_EXT_control_flow_attributes : enable
 #extension GL_EXT_shader_16bit_storage : require
 
+#ifdef MUL_MAT_ID
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_scalar_block_layout : require
+
+#define EXPERT_COUNT 8
+#endif
+
 #ifndef LOAD_VEC_A
 #define LOAD_VEC_A 1
 #endif
@@ -225,9 +233,22 @@ mulmat_head = """#version 450
 mulmat_body1 = """
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
+#ifdef MUL_MAT_ID
+layout (binding = 0) readonly buffer IDS {int data_ids[];};
+#else
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+#endif
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
+
+#ifdef MUL_MAT_ID
+layout (buffer_reference) readonly buffer InputA {A_TYPE data[];};
+layout (binding = 3) readonly buffer tensor_input_a {InputA data_a_ptr[EXPERT_COUNT];};
+
+#define DATA_A data_a.data
+#else
+#define DATA_A data_a
+#endif
 
 layout (push_constant) uniform parameter
 {
@@ -247,6 +268,12 @@ layout (push_constant) uniform parameter
     uint batch_stride_a;
     uint batch_stride_b;
     uint batch_stride_d;
+    uint expert_stride_b;
+    uint expert_stride_d;
+
+    uint idx;
+    uint nbi1;
+    uint n_as;
 } p;
 
 layout (constant_id = 1) const uint BM = 64;
@@ -263,8 +290,11 @@ shared FLOAT_TYPE buf_a[BM * (BK+1)];
 shared FLOAT_TYPE buf_b[BN * (BK+1)];
 
 void main() {
-    const uint i13 = gl_GlobalInvocationID.z / p.ne12;
-    const uint i12 = gl_GlobalInvocationID.z % p.ne12;
+    const uint batch_idx = gl_GlobalInvocationID.z / p.n_as;
+    const uint expert_idx = gl_GlobalInvocationID.z % p.n_as;
+
+    const uint i13 = batch_idx / p.ne12;
+    const uint i12 = batch_idx % p.ne12;
 
     const uint i03 = i13 / p.broadcast3;
     const uint i02 = i12 / p.broadcast2;
@@ -296,11 +326,16 @@ void main() {
     const uint loadstride_a = gl_WorkGroupSize.x * LOAD_VEC_A / BK;
     const uint loadstride_b = gl_WorkGroupSize.x * LOAD_VEC_B / BK;
 
+#ifdef MUL_MAT_ID
+    const uint expert_id = data_ids[p.idx + expert_idx * p.nbi1];
+    InputA data_a = data_a_ptr[expert_id];
+#endif
+
     const uint start_k = ik * p.k_split;
     const uint end_k = min(p.K, (ik + 1) * p.k_split);
 
     uint pos_a = (batch_idx_a * p.batch_stride_a + ir * BM * p.stride_a + start_k) / LOAD_VEC_A;
-    uint pos_b = (gl_GlobalInvocationID.z * p.batch_stride_b + ic * BN * p.stride_b + start_k) / LOAD_VEC_B;
+    uint pos_b = (expert_idx * p.expert_stride_b + batch_idx * p.batch_stride_b + ic * BN * p.stride_b + start_k) / LOAD_VEC_B;
 
     float sums[WMITER * TM * WNITER * TN];
     FLOAT_TYPE cache_a[WMITER * TM];
@@ -317,24 +352,24 @@ mulmat_load_scalar = """
 #if LOAD_VEC_A == 8
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
             const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
-            buf_a[buf_idx    ] = FLOAT_TYPE(data_a[idx][0].x);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(data_a[idx][0].y);
-            buf_a[buf_idx + 2] = FLOAT_TYPE(data_a[idx][0].z);
-            buf_a[buf_idx + 3] = FLOAT_TYPE(data_a[idx][0].w);
-            buf_a[buf_idx + 4] = FLOAT_TYPE(data_a[idx][1].x);
-            buf_a[buf_idx + 5] = FLOAT_TYPE(data_a[idx][1].y);
-            buf_a[buf_idx + 6] = FLOAT_TYPE(data_a[idx][1].z);
-            buf_a[buf_idx + 7] = FLOAT_TYPE(data_a[idx][1].w);
+            buf_a[buf_idx    ] = FLOAT_TYPE(DATA_A[idx][0].x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(DATA_A[idx][0].y);
+            buf_a[buf_idx + 2] = FLOAT_TYPE(DATA_A[idx][0].z);
+            buf_a[buf_idx + 3] = FLOAT_TYPE(DATA_A[idx][0].w);
+            buf_a[buf_idx + 4] = FLOAT_TYPE(DATA_A[idx][1].x);
+            buf_a[buf_idx + 5] = FLOAT_TYPE(DATA_A[idx][1].y);
+            buf_a[buf_idx + 6] = FLOAT_TYPE(DATA_A[idx][1].z);
+            buf_a[buf_idx + 7] = FLOAT_TYPE(DATA_A[idx][1].w);
 #elif LOAD_VEC_A == 4
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
             const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
-            buf_a[buf_idx    ] = FLOAT_TYPE(data_a[idx].x);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(data_a[idx].y);
-            buf_a[buf_idx + 2] = FLOAT_TYPE(data_a[idx].z);
-            buf_a[buf_idx + 3] = FLOAT_TYPE(data_a[idx].w);
+            buf_a[buf_idx    ] = FLOAT_TYPE(DATA_A[idx].x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(DATA_A[idx].y);
+            buf_a[buf_idx + 2] = FLOAT_TYPE(DATA_A[idx].z);
+            buf_a[buf_idx + 3] = FLOAT_TYPE(DATA_A[idx].w);
 #else
             if (ir * BM + loadc_a + l < p.M && block + loadr_a < end_k) {
-                buf_a[(loadc_a + l) * (BK+1) + loadr_a] = FLOAT_TYPE(data_a[pos_a + (loadc_a + l) * p.stride_a + loadr_a]);
+                buf_a[(loadc_a + l) * (BK+1) + loadr_a] = FLOAT_TYPE(DATA_A[pos_a + (loadc_a + l) * p.stride_a + loadr_a]);
             } else {
                 buf_a[(loadc_a + l) * (BK+1) + loadr_a] = FLOAT_TYPE(0.0f);
             }
@@ -348,8 +383,8 @@ mulmat_load_q4_0 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(data_a[ib].d);
-            const uint vui = uint(data_a[ib].qs[iqs]);
+            const float d = float(DATA_A[ib].d);
+            const uint vui = uint(DATA_A[ib].qs[iqs]);
             const vec2 v = (vec2(vui & 0xF, vui >> 4) - 8.0f) * d;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -362,9 +397,9 @@ mulmat_load_q4_1 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(data_a[ib].d);
-            const float m = float(data_a[ib].m);
-            const uint vui = uint(data_a[ib].qs[iqs]);
+            const float d = float(DATA_A[ib].d);
+            const float m = float(DATA_A[ib].m);
+            const uint vui = uint(DATA_A[ib].qs[iqs]);
             const vec2 v = vec2(vui & 0xF, vui >> 4) * d + m;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -377,10 +412,10 @@ mulmat_load_q5_0 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(data_a[ib].d);
-            const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | data_a[ib].qh[0];
+            const float d = float(DATA_A[ib].d);
+            const uint uint_qh = uint(DATA_A[ib].qh[1]) << 16 | DATA_A[ib].qh[0];
             const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
-            const uint vui = uint(data_a[ib].qs[iqs]);
+            const uint vui = uint(DATA_A[ib].qs[iqs]);
             const vec2 v = (vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) - 16.0f) * d;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -393,11 +428,11 @@ mulmat_load_q5_1 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(data_a[ib].d);
-            const float m = float(data_a[ib].m);
-            const uint uint_qh = data_a[ib].qh;
+            const float d = float(DATA_A[ib].d);
+            const float m = float(DATA_A[ib].m);
+            const uint uint_qh = DATA_A[ib].qh;
             const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
-            const uint vui = uint(data_a[ib].qs[iqs]);
+            const uint vui = uint(DATA_A[ib].qs[iqs]);
             const vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) * d + m;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -410,8 +445,8 @@ mulmat_load_q8_0 = """
             const uint ib = idx / 16;
             const uint iqs = (idx & 0xF) * 2;
 
-            const float d = float(data_a[ib].d);
-            const vec2 v = vec2(int(data_a[ib].qs[iqs]), int(data_a[ib].qs[iqs + 1])) * d;
+            const float d = float(DATA_A[ib].d);
+            const vec2 v = vec2(int(DATA_A[ib].qs[iqs]), int(DATA_A[ib].qs[iqs + 1])) * d;
 
             buf_a[buf_idx    ] = FLOAT_TYPE(v.x);
             buf_a[buf_idx + 1] = FLOAT_TYPE(v.y);"""
@@ -428,9 +463,9 @@ mulmat_load_q2_K = """
             const uint scalesi = iqs / 8;                      // 0..15
             const uint qsshift = ((iqs % 64) / 16) * 2;        // 0,2,4,6
 
-            const uvec2 qs = uvec2(data_a[ib].qs[qsi], data_a[ib].qs[qsi + 1]);
-            const uint scales = data_a[ib].scales[scalesi];
-            const vec2 d = vec2(data_a[ib].d);
+            const uvec2 qs = uvec2(DATA_A[ib].qs[qsi], DATA_A[ib].qs[qsi + 1]);
+            const uint scales = DATA_A[ib].scales[scalesi];
+            const vec2 d = vec2(DATA_A[ib].d);
 
             const vec2 v = d.x * float(scales & 0xF) * vec2((qs >> qsshift) & 3) - d.y * float(scales >> 4);
 
@@ -453,14 +488,14 @@ mulmat_load_q3_K = """
             const uint qsshift = halfsplit * 2;          // 0,2,4,6
             const uint m = 1 << (4 * n + halfsplit);     // 1,2,4,8,16,32,64,128
 
-            const int8_t us = int8_t(is <  4 ? (data_a[ib].scales[is-0] & 0xF) | (((data_a[ib].scales[is+8] >> 0) & 3) << 4) :
-                                    is <  8 ? (data_a[ib].scales[is-0] & 0xF) | (((data_a[ib].scales[is+4] >> 2) & 3) << 4) :
-                                    is < 12 ? (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is+0] >> 4) & 3) << 4) :
-                                            (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is-4] >> 6) & 3) << 4));
-            const float dl = float(data_a[ib].d) * float(us - 32);
+            const int8_t us = int8_t(is <  4 ? (DATA_A[ib].scales[is-0] & 0xF) | (((DATA_A[ib].scales[is+8] >> 0) & 3) << 4) :
+                                    is <  8 ? (DATA_A[ib].scales[is-0] & 0xF) | (((DATA_A[ib].scales[is+4] >> 2) & 3) << 4) :
+                                    is < 12 ? (DATA_A[ib].scales[is-8] >>  4) | (((DATA_A[ib].scales[is+0] >> 4) & 3) << 4) :
+                                            (DATA_A[ib].scales[is-8] >>  4) | (((DATA_A[ib].scales[is-4] >> 6) & 3) << 4));
+            const float dl = float(DATA_A[ib].d) * float(us - 32);
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(dl * float(int8_t((data_a[ib].qs[qsi    ] >> qsshift) & 3) - (((data_a[ib].hmask[hmi    ] & m) != 0) ? 0 : 4)));
-            buf_a[buf_idx + 1] = FLOAT_TYPE(dl * float(int8_t((data_a[ib].qs[qsi + 1] >> qsshift) & 3) - (((data_a[ib].hmask[hmi + 1] & m) != 0) ? 0 : 4)));"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(dl * float(int8_t((DATA_A[ib].qs[qsi    ] >> qsshift) & 3) - (((DATA_A[ib].hmask[hmi    ] & m) != 0) ? 0 : 4)));
+            buf_a[buf_idx + 1] = FLOAT_TYPE(dl * float(int8_t((DATA_A[ib].qs[qsi + 1] >> qsshift) & 3) - (((DATA_A[ib].hmask[hmi + 1] & m) != 0) ? 0 : 4)));"""
 
 mulmat_load_q4_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -474,22 +509,22 @@ mulmat_load_q4_K = """
             const uint is = 2 * n + b;                 // 0..7
             const uint qsi = n * 32 + (iqs % 16) * 2;  // 0,2,4..126
 
-            const vec2 loadd = vec2(data_a[ib].d);
+            const vec2 loadd = vec2(DATA_A[ib].d);
 
             uint8_t sc;
             uint8_t mbyte;
             if (is < 4) {
-                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
-                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
+                sc    = uint8_t(DATA_A[ib].scales[is    ] & 63);
+                mbyte = uint8_t(DATA_A[ib].scales[is + 4] & 63);
             } else {
-                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
-                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
+                sc    = uint8_t((DATA_A[ib].scales[is + 4] & 0xF) | ((DATA_A[ib].scales[is - 4] >> 6) << 4));
+                mbyte = uint8_t((DATA_A[ib].scales[is + 4] >>  4) | ((DATA_A[ib].scales[is    ] >> 6) << 4));
             }
             const float d = loadd.x * sc;
             const float m = loadd.y * mbyte;
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(d * float((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) - m);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(d * float((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) - m);"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(d * float((DATA_A[ib].qs[qsi    ] >> (b * 4)) & 0xF) - m);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(d * float((DATA_A[ib].qs[qsi + 1] >> (b * 4)) & 0xF) - m);"""
 
 mulmat_load_q5_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -506,22 +541,22 @@ mulmat_load_q5_K = """
 
             const uint8_t hm = uint8_t(1 << (iqs / 16));
 
-            const vec2 loadd = vec2(data_a[ib].d);
+            const vec2 loadd = vec2(DATA_A[ib].d);
 
             uint8_t sc;
             uint8_t mbyte;
             if (is < 4) {
-                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
-                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
+                sc    = uint8_t(DATA_A[ib].scales[is    ] & 63);
+                mbyte = uint8_t(DATA_A[ib].scales[is + 4] & 63);
             } else {
-                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
-                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
+                sc    = uint8_t((DATA_A[ib].scales[is + 4] & 0xF) | ((DATA_A[ib].scales[is - 4] >> 6) << 4));
+                mbyte = uint8_t((DATA_A[ib].scales[is + 4] >>  4) | ((DATA_A[ib].scales[is    ] >> 6) << 4));
             }
             const float d = loadd.x * sc;
             const float m = loadd.y * mbyte;
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(d * (float((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) + float((data_a[ib].qh[qhi    ] & hm) != 0 ? 16 : 0)) - m);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(d * (float((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) + float((data_a[ib].qh[qhi + 1] & hm) != 0 ? 16 : 0)) - m);"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(d * (float((DATA_A[ib].qs[qsi    ] >> (b * 4)) & 0xF) + float((DATA_A[ib].qh[qhi    ] & hm) != 0 ? 16 : 0)) - m);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(d * (float((DATA_A[ib].qs[qsi + 1] >> (b * 4)) & 0xF) + float((DATA_A[ib].qh[qhi + 1] & hm) != 0 ? 16 : 0)) - m);"""
 
 mulmat_load_q6_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -538,10 +573,10 @@ mulmat_load_q6_K = """
             const uint qsi = n * 64 + (iqs % 32) * 2;   // 0,2,4..126
             const uint qhi = n * 32 + (iqs % 16) * 2;   // 0,2,4..62
 
-            const float dscale = float(data_a[ib].d) * float(data_a[ib].scales[is]);
+            const float dscale = float(DATA_A[ib].d) * float(DATA_A[ib].scales[is]);
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(dscale * float(int8_t(((data_a[ib].ql[qsi    ] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi    ] >> qhshift) & 3) << 4)) - 32));
-            buf_a[buf_idx + 1] = FLOAT_TYPE(dscale * float(int8_t(((data_a[ib].ql[qsi + 1] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi + 1] >> qhshift) & 3) << 4)) - 32));"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(dscale * float(int8_t(((DATA_A[ib].ql[qsi    ] >> (b * 4)) & 0xF) | (((DATA_A[ib].qh[qhi    ] >> qhshift) & 3) << 4)) - 32));
+            buf_a[buf_idx + 1] = FLOAT_TYPE(dscale * float(int8_t(((DATA_A[ib].ql[qsi + 1] >> (b * 4)) & 0xF) | (((DATA_A[ib].qh[qhi + 1] >> qhshift) & 3) << 4)) - 32));"""
 
 mulmat_body2 = """
         }
@@ -608,7 +643,7 @@ mulmat_body2 = """
     const uint dr = ir * BM + warp_r * WM;
     const uint dc = ic * BN + warp_c * WN;
 
-    const uint offsets = gl_GlobalInvocationID.z * p.batch_stride_d + ik * p.batch_stride_d * gl_NumWorkGroups.z;
+    const uint offsets = expert_idx * p.expert_stride_d + batch_idx * p.batch_stride_d + ik * p.batch_stride_d * gl_NumWorkGroups.z;
 
     [[unroll]] for (uint wsic = 0; wsic < WNITER; wsic++) {
         [[unroll]] for (uint wsir = 0; wsir < WMITER; wsir++) {
@@ -1077,8 +1112,18 @@ mul_mat_vec_head = """#version 450
 layout (push_constant) uniform parameter
 {
     uint ncols;
-    uint b_offset;
-    uint d_offset;
+    uint stride_a;
+    uint stride_b;
+    uint stride_d;
+
+    uint ne02;
+    uint ne12;
+    uint broadcast2;
+    uint broadcast3;
+
+    uint batch_stride_a;
+    uint batch_stride_b;
+    uint batch_stride_d;
 } p;
 """
 
@@ -1096,13 +1141,26 @@ shared FLOAT_TYPE tmp[BLOCK_SIZE];
 void main() {
     const uint row = gl_WorkGroupID.x;
     const uint tid = gl_LocalInvocationID.x;
+    const uint batch_idx = gl_GlobalInvocationID.y;
+
+    const uint i13 = batch_idx / p.ne12;
+    const uint i12 = batch_idx % p.ne12;
+
+    const uint i03 = i13 / p.broadcast3;
+    const uint i02 = i12 / p.broadcast2;
+
+    const uint batch_idx_a = i03 * p.ne02 + i02;
+
+    const uint a_offset = batch_idx_a * p.batch_stride_a;
+    const uint b_offset = batch_idx * p.batch_stride_b;
+    const uint d_offset = batch_idx * p.batch_stride_d;
 
     const uint y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
 
     tmp[tid] = FLOAT_TYPE(0.0f);
 
     [[unroll]] for (uint i = 0; i < p.ncols/BLOCK_SIZE; i += 2) {
-        const uint col = i*BLOCK_SIZE + 2*tid;
+        const uint col = a_offset + i*BLOCK_SIZE + 2*tid;
         const uint ib = (row*p.ncols + col)/QUANT_K; // block index
         const uint iqs = (col%QUANT_K)/QUANT_R; // quant index
         const uint iybs = col - col%QUANT_K; // y block start index
@@ -1110,8 +1168,8 @@ void main() {
         DEQUANT_FUNC
 
         // matrix multiplication
-        tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(data_b[p.b_offset + iybs + iqs + 0]) +
-                    FLOAT_TYPE(v.y) * FLOAT_TYPE(data_b[p.b_offset + iybs + iqs + y_offset]);
+        tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(data_b[b_offset + iybs + iqs]) +
+                    FLOAT_TYPE(v.y) * FLOAT_TYPE(data_b[b_offset + iybs + iqs + y_offset]);
     }
 
     // sum up partial sums and write back result
@@ -1123,7 +1181,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[p.d_offset + row] = D_TYPE(tmp[0]);
+        dst[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -1140,9 +1198,22 @@ shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
+    const uint batch_idx = gl_GlobalInvocationID.y;
+
+    const uint i13 = batch_idx / p.ne12;
+    const uint i12 = batch_idx % p.ne12;
+
+    const uint i03 = i13 / p.broadcast3;
+    const uint i02 = i12 / p.broadcast2;
+
+    const uint batch_idx_a = i03 * p.ne02 + i02;
+
+    const uint a_offset = batch_idx_a * p.batch_stride_a;
+    const uint b_offset = batch_idx * p.batch_stride_b;
+    const uint d_offset = batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
-    const uint ib0 = row*num_blocks_per_row;
+    const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
     const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
@@ -1168,22 +1239,22 @@ void main() {
         FLOAT_TYPE sum1 = FLOAT_TYPE(0.0);
         FLOAT_TYPE sum2 = FLOAT_TYPE(0.0);
         for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
-            sum1 += FLOAT_TYPE(data_b[p.b_offset + y_idx + l +  0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 0) & 3)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 16]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 1] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 0) & 3)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 2) & 3)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 48]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 3] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 2) & 3)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 4) & 3)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 80]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 5] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 4) & 3)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 6) & 3)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l +112]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 7] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 6) & 3);
-            sum2 += FLOAT_TYPE(data_b[p.b_offset + y_idx + l +  0]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 0] >> 4) & 0xF)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 16]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 1] >> 4) & 0xF)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 32]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 2] >> 4) & 0xF)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 48]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 3] >> 4) & 0xF)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 64]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 4] >> 4) & 0xF)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 80]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 5] >> 4) & 0xF)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 96]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 6] >> 4) & 0xF)
-                  + FLOAT_TYPE(data_b[p.b_offset + y_idx + l +112]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 7] >> 4) & 0xF);
+            sum1 += FLOAT_TYPE(data_b[b_offset + y_idx + l +  0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 0) & 3)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 16]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 1] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 0) & 3)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 2) & 3)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 48]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 3] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 2) & 3)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 4) & 3)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 80]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 5] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 4) & 3)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 6) & 3)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l +112]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 7] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 6) & 3);
+            sum2 += FLOAT_TYPE(data_b[b_offset + y_idx + l +  0]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 0] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 16]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 1] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 32]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 2] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 48]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 3] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 64]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 4] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 80]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 5] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l + 96]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 6] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[b_offset + y_idx + l +112]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 7] >> 4) & 0xF);
         }
         tmp[16 * ix + tid] += dall * sum1 - dmin * sum2;
     }
@@ -1197,7 +1268,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[p.d_offset + row] = D_TYPE(tmp[0]);
+        dst[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -1212,9 +1283,22 @@ shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
+    const uint batch_idx = gl_GlobalInvocationID.y;
+
+    const uint i13 = batch_idx / p.ne12;
+    const uint i12 = batch_idx % p.ne12;
+
+    const uint i03 = i13 / p.broadcast3;
+    const uint i02 = i12 / p.broadcast2;
+
+    const uint batch_idx_a = i03 * p.ne02 + i02;
+
+    const uint a_offset = batch_idx_a * p.batch_stride_a;
+    const uint b_offset = batch_idx * p.batch_stride_b;
+    const uint d_offset = batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
-    const uint ib0 = row*num_blocks_per_row;
+    const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
     const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
@@ -1241,14 +1325,14 @@ void main() {
 
         FLOAT_TYPE sum = FLOAT_TYPE(0.0);
         for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
-            sum += FLOAT_TYPE(data_b[p.b_offset + y_idx + l +  0]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[0] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 8] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ]     ) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 0)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 32]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[2] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[10] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 2) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 1)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 64]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[4] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 8] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 4) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 2)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 96]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[6] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[10] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 6) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 3)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 16]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[1] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 9] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16]     ) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 0)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 48]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[3] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[11] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 2) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 1)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l + 80]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[5] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 9] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 4) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 2)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l +112]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[7] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[11] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 6) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 3)) != 0) ? 0 : 4));
+            sum += FLOAT_TYPE(data_b[b_offset + y_idx + l +  0]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[0] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 8] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ]     ) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 0)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l + 32]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[2] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[10] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 2) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 1)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l + 64]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[4] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 8] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 4) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 2)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l + 96]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[6] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[10] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 6) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 3)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l + 16]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[1] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 9] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16]     ) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 0)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l + 48]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[3] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[11] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 2) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 1)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l + 80]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[5] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 9] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 4) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 2)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l +112]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[7] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[11] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 6) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 3)) != 0) ? 0 : 4));
         }
         tmp[16 * ix + tid] += d * sum;
     }
@@ -1262,7 +1346,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[p.d_offset + row] = D_TYPE(tmp[0]);
+        dst[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -1277,9 +1361,22 @@ shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
+    const uint batch_idx = gl_GlobalInvocationID.y;
+
+    const uint i13 = batch_idx / p.ne12;
+    const uint i12 = batch_idx % p.ne12;
+
+    const uint i03 = i13 / p.broadcast3;
+    const uint i02 = i12 / p.broadcast2;
+
+    const uint batch_idx_a = i03 * p.ne02 + i02;
+
+    const uint a_offset = batch_idx_a * p.batch_stride_a;
+    const uint b_offset = batch_idx * p.batch_stride_b;
+    const uint d_offset = batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
-    const uint ib0 = row*num_blocks_per_row;
+    const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
     const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
@@ -1333,15 +1430,15 @@ void main() {
         const uint8_t q4_14 = uint8_t(data_a[ib0 + i].qs[q_offset + 66]  >> 4);
         const uint8_t q4_15 = uint8_t(data_a[ib0 + i].qs[q_offset + 67]  >> 4);
 
-        const FLOAT_TYPE sx = FLOAT_TYPE(data_b[p.b_offset + y1_idx] * q4_0 + data_b[p.b_offset + y1_idx + 1] * q4_1 + data_b[p.b_offset + y1_idx + 2] * q4_2 + data_b[p.b_offset + y1_idx + 3] * q4_3);
-        const FLOAT_TYPE sy = FLOAT_TYPE(data_b[p.b_offset + y1_idx + 32] * q4_4 + data_b[p.b_offset + y1_idx + 33] * q4_5 + data_b[p.b_offset + y1_idx + 34] * q4_6 + data_b[p.b_offset + y1_idx + 35] * q4_7);
-        const FLOAT_TYPE sz = FLOAT_TYPE(data_b[p.b_offset + y2_idx] * q4_8 + data_b[p.b_offset + y2_idx + 1] * q4_9 + data_b[p.b_offset + y2_idx + 2] * q4_10 + data_b[p.b_offset + y2_idx + 3] * q4_11);
-        const FLOAT_TYPE sw = FLOAT_TYPE(data_b[p.b_offset + y2_idx + 32] * q4_12 + data_b[p.b_offset + y2_idx + 33] * q4_13 + data_b[p.b_offset + y2_idx + 34] * q4_14 + data_b[p.b_offset + y2_idx + 35] * q4_15);
+        const FLOAT_TYPE sx = FLOAT_TYPE(data_b[b_offset + y1_idx] * q4_0 + data_b[b_offset + y1_idx + 1] * q4_1 + data_b[b_offset + y1_idx + 2] * q4_2 + data_b[b_offset + y1_idx + 3] * q4_3);
+        const FLOAT_TYPE sy = FLOAT_TYPE(data_b[b_offset + y1_idx + 32] * q4_4 + data_b[b_offset + y1_idx + 33] * q4_5 + data_b[b_offset + y1_idx + 34] * q4_6 + data_b[b_offset + y1_idx + 35] * q4_7);
+        const FLOAT_TYPE sz = FLOAT_TYPE(data_b[b_offset + y2_idx] * q4_8 + data_b[b_offset + y2_idx + 1] * q4_9 + data_b[b_offset + y2_idx + 2] * q4_10 + data_b[b_offset + y2_idx + 3] * q4_11);
+        const FLOAT_TYPE sw = FLOAT_TYPE(data_b[b_offset + y2_idx + 32] * q4_12 + data_b[b_offset + y2_idx + 33] * q4_13 + data_b[b_offset + y2_idx + 34] * q4_14 + data_b[b_offset + y2_idx + 35] * q4_15);
         const FLOAT_TYPE smin = FLOAT_TYPE(
-            data_b[p.b_offset + y1_idx    ] * sc2 + data_b[p.b_offset + y1_idx + 32] * sc3 + data_b[p.b_offset + y2_idx    ] * sc6 + data_b[p.b_offset + y2_idx + 32] * sc7
-          + data_b[p.b_offset + y1_idx + 1] * sc2 + data_b[p.b_offset + y1_idx + 33] * sc3 + data_b[p.b_offset + y2_idx + 1] * sc6 + data_b[p.b_offset + y2_idx + 33] * sc7
-          + data_b[p.b_offset + y1_idx + 2] * sc2 + data_b[p.b_offset + y1_idx + 34] * sc3 + data_b[p.b_offset + y2_idx + 2] * sc6 + data_b[p.b_offset + y2_idx + 34] * sc7
-          + data_b[p.b_offset + y1_idx + 3] * sc2 + data_b[p.b_offset + y1_idx + 35] * sc3 + data_b[p.b_offset + y2_idx + 3] * sc6 + data_b[p.b_offset + y2_idx + 35] * sc7
+            data_b[b_offset + y1_idx    ] * sc2 + data_b[b_offset + y1_idx + 32] * sc3 + data_b[b_offset + y2_idx    ] * sc6 + data_b[b_offset + y2_idx + 32] * sc7
+          + data_b[b_offset + y1_idx + 1] * sc2 + data_b[b_offset + y1_idx + 33] * sc3 + data_b[b_offset + y2_idx + 1] * sc6 + data_b[b_offset + y2_idx + 33] * sc7
+          + data_b[b_offset + y1_idx + 2] * sc2 + data_b[b_offset + y1_idx + 34] * sc3 + data_b[b_offset + y2_idx + 2] * sc6 + data_b[b_offset + y2_idx + 34] * sc7
+          + data_b[b_offset + y1_idx + 3] * sc2 + data_b[b_offset + y1_idx + 35] * sc3 + data_b[b_offset + y2_idx + 3] * sc6 + data_b[b_offset + y2_idx + 35] * sc7
         );
         tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * sc0 + sy * sc1 + sz * sc4 + sw * sc5) - dmin * smin);
 #else
@@ -1354,13 +1451,13 @@ void main() {
         const uint8_t q4_6 = uint8_t(data_a[ib0 + i].qs[q_offset + 64]  >> 4);
         const uint8_t q4_7 = uint8_t(data_a[ib0 + i].qs[q_offset + 65]  >> 4);
 
-        const FLOAT_TYPE sx = FLOAT_TYPE(data_b[p.b_offset + y1_idx     ] * q4_0  + data_b[p.b_offset + y1_idx +  1] * q4_1);
-        const FLOAT_TYPE sy = FLOAT_TYPE(data_b[p.b_offset + y1_idx + 32] * q4_2  + data_b[p.b_offset + y1_idx + 33] * q4_3);
-        const FLOAT_TYPE sz = FLOAT_TYPE(data_b[p.b_offset + y2_idx     ] * q4_4  + data_b[p.b_offset + y2_idx +  1] * q4_5);
-        const FLOAT_TYPE sw = FLOAT_TYPE(data_b[p.b_offset + y2_idx + 32] * q4_6 + data_b[p.b_offset + y2_idx + 33] * q4_7);
+        const FLOAT_TYPE sx = FLOAT_TYPE(data_b[b_offset + y1_idx     ] * q4_0  + data_b[b_offset + y1_idx +  1] * q4_1);
+        const FLOAT_TYPE sy = FLOAT_TYPE(data_b[b_offset + y1_idx + 32] * q4_2  + data_b[b_offset + y1_idx + 33] * q4_3);
+        const FLOAT_TYPE sz = FLOAT_TYPE(data_b[b_offset + y2_idx     ] * q4_4  + data_b[b_offset + y2_idx +  1] * q4_5);
+        const FLOAT_TYPE sw = FLOAT_TYPE(data_b[b_offset + y2_idx + 32] * q4_6 + data_b[b_offset + y2_idx + 33] * q4_7);
         const FLOAT_TYPE smin = FLOAT_TYPE(
-            data_b[p.b_offset + y1_idx] * sc2 + data_b[p.b_offset + y1_idx + 32] * sc3 + data_b[p.b_offset + y2_idx] * sc6 + data_b[p.b_offset + y2_idx + 32] * sc7
-          + data_b[p.b_offset + y1_idx + 1] * sc2 + data_b[p.b_offset + y1_idx + 33] * sc3 + data_b[p.b_offset + y2_idx + 1] * sc6 + data_b[p.b_offset + y2_idx + 33] * sc7
+            data_b[b_offset + y1_idx] * sc2 + data_b[b_offset + y1_idx + 32] * sc3 + data_b[b_offset + y2_idx] * sc6 + data_b[b_offset + y2_idx + 32] * sc7
+          + data_b[b_offset + y1_idx + 1] * sc2 + data_b[b_offset + y1_idx + 33] * sc3 + data_b[b_offset + y2_idx + 1] * sc6 + data_b[b_offset + y2_idx + 33] * sc7
         );
 
         tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * FLOAT_TYPE(data_a[ib0 + i].scales[v_im] & 0x3f) + sy * FLOAT_TYPE(data_a[ib0 + i].scales[v_im + 1] & 0x3f) + sz * FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 4] & 0x0f) | ((data_a[ib0 + i].scales[v_im] & 0xc0) >> 2)) + sw * FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 5] & 0x0f) | ((data_a[ib0 + i].scales[v_im + 1] & 0xc0) >> 2))) - dmin * smin);
@@ -1376,7 +1473,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[p.d_offset + row] = D_TYPE(tmp[0]);
+        dst[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -1391,9 +1488,22 @@ shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
+    const uint batch_idx = gl_GlobalInvocationID.y;
+
+    const uint i13 = batch_idx / p.ne12;
+    const uint i12 = batch_idx % p.ne12;
+
+    const uint i03 = i13 / p.broadcast3;
+    const uint i02 = i12 / p.broadcast2;
+
+    const uint batch_idx_a = i03 * p.ne02 + i02;
+
+    const uint a_offset = batch_idx_a * p.batch_stride_a;
+    const uint b_offset = batch_idx * p.batch_stride_b;
+    const uint d_offset = batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
-    const uint ib0 = row*num_blocks_per_row;
+    const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
     const uint tid = gl_LocalInvocationID.x/2;  // 0...31 or 0...16
     const uint ix  = gl_LocalInvocationID.x%2;  // 0 or 0, 1
@@ -1447,32 +1557,32 @@ void main() {
         const uint8_t q4_15 = uint8_t(data_a[ib0 + i].qs[q_offset + 81]  >> 4);
 
         const FLOAT_TYPE sx = FLOAT_TYPE(
-            data_b[p.b_offset + y1_idx     ] * (q4_0 + (((data_a[ib0 + i].qh[l0     ] & hm1) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y1_idx +  1] * (q4_1 + (((data_a[ib0 + i].qh[l0 +  1] & hm1) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y1_idx + 16] * (q4_2 + (((data_a[ib0 + i].qh[l0 + 16] & hm1) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y1_idx + 17] * (q4_3 + (((data_a[ib0 + i].qh[l0 + 17] & hm1) != 0) ? 16 : 0))
+            data_b[b_offset + y1_idx     ] * (q4_0 + (((data_a[ib0 + i].qh[l0     ] & hm1) != 0) ? 16 : 0))
+          + data_b[b_offset + y1_idx +  1] * (q4_1 + (((data_a[ib0 + i].qh[l0 +  1] & hm1) != 0) ? 16 : 0))
+          + data_b[b_offset + y1_idx + 16] * (q4_2 + (((data_a[ib0 + i].qh[l0 + 16] & hm1) != 0) ? 16 : 0))
+          + data_b[b_offset + y1_idx + 17] * (q4_3 + (((data_a[ib0 + i].qh[l0 + 17] & hm1) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE sy = FLOAT_TYPE(
-            data_b[p.b_offset + y1_idx + 32] * (q4_4 + (((data_a[ib0 + i].qh[l0     ] & (hm1 << 1)) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y1_idx + 33] * (q4_5 + (((data_a[ib0 + i].qh[l0 +  1] & (hm1 << 1)) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y1_idx + 48] * (q4_6 + (((data_a[ib0 + i].qh[l0 + 16] & (hm1 << 1)) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y1_idx + 49] * (q4_7 + (((data_a[ib0 + i].qh[l0 + 17] & (hm1 << 1)) != 0) ? 16 : 0))
+            data_b[b_offset + y1_idx + 32] * (q4_4 + (((data_a[ib0 + i].qh[l0     ] & (hm1 << 1)) != 0) ? 16 : 0))
+          + data_b[b_offset + y1_idx + 33] * (q4_5 + (((data_a[ib0 + i].qh[l0 +  1] & (hm1 << 1)) != 0) ? 16 : 0))
+          + data_b[b_offset + y1_idx + 48] * (q4_6 + (((data_a[ib0 + i].qh[l0 + 16] & (hm1 << 1)) != 0) ? 16 : 0))
+          + data_b[b_offset + y1_idx + 49] * (q4_7 + (((data_a[ib0 + i].qh[l0 + 17] & (hm1 << 1)) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE sz = FLOAT_TYPE(
-            data_b[p.b_offset + y2_idx     ] * (q4_8  + (((data_a[ib0 + i].qh[l0     ] & hm2) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y2_idx +  1] * (q4_9  + (((data_a[ib0 + i].qh[l0 +  1] & hm2) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y2_idx + 16] * (q4_10 + (((data_a[ib0 + i].qh[l0 + 16] & hm2) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y2_idx + 17] * (q4_11 + (((data_a[ib0 + i].qh[l0 + 17] & hm2) != 0) ? 16 : 0))
+            data_b[b_offset + y2_idx     ] * (q4_8  + (((data_a[ib0 + i].qh[l0     ] & hm2) != 0) ? 16 : 0))
+          + data_b[b_offset + y2_idx +  1] * (q4_9  + (((data_a[ib0 + i].qh[l0 +  1] & hm2) != 0) ? 16 : 0))
+          + data_b[b_offset + y2_idx + 16] * (q4_10 + (((data_a[ib0 + i].qh[l0 + 16] & hm2) != 0) ? 16 : 0))
+          + data_b[b_offset + y2_idx + 17] * (q4_11 + (((data_a[ib0 + i].qh[l0 + 17] & hm2) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE sw = FLOAT_TYPE(
-            data_b[p.b_offset + y2_idx + 32] * (q4_12 + (((data_a[ib0 + i].qh[l0     ] & (hm2 << 1)) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y2_idx + 33] * (q4_13 + (((data_a[ib0 + i].qh[l0 +  1] & (hm2 << 1)) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y2_idx + 48] * (q4_14 + (((data_a[ib0 + i].qh[l0 + 16] & (hm2 << 1)) != 0) ? 16 : 0))
-          + data_b[p.b_offset + y2_idx + 49] * (q4_15 + (((data_a[ib0 + i].qh[l0 + 17] & (hm2 << 1)) != 0) ? 16 : 0))
+            data_b[b_offset + y2_idx + 32] * (q4_12 + (((data_a[ib0 + i].qh[l0     ] & (hm2 << 1)) != 0) ? 16 : 0))
+          + data_b[b_offset + y2_idx + 33] * (q4_13 + (((data_a[ib0 + i].qh[l0 +  1] & (hm2 << 1)) != 0) ? 16 : 0))
+          + data_b[b_offset + y2_idx + 48] * (q4_14 + (((data_a[ib0 + i].qh[l0 + 16] & (hm2 << 1)) != 0) ? 16 : 0))
+          + data_b[b_offset + y2_idx + 49] * (q4_15 + (((data_a[ib0 + i].qh[l0 + 17] & (hm2 << 1)) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE smin = FLOAT_TYPE(
-            (data_b[p.b_offset + y1_idx] + data_b[p.b_offset + y1_idx + 1] + data_b[p.b_offset + y1_idx + 16] + data_b[p.b_offset + y1_idx + 17]) * sc2 + (data_b[p.b_offset + y1_idx + 32] + data_b[p.b_offset + y1_idx + 33] + data_b[p.b_offset + y1_idx + 48] + data_b[p.b_offset + y1_idx + 49]) * sc3
-          + (data_b[p.b_offset + y2_idx] + data_b[p.b_offset + y2_idx + 1] + data_b[p.b_offset + y2_idx + 16] + data_b[p.b_offset + y2_idx + 17]) * sc6 + (data_b[p.b_offset + y2_idx + 32] + data_b[p.b_offset + y2_idx + 33] + data_b[p.b_offset + y2_idx + 48] + data_b[p.b_offset + y2_idx + 49]) * sc7
+            (data_b[b_offset + y1_idx] + data_b[b_offset + y1_idx + 1] + data_b[b_offset + y1_idx + 16] + data_b[b_offset + y1_idx + 17]) * sc2 + (data_b[b_offset + y1_idx + 32] + data_b[b_offset + y1_idx + 33] + data_b[b_offset + y1_idx + 48] + data_b[b_offset + y1_idx + 49]) * sc3
+          + (data_b[b_offset + y2_idx] + data_b[b_offset + y2_idx + 1] + data_b[b_offset + y2_idx + 16] + data_b[b_offset + y2_idx + 17]) * sc6 + (data_b[b_offset + y2_idx + 32] + data_b[b_offset + y2_idx + 33] + data_b[b_offset + y2_idx + 48] + data_b[b_offset + y2_idx + 49]) * sc7
         );
         tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * sc0 + sy * sc1 + sz * sc4 + sw * sc5) - dmin * smin);
     }
@@ -1486,7 +1596,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[p.d_offset + row] = D_TYPE(tmp[0]);
+        dst[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -1500,11 +1610,23 @@ layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 shared FLOAT_TYPE tmp[32];
 
 void main() {
-    const uint block_size = gl_WorkGroupSize.x;
     const uint row = gl_WorkGroupID.x;
+    const uint batch_idx = gl_GlobalInvocationID.y;
+
+    const uint i13 = batch_idx / p.ne12;
+    const uint i12 = batch_idx % p.ne12;
+
+    const uint i03 = i13 / p.broadcast3;
+    const uint i02 = i12 / p.broadcast2;
+
+    const uint batch_idx_a = i03 * p.ne02 + i02;
+
+    const uint a_offset = batch_idx_a * p.batch_stride_a;
+    const uint b_offset = batch_idx * p.batch_stride_b;
+    const uint d_offset = batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
-    const uint ib0 = row*num_blocks_per_row;
+    const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
 
     const uint tid = gl_LocalInvocationID.x/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
     const uint ix  = gl_LocalInvocationID.x%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
@@ -1535,22 +1657,22 @@ void main() {
         const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
 
 #if K_QUANTS_PER_ITERATION == 1
-        FLOAT_TYPE sum = FLOAT_TYPE(data_b[p.b_offset + y_idx +  0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset +  0] & 0xF) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x03) << 4)) - 32)
-                       + FLOAT_TYPE(data_b[p.b_offset + y_idx + 16]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 1]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 16] & 0xF) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x03) << 4)) - 32)
-                       + FLOAT_TYPE(data_b[p.b_offset + y_idx + 32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 32] & 0xF) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x0c) << 2)) - 32)
-                       + FLOAT_TYPE(data_b[p.b_offset + y_idx + 48]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 3]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 48] & 0xF) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x0c) << 2)) - 32)
-                       + FLOAT_TYPE(data_b[p.b_offset + y_idx + 64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset +  0]  >> 4) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x30) >> 0)) - 32)
-                       + FLOAT_TYPE(data_b[p.b_offset + y_idx + 80]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 5]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 16]  >> 4) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x30) >> 0)) - 32)
-                       + FLOAT_TYPE(data_b[p.b_offset + y_idx + 96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 32]  >> 4) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0xc0) >> 2)) - 32)
-                       + FLOAT_TYPE(data_b[p.b_offset + y_idx +112]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 7]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 48]  >> 4) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0xc0) >> 2)) - 32);
+        FLOAT_TYPE sum = FLOAT_TYPE(data_b[b_offset + y_idx +  0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset +  0] & 0xF) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x03) << 4)) - 32)
+                       + FLOAT_TYPE(data_b[b_offset + y_idx + 16]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 1]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 16] & 0xF) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x03) << 4)) - 32)
+                       + FLOAT_TYPE(data_b[b_offset + y_idx + 32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 32] & 0xF) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x0c) << 2)) - 32)
+                       + FLOAT_TYPE(data_b[b_offset + y_idx + 48]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 3]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 48] & 0xF) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x0c) << 2)) - 32)
+                       + FLOAT_TYPE(data_b[b_offset + y_idx + 64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset +  0]  >> 4) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x30) >> 0)) - 32)
+                       + FLOAT_TYPE(data_b[b_offset + y_idx + 80]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 5]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 16]  >> 4) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x30) >> 0)) - 32)
+                       + FLOAT_TYPE(data_b[b_offset + y_idx + 96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 32]  >> 4) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0xc0) >> 2)) - 32)
+                       + FLOAT_TYPE(data_b[b_offset + y_idx +112]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 7]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 48]  >> 4) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0xc0) >> 2)) - 32);
         tmp[16 * ix + tid] += sum;
 #else
         FLOAT_TYPE sum = FLOAT_TYPE(0.0);
         [[unroll]] for (int l = 0; l < 4; ++l) {
-            sum += FLOAT_TYPE(data_b[p.b_offset + y_idx + l+ 0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+ 0] & 0xF) | (((data_a[ib0 + i].qh[qh_offset + l] >> 0) & 3) << 4)) - 32)
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l+32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+32] & 0xF) | (((data_a[ib0 + i].qh[qh_offset + l] >> 2) & 3) << 4)) - 32)
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l+64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+ 0]  >> 4) | (((data_a[ib0 + i].qh[qh_offset + l] >> 4) & 3) << 4)) - 32)
-                 + FLOAT_TYPE(data_b[p.b_offset + y_idx + l+96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+32]  >> 4) | (((data_a[ib0 + i].qh[qh_offset + l] >> 6) & 3) << 4)) - 32);
+            sum += FLOAT_TYPE(data_b[b_offset + y_idx + l+ 0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+ 0] & 0xF) | (((data_a[ib0 + i].qh[qh_offset + l] >> 0) & 3) << 4)) - 32)
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l+32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+32] & 0xF) | (((data_a[ib0 + i].qh[qh_offset + l] >> 2) & 3) << 4)) - 32)
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l+64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+ 0]  >> 4) | (((data_a[ib0 + i].qh[qh_offset + l] >> 4) & 3) << 4)) - 32)
+                 + FLOAT_TYPE(data_b[b_offset + y_idx + l+96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+32]  >> 4) | (((data_a[ib0 + i].qh[qh_offset + l] >> 6) & 3) << 4)) - 32);
         }
         tmp[16 * ix + tid] += sum;
 #endif
@@ -1565,7 +1687,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[p.d_offset + row] = D_TYPE(tmp[0]);
+        dst[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -2599,6 +2721,68 @@ async def main():
         stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q6_K_defines, mulmat_body1, mulmat_load_q6_K, mulmat_body2))
         tasks.append(string_to_spv("matmul_q6_k_f32", "".join(stream), {"LOAD_VEC_A": 2, "A_TYPE": "block_q6_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_q6_k_f32_aligned", "".join(stream), {"LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q6_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        # MUL_MAT_ID
+        stream.clear()
+        stream.extend((mulmat_head, shader_float_type, mulmat_body1, mulmat_load_scalar, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_f32", "".join(stream), {"MUL_MAT_ID": "1", "A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": load_vec, "LOAD_VEC_B": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        tasks.append(string_to_spv("matmul_id_f16", "".join(stream), {"MUL_MAT_ID": "1", "A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_f16_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": load_vec, "LOAD_VEC_B": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+
+        tasks.append(string_to_spv("matmul_id_f16_f32", "".join(stream), {"MUL_MAT_ID": "1", "A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_f16_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": load_vec, "LOAD_VEC_B": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q4_0_defines, mulmat_body1, mulmat_load_q4_0, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q4_0_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q4_0", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q4_0_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q4_1_defines, mulmat_body1, mulmat_load_q4_1, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q4_1_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q4_1", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q4_1_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_1", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q5_0_defines, mulmat_body1, mulmat_load_q5_0, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q5_0_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q5_0", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q5_0_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q5_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q5_1_defines, mulmat_body1, mulmat_load_q5_1, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q5_1_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q5_1", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q5_1_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q5_1", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q8_0_defines, mulmat_body1, mulmat_load_q8_0, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q8_0_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q8_0", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q8_0_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q8_0", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q2_K_defines, mulmat_body1, mulmat_load_q2_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q2_k_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q2_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q2_k_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q2_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q3_K_defines, mulmat_body1, mulmat_load_q3_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q3_k_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q3_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q3_k_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q3_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q4_K_defines, mulmat_body1, mulmat_load_q4_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q4_k_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q4_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q4_k_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q4_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q5_K_defines, mulmat_body1, mulmat_load_q5_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q5_k_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q5_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q5_k_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q5_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear()
+        stream.extend((mulmat_head, shader_int8_ext, shader_float_type, shader_q6_K_defines, mulmat_body1, mulmat_load_q6_K, mulmat_body2))
+        tasks.append(string_to_spv("matmul_id_q6_k_f32", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "A_TYPE": "block_q6_K", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_id_q6_k_f32_aligned", "".join(stream), {"MUL_MAT_ID": "1", "LOAD_VEC_A": 2, "LOAD_VEC_B": load_vec, "A_TYPE": "block_q6_K", "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
     # Shaders where precision is needed, so no fp16 version
 
