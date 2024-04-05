@@ -113,6 +113,9 @@ option(LLAMA_METAL                           "llama: use Metal"                 
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
 option(LLAMA_METAL_EMBED_LIBRARY             "llama: embed Metal library"                       OFF)
+set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
+                                             "llama: metal minimum macOS version")
+set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
@@ -248,6 +251,16 @@ if (LLAMA_METAL)
             set(XC_FLAGS -fno-fast-math -fno-inline -g)
         else()
             set(XC_FLAGS -O3)
+        endif()
+
+        # Append macOS metal versioning flags
+        if (LLAMA_METAL_MACOSX_VERSION_MIN)
+            message(STATUS "Adding -mmacosx-version-min=${LLAMA_METAL_MACOSX_VERSION_MIN} flag to metal compilation")
+            list(APPEND XC_FLAGS -mmacosx-version-min=${LLAMA_METAL_MACOSX_VERSION_MIN})
+        endif()
+        if (LLAMA_METAL_STD)
+            message(STATUS "Adding -std=${LLAMA_METAL_STD} flag to metal compilation")
+            list(APPEND XC_FLAGS -std=${LLAMA_METAL_STD})
         endif()
 
         add_custom_command(
