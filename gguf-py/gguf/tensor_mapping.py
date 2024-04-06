@@ -24,6 +24,7 @@ class TensorNameMap:
             "backbone.embedding",                        # mamba
             "backbone.embeddings",                       # mamba-hf
             "transformer.in_out_embed",                  # Grok
+            "transformer.wte.weight",                    # dbrx
         ),
 
         # Token type embeddings
@@ -52,7 +53,7 @@ class TensorNameMap:
             "output",                    # llama-pth bloom internlm2
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
-            "transformer.wte.weight",    # dbrx
+            "lm_head.weight",            # dbrx
         ),
 
         # Output norm
