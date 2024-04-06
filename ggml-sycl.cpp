@@ -16022,6 +16022,17 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
+GGML_CALL void ggml_backend_sycl_get_free_device_memory(int device, size_t *free) try {
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_free_device_memory\n");
+    size_t total;
+    ggml_backend_sycl_get_device_memory(device, free, &total);
+}
+catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 // backend interface

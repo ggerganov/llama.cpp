@@ -33,6 +33,7 @@ GGML_API GGML_CALL void   ggml_sycl_get_gpu_list(int *id_list, int max_len);
 GGML_API GGML_CALL void   ggml_sycl_get_device_description(int device, char *description, size_t description_size);
 GGML_API GGML_CALL int   ggml_backend_sycl_get_device_count();
 GGML_API GGML_CALL void ggml_backend_sycl_get_device_memory(int device, size_t *free, size_t *total);
+GGML_API GGML_CALL void ggml_backend_sycl_get_free_device_memory(int device, size_t *free);
 GGML_API GGML_CALL int ggml_backend_sycl_get_device_index(int device_id);
 
 // TODO: these are temporary

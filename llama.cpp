@@ -1659,12 +1659,12 @@ static size_t llama_get_available_device_memory(int device) {
 #elif defined(GGML_USE_SYCL)
     size_t total;
     size_t free;
-    ggml_backend_sycl_get_device_memory(device, &total, &free);
+    ggml_backend_sycl_get_free_device_memory(device, &total, &free);
     return free;
 #elif defined(GGML_USE_VULKAN)
     size_t total;
     size_t free;
-    ggml_backend_vk_get_device_memory(device, &total, &free);
+    ggml_backend_vk_get_free_device_memory(device, &total, &free);
     return free;
 #else
     return 1;
