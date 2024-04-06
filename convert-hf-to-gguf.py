@@ -1456,6 +1456,7 @@ class Qwen2MoeModel(Model):
         reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
         added_vocab = tokenizer.get_added_vocab()
 
+        # REVIEW: Not tested yet, need to deep dive this tiktoken
         for i in range(vocab_size):
             if i not in reverse_vocab:
                 tokens.append(f"[PAD{i}]")

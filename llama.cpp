@@ -7131,18 +7131,14 @@ struct llm_build_context {
                                  LLM_NORM, cb, il);
             cb(cur, "attn_norm", il);
 
+            cur = llm_build_norm(ctx0, inpL, hparams,
+                                 model.layers[il].attn_norm_2,
+                                 NULL,
+                                 LLM_NORM, cb, il);
+            cb(cur, "attn_norm_2", il);
 
             // self-attention
             {
-                if (model.layers[il].attn_norm_2) {
-                    // DBRX
-                    cur = llm_build_norm(ctx0, inpL, hparams,
-                                         model.layers[il].attn_norm_2,
-                                         NULL,
-                                         LLM_NORM, cb, il);
-                    cb(cur, "attn_norm_2", il);
-                }
-
                 cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
                 cb(cur, "wqkv", il);
 
