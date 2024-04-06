@@ -1478,11 +1478,11 @@ def main(args_in: list[str] | None = None) -> None:
 
     args = parser.parse_args(args_in)
 
-    if args.dump_single or args.dump:
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.dump_single or args.dump:
         # Avoid printing anything besides the dump output
         logging.basicConfig(level=logging.CRITICAL)
-    elif args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
 
