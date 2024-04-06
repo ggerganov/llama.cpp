@@ -1451,7 +1451,7 @@ class Qwen2MoeModel(Model):
         toktypes: list[int] = []
 
         from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(dir_model)
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
         vocab_size = tokenizer.vocab_size
 
         reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
