@@ -19,11 +19,13 @@ extern "C" {
 // fall back to the _Static_assert C11 keyword.
 // if C99 - static_assert is noop
 // ref: https://stackoverflow.com/a/53923785/4039976
+#ifndef __cplusplus
 #ifndef static_assert
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #else
 #define static_assert(cond, msg) struct global_scope_noop_trick
+#endif
 #endif
 #endif
 
@@ -51,13 +53,29 @@ extern "C" {
 //
 #include <arm_neon.h>
 
-#define GGML_COMPUTE_FP16_TO_FP32(x) ((float) (x))
-#define GGML_COMPUTE_FP32_TO_FP16(x) (x)
+typedef __fp16 ggml_fp16_internal_t;
 
-#define GGML_FP16_TO_FP32(x) ((float) (x))
-#define GGML_FP32_TO_FP16(x) (x)
+#define GGML_COMPUTE_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
+#define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
+
+#define GGML_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
+
+static inline float ggml_compute_fp16_to_fp32(ggml_fp16_t h) {
+    ggml_fp16_internal_t tmp;
+    memcpy(&tmp, &h, sizeof(ggml_fp16_t));
+    return (float)tmp;
+}
+
+static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
+    ggml_fp16_t res;
+    ggml_fp16_internal_t tmp = f;
+    memcpy(&res, &tmp, sizeof(ggml_fp16_t));
+    return res;
+}
 
 #else
+
+typedef uint16_t ggml_fp16_internal_t;
 
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h>
@@ -212,8 +230,7 @@ extern float ggml_table_f32_f16[1 << 16];
 // On ARM NEON, it's quicker to directly convert x -> x instead of calling into ggml_lookup_fp16_to_fp32,
 // so we define GGML_FP16_TO_FP32 and GGML_FP32_TO_FP16 elsewhere for NEON.
 // This is also true for POWER9.
-#if !defined(GGML_FP16_TO_FP32) || !defined(GGML_FP32_TO_FP16)
-
+#if !defined(GGML_FP16_TO_FP32)
 inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
     uint16_t s;
     memcpy(&s, &f, sizeof(uint16_t));
@@ -221,12 +238,16 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 }
 
 #define GGML_FP16_TO_FP32(x) ggml_lookup_fp16_to_fp32(x)
-#define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
+#endif
 
+#if !defined(GGML_FP32_TO_FP16)
+#define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
 #endif
 
 #define GGML_HASHTABLE_FULL ((size_t)-1)
 #define GGML_HASHTABLE_ALREADY_EXISTS ((size_t)-2)
+
+struct ggml_hash_set ggml_hash_set_new(size_t size);
 
 bool   ggml_hash_contains      (const struct ggml_hash_set hash_set, struct ggml_tensor * key);
 

@@ -107,7 +107,7 @@ class GGUFReader:
         offs, tensors_fields = self._build_tensors_fields(offs, tensor_count)
         new_align = self.fields.get('general.alignment')
         if new_align is not None:
-            if new_align.types != [GGUFValueType.UINT64]:
+            if new_align.types != [GGUFValueType.UINT32]:
                 raise ValueError('Bad type for general.alignment field')
             self.alignment = new_align.parts[-1][0]
         padding = offs % self.alignment
@@ -242,12 +242,27 @@ class GGUFReader:
             n_bytes = n_elems * type_size // block_size
             data_offs = int(start_offs + offset_tensor[0])
             item_type: npt.DTypeLike
-            if ggml_type == GGMLQuantizationType.F32:
-                item_count = n_elems
-                item_type = np.float32
-            elif ggml_type == GGMLQuantizationType.F16:
+            if ggml_type == GGMLQuantizationType.F16:
                 item_count = n_elems
                 item_type = np.float16
+            elif ggml_type == GGMLQuantizationType.F32:
+                item_count = n_elems
+                item_type = np.float32
+            elif ggml_type == GGMLQuantizationType.F64:
+                item_count = n_elems
+                item_type = np.float64
+            elif ggml_type == GGMLQuantizationType.I8:
+                item_count = n_elems
+                item_type = np.int8
+            elif ggml_type == GGMLQuantizationType.I16:
+                item_count = n_elems
+                item_type = np.int16
+            elif ggml_type == GGMLQuantizationType.I32:
+                item_count = n_elems
+                item_type = np.int32
+            elif ggml_type == GGMLQuantizationType.I64:
+                item_count = n_elems
+                item_type = np.int64
             else:
                 item_count = n_bytes
                 item_type = np.uint8

@@ -54,7 +54,8 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     // init llama.cpp
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     llama_model * model = NULL;
     llama_context * ctx = NULL;

@@ -17,7 +17,7 @@ let n_parallel: Int = arguments.count > 3 && Int(arguments[3]) != nil ? Int(argu
 let n_len: Int = 32
 
 // init LLM
-llama_backend_init(false)
+llama_backend_init()
 defer {
     llama_backend_free()
 }

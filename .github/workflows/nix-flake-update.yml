@@ -19,4 +19,4 @@ jobs:
           pr-labels: |
             nix
           pr-reviewers: philiptaron,SomeoneSerge
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.FLAKE_TOKEN }}

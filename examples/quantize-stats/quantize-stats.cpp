@@ -257,13 +257,13 @@ int main(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            params.include_layers.push_back(argv[i]);
+            params.include_layers.emplace_back(argv[i]);
         } else if (arg == "-L" || arg == "--exclude-layer") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            params.exclude_layers.push_back(argv[i]);
+            params.exclude_layers.emplace_back(argv[i]);
         } else if (arg == "-t" || arg == "--type") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -377,6 +377,8 @@ int main(int argc, char ** argv) {
             if (params.verbose) {
                 printf("testing %s ...\n",  ggml_type_name(type));
             }
+
+            ggml_quantize_init(type);
 
             error_stats global_stats {};
 
