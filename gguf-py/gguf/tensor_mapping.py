@@ -52,6 +52,7 @@ class TensorNameMap:
             "output",                    # llama-pth bloom internlm2
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
+            "transformer.wte.weight",    # dbrx
         ),
 
         # Output norm
@@ -68,6 +69,7 @@ class TensorNameMap:
             "model.norm_f",                            # mamba-qbert
             "backbone.norm_f",                         # mamba
             "transformer.rms_norm",                    # Grok
+            "transformer.norm_f.weight",               # dbrx
         ),
 
         # Rope frequencies
@@ -176,10 +178,9 @@ class TensorNameMap:
 
         # Attention output norm
         MODEL_TENSOR.ATTN_OUT_NORM: (
-            "encoder.layer.{bid}.attention.output.LayerNorm",                # bert
-            "encoder.layers.{bid}.norm1",                                    # nomic-bert
-            "transformer.decoder_layer.{bid}.rms_norm_1",                    # Grok
-            "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj.weight",  # dbrx
+            "encoder.layer.{bid}.attention.output.LayerNorm",  # bert
+            "encoder.layers.{bid}.norm1",                      # nomic-bert
+            "transformer.decoder_layer.{bid}.rms_norm_1",      # Grok
         ),
 
         # Rotary embeddings
@@ -307,9 +308,10 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.LAYER_OUT_NORM: (
-            "encoder.layer.{bid}.output.LayerNorm",         # bert
-            "encoder.layers.{bid}.norm2",                   # nomic-bert
-            "transformer.decoder_layer.{bid}.rms_norm_3",   # Grok
+            "encoder.layer.{bid}.output.LayerNorm",                          # bert
+            "encoder.layers.{bid}.norm2",                                    # nomic-bert
+            "transformer.decoder_layer.{bid}.rms_norm_3",                    # Grok
+            "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj.weight",  # dbrx
         ),
 
         MODEL_TENSOR.SSM_IN: (
