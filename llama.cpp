@@ -7128,7 +7128,7 @@ struct llm_build_context {
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
                                  model.layers[il].attn_norm, NULL,
-                                 LLM_NORM_RMS, cb, il);
+                                 LLM_NORM, cb, il);
             cb(cur, "attn_norm", il);
 
 
@@ -7268,7 +7268,7 @@ struct llm_build_context {
 
         cur = llm_build_norm(ctx0, cur, hparams,
                              model.output_norm, NULL,
-                             LLM_NORM_RMS, cb, -1);
+                             LLM_NORM, cb, -1);
         cb(cur, "result_norm", -1);
 
         // lm_head
