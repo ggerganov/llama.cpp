@@ -32,13 +32,15 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL] <PP> <TG> <PL>\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [N_KV_MAX] [N_BATCH] [N_UBATCH] [IS_PP_SHARED] [NGL] <PP> <TG> <PL>\n" , argv[0]);
         printf("  <PP>, <TG> and PL are comma-separated lists of numbers without spaces\n\n");
-        printf("  example: %s ggml-model-f16.gguf 2048 0 999 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
+        printf("  example: %s ggml-model-f16.gguf 2048 2048 512 0 999 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
         return 1 ;
     }
 
     int n_kv_max     = 2048;
+    int n_batch      = 2048;
+    int n_ubatch     = 512;
     int is_pp_shared = 0;
     int n_gpu_layers = 0;
 
@@ -56,23 +58,31 @@ int main(int argc, char ** argv) {
     }
 
     if (argc >= 4) {
-        is_pp_shared = std::atoi(argv[3]);
+        n_batch = std::atoi(argv[3]);
     }
 
     if (argc >= 5) {
-        n_gpu_layers = std::atoi(argv[4]);
+        n_ubatch = std::atoi(argv[4]);
     }
 
     if (argc >= 6) {
-        n_pp = parse_list(argv[5]);
+        is_pp_shared = std::atoi(argv[5]);
     }
 
     if (argc >= 7) {
-        n_tg = parse_list(argv[6]);
+        n_gpu_layers = std::atoi(argv[6]);
     }
 
     if (argc >= 8) {
-        n_pl = parse_list(argv[7]);
+        n_pp = parse_list(argv[7]);
+    }
+
+    if (argc >= 9) {
+        n_tg = parse_list(argv[8]);
+    }
+
+    if (argc >= 10) {
+        n_pl = parse_list(argv[9]);
     }
 
     // init LLM
@@ -100,7 +110,8 @@ int main(int argc, char ** argv) {
 
     ctx_params.seed      = 1234;
     ctx_params.n_ctx     = n_kv_max;
-    ctx_params.n_batch   = 512;
+    ctx_params.n_batch   = n_batch;
+    ctx_params.n_ubatch  = n_ubatch;
 
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
@@ -158,7 +169,7 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("\n");
-    LOG_TEE("%s: n_kv_max = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, is_pp_shared, n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch);
+    LOG_TEE("%s: n_kv_max = %d, n_batch = %d, n_ubatch = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, n_batch, n_ubatch, is_pp_shared, n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch);
     LOG_TEE("\n");
 
     LOG_TEE("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP",     "TG",     "B",    "N_KV",     "T_PP s",   "S_PP t/s", "T_TG s",   "S_TG t/s", "T s",      "S t/s");
