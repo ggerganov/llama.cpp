@@ -4695,7 +4695,6 @@ static bool llm_load_tensors(
                     layer.attn_norm_2 = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2,"weight", i), {n_embd});
 
                     layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd});
-                    layer.wo   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
 
                     layer.ffn_gate_inp  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP,  "weight", i), {n_embd, n_expert});
                     layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd, n_ff,   n_expert}, false);
@@ -7184,9 +7183,10 @@ struct llm_build_context {
 
             // feed-forward network
             // MoE branch
+            // FIXME REVIEW: I do not see this op in https://huggingface.co/databricks/dbrx-instruct/blob/464e701f50aef4c1b59c81fb5667819a5d08e108/modeling_dbrx.py#L727
             cur = llm_build_norm(ctx0, ffn_inp, hparams,
-                                 model.layers[il].ffn_norm, NULL,
-                                 LLM_NORM_RMS, cb, il);
+                                 NULL, NULL,
+                                 LLM_NORM, cb, il);
             cb(cur, "ffn_norm", il);
 
             ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
@@ -7244,8 +7244,15 @@ struct llm_build_context {
                     cb(moe_out, "ffn_moe_out", il);
                 }
             }
-
             cur = moe_out;
+
+            // DbrxNormAttentionNorm
+            {
+                cur = llm_build_norm(ctx0, cur, hparams,
+                                     model.layers[il].layer_out_norm, NULL,
+                                     LLM_NORM, cb, il);
+                cb(cur, "layer_out_norm", il);
+            }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
