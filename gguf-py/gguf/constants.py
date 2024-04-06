@@ -54,7 +54,6 @@ class Keys:
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
         CAUSAL            = "{arch}.attention.causal"
-        CLIP_KQV          = "{arch}.attention.clip_kqv"
 
     class Rope:
         DIMENSION_COUNT      = "{arch}.rope.dimension_count"
