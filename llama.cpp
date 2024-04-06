@@ -3563,6 +3563,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_40B:    return "40B";
         case MODEL_65B:    return "65B";
         case MODEL_70B:    return "70B";
+        case MODEL_132B:   return "132B";
         case MODEL_314B:   return "314B";
         case MODEL_SMALL:  return "0.1B";
         case MODEL_MEDIUM: return "0.4B";
