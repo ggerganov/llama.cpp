@@ -1446,7 +1446,6 @@ class Qwen2MoeModel(Model):
 
     def _set_vocab_gpt2(self):
         dir_model = self.dir_model
-        hparams = self.hparams
         tokens: list[str] = []
         toktypes: list[int] = []
 
@@ -1477,6 +1476,7 @@ class Qwen2MoeModel(Model):
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
         special_vocab.add_to_gguf(self.gguf_writer)
+
 
 @Model.register("MiniCPMForCausalLM")
 class MiniCPMModel(Model):
