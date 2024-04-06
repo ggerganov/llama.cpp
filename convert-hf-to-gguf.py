@@ -1424,6 +1424,60 @@ class GrokModel(Model):
             self.gguf_writer.add_tensor(new_name, data)
 
 
+@Model.register("DbrxForCausalLM")
+class Qwen2MoeModel(Model):
+    model_arch = gguf.MODEL_ARCH.DBRX
+
+    def set_gguf_parameters(self):
+        ffn_config = self.hparams["ffn_config"]
+        attn_config = self.hparams["attn_config"]
+        self.gguf_writer.add_name(self.hparams["model_type"])
+        self.gguf_writer.add_context_length(self.hparams["max_seq_len"])
+        self.gguf_writer.add_embedding_length(self.hparams["d_model"])
+        self.gguf_writer.add_block_count(self.hparams["n_layers"])
+        self.gguf_writer.add_head_count(self.hparams["n_heads"])
+        self.gguf_writer.add_head_count_kv(attn_config["kv_n_heads"])
+        self.gguf_writer.add_rope_freq_base(attn_config["rope_theta"])
+        self.gguf_writer.add_clip_kqv(attn_config["clip_qkv"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+        self.gguf_writer.add_expert_count(ffn_config["moe_num_experts"])
+        self.gguf_writer.add_expert_used_count(ffn_config["moe_top_k"])
+
+    def _set_vocab_gpt2(self):
+        dir_model = self.dir_model
+        hparams = self.hparams
+        tokens: list[str] = []
+        toktypes: list[int] = []
+
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(dir_model)
+        vocab_size = tokenizer.vocab_size
+
+        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
+        added_vocab = tokenizer.get_added_vocab()
+
+        for i in range(vocab_size):
+            if i not in reverse_vocab:
+                tokens.append(f"[PAD{i}]")
+                toktypes.append(gguf.TokenType.USER_DEFINED)
+            elif reverse_vocab[i] in added_vocab:
+                tokens.append(reverse_vocab[i])
+                if tokenizer.added_tokens_decoder[i].special:
+                    toktypes.append(gguf.TokenType.CONTROL)
+                else:
+                    toktypes.append(gguf.TokenType.USER_DEFINED)
+            else:
+                tokens.append(reverse_vocab[i])
+                toktypes.append(gguf.TokenType.NORMAL)
+
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
+        special_vocab.add_to_gguf(self.gguf_writer)
+
 @Model.register("MiniCPMForCausalLM")
 class MiniCPMModel(Model):
     model_arch = gguf.MODEL_ARCH.MINICPM

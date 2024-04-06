@@ -379,6 +379,9 @@ class GGUFWriter:
     def add_causal_attention(self, value: bool) -> None:
         self.add_bool(Keys.Attention.CAUSAL.format(arch=self.arch), value)
 
+    def add_clip_kqv(self, value: int) -> None:
+        self.add_uint32(Keys.Attention.CLIP_KQV.format(arch=self.arch), value)
+
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
 
