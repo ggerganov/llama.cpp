@@ -5406,8 +5406,7 @@ static bool llm_load_tensors(
 
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
 
-                        if (n_layer >= 64) 
-                        {
+                        if (n_layer >= 64){
                             layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head});
                             layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head_kv});
                         }
@@ -9460,17 +9459,7 @@ struct llm_build_context {
                     cb(Vcur, "Vcur", il);
                 }
 
-                if (model.layers[il].attn_q_norm)
-                {
-                    struct ggml_tensor * attn_q_norm = model.layers[il].attn_q_norm;
-                    struct ggml_tensor * attn_k_norm = model.layers[il].attn_k_norm;
-
-                   // CPU did not like F16, so cast to F32
-                    attn_q_norm = ggml_cast(ctx0, attn_q_norm, GGML_TYPE_F32);
-                    cb(attn_q_norm, "attn_q_norm_cast_F32", il);
-                    attn_k_norm = ggml_cast(ctx0, attn_k_norm, GGML_TYPE_F32);
-                    cb(attn_k_norm, "attn_k_norm_cast_F32", il);
-
+                if (model.layers[il].attn_q_norm) {
                     Qcur = ggml_view_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens,
                                 ggml_element_size(Qcur) * n_embd_head,
                                 ggml_element_size(Qcur) * n_embd_head * n_head,
@@ -9481,15 +9470,15 @@ struct llm_build_context {
                                 ggml_element_size(Kcur) * n_embd_head * n_head_kv,
                                 0);
                     cb(Kcur, "Kcur", il);
-                    
+
                     Qcur = llm_build_norm(ctx0, Qcur, hparams,
-                                attn_q_norm,
+                                model.layers[il].attn_q_norm,
                                 NULL,
                                 LLM_NORM, cb, il);
                     cb(Qcur, "Qcur", il);
 
                     Kcur = llm_build_norm(ctx0, Kcur, hparams,
-                            attn_k_norm,
+                            model.layers[il].attn_k_norm,
                             NULL,
                             LLM_NORM, cb, il);
                     cb(Kcur, "Kcur", il);
@@ -13105,15 +13094,9 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         return std::make_pair(i_layer, n_layer);
     };
 
-    // Command-R+ has such a large embedding weight tensor it overflows
-    // 32-bit signed integers. This is band-aid until quants can deal with
-    // that.
-    if (name == "token_embd.weight" && arch == LLM_ARCH_COMMAND_R && qs.model.hparams.n_layer >= 64) {
-        new_type = GGML_TYPE_F16;
-    }
     // for arches that share the same tensor between the token embeddings and the output, we quantize the token embeddings
     // with the quantization of the output tensor
-    else if (name == tn(LLM_TENSOR_OUTPUT, "weight") || (!qs.has_output && name == tn(LLM_TENSOR_TOKEN_EMBD, "weight"))) {
+    if (name == tn(LLM_TENSOR_OUTPUT, "weight") || (!qs.has_output && name == tn(LLM_TENSOR_TOKEN_EMBD, "weight"))) {
         if (qs.params->output_tensor_type < GGML_TYPE_COUNT) {
             new_type = qs.params->output_tensor_type;
         } else {
@@ -13145,11 +13128,6 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                 new_type = GGML_TYPE_IQ3_S;
             }
         }
-        
-    } else if ((arch == LLM_ARCH_COMMAND_R) &&
-               (name.find("q_norm") != std::string::npos ||
-                name.find("k_norm") != std::string::npos)) {
-        new_type = GGML_TYPE_F32;
     } else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
                ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M    || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
         if (name.find("attn_v.weight") != std::string::npos) {
@@ -13372,9 +13350,9 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
     return new_type;
 }
 
-static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int chunk_size, int nrows, int n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
+static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int64_t chunk_size, int64_t nrows, int64_t n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
     std::mutex mutex;
-    int counter = 0;
+    int64_t counter = 0;
     size_t new_size = 0;
     if (nthread < 2) {
         // single-thread
@@ -13382,11 +13360,11 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
     }
     auto compute = [&mutex, &counter, &new_size, new_type, f32_data, new_data, chunk_size,
             nrows, n_per_row, imatrix]() {
-        const int nrows_per_chunk = chunk_size / n_per_row;
+        const int64_t nrows_per_chunk = chunk_size / n_per_row;
         size_t local_size = 0;
         while (true) {
             std::unique_lock<std::mutex> lock(mutex);
-            int first_row = counter; counter += nrows_per_chunk;
+            int64_t first_row = counter; counter += nrows_per_chunk;
             if (first_row >= nrows) {
                 if (local_size > 0) {
                     new_size += local_size;
@@ -13394,7 +13372,7 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
                 break;
             }
             lock.unlock();
-            const int this_nrow = std::min(nrows - first_row, nrows_per_chunk);
+            const int64_t this_nrow = std::min(nrows - first_row, nrows_per_chunk);
             local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first_row * n_per_row, this_nrow, n_per_row, imatrix);
         }
     };
@@ -13583,6 +13561,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         // quantize only 2D and 3D tensors (experts)
         quantize &= (ggml_n_dims(tensor) >= 2);
+
+        // do not quantize norm tensors
+        quantize &= name.find("_norm.weight") == std::string::npos;
+
         quantize &= params->quantize_output_tensor || name != "output.weight";
         quantize &= !params->only_copy;
 
@@ -13629,7 +13611,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_size = ggml_nbytes(tensor);
             LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
         } else {
-            const size_t nelements = ggml_nelements(tensor);
+            const int64_t nelements = ggml_nelements(tensor);
 
             const float * imatrix = nullptr;
             if (imatrix_data) {
@@ -13681,20 +13663,20 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             LLAMA_LOG_INFO("converting to %s .. ", ggml_type_name(new_type));
             fflush(stdout);
 
-            if (work.size() < nelements * 4) {
+            if (work.size() < (size_t)nelements * 4) {
                 work.resize(nelements * 4); // upper bound on size
             }
             new_data = work.data();
 
-            const int n_per_row = tensor->ne[0];
-            const int nrows = tensor->ne[1];
+            const int64_t n_per_row = tensor->ne[0];
+            const int64_t nrows = tensor->ne[1];
 
-            static const int min_chunk_size = 32 * 512;
-            const int chunk_size = n_per_row >= min_chunk_size ? n_per_row : n_per_row * ((min_chunk_size + n_per_row - 1)/n_per_row);
+            static const int64_t min_chunk_size = 32 * 512;
+            const int64_t chunk_size = n_per_row >= min_chunk_size ? n_per_row : n_per_row * ((min_chunk_size + n_per_row - 1)/n_per_row);
 
-            const int nelements_matrix = tensor->ne[0] * tensor->ne[1];
-            const int nchunk = (nelements_matrix + chunk_size - 1)/chunk_size;
-            const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
+            const int64_t nelements_matrix = tensor->ne[0] * tensor->ne[1];
+            const int64_t nchunk = (nelements_matrix + chunk_size - 1)/chunk_size;
+            const int64_t nthread_use = nthread > 1 ? std::max((int64_t)1, std::min((int64_t)nthread, nchunk)) : 1;
 
             // quantize each expert separately since they have different importance matrices
             new_size = 0;
