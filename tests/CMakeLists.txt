@@ -59,6 +59,7 @@ llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-gpt2             AR
 
 llama_test(test-grammar-parser.cpp)
 llama_test(test-llama-grammar.cpp)
+llama_test(test-grammar-integration.cpp)
 llama_test(test-grad0.cpp)
 # llama_test(test-opt.cpp) # SLOW
 llama_test(test-backend-ops.cpp)
