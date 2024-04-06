@@ -7165,7 +7165,7 @@ struct llm_build_context {
                 cb(Vcur, "Vcur", il);
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
-                                   model.layers[il].wo, model.layers[il].bo,
+                                   NULL, NULL,
                                    Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
 
@@ -7182,68 +7182,69 @@ struct llm_build_context {
 
             // feed-forward network
             // MoE branch
-            // FIXME REVIEW: I do not see this op in https://huggingface.co/databricks/dbrx-instruct/blob/464e701f50aef4c1b59c81fb5667819a5d08e108/modeling_dbrx.py#L727
-            cur = llm_build_norm(ctx0, ffn_inp, hparams,
-                                 NULL, NULL,
-                                 LLM_NORM, cb, il);
-            cb(cur, "ffn_norm", il);
+            {
+                // FIXME REVIEW: I do not see this op in https://huggingface.co/databricks/dbrx-instruct/blob/464e701f50aef4c1b59c81fb5667819a5d08e108/modeling_dbrx.py#L727
+                cur = llm_build_norm(ctx0, ffn_inp, hparams,
+                                     NULL, NULL,
+                                     LLM_NORM, cb, il);
+                cb(cur, "ffn_norm", il);
 
-            ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
-            cb(logits, "ffn_moe_logits", il);
+                ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
+                cb(logits, "ffn_moe_logits", il);
 
-            ggml_tensor * probs = ggml_soft_max(ctx0, logits); // [n_tokens, num_experts]
-            cb(probs, "ffn_moe_probs", il);
+                ggml_tensor * probs = ggml_soft_max(ctx0, logits); // [n_tokens, num_experts]
+                cb(probs, "ffn_moe_probs", il);
 
-            // select experts
-            ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_expert_used); // [n_tokens, num_experts_per_tok]
-            cb(selected_experts->src[0], "ffn_moe_argsort", il);
+                // select experts
+                ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_expert_used); // [n_tokens, num_experts_per_tok]
+                cb(selected_experts->src[0], "ffn_moe_argsort", il);
 
-            ggml_tensor * weights = ggml_get_rows(ctx0,
-                                                  ggml_reshape_3d(ctx0, probs, 1, n_expert, n_tokens), selected_experts);
-            cb(weights, "ffn_moe_weights", il);
+                ggml_tensor * weights = ggml_get_rows(ctx0,
+                                                      ggml_reshape_3d(ctx0, probs, 1, n_expert, n_tokens), selected_experts);
+                cb(weights, "ffn_moe_weights", il);
 
-            weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens); // [n_tokens, num_experts_per_tok]
+                weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens); // [n_tokens, num_experts_per_tok]
 
-            ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights);
-            cb(weights_sum, "ffn_moe_weights_sum", il);
+                ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights);
+                cb(weights_sum, "ffn_moe_weights_sum", il);
 
-            weights = ggml_div(ctx0, weights, weights_sum); // [n_tokens, num_experts_per_tok]
-            cb(weights, "ffn_moe_weights_norm", il);
+                weights = ggml_div(ctx0, weights, weights_sum); // [n_tokens, num_experts_per_tok]
+                cb(weights, "ffn_moe_weights_norm", il);
 
-            // compute expert outputs
-            ggml_tensor * moe_out = nullptr;
+                // compute expert outputs
+                ggml_tensor * moe_out = nullptr;
+                for (int i = 0; i < n_expert_used; ++i) {
+                    ggml_tensor * cur_expert;
 
-            for (int i = 0; i < n_expert_used; ++i) {
-                ggml_tensor * cur_expert;
+                    ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, i, cur);
+                    cb(cur_up, "ffn_moe_up", il);
 
-                ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, i, cur);
-                cb(cur_up, "ffn_moe_up", il);
+                    ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
+                    cb(cur_gate, "ffn_moe_gate", il);
 
-                ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
-                cb(cur_gate, "ffn_moe_gate", il);
+                    //GeLU
+                    cur_gate = ggml_gelu(ctx0, cur_gate);
+                    cb(cur_gate, "ffn_moe_gelu", il);
 
-                //GeLU
-                cur_gate = ggml_gelu(ctx0, cur_gate);
-                cb(cur_gate, "ffn_moe_gelu", il);
+                    cur_expert = ggml_mul(ctx0, cur_up, cur_gate);
+                    cb(cur_expert, "ffn_moe_gate_par", il);
 
-                cur_expert = ggml_mul(ctx0, cur_up, cur_gate);
-                cb(cur_expert, "ffn_moe_gate_par", il);
+                    cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, i, cur_expert); // [n_tokens, n_embd]
+                    cb(cur_expert, "ffn_moe_down", il);
 
-                cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, i, cur_expert); // [n_tokens, n_embd]
-                cb(cur_expert, "ffn_moe_down", il);
+                    cur_expert = ggml_mul(ctx0, cur_expert,
+                                          ggml_view_2d(ctx0, weights, 1, n_tokens, weights->nb[1], i * weights->nb[0]));
+                    cb(cur_expert, "ffn_moe_weighted", il);
 
-                cur_expert = ggml_mul(ctx0, cur_expert,
-                                      ggml_view_2d(ctx0, weights, 1, n_tokens, weights->nb[1], i*weights->nb[0]));
-                cb(cur_expert, "ffn_moe_weighted", il);
-
-                if (i == 0) {
-                    moe_out = cur_expert;
-                } else {
-                    moe_out = ggml_add(ctx0, moe_out, cur_expert);
-                    cb(moe_out, "ffn_moe_out", il);
+                    if (i == 0) {
+                        moe_out = cur_expert;
+                    } else {
+                        moe_out = ggml_add(ctx0, moe_out, cur_expert);
+                        cb(moe_out, "ffn_moe_out", il);
+                    }
                 }
+                cur = moe_out;
             }
-            cur = moe_out;
 
             // DbrxNormAttentionNorm
             {
