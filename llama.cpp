@@ -7242,6 +7242,9 @@ struct llm_build_context {
                 cur = moe_out;
             }
 
+            cur = ggml_add(ctx0, cur, ffn_inp);
+            cb(cur, "ffn_out", il);
+
             // DbrxNormAttentionNorm
             {
                 cur = llm_build_norm(ctx0, cur, hparams,
@@ -7249,9 +7252,6 @@ struct llm_build_context {
                                      LLM_NORM, cb, il);
                 cb(cur, "layer_out_norm", il);
             }
-
-            cur = ggml_add(ctx0, cur, ffn_inp);
-            cb(cur, "ffn_out", il);
 
             ggml_tensor * layer_dir = lctx.cvec.tensor_for(il);
             if (layer_dir != nullptr) {
