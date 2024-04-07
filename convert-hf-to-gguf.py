@@ -1441,6 +1441,7 @@ class Qwen2MoeModel(Model):
         self.gguf_writer.add_clamp_kqv(attn_config["clip_qkv"])
         self.gguf_writer.add_file_type(self.ftype)
 
+        self.gguf_writer.add_feed_forward_length(ffn_config["ffn_hidden_size"])
         self.gguf_writer.add_expert_count(ffn_config["moe_num_experts"])
         self.gguf_writer.add_expert_used_count(ffn_config["moe_top_k"])
 
