@@ -10,7 +10,7 @@ class TensorNameMap:
         # Token embeddings
         MODEL_TENSOR.TOKEN_EMBD: (
             "gpt_neox.embed_in",                         # gptneox
-            "transformer.wte",                           # gpt2 gpt-j mpt refact qwen
+            "transformer.wte",                           # gpt2 gpt-j mpt refact qwen dbrx
             "transformer.word_embeddings",               # falcon
             "word_embeddings",                           # bloom
             "model.embed_tokens",                        # llama-hf
@@ -24,7 +24,6 @@ class TensorNameMap:
             "backbone.embedding",                        # mamba
             "backbone.embeddings",                       # mamba-hf
             "transformer.in_out_embed",                  # Grok
-            "transformer.wte.weight",                    # dbrx
         ),
 
         # Token type embeddings
@@ -49,11 +48,10 @@ class TensorNameMap:
         # Output
         MODEL_TENSOR.OUTPUT: (
             "embed_out",                 # gptneox
-            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen mamba
+            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen mamba dbrx
             "output",                    # llama-pth bloom internlm2
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
-            "lm_head.weight",            # dbrx
         ),
 
         # Output norm
@@ -62,7 +60,7 @@ class TensorNameMap:
             "transformer.ln_f",                        # gpt2 gpt-j falcon
             "model.norm",                              # llama-hf baichuan internlm2
             "norm",                                    # llama-pth
-            "transformer.norm_f",                      # mpt
+            "transformer.norm_f",                      # mpt dbrx
             "ln_f",                                    # refact bloom qwen gpt2
             "language_model.encoder.final_layernorm",  # persimmon
             "model.final_layernorm",                   # persimmon
@@ -70,7 +68,6 @@ class TensorNameMap:
             "model.norm_f",                            # mamba-qbert
             "backbone.norm_f",                         # mamba
             "transformer.rms_norm",                    # Grok
-            "transformer.norm_f.weight",               # dbrx
         ),
 
         # Rope frequencies
@@ -82,30 +79,30 @@ class TensorNameMap:
     block_mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
         # Attention norm
         MODEL_TENSOR.ATTN_NORM: (
-            "gpt_neox.layers.{bid}.input_layernorm",                  # gptneox
-            "transformer.h.{bid}.ln_1",                               # gpt2 gpt-j refact qwen
-            "transformer.blocks.{bid}.norm_1",                        # mpt
-            "transformer.h.{bid}.input_layernorm",                    # falcon7b
-            "h.{bid}.input_layernorm",                                # bloom
-            "transformer.h.{bid}.ln_mlp",                             # falcon40b
-            "model.layers.{bid}.input_layernorm",                     # llama-hf
-            "layers.{bid}.attention_norm",                            # llama-pth
-            "language_model.encoder.layers.{bid}.input_layernorm",    # persimmon
-            "model.layers.{bid}.ln1",                                 # yi
-            "h.{bid}.ln_1",                                           # gpt2
-            "transformer.h.{bid}.ln",                                 # phi2
-            "model.layers.layers.{bid}.norm",                         # plamo
-            "model.layers.{bid}.attention_norm",                      # internlm2
-            "model.layers.{bid}.norm",                                # mamba-qbert
-            "backbone.layers.{bid}.norm",                             # mamba
-            "transformer.decoder_layer.{bid}.rms_norm",               # Grok
-            "transformer.blocks.{bid}.norm_attn_norm.norm_1.weight",  # dbrx
+            "gpt_neox.layers.{bid}.input_layernorm",                # gptneox
+            "transformer.h.{bid}.ln_1",                             # gpt2 gpt-j refact qwen
+            "transformer.blocks.{bid}.norm_1",                      # mpt
+            "transformer.h.{bid}.input_layernorm",                  # falcon7b
+            "h.{bid}.input_layernorm",                              # bloom
+            "transformer.h.{bid}.ln_mlp",                           # falcon40b
+            "model.layers.{bid}.input_layernorm",                   # llama-hf
+            "layers.{bid}.attention_norm",                          # llama-pth
+            "language_model.encoder.layers.{bid}.input_layernorm",  # persimmon
+            "model.layers.{bid}.ln1",                               # yi
+            "h.{bid}.ln_1",                                         # gpt2
+            "transformer.h.{bid}.ln",                               # phi2
+            "model.layers.layers.{bid}.norm",                       # plamo
+            "model.layers.{bid}.attention_norm",                    # internlm2
+            "model.layers.{bid}.norm",                              # mamba-qbert
+            "backbone.layers.{bid}.norm",                           # mamba
+            "transformer.decoder_layer.{bid}.rms_norm",             # Grok
+            "transformer.blocks.{bid}.norm_attn_norm.norm_1",       # dbrx
         ),
 
         # Attention norm 2
         MODEL_TENSOR.ATTN_NORM_2: (
-            "transformer.h.{bid}.ln_attn",                            # falcon40b
-            "transformer.blocks.{bid}.norm_attn_norm.norm_2.weight",  # dbrx
+            "transformer.h.{bid}.ln_attn",                     # falcon40b
+            "transformer.blocks.{bid}.norm_attn_norm.norm_2",  # dbrx
         ),
 
         # Attention query-key-value
@@ -113,7 +110,7 @@ class TensorNameMap:
             "gpt_neox.layers.{bid}.attention.query_key_value",                     # gptneox
             "transformer.h.{bid}.attn.c_attn",                                     # gpt2 qwen
             "transformer.blocks.{bid}.attn.Wqkv",                                  # mpt
-            "transformer.blocks.{bid}.norm_attn_norm.attn.Wqkv.weight",            # dbrx
+            "transformer.blocks.{bid}.norm_attn_norm.attn.Wqkv",                   # dbrx
             "transformer.h.{bid}.self_attention.query_key_value",                  # falcon
             "h.{bid}.self_attention.query_key_value",                              # bloom
             "language_model.encoder.layers.{bid}.self_attention.query_key_value",  # persimmon
@@ -208,10 +205,10 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_GATE_INP: (
-            "layers.{bid}.feed_forward.gate",                    # mixtral
-            "model.layers.{bid}.block_sparse_moe.gate",          # mixtral
-            "transformer.decoder_layer.{bid}.router",            # Grok
-            "transformer.blocks.{bid}.ffn.router.layer.weight",  # dbrx
+            "layers.{bid}.feed_forward.gate",             # mixtral
+            "model.layers.{bid}.block_sparse_moe.gate",   # mixtral
+            "transformer.decoder_layer.{bid}.router",     # Grok
+            "transformer.blocks.{bid}.ffn.router.layer",  # dbrx
         ),
 
         # Feed-forward up
@@ -309,10 +306,10 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.LAYER_OUT_NORM: (
-            "encoder.layer.{bid}.output.LayerNorm",                          # bert
-            "encoder.layers.{bid}.norm2",                                    # nomic-bert
-            "transformer.decoder_layer.{bid}.rms_norm_3",                    # Grok
-            "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj.weight",  # dbrx
+            "encoder.layer.{bid}.output.LayerNorm",                   # bert
+            "encoder.layers.{bid}.norm2",                             # nomic-bert
+            "transformer.decoder_layer.{bid}.rms_norm_3",             # Grok
+            "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj",  # dbrx
         ),
 
         MODEL_TENSOR.SSM_IN: (
