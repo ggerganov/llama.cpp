@@ -390,6 +390,51 @@ class Model(ABC):
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
+    def _set_vocab_tiktoken(self):
+        # https://github.com/openai/tiktoken
+        dir_model = self.dir_model
+        tokens: list[str] = []
+        toktypes: list[int] = []
+
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
+
+        vocab_size = tokenizer.vocab_size
+        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
+        added_vocab = tokenizer.get_added_vocab()
+        merges = []
+
+        # FIXME REVIEW should we extract this from QwenModel to base Model class ?
+        mergeable_ranks = tokenizer.encoding._mergeable_ranks
+        for token, rank in mergeable_ranks.items():
+            reverse_vocab[QwenModel.token_bytes_to_string(token)] = rank
+            if len(token) == 1:
+                continue
+            merged = QwenModel.bpe(mergeable_ranks, token, max_rank=rank)
+            assert len(merged) == 2
+            merges.append(' '.join(map(QwenModel.token_bytes_to_string, merged)))
+
+        for i in range(vocab_size):
+            if reverse_vocab[i] in added_vocab:
+                tokens.append(reverse_vocab[i])
+                if tokenizer.added_tokens_decoder[i].special:
+                    toktypes.append(gguf.TokenType.CONTROL)
+                else:
+                    toktypes.append(gguf.TokenType.USER_DEFINED)
+            else:
+                tokens.append(reverse_vocab[i])
+                toktypes.append(gguf.TokenType.NORMAL)
+
+        # FIXME REVIEW should we introduce tiktoken in llama.cpp ?
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
+        special_vocab.merges = merges
+        # FIXME REVIEW how to add special tokens https://huggingface.co/databricks/dbrx-instruct/blob/main/tiktoken.py#L193
+        special_vocab.add_to_gguf(self.gguf_writer)
+
 
 @Model.register("GPTNeoXForCausalLM")
 class GPTNeoXModel(Model):
@@ -1445,42 +1490,8 @@ class Qwen2MoeModel(Model):
         self.gguf_writer.add_expert_count(ffn_config["moe_num_experts"])
         self.gguf_writer.add_expert_used_count(ffn_config["moe_top_k"])
 
-    def _set_vocab_gpt2(self):
-        dir_model = self.dir_model
-        tokens: list[str] = []
-        toktypes: list[int] = []
-
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
-        vocab_size = tokenizer.vocab_size
-
-        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
-        added_vocab = tokenizer.get_added_vocab()
-
-        self.gguf_writer.add_chat_template(tokenizer.default_chat_template)
-
-        # REVIEW: Not tested yet, need to deep dive this tiktoken
-        for i in range(vocab_size):
-            if i not in reverse_vocab:
-                tokens.append(f"[PAD{i}]")
-                toktypes.append(gguf.TokenType.USER_DEFINED)
-            elif reverse_vocab[i] in added_vocab:
-                tokens.append(reverse_vocab[i])
-                if tokenizer.added_tokens_decoder[i].special:
-                    toktypes.append(gguf.TokenType.CONTROL)
-                else:
-                    toktypes.append(gguf.TokenType.USER_DEFINED)
-            else:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.NORMAL)
-
-        self.gguf_writer.add_tokenizer_model("gpt2")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(dir_model) # FIXME https://huggingface.co/databricks/dbrx-instruct/blob/main/tokenizer_config.json
-        special_vocab.merges = []
-        special_vocab.add_to_gguf(self.gguf_writer)
+    def set_vocab(self):
+        self._set_vocab_tiktoken()
 
 
 @Model.register("MiniCPMForCausalLM")
