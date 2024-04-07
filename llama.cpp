@@ -4696,7 +4696,7 @@ static bool llm_load_tensors(
                     layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS,"weight", i), {n_ff,   n_embd, n_expert});
                     layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,  "weight", i), {n_embd, n_ff,   n_expert});
 
-                    layer.layer_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "weight", i), {n_embd});
+                    layer.layer_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "weight", i), {n_embd, n_embd});
                 }
             } break;
             case LLM_ARCH_BAICHUAN:
