@@ -1528,7 +1528,7 @@ class DbrxModel(Model):
             for exp_tensor_name in exp_tensor_names.keys():
                 if name.find(exp_tensor_name) != -1 and name.find(".weight") == -1:
                     experts = True
-                    expert_reshape = exp_tensor_names[exp_tensor_name]
+                    expert_reshape = exp_tensor_names[exp_tensor_name].reverse()
                     break
 
             old_dtype = data_torch.dtype
