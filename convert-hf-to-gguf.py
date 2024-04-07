@@ -1538,7 +1538,7 @@ class DbrxModel(Model):
             # Every other model has the weight names ending in .weight,
             # let's assume that is the convention which is not the case for dbrx:
             # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
-            new_name = tensor_map.get_name(name if not experts else name + ".weight", try_suffixes=(".weight", ".bias"))
+            new_name = tensor_map.get_name(name if not experts else name + ".weight", try_suffixes=".weight")
             if new_name is None:
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
@@ -1546,22 +1546,18 @@ class DbrxModel(Model):
             n_dims = len(data.shape)
             data_dtype = data.dtype
 
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
             # Reshape experts tensors from 2D to 3D as expected by GeLU
             if experts and n_dims == 2:
                 data = data.reshape((self.hparams["d_model"], self.hparams["ffn_config"]["ffn_hidden_size"], self.hparams["ffn_config"]["moe_num_experts"]))
                 n_dims = len(data.shape)
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and n_dims > 1:
+                data = data.astype(np.float16)
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
