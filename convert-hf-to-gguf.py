@@ -1470,7 +1470,7 @@ class GrokModel(Model):
 
 
 @Model.register("DbrxForCausalLM")
-class Qwen2MoeModel(Model):
+class DbrxModel(Model):
     model_arch = gguf.MODEL_ARCH.DBRX
 
     def set_gguf_parameters(self):
