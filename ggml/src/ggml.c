@@ -44,8 +44,17 @@ int ggml_sve_cnt_b = 0;
 #undef GGML_USE_LLAMAFILE
 #endif
 
+// enable AMX only with OPENMP
+#if !defined(__AMX_INT8__) || !defined(GGML_USE_OPENMP)
+#undef GGML_USE_AMX
+#endif
+
 #ifdef GGML_USE_LLAMAFILE
 #include <llamafile/sgemm.h>
+#endif
+
+#ifdef GGML_USE_AMX
+#include <ggml-amx/mmq.h>
 #endif
 
 #if defined(_MSC_VER)
@@ -398,6 +407,11 @@ static ggml_fp16_t ggml_table_gelu_quick_f16[1 << 16];
 
 // precomputed f32 table for f16 (256 KB) (ggml-impl.h)
 float ggml_table_f32_f16[1 << 16];
+
+#if GGML_USE_AMX
+// global flag for amx init
+static bool ggml_amx_initialized = false;
+#endif
 
 GGML_CALL const char * ggml_status_to_string(enum ggml_status status) {
     switch (status) {
@@ -3512,6 +3526,10 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
             GGML_PRINT_DEBUG("%s: g_state initialized in %f ms\n", __func__, (t_end - t_start)/1000.0f);
         }
+
+#if GGML_USE_AMX
+        ggml_amx_initialized = ggml_amx_init();
+#endif
 
         is_first_call = false;
     }
@@ -12310,6 +12328,13 @@ static void ggml_compute_forward_mul_mat(
 
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
+
+#if GGML_USE_AMX
+    if (ggml_compute_forward_mul_mat_use_amx(dst) && ggml_amx_initialized) {
+        ggml_mul_mat_amx(dst, nth, ith, params->wdata, params->wsize);
+        return;
+    }
+#endif
 
 #if GGML_USE_LLAMAFILE
     // broadcast factors
@@ -21947,6 +21972,14 @@ int ggml_cpu_has_avx512_vnni(void) {
 
 int ggml_cpu_has_avx512_bf16(void) {
 #if defined(__AVX512BF16__)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_amx_int8(void) {
+#if defined(__AMX_INT8__)
     return 1;
 #else
     return 0;
