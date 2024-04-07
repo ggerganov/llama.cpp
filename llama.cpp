@@ -15536,9 +15536,9 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
         if (j < 0) {
             throw std::runtime_error(format("batch.logits[%d] != true", i));
         }
-        if ((size_t) j >= ctx->n_outputs) {
+        if (j >= ctx->n_outputs) {
             // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%lu)", j, ctx->n_outputs));
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
         }
 
         return ctx->logits + j*ctx->model.hparams.n_vocab;
@@ -15581,9 +15581,9 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
         if (j < 0) {
             throw std::runtime_error(format("batch.logits[%d] != true", i));
         }
-        if ((size_t) j >= ctx->n_outputs) {
+        if (j >= ctx->n_outputs) {
             // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%lu)", j, ctx->n_outputs));
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
         }
 
         return ctx->embd + j*ctx->model.hparams.n_embd;
