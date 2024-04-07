@@ -7155,7 +7155,7 @@ struct llm_build_context {
                 cb(Vcur, "Vcur", il);
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
-                                   model.layers[il].wo, model.layers[il].bo,
+                                   model.layers[il].attn_out_norm, NULL,
                                    Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
 
@@ -7233,14 +7233,6 @@ struct llm_build_context {
                     }
                 }
                 cur = moe_out;
-            }
-
-            // DbrxNormAttentionNorm
-            {
-                cur = llm_build_norm(ctx0, cur, hparams,
-                                     model.layers[il].layer_out_norm, NULL,
-                                     LLM_NORM, cb, il);
-                cb(cur, "layer_out_norm", il);
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
