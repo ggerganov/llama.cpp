@@ -1457,6 +1457,8 @@ class Qwen2MoeModel(Model):
         reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
         added_vocab = tokenizer.get_added_vocab()
 
+        self.gguf_writer.add_chat_template(tokenizer.default_chat_template)
+
         # REVIEW: Not tested yet, need to deep dive this tiktoken
         for i in range(vocab_size):
             if i not in reverse_vocab:
@@ -1476,7 +1478,8 @@ class Qwen2MoeModel(Model):
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
+        special_vocab = gguf.SpecialVocab(dir_model) # FIXME https://huggingface.co/databricks/dbrx-instruct/blob/main/tokenizer_config.json
+        special_vocab.merges = []
         special_vocab.add_to_gguf(self.gguf_writer)
 
 
