@@ -294,7 +294,7 @@ static __m256 __lasx_xvreplfr2vr_s(float val)
 static inline __m256i ____m256i(__m128i in)
 {
     __m256i out = __lasx_xvldi(0);
-    asm volatile (
+    __asm__ volatile (
         ".irp i," __ALL_REGS                "\n\t"
         " .ifc %[out], " XREGS_PREFIX"\\i    \n\t"
         "  .irp j," __ALL_REGS              "\n\t"
@@ -312,7 +312,7 @@ static inline __m256i ____m256i(__m128i in)
 static inline __m256i lasx_set_q(__m128i inhi, __m128i inlo)
 {
     __m256i out;
-    asm volatile (
+    __asm__ volatile (
         ".irp i," __ALL_REGS                "\n\t"
         " .ifc %[hi], " VREGS_PREFIX "\\i    \n\t"
         "  .irp j," __ALL_REGS              "\n\t"
@@ -342,7 +342,7 @@ static inline __m256i lasx_set_q(__m128i inhi, __m128i inlo)
 static inline __m128i lasx_extracti128_lo(__m256i in)
 {
     __m128i out;
-    asm volatile (
+    __asm__ volatile (
         ".ifnc %[out], %[in]                 \n\t"
         ".irp i," __ALL_REGS                "\n\t"
         " .ifc %[out], " VREGS_PREFIX "\\i   \n\t"
@@ -362,7 +362,7 @@ static inline __m128i lasx_extracti128_lo(__m256i in)
 static inline __m128i lasx_extracti128_hi(__m256i in)
 {
     __m128i out;
-    asm volatile (
+    __asm__ volatile (
         ".irp i," __ALL_REGS                "\n\t"
         " .ifc %[out], " VREGS_PREFIX "\\i   \n\t"
         "  .irp j," __ALL_REGS              "\n\t"
