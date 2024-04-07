@@ -3986,7 +3986,7 @@ static void llm_load_hparams(
         case LLM_ARCH_DBRX:
         {
             ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV, hparams.f_clamp_kqv);
-            hparams.f_norm_eps = 1.e-5; // REVIEW is that OK ? https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html
+            hparams.f_norm_eps = 1.e-5; // REVIEW is that OK ? https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html, should we put in the converter ?
 
             switch (hparams.n_layer) {
                 case 40: model.type = e_model::MODEL_132B; break;
@@ -14765,12 +14765,12 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_MINICPM:
         case LLM_ARCH_XVERSE:
         case LLM_ARCH_COMMAND_R:
-        case LLM_ARCH_DBRX: // FIXME REVIEW @ggerganov I am not sure what to put here
             return LLAMA_ROPE_TYPE_NORM;
 
         // the pairs of head values are offset by n_rot/2
         case LLM_ARCH_FALCON:
         case LLM_ARCH_GROK:
+        case LLM_ARCH_DBRX: // FIXME REVIEW @ggerganov I am not sure what to put here
         case LLM_ARCH_PERSIMMON:
         case LLM_ARCH_BERT:
         case LLM_ARCH_NOMIC_BERT:
