@@ -2014,8 +2014,6 @@ static __global__ void k_copy_dst_from_contiguous(char * __restrict__ dst_origin
     }
 }
 
-//#define MMID_MEMCPY
-
 static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
@@ -2093,19 +2091,12 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
                 for (int64_t id = 0; id < n_ids; id++) {
                     const int32_t row_id_i = *(const int32_t *) (ids_host.data() + iid1*ids->nb[1] + id*ids->nb[0]);
 
+                    GGML_ASSERT(row_id_i >= 0 && row_id_i < n_as);
+
                     if (row_id_i != i02) {
                         continue;
                     }
 
-                    GGML_ASSERT(i02 >= 0 && i02 < n_as);
-
-#ifdef MMID_MEMCPY
-                    const int64_t i11 = id % ne11;
-                    const int64_t i12 = iid1;
-                    CUDA_CHECK(cudaMemcpyAsync(src1_contiguous.get() + num_src1_rows*nb11,
-                                               src1_original + i11*nb11 + i12*nb12,
-                                               nb11, cudaMemcpyDeviceToDevice, stream));
-#endif
                     num_src1_rows++;
                 }
             }
@@ -2114,7 +2105,6 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
                 continue;
             }
 
-#ifndef MMID_MEMCPY
             ggml_cuda_pool_alloc<int> dev_cur_src1_row(ctx.pool(), 1);
             ggml_cuda_pool_alloc<mmid_row_mapping> dev_row_mapping(ctx.pool(), num_src1_rows);
             CUDA_CHECK(cudaMemsetAsync(dev_cur_src1_row.get(), 0, sizeof(int), stream));
@@ -2130,7 +2120,6 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
                         nb11, nb12);
                 CUDA_CHECK(cudaGetLastError());
             }
-#endif
 
             src0_row.data = src0_original + i02*nb02;
 
@@ -2149,7 +2138,6 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
             ggml_cuda_mul_mat(ctx, &src0_row, &src1_row, &dst_row);
 
-#ifndef MMID_MEMCPY
             {
                 dim3 block_dims(std::min((unsigned int)ne0, 512u));
                 dim3 grid_dims(num_src1_rows);
@@ -2160,30 +2148,6 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
                         nb1, nb2);
                 CUDA_CHECK(cudaGetLastError());
             }
-#endif
-
-#ifdef MMID_MEMCPY
-            num_src1_rows = 0;
-            for (int64_t iid1 = 0; iid1 < ids->ne[1]; iid1++) {
-                for (int64_t id = 0; id < n_ids; id++) {
-                    const int32_t row_id_i = *(const int32_t *) (ids_host.data() + iid1*ids->nb[1] + id*ids->nb[0]);
-
-                    if (row_id_i != i02) {
-                        continue;
-                    }
-
-                    GGML_ASSERT(i02 >= 0 && i02 < n_as);
-
-                    const int64_t i1 = id;
-                    const int64_t i2 = iid1;
-
-                    CUDA_CHECK(cudaMemcpyAsync(dst_original + i1*nb1 + i2*nb2,
-                                               dst_contiguous.get() + num_src1_rows*nb1,
-                                               nb1, cudaMemcpyDeviceToDevice, stream));
-                    num_src1_rows++;
-                }
-            }
-#endif
         }
     }
 }
