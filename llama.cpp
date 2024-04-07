@@ -7155,7 +7155,7 @@ struct llm_build_context {
                 cb(Vcur, "Vcur", il);
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
-                                   model.layers[il].attn_out_norm, NULL,
+                                   model.layers[il].layer_out_norm, NULL,
                                    Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
 
