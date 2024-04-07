@@ -1516,15 +1516,12 @@ class DbrxModel(Model):
         block_count = self.hparams.get("n_layers")
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
         for name, data_torch in self.get_tensors():
-            # In MoE models the ffn tensors are typically most of the model weights,
-            # and need to be quantizable. Quantize expects tensor names to be suffixed by .weight.
-            # Every other model has the weight names ending in .weight,
-            # let's assume that is the convention which is not the case for dbrx:
-            # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
+            # Specific behavior for experts tensors: reshape to 3D and add suffix .weight
             exp_tensor_names = ["ffn.experts.mlp.v1", "ffn.experts.mlp.w1", "ffn.experts.mlp.w2"]
+            experts = False
             for exp_tensor_name in exp_tensor_names:
                 if name.find(exp_tensor_name) != -1 and name.find(".weight") == -1:
-                    name += ".weight"
+                    experts = True
                     break
 
             old_dtype = data_torch.dtype
@@ -1536,7 +1533,12 @@ class DbrxModel(Model):
             data = data_torch.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            # In MoE models the ffn tensors are typically most of the model weights,
+            # and need to be quantizable. Quantize expects tensor names to be suffixed by .weight.
+            # Every other model has the weight names ending in .weight,
+            # let's assume that is the convention which is not the case for dbrx:
+            # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
+            new_name = tensor_map.get_name(name if not experts else name + ".weight", try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
@@ -1555,6 +1557,11 @@ class DbrxModel(Model):
             # if f16 desired, convert any float32 2-dim weight tensors to float16
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
+
+            # Reshape experts tensors from 2D to 3D as expected by GeLU
+            if experts and n_dims == 2:
+                data = data.reshape((self.hparams["d_model"], self.hparams["ffn_config"]["ffn_hidden_size"], self.hparams["ffn_config"]["moe_num_experts"]))
+                n_dims = len(data.shape)
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
