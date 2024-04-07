@@ -3986,6 +3986,7 @@ static void llm_load_hparams(
         case LLM_ARCH_DBRX:
         {
             ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV, hparams.f_clamp_kqv);
+            hparams.f_norm_eps = 1.e-5; // REVIEW is that OK ? https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html
 
             switch (hparams.n_layer) {
                 case 40: model.type = e_model::MODEL_132B; break;
