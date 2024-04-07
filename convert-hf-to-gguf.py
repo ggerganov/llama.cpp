@@ -393,29 +393,36 @@ class Model(ABC):
     def _set_vocab_tiktoken(self):
         # https://github.com/openai/tiktoken
         dir_model = self.dir_model
+        hparams = self.hparams
         tokens: list[str] = []
         toktypes: list[int] = []
 
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
-
-        vocab_size = tokenizer.vocab_size
-        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
-        added_vocab = tokenizer.get_added_vocab()
+        vocab_size = hparams["vocab_size"]
+        assert max(tokenizer.get_vocab().values()) < vocab_size
+        vocab = {}
         merges = []
 
         # FIXME REVIEW should we extract this from QwenModel to base Model class ?
         mergeable_ranks = tokenizer.encoding._mergeable_ranks
         for token, rank in mergeable_ranks.items():
-            reverse_vocab[QwenModel.token_bytes_to_string(token)] = rank
+            vocab[QwenModel.token_bytes_to_string(token)] = rank
             if len(token) == 1:
                 continue
             merged = QwenModel.bpe(mergeable_ranks, token, max_rank=rank)
             assert len(merged) == 2
             merges.append(' '.join(map(QwenModel.token_bytes_to_string, merged)))
 
+        # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
+        added_vocab = tokenizer.get_added_vocab()
+        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in (vocab | added_vocab).items()}
+
         for i in range(vocab_size):
-            if reverse_vocab[i] in added_vocab:
+            if i not in reverse_vocab:
+                tokens.append(f"[PAD{i}]")
+                toktypes.append(gguf.TokenType.USER_DEFINED)
+            elif reverse_vocab[i] in added_vocab:
                 tokens.append(reverse_vocab[i])
                 if tokenizer.added_tokens_decoder[i].special:
                     toktypes.append(gguf.TokenType.CONTROL)
@@ -425,15 +432,22 @@ class Model(ABC):
                 tokens.append(reverse_vocab[i])
                 toktypes.append(gguf.TokenType.NORMAL)
 
-        # FIXME REVIEW should we introduce tiktoken in llama.cpp ?
         self.gguf_writer.add_tokenizer_model("gpt2")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
-        special_vocab.merges = merges
         special_vocab.chat_template = tokenizer.default_chat_template
-        # FIXME REVIEW how to add special tokens https://huggingface.co/databricks/dbrx-instruct/blob/main/tiktoken.py#L193
+        special_vocab.merges = merges
+        tk_endoftext = tokenizer.encoding._special_tokens["<|endoftext|>"]
+
+        # only add special tokens when they were not already loaded from config.json
+        if len(special_vocab.special_token_ids) == 0:
+            special_vocab._set_special_token("bos", tk_endoftext)
+            special_vocab._set_special_token("eos", tk_endoftext)
+        # this one is usually not in config.json anyway
+        special_vocab._set_special_token("unk", tk_endoftext)
+
         special_vocab.add_to_gguf(self.gguf_writer)
 
 
