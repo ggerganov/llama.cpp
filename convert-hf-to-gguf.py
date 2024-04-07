@@ -432,6 +432,7 @@ class Model(ABC):
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
         special_vocab.merges = merges
+        special_vocab.chat_template = tokenizer.default_chat_template
         # FIXME REVIEW how to add special tokens https://huggingface.co/databricks/dbrx-instruct/blob/main/tiktoken.py#L193
         special_vocab.add_to_gguf(self.gguf_writer)
 
