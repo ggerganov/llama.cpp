@@ -1,6 +1,13 @@
 // WARNING: This file was ported from json_schema_to_grammar.py, please fix bugs / add features there first.
 const SPACE_RULE = '" "?';
 
+function _buildRepetition(content, upToN) {
+  if (upToN === 0) {
+    return '';
+  }
+  return `(${content}${upToN > 1 ? ` ${_buildRepetition(content, upToN - 1)}` : ''})?`;
+}
+
 class BuiltinRule {
   constructor(content, deps) {
     this.content = content;
@@ -281,9 +288,20 @@ export class SchemaConverter {
               sub = id;
             }
 
-            const repeatedSub = Array.from({ length: minTimes }, () => subIsLiteral ? `"${sub.slice(1, -1).repeat(minTimes)}"` : sub);
-            const optionalSub = maxTimes !== undefined ? Array.from({ length: maxTimes - minTimes }, () => `${sub}?`) : [`${sub}*`];
-            seq[seq.length - 1] = [repeatedSub.concat(optionalSub).join(' '), false];
+            let result;
+            if (subIsLiteral && minTimes > 0) {
+              result = `"${sub.slice(1, -1).repeat(minTimes)}"`;
+            } else {
+              result = Array.from({ length: minTimes }, () => sub).join(' ');
+            }
+
+            if (minTimes < maxTimes) {
+              if (minTimes > 0) {
+                result += ' ';
+              }
+              result += _buildRepetition(sub, maxTimes - minTimes);
+            }
+            seq[seq.length - 1] = [result, false];
           }
         } else {
           let literal = '';
@@ -409,7 +427,7 @@ export class SchemaConverter {
           minItems--;
         }
         if (maxItems !== undefined && maxItems > minItems) {
-          successiveItems += `${listItemOperator}?`.repeat(maxItems - minItems - 1);
+          successiveItems += _buildRepetition(listItemOperator, maxItems - minItems - 1);
         } else {
           successiveItems += `${listItemOperator}*`;
         }

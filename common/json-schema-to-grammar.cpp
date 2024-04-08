@@ -11,6 +11,23 @@
 
 using json = nlohmann::ordered_json;
 
+static std::string build_repetition(const std::string & content, int upToN) {
+    std::ostringstream out;
+    std::function<void(int)> aux = [&](int n) {
+        if (n == 0) {
+            return;
+        }
+        out << "(" << content;
+        if (n > 1) {
+            out << " ";
+            aux(n - 1);
+        }
+        out << ")?";
+    };
+    aux(upToN);
+    return out.str();
+}
+
 const std::string SPACE_RULE = "\" \"?";
 
 struct BuiltinRule {
@@ -343,12 +360,7 @@ private:
                         if (max_times == std::numeric_limits<int>::max()) {
                             result += sub + "*";
                         } else {
-                            for (int j = min_times; j < max_times; j++) {
-                                if (j > min_times) {
-                                    result += " ";
-                                }
-                                result += sub + "?";
-                            }
+                            result += build_repetition(sub, max_times - min_times);
                         }
                         seq.back().first = result;
                         seq.back().second = false;
@@ -680,7 +692,7 @@ public:
                     min_items--;
                 }
                 if (max_items >= 0 && max_items > min_items) {
-                    successive_items += repeat(list_item_operator + "?", max_items - min_items - 1);
+                    successive_items += build_repetition(list_item_operator, max_items - min_items - 1);
                 } else {
                     successive_items += list_item_operator + "*";
                 }

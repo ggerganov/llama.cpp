@@ -307,7 +307,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             boolean ::= ("true" | "false") space
-            root ::= "[" space ( boolean ( "," space boolean )? )? "]" space
+            root ::= "[" space ( boolean (( "," space boolean ))? )? "]" space
             space ::= " "?
         )"""
     });
@@ -326,7 +326,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) space
             item ::= number | integer
             number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space
-            root ::= "[" space item ( "," space item )( "," space item )( "," space item )?( "," space item )? "]" space
+            root ::= "[" space item ( "," space item )( "," space item )(( "," space item ) (( "," space item ))?)? "]" space
             space ::= " "?
         )"""
     });
@@ -379,7 +379,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             dot ::= [\U00000000-\x09\x0B\x0C\x0E-\U0010FFFF]
-            root ::= "\"" ("(" root-1 root-1? root-1? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " and" dot dot dot "\"" space
+            root ::= "\"" ("(" root-1 (root-1 (root-1)?)? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " and" dot dot dot "\"" space
             root-1 ::= [0-9]
             space ::= " "?
         )"""

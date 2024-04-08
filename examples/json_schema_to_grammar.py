@@ -6,6 +6,12 @@ import re
 import sys
 from typing import Any, Dict, List, Set, Tuple, Union
 
+def _build_repetition(content, up_to_n):
+    # return ' '.join([content] * n)
+    if up_to_n == 0:
+        return ''
+    return f'({content}{" " + _build_repetition(content, up_to_n-1) if up_to_n > 1 else ""})?'
+
 class BuiltinRule:
     def __init__(self, content: str, deps: list[str] = None):
         self.content = content
@@ -277,10 +283,13 @@ class SchemaConverter:
                     (sub, sub_is_literal) = seq[-1]
 
                     if min_times == 0 and max_times is None:
+                        sub = f'"{sub}"' if sub_is_literal else sub
                         seq[-1] = (f'{sub}*', False)
                     elif min_times == 0 and max_times == 1:
+                        sub = f'"{sub}"' if sub_is_literal else sub
                         seq[-1] = (f'{sub}?', False)
                     elif min_times == 1 and max_times is None:
+                        sub = f'"{sub}"' if sub_is_literal else sub
                         seq[-1] = (f'{sub}+', False)
                     else:
                         if not sub_is_literal:
@@ -290,12 +299,17 @@ class SchemaConverter:
                                 sub_rule_ids[sub] = id
                             sub = id
 
-                        seq[-1] = (
-                            ' '.join(
-                                ([f'"{sub[1:-1] * min_times}"'] if sub_is_literal else [sub] * min_times) +
-                                ([f'{sub}?'] * (max_times - min_times) if max_times is not None else [f'{sub}*'])),
-                            False
-                        )
+                        if sub_is_literal and min_times > 0:
+                            result = '"' + (sub[1:-1] * min_times) + '"'
+                        else:
+                            result = ' '.join([sub] * min_times)
+
+                        if min_times < max_times:
+                            if min_times > 0:
+                                result += ' '
+                            result += _build_repetition(sub, max_times - min_times)
+
+                        seq[-1] = (result, False)
                 else:
                     literal = ''
                     while i < length:
@@ -411,7 +425,7 @@ class SchemaConverter:
                     successive_items = list_item_operator * (min_items - 1)
                     min_items -= 1
                 if max_items is not None and max_items > min_items:
-                    successive_items += (list_item_operator + "?") * (max_items - min_items - 1)
+                    successive_items += _build_repetition(list_item_operator, max_items - min_items - 1)
                 else:
                     successive_items += list_item_operator + "*"
                 if min_items == 0:
