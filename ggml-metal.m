@@ -1926,7 +1926,12 @@ static enum ggml_status ggml_metal_graph_compute(
                                     {
                                         nth0 = 4;
                                         nth1 = 16;
+                                    #if QK_K == 64
+                                        pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_ID_IQ4_NL_F32].pipeline;
+                                    #else
                                         pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_ID_IQ4_XS_F32].pipeline;
+                                    #endif
+
                                     } break;
                                 default:
                                     {
