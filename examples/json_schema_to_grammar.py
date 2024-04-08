@@ -6,18 +6,52 @@ import re
 import sys
 from typing import Any, Dict, List, Set, Tuple, Union
 
-def _build_repetition(content, up_to_n):
-    # return ' '.join([content] * n)
-    if up_to_n == 0:
-        return ''
-    return f'({content}{" " + _build_repetition(content, up_to_n-1) if up_to_n > 1 else ""})?'
+def _build_repetition(item_rule, min_items, max_items, separator_rule=None, item_rule_is_literal=False):
+    if not separator_rule:
+        if min_items == 0 and max_items == 1:
+            return f'{item_rule}?'
+        elif min_items == 1 and max_items is None:
+            return f'{item_rule}+'
+
+    result = ''
+
+    if min_items > 0:
+        if item_rule_is_literal and separator_rule is None:
+            result = '"' + (item_rule[1:-1] * min_items) + '"'
+        else:
+            result = (f' {separator_rule} ' if separator_rule else ' ').join([item_rule] * min_items)
+
+    def opt_repetitions(up_to_n, prefix_with_sep=False):
+        if up_to_n == 0:
+            return ''
+
+        res = separator_rule + ' ' + item_rule if separator_rule and prefix_with_sep else item_rule
+        if up_to_n > 1:
+            res += ' ' + opt_repetitions(up_to_n - 1, prefix_with_sep=True)
+        return f'({res})?'
+
+    if min_items > 0 and max_items != min_items:
+        result += ' '
+
+    if max_items is not None:
+        result += opt_repetitions(max_items - min_items, prefix_with_sep=min_items > 0)
+    else:
+        item_operator = f'({separator_rule + " " if separator_rule else ""}{item_rule})'
+
+        if min_items == 0 and separator_rule:
+            result = f'({item_rule} {item_operator}*)?'
+        else:
+            result += f'{item_operator}*'
+
+    return result
+
 
 class BuiltinRule:
     def __init__(self, content: str, deps: list[str] = None):
         self.content = content
         self.deps = deps or []
 
-_up_to_15_digits = _build_repetition('[0-9]', 15)
+_up_to_15_digits = _build_repetition('[0-9]', 0, 15)
 
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
@@ -286,34 +320,14 @@ class SchemaConverter:
 
                     (sub, sub_is_literal) = seq[-1]
 
-                    if min_times == 0 and max_times is None:
-                        sub = f'"{sub}"' if sub_is_literal else sub
-                        seq[-1] = (f'{sub}*', False)
-                    elif min_times == 0 and max_times == 1:
-                        sub = f'"{sub}"' if sub_is_literal else sub
-                        seq[-1] = (f'{sub}?', False)
-                    elif min_times == 1 and max_times is None:
-                        sub = f'"{sub}"' if sub_is_literal else sub
-                        seq[-1] = (f'{sub}+', False)
-                    else:
-                        if not sub_is_literal:
-                            id = sub_rule_ids.get(sub)
-                            if id is None:
-                                id = self._add_rule(f'{name}-{len(sub_rule_ids) + 1}', sub)
-                                sub_rule_ids[sub] = id
-                            sub = id
+                    if not sub_is_literal:
+                        id = sub_rule_ids.get(sub)
+                        if id is None:
+                            id = self._add_rule(f'{name}-{len(sub_rule_ids) + 1}', sub)
+                            sub_rule_ids[sub] = id
+                        sub = id
 
-                        if sub_is_literal and min_times > 0:
-                            result = '"' + (sub[1:-1] * min_times) + '"'
-                        else:
-                            result = ' '.join([sub] * min_times)
-
-                        if min_times < max_times:
-                            if min_times > 0:
-                                result += ' '
-                            result += _build_repetition(sub, max_times - min_times)
-
-                        seq[-1] = (result, False)
+                    seq[-1] = (_build_repetition(f'"{sub}"' if sub_is_literal else sub, min_times, max_times, item_rule_is_literal=sub_is_literal), False)
                 else:
                     literal = ''
                     while i < length:
@@ -421,22 +435,9 @@ class SchemaConverter:
                     ' "]" space')
             else:
                 item_rule_name = self.visit(items, f'{name}{"-" if name else ""}item')
-                list_item_operator = f'( "," space {item_rule_name} )'
-                successive_items = ""
                 min_items = schema.get("minItems", 0)
                 max_items = schema.get("maxItems")
-                if min_items > 0:
-                    successive_items = list_item_operator * (min_items - 1)
-                    min_items -= 1
-                if max_items is not None and max_items > min_items:
-                    successive_items += _build_repetition(list_item_operator, max_items - min_items - 1)
-                else:
-                    successive_items += list_item_operator + "*"
-                if min_items == 0:
-                    rule = f'"[" space ( {item_rule_name} {successive_items} )? "]" space'
-                else:
-                    rule = f'"[" space {item_rule_name} {successive_items} "]" space'
-                return self._add_rule(rule_name, rule)
+                return self._add_rule(rule_name, '"[" space ' + _build_repetition(item_rule_name, min_items, max_items, separator_rule='"," space') + ' "]" space')
 
         elif schema_type in (None, 'string') and 'pattern' in schema:
             return self._visit_pattern(schema['pattern'], rule_name)

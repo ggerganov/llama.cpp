@@ -1,11 +1,56 @@
 // WARNING: This file was ported from json_schema_to_grammar.py, please fix bugs / add features there first.
 const SPACE_RULE = '" "?';
 
-function _buildRepetition(content, upToN) {
-  if (upToN === 0) {
-    return '';
+function _buildRepetition(itemRule, minItems, maxItems, opts={}) {
+  const separatorRule = opts.separatorRule ?? '';
+  const itemRuleIsLiteral = opts.itemRuleIsLiteral ?? false
+
+  if (separatorRule === '') {
+    if (minItems === 0 && maxItems === 1) {
+      return `${itemRule}?`;
+    } else if (minItems === 1 && maxItems === undefined) {
+      return `${itemRule}+`;
+    }
   }
-  return `(${content}${upToN > 1 ? ` ${_buildRepetition(content, upToN - 1)}` : ''})?`;
+
+  let result = '';
+  if (minItems > 0) {
+    if (itemRuleIsLiteral && separatorRule === '') {
+      result = `"${itemRule.slice(1, -1).repeat(minItems)}"`;
+    } else {
+      result = Array.from({ length: minItems }, () => itemRule)
+        .join(separatorRule !== '' ? ` ${separatorRule} ` : ' ');
+    }
+  }
+
+  const optRepetitions = (upToN, prefixWithSep=false) => {
+    if (upToN === 0) {
+      return '';
+    }
+    let res = separatorRule !== '' && prefixWithSep ? separatorRule + ' ' + itemRule : itemRule;
+    if (upToN > 1) {
+      res += ' ' + optRepetitions(upToN - 1, true);
+    }
+    return `(${res})?`;
+  };
+
+  if (minItems > 0 && maxItems !== minItems) {
+    result += ' ';
+  }
+
+  if (maxItems !== undefined) {
+    result += optRepetitions(maxItems - minItems, minItems > 0);
+  } else {
+    const itemOperator = `(${separatorRule !== '' ? separatorRule + ' ' : ''}${itemRule})`;
+
+    if (minItems === 0 && separatorRule !== '') {
+      result = `(${itemRule} ${itemOperator}*)?`;
+    } else {
+      result += `${itemOperator}*`;
+    }
+  }
+
+  return result;
 }
 
 class BuiltinRule {
@@ -15,7 +60,7 @@ class BuiltinRule {
   }
 }
 
-const UP_TO_15_DIGITS = _buildRepetition('[0-9]', 15);
+const UP_TO_15_DIGITS = _buildRepetition('[0-9]', 0, 15);
 
 const PRIMITIVE_RULES = {
   boolean        : new BuiltinRule('("true" | "false") space', []),
@@ -276,37 +321,19 @@ export class SchemaConverter {
 
           let [sub, subIsLiteral] = seq[seq.length - 1];
 
-          if (minTimes === 0 && maxTimes === Infinity) {
-            seq[seq.length - 1] = [`${sub}*`, false];
-          } else if (minTimes === 0 && maxTimes === 1) {
-            seq[seq.length - 1] = [`${sub}?`, false];
-          } else if (minTimes === 1 && maxTimes === Infinity) {
-            seq[seq.length - 1] = [`${sub}+`, false];
-          } else {
-            if (!subIsLiteral) {
-              let id = subRuleIds[sub];
-              if (id === undefined) {
-                id = this._addRule(`${name}-${Object.keys(subRuleIds).length + 1}`, sub);
-                subRuleIds[sub] = id;
-              }
-              sub = id;
+          if (!subIsLiteral) {
+            let id = subRuleIds[sub];
+            if (id === undefined) {
+              id = this._addRule(`${name}-${Object.keys(subRuleIds).length + 1}`, sub);
+              subRuleIds[sub] = id;
             }
-
-            let result;
-            if (subIsLiteral && minTimes > 0) {
-              result = `"${sub.slice(1, -1).repeat(minTimes)}"`;
-            } else {
-              result = Array.from({ length: minTimes }, () => sub).join(' ');
-            }
-
-            if (minTimes < maxTimes) {
-              if (minTimes > 0) {
-                result += ' ';
-              }
-              result += _buildRepetition(sub, maxTimes - minTimes);
-            }
-            seq[seq.length - 1] = [result, false];
+            sub = id;
           }
+
+          seq[seq.length - 1] = [
+            _buildRepetition(subIsLiteral ? `"${sub}"` : sub, minTimes, maxTimes, {itemRuleIsLiteral: subIsLiteral}),
+            false
+          ];
         } else {
           let literal = '';
           while (i < length) {
@@ -422,23 +449,9 @@ export class SchemaConverter {
         );
       } else {
         const itemRuleName = this.visit(items, `${name ?? ''}${name ? '-' : ''}item`);
-        const listItemOperator = `( "," space ${itemRuleName} )`;
-        let successiveItems = '';
-        let minItems = schema.minItems || 0;
+        const minItems = schema.minItems || 0;
         const maxItems = schema.maxItems;
-        if (minItems > 0) {
-          successiveItems = listItemOperator.repeat(minItems - 1);
-          minItems--;
-        }
-        if (maxItems !== undefined && maxItems > minItems) {
-          successiveItems += _buildRepetition(listItemOperator, maxItems - minItems - 1);
-        } else {
-          successiveItems += `${listItemOperator}*`;
-        }
-        const rule = minItems === 0
-          ? `"[" space ( ${itemRuleName} ${successiveItems} )? "]" space`
-          : `"[" space ${itemRuleName} ${successiveItems} "]" space`;
-        return this._addRule(ruleName, rule);
+        return this._addRule(ruleName, '"[" space ' + _buildRepetition(itemRuleName, minItems, maxItems, {separatorRule: '"," space'}) + ' "]" space');
       }
     } else if ((schemaType === undefined || schemaType === 'string') && 'pattern' in schema) {
       return this._visitPattern(schema.pattern, ruleName);

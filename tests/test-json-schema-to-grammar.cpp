@@ -282,7 +282,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             boolean ::= ("true" | "false") space
-            root ::= "[" space boolean ( "," space boolean )( "," space boolean )* "]" space
+            root ::= "[" space boolean "," space boolean ("," space boolean)* "]" space
             space ::= " "?
         )"""
     });
@@ -298,7 +298,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             boolean ::= ("true" | "false") space
-            root ::= "[" space ( boolean  )? "]" space
+            root ::= "[" space (boolean)? "]" space
             space ::= " "?
         )"""
     });
@@ -314,7 +314,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             boolean ::= ("true" | "false") space
-            root ::= "[" space ( boolean (( "," space boolean ))? )? "]" space
+            root ::= "[" space (boolean ("," space boolean)?)? "]" space
             space ::= " "?
         )"""
     });
@@ -335,7 +335,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             integral-part ::= [0-9] | [1-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9])?)?)?)?)?)?)?)?)?)?)?)?)?)?)?
             item ::= number | integer
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
-            root ::= "[" space item ( "," space item )( "," space item )(( "," space item ) (( "," space item ))?)? "]" space
+            root ::= "[" space item "," space item "," space item ("," space item ("," space item)?)? "]" space
             space ::= " "?
         )"""
     });
@@ -384,11 +384,11 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         "regexp",
         R"""({
             "type": "string",
-            "pattern": "^(\\([0-9]{1,3}\\))?[0-9]{3}-[0-9]{4} and...$"
+            "pattern": "^(\\([0-9]{1,3}\\))?[0-9]{3}-[0-9]{4} a{3,5}nd...$"
         })""",
         R"""(
             dot ::= [\U00000000-\x09\x0B\x0C\x0E-\U0010FFFF]
-            root ::= "\"" ("(" root-1 (root-1 (root-1)?)? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " and" dot dot dot "\"" space
+            root ::= "\"" ("(" root-1 (root-1 (root-1)?)? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " " "aaa" ("a" ("a")?)? "nd" dot dot dot "\"" space
             root-1 ::= [0-9]
             space ::= " "?
         )"""
@@ -511,7 +511,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             additional-kv ::= string ":" space additional-value
             additional-kvs ::= additional-kv ( "," space additional-kv )*
-            additional-value ::= "[" space ( number ( "," space number )* )? "]" space
+            additional-value ::= "[" space (number ("," space number)*)? "]" space
             decimal-part ::= [0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9])?)?)?)?)?)?)?)?)?)?)?)?)?)?)?
             integral-part ::= [0-9] | [1-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9] ([0-9])?)?)?)?)?)?)?)?)?)?)?)?)?)?)?
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space

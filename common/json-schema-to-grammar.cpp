@@ -11,21 +11,63 @@
 
 using json = nlohmann::ordered_json;
 
-static std::string build_repetition(const std::string & content, int upToN) {
-    std::ostringstream out;
-    std::function<void(int)> aux = [&](int n) {
-        if (n == 0) {
-            return;
+template <typename Iterator>
+static std::string join(Iterator begin, Iterator end, const std::string & separator);
+
+static std::string repeat(const std::string & str, size_t n);
+
+static std::string build_repetition(const std::string & item_rule, int min_items, int max_items, const std::string & separator_rule = "", bool item_rule_is_literal = false) {
+    if (separator_rule.empty()) {
+        if (min_items == 0 && max_items == 1) {
+            return item_rule + "?";
+        } else if (min_items == 1 && max_items == std::numeric_limits<int>::max()) {
+            return item_rule + "+";
         }
-        out << "(" << content;
-        if (n > 1) {
-            out << " ";
-            aux(n - 1);
+    }
+
+    std::string result;
+    if (min_items > 0) {
+        if (item_rule_is_literal && separator_rule.empty()) {
+            result = "\"" + repeat(std::string(item_rule.begin() + 1, item_rule.end() - 1), min_items) + "\"";
+        } else {
+            std::vector<std::string> items(min_items, item_rule);
+            result = join(items.begin(), items.end(), separator_rule.empty() ? " " : " " + separator_rule + " ");
         }
-        out << ")?";
+    }
+
+    std::function<std::string(int, bool)> opt_repetitions = [&](int up_to_n, bool prefix_with_sep) -> std::string {
+        if (up_to_n == 0) {
+            return "";
+        }
+
+        std::string res;
+        if (!separator_rule.empty() && prefix_with_sep) {
+            res = separator_rule + " " + item_rule;
+        } else {
+            res = item_rule;
+        }
+        if (up_to_n > 1) {
+            res += " " + opt_repetitions(up_to_n - 1, true);
+        }
+        return "(" + res + ")?";
     };
-    aux(upToN);
-    return out.str();
+
+    if (min_items > 0 && max_items != min_items) {
+        result += " ";
+    }
+
+    if (max_items != std::numeric_limits<int>::max()) {
+        result += opt_repetitions(max_items - min_items, min_items > 0);
+    } else {
+        std::string item_operator = "(" + (separator_rule.empty() ? "" : separator_rule + " ") + item_rule + ")";
+        if (min_items == 0 && !separator_rule.empty()) {
+            result = "(" + item_rule + " " + item_operator + "*)?";
+        } else {
+            result += item_operator + "*";
+        }
+    }
+
+    return result;
 }
 
 const std::string SPACE_RULE = "\" \"?";
@@ -35,7 +77,7 @@ struct BuiltinRule {
     std::vector<std::string> deps;
 };
 
-const std::string _up_to_15_digits = build_repetition("[0-9]", 15);
+const std::string _up_to_15_digits = build_repetition("[0-9]", 0, 15);
 
 std::unordered_map<std::string, BuiltinRule> PRIMITIVE_RULES = {
     {"boolean", {"(\"true\" | \"false\") space", {}}},
@@ -333,42 +375,21 @@ private:
                     auto &sub = last.first;
                     auto sub_is_literal = last.second;
 
-                    if (min_times == 0 && max_times == std::numeric_limits<int>::max()) {
-                        sub += "*";
-                    } else if (min_times == 0 && max_times == 1) {
-                        sub += "?";
-                    } else if (min_times == 1 && max_times == std::numeric_limits<int>::max()) {
-                        sub += "+";
-                    } else {
-                        if (!sub_is_literal) {
-                            std::string & sub_id = sub_rule_ids[sub];
-                            if (sub_id.empty()) {
-                                sub_id = _add_rule(name + "-" + std::to_string(sub_rule_ids.size()), sub);
-                            }
-                            sub = sub_id;
+                    if (!sub_is_literal) {
+                        std::string & sub_id = sub_rule_ids[sub];
+                        if (sub_id.empty()) {
+                            sub_id = _add_rule(name + "-" + std::to_string(sub_rule_ids.size()), sub);
                         }
-                        std::string result;
-                        if (sub_is_literal && min_times > 0) {
-                            result = "\"" + repeat(sub.substr(1, sub.length() - 2), min_times) + "\"";
-                        } else {
-                            for (int j = 0; j < min_times; j++) {
-                                if (j > 0) {
-                                    result += " ";
-                                }
-                                result += sub;
-                            }
-                        }
-                        if (min_times > 0 && min_times < max_times) {
-                            result += " ";
-                        }
-                        if (max_times == std::numeric_limits<int>::max()) {
-                            result += sub + "*";
-                        } else {
-                            result += build_repetition(sub, max_times - min_times);
-                        }
-                        seq.back().first = result;
-                        seq.back().second = false;
+                        sub = sub_id;
                     }
+                    seq.back().first = build_repetition(
+                        sub_is_literal ? "\"" + sub + "\"" : sub,
+                        min_times,
+                        max_times,
+                        "",
+                        sub_is_literal
+                    );
+                    seq.back().second = false;
                 } else {
                     std::string literal;
                     auto is_non_literal = [&](char c) {
@@ -686,27 +707,11 @@ public:
                 return _add_rule(rule_name, rule);
             } else {
                 std::string item_rule_name = visit(items, name + (name.empty() ? "" : "-") + "item");
-                std::string list_item_operator = "( \",\" space " + item_rule_name + " )";
-                std::string successive_items;
                 int min_items = schema.contains("minItems") ? schema["minItems"].get<int>() : 0;
                 json max_items_json = schema.contains("maxItems") ? schema["maxItems"] : json();
-                int max_items = max_items_json.is_number_integer() ? max_items_json.get<int>() : -1;
-                if (min_items > 0) {
-                    successive_items += repeat(list_item_operator, min_items - 1);
-                    min_items--;
-                }
-                if (max_items >= 0 && max_items > min_items) {
-                    successive_items += build_repetition(list_item_operator, max_items - min_items - 1);
-                } else {
-                    successive_items += list_item_operator + "*";
-                }
-                std::string rule;
-                if (min_items == 0) {
-                    rule =  "\"[\" space ( " + item_rule_name + " " + successive_items + " )? \"]\" space";
-                } else {
-                    rule =  "\"[\" space " + item_rule_name + " " + successive_items + " \"]\" space";
-                }
-                return _add_rule(rule_name, rule);
+                int max_items = max_items_json.is_number_integer() ? max_items_json.get<int>() : std::numeric_limits<int>::max();
+
+                return _add_rule(rule_name, "\"[\" space " + build_repetition(item_rule_name, min_items, max_items, "\",\" space") + " \"]\" space");
             }
         } else if ((schema_type.is_null() || schema_type == "string") && schema.contains("pattern")) {
             return _visit_pattern(schema["pattern"], rule_name);
