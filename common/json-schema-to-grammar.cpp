@@ -13,33 +13,37 @@ using json = nlohmann::ordered_json;
 
 const std::string SPACE_RULE = "\" \"?";
 
-std::unordered_map<std::string, std::string> PRIMITIVE_RULES = {
-    {"boolean", "(\"true\" | \"false\") space"},
-    {"number", "(\"-\"? ([0-9] | [1-9] [0-9]*)) (\".\" [0-9]+)? ([eE] [-+]? [0-9]+)? space"},
-    {"integer", "(\"-\"? ([0-9] | [1-9] [0-9]*)) space"},
-    {"value", "object | array | string | number | boolean"},
-    {"object", "\"{\" space ( string \":\" space value (\",\" space string \":\" space value)* )? \"}\" space"},
-    {"array", "\"[\" space ( value (\",\" space value)* )? \"]\" space"},
-    {"uuid", "\"\\\"\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
+struct BuiltinRule {
+    std::string content;
+    std::vector<std::string> deps;
+};
+
+std::unordered_map<std::string, BuiltinRule> PRIMITIVE_RULES = {
+    {"boolean", {"(\"true\" | \"false\") space", {}}},
+    {"number", {"(\"-\"? ([0-9] | [1-9] [0-9]*)) (\".\" [0-9]+)? ([eE] [-+]? [0-9]+)? space", {}}},
+    {"integer", {"(\"-\"? ([0-9] | [1-9] [0-9]*)) space", {}}},
+    {"value", {"object | array | string | number | boolean | null", {"object", "array", "string", "number", "boolean", "null"}}},
+    {"object", {"\"{\" space ( string \":\" space value (\",\" space string \":\" space value)* )? \"}\" space", {"string", "value"}}},
+    {"array", {"\"[\" space ( value (\",\" space value)* )? \"]\" space", {"value"}}},
+    {"uuid", {"\"\\\"\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
                 "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
                 "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
                 "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
-                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] \"\\\"\" space"},
-    {"string", " \"\\\"\" (\n"
+                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] \"\\\"\" space", {}}},
+    {"string", {" \"\\\"\" (\n"
                "        [^\"\\\\] |\n"
                "        \"\\\\\" ([\"\\\\/bfnrt] | \"u\" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])\n"
-               "      )* \"\\\"\" space"},
-    {"null", "\"null\" space"}
+               "      )* \"\\\"\" space", {}}},
+    {"null", {"\"null\" space", {}}},
 };
-std::vector<std::string> OBJECT_RULE_NAMES = {"object", "array", "string", "number", "boolean", "null", "value"};
 
-std::unordered_map<std::string, std::string> DATE_RULES = {
-    {"date", "[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( \"0\" [1-9] | [1-2] [0-9] | \"3\" [0-1] )"},
-    {"time", "([01] [0-9] | \"2\" [0-3]) \":\" [0-5] [0-9] \":\" [0-5] [0-9] ( \".\" [0-9] [0-9] [0-9] )? ( \"Z\" | ( \"+\" | \"-\" ) ( [01] [0-9] | \"2\" [0-3] ) \":\" [0-5] [0-9] )"},
-    {"date-time", "date \"T\" time"},
-    {"date-string", "\"\\\"\" date \"\\\"\" space"},
-    {"time-string", "\"\\\"\" time \"\\\"\" space"},
-    {"date-time-string", "\"\\\"\" date-time \"\\\"\" space"}
+std::unordered_map<std::string, BuiltinRule> STRING_FORMAT_RULES = {
+    {"date", {"[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( \"0\" [1-9] | [1-2] [0-9] | \"3\" [0-1] )", {}}},
+    {"time", {"([01] [0-9] | \"2\" [0-3]) \":\" [0-5] [0-9] \":\" [0-5] [0-9] ( \".\" [0-9] [0-9] [0-9] )? ( \"Z\" | ( \"+\" | \"-\" ) ( [01] [0-9] | \"2\" [0-3] ) \":\" [0-5] [0-9] )", {}}},
+    {"date-time", {"date \"T\" time", {"date", "time"}}},
+    {"date-string", {"\"\\\"\" date \"\\\"\" space", {"date"}}},
+    {"time-string", {"\"\\\"\" time \"\\\"\" space", {"time"}}},
+    {"date-time-string", {"\"\\\"\" date-time \"\\\"\" space", {"date-time"}}}
 };
 
 static bool is_reserved_name(const std::string & name) {
@@ -47,7 +51,7 @@ static bool is_reserved_name(const std::string & name) {
     if (RESERVED_NAMES.empty()) {
         RESERVED_NAMES.insert("root");
         for (const auto &p : PRIMITIVE_RULES) RESERVED_NAMES.insert(p.first);
-        for (const auto &p : DATE_RULES) RESERVED_NAMES.insert(p.first);
+        for (const auto &p : STRING_FORMAT_RULES) RESERVED_NAMES.insert(p.first);
     }
     return RESERVED_NAMES.find(name) != RESERVED_NAMES.end();
 }
@@ -424,7 +428,7 @@ private:
         if (additional_properties.is_object() || (additional_properties.is_boolean() && additional_properties.get<bool>())) {
             std::string sub_name = name + (name.empty() ? "" : "-") + "additional";
             std::string value_rule = visit(additional_properties.is_object() ? additional_properties : json::object(), sub_name + "-value");
-            std::string kv_rule = _add_rule(sub_name + "-kv", _add_rule("string", PRIMITIVE_RULES.at("string")) + " \":\" space " + value_rule);
+            std::string kv_rule = _add_rule(sub_name + "-kv", _add_primitive("string", PRIMITIVE_RULES.at("string")) + " \":\" space " + value_rule);
             prop_kv_rule_names["*"] = kv_rule;
             optional_props.push_back("*");
         }
@@ -484,6 +488,25 @@ private:
         rule += " \"}\" space";
 
         return rule;
+    }
+
+    std::string _add_primitive(const std::string & name, const BuiltinRule & rule) {
+        auto n = _add_rule(name, rule.content);
+        for (const auto & dep : rule.deps) {
+            BuiltinRule dep_rule;
+            auto it = PRIMITIVE_RULES.find(dep);
+            if (it == PRIMITIVE_RULES.end()) {
+                it = STRING_FORMAT_RULES.find(dep);
+                if (it == STRING_FORMAT_RULES.end()) {
+                    _errors.push_back("Rule " + dep + " not known");
+                    continue;
+                }
+            }
+            if (_rules.find(dep) == _rules.end()) {
+                _add_primitive(dep, it->second);
+            }
+        }
+        return n;
     }
 
 public:
@@ -672,24 +695,19 @@ public:
         } else if ((schema_type.is_null() || schema_type == "string") && schema.contains("pattern")) {
             return _visit_pattern(schema["pattern"], rule_name);
         } else if ((schema_type.is_null() || schema_type == "string") && std::regex_match(schema_format, std::regex("^uuid[1-5]?$"))) {
-            return _add_rule(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
-        } else if ((schema_type.is_null() || schema_type == "string") && DATE_RULES.find(schema_format) != DATE_RULES.end()) {
-            for (const auto & kv : DATE_RULES) {
-                _add_rule(kv.first, kv.second);
-            }
-            return schema_format + "-string";
+            return _add_primitive(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
+        } else if ((schema_type.is_null() || schema_type == "string") && STRING_FORMAT_RULES.find(schema_format + "-string") != STRING_FORMAT_RULES.end()) {
+            auto prim_name = schema_format + "-string";
+            return _add_rule(rule_name, _add_primitive(prim_name, STRING_FORMAT_RULES.at(prim_name)));
         } else if (schema.empty() || schema_type == "object") {
-            for (const auto & n : OBJECT_RULE_NAMES) {
-                _add_rule(n, PRIMITIVE_RULES.at(n));
-            }
-            return _add_rule(rule_name, "object");
+            return _add_rule(rule_name, _add_primitive("object", PRIMITIVE_RULES.at("object")));
         } else {
             if (!schema_type.is_string() || PRIMITIVE_RULES.find(schema_type.get<std::string>()) == PRIMITIVE_RULES.end()) {
                 _errors.push_back("Unrecognized schema: " + schema.dump());
                 return "";
             }
             // TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
-            return _add_rule(rule_name == "root" ? "root" : schema_type.get<std::string>(), PRIMITIVE_RULES.at(schema_type.get<std::string>()));
+            return _add_primitive(rule_name == "root" ? "root" : schema_type.get<std::string>(), PRIMITIVE_RULES.at(schema_type.get<std::string>()));
         }
     }
 

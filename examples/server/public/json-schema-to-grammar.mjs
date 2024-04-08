@@ -1,33 +1,39 @@
-// WARNING: This file was ported from json-schema-to-grammar.py, please fix bugs / add features there first.
+// WARNING: This file was ported from json_schema_to_grammar.py, please fix bugs / add features there first.
 const SPACE_RULE = '" "?';
 
+class BuiltinRule {
+  constructor(content, deps) {
+    this.content = content;
+    this.deps = deps || [];
+  }
+}
+
 const PRIMITIVE_RULES = {
-  boolean: '("true" | "false") space',
-  number: '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
-  integer: '("-"? ([0-9] | [1-9] [0-9]*)) space',
-  value: 'object | array | string | number | boolean',
-  object: '"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space',
-  array: '"[" space ( value ("," space value)* )? "]" space',
-  uuid: '"\\"" ' + [8, 4, 4, 4, 12].map(n => [...new Array(n)].map(_ => '[0-9a-fA-F]').join('')).join(' "-" ') + ' "\\"" space',
-  string: ` "\\"" (
+  boolean        : new BuiltinRule('("true" | "false") space', []),
+  number         : new BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space', []),
+  integer        : new BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) space', []),
+  value          : new BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
+  object         : new BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
+  array          : new BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
+  uuid           : new BuiltinRule('"\\"" ' + [8, 4, 4, 4, 12].map(n => [...new Array(n)].map(_ => '[0-9a-fA-F]').join('')).join(' "-" ') + ' "\\"" space', []),
+  string         : new BuiltinRule(` "\\"" (
         [^"\\\\] |
         "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-      )* "\\"" space`,
-  null: '"null" space',
+      )* "\\"" space`, []),
+  null: new BuiltinRule('"null" space', []),
 };
-const OBJECT_RULE_NAMES = ['object', 'array', 'string', 'number', 'boolean', 'null', 'value'];
 
 // TODO: support "uri", "email" string formats
-const DATE_RULES = {
-    'date'   : '[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )',
-    'time'   : '([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )',
-    'date-time': 'date "T" time',
-    'date-string': '"\\"" date "\\"" space',
-    'time-string': '"\\"" time "\\"" space',
-    'date-time-string': '"\\"" date-time "\\"" space',
-};
+const STRING_FORMAT_RULES = {
+  'date'            : new BuiltinRule('[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )', []),
+  'time'            : new BuiltinRule('([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )', []),
+  'date-time'       : new BuiltinRule('date "T" time', ['date', 'time']),
+  'date-string'     : new BuiltinRule('"\\"" date "\\"" space', ['date']),
+  'time-string'     : new BuiltinRule('"\\"" time "\\"" space', ['time']),
+  'date-time-string': new BuiltinRule('"\\"" date-time "\\"" space', ['date-time']),
+}
 
-const RESERVED_NAMES = {'root': true, ...PRIMITIVE_RULES, ...DATE_RULES};
+const RESERVED_NAMES = {'root': true, ...PRIMITIVE_RULES, ...STRING_FORMAT_RULES};
 
 const INVALID_RULE_CHARS_RE = /[^\dA-Za-z-]+/g;
 const GRAMMAR_LITERAL_ESCAPE_RE = /[\n\r"]/g;
@@ -415,26 +421,36 @@ export class SchemaConverter {
     } else if ((schemaType === undefined || schemaType === 'string') && 'pattern' in schema) {
       return this._visitPattern(schema.pattern, ruleName);
     } else if ((schemaType === undefined || schemaType === 'string') && /^uuid[1-5]?$/.test(schema.format || '')) {
-      return this._addRule(
-          ruleName === 'root' ? 'root' : schemaFormat,
-          PRIMITIVE_RULES['uuid'])
-    } else if ((schemaType === undefined || schemaType === 'string') && schema.format in DATE_RULES) {
-      for (const [t, r] of Object.entries(DATE_RULES)) {
-        this._addRule(t, r);
-      }
-      return schemaFormat + '-string';
+      return this._addPrimitive(
+        ruleName === 'root' ? 'root' : schemaFormat,
+        PRIMITIVE_RULES['uuid']
+      );
+    } else if ((schemaType === undefined || schemaType === 'string') && `${schema.format}-string` in STRING_FORMAT_RULES) {
+      const primName = `${schema.format}-string`
+      return this._addRule(ruleName, this._addPrimitive(primName, STRING_FORMAT_RULES[primName]));
     } else if ((schemaType === 'object') || (Object.keys(schema).length === 0)) {
-      for (const n of OBJECT_RULE_NAMES) {
-        this._addRule(n, PRIMITIVE_RULES[n]);
-      }
-      return this._addRule(ruleName, 'object');
+      return this._addRule(ruleName, this._addPrimitive('object', PRIMITIVE_RULES['object']));
     } else {
       if (!(schemaType in PRIMITIVE_RULES)) {
         throw new Error(`Unrecognized schema: ${JSON.stringify(schema)}`);
       }
       // TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
-      return this._addRule(ruleName === 'root' ? 'root' : schemaType, PRIMITIVE_RULES[schemaType]);
+      return this._addPrimitive(ruleName === 'root' ? 'root' : schemaType, PRIMITIVE_RULES[schemaType]);
     }
+  }
+
+  _addPrimitive(name, rule) {
+    let n = this._addRule(name, rule.content);
+    for (const dep of rule.deps) {
+      const depRule = PRIMITIVE_RULES[dep] || STRING_FORMAT_RULES[dep];
+      if (!depRule) {
+        throw new Error(`Rule ${dep} not known`);
+      }
+      if (!(dep in this._rules)) {
+        this._addPrimitive(dep, depRule);
+      }
+    }
+    return n;
   }
 
   _buildObjectRule(properties, required, name, additionalProperties) {
@@ -462,7 +478,7 @@ export class SchemaConverter {
       const valueRule = this.visit(additionalProperties === true ? {} : additionalProperties, `${subName}-value`);
       propKvRuleNames['*'] = this._addRule(
         `${subName}-kv`,
-        `${this._addRule('string', PRIMITIVE_RULES['string'])} ":" space ${valueRule}`);
+        `${this._addPrimitive('string', PRIMITIVE_RULES['string'])} ":" space ${valueRule}`);
       optionalProps.push('*');
     }
 

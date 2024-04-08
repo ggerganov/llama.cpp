@@ -6,37 +6,44 @@ import re
 import sys
 from typing import Any, Dict, List, Set, Tuple, Union
 
+class BuiltinRule:
+    def __init__(self, content: str, deps: list[str] = None):
+        self.content = content
+        self.deps = deps or []
+
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
 SPACE_RULE = '" "?'
 
 PRIMITIVE_RULES = {
-    'boolean': '("true" | "false") space',
-    'number': '("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space',
-    'integer': '("-"? ([0-9] | [1-9] [0-9]*)) space',
-    'value'  : 'object | array | string | number | boolean',
-    'object' : '"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space',
-    'array'  : '"[" space ( value ("," space value)* )? "]" space',
-    'uuid'   : '"\\"" ' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + ' "\\"" space',
-    'string': r''' "\"" (
+    'boolean'      : BuiltinRule('("true" | "false") space', []),
+    'number'       : BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space', []),
+    'integer'      : BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) space', []),
+    'value'        : BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
+    'object'       : BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
+    'array'        : BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
+    'uuid'         : BuiltinRule('"\\"" ' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + ' "\\"" space', []),
+    'string'       : BuiltinRule(r''' "\"" (
         [^"\\] |
         "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-      )* "\"" space''',
-    'null': '"null" space',
+      )* "\"" space''', []),
+    'null'         : BuiltinRule('"null" space', []),
 }
-OBJECT_RULE_NAMES = ['object', 'array', 'string', 'number', 'boolean', 'null', 'value']
 
 # TODO: support "uri", "email" string formats
-DATE_RULES = {
-    'date'   : '[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )',
-    'time'   : '([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )',
-    'date-time': 'date "T" time',
-    'date-string': '"\\"" date "\\"" space',
-    'time-string': '"\\"" time "\\"" space',
-    'date-time-string': '"\\"" date-time "\\"" space',
+STRING_FORMAT_RULES = {
+    'date'            : BuiltinRule('[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )', []),
+    'time'            : BuiltinRule('([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )', []),
+    'date-time'       : BuiltinRule('date "T" time', ['date', 'time']),
+    'date-string'     : BuiltinRule('"\\"" date "\\"" space', ['date']),
+    'time-string'     : BuiltinRule('"\\"" time "\\"" space', ['time']),
+    'date-time-string': BuiltinRule('"\\"" date-time "\\"" space', ['date-time']),
 }
 
-RESERVED_NAMES = set(["root", *PRIMITIVE_RULES.keys(), *DATE_RULES.keys()])
+DOTALL = '[\\U00000000-\\U0010FFFF]'
+DOT = '[\\U00000000-\\x09\\x0B\\x0C\\x0E-\\U0010FFFF]'
+
+RESERVED_NAMES = set(["root", "dot", *PRIMITIVE_RULES.keys(), *STRING_FORMAT_RULES.keys()])
 
 INVALID_RULE_CHARS_RE = re.compile(r'[^a-zA-Z0-9-]+')
 GRAMMAR_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"]')
@@ -46,8 +53,6 @@ GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"', '-': '\\-', ']'
 NON_LITERAL_SET = set('|.()[]{}*+?')
 ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('[]()|{}*+?')
 
-DATE_PATTERN = '[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])'
-TIME_PATTERN = '([01][0-9]|2[0-3])(:[0-5][0-9]){2}(\\.[0-9]{1,3})?(Z|[+-](([01][0-9]|2[0-3]):[0-5][0-9]))' # Cap millisecond precision w/ 3 digits
 
 class SchemaConverter:
     def __init__(self, *, prop_order, allow_fetch, dotall, raw_pattern):
@@ -55,7 +60,9 @@ class SchemaConverter:
         self._allow_fetch = allow_fetch
         self._dotall = dotall
         self._raw_pattern = raw_pattern
-        self._rules = {'space': SPACE_RULE}
+        self._rules = {
+            'space': SPACE_RULE,
+        }
         self._refs = {}
         self._refs_being_resolved = set()
 
@@ -64,6 +71,29 @@ class SchemaConverter:
             lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), literal
         )
         return f'"{escaped}"'
+
+    def not_literal(self, literal: str, dotall: bool = True, maybe_escaped_underscores = False) -> str:
+        '''
+            not_literal('a') -> '[^a]'
+            not_literal('abc') -> '([^a] | "a" ([^b] | "b" ([^c])?)?)?'
+        '''
+        assert len(literal) > 0, 'Empty literal not supported'
+        def recurse(i: int):
+            c = literal[i]
+            if maybe_escaped_underscores and c == '_':
+                yield f'[^{c}\\\\]'
+                yield ' | '
+                yield f'"\\\\"? "{c}"'
+            else:
+                yield f'[^{c}]'
+            if i < len(literal) - 1:
+                yield ' | '
+                yield self._format_literal(c)
+                yield ' ('
+                yield from recurse(i + 1)
+                yield ')?'
+
+        return ''.join(('(', *recurse(0), ')'))
 
     def _add_rule(self, name, rule):
         esc_name = INVALID_RULE_CHARS_RE.sub('-', name)
@@ -169,10 +199,10 @@ class SchemaConverter:
 
             def get_dot():
                 if self._dotall:
-                    rule = '[\\U00000000-\\U0010FFFF]'
+                    rule = DOTALL
                 else:
                     # Accept any character... except \n and \r line break chars (\x0A and \xOD)
-                    rule = '[\\U00000000-\\x09\\x0B\\x0C\\x0E-\\U0010FFFF]'
+                    rule = DOT
                 return self._add_rule(f'dot', rule)
 
             def join_seq():
@@ -394,28 +424,32 @@ class SchemaConverter:
             return self._visit_pattern(schema['pattern'], rule_name)
 
         elif schema_type in (None, 'string') and re.match(r'^uuid[1-5]?$', schema_format or ''):
-            return self._add_rule(
+            return self._add_primitive(
                 'root' if rule_name == 'root' else schema_format,
                 PRIMITIVE_RULES['uuid']
             )
 
-        elif schema_type in (None, 'string') and schema_format in DATE_RULES:
-            for t, r in DATE_RULES.items():
-                self._add_rule(t, r)
-            return schema_format + '-string'
+        elif schema_type in (None, 'string') and f'{schema_format}-string' in STRING_FORMAT_RULES:
+            prim_name = f'{schema_format}-string'
+            return self._add_rule(rule_name, self._add_primitive(prim_name, STRING_FORMAT_RULES[prim_name]))
 
         elif (schema_type == 'object') or (len(schema) == 0):
-            for n in OBJECT_RULE_NAMES:
-                self._add_rule(n, PRIMITIVE_RULES[n])
-            return self._add_rule(rule_name, 'object')
+            return self._add_rule(rule_name, self._add_primitive('object', PRIMITIVE_RULES['object']))
 
         else:
             assert schema_type in PRIMITIVE_RULES, f'Unrecognized schema: {schema}'
             # TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
-            return self._add_rule(
-                'root' if rule_name == 'root' else schema_type,
-                PRIMITIVE_RULES[schema_type]
-            )
+            return self._add_primitive('root' if rule_name == 'root' else schema_type, PRIMITIVE_RULES[schema_type])
+
+    def _add_primitive(self, name: str, rule: BuiltinRule):
+        n = self._add_rule(name, rule.content)
+
+        for dep in rule.deps:
+            dep_rule = PRIMITIVE_RULES.get(dep) or STRING_FORMAT_RULES.get(dep)
+            assert dep_rule, f'Rule {dep} not known'
+            if dep not in self._rules:
+                self._add_primitive(dep, dep_rule)
+        return n
 
     def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str, additional_properties: Union[bool, Any]):
         prop_order = self._prop_order
@@ -437,7 +471,7 @@ class SchemaConverter:
             value_rule = self.visit({} if additional_properties == True else additional_properties, f'{sub_name}-value')
             prop_kv_rule_names["*"] = self._add_rule(
                 f'{sub_name}-kv',
-                self._add_rule('string', PRIMITIVE_RULES['string']) + f' ":" space {value_rule}'
+                self._add_primitive('string', PRIMITIVE_RULES['string']) + f' ":" space {value_rule}'
             )
             optional_props.append("*")
 

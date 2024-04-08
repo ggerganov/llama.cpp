@@ -113,7 +113,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
                     [^"\\] |
                     "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
                     )* "\"" space
-            value ::= object | array | string | number | boolean
+            value ::= object | array | string | number | boolean | null
         )"""
     });
 
@@ -133,10 +133,13 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             date-string ::= "\"" date "\"" space
             date-time ::= date "T" time
             date-time-string ::= "\"" date-time "\"" space
-            root ::= "[" space date-string "," space uuid "," space time-string "," space date-time-string "]" space
+            root ::= "[" space tuple-0 "," space uuid "," space tuple-2 "," space tuple-3 "]" space
             space ::= " "?
             time ::= ([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )
             time-string ::= "\"" time "\"" space
+            tuple-0 ::= date-string
+            tuple-2 ::= time-string
+            tuple-3 ::= date-time-string
             uuid ::= "\"" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "-" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "-" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "-" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "-" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "\"" space
         )"""
     });
@@ -529,7 +532,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
                     [^"\\] |
                     "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
                     )* "\"" space
-            value ::= object | array | string | number | boolean
+            value ::= object | array | string | number | boolean | null
         )"""
     });
 
@@ -551,7 +554,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
                     [^"\\] |
                     "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
                     )* "\"" space
-            value ::= object | array | string | number | boolean
+            value ::= object | array | string | number | boolean | null
         )"""
     });
 
