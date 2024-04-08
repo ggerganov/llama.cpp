@@ -15,10 +15,14 @@ class BuiltinRule {
   }
 }
 
+const UP_TO_15_DIGITS = _buildRepetition('[0-9]', 15);
+
 const PRIMITIVE_RULES = {
   boolean        : new BuiltinRule('("true" | "false") space', []),
-  number         : new BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space', []),
-  integer        : new BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) space', []),
+  'decimal-part' : new BuiltinRule('[0-9] ' + UP_TO_15_DIGITS, []),
+  'integral-part': new BuiltinRule('[0-9] | [1-9] ' + UP_TO_15_DIGITS, []),
+  number         : new BuiltinRule('("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space', ['integral-part', 'decimal-part']),
+  integer        : new BuiltinRule('("-"? integral-part) space', ['integral-part']),
   value          : new BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
   object         : new BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
   array          : new BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),

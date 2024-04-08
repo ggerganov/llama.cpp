@@ -17,14 +17,18 @@ class BuiltinRule:
         self.content = content
         self.deps = deps or []
 
+_up_to_15_digits = _build_repetition('[0-9]', 15)
+
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
 SPACE_RULE = '" "?'
 
 PRIMITIVE_RULES = {
     'boolean'      : BuiltinRule('("true" | "false") space', []),
-    'number'       : BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? space', []),
-    'integer'      : BuiltinRule('("-"? ([0-9] | [1-9] [0-9]*)) space', []),
+    'decimal-part' : BuiltinRule('[0-9] ' + _up_to_15_digits, []),
+    'integral-part': BuiltinRule('[0-9] | [1-9] ' + _up_to_15_digits, []),
+    'number'       : BuiltinRule('("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space', ['integral-part', 'decimal-part']),
+    'integer'      : BuiltinRule('("-"? integral-part) space', ['integral-part']),
     'value'        : BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
     'object'       : BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
     'array'        : BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),

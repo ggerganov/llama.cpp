@@ -35,10 +35,14 @@ struct BuiltinRule {
     std::vector<std::string> deps;
 };
 
+const std::string _up_to_15_digits = build_repetition("[0-9]", 15);
+
 std::unordered_map<std::string, BuiltinRule> PRIMITIVE_RULES = {
     {"boolean", {"(\"true\" | \"false\") space", {}}},
-    {"number", {"(\"-\"? ([0-9] | [1-9] [0-9]*)) (\".\" [0-9]+)? ([eE] [-+]? [0-9]+)? space", {}}},
-    {"integer", {"(\"-\"? ([0-9] | [1-9] [0-9]*)) space", {}}},
+    {"decimal-part", {"[0-9] " + _up_to_15_digits, {}}},
+    {"integral-part", {"[0-9] | [1-9] " + _up_to_15_digits, {}}},
+    {"number", {"(\"-\"? integral-part) (\".\" decimal-part)? ([eE] [-+]? integral-part)? space", {"integral-part", "decimal-part"}}},
+    {"integer", {"(\"-\"? integral-part) space", {"integral-part"}}},
     {"value", {"object | array | string | number | boolean | null", {"object", "array", "string", "number", "boolean", "null"}}},
     {"object", {"\"{\" space ( string \":\" space value (\",\" space string \":\" space value)* )? \"}\" space", {"string", "value"}}},
     {"array", {"\"[\" space ( value (\",\" space value)* )? \"]\" space", {"value"}}},
