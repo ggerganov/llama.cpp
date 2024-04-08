@@ -13468,7 +13468,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         const std::string name = ggml_get_name(meta);
 
         // TODO: avoid hardcoded tensor names - use the TN_* constants
-        if (name.find("attn_v.weight") != std::string::npos || name.find("attn_qkv.weight") != std::string::npos) {
+        if (name.find("attn_v.weight")   != std::string::npos ||
+            name.find("attn_qkv.weight") != std::string::npos) {
             ++qs.n_attention_wv;
         } else if (name == LLM_TN(model.arch)(LLM_TENSOR_OUTPUT, "weight")) {
             qs.has_output = true;
@@ -13478,7 +13479,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     qs.n_ffn_down = qs.n_ffn_gate = qs.n_ffn_up = (int)model.hparams.n_layer;
 
     // sanity checks
-    GGML_ASSERT(qs.n_attention_wv == (int)model.hparams.n_layer && "n_attention_wv != n_layer is unexpected");
+    //
+    //  - qs.n_attention_wv == 0                     for Mamba       models
+    //  - qs.n_attention_wv == model.hparams.n_layer for Transformer models
+    //
+    GGML_ASSERT((qs.n_attention_wv == 0 || qs.n_attention_wv == (int)model.hparams.n_layer) && "n_attention_wv is unexpected");
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
