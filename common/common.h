@@ -62,7 +62,7 @@ struct gpt_params {
     int32_t n_parallel            = 1;     // number of parallel sequences to decode
     int32_t n_sequences           = 1;     // number of sequences to decode
     float   p_split               = 0.1f;  // speculative decoding split probability
-    int32_t n_gpu_layers          = -1;    // number of layers to store in VRAM (-1 - use default, -2 - automatically determine)
+    int32_t n_gpu_layers          = -1;    // number of layers to store in VRAM (-1 - use default, -2 - determine automatically)
     int32_t n_gpu_layers_draft    = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
     llama_split_mode split_mode   = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     int32_t main_gpu              = 0;     // the GPU that is used for scratch and small tensors
