@@ -47,7 +47,7 @@ def _build_repetition(item_rule, min_items, max_items, separator_rule=None, item
 
 
 class BuiltinRule:
-    def __init__(self, content: str, deps: list[str] = None):
+    def __init__(self, content: str, deps: list = None):
         self.content = content
         self.deps = deps or []
 
