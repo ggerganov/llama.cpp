@@ -3986,7 +3986,6 @@ static void llm_load_hparams(
         case LLM_ARCH_DBRX:
         {
             ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV, hparams.f_clamp_kqv);
-            hparams.f_norm_eps = 1.e-5; // REVIEW is that OK ? https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html, should we put in the converter ?
 
             switch (hparams.n_layer) {
                 case 40: model.type = e_model::MODEL_132B; break;
@@ -7133,12 +7132,11 @@ struct llm_build_context {
                 struct ggml_tensor * Vcur = nullptr;
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
+                cur = ggml_norm(ctx0, cur, hparams.f_norm_eps);
                 cb(cur, "wqkv", il);
 
-                if (hparams.f_clamp_kqv > 0.0f) {
-                    cur = ggml_clamp(ctx0, cur, -hparams.f_clamp_kqv, hparams.f_clamp_kqv);
-                    cb(cur, "wqkv_clamped", il);
-                }
+                cur = ggml_clamp(ctx0, cur, -hparams.f_clamp_kqv, hparams.f_clamp_kqv);
+                cb(cur, "wqkv_clamped", il);
 
                 Qcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd)));
                 Kcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd)));
@@ -7148,24 +7146,25 @@ struct llm_build_context {
                 cb(Kcur, "Kcur", il);
                 cb(Vcur, "Vcur", il);
 
-                Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
-                Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
-
                 Qcur = ggml_rope_custom(
-                    ctx0, Qcur, inp_pos, n_rot, rope_type, 0, n_orig_ctx,
-                    freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos,
+                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_custom(
-                    ctx0, Kcur, inp_pos, n_rot, rope_type, 0, n_orig_ctx,
-                    freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos,
+                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
-                                   model.layers[il].layer_out_norm, NULL,
-                                   Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens,kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                                   model.layers[il].layer_out_norm, model.layers[il].bo,
+                                   Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+
+                cur = ggml_norm(ctx0, cur, hparams.f_norm_eps);
             }
 
             if (il == n_layer - 1) {
