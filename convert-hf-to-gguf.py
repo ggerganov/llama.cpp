@@ -1522,7 +1522,7 @@ class DbrxModel(Model):
             n_ff = self.hparams["ffn_config"]["ffn_hidden_size"]
             n_embd = self.hparams["d_model"]
 
-            # Specific behavior for experts tensors: reshape to 3D and add suffix .weight
+            # Specific behavior for experts tensors: suffix .weight, reshape to 3D and transpose
             # orginal implementation expects (n_expert, n_ff, n_embd)
             exp_tensor_names = {"ffn.experts.mlp.v1": (2, 1, 0),  # LLM_TENSOR_FFN_GATE_EXPS(n_embd, n_ff,   n_expert)
                                 "ffn.experts.mlp.w2": (1, 2, 0),  # LLM_TENSOR_FFN_DOWN_EXPS(n_ff,   n_embd, n_expert)
@@ -1536,6 +1536,7 @@ class DbrxModel(Model):
 
             old_dtype = data_torch.dtype
 
+            # View experts tensors as 3D
             if experts:
                 data_torch = data_torch.view(n_expert, n_ff, n_embd)
 
@@ -1559,8 +1560,8 @@ class DbrxModel(Model):
             n_dims = len(data.shape)
             data_dtype = data.dtype
 
-            # Reshape experts tensors from 2D to 3D as expected by GeLU
-            if experts and n_dims == 2:
+            # Transpose experts to the expected llama.cpp format
+            if experts:
                 data = data.transpose(expert_permute)
                 n_dims = len(data.shape)
 
