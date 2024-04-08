@@ -13483,7 +13483,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     //  - qs.n_attention_wv == 0                     for Mamba       models
     //  - qs.n_attention_wv == model.hparams.n_layer for Transformer models
     //
-    GGML_ASSERT(qs.n_attention_wv == 0 || qs.n_attention_wv == (int)model.hparams.n_layer && "n_attention_wv is unexpected");
+    GGML_ASSERT((qs.n_attention_wv == 0 || qs.n_attention_wv == (int)model.hparams.n_layer) && "n_attention_wv is unexpected");
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
