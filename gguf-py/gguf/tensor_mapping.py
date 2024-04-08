@@ -238,7 +238,7 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_UP_EXP: (
             "layers.{bid}.feed_forward.experts.w3",                 # mixtral (merged)
             "transformer.decoder_layer.{bid}.moe.linear_v",         # Grok (merged)
-            "transformer.blocks.{bid}.ffn.experts.mlp.w1",          # dbrx
+            "transformer.blocks.{bid}.ffn.experts.mlp.v1",          # dbrx
         ),
 
         # AWQ-activation gate
@@ -259,7 +259,7 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_GATE_EXP: (
             "layers.{bid}.feed_forward.experts.w1",         # mixtral (merged)
             "transformer.decoder_layer.{bid}.moe.linear",   # Grok (merged)
-            "transformer.blocks.{bid}.ffn.experts.mlp.v1",  # dbrx
+            "transformer.blocks.{bid}.ffn.experts.mlp.w1",  # dbrx
         ),
 
         # Feed-forward down
