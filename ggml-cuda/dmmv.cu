@@ -577,7 +577,7 @@ template <int qk, int qr, dequantize_kernel_t dequantize_kernel>
 static __global__ void dequantize_mul_mat_vec(const void * __restrict__ vx, const dfloat * __restrict__ y, float * __restrict__ dst, const int ncols, const int nrows) {
     // qk = quantized weights per x block
     // qr = number of quantized weights per data value in x block
-    const int row = blockIdx.x*blockDim.y + threadIdx.y;
+    const int64_t row = (int64_t)blockIdx.x*blockDim.y + threadIdx.y;
 
     if (row >= nrows) {
         return;

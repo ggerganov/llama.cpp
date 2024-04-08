@@ -1225,7 +1225,7 @@ static void ggml_cuda_op_mul_mat_cublas(
 
     // the main device has a larger memory buffer to hold the results from all GPUs
     // ldc == nrows of the matrix that cuBLAS writes into
-    int ldc = id == ctx.device ? ne0 : row_diff;
+    int64_t ldc = id == ctx.device ? ne0 : row_diff;
 
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
@@ -1377,8 +1377,8 @@ static void ggml_cuda_op_mul_mat(
     const int64_t ne0 = dst->ne[0];
     const int64_t ne1 = dst->ne[1];
 
-    const int nb2 = dst->nb[2];
-    const int nb3 = dst->nb[3];
+    const int64_t nb2 = dst->nb[2];
+    const int64_t nb3 = dst->nb[3];
 
     GGML_ASSERT(ggml_backend_buffer_is_cuda(dst->buffer));
     GGML_ASSERT(ggml_backend_buffer_is_cuda(src1->buffer));
