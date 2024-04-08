@@ -307,9 +307,9 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.LAYER_OUT_NORM: (
-            "encoder.layer.{bid}.output.LayerNorm",            # bert
-            "encoder.layers.{bid}.norm2",                      # nomic-bert
-            "transformer.decoder_layer.{bid}.rms_norm_3",      # Grok
+            "encoder.layer.{bid}.output.LayerNorm",         # bert
+            "encoder.layers.{bid}.norm2",                   # nomic-bert
+            "transformer.decoder_layer.{bid}.rms_norm_3",   # Grok
         ),
 
         MODEL_TENSOR.SSM_IN: (
