@@ -36,6 +36,8 @@ import gguf
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
 
+logger = logging.getLogger(__name__)
+
 if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
     faulthandler.register(signal.SIGUSR1)
 
@@ -644,7 +646,7 @@ class LlamaHfVocab(Vocab):
 
 
 def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
-    # logging.info( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
+    # logger.info( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
     if n_head_kv is not None and n_head != n_head_kv:
         n_head = n_head_kv
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
@@ -1034,12 +1036,12 @@ def check_vocab_size(params: Params, vocab: BaseVocab, pad_vocab: bool = False) 
 
     # Check for a vocab size mismatch
     if params.n_vocab == vocab.vocab_size:
-        logging.warning("Ignoring added_tokens.json since model matches vocab size without it.")
+        logger.warning("Ignoring added_tokens.json since model matches vocab size without it.")
         return
 
     if pad_vocab and params.n_vocab > vocab.vocab_size:
         pad_count = params.n_vocab - vocab.vocab_size
-        logging.debug(
+        logger.debug(
             f"Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>"
         )
         for i in range(1, pad_count + 1):
@@ -1167,7 +1169,7 @@ class OutputFile:
             elapsed = time.time() - start
             size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
             padi = len(str(len(model)))
-            logging.info(
+            logger.info(
                 f"[{i + 1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}"
             )
             self.gguf.write_tensor_data(ndarray)
@@ -1282,12 +1284,12 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
     # HF models permut or pack some of the tensors, so we need to undo that
     for i in itertools.count():
         if f"model.layers.{i}.self_attn.q_proj.weight" in model:
-            logging.debug(f"Permuting layer {i}")
+            logger.debug(f"Permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head, params.n_head_kv)
             # tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
-            logging.debug(f"Unpacking and permuting layer {i}")
+            logger.debug(f"Unpacking and permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
             tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
@@ -1300,15 +1302,15 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
         tensor_type, name_new = tmap.get_type_and_name(name, try_suffixes = (".weight", ".bias")) or (None, None)
         if name_new is None:
             if skip_unknown:
-                logging.warning(f"Unexpected tensor name: {name} - skipping")
+                logger.warning(f"Unexpected tensor name: {name} - skipping")
                 continue
             raise ValueError(f"Unexpected tensor name: {name}. Use --skip-unknown to ignore it (e.g. LLaVA)")
 
         if tensor_type in should_skip:
-            logging.debug(f"skipping tensor {name_new}")
+            logger.debug(f"skipping tensor {name_new}")
             continue
 
-        logging.debug(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
+        logger.debug(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
         out[name_new] = lazy_tensor
 
     return out
@@ -1373,7 +1375,7 @@ def load_some_model(path: Path) -> ModelPlus:
     paths = find_multifile_paths(path)
     models_plus: list[ModelPlus] = []
     for path in paths:
-        logging.info(f"Loading model file {path}")
+        logger.info(f"Loading model file {path}")
         models_plus.append(lazy_load_file(path))
 
     model_plus = merge_multifile_models(models_plus)
@@ -1414,7 +1416,7 @@ class VocabFactory:
         else:
             raise FileNotFoundError(f"Could not find a tokenizer matching any of {vocab_types}")
 
-        logging.info(f"Loaded vocab file {vocab.fname_tokenizer!r}, type {vocab.name!r}")
+        logger.info(f"Loaded vocab file {vocab.fname_tokenizer!r}, type {vocab.name!r}")
         return vocab
 
     def load_vocab(self, vocab_types: list[str] | None, model_parent_path: Path) -> tuple[BaseVocab, gguf.SpecialVocab]:
