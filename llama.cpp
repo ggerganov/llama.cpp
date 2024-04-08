@@ -3985,7 +3985,8 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_DBRX:
         {
-            ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV, hparams.f_clamp_kqv);
+            ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,  hparams.f_norm_eps);
+            ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV,      hparams.f_clamp_kqv);
 
             switch (hparams.n_layer) {
                 case 40: model.type = e_model::MODEL_132B; break;
