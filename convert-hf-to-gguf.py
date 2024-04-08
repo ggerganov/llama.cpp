@@ -1522,16 +1522,16 @@ class DbrxModel(Model):
             n_ff = self.hparams["ffn_config"]["ffn_hidden_size"]
             n_embd = self.hparams["d_model"]
 
-            # Specific behavior for experts tensors: suffix .weight, reshape to 3D and transpose
+            # Specific behavior for experts tensors: suffix .weight, reshape to 3D
             # orginal implementation expects (n_expert, n_ff, n_embd)
-            exp_tensor_names = {"ffn.experts.mlp.v1": (2, 1, 0),  # LLM_TENSOR_FFN_GATE_EXPS(n_embd, n_ff,   n_expert)
-                                "ffn.experts.mlp.w2": (1, 2, 0),  # LLM_TENSOR_FFN_DOWN_EXPS(n_ff,   n_embd, n_expert)
-                                "ffn.experts.mlp.w1": (2, 1, 0)}  # LLM_TENSOR_FFN_UP_EXPS  (n_embd, n_ff,   n_expert)
+            exp_tensor_names = {"ffn.experts.mlp.v1",  # LLM_TENSOR_FFN_GATE_EXPS ne {n_embd, n_ff,   n_expert}
+                                "ffn.experts.mlp.w2",  # LLM_TENSOR_FFN_DOWN_EXPS ne {n_ff,   n_embd, n_expert}
+                                "ffn.experts.mlp.w1"}  # LLM_TENSOR_FFN_UP_EXPS   ne {n_embd, n_ff,   n_expert }
             experts = False
-            for exp_tensor_name in exp_tensor_names.keys():
+            for exp_tensor_name in exp_tensor_names:
                 if name.find(exp_tensor_name) != -1 and name.find(".weight") == -1:
                     experts = True
-                    data_torch = data_torch.view(n_expert, n_ff, n_embd).permute(*exp_tensor_names[exp_tensor_name])
+                    data_torch = data_torch.view(n_expert, n_ff, n_embd)
                     break
 
             old_dtype = data_torch.dtype
