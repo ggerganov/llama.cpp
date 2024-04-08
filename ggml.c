@@ -6335,19 +6335,18 @@ struct ggml_tensor * ggml_ssm_conv(
     GGML_ASSERT(ggml_is_3d(s));
     GGML_ASSERT(ggml_is_matrix(x));
     GGML_ASSERT(ggml_is_matrix(c));
-    GGML_ASSERT(ggml_is_matrix(sq));
+    GGML_ASSERT(ggml_is_vector(sq));
     GGML_ASSERT(sq->type == GGML_TYPE_I32);
 
     const int64_t d_conv   = c->ne[0];
     const int64_t d_inner  = c->ne[1];
     const int64_t n_tokens = x->ne[1];
-    const int64_t n_kv     = s->ne[2];
+    const int64_t n_rs     = s->ne[2];
 
     GGML_ASSERT( s->ne[0] == d_conv - 1);
     GGML_ASSERT( s->ne[1] == d_inner);
     GGML_ASSERT( x->ne[0] == d_inner);
-    GGML_ASSERT(sq->ne[0] == n_kv);
-    GGML_ASSERT(sq->ne[1] == n_tokens);
+    GGML_ASSERT(sq->ne[0] == n_tokens);
 
     bool is_node = false;
 
@@ -6356,8 +6355,8 @@ struct ggml_tensor * ggml_ssm_conv(
         is_node = true;
     }
 
-    // 2-in-1 concatenated x and conv_states, {d_inner, n_tokens} with {d_conv, d_inner, n_kv}
-    struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, (d_inner*n_tokens) + (d_conv*d_inner*n_kv));
+    // 2-in-1 concatenated x and conv_states, {d_inner, n_tokens} with {d_conv, d_inner, n_rs}
+    struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, (d_inner*n_tokens) + (d_conv*d_inner*n_rs));
 
     result->op   = GGML_OP_SSM_CONV;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6410,7 +6409,7 @@ struct ggml_tensor * ggml_ssm_scan(
         is_node = true;
     }
 
-    // 2-in-1 concatenated y and ssm_states, {d_inner, n_tokens} with {d_state, d_inner, n_kv}
+    // 2-in-1 concatenated y and ssm_states, {d_inner, n_tokens} with {d_state, d_inner, n_rs}
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, ggml_nelements(x) + ggml_nelements(s));
 
     result->op   = GGML_OP_SSM_SCAN;
@@ -15087,9 +15086,9 @@ static void ggml_compute_forward_ssm_conv_f32(
     const int nc   = src2->ne[0]; // d_conv
     const int nr   = src0->ne[1]; // d_inner
     const int n_t  = src1->ne[1]; // n_tokens
-    const int n_kv = src0->ne[2]; // max number of sequences in the batch
+    const int n_rs = src0->ne[2]; // max number of sequences in the batch
 
-    GGML_ASSERT((nr*n_t) + (nc*nr*n_kv) == ggml_nelements(dst));
+    GGML_ASSERT((nr*n_t) + (nc*nr*n_rs) == ggml_nelements(dst));
     GGML_ASSERT(src0->nb[0] == sizeof(float));
     GGML_ASSERT(src1->nb[0] == sizeof(float));
     GGML_ASSERT(src2->nb[0] == sizeof(float));
@@ -15106,10 +15105,12 @@ static void ggml_compute_forward_ssm_conv_f32(
     const int ir1 = MIN(ir0 + dr, nr);
     const int ir  = ir1 - ir0;
 
-    if (n_kv > 1) {
+    const int32_t * sq = src3->data; // {n_tokens}
+
+    if (n_rs > 1) {
         // multiple sequences means it's hard to know when it's the first time a state is read,
         // so copy them all over to the destination, just to be sure.
-        for (int i3 = 0; i3 < n_kv; ++i3) {
+        for (int i3 = 0; i3 < n_rs; ++i3) {
             float * s0 = (float *) ((char *) src0->data + ir0*(src0->nb[1]) + i3*(src0->nb[2]));
             float * s  = (float *) ((char *)  dst->data + ir0*(src2->nb[1]) + i3*(src2->nb[2]) + nr*n_t*sizeof(float));
             // can't use memcpy because of d_conv vs d_conv - 1
@@ -15123,19 +15124,19 @@ static void ggml_compute_forward_ssm_conv_f32(
     }
 
     for (int i2 = 0; i2 < n_t; ++i2) {
-        int32_t * sq = (int32_t *) ((char *) src3->data +  i2*(src3->nb[1])); // {n_kv, n_tokens}
-        float *   x  = (float *)   ((char *)  dst->data + ir0*sizeof(float) + i2*(nr*sizeof(float))); // {d_inner, n_tokens}
-        float *   s  = (float *)   ((char *)  dst->data + ir0*(src2->nb[1]) + sq[0]*(src2->nb[2]) + nr*n_t*sizeof(float)); // {d_conv, d_inner, n_kv}
-        float *   s0; // {d_conv - 1, d_inner, n_kv}
-        float *   x0 = (float *)   ((char *) src1->data + ir0*(src1->nb[0]) + i2*(src1->nb[1])); // {d_inner, n_tokens}
-        float *   c  = (float *)   ((char *) src2->data + ir0*(src2->nb[1])); // {d_conv, d_inner}
+        int32_t sq_i = sq[i2];
+        float * x  = (float *)   ((char *)  dst->data + ir0*sizeof(float) + i2*(nr*sizeof(float))); // {d_inner, n_tokens}
+        float * s  = (float *)   ((char *)  dst->data + ir0*(src2->nb[1]) + sq_i*(src2->nb[2]) + nr*n_t*sizeof(float)); // {d_conv, d_inner, n_rs}
+        float * s0; // {d_conv - 1, d_inner, n_rs}
+        float * x0 = (float *)   ((char *) src1->data + ir0*(src1->nb[0]) + i2*(src1->nb[1])); // {d_inner, n_tokens}
+        float * c  = (float *)   ((char *) src2->data + ir0*(src2->nb[1])); // {d_conv, d_inner}
         int ne0s0;
 
-        GGML_ASSERT(0 <= sq[0] && sq[0] < n_kv);
+        GGML_ASSERT(0 <= sq_i && sq_i < n_rs);
 
         // avoid needing to copy the state for the first token
         if (i2 == 0) {
-            s0 = (float *) ((char *) src0->data + ir0*(src0->nb[1]) + sq[0]*(src0->nb[2])); // {d_conv - 1, d_inner, n_kv}
+            s0 = (float *) ((char *) src0->data + ir0*(src0->nb[1]) + sq_i*(src0->nb[2])); // {d_conv - 1, d_inner, n_rs}
             ne0s0 = src0->ne[0];
         } else {
             // the source is the last (d_conv - 1) columns of the destination
@@ -15151,18 +15152,6 @@ static void ggml_compute_forward_ssm_conv_f32(
             }
             // insert x on the last column
             s[(nc - 1) + i1*nc] = x0[i1];
-        }
-
-        // handle copies when there are multiple output states
-        for (int i3 = 1; i3 < n_kv; ++i3) {
-            int32_t seq = sq[i3];
-            if (0 <= seq && seq < n_kv) {
-                float * s1 = s + (seq - sq[0])*nc*nr;
-                memcpy(s1, s, nc*ir*sizeof(float));
-            } else {
-                // stop at negative or too big seq_ids
-                break;
-            }
         }
 
         // it seems a little faster when this is separate from the state shift
@@ -15216,7 +15205,7 @@ static void ggml_compute_forward_ssm_scan_f32(
     const int64_t nc   = src0->ne[0]; // d_state
     const int64_t nr   = src0->ne[1]; // d_inner
     const int64_t n_t  = src1->ne[1]; // number of tokens in the batch
-    const int64_t n_kv = src0->ne[2]; // max number of sequences in the batch
+    const int64_t n_rs = src0->ne[2]; // max number of sequences in the batch
 
     GGML_ASSERT(ggml_nelements(src1) + ggml_nelements(src0) == ggml_nelements(dst));
     GGML_ASSERT(src0->nb[0] == sizeof(float));
@@ -15225,6 +15214,7 @@ static void ggml_compute_forward_ssm_scan_f32(
     GGML_ASSERT(src3->nb[0] == sizeof(float));
     GGML_ASSERT(src4->nb[0] == sizeof(float));
     GGML_ASSERT(src5->nb[0] == sizeof(float));
+    GGML_ASSERT(src6->nb[0] == sizeof(int32_t));
     // required for the dot product between s and C, and when copying the states
     GGML_ASSERT(src0->nb[1] == src0->ne[0]*sizeof(float));
     // required for per-sequence offsets for states
@@ -15240,10 +15230,12 @@ static void ggml_compute_forward_ssm_scan_f32(
     const int ir1 = MIN(ir0 + dr, nr);
     const int ir  = ir1 - ir0;
 
-    if (n_kv > 1) {
+    const int32_t * sq = src6->data; // {n_tokens}
+
+    if (n_rs > 1) {
         // it's hard to know if the source states have already been copied
         // when there are multiple, so copy them already.
-        for (int i3 = 0; i3 < n_kv; ++i3) {
+        for (int i3 = 0; i3 < n_rs; ++i3) {
             float * s0 = (float *) ((char *) src0->data + ir0*(src0->nb[1]) + i3*(src0->nb[2]));
             float * s  = (float *) ((char *)  dst->data + ir0*(src0->nb[1]) + i3*(src0->nb[2]) + src1->nb[2]);
             memcpy(s, s0, nc*ir*sizeof(float));
@@ -15251,21 +15243,21 @@ static void ggml_compute_forward_ssm_scan_f32(
     }
 
     for (int i2 = 0; i2 < n_t; ++i2) {
-        int32_t * sq = (int32_t *) ((char *) src6->data +  i2*(src6->nb[1])); // {n_kv, n_tokens}
-        float *   y  = (float *)   ((char *)  dst->data + ir0*(src1->nb[0]) +    i2*(src1->nb[1])); // {d_inner, n_tokens}
-        float *   s  = (float *)   ((char *)  dst->data + ir0*(src0->nb[1]) + sq[0]*(src0->nb[2]) + src1->nb[2]); // {d_state, d_inner, n_kv}
-        float *   s0;
-        float *   x  = (float *)   ((char *) src1->data + ir0*(src1->nb[0]) + i2*(src1->nb[1])); // {d_inner, n_tokens}
-        float *   dt = (float *)   ((char *) src2->data + ir0*(src2->nb[0]) + i2*(src2->nb[1])); // {d_inner, n_tokens}
-        float *   A  = (float *)   ((char *) src3->data + ir0*(src3->nb[1])); // {d_state, d_inner}
-        float *   B  = (float *)   ((char *) src4->data +  i2*(src4->nb[1])); // {d_state, n_tokens}
-        float *   C  = (float *)   ((char *) src5->data +  i2*(src5->nb[1])); // {d_state, n_tokens}
+        int32_t sq_i = sq[i2];
+        float * y  = (float *)   ((char *)  dst->data + ir0*(src1->nb[0]) +   i2*(src1->nb[1])); // {d_inner, n_tokens}
+        float * s  = (float *)   ((char *)  dst->data + ir0*(src0->nb[1]) + sq_i*(src0->nb[2]) + src1->nb[2]); // {d_state, d_inner, n_rs}
+        float * s0;
+        float * x  = (float *)   ((char *) src1->data + ir0*(src1->nb[0]) + i2*(src1->nb[1])); // {d_inner, n_tokens}
+        float * dt = (float *)   ((char *) src2->data + ir0*(src2->nb[0]) + i2*(src2->nb[1])); // {d_inner, n_tokens}
+        float * A  = (float *)   ((char *) src3->data + ir0*(src3->nb[1])); // {d_state, d_inner}
+        float * B  = (float *)   ((char *) src4->data +  i2*(src4->nb[1])); // {d_state, n_tokens}
+        float * C  = (float *)   ((char *) src5->data +  i2*(src5->nb[1])); // {d_state, n_tokens}
 
-        GGML_ASSERT(0 <= sq[0] && sq[0] < n_kv);
+        GGML_ASSERT(0 <= sq_i && sq_i < n_rs);
 
         // avoid needing to copy the state for the first token
         if (i2 == 0) {
-            s0 = (float *) ((char *) src0->data + ir0*(src0->nb[1]) + sq[0]*(src0->nb[2])); // {d_state, d_inner, n_kv}
+            s0 = (float *) ((char *) src0->data + ir0*(src0->nb[1]) + sq_i*(src0->nb[2])); // {d_state, d_inner, n_rs}
         } else {
             // otherwise the source is the same as the destination
             s0 = s;
@@ -15287,18 +15279,6 @@ static void ggml_compute_forward_ssm_scan_f32(
                 s[i] = state;
             }
             y[i1] = sumf;
-        }
-
-        // handle copies when there are multiple output states
-        for (int i3 = 1; i3 < n_kv; ++i3) {
-            int32_t seq = sq[i3];
-            if (0 <= seq && seq < n_kv) {
-                float * s1 = s + (seq - sq[0])*nc*nr;
-                memcpy(s1, s, nc*ir*sizeof(float));
-            } else {
-                // stop at negative or too big seq_ids
-                break;
-            }
         }
     }
 }
