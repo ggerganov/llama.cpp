@@ -816,7 +816,7 @@ int main() {
         test_all("Python", [](const TestCase & tc) {
             write("test-json-schema-input.tmp", tc.schema);
             tc.verify_status(std::system(
-                "python ./examples/json-schema-to-grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+                "python ./examples/json_schema_to_grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
             tc.verify(read("test-grammar-output.tmp"));
         });
     } else {
