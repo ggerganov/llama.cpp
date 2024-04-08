@@ -1527,7 +1527,7 @@ def main(args_in: list[str] | None = None) -> None:
             "q8_0": GGMLFileType.MostlyQ8_0,
         }[args.outtype]
 
-    logging.info(f"params = {params}")
+    logger.info(f"params = {params}")
 
     model_parent_path = model_plus.paths[0].parent
     vocab_path = Path(args.vocab_dir or args.model or model_parent_path)
@@ -1542,14 +1542,14 @@ def main(args_in: list[str] | None = None) -> None:
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab,
                                     endianess=endianess, pad_vocab=args.pad_vocab)
-        logging.info(f"Wrote {outfile}")
+        logger.info(f"Wrote {outfile}")
         return
 
     if model_plus.vocab is not None and args.vocab_dir is None and not args.no_vocab:
         vocab = model_plus.vocab
 
-    logging.info(f"Vocab info: {vocab}")
-    logging.info(f"Special vocab info: {special_vocab}")
+    logger.info(f"Vocab info: {vocab}")
+    logger.info(f"Special vocab info: {special_vocab}")
     model   = model_plus.model
     model   = convert_model_names(model, params, args.skip_unknown)
     ftype   = pick_output_type(model, args.outtype)
@@ -1557,11 +1557,11 @@ def main(args_in: list[str] | None = None) -> None:
     outfile = args.outfile or default_outfile(model_plus.paths, ftype)
 
     params.ftype = ftype
-    logging.info(f"Writing {outfile}, format {ftype}")
+    logger.info(f"Writing {outfile}, format {ftype}")
 
     OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab,
                          concurrency=args.concurrency, endianess=endianess, pad_vocab=args.pad_vocab)
-    logging.info(f"Wrote {outfile}")
+    logger.info(f"Wrote {outfile}")
 
 
 if __name__ == '__main__':
