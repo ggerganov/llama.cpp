@@ -2635,6 +2635,8 @@ float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n)
 //
 
 static llama_control_vector_data llama_control_vector_load_one(const llama_control_vector_load_info & load_info) {
+    auto start = ggml_time_ms();
+    printf("control vector load_one...\n");
     int32_t n_tensors;
 
     size_t n_bytes = 0;
@@ -2645,12 +2647,7 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
 
     // calculate size of ctx needed for tensors, ensure tensors are f32, and find max layer
     {
-        struct ggml_init_params meta_params = {
-            /* .mem_size   = */ ggml_tensor_overhead() * 128 + ggml_graph_overhead(),
-            /* .mem_buffer = */ nullptr,
-            /* .no_alloc   = */ true,
-        };
-        ggml_context * meta_ctx = ggml_init(meta_params);
+        ggml_context * meta_ctx = nullptr;
         struct gguf_init_params meta_gguf_params = {
             /* .no_alloc = */ true,
             /* .ctx      = */ &meta_ctx,
@@ -2673,8 +2670,8 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
                     uint32_t layer = std::stoi(name.substr(dotpos + 1));
                     if (layer == 0) {
                         fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                        ggml_free(meta_ctx);
                         gguf_free(meta_ctx_gguf);
+                        ggml_free(meta_ctx);
                         return result;
                     }
                     if (layer > max_direction_layer) {
@@ -2682,31 +2679,30 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
                     }
                 } catch (...) {
                     fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                    ggml_free(meta_ctx);
                     gguf_free(meta_ctx_gguf);
-                    return result;
+                    ggml_free(meta_ctx);
                 }
             }
 
             struct ggml_tensor * tensor_meta = ggml_get_tensor(meta_ctx, name.c_str());
             if (tensor_meta->type != GGML_TYPE_F32 || ggml_n_dims(tensor_meta) != 1) {
                 fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                ggml_free(meta_ctx);
                 gguf_free(meta_ctx_gguf);
+                ggml_free(meta_ctx);
                 return result;
             }
             if (result.n_embd == -1) {
                 result.n_embd = ggml_nelements(tensor_meta);
             } else if (ggml_nelements(tensor_meta) != result.n_embd) {
                 fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, load_info.fname.c_str());
-                ggml_free(meta_ctx);
                 gguf_free(meta_ctx_gguf);
+                ggml_free(meta_ctx);
                 return result;
             }
             n_bytes += ggml_nbytes(tensor_meta);
         }
-        ggml_free(meta_ctx);
         gguf_free(meta_ctx_gguf);
+        ggml_free(meta_ctx);
     }
 
     if (n_tensors == 0) {
@@ -2715,13 +2711,7 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
     }
 
     // load and scale tensors into final control vector context
-    struct ggml_init_params ggml_params = {
-        /* .mem_size   = */ ggml_tensor_overhead() * n_tensors + n_bytes,
-        /* .mem_buffer = */ nullptr,
-        /* .no_alloc   = */ false,
-    };
-    struct ggml_context * ctx = ggml_init(ggml_params);
-
+    struct ggml_context * ctx = nullptr;
     struct gguf_init_params params = {
         /*.no_alloc = */ false,
         /*.ctx      = */ &ctx,
@@ -2754,10 +2744,17 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
         }
     }
 
+    gguf_free(ctx_gguf);
+    ggml_free(ctx);
+
+    auto end = ggml_time_ms();
+    printf("control vector load_one took %ums\n", end - start);
     return result;
 }
 
 llama_control_vector_data llama_control_vector_load(const std::vector<llama_control_vector_load_info> & load_infos) {
+    auto start = ggml_time_ms();
+    printf("control vector load...\n");
     llama_control_vector_data result = { -1, {} };
 
     for (const auto & info : load_infos) {
@@ -2767,7 +2764,7 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
             return result;
         }
         if (result.n_embd != -1 && (result.n_embd != cur.n_embd || result.data.size() != cur.data.size())) {
-            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
+            printf("%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
             return result;
         }
 
@@ -2781,8 +2778,10 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
     }
 
     if (result.n_embd == -1) {
-        fprintf(stderr, "%s: no vectors passed\n", __func__);
+        printf("%s: no vectors passed\n", __func__);
     }
 
+    auto end = ggml_time_ms();
+    printf("control vector load time: %ums\n", end-start);
     return result;
 }

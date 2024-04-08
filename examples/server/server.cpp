@@ -121,6 +121,8 @@ struct server_params {
 
     std::vector<std::string> api_keys;
 
+    std::vector<llama_control_vector_load_option> control_vector_load_options;
+
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     std::string ssl_key_file = "";
     std::string ssl_cert_file = "";
@@ -2226,6 +2228,12 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("                            set an alias for the model, will be added as `model` field in completion response\n");
     printf("  --lora FNAME              apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-base FNAME         optional model to use as a base for the layers modified by the LoRA adapter\n");
+    printf("  --control-vector FNAME\n");
+    printf("                            add a control vector\n");
+    printf("  --control-vector-scaled FNAME S\n");
+    printf("                            add a control vector with user defined scaling S\n");
+    printf("  --control-vector-layer-range START END\n");
+    printf("                        layer range to apply the control vector(s) to, start and end inclusive\n");
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
     printf("  --path PUBLIC_PATH        path from which to serve static files (default: disabled)\n");
@@ -2711,6 +2719,58 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             params.kv_overrides.push_back(kvo);
+        } else if (arg == "--control-vector") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back({ 1.0f, argv[i], });
+        } else if (arg == "--control-vector-scaled") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            const char* fname = argv[i];
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vectors.push_back({ std::stof(argv[i]), fname, });
+        } else if (arg == "--control-vector-layer-range") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vector_layer_start = std::stoi(argv[i]);
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.control_vector_layer_end = std::stoi(argv[i]);
+            break;
+        } else if (arg == "--control-vector-option") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string name = argv[i];
+
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string fname = argv[i];
+
+            size_t slen = fname.length();
+            bool is_dir = slen < 5 || strncmp(argv[i] + slen - 5, ".gguf", 5) != 0;
+
+            // Append path separator for dir names
+            if (is_dir && argv[i][slen - 1] != '/')
+                fname += '/';
+            if (is_dir && argv[i-1][slen - 1] != '/')
+                name += '/';
+            sparams.control_vector_load_options.push_back({ name, fname, is_dir });
+            break;
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             server_print_usage(argv[0], default_params, default_sparams);
@@ -3159,6 +3219,133 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
+    const auto handle_control_vector_options = [&sparams](const httplib::Request & req, httplib::Response & res) {
+      res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+      json options = json::array();
+
+      for (const auto & opt : sparams.control_vector_load_options) {
+          options.push_back(opt.name);
+      }
+      res.set_content(options.dump(), "application/json; charset=utf-8");
+    };
+
+    const auto handle_get_control_vectors = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+      res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+      json vectors = json::array();
+
+      for (const auto & vec : ctx_server.params.control_vectors) {
+          vectors.push_back(json {
+              { "fname", vec.fname },
+              { "strength", vec.strength }
+          });
+      }
+      json data = {
+          { "vectors", vectors },
+          { "layer_start", ctx_server.params.control_vector_layer_start },
+          { "layer_end", ctx_server.params.control_vector_layer_end }
+      };
+      res.set_content(data.dump(), "application/json; charset=utf-8");
+    };
+
+    const auto handle_set_control_vectors = [&ctx_server, &sparams, &res_error, &handle_get_control_vectors](const httplib::Request & req, httplib::Response & res) {
+        json data = json::parse(req.body);
+
+        // vector parameters passed by user
+        std::vector<llama_control_vector_load_info> vec_params;
+        // names translated to real file names
+        std::vector<llama_control_vector_load_info> real_vec_params;
+
+        if (data.contains("vectors") && data["vectors"].is_array()) {
+            for (const auto &item : data["vectors"]) {
+                llama_control_vector_load_info v = item.get<llama_control_vector_load_info>();
+                std::string real_fname = "";
+                std::cout << "Check vec " << v.fname << "\n";
+                // check for path traversal attempt
+                if (v.fname.length() > 0 && v.fname[0] != '/' && v.fname[0] != '\\') {
+                    if (v.fname.find("../") == -1 && v.fname.find("..\\") == -1 &&
+                        v.fname.find("/..") == -1 && v.fname.find("\\..") == -1) {
+
+                        // check if vector name matches allowed names
+                        for (auto opt : sparams.control_vector_load_options) {
+                            std::cout << "check option " << opt.name << " : " << opt.fname << " : " << opt.is_dir << "\n";
+                            if (!opt.is_dir && opt.name == v.fname) {
+                                std::cout << "file exact match\n";
+                                real_fname = opt.fname;
+                                break;
+                            }
+                            if (opt.is_dir && v.fname.rfind(opt.name, 0) == 0) {
+                                std::cout << "file exact match\n";
+                                real_fname = opt.fname + v.fname.substr(opt.name.length());
+#if defined(_WIN32)
+                                std::replace(real_fname.begin(), real_fname.end(), '/', '\\');
+#endif
+                                size_t len = real_fname.length();
+                                if (len < 5 || real_fname.compare(len - 5, 5, ".gguf") != 0)
+                                    real_fname += ".gguf";
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (real_fname.length() == 0) {
+                    res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+                    res_error(res, format_error_response("Control vector not allowed", ERROR_TYPE_SERVER));
+                    return;
+                }
+
+                std::cout << "Add vector: " << v.fname << " -> " << real_fname << " " << v.strength << "\n";
+                llama_control_vector_load_info real_info = { v.strength, real_fname };
+                vec_params.push_back(v);
+                real_vec_params.push_back(real_info);
+            }
+        } else {
+            std::cerr << "No vectors array passed\n";
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+            res_error(res, format_error_response("No vectors array passed. If you want reset to 0, send an empty array.", ERROR_TYPE_SERVER));
+            return;
+        }
+
+        const auto cvec = llama_control_vector_load(real_vec_params);
+
+        if (cvec.n_embd == -1) {
+            std::cerr << "Could not load control vector\n";
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+            res_error(res, format_error_response("Could not load control vector", ERROR_TYPE_SERVER));
+            return;
+        }
+
+        if (ctx_server.params.control_vector_layer_start <= 0) {
+            ctx_server.params.control_vector_layer_start = 1;
+        }
+        if (ctx_server.params.control_vector_layer_end   <= 0){
+            ctx_server.params.control_vector_layer_end   = llama_n_layer(ctx_server.model);
+        }
+
+        int err = llama_control_vector_apply(ctx_server.ctx,
+                                             cvec.data.data(),
+                                             cvec.data.size(),
+                                             cvec.n_embd,
+                                             ctx_server.params.control_vector_layer_start,
+                                             ctx_server.params.control_vector_layer_end);
+        if (err) {
+            std::cerr << "Could not apply control vector\n";
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+            res_error(res, format_error_response("Could not apply control vector", ERROR_TYPE_SERVER));
+            return;
+        }
+
+        ctx_server.params.control_vectors.clear();
+
+        for (auto v : vec_params) {
+          std::cout << "set vector param: " << v.fname << " " << v.strength << "\n";
+          ctx_server.params.control_vectors.push_back(v);
+        }
+
+        handle_get_control_vectors(req, res);
+    };
+
+
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
@@ -3505,22 +3692,25 @@ int main(int argc, char ** argv) {
         json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
 
     // register API routes
-    svr->Get ("/health",              handle_health);
-    svr->Get ("/slots",               handle_slots);
-    svr->Get ("/metrics",             handle_metrics);
-    svr->Get ("/props",               handle_props);
-    svr->Get ("/v1/models",           handle_models);
-    svr->Post("/completion",          handle_completions); // legacy
-    svr->Post("/completions",         handle_completions);
-    svr->Post("/v1/completions",      handle_completions);
-    svr->Post("/chat/completions",    handle_chat_completions);
-    svr->Post("/v1/chat/completions", handle_chat_completions);
-    svr->Post("/infill",              handle_infill);
-    svr->Post("/embedding",           handle_embeddings); // legacy
-    svr->Post("/embeddings",          handle_embeddings);
-    svr->Post("/v1/embeddings",       handle_embeddings);
-    svr->Post("/tokenize",            handle_tokenize);
-    svr->Post("/detokenize",          handle_detokenize);
+    svr->Get ("/health",                  handle_health);
+    svr->Get ("/slots",                   handle_slots);
+    svr->Get ("/metrics",                 handle_metrics);
+    svr->Get ("/props",                   handle_props);
+    svr->Get ("/v1/models",               handle_models);
+    svr->Get ("/control-vectors",         handle_get_control_vectors);
+    svr->Get ("/control-vector-options",  handle_control_vector_options);
+    svr->Post("/control-vectors",         handle_set_control_vectors);
+    svr->Post("/completion",              handle_completions); // legacy
+    svr->Post("/completions",             handle_completions);
+    svr->Post("/v1/completions",          handle_completions);
+    svr->Post("/chat/completions",        handle_chat_completions);
+    svr->Post("/v1/chat/completions",     handle_chat_completions);
+    svr->Post("/infill",                  handle_infill);
+    svr->Post("/embedding",               handle_embeddings); // legacy
+    svr->Post("/embeddings",              handle_embeddings);
+    svr->Post("/v1/embeddings",           handle_embeddings);
+    svr->Post("/tokenize",                handle_tokenize);
+    svr->Post("/detokenize",              handle_detokenize);
 
     //
     // Start the server
