@@ -36,7 +36,7 @@ import gguf
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("convert")
 
 if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
     faulthandler.register(signal.SIGUSR1)
