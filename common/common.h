@@ -179,6 +179,8 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 
 void process_escapes(std::string& input);
 
+bool validate_file_name(const std::string & filename);
+
 //
 // String utils
 //
