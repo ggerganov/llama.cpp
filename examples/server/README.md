@@ -11,6 +11,7 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
  * Continuous batching
  * Multimodal (wip)
  * Monitoring endpoints
+ * Schema-constrained JSON response format
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
 
@@ -249,6 +250,8 @@ node index.js
     `mirostat_eta`: Set the Mirostat learning rate, parameter eta.  Default: `0.1`
 
     `grammar`: Set grammar for grammar-based sampling.  Default: no grammar
+
+    `response_format`: Set the response format. Only supports JSON (e.g. `{"type": "json_object"}`), optionally with a schema (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}`). See [test-json-schema-to-grammar.cpp](../../tests/test-json-schema-to-grammar.cpp).  Default: no response format.
 
     `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
