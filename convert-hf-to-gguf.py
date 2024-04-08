@@ -1535,7 +1535,7 @@ class DbrxModel(Model):
                 if name.find(exp_tensor_name) != -1 and name.find(".weight") == -1:
                     experts = True
                     data_torch = data_torch.view(n_expert, n_ff, n_embd)
-                    if permute_tensor := exp_tensor_names[exp_tensor_name] is not None:
+                    if (permute_tensor := exp_tensor_names[exp_tensor_name]) is not None:
                         data_torch = data_torch.permute(*permute_tensor)
                     break
 

@@ -179,6 +179,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.attention.output.LayerNorm",  # bert
             "encoder.layers.{bid}.norm1",                      # nomic-bert
             "transformer.decoder_layer.{bid}.rms_norm_1",      # Grok
+            "transformer.blocks.{bid}.norm_attn_norm.norm_2",  # dbrx
         ),
 
         # Rotary embeddings
@@ -309,7 +310,6 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.LayerNorm",            # bert
             "encoder.layers.{bid}.norm2",                      # nomic-bert
             "transformer.decoder_layer.{bid}.rms_norm_3",      # Grok
-            "transformer.blocks.{bid}.norm_attn_norm.norm_2",  # dbrx
         ),
 
         MODEL_TENSOR.SSM_IN: (
