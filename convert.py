@@ -139,7 +139,8 @@ class GGMLFileType(enum.IntEnum):
         dt = GGML_FILE_TYPE_TO_DATA_TYPE.get(self)
         if dt is None:
             raise ValueError(self)
-        # 1D tensors are always F32.
+        # Convert all 1D tensors to F32.  Most of the codebase that takes in 1D tensors only handles F32 tensors, and most of the outputs tensors are F32.
+        #  Also The 1d tensors aren't much of a performance/size issue.  So instead of having to have separate F32 and F16 implementations of both, just convert everything to F32 for now.
         return dt if len(tensor.shape) > 1 else DT_F32
 
 
