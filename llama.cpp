@@ -7122,16 +7122,16 @@ struct llm_build_context {
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
 
-            cur = llm_build_norm(ctx0, cur, hparams,
-                                 model.layers[il].attn_out_norm, NULL,
-                                 LLM_NORM, cb, il);
-            cb(cur, "attn_out_norm", il);
-
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
             cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
             // MoE branch
+            cur = llm_build_norm(ctx0, cur, hparams,
+                                 model.layers[il].attn_out_norm, NULL,
+                                 LLM_NORM, cb, il);
+            cb(cur, "attn_out_norm", il);
+
             cur = build_moe(cur, n_tokens, il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
