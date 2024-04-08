@@ -89,3 +89,13 @@ This guide provides a brief overview. Check out the GBNF files in this directory
 ```
 ./main -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
 ```
+
+## Troubleshooting
+
+Grammars currently have performance gotchas (see https://github.com/ggerganov/llama.cpp/issues/4218).
+
+### Efficient optional repetitions
+
+A common pattern is to allow repetitions of a pattern `x` up to N times.
+
+While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) will result in extremely slow inference. Instead, you can write `(x (x (x ... (x)?...)?)?)?` (w/ N-deep nesting)
