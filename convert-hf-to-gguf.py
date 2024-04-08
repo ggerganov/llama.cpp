@@ -1523,9 +1523,10 @@ class DbrxModel(Model):
             n_embd = self.hparams["d_model"]
 
             # Specific behavior for experts tensors: reshape to 3D and add suffix .weight
-            exp_tensor_names = {"ffn.experts.mlp.v1": (2, 1, 3),  # LLM_TENSOR_FFN_GATE_EXPS(n_embd, n_ff,   n_expert)
-                                "ffn.experts.mlp.w2": (1, 2, 3),  # LLM_TENSOR_FFN_DOWN_EXPS(n_ff,   n_embd, n_expert)
-                                "ffn.experts.mlp.w1": (2, 1, 3)}  # LLM_TENSOR_FFN_UP_EXPS  (n_embd, n_ff,   n_expert)
+            # orginal implementation expects (n_expert, n_ff, n_embd)
+            exp_tensor_names = {"ffn.experts.mlp.v1": (2, 1, 0),  # LLM_TENSOR_FFN_GATE_EXPS(n_embd, n_ff,   n_expert)
+                                "ffn.experts.mlp.w2": (1, 2, 0),  # LLM_TENSOR_FFN_DOWN_EXPS(n_ff,   n_embd, n_expert)
+                                "ffn.experts.mlp.w1": (2, 1, 0)}  # LLM_TENSOR_FFN_UP_EXPS  (n_embd, n_ff,   n_expert)
             experts = False
             for exp_tensor_name in exp_tensor_names.keys():
                 if name.find(exp_tensor_name) != -1 and name.find(".weight") == -1:
