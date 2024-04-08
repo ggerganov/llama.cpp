@@ -2177,7 +2177,7 @@ struct llama_context {
 
     std::vector<int32_t> output_ids; // map batch token positions to ids of the logits and embd buffers
     size_t  output_size = 0; // capacity (of tokens positions) for the output buffers
-    int32_t n_outputs   = 0; // number of actually-used outputs in the current ubatch
+    int32_t n_outputs   = 0; // number of actually-used outputs in the current ubatch or last logical batch
 
     bool logits_all = false;
 
@@ -10411,6 +10411,9 @@ static int llama_decode_internal(
         n_outputs_prev += lctx.n_outputs;
     }
 
+    // set to total number of outputs in the batch, for use in llama_get_logits_ith
+    lctx.n_outputs = n_outputs;
+
     // wait for the computation to finish (automatically done when obtaining the model output)
     //llama_synchronize(&lctx);
 
@@ -15944,23 +15947,31 @@ float * llama_get_logits(struct llama_context * ctx) {
 }
 
 float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
+    int32_t j = -1;
     llama_synchronize(ctx);
 
     try {
         if (ctx->logits == nullptr) {
             throw std::runtime_error("no logits");
         }
-        if ((size_t) i >= ctx->output_ids.size()) {
+
+        if (i < 0) {
+            j = ctx->n_outputs + i;
+            if (j < 0) {
+                throw std::runtime_error(format("negative index out of range [0, %d)", ctx->n_outputs));
+            }
+        } else if ((size_t) i >= ctx->output_ids.size()) {
             throw std::runtime_error(format("out of range [0, %lu)", ctx->output_ids.size()));
+        } else {
+            j = ctx->output_ids[i];
         }
-        const int32_t j = ctx->output_ids[i];
 
         if (j < 0) {
             throw std::runtime_error(format("batch.logits[%d] != true", i));
         }
-        if ((size_t) j >= ctx->output_size) {
+        if (j >= ctx->n_outputs) {
             // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, output_size=%lu)", j, ctx->output_size));
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
         }
 
         return ctx->logits + j*ctx->model.hparams.n_vocab;
@@ -15980,23 +15991,32 @@ float * llama_get_embeddings(struct llama_context * ctx) {
 }
 
 float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
+    int32_t j = -1;
+
     llama_synchronize(ctx);
 
     try {
         if (ctx->embd == nullptr) {
             throw std::runtime_error("no embeddings");
         }
-        if ((size_t) i >= ctx->output_ids.size()) {
+
+        if (i < 0) {
+            j = ctx->n_outputs + i;
+            if (j < 0) {
+                throw std::runtime_error(format("negative index out of range [0, %d)", ctx->n_outputs));
+            }
+        } else if ((size_t) i >= ctx->output_ids.size()) {
             throw std::runtime_error(format("out of range [0, %lu)", ctx->output_ids.size()));
+        } else {
+            j = ctx->output_ids[i];
         }
-        const int32_t j = ctx->output_ids[i];
 
         if (j < 0) {
             throw std::runtime_error(format("batch.logits[%d] != true", i));
         }
-        if ((size_t) j >= ctx->output_size) {
+        if (j >= ctx->n_outputs) {
             // This should not happen
-            throw std::runtime_error(format("corrupt output buffer (j=%d, output_size=%lu)", j, ctx->output_size));
+            throw std::runtime_error(format("corrupt output buffer (j=%d, n_outputs=%d)", j, ctx->n_outputs));
         }
 
         return ctx->embd + j*ctx->model.hparams.n_embd;
