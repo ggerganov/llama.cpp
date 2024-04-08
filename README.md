@@ -183,6 +183,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file)(Apachev2.0 or later)
 - [Dot](https://github.com/alexpinel/Dot) (GPL)
 - [MindMac](https://mindmac.app) (proprietary)
+- [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
