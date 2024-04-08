@@ -4362,12 +4362,22 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
 }
 
-static int llm_determine_max_ngl(const llama_model_loader & ml, const llama_model & model, const int main_gpu) {
+static int llm_determine_max_ngl(const llama_model_loader & ml, const llama_model & model, const int main_gpu, enum llama_split_mode split_mode) {
     const auto & hparams = model.hparams;
 
     // could become negative - use signed size_t
-    ssize_t available_gpu_memory = llama_get_available_device_memory(main_gpu);
+    ssize_t available_gpu_memory = 0;
     int n_layer = hparams.n_layer;
+
+    if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
+        // veeery sketchy, there has to be a better way to do this
+        int deice_count = llama_get_device_count();
+        for (int i = 0; i < deice_count; ++i) {
+            available_gpu_memory += llama_get_available_device_memory(i);
+        }
+    } else {
+        available_gpu_memory = llama_get_available_device_memory(main_gpu);
+    }
 
     // "avoid a scenario where an application ooms because llama.cpp only left 5 MB of VRAM" - https://github.com/ggerganov/llama.cpp/pull/6502#discussion_r1555060962
     available_gpu_memory -= 50 * MiB;
@@ -4452,7 +4462,7 @@ static bool llm_load_tensors(
     auto & hparams = model.hparams;
 
     if (n_gpu_layers == -2) {
-        n_gpu_layers = llm_determine_max_ngl(ml, model, main_gpu);
+        n_gpu_layers = llm_determine_max_ngl(ml, model, main_gpu, split_mode);
         LLAMA_LOG_INFO("%s: automatically set n_gpu_layers to %d\n", __func__, n_gpu_layers);
     }
 
