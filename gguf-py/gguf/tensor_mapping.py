@@ -101,8 +101,7 @@ class TensorNameMap:
 
         # Attention norm 2
         MODEL_TENSOR.ATTN_NORM_2: (
-            "transformer.h.{bid}.ln_attn",                     # falcon40b
-            "transformer.blocks.{bid}.norm_attn_norm.norm_2",  # dbrx
+            "transformer.h.{bid}.ln_attn",  # falcon40b
         ),
 
         # Attention query-key-value
@@ -155,23 +154,24 @@ class TensorNameMap:
 
         # Attention output
         MODEL_TENSOR.ATTN_OUT: (
-            "gpt_neox.layers.{bid}.attention.dense",                     # gptneox
-            "transformer.h.{bid}.attn.c_proj",                           # gpt2 refact qwen
-            "transformer.blocks.{bid}.attn.out_proj",                    # mpt
-            "transformer.h.{bid}.self_attention.dense",                  # falcon
-            "h.{bid}.self_attention.dense",                              # bloom
-            "model.layers.{bid}.self_attn.o_proj",                       # llama-hf
-            "layers.{bid}.attention.wo",                                 # llama-pth
-            "encoder.layer.{bid}.attention.output.dense",                # bert
-            "transformer.h.{bid}.attn.out_proj",                         # gpt-j
-            "language_model.encoder.layers.{bid}.self_attention.dense",  # persimmon
-            "model.layers.{bid}.self_attn.dense",                        # persimmon
-            "h.{bid}.attn.c_proj",                                       # gpt2
-            "transformer.h.{bid}.mixer.out_proj",                        # phi2
-            "model.layers.layers.{bid}.self_attn.o_proj",                # plamo
-            "model.layers.{bid}.attention.wo",                           # internlm2
-            "encoder.layers.{bid}.attn.out_proj",                        # nomic-bert
-            "transformer.decoder_layer.{bid}.multi_head_attention.linear"# Grok
+            "gpt_neox.layers.{bid}.attention.dense",                        # gptneox
+            "transformer.h.{bid}.attn.c_proj",                              # gpt2 refact qwen
+            "transformer.blocks.{bid}.attn.out_proj",                       # mpt
+            "transformer.h.{bid}.self_attention.dense",                     # falcon
+            "h.{bid}.self_attention.dense",                                 # bloom
+            "model.layers.{bid}.self_attn.o_proj",                          # llama-hf
+            "layers.{bid}.attention.wo",                                    # llama-pth
+            "encoder.layer.{bid}.attention.output.dense",                   # bert
+            "transformer.h.{bid}.attn.out_proj",                            # gpt-j
+            "language_model.encoder.layers.{bid}.self_attention.dense",     # persimmon
+            "model.layers.{bid}.self_attn.dense",                           # persimmon
+            "h.{bid}.attn.c_proj",                                          # gpt2
+            "transformer.h.{bid}.mixer.out_proj",                           # phi2
+            "model.layers.layers.{bid}.self_attn.o_proj",                   # plamo
+            "model.layers.{bid}.attention.wo",                              # internlm2
+            "encoder.layers.{bid}.attn.out_proj",                           # nomic-bert
+            "transformer.decoder_layer.{bid}.multi_head_attention.linear",  # Grok
+            "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj",        # dbrx
         ),
 
         # Attention output norm
@@ -306,10 +306,10 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.LAYER_OUT_NORM: (
-            "encoder.layer.{bid}.output.LayerNorm",                   # bert
-            "encoder.layers.{bid}.norm2",                             # nomic-bert
-            "transformer.decoder_layer.{bid}.rms_norm_3",             # Grok
-            "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj",  # dbrx
+            "encoder.layer.{bid}.output.LayerNorm",            # bert
+            "encoder.layers.{bid}.norm2",                      # nomic-bert
+            "transformer.decoder_layer.{bid}.rms_norm_3",      # Grok
+            "transformer.blocks.{bid}.norm_attn_norm.norm_2",  # dbrx
         ),
 
         MODEL_TENSOR.SSM_IN: (

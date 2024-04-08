@@ -938,7 +938,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_OUTPUT,          "output" },
             { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
             { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
-            { LLM_TENSOR_ATTN_NORM_2,     "blk.%d.attn_norm_2" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_FFN_GATE_INP,    "blk.%d.ffn_gate_inp" },
             { LLM_TENSOR_FFN_GATE_EXPS,   "blk.%d.ffn_gate_exps" },
             { LLM_TENSOR_FFN_DOWN_EXPS,   "blk.%d.ffn_down_exps" },
@@ -4687,16 +4687,16 @@ static bool llm_load_tensors(
                     auto & layer = model.layers[i];
 
                     layer.attn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM,  "weight", i), {n_embd});
-                    layer.attn_norm_2 = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2,"weight", i), {n_embd});
 
                     layer.wqkv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa});
+                    layer.wo   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
 
                     layer.ffn_gate_inp  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert});
                     layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS,"weight", i), {n_embd, n_ff,   n_expert});
                     layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS,"weight", i), {n_ff,   n_embd, n_expert});
                     layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,  "weight", i), {n_embd, n_ff,   n_expert});
 
-                    layer.layer_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "weight", i), {n_embd, n_embd});
+                    layer.layer_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "weight", i), {n_embd});
                 }
             } break;
             case LLM_ARCH_BAICHUAN:
@@ -7132,7 +7132,6 @@ struct llm_build_context {
                 struct ggml_tensor * Vcur = nullptr;
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
-                cur = ggml_norm(ctx0, cur, hparams.f_norm_eps);
                 cb(cur, "wqkv", il);
 
                 cur = ggml_clamp(ctx0, cur, -hparams.f_clamp_kqv, hparams.f_clamp_kqv);
@@ -7161,10 +7160,9 @@ struct llm_build_context {
                 cb(Kcur, "Kcur", il);
 
                 cur = llm_build_kv(ctx0, model, hparams, kv_self, gf,
-                                   model.layers[il].layer_out_norm, model.layers[il].bo,
+                                   model.layers[il].wo, NULL,
                                    Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
-                cur = ggml_norm(ctx0, cur, hparams.f_norm_eps);
             }
 
             if (il == n_layer - 1) {
@@ -7181,11 +7179,6 @@ struct llm_build_context {
             // feed-forward network
             // MoE branch
             {
-                cur = llm_build_norm(ctx0, ffn_inp, hparams,
-                                     model.layers[il].attn_norm_2, NULL,
-                                     LLM_NORM, cb, il);
-                cb(cur, "ffn_norm", il);
-
                 ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
                 cb(logits, "ffn_moe_logits", il);
 
@@ -7242,6 +7235,11 @@ struct llm_build_context {
                 }
                 cur = moe_out;
             }
+
+            cur = llm_build_norm(ctx0, cur, hparams,
+                                 model.layers[il].layer_out_norm, NULL,
+                                 LLM_NORM, cb, il);
+            cb(cur, "layer_out_norm", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
