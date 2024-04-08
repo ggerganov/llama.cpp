@@ -1412,7 +1412,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_supports_gpu_offload()) {
         printf("  -ngl N, --n-gpu-layers N\n");
         printf("                        number of layers to store in VRAM\n");
-        printf("                        set to 'auto' or 'a' to determine max automatically based on VRAM size\n");
+        printf("                        set to 'auto' or 'a' to estimate max automatically based on VRAM size\n");
         printf("  -ngld N, --n-gpu-layers-draft N\n");
         printf("                        number of layers to store in VRAM for the draft model\n");
         printf("  -sm SPLIT_MODE, --split-mode SPLIT_MODE\n");
