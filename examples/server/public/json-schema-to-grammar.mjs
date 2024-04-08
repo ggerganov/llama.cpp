@@ -72,11 +72,9 @@ const PRIMITIVE_RULES = {
   object         : new BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
   array          : new BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
   uuid           : new BuiltinRule('"\\"" ' + [8, 4, 4, 4, 12].map(n => [...new Array(n)].map(_ => '[0-9a-fA-F]').join('')).join(' "-" ') + ' "\\"" space', []),
-  string         : new BuiltinRule(` "\\"" (
-        [^"\\\\] |
-        "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-      )* "\\"" space`, []),
-  null: new BuiltinRule('"null" space', []),
+  char           : new BuiltinRule(`[^"\\\\] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])`, []),
+  string         : new BuiltinRule(`"\\"" char* "\\"" space`, ['char']),
+  null           : new BuiltinRule('"null" space', []),
 };
 
 // TODO: support "uri", "email" string formats
@@ -463,6 +461,11 @@ export class SchemaConverter {
     } else if ((schemaType === undefined || schemaType === 'string') && `${schema.format}-string` in STRING_FORMAT_RULES) {
       const primName = `${schema.format}-string`
       return this._addRule(ruleName, this._addPrimitive(primName, STRING_FORMAT_RULES[primName]));
+    } else if (schemaType === 'string' && ('minLength' in schema || 'maxLength' in schema)) {
+      const charRuleName = this._addPrimitive('char', PRIMITIVE_RULES['char']);
+      const minLen = schema.minLength || 0;
+      const maxLen = schema.maxLength;
+      return this._addRule(ruleName, '"\\\"" ' + _buildRepetition(charRuleName, minLen, maxLen) + ' "\\\"" space');
     } else if ((schemaType === 'object') || (Object.keys(schema).length === 0)) {
       return this._addRule(ruleName, this._addPrimitive('object', PRIMITIVE_RULES['object']));
     } else {

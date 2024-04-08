@@ -66,11 +66,9 @@ PRIMITIVE_RULES = {
     'value'        : BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
     'object'       : BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
     'array'        : BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
-    'uuid'         : BuiltinRule('"\\"" ' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + ' "\\"" space', []),
-    'string'       : BuiltinRule(r''' "\"" (
-        [^"\\] |
-        "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
-      )* "\"" space''', []),
+    'uuid'         : BuiltinRule(r'"\"" ' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + r' "\"" space', []),
+    'char'         : BuiltinRule(r'[^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])', []),
+    'string'       : BuiltinRule(r'"\"" char* "\"" space', ['char']),
     'null'         : BuiltinRule('"null" space', []),
 }
 
@@ -451,6 +449,13 @@ class SchemaConverter:
         elif schema_type in (None, 'string') and f'{schema_format}-string' in STRING_FORMAT_RULES:
             prim_name = f'{schema_format}-string'
             return self._add_rule(rule_name, self._add_primitive(prim_name, STRING_FORMAT_RULES[prim_name]))
+
+        elif schema_type == 'string' and ('minLength' in schema or 'maxLength' in schema):
+            char_rule = self._add_primitive('char', PRIMITIVE_RULES['char'])
+            min_len = schema.get('minLength', 0)
+            max_len = schema.get('maxLength')
+
+            return self._add_rule(rule_name, r'"\"" ' + _build_repetition(char_rule, min_len, max_len) + r' "\"" space')
 
         elif (schema_type == 'object') or (len(schema) == 0):
             return self._add_rule(rule_name, self._add_primitive('object', PRIMITIVE_RULES['object']))
