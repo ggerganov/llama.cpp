@@ -1,21 +1,25 @@
 import atexit
+import os
 from pathlib import Path
 import subprocess
 import sys
 from time import sleep
 import typer
-from pydantic import Json, TypeAdapter
+from pydantic import BaseModel, Json, TypeAdapter
 from typing import Annotated, Callable, List, Union, Optional, Type
 import json, requests
 
-from examples.json_schema_to_grammar import SchemaConverter
+from examples.agent.openapi_client import OpenAPIMethod, openapi_methods_from_endpoint
 from examples.agent.tools.std_tools import StandardTools
 from examples.openai.api import ChatCompletionRequest, ChatCompletionResponse, Message, ResponseFormat, Tool, ToolFunction
 from examples.agent.utils import collect_functions, load_module
 from examples.openai.prompting import ToolsPromptStyle
 
 def _get_params_schema(fn: Callable, verbose):
-    converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
+    if isinstance(fn, OpenAPIMethod):
+        return fn.parameters_schema
+    
+    # converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
     schema = TypeAdapter(fn).json_schema()
     # Do NOT call converter.resolve_refs(schema) here. Let the server resolve local refs.
     if verbose:
@@ -81,9 +85,7 @@ def completion_with_tool_usage(
             headers=headers,
             json=request.model_dump(),
         )
-        if response.status_code != 200:
-            raise Exception(f"Request failed ({response.status_code}): {response.text}")
-
+        response.raise_for_status()
         response_json = response.json()
         response = ChatCompletionResponse(**response_json)
         if verbose:
@@ -101,8 +103,9 @@ def completion_with_tool_usage(
                 if content:
                     print(f'💭 {content}')
 
-                pretty_call = f'{tool_call.function.name}({", ".join(f"{k}={v}" for k, v in tool_call.function.arguments.items())})'
+                pretty_call = f'{tool_call.function.name}({", ".join(f"{k}={v.model_dump_json() if isinstance(v, BaseModel) else json.dumps(v)}" for k, v in tool_call.function.arguments.items())})'
                 sys.stdout.write(f'⚙️  {pretty_call}')
+                sys.stdout.flush()
                 tool_result = tool_map[tool_call.function.name](**tool_call.function.arguments)
                 sys.stdout.write(f" -> {tool_result}\n")
                 messages.append(Message(
@@ -188,13 +191,16 @@ def main(
     tool_functions = []
     types = {}
     for f in tools:
-        module = load_module(f)
-        tool_functions.extend(collect_functions(module))
-        types.update({
-            k: v
-            for k, v in module.__dict__.items()
-            if isinstance(v, type)
-        })
+        if f.startswith('http://') or f.startswith('https://'):
+            tool_functions.extend(openapi_methods_from_endpoint(f))
+        else:
+            module = load_module(f)
+            tool_functions.extend(collect_functions(module))
+            types.update({
+                k: v
+                for k, v in module.__dict__.items()
+                if isinstance(v, type)
+            })
 
     if std_tools:
         tool_functions.extend(collect_functions(StandardTools))

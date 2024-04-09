@@ -27,7 +27,7 @@ def bind_functions(app, module):
 
         print(f'INFO:     Binding /{k}')
         try:
-            app.post(k)(v)
+            app.post('/' + k)(v)
         except Exception as e:
             print(f'WARNING:    Failed to bind /{k}\n\t{e}')
 

@@ -108,14 +108,24 @@ The agent can use tools written in Python, or (soon) exposed under OpenAPI endpo
 so we provide a script to run them in a Docker-sandboxed environment, exposed as an OpenAPI server:
 
     ```bash
-    examples/openai/run_sandboxed_tools.sh \
-        examples/agent/tools/unsafe_python_tools.py 6666 &
+    PORT=9999 examples/openai/run_sandboxed_tools.sh \
+        examples/agent/tools/unsafe_python_tools.py &
 
-    python -m examples.openai.reactor \
-        --model ~/AI/Models/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf \
-        --tools http://localhost:6666 \
+    python -m examples.agent \
+        --tools http://localhost:9999 \
         --goal "Whats cos(123) / 23 * 12.6 ?"
     ```
+
+    <details>
+    <summary>Show output</summary>
+
+    ```
+    💭 Calculate the expression using Python
+    ⚙️  execute_python(source="import math\nresult = math.cos(123) / 23 * 12.6") -> {'result': -0.4864525314920599}
+    ➡️ "-0.4864525314920599"
+    ```
+
+    </details>
 
     - [fastify.py](./fastify.py) turns a python module into an OpenAPI endpoint using FastAPI
 
@@ -125,7 +135,6 @@ so we provide a script to run them in a Docker-sandboxed environment, exposed as
 
     ```bash
     python -m examples.agent \
-        --model ~/AI/Models/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf \
         --tools examples/agent/tools/example_summaries.py \
         --format PyramidalSummary \
         --goal "Create a pyramidal summary of Mankind's recent advancements"
@@ -156,7 +165,8 @@ python -m examples.openai \
 #   python -m examples.openai --model mixtral.gguf
 
 # Agent itself:
-python -m examples.agent --endpoint http://localhost:8080 \
+python -m examples.agent \
+    --endpoint http://localhost:8080 \
     --tools examples/agent/tools/example_summaries.py \
     --format PyramidalSummary \
     --goal "Create a pyramidal summary of Mankind's recent advancements"

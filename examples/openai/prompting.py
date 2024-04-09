@@ -54,7 +54,7 @@ class ChatTemplate(BaseModel):
     template: str
     eos_token: str
     bos_token: str
-    
+
     inferred_tool_style: Annotated[Optional['ToolsPromptStyle'], Field(exclude=True)] = None
     expects_stringified_function_arguments: Annotated[Optional[bool], Field(exclude=True)] = None
     expects_strict_user_assistant_alternance: Annotated[Optional[bool], Field(exclude=True)] = None
@@ -103,7 +103,7 @@ class ChatTemplate(BaseModel):
         # if self.inferred_tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
         user_msg = Message(role="user", content="Hey")
         assistant_msg = Message(role="assistant", content="I, Robot")
-        
+
         self.expects_strict_user_assistant_alternance = not succeeds([assistant_msg, user_msg]) and succeeds([user_msg, assistant_msg])
 
         thought = "Precious thought"
@@ -193,7 +193,7 @@ class ChatHandler(ABC):
     @abstractmethod
     def parse(self, s: str) -> Optional[Message]:
         raise NotImplementedError()
-    
+
 
     def add_system_prompt(self, messages: list[Message], system_prompt: Message) -> list[Message]:
         assert system_prompt.role == "system"
@@ -233,7 +233,7 @@ class ChatHandler(ABC):
                         }, indent=2)
                     )
                 # Fall through to benefit from role normalization
-                
+
             if m.tool_calls:
                 if not self.args.chat_template.formats_tool_call or not self.args.chat_template.formats_tool_call_content:
                     return Message(
@@ -276,9 +276,9 @@ class ChatHandler(ABC):
                     return Message(role="user", content=f'[{m.role.upper()}]{m.content}[/{m.role.upper()}]')
             else:
                 return m
-    
+
         messages=[normalize(m) for m in messages]
-        
+
         if self.args.chat_template.expects_strict_user_assistant_alternance:
             new_messages=[]
             current_role = 'user'
@@ -580,7 +580,13 @@ class ThoughtfulStepsToolsChatHandler(ChatHandler):
         # args.response_schema = args.response_schema or {}
         converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
 
-        response_schema = args.response_schema or {"type": "string"}
+        response_schema = converter.resolve_refs(args.response_schema or {"type": "string"}, 'response')
+        tool_parameter_schemas = {
+            tool.function.name: converter.resolve_refs(tool.function.parameters, tool.function.name)
+            for tool in self.args.tools
+        }
+        # sys.stderr.write(f"# RESOLVED RESPONSE SCHEMA: {json.dumps(response_schema, indent=2)}\n")
+        # sys.stderr.write(f"# RESOLVED TOOL PARAMETER SCHEMA: {json.dumps(tool_parameter_schemas, indent=2)}\n")
         converter.visit(
             _make_bespoke_schema(
                 response_schema,
@@ -589,12 +595,12 @@ class ThoughtfulStepsToolsChatHandler(ChatHandler):
                         {
                             "type": "object",
                             "properties": {
-                                "name": {"const": tool.function.name},
-                                "arguments": tool.function.parameters,
+                                "name": {"const": tool_name},
+                                "arguments": tool_parameters,
                             },
                             "required": ["name", "arguments"]
                         }
-                        for tool in self.args.tools
+                        for tool_name, tool_parameters in tool_parameter_schemas.items()
                     ]
                 },
                 parallel_calls=parallel_calls,
