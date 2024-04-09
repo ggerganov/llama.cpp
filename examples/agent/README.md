@@ -138,19 +138,28 @@ If you'd like to debug each binary separately (rather than have an agent spawing
 ```bash
 # C++ server
 make -j server
-./server --model mixtral.gguf --port 8081
+./server \
+    --model mixtral.gguf \
+    --metrics \
+    -ctk q4_0 \
+    -ctv f16 \
+    -c 32768 \
+    --port 8081
 
 # OpenAI compatibility layer
 python -m examples.openai \
-    --port 8080
+    --port 8080 \
     --endpoint http://localhost:8081 \
-    --template_hf_model_id_fallback mistralai/Mixtral-8x7B-Instruct-v0.1
+    --template-hf-model-id-fallback mistralai/Mixtral-8x7B-Instruct-v0.1
 
 # Or have the OpenAI compatibility layer spawn the C++ server under the hood:
 #   python -m examples.openai --model mixtral.gguf
 
 # Agent itself:
 python -m examples.agent --endpoint http://localhost:8080 \
+    --tools examples/agent/tools/example_summaries.py \
+    --format PyramidalSummary \
+    --goal "Create a pyramidal summary of Mankind's recent advancements"
 ```
 
 ## Use existing tools (WIP)

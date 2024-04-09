@@ -712,15 +712,19 @@ def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Op
     else:
         raise ValueError(f"Unsupported tool call style: {args.chat_template.tool_style}")
 
-_ts_converter = SchemaToTypeScriptConverter()
-
 # os.environ.get('NO_TS')
 def _please_respond_with_schema(schema: dict) -> str:
     # sig = json.dumps(schema, indent=2)
+    _ts_converter = SchemaToTypeScriptConverter()
+    _ts_converter.resolve_refs(schema, 'schema')
     sig = _ts_converter.visit(schema)
     return f'Please respond in JSON format with the following schema: {sig}'
 
 def _tools_typescript_signatures(tools: list[Tool]) -> str:
+    _ts_converter = SchemaToTypeScriptConverter()
+    for tool in tools:
+        _ts_converter.resolve_refs(tool.function.parameters, tool.function.name)
+
     return 'namespace functions {\n' + '\n'.join(
         '// ' + tool.function.description.replace('\n', '\n// ') + '\n' + ''
         'type ' + tool.function.name + ' = (_: ' + _ts_converter.visit(tool.function.parameters) + ") => any;\n"

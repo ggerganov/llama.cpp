@@ -73,7 +73,7 @@ def main(
         ]
         server_process = subprocess.Popen(cmd, stdout=sys.stderr)
         atexit.register(server_process.kill)
-        endpoint = f"http://{server_host}:{server_port}/completions"
+        endpoint = f"http://{server_host}:{server_port}"
 
 
     # print(chat_template.render([
@@ -125,7 +125,7 @@ def main(
 
         if chat_request.response_format is not None:
             assert chat_request.response_format.type == "json_object", f"Unsupported response format: {chat_request.response_format.type}"
-            response_schema = chat_request.response_format.json_schema or {}
+            response_schema = chat_request.response_format.schema or {}
         else:
             response_schema = None
 
@@ -164,7 +164,7 @@ def main(
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{endpoint}",
+                f'{endpoint}/completions',
                 json=data,
                 headers=headers,
                 timeout=None)

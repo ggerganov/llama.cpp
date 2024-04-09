@@ -28,8 +28,8 @@ class Tool(BaseModel):
     function: ToolFunction
 
 class ResponseFormat(BaseModel):
-    type: str
-    json_schema: Optional[Any] = None
+    type: Literal["json_object"]
+    schema: Optional[Dict] = None
 
 class LlamaCppParams(BaseModel):
     n_predict: Optional[int] = None

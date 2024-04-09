@@ -14,6 +14,56 @@ class SchemaToTypeScriptConverter:
     # // where to get weather.
     # location: string,
     # }) => any;
+
+    def __init__(self):
+        self._refs = {}
+        self._refs_being_resolved = set()
+
+    def resolve_refs(self, schema: dict, url: str):
+        '''
+            Resolves all $ref fields in the given schema, fetching any remote schemas,
+            replacing $ref with absolute reference URL and populating self._refs with the
+            respective referenced (sub)schema dictionaries.
+        '''
+        def visit(n: dict):
+            if isinstance(n, list):
+                return [visit(x) for x in n]
+            elif isinstance(n, dict):
+                ref = n.get('$ref')
+                if ref is not None and ref not in self._refs:
+                    if ref.startswith('https://'):
+                        assert self._allow_fetch, 'Fetching remote schemas is not allowed (use --allow-fetch for force)'
+                        import requests
+
+                        frag_split = ref.split('#')
+                        base_url = frag_split[0]
+
+                        target = self._refs.get(base_url)
+                        if target is None:
+                            target = self.resolve_refs(requests.get(ref).json(), base_url)
+                            self._refs[base_url] = target
+
+                        if len(frag_split) == 1 or frag_split[-1] == '':
+                            return target
+                    elif ref.startswith('#/'):
+                        target = schema
+                        ref = f'{url}{ref}'
+                        n['$ref'] = ref
+                    else:
+                        raise ValueError(f'Unsupported ref {ref}')
+
+                    for sel in ref.split('#')[-1].split('/')[1:]:
+                        assert target is not None and sel in target, f'Error resolving ref {ref}: {sel} not in {target}'
+                        target = target[sel]
+
+                    self._refs[ref] = target
+                else:
+                    for v in n.values():
+                        visit(v)
+
+            return n
+        return visit(schema)
+
     def _desc_comment(self, schema: dict):
         desc = schema.get("description", "").replace("\n", "\n// ") if 'description' in schema else None
         return f'// {desc}\n' if desc else ''
@@ -78,7 +128,7 @@ class SchemaToTypeScriptConverter:
                 else:
                     add_component(t, is_required=True)
 
-            return self._build_object_rule(properties, required, additional_properties=[])
+            return self._build_object_rule(properties, required, additional_properties={})
 
         elif schema_type in (None, 'array') and ('items' in schema or 'prefixItems' in schema):
             items = schema.get('items') or schema['prefixItems']
@@ -94,4 +144,4 @@ class SchemaToTypeScriptConverter:
             return 'any'
 
         else:
-            return 'number' if schema_type == 'integer' else schema_type
+            return 'number' if schema_type == 'integer' else schema_type or 'any'

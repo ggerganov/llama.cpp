@@ -10,7 +10,7 @@ import json, requests
 
 from examples.json_schema_to_grammar import SchemaConverter
 from examples.agent.tools.std_tools import StandardTools
-from examples.openai.api import ChatCompletionRequest, ChatCompletionResponse, Message, Tool, ToolFunction
+from examples.openai.api import ChatCompletionRequest, ChatCompletionResponse, Message, ResponseFormat, Tool, ToolFunction
 from examples.agent.utils import collect_functions, load_module
 from examples.openai.prompting import ToolsPromptStyle
 
@@ -46,7 +46,7 @@ def completion_with_tool_usage(
         else:
             type_adapter = TypeAdapter(response_model)
             schema = type_adapter.json_schema()
-        response_format={"type": "json_object", "schema": schema }
+        response_format=ResponseFormat(type="json_object", schema=schema)
 
     tool_map = {fn.__name__: fn for fn in tools}
     tools_schemas = [
@@ -77,14 +77,15 @@ def completion_with_tool_usage(
         if auth:
             headers["Authorization"] = auth
         response = requests.post(
-            endpoint,
+            f'{endpoint}/v1/chat/completions',
             headers=headers,
             json=request.model_dump(),
         )
         if response.status_code != 200:
             raise Exception(f"Request failed ({response.status_code}): {response.text}")
 
-        response = ChatCompletionResponse(**response.json())
+        response_json = response.json()
+        response = ChatCompletionResponse(**response_json)
         if verbose:
             sys.stderr.write(f'# RESPONSE: {response.model_dump_json(indent=2)}\n')
         if response.error:
@@ -169,7 +170,7 @@ def main(
     if not endpoint:
         server_port = 8080
         server_host = 'localhost'
-        endpoint: str = f'http://{server_host}:{server_port}/v1/chat/completions'
+        endpoint = f'http://{server_host}:{server_port}'
         if verbose:
             sys.stderr.write(f"# Starting C++ server with model {model} on {endpoint}\n")
         cmd = [
