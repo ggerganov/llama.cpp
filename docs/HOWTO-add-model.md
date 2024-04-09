@@ -95,6 +95,7 @@ The model params and tensors layout must be defined in `llama.cpp`:
 2. Define the tensors layout in `LLM_TENSOR_NAMES`
 3. Add any non standard metadata in `llm_load_hparams`
 4. Create the tensors for inference in `llm_load_tensors`
+5. If the model has a RoPE operation, add the rope type in `llama_rope_type`
 
 NOTE: The dimensions in `ggml` are typically in the reverse order of the `pytorch` dimensions.
 
