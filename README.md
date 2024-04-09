@@ -122,7 +122,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
 
-Your model is not yet in the list ? New architecture contributions are welcomed, have a look to [Add a model.md](./docs/HOWTO-add-model.md) HOWTO to `llama.cpp`. 
+Your model is not yet in the list ? New architecture contributions are welcomed, have a look to [Add a model.md](./docs/HOWTO-add-model.md) HOW TO. 
 
 **Multimodal models:**
 
