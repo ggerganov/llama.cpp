@@ -52,14 +52,14 @@ echo "
     RUN      mkdir /src /data
 
     # Copy resources in increasing likelihood of change, to keep as much as possible cached
-    COPY     fastify-requirements.txt /root
+    COPY     fastify-requirements.txt /root/
     RUN      pip install -r /root/fastify-requirements.txt
-    COPY     script-requirements.txt  /root
+    COPY     script-requirements.txt  /root/
     RUN      pip install -r /root/script-requirements.txt
-    COPY     fastify.py utils.py      /root
+    COPY     fastify.py utils.py      /root/examples/agent/
 
     WORKDIR  /data
-    ENTRYPOINT PYTHONPATH=/src python /root/fastify.py --port=$PORT '/src/$( basename "$script" )'
+    ENTRYPOINT PYTHONPATH=/src:/root python -m examples.agent.fastify --port=$PORT '/src/$( basename "$script" )'
 " | docker build "$BUILD_DIR" -f - -t "$LLAMA_IMAGE_NAME"
 
 echo "#"
