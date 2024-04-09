@@ -251,7 +251,7 @@ node index.js
 
     `grammar`: Set grammar for grammar-based sampling.  Default: no grammar
 
-    `response_format`: Set the response format. Only supports JSON (e.g. `{"type": "json_object"}`), optionally with a schema (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}`). See [test-json-schema-to-grammar.cpp](../../tests/test-json-schema-to-grammar.cpp).  Default: no response format.
+    `json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
 
     `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
@@ -367,6 +367,8 @@ Notice that each `probs` is an array of length `n_probs`.
     *Options:*
 
     See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
+
+    The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}`), similar to other OpenAI-inspired API providers.
 
     *Examples:*
 
