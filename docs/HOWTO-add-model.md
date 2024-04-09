@@ -1,11 +1,4 @@
-# HOW TO
-
 ## Add a new model architecture to `llama.cpp`
-
-LLaMA C++ is built on top of [ggml](https://github.com/ggerganov/ggml) Tensor library for machine learning.
-Model are stored in [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md).
-
-#### Quick start
 
 Adding a model requires few steps:
 
@@ -23,10 +16,10 @@ Also, it is important to check that the examples and main ggml backends (CUDA, M
 
 ### 1. Convert the model to GGUF
 
-This step is done in python with a `convert` script using [gguf-writer](https://pypi.org/project/gguf/) library.
+This step is done in python with a `convert` script using the [gguf](https://pypi.org/project/gguf/) library.
 Depending on the model architecture, you can use either [convert.py](../convert.py) or [convert-hf-to-gguf.py](../convert-hf-to-gguf.py).
 
-The convert script reads the model configuration, tokenizer, tensor names+data and convert them to GGUF Metadata and tensors.
+The convert script reads the model configuration, tokenizer, tensor names+data and converts them to GGUF metadata and tensors.
 
 The required steps to implement for an HF model are:
 
@@ -105,20 +98,14 @@ This is the funniest part, you have to provide the inference graph implementatio
 
 Have a look to existing implementation like `build_llama`, `build_dbrx` or `build_bert`.
 
-When implementing a new graph, please note that the underlying `ggml` backends do not support them all, support of missing backend operations can be added in another PR.
+When implementing a new graph, please note that the underlying `ggml` backends might not support them all, support of missing backend operations can be added in another PR.
 
-## Terminology
+## GGUF specification
 
-| term    | description                                                                                                                                       | link                                                       |
-|---------|---------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
-| GGML    | Georgi Gerganov Model Language a.k.a GPT-Generated Model Language                                                                                 | https://github.com/ggerganov/ggml                          |
-| GGUF    | GGML Universal File a.k.a GPT-Generated Unified Format, successor to GGML format, GGUF’s creation aligns with the needs of large-scale AI models. | https://github.com/ggerganov/ggml/blob/master/docs/gguf.md |
+https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
 
 ## Resources
 
-- [GGML - Large Language Models for Everyone](https://github.com/rustformers/llm/blob/main/crates/ggml/README.md): a
-  description of the GGML format provided by the maintainers of the `llm` Rust crate, which provides Rust bindings for
-  GGML
 - YaRN RoPE scaling https://github.com/ggerganov/llama.cpp/pull/2268
 - support Baichuan serial models https://github.com/ggerganov/llama.cpp/pull/3009
 - support attention bias https://github.com/ggerganov/llama.cpp/pull/4283
