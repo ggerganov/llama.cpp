@@ -608,8 +608,8 @@ class ThoughtfulStepsToolsChatHandler(ChatHandler):
             content='\n'.join([
                 'You are a function calling AI model.',
                 'Here are the tools available:',
-                # _tools_schema_signatures(self.args.tools, indent=2),
-                _tools_typescript_signatures(self.args.tools),
+                _tools_schema_signatures(self.args.tools, indent=2),
+                # _tools_typescript_signatures(self.args.tools),
                 _please_respond_with_schema(
                     _make_bespoke_schema(
                         response_schema,
@@ -714,16 +714,16 @@ def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Op
 
 # os.environ.get('NO_TS')
 def _please_respond_with_schema(schema: dict) -> str:
-    # sig = json.dumps(schema, indent=2)
-    _ts_converter = SchemaToTypeScriptConverter()
-    _ts_converter.resolve_refs(schema, 'schema')
-    sig = _ts_converter.visit(schema)
+    sig = json.dumps(schema, indent=2)
+    # _ts_converter = SchemaToTypeScriptConverter()
+    # # _ts_converter.resolve_refs(schema, 'schema')
+    # sig = _ts_converter.visit(schema)
     return f'Please respond in JSON format with the following schema: {sig}'
 
 def _tools_typescript_signatures(tools: list[Tool]) -> str:
     _ts_converter = SchemaToTypeScriptConverter()
-    for tool in tools:
-        _ts_converter.resolve_refs(tool.function.parameters, tool.function.name)
+    # for tool in tools:
+    #     _ts_converter.resolve_refs(tool.function.parameters, tool.function.name)
 
     return 'namespace functions {\n' + '\n'.join(
         '// ' + tool.function.description.replace('\n', '\n// ') + '\n' + ''
