@@ -139,7 +139,7 @@ def main(
         messages = chat_request.messages
 
         prompt = chat_handler.render_prompt(messages)
-        
+
         if verbose:
             sys.stderr.write(f'\n# REQUEST:\n\n{chat_request.model_dump_json(indent=2)}\n\n')
             # sys.stderr.write(f'\n# MESSAGES:\n\n{TypeAdapter(list[Message]).dump_json(messages)}\n\n')

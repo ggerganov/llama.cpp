@@ -202,14 +202,14 @@ if __name__ == "__main__":
                 ch = get_chat_handler(args, parallel_calls=True, tool_style=style)
 
                 print(f'\n### {model_name} / {style.name} / {tool_situation}\n')
-                
+
                 print(f'\nPrompt:\n\n```js\n{ch.render_prompt(TEST_MESSAGES_THOUGHT)}\n```\n')
 
                 print(f'\nOutput format prompt:\n\n```json\n{ch.output_format_prompt.content}\n```\n')
 
                 print(f'\nGrammar:\n\n```js\n{ch.grammar}\n```\n')
 
-                        
+
                 # if model_name == 'hermes_2_pro_mistral':
                 #     print("Skipping hermes_2_pro_mistral")
                 #     continue
@@ -233,38 +233,3 @@ if __name__ == "__main__":
             print(f'{f}\n\n')
 
         assert not failures
-    # test_templates([
-    #     Message(**{
-    #         "role": "user",
-    #         "name": None,
-    #         "tool_call_id": None,
-    #         "content": "What is the sum of 2535 squared and 32222000403 then multiplied by one and a half. What's a third of the result?",
-    #         "tool_calls": None
-    #     }),
-    #     Message(**{
-    #         "role": "assistant",
-    #         # "name": None,
-    #         "tool_call_id": None,
-    #         "content": "?",
-    #         "tool_calls": [
-    #             {
-    #                 # "id": "call_531873",
-    #                 "type": "function",
-    #                 "function": {
-    #                     "name": TOOL_NAME,
-    #                     "arguments": {
-    #                         "a": 2535,
-    #                         "b": 32222000403
-    #                     }
-    #                 }
-    #             }
-    #         ]
-    #     }),
-    #     Message(**{
-    #         "role": "tool",
-    #         "name": TOOL_NAME,
-    #         "tool_call_id": "call_531873",
-    #         "content": "32222002938",
-    #         "tool_calls": None
-    #     })
-    # ])

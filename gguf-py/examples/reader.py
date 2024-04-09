@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from gguf.gguf_reader import GGUFReader
 
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 

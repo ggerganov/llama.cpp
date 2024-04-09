@@ -50,6 +50,7 @@ class ReaderField(NamedTuple):
     types: list[GGUFValueType] = []
 
 
+
 class ReaderTensor(NamedTuple):
     name: str
     tensor_type: GGMLQuantizationType
