@@ -1441,9 +1441,9 @@ def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
     }[file_type]
     ret = model_paths[0].parent / f"ggml-model-{namestr}.gguf"
     if ret in model_paths:
-        sys.stderr.write(
+        logger.error(
             f"Error: Default output path ({ret}) would overwrite the input. "
-            "Please explicitly specify a path using --outfile.\n")
+            "Please explicitly specify a path using --outfile.")
         sys.exit(1)
     return ret
 
