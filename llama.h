@@ -786,6 +786,8 @@ extern "C" {
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+    LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
+    LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
 
     // Returns -1 if unknown, 1 for true or 0 for false.
@@ -808,16 +810,16 @@ extern "C" {
     /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
     /// @return Returns the number of tokens on success, no more than n_tokens_max
     /// @return Returns a negative number on failure - the number of tokens that would have been returned
-    /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
-    ///                Does not insert a leading space.
+    /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
+    ///                      as plaintext. Does not insert a leading space.
     LLAMA_API int32_t llama_tokenize(
         const struct llama_model * model,
                       const char * text,
                          int32_t   text_len,
                      llama_token * tokens,
                          int32_t   n_tokens_max,
-                            bool   add_bos,
-                            bool   special);
+                            bool   add_special,
+                            bool   parse_special);
 
     // Token Id -> Piece.
     // Uses the vocabulary in the provided context.
