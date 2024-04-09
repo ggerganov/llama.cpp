@@ -60,6 +60,7 @@ while read c; do
         src/ggml*.m \
         src/ggml*.metal \
         src/ggml*.cu \
+        src/ggml-cuda/* \
         tests/test-opt.cpp \
         tests/test-grad0.cpp \
         tests/test-quantize-fns.cpp \

@@ -2617,6 +2617,7 @@ GGML_CALL bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size
         return false;
     }
 
+#if CUDART_VERSION >= 11100
     cudaError_t err = cudaHostRegister(buffer, size, cudaHostRegisterPortable | cudaHostRegisterReadOnly);
     if (err != cudaSuccess) {
         // clear the error
@@ -2627,6 +2628,9 @@ GGML_CALL bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size
         return false;
     }
     return true;
+#else
+    return false;
+#endif
 }
 
 GGML_CALL void ggml_backend_cuda_unregister_host_buffer(void * buffer) {
