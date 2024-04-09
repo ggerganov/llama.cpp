@@ -13,7 +13,7 @@ Adding a model requires few steps:
 2. Define the model architecture in `llama.cpp`
 3. Build the GGML graph implementation
 
-After following this step, you can open PR.
+After following these steps, you can open PR.
 
 Also, it is important to check that the examples and main ggml backends (CUDA, METAL, CPU) are working with the new architecture, especially:
 - [main](../examples/main)
@@ -86,7 +86,7 @@ Depending on the model configuration, tokenizer, code and tensors layout, you wi
 - `Model#set_vocab`
 - `Model#write_tensors`
 
-NOTE: Tensor names must end with `.weight` suffix, that is the convention and several tools like `quantize` expect this to proceed weights.
+NOTE: Tensor names must end with `.weight` suffix, that is the convention and several tools like `quantize` expect this to proceed the weights.
 
 ### 2. Define the model architecture in `llama.cpp`
 
@@ -118,12 +118,12 @@ When implementing a new graph, please note that the underlying `ggml` backends d
 - [GGML - Large Language Models for Everyone](https://github.com/rustformers/llm/blob/main/crates/ggml/README.md): a
   description of the GGML format provided by the maintainers of the `llm` Rust crate, which provides Rust bindings for
   GGML
-- YaRN RoPE scaling #2268
-- support Baichuan serial models #3009
-- support attention bias #4283
-- Mixtral support #4406
-- BERT embeddings #5423
-- Grok-1 support #6204
-- Command R Plus support #6491
-- support arch DBRX #6515
-- How to convert HuggingFace model to GGUF format #2948
+- YaRN RoPE scaling https://github.com/ggerganov/llama.cpp/pull/2268
+- support Baichuan serial models https://github.com/ggerganov/llama.cpp/pull/3009
+- support attention bias https://github.com/ggerganov/llama.cpp/pull/4283
+- Mixtral support https://github.com/ggerganov/llama.cpp/pull/4406
+- BERT embeddings https://github.com/ggerganov/llama.cpp/pull/5423
+- Grok-1 support https://github.com/ggerganov/llama.cpp/pull/6204
+- Command R Plus support https://github.com/ggerganov/llama.cpp/pull/6491
+- support arch DBRX https://github.com/ggerganov/llama.cpp/pull/6515
+- How to convert HuggingFace model to GGUF format https://github.com/ggerganov/llama.cpp/discussions/2948
