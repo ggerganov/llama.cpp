@@ -768,11 +768,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-        if (params.image != "") {
-            params.image += ",";
-        }
-        params.image += argv[i];
-        params.image = std::regex_replace(params.image,std::regex(" --image "), ",");
+        params.image.emplace_back(argv[i]);
         return true;
     }
     if (arg == "-i" || arg == "--interactive") {
