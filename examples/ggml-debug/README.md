@@ -32,7 +32,7 @@ ggml_debug:                 inp_embd = (f32)   GET_ROWS(token_embd.weight{2560, 
                                        [ -0.0181,   0.0272,   0.0272, ...],
                                       ],
                                      ]
-ggml_debug:                   norm-0 = (f32)       NORM(CUDA0#inp_embd#0{2560, 1, 1, 1}, }) = {2560, 1, 1, 1} 
+ggml_debug:                   norm-0 = (f32)       NORM(CUDA0#inp_embd#0{2560, 1, 1, 1}, }) = {2560, 1, 1, 1}
                                      [
                                       [
                                        [ -0.6989,   1.0636,   1.0636, ...],
