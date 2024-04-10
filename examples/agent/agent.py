@@ -3,6 +3,7 @@ import sys
 from time import sleep
 import typer
 from pydantic import BaseModel, Json, TypeAdapter
+from pydantic_core import SchemaValidator, core_schema
 from typing import Annotated, Any, Callable, Dict, List, Union, Optional, Type
 import json, requests
 
@@ -13,16 +14,12 @@ from examples.agent.utils import collect_functions, load_module
 from examples.openai.prompting import ToolsPromptStyle
 from examples.openai.subprocesses import spawn_subprocess
 
-def _get_params_schema(fn: Callable[[Any], Any], verbose):
-    if isinstance(fn, OpenAPIMethod):
-        return fn.parameters_schema
-
-    # converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
-    schema = TypeAdapter(fn).json_schema()
-    # Do NOT call converter.resolve_refs(schema) here. Let the server resolve local refs.
-    if verbose:
-        sys.stderr.write(f'# PARAMS SCHEMA: {json.dumps(schema, indent=2)}\n')
-    return schema
+def make_call_adapter(ta: TypeAdapter, fn: Callable[..., Any]):
+    args_validator = SchemaValidator(core_schema.call_schema(
+        arguments=ta.core_schema['arguments_schema'],
+        function=fn,
+    ))
+    return lambda **kwargs: args_validator.validate_python(kwargs)
 
 def completion_with_tool_usage(
         *,
@@ -50,18 +47,28 @@ def completion_with_tool_usage(
             schema = type_adapter.json_schema()
         response_format=ResponseFormat(type="json_object", schema=schema)
 
-    tool_map = {fn.__name__: fn for fn in tools}
-    tools_schemas = [
-        Tool(
-            type="function",
-            function=ToolFunction(
-                name=fn.__name__,
-                description=fn.__doc__ or '',
-                parameters=_get_params_schema(fn, verbose=verbose)
+    tool_map = {}
+    tools_schemas = []
+    for fn in tools:
+        if isinstance(fn, OpenAPIMethod):
+            tool_map[fn.__name__] = fn
+            parameters_schema = fn.parameters_schema
+        else:
+            ta = TypeAdapter(fn)
+            tool_map[fn.__name__] = make_call_adapter(ta, fn)
+            parameters_schema = ta.json_schema()
+        if verbose:
+            sys.stderr.write(f'# PARAMS SCHEMA ({fn.__name__}): {json.dumps(parameters_schema, indent=2)}\n')
+        tools_schemas.append(
+            Tool(
+                type="function",
+                function=ToolFunction(
+                    name=fn.__name__,
+                    description=fn.__doc__ or '',
+                    parameters=parameters_schema,
+                )
             )
         )
-        for fn in tools
-    ]
 
     i = 0
     while (max_iterations is None or i < max_iterations):
@@ -106,7 +113,7 @@ def completion_with_tool_usage(
                 sys.stdout.write(f'⚙️  {pretty_call}')
                 sys.stdout.flush()
                 tool_result = tool_map[tool_call.function.name](**tool_call.function.arguments)
-                sys.stdout.write(f" -> {tool_result}\n")
+                sys.stdout.write(f" → {tool_result}\n")
                 messages.append(Message(
                     tool_call_id=tool_call.id,
                     role="tool",
@@ -202,6 +209,8 @@ def main(
 
     if std_tools:
         tool_functions.extend(collect_functions(StandardTools))
+
+    sys.stdout.write(f'🛠️  {", ".join(fn.__name__ for fn in tool_functions)}\n')
 
     response_model: Union[type, Json[Any]] = None #str
     if format:
