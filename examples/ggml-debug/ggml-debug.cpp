@@ -136,6 +136,7 @@ int main(int argc, char ** argv) {
     // it will be executed for each node during the graph computation
     params.cb_eval = ggml_debug;
     params.cb_eval_user_data = &cb_data;
+    params.warmup = false;
 
     // init
     llama_model * model;

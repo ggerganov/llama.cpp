@@ -2194,7 +2194,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
     }
 
-    {
+    if (params.warmup) {
         LOG("warming up the model with an empty run\n");
 
         std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
