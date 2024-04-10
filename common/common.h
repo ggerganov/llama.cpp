@@ -182,6 +182,8 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 
 void process_escapes(std::string& input);
 
+bool validate_file_name(const std::string & filename);
+
 //
 // String utils
 //
@@ -224,14 +226,14 @@ void llama_batch_add(
 std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special = false);
+                        bool   add_special,
+                        bool   parse_special = false);
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special = false);
+                        bool   add_special,
+                        bool   parse_special = false);
 
 // tokenizes a token into a piece
 // should work similar to Python's `tokenizer.id_to_piece`

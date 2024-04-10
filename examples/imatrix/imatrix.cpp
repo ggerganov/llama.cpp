@@ -349,12 +349,13 @@ static void process_logits(
 static bool compute_imatrix(llama_context * ctx, const gpt_params & params, bool compute_ppl, int from_chunk) {
 
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+    GGML_ASSERT(llama_add_eos_token(llama_get_model(ctx)) != 1);
     const int n_ctx = llama_n_ctx(ctx);
 
     auto tim1 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
+    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
