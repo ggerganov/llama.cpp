@@ -3,6 +3,13 @@ import sys
 import types
 from typing import Dict, Union
 
+def _is_serializable(obj) -> bool:
+    try:
+        json.dumps(obj)
+        return True
+    except Exception as e:
+        return False
+
 def execute_python(source: str) -> Union[Dict, str]:
     """
         Evaluate a Python program and return the globals it declared.
@@ -21,7 +28,11 @@ def execute_python(source: str) -> Union[Dict, str]:
     results = {
         k: v
         for k, v in namespace.items()
-        if not k.startswith('_') and not isinstance(v, type) and not callable(v) and not isinstance(v, types.ModuleType)
+        if not k.startswith('_') \
+            and not isinstance(v, type) \
+            and not isinstance(v, types.ModuleType) \
+            and not callable(v) \
+            and _is_serializable(v)
     }
     sys.stderr.write(f"Results: {json.dumps(results, indent=2)}\n")
 
