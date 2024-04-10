@@ -2289,6 +2289,9 @@ extern "C" {
     GGML_API char *         gguf_get_tensor_name  (const struct gguf_context * ctx, int i);
     GGML_API enum ggml_type gguf_get_tensor_type  (const struct gguf_context * ctx, int i);
 
+    // removes key if it exists
+    GGML_API void gguf_remove_key(struct gguf_context * ctx, const char * key);
+
     // overrides existing values or adds a new one
     GGML_API void gguf_set_val_u8  (struct gguf_context * ctx, const char * key, uint8_t  val);
     GGML_API void gguf_set_val_i8  (struct gguf_context * ctx, const char * key, int8_t   val);

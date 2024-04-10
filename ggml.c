@@ -21148,6 +21148,17 @@ static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
     return n_kv;
 }
 
+void gguf_remove_key(struct gguf_context * ctx, const char * key) {
+    const int idx = gguf_find_key(ctx, key);
+    if (idx >= 0) {
+        const int n_kv = gguf_get_n_kv(ctx);
+        for (int i = idx; i < n_kv; ++i)
+            ctx->kv[i] = ctx->kv[i+1];
+        ctx->kv = realloc(ctx->kv, (n_kv - 1) * sizeof(struct gguf_kv));
+        ctx->header.n_kv--;
+    }
+}
+
 void gguf_set_val_u8(struct gguf_context * ctx, const char * key, uint8_t val) {
     const int idx = gguf_get_or_add_key(ctx, key);
 
