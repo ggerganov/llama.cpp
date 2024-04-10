@@ -122,6 +122,8 @@ Typically finetunes of the base models below are supported as well.
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
 
+(instructions for supporting more models: [HOWTO-add-model.md](./docs/HOWTO-add-model.md))
+
 **Multimodal models:**
 
 - [x] [LLaVA 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e), [LLaVA 1.6 models](https://huggingface.co/collections/liuhaotian/llava-16-65b9e40155f60fd046a5ccf2)
