@@ -1449,11 +1449,11 @@ def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
 
 
 def do_dump_model(model_plus: ModelPlus) -> None:
-    print(f"model_plus.paths = {model_plus.paths!r}")
-    print(f"model_plus.format = {model_plus.format!r}")
-    print(f"model_plus.vocab = {model_plus.vocab!r}")
+    print(f"model_plus.paths = {model_plus.paths!r}") # noqa: NP100
+    print(f"model_plus.format = {model_plus.format!r}") # noqa: NP100
+    print(f"model_plus.vocab = {model_plus.vocab!r}") # noqa: NP100
     for name, lazy_tensor in model_plus.model.items():
-        print(f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}")
+        print(f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}") # noqa: NP100
 
 
 def main(args_in: list[str] | None = None) -> None:
