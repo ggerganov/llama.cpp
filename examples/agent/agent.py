@@ -18,7 +18,7 @@ from examples.openai.prompting import ToolsPromptStyle
 def _get_params_schema(fn: Callable, verbose):
     if isinstance(fn, OpenAPIMethod):
         return fn.parameters_schema
-    
+
     # converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
     schema = TypeAdapter(fn).json_schema()
     # Do NOT call converter.resolve_refs(schema) here. Let the server resolve local refs.
