@@ -938,6 +938,12 @@ jobs:
       - name: Download artifacts
         id: download-artifact
         uses: actions/download-artifact@v4
+        with:
+          path: ./artifact
+
+      - name: Move artifacts
+        id: move_artifacts
+        run: mkdir -p ./artifact/release && mv ./artifact/*/*.zip ./artifact/release
 
       - name: Create release
         id: create_release
@@ -956,7 +962,7 @@ jobs:
             const path = require('path');
             const fs = require('fs');
             const release_id = '${{ steps.create_release.outputs.id }}';
-            for (let file of await fs.readdirSync('./artifact')) {
+            for (let file of await fs.readdirSync('./artifact/release')) {
               if (path.extname(file) === '.zip') {
                 console.log('uploadReleaseAsset', file);
                 await github.repos.uploadReleaseAsset({
@@ -964,7 +970,7 @@ jobs:
                   repo: context.repo.repo,
                   release_id: release_id,
                   name: file,
-                  data: await fs.readFileSync(`./artifact/${file}`)
+                  data: await fs.readFileSync(`./artifact/release/${file}`)
                 });
               }
             }
