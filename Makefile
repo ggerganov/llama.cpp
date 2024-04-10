@@ -646,7 +646,7 @@ CUDA_VERSION := $(shell $(NVCC) --version | grep -oP 'release (\K[0-9]+\.[0-9])'
 ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
 ifndef CUDA_DOCKER_ARCH
 ifndef CUDA_POWER_ARCH
-$(error I ERROR: To address this error for CUDA versions earlier than 11.7, you must specify your GPU's compute capability. Execute export CUDA_DOCKER_ARCH=compute_XX, replacing XX with your GPU's compute capability number. For assistance in finding your GPU's compute capability, visit https://developer.nvidia.com/cuda-gpus.)
+$(error I ERROR: To address this error for CUDA versions earlier than 11.7, you must specify your GPU's compute capability. Run "export CUDA_DOCKER_ARCH=compute_XX", replacing XX with your GPU's compute capability number. For assistance in finding your GPU's compute capability, visit "https://developer.nvidia.com/cuda-gpus")
 endif # CUDA_POWER_ARCH
 endif # CUDA_DOCKER_ARCH
 endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
