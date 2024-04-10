@@ -1,7 +1,4 @@
-import atexit
-import os
 from pathlib import Path
-import subprocess
 import sys
 from time import sleep
 import typer
@@ -14,6 +11,7 @@ from examples.agent.tools.std_tools import StandardTools
 from examples.openai.api import ChatCompletionRequest, ChatCompletionResponse, Message, ResponseFormat, Tool, ToolFunction
 from examples.agent.utils import collect_functions, load_module
 from examples.openai.prompting import ToolsPromptStyle
+from examples.openai.subprocesses import spawn_subprocess
 
 def _get_params_schema(fn: Callable, verbose):
     if isinstance(fn, OpenAPIMethod):
@@ -185,8 +183,7 @@ def main(
             *([f'--context-length={context_length}'] if context_length else []),
             *([f'--style={style.value}'] if style else []),
         ]
-        server_process = subprocess.Popen(cmd, stdout=sys.stderr)
-        atexit.register(server_process.kill)
+        spawn_subprocess(cmd)
         sleep(5)
 
     tool_functions = []

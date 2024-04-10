@@ -1,7 +1,7 @@
 # https://gist.github.com/ochafik/a3d4a5b9e52390544b205f37fb5a0df3
 # pip install "fastapi[all]" "uvicorn[all]" sse-starlette jsonargparse jinja2 pydantic
 
-import json, sys, subprocess, atexit
+import json, sys
 from pathlib import Path
 import time
 
@@ -21,6 +21,8 @@ import random
 from starlette.responses import StreamingResponse
 from typing import Annotated, Optional
 import typer
+
+from examples.openai.subprocesses import spawn_subprocess
 
 def generate_id(prefix):
     return f"{prefix}{random.randint(0, 1 << 32)}"
@@ -71,8 +73,8 @@ def main(
             "-c", f"{context_length}",
             *([] if verbose else ["--log-disable"]),
         ]
-        server_process = subprocess.Popen(cmd, stdout=sys.stderr)
-        atexit.register(server_process.kill)
+
+        spawn_subprocess(cmd)
         endpoint = f"http://{server_host}:{server_port}"
 
     app = FastAPI()
