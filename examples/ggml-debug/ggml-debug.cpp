@@ -3,7 +3,9 @@
 #include "ggml.h"
 
 #include <cstdio>
+#include <random>
 #include <string>
+#include <tuple>
 #include <vector>
 
 /**
@@ -11,7 +13,7 @@
  * Later on we can for example add operation or tensor name filter from the CLI arg, or a file descriptor to dump the tensor.
  */
 struct callback_data {
-    std::vector<float> data;
+    std::vector<int8_t> data;
 };
 
 static std::string ggml_ne_string(const ggml_tensor * t) {
@@ -25,7 +27,7 @@ static std::string ggml_ne_string(const ggml_tensor * t) {
     return str;
 }
 
-static void ggml_print_tensor(const float * data, const int64_t * ne, const size_t * nb, int64_t n) {
+static void ggml_print_tensor(int8_t * data, const int64_t * ne, const size_t * nb, int64_t n) {
     for (int64_t i3 = 0; i3 < ne[3]; i3++) {
         printf("                                     [\n");
         for (int64_t i2 = 0; i2 < ne[2] && i2 < n; i2++) {
@@ -34,7 +36,7 @@ static void ggml_print_tensor(const float * data, const int64_t * ne, const size
                 printf("                                       [");
                 for (int64_t i0 = 0; i0 < ne[0] && i0 < n; i0++) {
                     size_t i = i3 * nb[3] + i2 * nb[2] + i1 * nb[1] + i0 * nb[0];
-                    float v = *(data + i);
+                    float v = *(float *)(data + i);
                     printf("%8.4f", v);
                     if (i0 < ne[0] - 1 && i0 < n - 1) printf(", ");
                 }
@@ -55,6 +57,7 @@ static void ggml_print_tensor(const float * data, const int64_t * ne, const size
  * @param t current tensor
  * @param ask when ask is true, the scheduler wants to know if we are interested in data from this tensor
  *            if we return true, a follow-up call will be made with ask=false in which we can do the actual collection.
+ *            see ggml_backend_sched_eval_callback
  * @param user_data user data to pass at each call back
  * @return true to receive data or continue the graph, false otherwise
  */
@@ -85,12 +88,12 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 
     if (!is_host) {
         auto n_bytes = ggml_nbytes(t);
-        cb_data->data.resize(n_bytes / sizeof(float));
+        cb_data->data.resize(n_bytes);
         ggml_backend_tensor_get(t, cb_data->data.data(), 0, n_bytes);
     }
 
     if (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_F16) {
-        const float * data = is_host ? (const float *) t->data : cb_data->data.data();
+        int8_t * data = is_host ? (int8_t *) t->data : cb_data->data.data();
         ggml_print_tensor(data, t->ne, t->nb, 3);
     }
 
@@ -131,34 +134,17 @@ int main(int argc, char ** argv) {
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    auto mparams = llama_model_params_from_gpt_params(params);
-
-    llama_model * model = nullptr;
-
-    if (!params.hf_repo.empty() && !params.hf_file.empty()) {
-        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), mparams);
-    } else if (!params.model_url.empty()) {
-        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), mparams);
-    } else {
-        model = llama_load_model_from_file(params.model.c_str(), mparams);
-    }
-
-    if (model == NULL) {
-        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
-        return 1;
-    }
-
-    auto cparams = llama_context_params_from_gpt_params(params);
-
     // pass the callback to the backend scheduler
     // it will be executed for each node during the graph computation
-    cparams.cb_eval = ggml_debug;
-    cparams.cb_eval_user_data = &cb_data;
+    params.cb_eval = ggml_debug;
+    params.cb_eval_user_data = &cb_data;
 
-    llama_context * ctx = llama_new_context_with_model(model, cparams);
-    if (ctx == NULL) {
-        fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
-        llama_free_model(model);
+    // init
+    llama_model * model;
+    llama_context * ctx;
+    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    if (model == nullptr || ctx == nullptr) {
+        fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;
     }
 
