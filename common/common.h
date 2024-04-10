@@ -161,8 +161,8 @@ struct gpt_params {
     std::string cache_type_v = "f16"; // KV cache data type for the V
 
     // multimodal models (see examples/llava)
-    std::string mmproj = ""; // path to multimodal projector
-    std::string image  = ""; // path to an image file
+    std::string mmproj = "";        // path to multimodal projector
+    std::vector<std::string> image; // path to image file(s)
 };
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
