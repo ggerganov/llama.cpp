@@ -496,7 +496,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   This provides BLAS acceleration on HIP-supported AMD GPUs.
   Make sure to have ROCm installed.
-  You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html).
+  You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/tutorial/quick-start.html#rocm-install-quick).
 
   - Using `make`:
     ```bash
