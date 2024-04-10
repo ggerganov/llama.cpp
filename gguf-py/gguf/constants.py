@@ -90,6 +90,8 @@ class Keys:
         HF_JSON          = "tokenizer.huggingface.json"
         RWKV             = "tokenizer.rwkv.world"
         CHAT_TEMPLATE    = "tokenizer.chat_template"
+        CHAT_TEMPLATE_N  = "tokenizer.chat_template.{name}"
+        CHAT_TEMPLATES   = "tokenizer.chat_templates"
 
 
 #
