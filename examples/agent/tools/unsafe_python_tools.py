@@ -6,7 +6,7 @@ from typing import Dict, Union
 def execute_python(source: str) -> Union[Dict, str]:
     """
         Evaluate a Python program and return the globals it declared.
-        Can be used to compute mathematical expressions.
+        Can be used to compute mathematical expressions (e.g. after importing math module).
 
         Args:
             source: contain valid, executable and pure Python code. Should also import any required Python packages.
