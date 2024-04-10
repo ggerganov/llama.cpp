@@ -185,7 +185,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [Dot](https://github.com/alexpinel/Dot) (GPL)
 - [MindMac](https://mindmac.app) (proprietary)
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
-
+- [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
 ---
@@ -513,7 +513,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   - Using `make` (example for target gfx1030, build with 16 CPU threads):
     ```bash
-    make -j16 LLAMA_HIPBLAS=1 LLAMA_HIP_UMA=1 AMDGPU_TARGETS=gxf1030
+    make -j16 LLAMA_HIPBLAS=1 LLAMA_HIP_UMA=1 AMDGPU_TARGETS=gfx1030
     ```
 
   - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
