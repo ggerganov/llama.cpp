@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Json, TypeAdapter
 
 class FunctionCall(BaseModel):
@@ -16,7 +16,7 @@ class Message(BaseModel):
     name: Optional[str] = None
     tool_call_id: Optional[str] = None
     content: Optional[str]
-    tool_calls: Optional[list[ToolCall]] = None
+    tool_calls: Optional[List[ToolCall]] = None
 
 class ToolFunction(BaseModel):
     name: str
@@ -29,7 +29,7 @@ class Tool(BaseModel):
 
 class ResponseFormat(BaseModel):
     type: Literal["json_object"]
-    schema: Optional[Dict] = None
+    schema: Optional[Json[Any]] = None  # type: ignore
 
 class LlamaCppParams(BaseModel):
     n_predict: Optional[int] = None
@@ -56,8 +56,8 @@ class LlamaCppParams(BaseModel):
 
 class ChatCompletionRequest(LlamaCppParams):
     model: str
-    tools: Optional[list[Tool]] = None
-    messages: list[Message] = None
+    tools: Optional[List[Tool]] = None
+    messages: Optional[List[Message]] = None
     prompt: Optional[str] = None
     response_format: Optional[ResponseFormat] = None
 
@@ -67,7 +67,7 @@ class ChatCompletionRequest(LlamaCppParams):
 class Choice(BaseModel):
     index: int
     message: Message
-    logprobs: Optional[Json] = None
+    logprobs: Optional[Json[Any]] = None
     finish_reason: Union[Literal["stop"], Literal["tool_calls"]]
 
 class Usage(BaseModel):
@@ -84,7 +84,7 @@ class ChatCompletionResponse(BaseModel):
     object: Literal["chat.completion"]
     created: int
     model: str
-    choices: list[Choice]
+    choices: List[Choice]
     usage: Usage
     system_fingerprint: str
     error: Optional[CompletionError] = None

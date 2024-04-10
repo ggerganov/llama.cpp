@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 
 from examples.openai.llama_cpp_server_api import LlamaCppServerCompletionRequest
-from examples.openai.gguf_kvs import GGUFKeyValues, Keys
+from examples.openai.gguf_kvs import GGUFKeyValues, Keys  # type: ignore
 from examples.openai.api import ChatCompletionResponse, Choice, ChatCompletionRequest, Usage
 from examples.openai.prompting import ChatHandlerArgs, ChatTemplate, ToolsPromptStyle, get_chat_handler
 
@@ -21,12 +21,12 @@ def generate_id(prefix):
     return f"{prefix}{random.randint(0, 1 << 32)}"
 
 def main(
-    model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
+    model: Annotated[str, typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
     template_hf_model_id_fallback: Annotated[Optional[str], typer.Option(help="If the GGUF model does not contain a chat template, get it from this HuggingFace tokenizer")] = 'meta-llama/Llama-2-7b-chat-hf',
     # model_url: Annotated[Optional[str], typer.Option("--model-url", "-mu")] = None,
     host: str = "localhost",
     port: int = 8080,
-    parallel_calls: Optional[bool] = False,
+    parallel_calls: bool = False,
     style: Optional[ToolsPromptStyle] = None,
     auth: Optional[str] = None,
     verbose: bool = False,
@@ -39,10 +39,11 @@ def main(
 
     if endpoint:
         sys.stderr.write(f"# WARNING: Unsure which model we're talking to, fetching its chat template from HuggingFace tokenizer of {template_hf_model_id_fallback}\n")
+        assert template_hf_model_id_fallback, "template_hf_model_id_fallback is required when using an endpoint"
         chat_template = ChatTemplate.from_huggingface(template_hf_model_id_fallback)
 
     else:
-        metadata = GGUFKeyValues(model)
+        metadata = GGUFKeyValues(Path(model))
 
         if not context_length:
             context_length = metadata[Keys.LLM.CONTEXT_LENGTH]
@@ -51,6 +52,7 @@ def main(
             chat_template = ChatTemplate.from_gguf(metadata)
         else:
             sys.stderr.write(f"# WARNING: Model does not contain a chat template, fetching it from HuggingFace tokenizer of {template_hf_model_id_fallback}\n")
+            assert template_hf_model_id_fallback, "template_hf_model_id_fallback is required when the model does not contain a chat template"
             chat_template = ChatTemplate.from_huggingface(template_hf_model_id_fallback)
 
         if verbose:
@@ -93,9 +95,8 @@ def main(
             verbose=verbose,
         )
 
-        messages = chat_request.messages
-
-        prompt = chat_handler.render_prompt(messages)
+        prompt = chat_handler.render_prompt(chat_request.messages) if chat_request.messages else chat_request.prompt
+        assert prompt is not None, "One of prompt or messages field is required"
 
         if verbose:
             sys.stderr.write(f'\n# REQUEST:\n\n{chat_request.model_dump_json(indent=2)}\n\n')

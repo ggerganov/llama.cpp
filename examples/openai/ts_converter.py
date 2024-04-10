@@ -1,5 +1,7 @@
-from typing import Any, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple, Union
 import json
+
+from pydantic import Json
 
 class SchemaToTypeScriptConverter:
     # TODO: comments for arguments!
@@ -15,17 +17,18 @@ class SchemaToTypeScriptConverter:
     # location: string,
     # }) => any;
 
-    def __init__(self):
-        self._refs = {}
-        self._refs_being_resolved = set()
+    def __init__(self, allow_fetch: bool = True):
+        self._refs: Dict[str, Json[Any]] = {}
+        self._refs_being_resolved: Set[str] = set()
+        self._allow_fetch = allow_fetch
 
-    def resolve_refs(self, schema: dict, url: str):
+    def resolve_refs(self, schema: Json[Any], url: str):
         '''
             Resolves all $ref fields in the given schema, fetching any remote schemas,
             replacing $ref with absolute reference URL and populating self._refs with the
             respective referenced (sub)schema dictionaries.
         '''
-        def visit(n: dict):
+        def visit(n: Json[Any]):
             if isinstance(n, list):
                 return [visit(x) for x in n]
             elif isinstance(n, dict):
@@ -64,7 +67,7 @@ class SchemaToTypeScriptConverter:
             return n
         return visit(schema)
 
-    def _desc_comment(self, schema: dict):
+    def _desc_comment(self, schema: Json[Any]):
         desc = schema.get("description", "").replace("\n", "\n// ") if 'description' in schema else None
         return f'// {desc}\n' if desc else ''
 
@@ -78,11 +81,11 @@ class SchemaToTypeScriptConverter:
             f'{self._desc_comment(prop_schema)}{prop_name}{"" if prop_name in required else "?"}: {self.visit(prop_schema)}'
             for prop_name, prop_schema in properties
         ] + (
-            [f"{self._desc_comment(additional_properties) if additional_properties else ''}[key: string]: {self.visit(additional_properties)}"]
+            [f"{self._desc_comment(additional_properties) if isinstance(additional_properties, dict) else ''}[key: string]: {self.visit(additional_properties)}"]
             if additional_properties is not None else []
         )) + "\n}"
 
-    def visit(self, schema: dict):
+    def visit(self, schema: Json[Any]):
         def print_constant(v):
             return json.dumps(v)
 
@@ -90,7 +93,7 @@ class SchemaToTypeScriptConverter:
         schema_format = schema.get('format')
 
         if 'oneOf' in schema or 'anyOf' in schema:
-            return '|'.join(self.visit(s) for s in schema.get('oneOf') or schema.get('anyOf'))
+            return '|'.join(self.visit(s) for s in schema.get('oneOf') or schema.get('anyOf') or [])
 
         elif isinstance(schema_type, list):
             return '|'.join(self.visit({'type': t}) for t in schema_type)

@@ -15,6 +15,9 @@ class Duration(BaseModel):
     months: Optional[int] = None
     years: Optional[int] = None
 
+    def __str__(self) -> str:
+        return f"{self.years} years, {self.months} months, {self.days} days, {self.hours} hours, {self.minutes} minutes, {self.seconds} seconds"
+
     @property
     def get_total_seconds(self) -> int:
         return sum([
@@ -28,6 +31,10 @@ class Duration(BaseModel):
 
 class WaitForDuration(BaseModel):
     duration: Duration
+
+    def __call__(self):
+        sys.stderr.write(f"Waiting for {self.duration}...\n")
+        time.sleep(self.duration.get_total_seconds)
 
 class WaitForDate(BaseModel):
     until: date
@@ -43,7 +50,7 @@ class WaitForDate(BaseModel):
 
         days, seconds = time_diff.days, time_diff.seconds
 
-        sys.stderr.write(f"Waiting for {days} days and {seconds} seconds until {d}...\n")
+        sys.stderr.write(f"Waiting for {days} days and {seconds} seconds until {self.until}...\n")
         time.sleep(days * 86400 + seconds)
         sys.stderr.write(f"Reached the target date: {self.until}\n")
 
@@ -67,8 +74,8 @@ class StandardTools:
         return _for()
 
     @staticmethod
-    def say_out_loud(something: str) -> str:
+    def say_out_loud(something: str) -> None:
         """
             Just says something. Used to say each thought out loud
         """
-        return subprocess.check_call(["say", something])
+        subprocess.check_call(["say", something])

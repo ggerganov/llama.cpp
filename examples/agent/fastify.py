@@ -17,7 +17,7 @@ def bind_functions(app, module):
         if k == k.capitalize():
             continue
         v = getattr(module, k)
-        if not callable(v) or isinstance(v, Type):
+        if not callable(v) or isinstance(v, type):
             continue
         if not hasattr(v, '__annotations__'):
             continue

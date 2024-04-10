@@ -6,12 +6,12 @@ from pathlib import Path
 import random
 import re
 import sys
-from typing import Annotated, Optional
-from pydantic import BaseModel, Field
+from typing import Annotated, Any, Optional
+from pydantic import BaseModel, Field, Json
 
 from examples.json_schema_to_grammar import SchemaConverter
 from examples.openai.api import Tool, Message, FunctionCall, ToolCall
-from examples.openai.gguf_kvs import GGUFKeyValues, Keys
+from examples.openai.gguf_kvs import GGUFKeyValues, Keys  # type: ignore
 from examples.openai.ts_converter import SchemaToTypeScriptConverter
 
 # _THOUGHT_KEY = "thought"
@@ -65,7 +65,7 @@ class ChatTemplate(BaseModel):
 
     @property
     def potentially_supports_parallel_calls(self) -> bool:
-        return self.formats_tool_result and self.formats_tool_name
+        return bool(self.formats_tool_result and self.formats_tool_name)
 
     def __init__(self, template: str, eos_token: str, bos_token: str):
         super().__init__(template=template, eos_token=eos_token, bos_token=bos_token)
@@ -161,7 +161,7 @@ class ChatTemplate(BaseModel):
 
     @staticmethod
     def from_huggingface(model_id: str):
-        from transformers import LlamaTokenizer
+        from transformers import LlamaTokenizer  # type: ignore
         tokenizer = LlamaTokenizer.from_pretrained(model_id)
         return ChatTemplate(
             template = tokenizer.chat_template or tokenizer.default_chat_template,
@@ -170,7 +170,7 @@ class ChatTemplate(BaseModel):
 
     def raw_render(self, messages: list[Message], add_generation_prompt: bool, omit_bos: bool = False):
         result = self._template.render(
-            messages=messages,
+            messages=[messages.model_dump() for messages in messages],
             eos_token=self.eos_token,
             bos_token='' if omit_bos else self.bos_token,
             raise_exception=raise_exception,
@@ -180,7 +180,7 @@ class ChatTemplate(BaseModel):
 
 class ChatHandlerArgs(BaseModel):
     chat_template: ChatTemplate
-    response_schema: Optional[dict] = None
+    response_schema: Optional[Json[Any]] = None
     tools: Optional[list[Tool]] = None
 
 class ChatHandler(ABC):
@@ -199,9 +199,9 @@ class ChatHandler(ABC):
         assert system_prompt.role == "system"
         # TODO: add to last system message, or create a new one just before the last user message
         system_message = next(((i, m) for i, m in enumerate(messages) if m.role == "system"), None)
-        if system_message is not None:
+        if system_message:
             (i, m) = system_message
-            return messages[:i] + [Message(role="system", content=system_prompt.content + '\n' + m.content)] + messages[i+1:]
+            return messages[:i] + [Message(role="system", content=(system_prompt.content + '\n' if system_prompt.content else '') + (m.content or ''))] + messages[i+1:]
         else:
             return [system_prompt] + messages
 
@@ -282,7 +282,7 @@ class ChatHandler(ABC):
         if self.args.chat_template.expects_strict_user_assistant_alternance:
             new_messages=[]
             current_role = 'user'
-            current_content = []
+            current_content: list[str] = []
 
             def flush():
                 nonlocal current_content
@@ -311,24 +311,24 @@ class ChatHandler(ABC):
             messages = new_messages
 
         # JSON!
-        messages = [m.model_dump() for m in messages]
+        # messages = [m.model_dump() for m in messages]
 
         # if self.inferred_tool_style == ToolsPromptStyle.TYPESCRIPT_FUNCTIONARY_V2:
         if self.args.chat_template.expects_stringified_function_arguments:
             messages = [
-                {
-                    **m,
+                Message(**{
+                    **m.model_dump(),
                     "tool_calls": [
-                        {
-                            **tc,
+                        ToolCall(**{
+                            **tc.model_dump(),
                             "function": {
-                                "name": tc["function"]["name"],
-                                "arguments": json.dumps(tc["function"]["arguments"]),
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
                             }
-                        }
-                        for tc in m["tool_calls"]
-                    ] if m.get("tool_calls") else None
-                }
+                        })
+                        for tc in m.tool_calls
+                    ] if m.tool_calls else None
+                })
                 for m in messages
             ]
 
@@ -364,7 +364,7 @@ class ToolCallTagsChatHandler(ChatHandler):
 
         converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
         tool_rules = []
-        for tool in self.args.tools:
+        for tool in self.args.tools or []:
 
             parameters_schema = tool.function.parameters
             parameters_schema = converter.resolve_refs(parameters_schema, tool.function.name)
@@ -416,7 +416,7 @@ class ToolCallTagsChatHandler(ChatHandler):
         if len(parts) == 1:
             return Message(role="assistant", content=s)
         else:
-            content = []
+            content: list[str] = []
             tool_calls = []
             for i, part in enumerate(parts):
                 if i % 2 == 0:
@@ -431,8 +431,8 @@ class ToolCallTagsChatHandler(ChatHandler):
                             id=gen_callid(),
                             function=FunctionCall(**fc)))
 
-            content = '\n'.join(content).strip()
-            return Message(role="assistant", content=content if content else None, tool_calls=tool_calls)
+            content_str = '\n'.join(content).strip()
+            return Message(role="assistant", content=content_str if content_str else None, tool_calls=tool_calls)
 
 
 class TemplatedToolsChatHandler(ToolCallTagsChatHandler):
@@ -444,7 +444,7 @@ class TemplatedToolsChatHandler(ToolCallTagsChatHandler):
             role="system",
             content=template.replace(
                 '{tools}',
-                '\n'.join(json.dumps(tool.model_dump(), indent=2) for tool in self.args.tools),
+                '\n'.join(json.dumps(tool.model_dump(), indent=2) for tool in (self.args.tools or [])),
             )
         )
 
@@ -456,11 +456,11 @@ class Hermes2ProToolsChatHandler(ToolCallTagsChatHandler):
         path = str(Path(__file__).parent / "hermes_function_calling")
         if path not in sys.path: sys.path.insert(0, path)
         try:
-            from examples.openai.hermes_function_calling.prompter import PromptManager
+            from examples.openai.hermes_function_calling.prompter import PromptManager  # type: ignore
         except ImportError:
             raise ImportError(f"Please `git clone https://github.com/NousResearch/Hermes-Function-Calling {path}`")
 
-        prompt = PromptManager().generate_prompt(user_prompt=[], tools=[tool.model_dump_json() for tool in args.tools])
+        prompt = PromptManager().generate_prompt(user_prompt=[], tools=[tool.model_dump_json() for tool in args.tools or []])
         assert len(prompt) == 1 and prompt[0]["role"] == "system"
         self.output_format_prompt = Message(**prompt[0])
 
@@ -471,7 +471,7 @@ class FunctionaryToolsChatHandler(ChatHandler):
         self.output_format_prompt = Message(
             role="system",
             content= '// Supported function definitions that should be called when necessary.\n' +
-                _tools_typescript_signatures(args.tools)
+                _tools_typescript_signatures(args.tools or [])
         )
 
         converter = SchemaConverter(prop_order={}, allow_fetch=False, dotall=False, raw_pattern=False)
@@ -481,7 +481,7 @@ class FunctionaryToolsChatHandler(ChatHandler):
                 converter._format_literal(tool.function.name) + ' ' + converter._format_literal('\n<|content|>\n') + ' ' +
                 converter.visit(tool.function.parameters, tool.function.name + '-args') + ' ' +
                 converter._format_literal('\n'))
-            for i, tool in enumerate(self.args.tools)
+            for i, tool in enumerate(self.args.tools or [])
         ]
 
         not_from_rule = converter._add_rule('not_from', converter.not_literal("<|from|>"))
@@ -583,7 +583,7 @@ class ThoughtfulStepsToolsChatHandler(ChatHandler):
         response_schema = converter.resolve_refs(args.response_schema or {"type": "string"}, 'response')
         tool_parameter_schemas = {
             tool.function.name: converter.resolve_refs(tool.function.parameters, tool.function.name)
-            for tool in self.args.tools
+            for tool in self.args.tools or []
         }
         # sys.stderr.write(f"# RESOLVED RESPONSE SCHEMA: {json.dumps(response_schema, indent=2)}\n")
         # sys.stderr.write(f"# RESOLVED TOOL PARAMETER SCHEMA: {json.dumps(tool_parameter_schemas, indent=2)}\n")
@@ -614,7 +614,7 @@ class ThoughtfulStepsToolsChatHandler(ChatHandler):
             content='\n'.join([
                 'You are a function calling AI model.',
                 'Here are the tools available:',
-                _tools_schema_signatures(self.args.tools, indent=2),
+                _tools_schema_signatures(self.args.tools or [], indent=2),
                 # _tools_typescript_signatures(self.args.tools),
                 _please_respond_with_schema(
                     _make_bespoke_schema(
@@ -716,10 +716,10 @@ def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Op
     elif tool_style == ToolsPromptStyle.TOOLS_HERMES_2_PRO:
         return Hermes2ProToolsChatHandler(args, parallel_calls=parallel_calls)
     else:
-        raise ValueError(f"Unsupported tool call style: {args.chat_template.tool_style}")
+        raise ValueError(f"Unsupported tool call style: {tool_style}")
 
 # os.environ.get('NO_TS')
-def _please_respond_with_schema(schema: dict) -> str:
+def _please_respond_with_schema(schema: Json[Any]) -> str:
     sig = json.dumps(schema, indent=2)
     # _ts_converter = SchemaToTypeScriptConverter()
     # # _ts_converter.resolve_refs(schema, 'schema')

@@ -9,8 +9,10 @@ def load_source_as_module(source):
         i += 1
 
     spec = importlib.util.spec_from_file_location(module_name, source)
+    assert spec, f'Failed to load {source} as module'
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
+    assert spec.loader, f'{source} spec has no loader'
     spec.loader.exec_module(module)
     return module
 
@@ -29,7 +31,7 @@ def collect_functions(module):
         if k == k.capitalize():
             continue
         v = getattr(module, k)
-        if not callable(v) or isinstance(v, Type):
+        if not callable(v) or isinstance(v, type):
             continue
         if not hasattr(v, '__annotations__'):
             continue

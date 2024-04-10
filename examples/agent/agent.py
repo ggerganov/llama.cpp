@@ -3,7 +3,7 @@ import sys
 from time import sleep
 import typer
 from pydantic import BaseModel, Json, TypeAdapter
-from typing import Annotated, Callable, List, Union, Optional, Type
+from typing import Annotated, Any, Callable, Dict, List, Union, Optional, Type
 import json, requests
 
 from examples.agent.openapi_client import OpenAPIMethod, openapi_methods_from_endpoint
@@ -13,7 +13,7 @@ from examples.agent.utils import collect_functions, load_module
 from examples.openai.prompting import ToolsPromptStyle
 from examples.openai.subprocesses import spawn_subprocess
 
-def _get_params_schema(fn: Callable, verbose):
+def _get_params_schema(fn: Callable[[Any], Any], verbose):
     if isinstance(fn, OpenAPIMethod):
         return fn.parameters_schema
 
@@ -26,9 +26,9 @@ def _get_params_schema(fn: Callable, verbose):
 
 def completion_with_tool_usage(
         *,
-        response_model: Optional[Union[Json, Type]]=None,
+        response_model: Optional[Union[Json[Any], type]]=None,
         max_iterations: Optional[int]=None,
-        tools: List[Callable],
+        tools: List[Callable[..., Any]],
         endpoint: str,
         messages: List[Message],
         auth: Optional[str],
@@ -56,7 +56,7 @@ def completion_with_tool_usage(
             type="function",
             function=ToolFunction(
                 name=fn.__name__,
-                description=fn.__doc__,
+                description=fn.__doc__ or '',
                 parameters=_get_params_schema(fn, verbose=verbose)
             )
         )
@@ -128,7 +128,7 @@ def completion_with_tool_usage(
 def main(
     goal: Annotated[str, typer.Option()],
     tools: Optional[List[str]] = None,
-    format: Annotated[str, typer.Option(help="The output format: either a Python type (e.g. 'float' or a Pydantic model defined in one of the tool files), or a JSON schema, e.g. '{\"format\": \"date\"}'")] = None,
+    format: Annotated[Optional[str], typer.Option(help="The output format: either a Python type (e.g. 'float' or a Pydantic model defined in one of the tool files), or a JSON schema, e.g. '{\"format\": \"date\"}'")] = None,
     max_iterations: Optional[int] = 10,
     std_tools: Optional[bool] = False,
     auth: Optional[str] = None,
@@ -136,7 +136,7 @@ def main(
     verbose: bool = False,
     style: Optional[ToolsPromptStyle] = None,
 
-    model: Annotated[Optional[Path], typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
+    model: Annotated[str, typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
     endpoint: Optional[str] = None,
     context_length: Optional[int] = None,
     # endpoint: str = 'http://localhost:8080/v1/chat/completions',
@@ -187,8 +187,8 @@ def main(
         sleep(5)
 
     tool_functions = []
-    types = {}
-    for f in tools:
+    types: Dict[str, type] = {}
+    for f in (tools or []):
         if f.startswith('http://') or f.startswith('https://'):
             tool_functions.extend(openapi_methods_from_endpoint(f))
         else:
@@ -203,7 +203,7 @@ def main(
     if std_tools:
         tool_functions.extend(collect_functions(StandardTools))
 
-    response_model = None #str
+    response_model: Union[type, Json[Any]] = None #str
     if format:
         if format in types:
             response_model = types[format]
@@ -246,10 +246,7 @@ def main(
         seed=seed,
         n_probs=n_probs,
         min_keep=min_keep,
-        messages=[{
-            "role": "user",
-            "content": goal,
-        }]
+        messages=[Message(role="user", content=goal)],
     )
     print(result if response_model else f'➡️ {result}')
     # exit(0)
