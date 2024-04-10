@@ -76,7 +76,7 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
         sprintf(src1_str, "%s{%s}", src1->name, ggml_ne_string(src1).c_str());
     }
 
-    printf("%s: %24s = (%s) %10s(%s{%s}, %s}) = {%s} \n", __func__,
+    printf("%s: %24s = (%s) %10s(%s{%s}, %s}) = {%s}\n", __func__,
            t->name, ggml_type_name(t->type), ggml_op_name(t->op),
            src0->name, ggml_ne_string(src0).c_str(),
            src1 ? src1_str : "",
