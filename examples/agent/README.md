@@ -29,7 +29,7 @@ python -m examples.agent \
 
 ```bash
 python -m examples.agent \
-    --tools examples/agent/tools/example_weather_tools.py \
+    --tools examples/agent/tools/fake_weather_tools.py \
     --goal "What is the weather going to be like in San Francisco and Glasgow over the next 4 days." \
     --greedy
 ```
