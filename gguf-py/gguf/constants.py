@@ -24,6 +24,7 @@ class Keys:
         ALIGNMENT            = "general.alignment"
         NAME                 = "general.name"
         AUTHOR               = "general.author"
+        VERSION              = "general.version"
         URL                  = "general.url"
         DESCRIPTION          = "general.description"
         LICENSE              = "general.license"
@@ -638,6 +639,8 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_Q_NORM,
     ],
     # TODO
 }

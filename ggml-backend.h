@@ -137,7 +137,7 @@ extern "C" {
     /*
       Example usage:
 
-        // operations that use tensors allocated in a buffer with USAGE_WEIGHTS will be asigned
+        // operations that use tensors allocated in a buffer with USAGE_WEIGHTS will be assigned
         // preferrably to run on the same backend as the buffer
         ggml_backend_buffer_set_usage(buf_weights, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
 

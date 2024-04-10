@@ -567,6 +567,15 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
         {"model",   modelname},
         {"object",  "chat.completion.chunk"}
     };
+    if (!finish_reason.empty()) {
+        int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
+        int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
+        ret.push_back({"usage", json {
+            {"completion_tokens", num_tokens_predicted},
+            {"prompt_tokens",     num_prompt_tokens},
+            {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
+        }});
+    }
 
     return std::vector<json>({ret});
 }
