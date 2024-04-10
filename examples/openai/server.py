@@ -75,44 +75,6 @@ def main(
         atexit.register(server_process.kill)
         endpoint = f"http://{server_host}:{server_port}"
 
-
-    # print(chat_template.render([
-    #     Message(**{
-    #         "role": "user",
-    #         "name": None,
-    #         "tool_call_id": None,
-    #         "content": "What is the sum of 2535 squared and 32222000403 then multiplied by one and a half. What's a third of the result?",
-    #         "tool_calls": None
-    #     }),
-    #     Message(**{
-    #         "role": "assistant",
-    #         # "name": None,
-    #         "tool_call_id": None,
-    #         "content": "?",
-    #         "tool_calls": [
-    #             {
-    #                 # "id": "call_531873",
-    #                 "type": "function",
-    #                 "function": {
-    #                     "name": "add",
-    #                     "arguments": {
-    #                         "a": 2535,
-    #                         "b": 32222000403
-    #                     }
-    #                 }
-    #             }
-    #         ]
-    #     }),
-    #     Message(**{
-    #         "role": "tool",
-    #         "name": "add",
-    #         "tool_call_id": "call_531873",
-    #         "content": "32222002938",
-    #         "tool_calls": None
-    #     })
-    # ], add_generation_prompt=True))
-    # exit(0)
-
     app = FastAPI()
 
     @app.post("/v1/chat/completions")
