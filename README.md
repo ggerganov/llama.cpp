@@ -185,7 +185,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [Dot](https://github.com/alexpinel/Dot) (GPL)
 - [MindMac](https://mindmac.app) (proprietary)
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
-
+- [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
 ---
