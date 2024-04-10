@@ -3,13 +3,14 @@
 #include "ggml.h"
 
 #include <cstdio>
-#include <cstring>
 #include <string>
-#include <mutex>
 #include <vector>
 
+/**
+ * This the arbitrary data which will be passed to each callback.
+ * Later on we can for example add operation or tensor name filter from the CLI arg, or a file descriptor to dump the tensor.
+ */
 struct callback_data {
-    std::mutex m_mutex;
     std::vector<float> data;
 };
 
@@ -24,25 +25,28 @@ static std::string ggml_ne_string(const ggml_tensor * t) {
     return str;
 }
 
-static void ggml_print_tensor(const float * data, const int64_t * ne) {
-    int i, j, k;
-    printf("                                     [\n");
-    for (i = 0; i < ne[2] && i < 3; i++) {
-        printf("                                      [\n");
-        for (j = 0; j < ne[1] && j < 3; j++) {
-            printf("                                       [");
-            for (k = 0; k < ne[0] && k < 3; k++) {
-                printf("%8.4f", data[k * ne[1] * ne[2] + j * ne[2] + i]);
-                if (k < ne[0] - 1 && k < 2) printf(", ");
+static void ggml_print_tensor(const float * data, const int64_t * ne, const size_t * nb, int64_t n) {
+    for (int64_t i3 = 0; i3 < ne[3]; i3++) {
+        printf("                                     [\n");
+        for (int64_t i2 = 0; i2 < ne[2] && i2 < n; i2++) {
+            printf("                                      [\n");
+            for (int64_t i1 = 0; i1 < ne[1] && i1 < n; i1++) {
+                printf("                                       [");
+                for (int64_t i0 = 0; i0 < ne[0] && i0 < n; i0++) {
+                    size_t i = i3 * nb[3] + i2 * nb[2] + i1 * nb[1] + i0 * nb[0];
+                    float v = *(data + i);
+                    printf("%8.4f", v);
+                    if (i0 < ne[0] - 1 && i0 < n - 1) printf(", ");
+                }
+                if (ne[0] > n) printf(", ...");
+                printf("],\n");
             }
-            if (ne[0] > 3) printf(", ...");
-            printf("],\n");
+            if (ne[1] > n) printf("                                       ...\n");
+            printf("                                      ],\n");
         }
-        if (ne[1] > 3) printf("                                       ...\n");
-        printf("                                      ],\n");
+        if (ne[2] > n) printf("                                     ...\n");
+        printf("                                     ]\n");
     }
-    if (ne[2] > 3) printf("                                     ...\n");
-    printf("                                     ]\n");
 }
 
 /**
@@ -64,15 +68,13 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
         return true; // Always retrieve data
     }
 
-    std::lock_guard<std::mutex> lock(cb_data->m_mutex);
-
     char src1_str[128] = {0};
     if (src1) {
         sprintf(src1_str, "%s{%s}", src1->name, ggml_ne_string(src1).c_str());
     }
 
-    printf("%s: %24s = %10s(%s{%s}, %s}) = {%s} \n", __func__,
-           t->name, ggml_op_name(t->op),
+    printf("%s: %24s = (%s) %10s(%s{%s}, %s}) = {%s} \n", __func__,
+           t->name, ggml_type_name(t->type), ggml_op_name(t->op),
            src0->name, ggml_ne_string(src0).c_str(),
            src1 ? src1_str : "",
            ggml_ne_string(t).c_str());
@@ -87,8 +89,10 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
         ggml_backend_tensor_get(t, cb_data->data.data(), 0, n_bytes);
     }
 
-    const float * data = is_host ? (const float *) t->data : cb_data->data.data();
-    ggml_print_tensor(data, t->ne);
+    if (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_F16) {
+        const float * data = is_host ? (const float *) t->data : cb_data->data.data();
+        ggml_print_tensor(data, t->ne, t->nb, 3);
+    }
 
     return true;
 }
