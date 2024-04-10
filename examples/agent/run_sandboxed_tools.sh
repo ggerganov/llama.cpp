@@ -20,6 +20,8 @@ BUILD_DIR=$(mktemp -d)
 DATA_DIR="${DATA_DIR:-$HOME/.llama.cpp/sandbox}"
 SCRIPT_DIR=$( cd "$(dirname "$0")" ; pwd )
 
+mkdir -p "$DATA_DIR"
+
 REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-}"
 if [[ -z "$REQUIREMENTS_FILE" && -f "$script_folder/requirements.txt" ]]; then
     REQUIREMENTS_FILE="$script_folder/requirements.txt"
@@ -69,6 +71,6 @@ set -x
 docker run \
     "$@" \
     --mount "type=bind,source=$( realpath "$script_folder" ),target=/src,readonly" \
-    --mount "type=bind,source=$( realpath "$DATA_DIR" ),target=/data" \
+    --mount "type=bind,source=$DATA_DIR,target=/data" \
     -p "$PORT:$PORT" \
     -it "$LLAMA_IMAGE_NAME"

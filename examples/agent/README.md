@@ -108,7 +108,10 @@ The agent can use tools written in Python, or (soon) exposed under OpenAPI endpo
 so we provide a script to run them in a Docker-sandboxed environment, exposed as an OpenAPI server:
 
     ```bash
-    PORT=9999 examples/openai/run_sandboxed_tools.sh \
+    # With limactl, the default sandbox location ~/.llama.cpp/sandbox won't be writable
+    # (see https://github.com/lima-vm/lima/discussions/393)
+    # export DATA_DIR=/tmp/lima/llama.cpp/sandbox
+    PORT=9999 examples/agent/run_sandboxed_tools.sh \
         examples/agent/tools/unsafe_python_tools.py &
 
     python -m examples.agent \
@@ -127,11 +130,11 @@ so we provide a script to run them in a Docker-sandboxed environment, exposed as
 
     </details>
 
-    - [fastify.py](./fastify.py) turns a python module into an OpenAPI endpoint using FastAPI
+    - [fastify.py](./fastify.py) turns a python module into an [OpenAPI](https://www.openapis.org/) endpoint using [FastAPI](https://fastapi.tiangolo.com/)
 
     - [run_sandboxed_tools.sh](./run_sandboxed_tools.sh) builds and runs a Docker environment with fastify inside it, and exposes its port locally
 
-- Beyond just "tools", output format can be constrained using JSON schemas or Pydantic types
+- Beyond just "tools", output format can be constrained using [JSON schemas](https://json-schema.org/) or [Pydantic](https://docs.pydantic.dev/latest/) types
 
     ```bash
     python -m examples.agent \

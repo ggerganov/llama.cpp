@@ -3,6 +3,7 @@
 
     This is useful in combination w/ the examples/agent/run_sandboxed_tools.sh
 '''
+import os
 import fastapi, uvicorn
 import typer
 from typing import Type, List
@@ -37,6 +38,7 @@ def main(files: List[str], host: str = '0.0.0.0', port: int = 8000):
     for f in files:
         bind_functions(app, load_module(f))
 
+    print(f'INFO:     CWD = {os.getcwd()}')
     uvicorn.run(app, host=host, port=port)
 
 if __name__ == '__main__':
