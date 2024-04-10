@@ -118,11 +118,9 @@ int main(int argc, char ** argv) {
     callback_data cb_data;
 
     gpt_params params;
-    params.n_batch = 512;
     if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
-    params.n_batch = std::min(params.n_batch, params.n_ctx);
 
     print_build_info();
 
