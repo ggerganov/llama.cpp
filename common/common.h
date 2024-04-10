@@ -80,6 +80,9 @@ struct gpt_params {
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
 
+    ggml_backend_sched_eval_callback cb_eval;
+    void * cb_eval_user_data;
+
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
     llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
