@@ -71,6 +71,7 @@ def completion_with_tool_usage(
             messages=messages,
             response_format=response_format,
             tools=tools_schemas,
+            cache_prompt=True,
             **kwargs,
         )
         if verbose:
