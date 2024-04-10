@@ -1,18 +1,11 @@
-# https://gist.github.com/ochafik/a3d4a5b9e52390544b205f37fb5a0df3
-# pip install "fastapi[all]" "uvicorn[all]" sse-starlette jsonargparse jinja2 pydantic
-
 import json, sys
 from pathlib import Path
 import time
 
-from pydantic import TypeAdapter
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from examples.openai.llama_cpp_server_api import LlamaCppServerCompletionRequest
 from examples.openai.gguf_kvs import GGUFKeyValues, Keys
-from examples.openai.api import ChatCompletionResponse, Choice, Message, ChatCompletionRequest, Usage
-from examples.openai.prompting import ChatHandlerArgs, ChatTemplate, ToolsPromptStyle, get_chat_handler, ChatHandler
+from examples.openai.api import ChatCompletionResponse, Choice, ChatCompletionRequest, Usage
+from examples.openai.prompting import ChatHandlerArgs, ChatTemplate, ToolsPromptStyle, get_chat_handler
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse

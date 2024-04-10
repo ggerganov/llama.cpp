@@ -1,5 +1,5 @@
 fastapi[all]
-gguf
+# gguf
 jinja2
 pydantic
 sse-starlette
