@@ -28,8 +28,6 @@ static std::string ggml_ne_string(const ggml_tensor * t) {
 }
 
 static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne, const size_t * nb, int64_t n) {
-    size_t bs = ggml_blck_size(type);
-
     float sum = 0;
     for (int64_t i3 = 0; i3 < ne[3]; i3++) {
         printf("                                     [\n");
@@ -38,7 +36,7 @@ static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne
             for (int64_t i1 = 0; i1 < ne[1] && i1 < n; i1++) {
                 printf("                                       [");
                 for (int64_t i0 = 0; i0 < ne[0] && i0 < n; i0++) {
-                    size_t i = i3 * nb[3] + i2 * nb[2] + i1 * nb[1] + i0 / bs * nb[0];
+                    size_t i = i3 * nb[3] + i2 * nb[2] + i1 * nb[1] + i0 * nb[0];
                     float v;
                     if (type == GGML_TYPE_F16) {
                         v = ggml_fp16_to_fp32(*(ggml_fp16_t *) data + i);
