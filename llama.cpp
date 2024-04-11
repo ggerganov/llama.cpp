@@ -11121,7 +11121,7 @@ struct llm_tokenizer_bpe {
                 add_new_bigram(bigram.left, left_symbol.next);  // right side of current symbol
             }
 
-            // add the fnished tokens to the final list keeping correct order for next and prev
+            // add the finished tokens to the final list keeping correct order for next and prev
             for (auto & sym : symbols) {
                 if (sym.n > 0) {
                     sym.prev = final_prev_index;

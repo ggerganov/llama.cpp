@@ -597,24 +597,18 @@ int main(int argc, char ** argv) {
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    llama_model_params mparams = llama_model_params_from_gpt_params(params);
-
-    llama_model * model = llama_load_model_from_file(params.model.c_str(), mparams);
-    if (model == NULL) {
-        fprintf(stderr, "%s: error: unable to load model\n", __func__);
-        return 1;
-    }
-
-    llama_context_params cparams = llama_context_params_from_gpt_params(params);
-
     // pass the callback to the backend scheduler
     // it will be executed for each node during the graph computation
-    cparams.cb_eval = ik_collect_imatrix;
-    cparams.cb_eval_user_data = NULL;
+    params.cb_eval = ik_collect_imatrix;
+    params.cb_eval_user_data = NULL;
+    params.warmup = false;
 
-    llama_context * ctx = llama_new_context_with_model(model, cparams);
-    if (ctx == NULL) {
-        fprintf(stderr, "%s: error: unable to create context\n", __func__);
+    // init
+    llama_model * model;
+    llama_context * ctx;
+    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    if (model == nullptr || ctx == nullptr) {
+        fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;
     }
 
