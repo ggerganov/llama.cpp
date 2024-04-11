@@ -146,7 +146,8 @@ int main(int argc, char ** argv)  {
         /* no_alloc   =*/ 0
     };
 
-    ctx = ggml_init(params);
+    int main_gpu = 0;
+    ggml_backend_t backend = ggml_backend_sycl_init(main_gpu);
     if (!ctx) {
         fprintf(stderr, "%s: ggml_init() failed\n", __func__);
         return 1;

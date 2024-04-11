@@ -1,0 +1,5 @@
+set(TARGET test-bench)
+add_executable(${TARGET} test-bench.cpp)
+install(TARGETS ${TARGET} RUNTIME)
+target_link_libraries(${TARGET} PRIVATE common)
+#target_compile_features(${TARGET} PRIVATE cxx_std_11)
