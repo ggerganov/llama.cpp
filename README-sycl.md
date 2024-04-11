@@ -8,9 +8,9 @@
 - [Linux](#linux)
 - [Windows](#windows)
 - [Environment Variable](#environment-variable)
-- [Known Issue](#known-issue)
-- [Q&A](#q&a)
-- [Todo](#todo)
+- [Known Issue](#known-issues)
+- [Q&A](#qa)
+- [TODO](#todo)
 
 ## Background
 
@@ -54,10 +54,10 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 
 ## OS
 
-|OS|Status|Verified|
-|-|-|-|
-|Linux|Support|Ubuntu 22.04, Fedora Silverblue 39|
-|Windows|Support|Windows 11|
+| OS      | Status  | Verified                           |
+|---------|---------|------------------------------------|
+| Linux   | Support | Ubuntu 22.04, Fedora Silverblue 39 |
+| Windows | Support | Windows 11                         |
 
 
 ## Hardware
@@ -66,13 +66,13 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 
 **Verified devices**
 
-|Intel GPU| Status | Verified Model|
-|-|-|-|
-|Intel Data Center Max Series| Support| Max 1550|
-|Intel Data Center Flex Series| Support| Flex 170|
-|Intel Arc Series| Support| Arc 770, 730M|
-|Intel built-in Arc GPU| Support| built-in Arc GPU in Meteor Lake|
-|Intel iGPU| Support| iGPU in i5-1250P, i7-1260P, i7-1165G7|
+| Intel GPU                     | Status  | Verified Model                        |
+|-------------------------------|---------|---------------------------------------|
+| Intel Data Center Max Series  | Support | Max 1550                              |
+| Intel Data Center Flex Series | Support | Flex 170                              |
+| Intel Arc Series              | Support | Arc 770, 730M                         |
+| Intel built-in Arc GPU        | Support | built-in Arc GPU in Meteor Lake       |
+| Intel iGPU                    | Support | iGPU in i5-1250P, i7-1260P, i7-1165G7 |
 
 *Notes:*
 
@@ -89,10 +89,10 @@ The BLAS acceleration on Nvidia GPU through oneAPI can be obtained using the Nvi
 
 **Verified devices**
 
-|Nvidia GPU| Status | Verified Model|
-|-|-|-|
-|Ampere Series| Support| A100, A4000|
-|Ampere Series *(Mobile)*| Support| RTX 40 Series|
+| Nvidia GPU               | Status  | Verified Model |
+|--------------------------|---------|----------------|
+| Ampere Series            | Support | A100, A4000    |
+| Ampere Series *(Mobile)* | Support | RTX 40 Series  |
 
 *Notes:*
   - Support for Nvidia targets through oneAPI is currently limited to Linux platforms.
@@ -167,7 +167,7 @@ Platform #0: Intel(R) OpenCL HD Graphics
 
 - **Nvidia GPU**
 
-In order to target Nvidia GPUs through SYCL, please make sure the CUDA/CUBLAS native requirements *-found [here](README.md#cublas)-* are installed.
+In order to target Nvidia GPUs through SYCL, please make sure the CUDA/CUBLAS native requirements *-found [here](README.md#cuda)-* are installed.
 Installation can be verified by running the following:
 ```sh
 nvidia-smi
@@ -313,10 +313,10 @@ found 6 SYCL devices:
 | 5|    [opencl:acc:0]|               Intel(R) FPGA Emulation Device|       1.2|         24|67108864|     64|    67064815616|
 ```
 
-|Attribute|Note|
-|-|-|
-|compute capability 1.3|Level-zero driver/runtime, recommended |
-|compute capability 3.0|OpenCL driver/runtime, slower than level-zero in most cases|
+| Attribute              | Note                                                        |
+|------------------------|-------------------------------------------------------------|
+| compute capability 1.3 | Level-zero driver/runtime, recommended                      |
+| compute capability 3.0 | OpenCL driver/runtime, slower than level-zero in most cases |
 
 4. Launch inference
 
@@ -325,10 +325,10 @@ There are two device selection modes:
 - Single device: Use one device target specified by the user.
 - Multiple devices: Automatically select the devices with the same largest Max compute-units.
 
-|Device selection|Parameter|
-|-|-|
-|Single device|--split-mode none --main-gpu DEVICE_ID |
-|Multiple devices|--split-mode layer (default)|
+| Device selection | Parameter                              |
+|------------------|----------------------------------------|
+| Single device    | --split-mode none --main-gpu DEVICE_ID |
+| Multiple devices | --split-mode layer (default)           |
 
 Examples:
 
@@ -486,10 +486,10 @@ found 6 SYCL devices:
 
 ```
 
-|Attribute|Note|
-|-|-|
-|compute capability 1.3|Level-zero running time, recommended |
-|compute capability 3.0|OpenCL running time, slower than level-zero in most cases|
+| Attribute              | Note                                                      |
+|------------------------|-----------------------------------------------------------|
+| compute capability 1.3 | Level-zero running time, recommended                      |
+| compute capability 3.0 | OpenCL running time, slower than level-zero in most cases |
 
 
 4. Launch inference
@@ -499,10 +499,10 @@ There are two device selection modes:
 - Single device: Use one device assigned by user.
 - Multiple devices: Automatically choose the devices with the same biggest Max compute units.
 
-|Device selection|Parameter|
-|-|-|
-|Single device|--split-mode none --main-gpu DEVICE_ID |
-|Multiple devices|--split-mode layer (default)|
+| Device selection | Parameter                              |
+|------------------|----------------------------------------|
+| Single device    | --split-mode none --main-gpu DEVICE_ID |
+| Multiple devices | --split-mode layer (default)           |
 
 Examples:
 
@@ -540,20 +540,20 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 
 #### Build
 
-|Name|Value|Function|
-|-|-|-|
-|LLAMA_SYCL|ON (mandatory)|Enable build with SYCL code path.|
-|LLAMA_SYCL_TARGET | INTEL *(default)* \| NVIDIA|Set the SYCL target device type.|
-|LLAMA_SYCL_F16|OFF *(default)* \|ON *(optional)*|Enable FP16 build with SYCL code path.|
-|CMAKE_C_COMPILER|icx|Set *icx* compiler for SYCL code path.|
-|CMAKE_CXX_COMPILER|icpx *(Linux)*, icx *(Windows)*|Set `icpx/icx` compiler for SYCL code path.|
+| Name               | Value                             | Function                                    |
+|--------------------|-----------------------------------|---------------------------------------------|
+| LLAMA_SYCL         | ON (mandatory)                    | Enable build with SYCL code path.           |
+| LLAMA_SYCL_TARGET  | INTEL *(default)* \| NVIDIA       | Set the SYCL target device type.            |
+| LLAMA_SYCL_F16     | OFF *(default)* \|ON *(optional)* | Enable FP16 build with SYCL code path.      |
+| CMAKE_C_COMPILER   | icx                               | Set *icx* compiler for SYCL code path.      |
+| CMAKE_CXX_COMPILER | icpx *(Linux)*, icx *(Windows)*   | Set `icpx/icx` compiler for SYCL code path. |
 
 #### Runtime
 
-|Name|Value|Function|
-|-|-|-|
-|GGML_SYCL_DEBUG|0 (default) or 1|Enable log function by macro: GGML_SYCL_DEBUG|
-|ZES_ENABLE_SYSMAN| 0 (default) or 1|Support to get free memory of GPU by sycl::aspect::ext_intel_free_memory.<br>Recommended to use when --split-mode = layer|
+| Name              | Value            | Function                                                                                                                  |
+|-------------------|------------------|---------------------------------------------------------------------------------------------------------------------------|
+| GGML_SYCL_DEBUG   | 0 (default) or 1 | Enable log function by macro: GGML_SYCL_DEBUG                                                                             |
+| ZES_ENABLE_SYSMAN | 0 (default) or 1 | Support to get free memory of GPU by sycl::aspect::ext_intel_free_memory.<br>Recommended to use when --split-mode = layer |
 
 ## Known Issues
 
@@ -591,6 +591,6 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 ### **GitHub contribution**:
 Please add the **[SYCL]** prefix/tag in issues/PRs titles to help the SYCL-team check/address them without delay.
 
-## Todo
+## TODO
 
 - Support row layer split for multiple card runs.
