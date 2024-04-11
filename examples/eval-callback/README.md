@@ -1,4 +1,4 @@
-# llama.cpp/examples/ggml-debug
+# llama.cpp/examples/eval-callback
 
 A simple example which demonstrates how to use callback during the inference.
 It simply prints to the console all operations and tensor data.
@@ -6,7 +6,7 @@ It simply prints to the console all operations and tensor data.
 Usage:
 
 ```shell
-ggml-debug \
+eval-callback \
   --hf-repo ggml-org/models \
   --hf-file phi-2/ggml-model-q4_0.gguf \
   --model phi-2-q4_0.gguf \
