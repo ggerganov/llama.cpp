@@ -80,6 +80,9 @@ struct gpt_params {
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
 
+    ggml_backend_sched_eval_callback cb_eval = nullptr;
+    void * cb_eval_user_data                 = nullptr;
+
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
     llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
@@ -156,6 +159,7 @@ struct gpt_params {
     bool infill            = false; // use infill mode
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
     bool no_kv_offload     = false; // disable KV offloading
+    bool warmup            = true;  // warmup run
 
     std::string cache_type_k = "f16"; // KV cache data type for the K
     std::string cache_type_v = "f16"; // KV cache data type for the V

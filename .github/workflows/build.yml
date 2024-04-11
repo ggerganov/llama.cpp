@@ -52,7 +52,7 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          ctest -L 'main|curl' --verbose --timeout 900
 
       - name: Determine tag name
         id: tag
@@ -209,21 +209,21 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential libcurl4-openssl-dev
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          ctest -L 'main|curl' --verbose --timeout 900
 
       - name: Test llama2c conversion
         id: llama2c_test
