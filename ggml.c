@@ -21152,8 +21152,9 @@ void gguf_remove_key(struct gguf_context * ctx, const char * key) {
     const int idx = gguf_find_key(ctx, key);
     if (idx >= 0) {
         const int n_kv = gguf_get_n_kv(ctx);
-        for (int i = idx; i < n_kv; ++i)
+        for (int i = idx; i < n_kv-1; ++i) {
             ctx->kv[i] = ctx->kv[i+1];
+        }
         ctx->kv = realloc(ctx->kv, (n_kv - 1) * sizeof(struct gguf_kv));
         ctx->header.n_kv--;
     }
