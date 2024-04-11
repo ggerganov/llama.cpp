@@ -12776,7 +12776,7 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
     std::vector<std::vector<const llama_grammar_element *>> tmp_new_stacks;
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         llama_grammar_accept(grammar->rules, grammar->stacks, *it, tmp_new_stacks);
-        tmp_new_stacks.swap(grammar->stacks);
+        grammar->stacks = tmp_new_stacks;
     }
     grammar->partial_utf8 = decoded.second;
     GGML_ASSERT(!grammar->stacks.empty());
