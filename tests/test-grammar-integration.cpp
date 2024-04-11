@@ -38,7 +38,7 @@ number ::= [0-9]+)""";
 
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         auto prev_stacks = grammar->stacks;
-        grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
+        llama_grammar_accept(grammar->rules, prev_stacks, *it, grammar->stacks);
         assert(!grammar->stacks.empty());
     }
 
@@ -138,7 +138,7 @@ ws ::= [ \t\n\r]?)""";
         for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
             ++pos;
             auto prev_stacks = grammar->stacks;
-            grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
+            llama_grammar_accept(grammar->rules, prev_stacks, *it, grammar->stacks);
 
             // Expect that each code point will not cause the grammar to fail
             if (grammar->stacks.empty()) {
@@ -173,7 +173,7 @@ ws ::= [ \t\n\r]?)""";
 
         for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
             auto prev_stacks = grammar->stacks;
-            grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
+            llama_grammar_accept(grammar->rules, prev_stacks, *it, grammar->stacks);
             if (grammar->stacks.empty()) {
                 parse_failed = true;
                 break;
