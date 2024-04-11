@@ -477,7 +477,7 @@ class GGUFWriter:
                 template = choice.get('template')
 
                 # Allowing non-alphanumerical characters in template name is probably not a good idea, so filter it
-                name = ''.join((c for c in name if c in ['_'] + list(ascii_letters) + list(digits)))
+                name = ''.join((c if c in ascii_letters + digits else '_' for c in name))
 
                 if name and template is not None:
                     if name == 'default':
