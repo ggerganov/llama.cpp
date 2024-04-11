@@ -59,9 +59,9 @@ option(LLAMA_GPROF                      "llama: enable gprof"                   
 option(LLAMA_FATAL_WARNINGS             "llama: enable -Werror flag"                            OFF)
 
 # sanitizers
-option(LLAMA_SANITIZE_THREAD            "llama: enable thread sanitizer"                        OFF)
-option(LLAMA_SANITIZE_ADDRESS           "llama: enable address sanitizer"                       OFF)
-option(LLAMA_SANITIZE_UNDEFINED         "llama: enable undefined sanitizer"                     OFF)
+option(LLAMA_SANITIZE_THREAD            "llama: enable thread sanitizer"                        ON)
+option(LLAMA_SANITIZE_ADDRESS           "llama: enable address sanitizer"                       ON)
+option(LLAMA_SANITIZE_UNDEFINED         "llama: enable undefined sanitizer"                     ON)
 
 # instruction set specific
 if (LLAMA_NATIVE)
@@ -126,7 +126,7 @@ option(LLAMA_CPU_HBM                         "llama: use memkind for CPU HBM"   
 set(LLAMA_SCHED_MAX_COPIES  "4" CACHE STRING "llama: max input copies for pipeline parallelism")
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ON)
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 
 # add perf arguments

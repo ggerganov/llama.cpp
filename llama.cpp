@@ -205,6 +205,7 @@ enum llm_arch {
     LLM_ARCH_REFACT,
     LLM_ARCH_BERT,
     LLM_ARCH_NOMIC_BERT,
+    LLM_ARCH_JINA_BERT,
     LLM_ARCH_BLOOM,
     LLM_ARCH_STABLELM,
     LLM_ARCH_QWEN,
@@ -237,6 +238,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_REFACT,          "refact"     },
     { LLM_ARCH_BERT,            "bert"       },
     { LLM_ARCH_NOMIC_BERT,      "nomic-bert" },
+    { LLM_ARCH_JINA_BERT,       "jina-bert"  },
     { LLM_ARCH_BLOOM,           "bloom"      },
     { LLM_ARCH_STABLELM,        "stablelm"   },
     { LLM_ARCH_QWEN,            "qwen"       },
@@ -661,6 +663,22 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_LAYER_OUT_NORM,  "blk.%d.layer_output_norm" },
             { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
+            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+        },
+    },
+    {
+        LLM_ARCH_JINA_BERT,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_TOKEN_EMBD_NORM, "token_embd_norm" },
+            { LLM_TENSOR_TOKEN_TYPES,     "token_types" },
+            { LLM_TENSOR_ATTN_OUT_NORM,   "blk.%d.attn_output_norm" },
+            { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_LAYER_OUT_NORM,  "blk.%d.layer_output_norm" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
@@ -3770,6 +3788,18 @@ static void llm_load_hparams(
                         model.type = e_model::MODEL_335M; break; // bge-large
                 }
             } break;
+        case LLM_ARCH_JINA_BERT:
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
+                ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
+                ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
+                ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type);
+
+                switch (hparams.n_layer) {
+                    case 4: model.type = e_model::MODEL_33M; break; // jina-embeddings-small
+                    case 12: model.type = e_model::MODEL_137M; break; // jina-embeddings-base
+                }
+            } break;
         case LLM_ARCH_NOMIC_BERT:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
@@ -4488,6 +4518,7 @@ static bool llm_load_tensors(
         model.layers.resize(n_layer);
 
         const auto tn = LLM_TN(model.arch);
+        //std::printf("JOAN HERE ARCH %i", model.arch);
         switch (model.arch) {
             case LLM_ARCH_LLAMA:
             case LLM_ARCH_REFACT:
@@ -4782,6 +4813,7 @@ static bool llm_load_tensors(
                     }
                 } break;
             case LLM_ARCH_BERT:
+            case LLM_ARCH_JINA_BERT:
             case LLM_ARCH_NOMIC_BERT:
                 {
                     model.tok_embd     = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab});
@@ -4799,7 +4831,7 @@ static bool llm_load_tensors(
 
                         auto & layer = model.layers[i];
 
-                        if (model.arch == LLM_ARCH_BERT) {
+                        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT) {
                             layer.wq   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
                             layer.bq   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i),   {n_embd});
 
@@ -4820,7 +4852,7 @@ static bool llm_load_tensors(
                         layer.ffn_up          = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,        "weight", i), {n_embd, n_ff});
                         layer.ffn_down        = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN,      "weight", i), {n_ff, n_embd});
 
-                        if (model.arch == LLM_ARCH_BERT) {
+                        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT) {
                             layer.bo         = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd});
                             layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
 
@@ -14558,6 +14590,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_REFACT:
         case LLM_ARCH_BLOOM:
         case LLM_ARCH_MAMBA:
+        case LLM_ARCH_JINA_BERT:
             return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values

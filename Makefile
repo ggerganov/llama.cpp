@@ -1,990 +1,1761 @@
-# Define the default target now so that it is always the first target
-BUILD_TARGETS = \
-	main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
-	simple batched batched-bench save-load-state server gguf gguf-split llama-bench libllava.a llava-cli baby-llama beam-search  \
-	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm tests/test-c.o
-
-# Binaries only useful for tests
-TEST_TARGETS = \
-	tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt \
-	tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama          \
-	tests/test-tokenizer-0-falcon tests/test-tokenizer-1-llama tests/test-tokenizer-1-bpe tests/test-rope      \
-	tests/test-backend-ops tests/test-model-load-cancel tests/test-autorelease                                 \
-	tests/test-json-schema-to-grammar tests/test-grammar-integration
-
-# Code coverage output files
-COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
-
-ifndef UNAME_S
-UNAME_S := $(shell uname -s)
-endif
-
-ifndef UNAME_P
-UNAME_P := $(shell uname -p)
-endif
-
-ifndef UNAME_M
-UNAME_M := $(shell uname -m)
-endif
-
-# Mac OS + Arm can report x86_64
-# ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
-ifeq ($(UNAME_S),Darwin)
-	ifndef LLAMA_NO_METAL
-		LLAMA_METAL := 1
-	endif
-
-	ifneq ($(UNAME_P),arm)
-		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
-		ifeq ($(SYSCTL_M),1)
-			# UNAME_P := arm
-			# UNAME_M := arm64
-			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
-		endif
-	endif
-endif
-
-default: $(BUILD_TARGETS)
-
-test: $(TEST_TARGETS)
-	@failures=0; \
-	for test_target in $(TEST_TARGETS); do \
-		if [ "$$test_target" = "tests/test-tokenizer-0-llama" ]; then \
-			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
-		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
-			./$$test_target $(CURDIR)/models/ggml-vocab-falcon.gguf; \
-		elif [ "$$test_target" = "tests/test-tokenizer-1-llama" ]; then \
-			continue; \
-		elif [ "$$test_target" = "tests/test-tokenizer-1-bpe" ]; then \
-			continue; \
-		else \
-			echo "Running test $$test_target..."; \
-			./$$test_target; \
-		fi; \
-		if [ $$? -ne 0 ]; then \
-			printf 'Test %s FAILED!\n\n' $$test_target; \
-			failures=$$(( failures + 1 )); \
-		else \
-			printf 'Test %s passed.\n\n' $$test_target; \
-		fi; \
-	done; \
-	if [ $$failures -gt 0 ]; then \
-		printf '\n%s tests failed.\n' $$failures; \
-		exit 1; \
-	fi
-	@echo 'All tests passed.'
-
-all: $(BUILD_TARGETS) $(TEST_TARGETS)
-
-coverage: ## Run code coverage
-	gcov -pb tests/*.cpp
-
-lcov-report: coverage ## Generate lcov report
-	mkdir -p lcov-report
-	lcov --capture --directory . --output-file lcov-report/coverage.info
-	genhtml lcov-report/coverage.info --output-directory lcov-report
-
-gcovr-report: coverage ## Generate gcovr report
-	mkdir -p gcovr-report
-	gcovr --root . --html --html-details --output gcovr-report/coverage.html
-
-ifdef RISCV_CROSS_COMPILE
-CC	:= riscv64-unknown-linux-gnu-gcc
-CXX	:= riscv64-unknown-linux-gnu-g++
-endif
-
-#
-# Compile flags
-#
-
-# keep standard at C11 and C++11
-MK_CPPFLAGS  = -I. -Icommon
-MK_CFLAGS    = -std=c11   -fPIC
-MK_CXXFLAGS  = -std=c++11 -fPIC
-MK_NVCCFLAGS = -std=c++11
-
-# -Ofast tends to produce faster code, but may not be available for some compilers.
-ifdef LLAMA_FAST
-MK_CFLAGS     += -Ofast
-HOST_CXXFLAGS += -Ofast
-MK_NVCCFLAGS  += -O3
-else
-MK_CFLAGS     += -O3
-MK_CXXFLAGS   += -O3
-MK_NVCCFLAGS  += -O3
-endif
-
-ifndef LLAMA_NO_CCACHE
-CCACHE := $(shell which ccache)
-ifdef CCACHE
-export CCACHE_SLOPPINESS = time_macros
-$(info I ccache found, compilation results will be cached. Disable with LLAMA_NO_CCACHE.)
-CC    := $(CCACHE) $(CC)
-CXX   := $(CCACHE) $(CXX)
-else
-$(info I ccache not found. Consider installing it for faster compilation.)
-endif # CCACHE
-endif # LLAMA_NO_CCACHE
-
-# clock_gettime came in POSIX.1b (1993)
-# CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
-# posix_memalign came in POSIX.1-2001 / SUSv3
-# M_PI is an XSI extension since POSIX.1-2001 / SUSv3, came in XPG1 (1985)
-MK_CPPFLAGS += -D_XOPEN_SOURCE=600
-
-# Somehow in OpenBSD whenever POSIX conformance is specified
-# some string functions rely on locale_t availability,
-# which was introduced in POSIX.1-2008, forcing us to go higher
-ifeq ($(UNAME_S),OpenBSD)
-	MK_CPPFLAGS += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
-endif
-
-# Data types, macros and functions related to controlling CPU affinity and
-# some memory allocation are available on Linux through GNU extensions in libc
-ifeq ($(UNAME_S),Linux)
-	MK_CPPFLAGS += -D_GNU_SOURCE
-endif
-
-# RLIMIT_MEMLOCK came in BSD, is not specified in POSIX.1,
-# and on macOS its availability depends on enabling Darwin extensions
-# similarly on DragonFly, enabling BSD extensions is necessary
-ifeq ($(UNAME_S),Darwin)
-	MK_CPPFLAGS += -D_DARWIN_C_SOURCE
-endif
-ifeq ($(UNAME_S),DragonFly)
-	MK_CPPFLAGS += -D__BSD_VISIBLE
-endif
-
-# alloca is a non-standard interface that is not visible on BSDs when
-# POSIX conformance is specified, but not all of them provide a clean way
-# to enable it in such cases
-ifeq ($(UNAME_S),FreeBSD)
-	MK_CPPFLAGS += -D__BSD_VISIBLE
-endif
-ifeq ($(UNAME_S),NetBSD)
-	MK_CPPFLAGS += -D_NETBSD_SOURCE
-endif
-ifeq ($(UNAME_S),OpenBSD)
-	MK_CPPFLAGS += -D_BSD_SOURCE
-endif
-
-ifdef LLAMA_SCHED_MAX_COPIES
-	MK_CPPFLAGS += -DGGML_SCHED_MAX_COPIES=$(LLAMA_SCHED_MAX_COPIES)
-endif
-
-ifdef LLAMA_DEBUG
-	MK_CFLAGS   += -O0 -g
-	MK_CXXFLAGS += -O0 -g
-	MK_LDFLAGS  += -g
-
-	ifeq ($(UNAME_S),Linux)
-		MK_CPPFLAGS += -D_GLIBCXX_ASSERTIONS
-	endif
-else
-	MK_CPPFLAGS += -DNDEBUG
-endif
-
-ifdef LLAMA_SANITIZE_THREAD
-	MK_CFLAGS   += -fsanitize=thread -g
-	MK_CXXFLAGS += -fsanitize=thread -g
-	MK_LDFLAGS  += -fsanitize=thread -g
-endif
-
-ifdef LLAMA_SANITIZE_ADDRESS
-	MK_CFLAGS   += -fsanitize=address -fno-omit-frame-pointer -g
-	MK_CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer -g
-	MK_LDFLAGS  += -fsanitize=address -fno-omit-frame-pointer -g
-endif
-
-ifdef LLAMA_SANITIZE_UNDEFINED
-	MK_CFLAGS   += -fsanitize=undefined -g
-	MK_CXXFLAGS += -fsanitize=undefined -g
-	MK_LDFLAGS  += -fsanitize=undefined -g
-endif
-
-ifdef LLAMA_SERVER_VERBOSE
-	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
-endif
-
-ifdef LLAMA_SERVER_SSL
-	MK_CPPFLAGS += -DCPPHTTPLIB_OPENSSL_SUPPORT
-	MK_LDFLAGS += -lssl -lcrypto
-endif
-
-ifdef LLAMA_CODE_COVERAGE
-	MK_CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
-endif
-
-ifdef LLAMA_DISABLE_LOGS
-	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
-endif # LLAMA_DISABLE_LOGS
-
-# warnings
-WARN_FLAGS    = -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
-MK_CFLAGS    += $(WARN_FLAGS) -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int \
-				-Werror=implicit-function-declaration
-MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
-
-ifeq ($(LLAMA_FATAL_WARNINGS),1)
-	MK_CFLAGS   += -Werror
-	MK_CXXFLAGS += -Werror
-endif
-
-# this version of Apple ld64 is buggy
-ifneq '' '$(findstring dyld-1015.7,$(shell $(CC) $(LDFLAGS) -Wl,-v 2>&1))'
-	MK_CPPFLAGS += -DHAVE_BUGGY_APPLE_LINKER
-endif
-
-# OS specific
-# TODO: support Windows
-ifneq '' '$(filter $(UNAME_S),Linux Darwin FreeBSD NetBSD OpenBSD Haiku)'
-	MK_CFLAGS   += -pthread
-	MK_CXXFLAGS += -pthread
-endif
-
-# detect Windows
-ifneq ($(findstring _NT,$(UNAME_S)),)
-	_WIN32 := 1
-endif
-
-# library name prefix
-ifneq ($(_WIN32),1)
-	LIB_PRE := lib
-endif
-
-# Dynamic Shared Object extension
-ifneq ($(_WIN32),1)
-	DSO_EXT := .so
-else
-	DSO_EXT := .dll
-endif
-
-# Windows Sockets 2 (Winsock) for network-capable apps
-ifeq ($(_WIN32),1)
-	LWINSOCK2 := -lws2_32
-endif
-
-ifdef LLAMA_GPROF
-	MK_CFLAGS   += -pg
-	MK_CXXFLAGS += -pg
-endif
-ifdef LLAMA_PERF
-	MK_CPPFLAGS += -DGGML_PERF
-endif
-
-# Architecture specific
-# TODO: probably these flags need to be tweaked on some architectures
-#       feel free to update the Makefile for your architecture and send a pull request or issue
-
-ifndef RISCV
-
-ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
-	# Use all CPU extensions that are available:
-	MK_CFLAGS     += -march=native -mtune=native
-	HOST_CXXFLAGS += -march=native -mtune=native
-
-	# Usage AVX-only
-	#MK_CFLAGS   += -mfma -mf16c -mavx
-	#MK_CXXFLAGS += -mfma -mf16c -mavx
-
-	# Usage SSSE3-only (Not is SSE3!)
-	#MK_CFLAGS   += -mssse3
-	#MK_CXXFLAGS += -mssse3
-endif
-
-ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
-	# The stack is only 16-byte aligned on Windows, so don't let gcc emit aligned moves.
-	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
-	# https://github.com/ggerganov/llama.cpp/issues/2922
-	MK_CFLAGS   += -Xassembler -muse-unaligned-vector-move
-	MK_CXXFLAGS += -Xassembler -muse-unaligned-vector-move
-
-	# Target Windows 8 for PrefetchVirtualMemory
-	MK_CPPFLAGS += -D_WIN32_WINNT=0x602
-endif
-
-ifneq ($(filter aarch64%,$(UNAME_M)),)
-	# Apple M1, M2, etc.
-	# Raspberry Pi 3, 4, Zero 2 (64-bit)
-	# Nvidia Jetson
-	MK_CFLAGS   += -mcpu=native
-	MK_CXXFLAGS += -mcpu=native
-	JETSON_RELEASE_INFO = $(shell jetson_release)
-	ifdef JETSON_RELEASE_INFO
-		ifneq ($(filter TX2%,$(JETSON_RELEASE_INFO)),)
-			JETSON_EOL_MODULE_DETECT = 1
-			CC = aarch64-unknown-linux-gnu-gcc
-			cxx = aarch64-unknown-linux-gnu-g++
-		endif
-	endif
-endif
-
-ifneq ($(filter armv6%,$(UNAME_M)),)
-	# Raspberry Pi 1, Zero
-	MK_CFLAGS   += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
-	MK_CXXFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
-endif
-
-ifneq ($(filter armv7%,$(UNAME_M)),)
-	# Raspberry Pi 2
-	MK_CFLAGS   += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
-	MK_CXXFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
-endif
-
-ifneq ($(filter armv8%,$(UNAME_M)),)
-	# Raspberry Pi 3, 4, Zero 2 (32-bit)
-	MK_CFLAGS   += -mfp16-format=ieee -mno-unaligned-access
-	MK_CXXFLAGS += -mfp16-format=ieee -mno-unaligned-access
-endif
-
-ifneq ($(filter ppc64%,$(UNAME_M)),)
-	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
-	ifneq (,$(findstring POWER9,$(POWER9_M)))
-		MK_CFLAGS   += -mcpu=power9
-		MK_CXXFLAGS += -mcpu=power9
-	endif
-endif
-
-ifneq ($(filter ppc64le%,$(UNAME_M)),)
-	MK_CFLAGS   += -mcpu=powerpc64le
-	MK_CXXFLAGS += -mcpu=powerpc64le
-	CUDA_POWER_ARCH = 1
-endif
-
-else
-	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
-	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
-endif
-
-ifdef LLAMA_QKK_64
-	MK_CPPFLAGS += -DGGML_QKK_64
-endif
-
-ifndef LLAMA_NO_ACCELERATE
-	# Mac OS - include Accelerate framework.
-	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
-	ifeq ($(UNAME_S),Darwin)
-		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
-		MK_CPPFLAGS += -DACCELERATE_NEW_LAPACK
-		MK_CPPFLAGS += -DACCELERATE_LAPACK_ILP64
-		MK_LDFLAGS  += -framework Accelerate
-	endif
-endif # LLAMA_NO_ACCELERATE
-
-ifdef LLAMA_MPI
-	MK_CPPFLAGS += -DGGML_USE_MPI
-	MK_CFLAGS   += -Wno-cast-qual
-	MK_CXXFLAGS += -Wno-cast-qual
-	OBJS        += ggml-mpi.o
-endif # LLAMA_MPI
-
-ifdef LLAMA_OPENBLAS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
-	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
-	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
-endif # LLAMA_OPENBLAS
-
-ifdef LLAMA_BLIS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
-	MK_LDFLAGS  += -lblis -L/usr/local/lib
-endif # LLAMA_BLIS
-
-ifdef LLAMA_CUBLAS
-# LLAMA_CUBLAS is deprecated and will be removed in the future
-	LLAMA_CUDA := 1
-endif
-
-ifdef LLAMA_CUDA
-	ifneq ('', '$(wildcard /opt/cuda)')
-		CUDA_PATH ?= /opt/cuda
-	else
-		CUDA_PATH ?= /usr/local/cuda
-	endif
-	MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include
-	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L/usr/lib/wsl/lib
-	OBJS         += ggml-cuda.o
-	OBJS         += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
-	MK_NVCCFLAGS += -use_fast_math
-ifdef LLAMA_FATAL_WARNINGS
-	MK_NVCCFLAGS += -Werror all-warnings
-endif # LLAMA_FATAL_WARNINGS
-ifndef JETSON_EOL_MODULE_DETECT
-	MK_NVCCFLAGS += --forward-unknown-to-host-compiler
-endif # JETSON_EOL_MODULE_DETECT
-ifdef LLAMA_DEBUG
-	MK_NVCCFLAGS += -lineinfo
-endif # LLAMA_DEBUG
-ifdef LLAMA_CUDA_NVCC
-	NVCC = $(CCACHE) $(LLAMA_CUDA_NVCC)
-else
-	NVCC = $(CCACHE) nvcc
-endif #LLAMA_CUDA_NVCC
-ifdef CUDA_DOCKER_ARCH
-	MK_NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
-else ifndef CUDA_POWER_ARCH
-	MK_NVCCFLAGS += -arch=native
-endif # CUDA_DOCKER_ARCH
-ifdef LLAMA_CUDA_FORCE_DMMV
-	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_DMMV
-endif # LLAMA_CUDA_FORCE_DMMV
-ifdef LLAMA_CUDA_FORCE_MMQ
-	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_MMQ
-endif # LLAMA_CUDA_FORCE_MMQ
-ifdef LLAMA_CUDA_DMMV_X
-	MK_NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
-else
-	MK_NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
-endif # LLAMA_CUDA_DMMV_X
-ifdef LLAMA_CUDA_MMV_Y
-	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
-else ifdef LLAMA_CUDA_DMMV_Y
-	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_DMMV_Y) # for backwards compatibility
-else
-	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
-endif # LLAMA_CUDA_MMV_Y
-ifdef LLAMA_CUDA_F16
-	MK_NVCCFLAGS += -DGGML_CUDA_F16
-endif # LLAMA_CUDA_F16
-ifdef LLAMA_CUDA_DMMV_F16
-	MK_NVCCFLAGS += -DGGML_CUDA_F16
-endif # LLAMA_CUDA_DMMV_F16
-ifdef LLAMA_CUDA_KQUANTS_ITER
-	MK_NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
-else
-	MK_NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
-endif
-ifdef LLAMA_CUDA_PEER_MAX_BATCH_SIZE
-	MK_NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=$(LLAMA_CUDA_PEER_MAX_BATCH_SIZE)
-else
-	MK_NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128
-endif # LLAMA_CUDA_PEER_MAX_BATCH_SIZE
-ifdef LLAMA_CUDA_NO_PEER_COPY
-	MK_NVCCFLAGS += -DGGML_CUDA_NO_PEER_COPY
-endif # LLAMA_CUDA_NO_PEER_COPY
-ifdef LLAMA_CUDA_CCBIN
-	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
-endif
-
-ifdef JETSON_EOL_MODULE_DETECT
-define NVCC_COMPILE
-	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUDA -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
-endef # NVCC_COMPILE
-else
-define NVCC_COMPILE
-	$(NVCC) $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
-endef # NVCC_COMPILE
-endif # JETSON_EOL_MODULE_DETECT
-
-ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
-	$(NVCC_COMPILE)
-
-ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
-	$(NVCC_COMPILE)
-
-endif # LLAMA_CUDA
-
-ifdef LLAMA_CLBLAST
-
-	MK_CPPFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags-only-I clblast OpenCL)
-	MK_CFLAGS   += $(shell pkg-config --cflags-only-other clblast OpenCL)
-	MK_CXXFLAGS += $(shell pkg-config --cflags-only-other clblast OpenCL)
-
-	# Mac provides OpenCL as a framework
-	ifeq ($(UNAME_S),Darwin)
-		MK_LDFLAGS += -lclblast -framework OpenCL
-	else
-		MK_LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
-	endif
-	OBJS    += ggml-opencl.o
-
-ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-endif # LLAMA_CLBLAST
-
-ifdef LLAMA_VULKAN
-	MK_CPPFLAGS  += -DGGML_USE_VULKAN
-	MK_LDFLAGS += -lvulkan
-	OBJS    += ggml-vulkan.o
-
-ifdef LLAMA_VULKAN_CHECK_RESULTS
-	MK_CPPFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
-endif
-
-ifdef LLAMA_VULKAN_DEBUG
-	MK_CPPFLAGS  += -DGGML_VULKAN_DEBUG
-endif
-
-ifdef LLAMA_VULKAN_VALIDATE
-	MK_CPPFLAGS  += -DGGML_VULKAN_VALIDATE
-endif
-
-ifdef LLAMA_VULKAN_RUN_TESTS
-	MK_CPPFLAGS  += -DGGML_VULKAN_RUN_TESTS
-endif
-
-ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-endif # LLAMA_VULKAN
-
-ifdef LLAMA_HIPBLAS
-	ifeq ($(wildcard /opt/rocm),)
-		ROCM_PATH	?= /usr
-		GPU_TARGETS ?= $(shell $(shell which amdgpu-arch))
-	else
-		ROCM_PATH	?= /opt/rocm
-		GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
-	endif
-	HIPCC                   ?= $(CCACHE) $(ROCM_PATH)/bin/hipcc
-	LLAMA_CUDA_DMMV_X       ?= 32
-	LLAMA_CUDA_MMV_Y        ?= 1
-	LLAMA_CUDA_KQUANTS_ITER ?= 2
-	MK_CPPFLAGS += -DGGML_USE_HIPBLAS -DGGML_USE_CUDA
-ifdef LLAMA_HIP_UMA
-	MK_CPPFLAGS += -DGGML_HIP_UMA
-endif # LLAMA_HIP_UMA
-	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
-	MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
-	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
-	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
-	HIPFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
-	HIPFLAGS    += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
-ifdef LLAMA_CUDA_FORCE_DMMV
-	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
-endif # LLAMA_CUDA_FORCE_DMMV
-ifdef LLAMA_CUDA_NO_PEER_COPY
-	HIPFLAGS 	+= -DGGML_CUDA_NO_PEER_COPY
-endif # LLAMA_CUDA_NO_PEER_COPY
-	OBJS        += ggml-cuda.o
-	OBJS        += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
-
-ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
-	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
-
-ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
-	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
-
-endif # LLAMA_HIPBLAS
-
-ifdef LLAMA_METAL
-	MK_CPPFLAGS += -DGGML_USE_METAL
-	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
-	OBJS		+= ggml-metal.o
-ifdef LLAMA_METAL_NDEBUG
-	MK_CPPFLAGS += -DGGML_METAL_NDEBUG
-endif
-ifdef LLAMA_METAL_EMBED_LIBRARY
-	MK_CPPFLAGS += -DGGML_METAL_EMBED_LIBRARY
-	OBJS        += ggml-metal-embed.o
-endif
-endif # LLAMA_METAL
-
-ifdef LLAMA_METAL
-ggml-metal.o: ggml-metal.m ggml-metal.h ggml.h
-	$(CC) $(CFLAGS) -c $< -o $@
-
-ifdef LLAMA_METAL_EMBED_LIBRARY
-ggml-metal-embed.o: ggml-metal.metal ggml-common.h
-	@echo "Embedding Metal library"
-	@sed -e '/#include "ggml-common.h"/r ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml-metal.metal > ggml-metal-embed.metal
-	$(eval TEMP_ASSEMBLY=$(shell mktemp))
-	@echo ".section __DATA, __ggml_metallib"   >  $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_start"        >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_start:"              >> $(TEMP_ASSEMBLY)
-	@echo ".incbin \"ggml-metal-embed.metal\"" >> $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_end"          >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_end:"                >> $(TEMP_ASSEMBLY)
-	@$(AS) $(TEMP_ASSEMBLY) -o $@
-	@rm -f ${TEMP_ASSEMBLY}
-endif
-endif # LLAMA_METAL
-
-ifdef LLAMA_MPI
-ggml-mpi.o: ggml-mpi.c ggml-mpi.h
-	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_MPI
-
-GF_CC := $(CC)
-include scripts/get-flags.mk
-
-# combine build flags with cmdline overrides
-override CPPFLAGS  := $(MK_CPPFLAGS) $(CPPFLAGS)
-override CFLAGS    := $(CPPFLAGS) $(MK_CFLAGS) $(GF_CFLAGS) $(CFLAGS)
-BASE_CXXFLAGS      := $(MK_CXXFLAGS) $(CXXFLAGS)
-override CXXFLAGS  := $(BASE_CXXFLAGS) $(HOST_CXXFLAGS) $(GF_CXXFLAGS) $(CPPFLAGS)
-override NVCCFLAGS := $(MK_NVCCFLAGS) $(NVCCFLAGS)
-override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
-
-# identify CUDA host compiler
-ifdef LLAMA_CUDA
-GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
-include scripts/get-flags.mk
-CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
-endif
-
-ifdef LLAMA_CURL
-override CXXFLAGS := $(CXXFLAGS) -DLLAMA_USE_CURL
-override LDFLAGS  := $(LDFLAGS) -lcurl
-endif
-
-#
-# Print build information
-#
-
-$(info I llama.cpp build info: )
-$(info I UNAME_S:   $(UNAME_S))
-$(info I UNAME_P:   $(UNAME_P))
-$(info I UNAME_M:   $(UNAME_M))
-$(info I CFLAGS:    $(CFLAGS))
-$(info I CXXFLAGS:  $(CXXFLAGS))
-$(info I NVCCFLAGS: $(NVCCFLAGS))
-$(info I LDFLAGS:   $(LDFLAGS))
-$(info I CC:        $(shell $(CC)   --version | head -n 1))
-$(info I CXX:       $(shell $(CXX)  --version | head -n 1))
-ifdef LLAMA_CUDA
-$(info I NVCC:      $(shell $(NVCC) --version | tail -n 1))
-CUDA_VERSION := $(shell $(NVCC) --version | grep -oP 'release (\K[0-9]+\.[0-9])')
-ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
-ifndef CUDA_DOCKER_ARCH
-ifndef CUDA_POWER_ARCH
-$(error I ERROR: For CUDA versions < 11.7 a target CUDA architecture must be explicitly provided via CUDA_DOCKER_ARCH)
-endif # CUDA_POWER_ARCH
-endif # CUDA_DOCKER_ARCH
-endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
-endif # LLAMA_CUDA
-$(info )
-
-ifdef LLAMA_CUBLAS
-$(info !!!!)
-$(info LLAMA_CUBLAS is deprecated and will be removed in the future. Use LLAMA_CUDA instead.)
-$(info !!!!)
-$(info )
-endif
-
-#
-# Build library
-#
-
-ggml.o: ggml.c ggml.h ggml-cuda.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
-
-ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
-
-ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
-
-ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
-	$(CC) $(CFLAGS)    -c $< -o $@
-
-unicode.o: unicode.cpp unicode.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-unicode-data.o: unicode-data.cpp unicode-data.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
-
-llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-COMMON_H_DEPS = common/common.h common/sampling.h common/log.h
-COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o
-
-common.o: common/common.cpp $(COMMON_H_DEPS)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-sampling.o: common/sampling.cpp $(COMMON_H_DEPS)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-console.o: common/console.cpp common/console.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-grammar-parser.o: common/grammar-parser.cpp common/grammar-parser.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-json-schema-to-grammar.o: common/json-schema-to-grammar.cpp common/json-schema-to-grammar.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-train.o: common/train.cpp common/train.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-ngram-cache.o: common/ngram-cache.cpp common/ngram-cache.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-libllama.so: llama.o ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
-
-libllama.a: llama.o ggml.o $(OBJS) $(COMMON_DEPS)
-	ar rcs libllama.a llama.o ggml.o $(OBJS) $(COMMON_DEPS)
+# CMAKE generated file: DO NOT EDIT!
+# Generated by "Unix Makefiles" Generator, CMake Version 3.29
 
+# Default target executed when no arguments are given to make.
+default_target: all
+.PHONY : default_target
+
+# Allow only one "make -f Makefile2" at a time, but pass parallelism.
+.NOTPARALLEL:
+
+#=============================================================================
+# Special targets provided by cmake.
+
+# Disable implicit rules so canonical targets will work.
+.SUFFIXES:
+
+# Disable VCS-based implicit rules.
+% : %,v
+
+# Disable VCS-based implicit rules.
+% : RCS/%
+
+# Disable VCS-based implicit rules.
+% : RCS/%,v
+
+# Disable VCS-based implicit rules.
+% : SCCS/s.%
+
+# Disable VCS-based implicit rules.
+% : s.%
+
+.SUFFIXES: .hpux_make_needs_suffix_list
+
+# Command-line flag to silence nested $(MAKE).
+$(VERBOSE)MAKESILENT = -s
+
+#Suppress display of executed commands.
+$(VERBOSE).SILENT:
+
+# A target that is always out of date.
+cmake_force:
+.PHONY : cmake_force
+
+#=============================================================================
+# Set environment variables for the build.
+
+# The shell in which to execute make rules.
+SHELL = /bin/sh
+
+# The CMake executable.
+CMAKE_COMMAND = /home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake
+
+# The command to remove a file.
+RM = /home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -E rm -f
+
+# Escaping for special characters.
+EQUALS = =
+
+# The top-level source directory on which CMake was run.
+CMAKE_SOURCE_DIR = /home/joan/workspace/llama.cpp
+
+# The top-level build directory on which CMake was run.
+CMAKE_BINARY_DIR = /home/joan/workspace/llama.cpp
+
+#=============================================================================
+# Targets provided globally by CMake.
+
+# Special rule for the target test
+test:
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running tests..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/ctest --force-new-ctest-process $(ARGS)
+.PHONY : test
+
+# Special rule for the target test
+test/fast: test
+.PHONY : test/fast
+
+# Special rule for the target edit_cache
+edit_cache:
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "No interactive CMake dialog available..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -E echo No\ interactive\ CMake\ dialog\ available.
+.PHONY : edit_cache
+
+# Special rule for the target edit_cache
+edit_cache/fast: edit_cache
+.PHONY : edit_cache/fast
+
+# Special rule for the target rebuild_cache
+rebuild_cache:
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake to regenerate build system..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+.PHONY : rebuild_cache
+
+# Special rule for the target rebuild_cache
+rebuild_cache/fast: rebuild_cache
+.PHONY : rebuild_cache/fast
+
+# Special rule for the target list_install_components
+list_install_components:
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Available install components are: \"Unspecified\""
+.PHONY : list_install_components
+
+# Special rule for the target list_install_components
+list_install_components/fast: list_install_components
+.PHONY : list_install_components/fast
+
+# Special rule for the target install
+install: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -P cmake_install.cmake
+.PHONY : install
+
+# Special rule for the target install
+install/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -P cmake_install.cmake
+.PHONY : install/fast
+
+# Special rule for the target install/local
+install/local: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+.PHONY : install/local
+
+# Special rule for the target install/local
+install/local/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+.PHONY : install/local/fast
+
+# Special rule for the target install/strip
+install/strip: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip
+
+# Special rule for the target install/strip
+install/strip/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
+	/home/joan/jina/gateway-api-server/venv/lib/python3.8/site-packages/cmake/data/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip/fast
+
+# The main all target
+all: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/joan/workspace/llama.cpp/CMakeFiles /home/joan/workspace/llama.cpp//CMakeFiles/progress.marks
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/joan/workspace/llama.cpp/CMakeFiles 0
+.PHONY : all
+
+# The main clean target
 clean:
-	rm -vrf *.o tests/*.o *.so *.a *.dll benchmark-matmult lookup-create lookup-merge lookup-stats common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
-	rm -vrf ggml-cuda/*.o
-	find examples pocs -type f -name "*.o" -delete
-
-#
-# Examples
-#
-
-# $< is the first prerequisite, i.e. the source file.
-# Explicitly compile this to an object file so that it can be cached with ccache.
-# The source file is then filtered out from $^ (the list of all prerequisites) and the object file is added instead.
-
-# Helper function that replaces .c, .cpp, and .cu file endings with .o:
-GET_OBJ_FILE = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(patsubst %.cu,%.o,$(1))))
-
-main: examples/main/main.cpp                                  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo
-	@echo '====  Run ./main -h for help.  ===='
-	@echo
-
-infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-simple: examples/simple/simple.cpp                            ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tokenize: examples/tokenize/tokenize.cpp                      ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-batched: examples/batched/batched.cpp                         ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-batched-bench: examples/batched-bench/batched-bench.cpp       build-info.o ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-quantize: examples/quantize/quantize.cpp                      build-info.o ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-quantize-stats: examples/quantize-stats/quantize-stats.cpp    build-info.o ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-perplexity: examples/perplexity/perplexity.cpp                ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-imatrix: examples/imatrix/imatrix.cpp                         ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-embedding: examples/embedding/embedding.cpp                   ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-gritlm: examples/gritlm/gritlm.cpp                         ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-save-load-state: examples/save-load-state/save-load-state.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-server: examples/server/server.cpp examples/server/utils.hpp examples/server/httplib.h common/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp json-schema-to-grammar.o common/stb_image.h ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
-
-gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-gguf-split: examples/gguf-split/gguf-split.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-bench: examples/llama-bench/llama-bench.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-libllava.a: examples/llava/llava.cpp examples/llava/llava.h examples/llava/clip.cpp examples/llava/clip.h common/stb_image.h common/base64.hpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -static -fPIC -c $< -o $@ -Wno-cast-qual
-
-llava-cli: examples/llava/llava-cli.cpp examples/llava/clip.h examples/llava/clip.cpp examples/llava/llava.h examples/llava/llava.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) -c examples/llava/clip.cpp  -o $(call GET_OBJ_FILE, examples/llava/clip.cpp) -Wno-cast-qual
-	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) -o $@ $(LDFLAGS)
-
-baby-llama: examples/baby-llama/baby-llama.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-beam-search: examples/beam-search/beam-search.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-finetune: examples/finetune/finetune.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-export-lora: examples/export-lora/export-lora.cpp ggml.o common/common.h $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-retrieval: examples/retrieval/retrieval.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-speculative: examples/speculative/speculative.cpp ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-parallel: examples/parallel/parallel.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-lookahead: examples/lookahead/lookahead.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-lookup: examples/lookup/lookup.cpp ggml.o llama.o ngram-cache.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	$(CXX) $(CXXFLAGS) -c examples/lookup/lookup-create.cpp -o $(call GET_OBJ_FILE, examples/lookup/lookup-create.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, examples/lookup/lookup-create.cpp) -o lookup-create $(LDFLAGS)
-	$(CXX) $(CXXFLAGS) -c examples/lookup/lookup-merge.cpp -o $(call GET_OBJ_FILE, examples/lookup/lookup-merge.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, examples/lookup/lookup-merge.cpp) -o lookup-merge $(LDFLAGS)
-	$(CXX) $(CXXFLAGS) -c examples/lookup/lookup-stats.cpp -o $(call GET_OBJ_FILE, examples/lookup/lookup-stats.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, examples/lookup/lookup-stats.cpp) -o lookup-stats $(LDFLAGS)
-
-passkey: examples/passkey/passkey.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-gbnf-validator: examples/gbnf-validator/gbnf-validator.cpp ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-ifeq ($(UNAME_S),Darwin)
-swift: examples/batched.swift
-	(cd examples/batched.swift; make build)
-endif
-
-common/build-info.cpp: $(wildcard .git/index) scripts/build-info.sh
-	@sh scripts/build-info.sh "$(CC)" > $@.tmp
-	@if ! cmp -s $@.tmp $@; then \
-		mv $@.tmp $@; \
-	else \
-		rm $@.tmp; \
-	fi
-
-build-info.o: common/build-info.cpp
-	$(CXX) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@
-
-#
-# Tests
-#
-
-tests: $(TEST_TARGETS)
-
-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.o ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-run-benchmark-matmult: benchmark-matmult
-	./$@
-
-.PHONY: run-benchmark-matmult swift
-
-vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-q8dot: pocs/vdot/q8dot.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-llama-grammar: tests/test-llama-grammar.cpp ggml.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grammar-parser: tests/test-grammar-parser.cpp ggml.o llama.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grammar-integration: tests/test-grammar-integration.cpp ggml.o llama.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-double-float: tests/test-double-float.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp json-schema-to-grammar.o ggml.o llama.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grad0: tests/test-grad0.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-opt: tests/test-opt.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-quantize-fns: tests/test-quantize-fns.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-quantize-perf: tests/test-quantize-perf.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-sampling: tests/test-sampling.cpp ggml.o llama.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-tokenizer-0-falcon: tests/test-tokenizer-0-falcon.cpp ggml.o llama.o $(COMMON_DEPS) console.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-tokenizer-0-llama: tests/test-tokenizer-0-llama.cpp ggml.o llama.o $(COMMON_DEPS) console.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-tokenizer-1-bpe: tests/test-tokenizer-1-bpe.cpp ggml.o llama.o $(COMMON_DEPS) console.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-tokenizer-1-llama: tests/test-tokenizer-1-llama.cpp ggml.o llama.o $(COMMON_DEPS) console.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-rope: tests/test-rope.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-c.o: tests/test-c.c llama.h
-	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
-
-tests/test-backend-ops: tests/test-backend-ops.cpp ggml.o $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-model-load-cancel: tests/test-model-load-cancel.cpp ggml.o llama.o tests/get-model.cpp $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-autorelease: tests/test-autorelease.cpp ggml.o llama.o tests/get-model.cpp $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-chat-template: tests/test-chat-template.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 clean
+.PHONY : clean
+
+# The main clean target
+clean/fast: clean
+.PHONY : clean/fast
+
+# Prepare targets for installation.
+preinstall: all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 preinstall
+.PHONY : preinstall
+
+# Prepare targets for installation.
+preinstall/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 preinstall
+.PHONY : preinstall/fast
+
+# clear depends
+depend:
+	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+.PHONY : depend
+
+#=============================================================================
+# Target rules for targets named ggml
+
+# Build rule for target.
+ggml: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml
+.PHONY : ggml
+
+# fast build rule for target.
+ggml/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/build
+.PHONY : ggml/fast
+
+#=============================================================================
+# Target rules for targets named ggml_static
+
+# Build rule for target.
+ggml_static: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml_static
+.PHONY : ggml_static
+
+# fast build rule for target.
+ggml_static/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml_static.dir/build.make CMakeFiles/ggml_static.dir/build
+.PHONY : ggml_static/fast
+
+#=============================================================================
+# Target rules for targets named llama
+
+# Build rule for target.
+llama: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 llama
+.PHONY : llama
+
+# fast build rule for target.
+llama/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/build
+.PHONY : llama/fast
+
+#=============================================================================
+# Target rules for targets named Experimental
+
+# Build rule for target.
+Experimental: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 Experimental
+.PHONY : Experimental
+
+# fast build rule for target.
+Experimental/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Experimental.dir/build.make CMakeFiles/Experimental.dir/build
+.PHONY : Experimental/fast
+
+#=============================================================================
+# Target rules for targets named Nightly
+
+# Build rule for target.
+Nightly: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 Nightly
+.PHONY : Nightly
+
+# fast build rule for target.
+Nightly/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Nightly.dir/build.make CMakeFiles/Nightly.dir/build
+.PHONY : Nightly/fast
+
+#=============================================================================
+# Target rules for targets named Continuous
+
+# Build rule for target.
+Continuous: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 Continuous
+.PHONY : Continuous
+
+# fast build rule for target.
+Continuous/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Continuous.dir/build.make CMakeFiles/Continuous.dir/build
+.PHONY : Continuous/fast
+
+#=============================================================================
+# Target rules for targets named NightlyMemoryCheck
+
+# Build rule for target.
+NightlyMemoryCheck: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyMemoryCheck
+.PHONY : NightlyMemoryCheck
+
+# fast build rule for target.
+NightlyMemoryCheck/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyMemoryCheck.dir/build.make CMakeFiles/NightlyMemoryCheck.dir/build
+.PHONY : NightlyMemoryCheck/fast
+
+#=============================================================================
+# Target rules for targets named NightlyStart
+
+# Build rule for target.
+NightlyStart: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyStart
+.PHONY : NightlyStart
+
+# fast build rule for target.
+NightlyStart/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyStart.dir/build.make CMakeFiles/NightlyStart.dir/build
+.PHONY : NightlyStart/fast
+
+#=============================================================================
+# Target rules for targets named NightlyUpdate
+
+# Build rule for target.
+NightlyUpdate: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyUpdate
+.PHONY : NightlyUpdate
+
+# fast build rule for target.
+NightlyUpdate/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyUpdate.dir/build.make CMakeFiles/NightlyUpdate.dir/build
+.PHONY : NightlyUpdate/fast
+
+#=============================================================================
+# Target rules for targets named NightlyConfigure
+
+# Build rule for target.
+NightlyConfigure: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyConfigure
+.PHONY : NightlyConfigure
+
+# fast build rule for target.
+NightlyConfigure/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyConfigure.dir/build.make CMakeFiles/NightlyConfigure.dir/build
+.PHONY : NightlyConfigure/fast
+
+#=============================================================================
+# Target rules for targets named NightlyBuild
+
+# Build rule for target.
+NightlyBuild: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyBuild
+.PHONY : NightlyBuild
+
+# fast build rule for target.
+NightlyBuild/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyBuild.dir/build.make CMakeFiles/NightlyBuild.dir/build
+.PHONY : NightlyBuild/fast
+
+#=============================================================================
+# Target rules for targets named NightlyTest
+
+# Build rule for target.
+NightlyTest: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyTest
+.PHONY : NightlyTest
+
+# fast build rule for target.
+NightlyTest/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyTest.dir/build.make CMakeFiles/NightlyTest.dir/build
+.PHONY : NightlyTest/fast
+
+#=============================================================================
+# Target rules for targets named NightlyCoverage
+
+# Build rule for target.
+NightlyCoverage: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyCoverage
+.PHONY : NightlyCoverage
+
+# fast build rule for target.
+NightlyCoverage/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyCoverage.dir/build.make CMakeFiles/NightlyCoverage.dir/build
+.PHONY : NightlyCoverage/fast
+
+#=============================================================================
+# Target rules for targets named NightlyMemCheck
+
+# Build rule for target.
+NightlyMemCheck: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlyMemCheck
+.PHONY : NightlyMemCheck
+
+# fast build rule for target.
+NightlyMemCheck/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlyMemCheck.dir/build.make CMakeFiles/NightlyMemCheck.dir/build
+.PHONY : NightlyMemCheck/fast
+
+#=============================================================================
+# Target rules for targets named NightlySubmit
+
+# Build rule for target.
+NightlySubmit: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 NightlySubmit
+.PHONY : NightlySubmit
+
+# fast build rule for target.
+NightlySubmit/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/NightlySubmit.dir/build.make CMakeFiles/NightlySubmit.dir/build
+.PHONY : NightlySubmit/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalStart
+
+# Build rule for target.
+ExperimentalStart: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalStart
+.PHONY : ExperimentalStart
+
+# fast build rule for target.
+ExperimentalStart/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalStart.dir/build.make CMakeFiles/ExperimentalStart.dir/build
+.PHONY : ExperimentalStart/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalUpdate
+
+# Build rule for target.
+ExperimentalUpdate: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalUpdate
+.PHONY : ExperimentalUpdate
+
+# fast build rule for target.
+ExperimentalUpdate/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalUpdate.dir/build.make CMakeFiles/ExperimentalUpdate.dir/build
+.PHONY : ExperimentalUpdate/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalConfigure
+
+# Build rule for target.
+ExperimentalConfigure: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalConfigure
+.PHONY : ExperimentalConfigure
+
+# fast build rule for target.
+ExperimentalConfigure/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalConfigure.dir/build.make CMakeFiles/ExperimentalConfigure.dir/build
+.PHONY : ExperimentalConfigure/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalBuild
+
+# Build rule for target.
+ExperimentalBuild: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalBuild
+.PHONY : ExperimentalBuild
+
+# fast build rule for target.
+ExperimentalBuild/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalBuild.dir/build.make CMakeFiles/ExperimentalBuild.dir/build
+.PHONY : ExperimentalBuild/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalTest
+
+# Build rule for target.
+ExperimentalTest: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalTest
+.PHONY : ExperimentalTest
+
+# fast build rule for target.
+ExperimentalTest/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalTest.dir/build.make CMakeFiles/ExperimentalTest.dir/build
+.PHONY : ExperimentalTest/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalCoverage
+
+# Build rule for target.
+ExperimentalCoverage: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalCoverage
+.PHONY : ExperimentalCoverage
+
+# fast build rule for target.
+ExperimentalCoverage/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalCoverage.dir/build.make CMakeFiles/ExperimentalCoverage.dir/build
+.PHONY : ExperimentalCoverage/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalMemCheck
+
+# Build rule for target.
+ExperimentalMemCheck: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalMemCheck
+.PHONY : ExperimentalMemCheck
+
+# fast build rule for target.
+ExperimentalMemCheck/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalMemCheck.dir/build.make CMakeFiles/ExperimentalMemCheck.dir/build
+.PHONY : ExperimentalMemCheck/fast
+
+#=============================================================================
+# Target rules for targets named ExperimentalSubmit
+
+# Build rule for target.
+ExperimentalSubmit: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ExperimentalSubmit
+.PHONY : ExperimentalSubmit
+
+# fast build rule for target.
+ExperimentalSubmit/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ExperimentalSubmit.dir/build.make CMakeFiles/ExperimentalSubmit.dir/build
+.PHONY : ExperimentalSubmit/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousStart
+
+# Build rule for target.
+ContinuousStart: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousStart
+.PHONY : ContinuousStart
+
+# fast build rule for target.
+ContinuousStart/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousStart.dir/build.make CMakeFiles/ContinuousStart.dir/build
+.PHONY : ContinuousStart/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousUpdate
+
+# Build rule for target.
+ContinuousUpdate: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousUpdate
+.PHONY : ContinuousUpdate
+
+# fast build rule for target.
+ContinuousUpdate/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousUpdate.dir/build.make CMakeFiles/ContinuousUpdate.dir/build
+.PHONY : ContinuousUpdate/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousConfigure
+
+# Build rule for target.
+ContinuousConfigure: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousConfigure
+.PHONY : ContinuousConfigure
+
+# fast build rule for target.
+ContinuousConfigure/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousConfigure.dir/build.make CMakeFiles/ContinuousConfigure.dir/build
+.PHONY : ContinuousConfigure/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousBuild
+
+# Build rule for target.
+ContinuousBuild: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousBuild
+.PHONY : ContinuousBuild
+
+# fast build rule for target.
+ContinuousBuild/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousBuild.dir/build.make CMakeFiles/ContinuousBuild.dir/build
+.PHONY : ContinuousBuild/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousTest
+
+# Build rule for target.
+ContinuousTest: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousTest
+.PHONY : ContinuousTest
+
+# fast build rule for target.
+ContinuousTest/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousTest.dir/build.make CMakeFiles/ContinuousTest.dir/build
+.PHONY : ContinuousTest/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousCoverage
+
+# Build rule for target.
+ContinuousCoverage: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousCoverage
+.PHONY : ContinuousCoverage
+
+# fast build rule for target.
+ContinuousCoverage/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousCoverage.dir/build.make CMakeFiles/ContinuousCoverage.dir/build
+.PHONY : ContinuousCoverage/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousMemCheck
+
+# Build rule for target.
+ContinuousMemCheck: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousMemCheck
+.PHONY : ContinuousMemCheck
+
+# fast build rule for target.
+ContinuousMemCheck/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousMemCheck.dir/build.make CMakeFiles/ContinuousMemCheck.dir/build
+.PHONY : ContinuousMemCheck/fast
+
+#=============================================================================
+# Target rules for targets named ContinuousSubmit
+
+# Build rule for target.
+ContinuousSubmit: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ContinuousSubmit
+.PHONY : ContinuousSubmit
+
+# fast build rule for target.
+ContinuousSubmit/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ContinuousSubmit.dir/build.make CMakeFiles/ContinuousSubmit.dir/build
+.PHONY : ContinuousSubmit/fast
+
+#=============================================================================
+# Target rules for targets named build_info
+
+# Build rule for target.
+build_info: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 build_info
+.PHONY : build_info
+
+# fast build rule for target.
+build_info/fast:
+	$(MAKE) $(MAKESILENT) -f common/CMakeFiles/build_info.dir/build.make common/CMakeFiles/build_info.dir/build
+.PHONY : build_info/fast
+
+#=============================================================================
+# Target rules for targets named json-schema-to-grammar
+
+# Build rule for target.
+json-schema-to-grammar: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 json-schema-to-grammar
+.PHONY : json-schema-to-grammar
+
+# fast build rule for target.
+json-schema-to-grammar/fast:
+	$(MAKE) $(MAKESILENT) -f common/CMakeFiles/json-schema-to-grammar.dir/build.make common/CMakeFiles/json-schema-to-grammar.dir/build
+.PHONY : json-schema-to-grammar/fast
+
+#=============================================================================
+# Target rules for targets named common
+
+# Build rule for target.
+common: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 common
+.PHONY : common
+
+# fast build rule for target.
+common/fast:
+	$(MAKE) $(MAKESILENT) -f common/CMakeFiles/common.dir/build.make common/CMakeFiles/common.dir/build
+.PHONY : common/fast
+
+#=============================================================================
+# Target rules for targets named test-quantize-fns
+
+# Build rule for target.
+test-quantize-fns: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-quantize-fns
+.PHONY : test-quantize-fns
+
+# fast build rule for target.
+test-quantize-fns/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-quantize-fns.dir/build.make tests/CMakeFiles/test-quantize-fns.dir/build
+.PHONY : test-quantize-fns/fast
+
+#=============================================================================
+# Target rules for targets named test-quantize-perf
+
+# Build rule for target.
+test-quantize-perf: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-quantize-perf
+.PHONY : test-quantize-perf
+
+# fast build rule for target.
+test-quantize-perf/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-quantize-perf.dir/build.make tests/CMakeFiles/test-quantize-perf.dir/build
+.PHONY : test-quantize-perf/fast
+
+#=============================================================================
+# Target rules for targets named test-sampling
+
+# Build rule for target.
+test-sampling: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-sampling
+.PHONY : test-sampling
+
+# fast build rule for target.
+test-sampling/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-sampling.dir/build.make tests/CMakeFiles/test-sampling.dir/build
+.PHONY : test-sampling/fast
+
+#=============================================================================
+# Target rules for targets named test-chat-template
+
+# Build rule for target.
+test-chat-template: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-chat-template
+.PHONY : test-chat-template
+
+# fast build rule for target.
+test-chat-template/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-chat-template.dir/build.make tests/CMakeFiles/test-chat-template.dir/build
+.PHONY : test-chat-template/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-0-llama
+
+# Build rule for target.
+test-tokenizer-0-llama: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-0-llama
+.PHONY : test-tokenizer-0-llama
+
+# fast build rule for target.
+test-tokenizer-0-llama/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-0-llama.dir/build.make tests/CMakeFiles/test-tokenizer-0-llama.dir/build
+.PHONY : test-tokenizer-0-llama/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-0-falcon
+
+# Build rule for target.
+test-tokenizer-0-falcon: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-0-falcon
+.PHONY : test-tokenizer-0-falcon
+
+# fast build rule for target.
+test-tokenizer-0-falcon/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-0-falcon.dir/build.make tests/CMakeFiles/test-tokenizer-0-falcon.dir/build
+.PHONY : test-tokenizer-0-falcon/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-llama
+
+# Build rule for target.
+test-tokenizer-1-llama: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-llama
+.PHONY : test-tokenizer-1-llama
+
+# fast build rule for target.
+test-tokenizer-1-llama/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-llama.dir/build.make tests/CMakeFiles/test-tokenizer-1-llama.dir/build
+.PHONY : test-tokenizer-1-llama/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-baichuan
+
+# Build rule for target.
+test-tokenizer-1-baichuan: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-baichuan
+.PHONY : test-tokenizer-1-baichuan
+
+# fast build rule for target.
+test-tokenizer-1-baichuan/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-baichuan.dir/build.make tests/CMakeFiles/test-tokenizer-1-baichuan.dir/build
+.PHONY : test-tokenizer-1-baichuan/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-falcon
+
+# Build rule for target.
+test-tokenizer-1-falcon: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-falcon
+.PHONY : test-tokenizer-1-falcon
+
+# fast build rule for target.
+test-tokenizer-1-falcon/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-falcon.dir/build.make tests/CMakeFiles/test-tokenizer-1-falcon.dir/build
+.PHONY : test-tokenizer-1-falcon/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-aquila
+
+# Build rule for target.
+test-tokenizer-1-aquila: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-aquila
+.PHONY : test-tokenizer-1-aquila
+
+# fast build rule for target.
+test-tokenizer-1-aquila/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-aquila.dir/build.make tests/CMakeFiles/test-tokenizer-1-aquila.dir/build
+.PHONY : test-tokenizer-1-aquila/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-mpt
+
+# Build rule for target.
+test-tokenizer-1-mpt: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-mpt
+.PHONY : test-tokenizer-1-mpt
+
+# fast build rule for target.
+test-tokenizer-1-mpt/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-mpt.dir/build.make tests/CMakeFiles/test-tokenizer-1-mpt.dir/build
+.PHONY : test-tokenizer-1-mpt/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-stablelm-3b-4e1t
+
+# Build rule for target.
+test-tokenizer-1-stablelm-3b-4e1t: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-stablelm-3b-4e1t
+.PHONY : test-tokenizer-1-stablelm-3b-4e1t
+
+# fast build rule for target.
+test-tokenizer-1-stablelm-3b-4e1t/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-stablelm-3b-4e1t.dir/build.make tests/CMakeFiles/test-tokenizer-1-stablelm-3b-4e1t.dir/build
+.PHONY : test-tokenizer-1-stablelm-3b-4e1t/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-gpt-neox
+
+# Build rule for target.
+test-tokenizer-1-gpt-neox: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-gpt-neox
+.PHONY : test-tokenizer-1-gpt-neox
+
+# fast build rule for target.
+test-tokenizer-1-gpt-neox/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-gpt-neox.dir/build.make tests/CMakeFiles/test-tokenizer-1-gpt-neox.dir/build
+.PHONY : test-tokenizer-1-gpt-neox/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-refact
+
+# Build rule for target.
+test-tokenizer-1-refact: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-refact
+.PHONY : test-tokenizer-1-refact
+
+# fast build rule for target.
+test-tokenizer-1-refact/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-refact.dir/build.make tests/CMakeFiles/test-tokenizer-1-refact.dir/build
+.PHONY : test-tokenizer-1-refact/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-starcoder
+
+# Build rule for target.
+test-tokenizer-1-starcoder: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-starcoder
+.PHONY : test-tokenizer-1-starcoder
+
+# fast build rule for target.
+test-tokenizer-1-starcoder/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-starcoder.dir/build.make tests/CMakeFiles/test-tokenizer-1-starcoder.dir/build
+.PHONY : test-tokenizer-1-starcoder/fast
+
+#=============================================================================
+# Target rules for targets named test-tokenizer-1-gpt2
+
+# Build rule for target.
+test-tokenizer-1-gpt2: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-tokenizer-1-gpt2
+.PHONY : test-tokenizer-1-gpt2
+
+# fast build rule for target.
+test-tokenizer-1-gpt2/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-tokenizer-1-gpt2.dir/build.make tests/CMakeFiles/test-tokenizer-1-gpt2.dir/build
+.PHONY : test-tokenizer-1-gpt2/fast
+
+#=============================================================================
+# Target rules for targets named test-grammar-parser
+
+# Build rule for target.
+test-grammar-parser: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-grammar-parser
+.PHONY : test-grammar-parser
+
+# fast build rule for target.
+test-grammar-parser/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-grammar-parser.dir/build.make tests/CMakeFiles/test-grammar-parser.dir/build
+.PHONY : test-grammar-parser/fast
+
+#=============================================================================
+# Target rules for targets named test-llama-grammar
+
+# Build rule for target.
+test-llama-grammar: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-llama-grammar
+.PHONY : test-llama-grammar
+
+# fast build rule for target.
+test-llama-grammar/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-llama-grammar.dir/build.make tests/CMakeFiles/test-llama-grammar.dir/build
+.PHONY : test-llama-grammar/fast
+
+#=============================================================================
+# Target rules for targets named test-grammar-integration
+
+# Build rule for target.
+test-grammar-integration: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-grammar-integration
+.PHONY : test-grammar-integration
+
+# fast build rule for target.
+test-grammar-integration/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-grammar-integration.dir/build.make tests/CMakeFiles/test-grammar-integration.dir/build
+.PHONY : test-grammar-integration/fast
+
+#=============================================================================
+# Target rules for targets named test-grad0
+
+# Build rule for target.
+test-grad0: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-grad0
+.PHONY : test-grad0
+
+# fast build rule for target.
+test-grad0/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-grad0.dir/build.make tests/CMakeFiles/test-grad0.dir/build
+.PHONY : test-grad0/fast
+
+#=============================================================================
+# Target rules for targets named test-backend-ops
+
+# Build rule for target.
+test-backend-ops: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-backend-ops
+.PHONY : test-backend-ops
+
+# fast build rule for target.
+test-backend-ops/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-backend-ops.dir/build.make tests/CMakeFiles/test-backend-ops.dir/build
+.PHONY : test-backend-ops/fast
+
+#=============================================================================
+# Target rules for targets named test-rope
+
+# Build rule for target.
+test-rope: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-rope
+.PHONY : test-rope
+
+# fast build rule for target.
+test-rope/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-rope.dir/build.make tests/CMakeFiles/test-rope.dir/build
+.PHONY : test-rope/fast
+
+#=============================================================================
+# Target rules for targets named test-model-load-cancel
+
+# Build rule for target.
+test-model-load-cancel: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-model-load-cancel
+.PHONY : test-model-load-cancel
+
+# fast build rule for target.
+test-model-load-cancel/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-model-load-cancel.dir/build.make tests/CMakeFiles/test-model-load-cancel.dir/build
+.PHONY : test-model-load-cancel/fast
+
+#=============================================================================
+# Target rules for targets named test-autorelease
+
+# Build rule for target.
+test-autorelease: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-autorelease
+.PHONY : test-autorelease
+
+# fast build rule for target.
+test-autorelease/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-autorelease.dir/build.make tests/CMakeFiles/test-autorelease.dir/build
+.PHONY : test-autorelease/fast
+
+#=============================================================================
+# Target rules for targets named test-json-schema-to-grammar
+
+# Build rule for target.
+test-json-schema-to-grammar: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-json-schema-to-grammar
+.PHONY : test-json-schema-to-grammar
+
+# fast build rule for target.
+test-json-schema-to-grammar/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-json-schema-to-grammar.dir/build.make tests/CMakeFiles/test-json-schema-to-grammar.dir/build
+.PHONY : test-json-schema-to-grammar/fast
+
+#=============================================================================
+# Target rules for targets named test-c
+
+# Build rule for target.
+test-c: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test-c
+.PHONY : test-c
+
+# fast build rule for target.
+test-c/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test-c.dir/build.make tests/CMakeFiles/test-c.dir/build
+.PHONY : test-c/fast
+
+#=============================================================================
+# Target rules for targets named baby-llama
+
+# Build rule for target.
+baby-llama: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 baby-llama
+.PHONY : baby-llama
+
+# fast build rule for target.
+baby-llama/fast:
+	$(MAKE) $(MAKESILENT) -f examples/baby-llama/CMakeFiles/baby-llama.dir/build.make examples/baby-llama/CMakeFiles/baby-llama.dir/build
+.PHONY : baby-llama/fast
+
+#=============================================================================
+# Target rules for targets named batched
+
+# Build rule for target.
+batched: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 batched
+.PHONY : batched
+
+# fast build rule for target.
+batched/fast:
+	$(MAKE) $(MAKESILENT) -f examples/batched/CMakeFiles/batched.dir/build.make examples/batched/CMakeFiles/batched.dir/build
+.PHONY : batched/fast
+
+#=============================================================================
+# Target rules for targets named batched-bench
+
+# Build rule for target.
+batched-bench: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 batched-bench
+.PHONY : batched-bench
+
+# fast build rule for target.
+batched-bench/fast:
+	$(MAKE) $(MAKESILENT) -f examples/batched-bench/CMakeFiles/batched-bench.dir/build.make examples/batched-bench/CMakeFiles/batched-bench.dir/build
+.PHONY : batched-bench/fast
+
+#=============================================================================
+# Target rules for targets named beam-search
+
+# Build rule for target.
+beam-search: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 beam-search
+.PHONY : beam-search
+
+# fast build rule for target.
+beam-search/fast:
+	$(MAKE) $(MAKESILENT) -f examples/beam-search/CMakeFiles/beam-search.dir/build.make examples/beam-search/CMakeFiles/beam-search.dir/build
+.PHONY : beam-search/fast
+
+#=============================================================================
+# Target rules for targets named benchmark
+
+# Build rule for target.
+benchmark: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 benchmark
+.PHONY : benchmark
+
+# fast build rule for target.
+benchmark/fast:
+	$(MAKE) $(MAKESILENT) -f examples/benchmark/CMakeFiles/benchmark.dir/build.make examples/benchmark/CMakeFiles/benchmark.dir/build
+.PHONY : benchmark/fast
+
+#=============================================================================
+# Target rules for targets named convert-llama2c-to-ggml
+
+# Build rule for target.
+convert-llama2c-to-ggml: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 convert-llama2c-to-ggml
+.PHONY : convert-llama2c-to-ggml
+
+# fast build rule for target.
+convert-llama2c-to-ggml/fast:
+	$(MAKE) $(MAKESILENT) -f examples/convert-llama2c-to-ggml/CMakeFiles/convert-llama2c-to-ggml.dir/build.make examples/convert-llama2c-to-ggml/CMakeFiles/convert-llama2c-to-ggml.dir/build
+.PHONY : convert-llama2c-to-ggml/fast
+
+#=============================================================================
+# Target rules for targets named embedding
+
+# Build rule for target.
+embedding: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 embedding
+.PHONY : embedding
+
+# fast build rule for target.
+embedding/fast:
+	$(MAKE) $(MAKESILENT) -f examples/embedding/CMakeFiles/embedding.dir/build.make examples/embedding/CMakeFiles/embedding.dir/build
+.PHONY : embedding/fast
+
+#=============================================================================
+# Target rules for targets named finetune
+
+# Build rule for target.
+finetune: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 finetune
+.PHONY : finetune
+
+# fast build rule for target.
+finetune/fast:
+	$(MAKE) $(MAKESILENT) -f examples/finetune/CMakeFiles/finetune.dir/build.make examples/finetune/CMakeFiles/finetune.dir/build
+.PHONY : finetune/fast
+
+#=============================================================================
+# Target rules for targets named gritlm
+
+# Build rule for target.
+gritlm: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 gritlm
+.PHONY : gritlm
+
+# fast build rule for target.
+gritlm/fast:
+	$(MAKE) $(MAKESILENT) -f examples/gritlm/CMakeFiles/gritlm.dir/build.make examples/gritlm/CMakeFiles/gritlm.dir/build
+.PHONY : gritlm/fast
+
+#=============================================================================
+# Target rules for targets named gguf-split
+
+# Build rule for target.
+gguf-split: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 gguf-split
+.PHONY : gguf-split
+
+# fast build rule for target.
+gguf-split/fast:
+	$(MAKE) $(MAKESILENT) -f examples/gguf-split/CMakeFiles/gguf-split.dir/build.make examples/gguf-split/CMakeFiles/gguf-split.dir/build
+.PHONY : gguf-split/fast
+
+#=============================================================================
+# Target rules for targets named infill
+
+# Build rule for target.
+infill: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 infill
+.PHONY : infill
+
+# fast build rule for target.
+infill/fast:
+	$(MAKE) $(MAKESILENT) -f examples/infill/CMakeFiles/infill.dir/build.make examples/infill/CMakeFiles/infill.dir/build
+.PHONY : infill/fast
+
+#=============================================================================
+# Target rules for targets named llama-bench
+
+# Build rule for target.
+llama-bench: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 llama-bench
+.PHONY : llama-bench
+
+# fast build rule for target.
+llama-bench/fast:
+	$(MAKE) $(MAKESILENT) -f examples/llama-bench/CMakeFiles/llama-bench.dir/build.make examples/llama-bench/CMakeFiles/llama-bench.dir/build
+.PHONY : llama-bench/fast
+
+#=============================================================================
+# Target rules for targets named llava
+
+# Build rule for target.
+llava: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 llava
+.PHONY : llava
+
+# fast build rule for target.
+llava/fast:
+	$(MAKE) $(MAKESILENT) -f examples/llava/CMakeFiles/llava.dir/build.make examples/llava/CMakeFiles/llava.dir/build
+.PHONY : llava/fast
+
+#=============================================================================
+# Target rules for targets named llava_static
+
+# Build rule for target.
+llava_static: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 llava_static
+.PHONY : llava_static
+
+# fast build rule for target.
+llava_static/fast:
+	$(MAKE) $(MAKESILENT) -f examples/llava/CMakeFiles/llava_static.dir/build.make examples/llava/CMakeFiles/llava_static.dir/build
+.PHONY : llava_static/fast
+
+#=============================================================================
+# Target rules for targets named llava-cli
+
+# Build rule for target.
+llava-cli: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 llava-cli
+.PHONY : llava-cli
+
+# fast build rule for target.
+llava-cli/fast:
+	$(MAKE) $(MAKESILENT) -f examples/llava/CMakeFiles/llava-cli.dir/build.make examples/llava/CMakeFiles/llava-cli.dir/build
+.PHONY : llava-cli/fast
+
+#=============================================================================
+# Target rules for targets named main
+
+# Build rule for target.
+main: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 main
+.PHONY : main
+
+# fast build rule for target.
+main/fast:
+	$(MAKE) $(MAKESILENT) -f examples/main/CMakeFiles/main.dir/build.make examples/main/CMakeFiles/main.dir/build
+.PHONY : main/fast
+
+#=============================================================================
+# Target rules for targets named tokenize
+
+# Build rule for target.
+tokenize: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tokenize
+.PHONY : tokenize
+
+# fast build rule for target.
+tokenize/fast:
+	$(MAKE) $(MAKESILENT) -f examples/tokenize/CMakeFiles/tokenize.dir/build.make examples/tokenize/CMakeFiles/tokenize.dir/build
+.PHONY : tokenize/fast
+
+#=============================================================================
+# Target rules for targets named parallel
+
+# Build rule for target.
+parallel: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 parallel
+.PHONY : parallel
+
+# fast build rule for target.
+parallel/fast:
+	$(MAKE) $(MAKESILENT) -f examples/parallel/CMakeFiles/parallel.dir/build.make examples/parallel/CMakeFiles/parallel.dir/build
+.PHONY : parallel/fast
+
+#=============================================================================
+# Target rules for targets named perplexity
+
+# Build rule for target.
+perplexity: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 perplexity
+.PHONY : perplexity
+
+# fast build rule for target.
+perplexity/fast:
+	$(MAKE) $(MAKESILENT) -f examples/perplexity/CMakeFiles/perplexity.dir/build.make examples/perplexity/CMakeFiles/perplexity.dir/build
+.PHONY : perplexity/fast
+
+#=============================================================================
+# Target rules for targets named quantize
+
+# Build rule for target.
+quantize: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 quantize
+.PHONY : quantize
+
+# fast build rule for target.
+quantize/fast:
+	$(MAKE) $(MAKESILENT) -f examples/quantize/CMakeFiles/quantize.dir/build.make examples/quantize/CMakeFiles/quantize.dir/build
+.PHONY : quantize/fast
+
+#=============================================================================
+# Target rules for targets named quantize-stats
+
+# Build rule for target.
+quantize-stats: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 quantize-stats
+.PHONY : quantize-stats
+
+# fast build rule for target.
+quantize-stats/fast:
+	$(MAKE) $(MAKESILENT) -f examples/quantize-stats/CMakeFiles/quantize-stats.dir/build.make examples/quantize-stats/CMakeFiles/quantize-stats.dir/build
+.PHONY : quantize-stats/fast
+
+#=============================================================================
+# Target rules for targets named retrieval
+
+# Build rule for target.
+retrieval: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 retrieval
+.PHONY : retrieval
+
+# fast build rule for target.
+retrieval/fast:
+	$(MAKE) $(MAKESILENT) -f examples/retrieval/CMakeFiles/retrieval.dir/build.make examples/retrieval/CMakeFiles/retrieval.dir/build
+.PHONY : retrieval/fast
+
+#=============================================================================
+# Target rules for targets named save-load-state
+
+# Build rule for target.
+save-load-state: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 save-load-state
+.PHONY : save-load-state
+
+# fast build rule for target.
+save-load-state/fast:
+	$(MAKE) $(MAKESILENT) -f examples/save-load-state/CMakeFiles/save-load-state.dir/build.make examples/save-load-state/CMakeFiles/save-load-state.dir/build
+.PHONY : save-load-state/fast
+
+#=============================================================================
+# Target rules for targets named simple
+
+# Build rule for target.
+simple: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 simple
+.PHONY : simple
+
+# fast build rule for target.
+simple/fast:
+	$(MAKE) $(MAKESILENT) -f examples/simple/CMakeFiles/simple.dir/build.make examples/simple/CMakeFiles/simple.dir/build
+.PHONY : simple/fast
+
+#=============================================================================
+# Target rules for targets named passkey
+
+# Build rule for target.
+passkey: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 passkey
+.PHONY : passkey
+
+# fast build rule for target.
+passkey/fast:
+	$(MAKE) $(MAKESILENT) -f examples/passkey/CMakeFiles/passkey.dir/build.make examples/passkey/CMakeFiles/passkey.dir/build
+.PHONY : passkey/fast
+
+#=============================================================================
+# Target rules for targets named speculative
+
+# Build rule for target.
+speculative: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 speculative
+.PHONY : speculative
+
+# fast build rule for target.
+speculative/fast:
+	$(MAKE) $(MAKESILENT) -f examples/speculative/CMakeFiles/speculative.dir/build.make examples/speculative/CMakeFiles/speculative.dir/build
+.PHONY : speculative/fast
+
+#=============================================================================
+# Target rules for targets named lookahead
+
+# Build rule for target.
+lookahead: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 lookahead
+.PHONY : lookahead
+
+# fast build rule for target.
+lookahead/fast:
+	$(MAKE) $(MAKESILENT) -f examples/lookahead/CMakeFiles/lookahead.dir/build.make examples/lookahead/CMakeFiles/lookahead.dir/build
+.PHONY : lookahead/fast
+
+#=============================================================================
+# Target rules for targets named lookup
+
+# Build rule for target.
+lookup: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 lookup
+.PHONY : lookup
+
+# fast build rule for target.
+lookup/fast:
+	$(MAKE) $(MAKESILENT) -f examples/lookup/CMakeFiles/lookup.dir/build.make examples/lookup/CMakeFiles/lookup.dir/build
+.PHONY : lookup/fast
+
+#=============================================================================
+# Target rules for targets named lookup-create
+
+# Build rule for target.
+lookup-create: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 lookup-create
+.PHONY : lookup-create
+
+# fast build rule for target.
+lookup-create/fast:
+	$(MAKE) $(MAKESILENT) -f examples/lookup/CMakeFiles/lookup-create.dir/build.make examples/lookup/CMakeFiles/lookup-create.dir/build
+.PHONY : lookup-create/fast
+
+#=============================================================================
+# Target rules for targets named lookup-merge
+
+# Build rule for target.
+lookup-merge: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 lookup-merge
+.PHONY : lookup-merge
+
+# fast build rule for target.
+lookup-merge/fast:
+	$(MAKE) $(MAKESILENT) -f examples/lookup/CMakeFiles/lookup-merge.dir/build.make examples/lookup/CMakeFiles/lookup-merge.dir/build
+.PHONY : lookup-merge/fast
+
+#=============================================================================
+# Target rules for targets named lookup-stats
+
+# Build rule for target.
+lookup-stats: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 lookup-stats
+.PHONY : lookup-stats
+
+# fast build rule for target.
+lookup-stats/fast:
+	$(MAKE) $(MAKESILENT) -f examples/lookup/CMakeFiles/lookup-stats.dir/build.make examples/lookup/CMakeFiles/lookup-stats.dir/build
+.PHONY : lookup-stats/fast
+
+#=============================================================================
+# Target rules for targets named gguf
+
+# Build rule for target.
+gguf: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 gguf
+.PHONY : gguf
+
+# fast build rule for target.
+gguf/fast:
+	$(MAKE) $(MAKESILENT) -f examples/gguf/CMakeFiles/gguf.dir/build.make examples/gguf/CMakeFiles/gguf.dir/build
+.PHONY : gguf/fast
+
+#=============================================================================
+# Target rules for targets named train-text-from-scratch
+
+# Build rule for target.
+train-text-from-scratch: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 train-text-from-scratch
+.PHONY : train-text-from-scratch
+
+# fast build rule for target.
+train-text-from-scratch/fast:
+	$(MAKE) $(MAKESILENT) -f examples/train-text-from-scratch/CMakeFiles/train-text-from-scratch.dir/build.make examples/train-text-from-scratch/CMakeFiles/train-text-from-scratch.dir/build
+.PHONY : train-text-from-scratch/fast
+
+#=============================================================================
+# Target rules for targets named imatrix
+
+# Build rule for target.
+imatrix: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 imatrix
+.PHONY : imatrix
+
+# fast build rule for target.
+imatrix/fast:
+	$(MAKE) $(MAKESILENT) -f examples/imatrix/CMakeFiles/imatrix.dir/build.make examples/imatrix/CMakeFiles/imatrix.dir/build
+.PHONY : imatrix/fast
+
+#=============================================================================
+# Target rules for targets named server
+
+# Build rule for target.
+server: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 server
+.PHONY : server
+
+# fast build rule for target.
+server/fast:
+	$(MAKE) $(MAKESILENT) -f examples/server/CMakeFiles/server.dir/build.make examples/server/CMakeFiles/server.dir/build
+.PHONY : server/fast
+
+#=============================================================================
+# Target rules for targets named export-lora
+
+# Build rule for target.
+export-lora: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 export-lora
+.PHONY : export-lora
+
+# fast build rule for target.
+export-lora/fast:
+	$(MAKE) $(MAKESILENT) -f examples/export-lora/CMakeFiles/export-lora.dir/build.make examples/export-lora/CMakeFiles/export-lora.dir/build
+.PHONY : export-lora/fast
+
+#=============================================================================
+# Target rules for targets named vdot
+
+# Build rule for target.
+vdot: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 vdot
+.PHONY : vdot
+
+# fast build rule for target.
+vdot/fast:
+	$(MAKE) $(MAKESILENT) -f pocs/vdot/CMakeFiles/vdot.dir/build.make pocs/vdot/CMakeFiles/vdot.dir/build
+.PHONY : vdot/fast
+
+#=============================================================================
+# Target rules for targets named q8dot
+
+# Build rule for target.
+q8dot: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 q8dot
+.PHONY : q8dot
+
+# fast build rule for target.
+q8dot/fast:
+	$(MAKE) $(MAKESILENT) -f pocs/vdot/CMakeFiles/q8dot.dir/build.make pocs/vdot/CMakeFiles/q8dot.dir/build
+.PHONY : q8dot/fast
+
+ggml-alloc.o: ggml-alloc.c.o
+.PHONY : ggml-alloc.o
+
+# target to build an object file
+ggml-alloc.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-alloc.c.o
+.PHONY : ggml-alloc.c.o
+
+ggml-alloc.i: ggml-alloc.c.i
+.PHONY : ggml-alloc.i
+
+# target to preprocess a source file
+ggml-alloc.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-alloc.c.i
+.PHONY : ggml-alloc.c.i
+
+ggml-alloc.s: ggml-alloc.c.s
+.PHONY : ggml-alloc.s
+
+# target to generate assembly for a file
+ggml-alloc.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-alloc.c.s
+.PHONY : ggml-alloc.c.s
+
+ggml-backend.o: ggml-backend.c.o
+.PHONY : ggml-backend.o
+
+# target to build an object file
+ggml-backend.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-backend.c.o
+.PHONY : ggml-backend.c.o
+
+ggml-backend.i: ggml-backend.c.i
+.PHONY : ggml-backend.i
+
+# target to preprocess a source file
+ggml-backend.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-backend.c.i
+.PHONY : ggml-backend.c.i
+
+ggml-backend.s: ggml-backend.c.s
+.PHONY : ggml-backend.s
+
+# target to generate assembly for a file
+ggml-backend.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-backend.c.s
+.PHONY : ggml-backend.c.s
+
+ggml-quants.o: ggml-quants.c.o
+.PHONY : ggml-quants.o
+
+# target to build an object file
+ggml-quants.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-quants.c.o
+.PHONY : ggml-quants.c.o
+
+ggml-quants.i: ggml-quants.c.i
+.PHONY : ggml-quants.i
+
+# target to preprocess a source file
+ggml-quants.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-quants.c.i
+.PHONY : ggml-quants.c.i
+
+ggml-quants.s: ggml-quants.c.s
+.PHONY : ggml-quants.s
+
+# target to generate assembly for a file
+ggml-quants.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml-quants.c.s
+.PHONY : ggml-quants.c.s
+
+ggml.o: ggml.c.o
+.PHONY : ggml.o
+
+# target to build an object file
+ggml.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml.c.o
+.PHONY : ggml.c.o
+
+ggml.i: ggml.c.i
+.PHONY : ggml.i
+
+# target to preprocess a source file
+ggml.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml.c.i
+.PHONY : ggml.c.i
+
+ggml.s: ggml.c.s
+.PHONY : ggml.s
+
+# target to generate assembly for a file
+ggml.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ggml.dir/build.make CMakeFiles/ggml.dir/ggml.c.s
+.PHONY : ggml.c.s
+
+llama.o: llama.cpp.o
+.PHONY : llama.o
+
+# target to build an object file
+llama.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/llama.cpp.o
+.PHONY : llama.cpp.o
+
+llama.i: llama.cpp.i
+.PHONY : llama.i
+
+# target to preprocess a source file
+llama.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/llama.cpp.i
+.PHONY : llama.cpp.i
+
+llama.s: llama.cpp.s
+.PHONY : llama.s
+
+# target to generate assembly for a file
+llama.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/llama.cpp.s
+.PHONY : llama.cpp.s
+
+unicode-data.o: unicode-data.cpp.o
+.PHONY : unicode-data.o
+
+# target to build an object file
+unicode-data.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/unicode-data.cpp.o
+.PHONY : unicode-data.cpp.o
+
+unicode-data.i: unicode-data.cpp.i
+.PHONY : unicode-data.i
+
+# target to preprocess a source file
+unicode-data.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/unicode-data.cpp.i
+.PHONY : unicode-data.cpp.i
+
+unicode-data.s: unicode-data.cpp.s
+.PHONY : unicode-data.s
+
+# target to generate assembly for a file
+unicode-data.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/unicode-data.cpp.s
+.PHONY : unicode-data.cpp.s
+
+unicode.o: unicode.cpp.o
+.PHONY : unicode.o
+
+# target to build an object file
+unicode.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/unicode.cpp.o
+.PHONY : unicode.cpp.o
+
+unicode.i: unicode.cpp.i
+.PHONY : unicode.i
+
+# target to preprocess a source file
+unicode.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/unicode.cpp.i
+.PHONY : unicode.cpp.i
+
+unicode.s: unicode.cpp.s
+.PHONY : unicode.s
+
+# target to generate assembly for a file
+unicode.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama.dir/build.make CMakeFiles/llama.dir/unicode.cpp.s
+.PHONY : unicode.cpp.s
+
+# Help Target
+help:
+	@echo "The following are some of the valid targets for this Makefile:"
+	@echo "... all (the default if no target is provided)"
+	@echo "... clean"
+	@echo "... depend"
+	@echo "... edit_cache"
+	@echo "... install"
+	@echo "... install/local"
+	@echo "... install/strip"
+	@echo "... list_install_components"
+	@echo "... rebuild_cache"
+	@echo "... test"
+	@echo "... Continuous"
+	@echo "... ContinuousBuild"
+	@echo "... ContinuousConfigure"
+	@echo "... ContinuousCoverage"
+	@echo "... ContinuousMemCheck"
+	@echo "... ContinuousStart"
+	@echo "... ContinuousSubmit"
+	@echo "... ContinuousTest"
+	@echo "... ContinuousUpdate"
+	@echo "... Experimental"
+	@echo "... ExperimentalBuild"
+	@echo "... ExperimentalConfigure"
+	@echo "... ExperimentalCoverage"
+	@echo "... ExperimentalMemCheck"
+	@echo "... ExperimentalStart"
+	@echo "... ExperimentalSubmit"
+	@echo "... ExperimentalTest"
+	@echo "... ExperimentalUpdate"
+	@echo "... Nightly"
+	@echo "... NightlyBuild"
+	@echo "... NightlyConfigure"
+	@echo "... NightlyCoverage"
+	@echo "... NightlyMemCheck"
+	@echo "... NightlyMemoryCheck"
+	@echo "... NightlyStart"
+	@echo "... NightlySubmit"
+	@echo "... NightlyTest"
+	@echo "... NightlyUpdate"
+	@echo "... baby-llama"
+	@echo "... batched"
+	@echo "... batched-bench"
+	@echo "... beam-search"
+	@echo "... benchmark"
+	@echo "... build_info"
+	@echo "... common"
+	@echo "... convert-llama2c-to-ggml"
+	@echo "... embedding"
+	@echo "... export-lora"
+	@echo "... finetune"
+	@echo "... ggml"
+	@echo "... ggml_static"
+	@echo "... gguf"
+	@echo "... gguf-split"
+	@echo "... gritlm"
+	@echo "... imatrix"
+	@echo "... infill"
+	@echo "... json-schema-to-grammar"
+	@echo "... llama"
+	@echo "... llama-bench"
+	@echo "... llava"
+	@echo "... llava-cli"
+	@echo "... llava_static"
+	@echo "... lookahead"
+	@echo "... lookup"
+	@echo "... lookup-create"
+	@echo "... lookup-merge"
+	@echo "... lookup-stats"
+	@echo "... main"
+	@echo "... parallel"
+	@echo "... passkey"
+	@echo "... perplexity"
+	@echo "... q8dot"
+	@echo "... quantize"
+	@echo "... quantize-stats"
+	@echo "... retrieval"
+	@echo "... save-load-state"
+	@echo "... server"
+	@echo "... simple"
+	@echo "... speculative"
+	@echo "... test-autorelease"
+	@echo "... test-backend-ops"
+	@echo "... test-c"
+	@echo "... test-chat-template"
+	@echo "... test-grad0"
+	@echo "... test-grammar-integration"
+	@echo "... test-grammar-parser"
+	@echo "... test-json-schema-to-grammar"
+	@echo "... test-llama-grammar"
+	@echo "... test-model-load-cancel"
+	@echo "... test-quantize-fns"
+	@echo "... test-quantize-perf"
+	@echo "... test-rope"
+	@echo "... test-sampling"
+	@echo "... test-tokenizer-0-falcon"
+	@echo "... test-tokenizer-0-llama"
+	@echo "... test-tokenizer-1-aquila"
+	@echo "... test-tokenizer-1-baichuan"
+	@echo "... test-tokenizer-1-falcon"
+	@echo "... test-tokenizer-1-gpt-neox"
+	@echo "... test-tokenizer-1-gpt2"
+	@echo "... test-tokenizer-1-llama"
+	@echo "... test-tokenizer-1-mpt"
+	@echo "... test-tokenizer-1-refact"
+	@echo "... test-tokenizer-1-stablelm-3b-4e1t"
+	@echo "... test-tokenizer-1-starcoder"
+	@echo "... tokenize"
+	@echo "... train-text-from-scratch"
+	@echo "... vdot"
+	@echo "... ggml-alloc.o"
+	@echo "... ggml-alloc.i"
+	@echo "... ggml-alloc.s"
+	@echo "... ggml-backend.o"
+	@echo "... ggml-backend.i"
+	@echo "... ggml-backend.s"
+	@echo "... ggml-quants.o"
+	@echo "... ggml-quants.i"
+	@echo "... ggml-quants.s"
+	@echo "... ggml.o"
+	@echo "... ggml.i"
+	@echo "... ggml.s"
+	@echo "... llama.o"
+	@echo "... llama.i"
+	@echo "... llama.s"
+	@echo "... unicode-data.o"
+	@echo "... unicode-data.i"
+	@echo "... unicode-data.s"
+	@echo "... unicode.o"
+	@echo "... unicode.i"
+	@echo "... unicode.s"
+.PHONY : help
+
+
+
+#=============================================================================
+# Special targets to cleanup operation of make.
+
+# Special rule to run CMake to check the build system integrity.
+# No rule that depends on this can have commands that come from listfiles
+# because they might be regenerated.
+cmake_check_build_system:
+	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+.PHONY : cmake_check_build_system
+
