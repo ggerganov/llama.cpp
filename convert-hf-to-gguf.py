@@ -1097,7 +1097,8 @@ class MiniCPMModel(Model):
         self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
         self.gguf_writer.add_file_type(self.ftype)
-        self.gguf_writer.add_tie_lm_head(self.hparams["tie_lm_head"])
+        if "tie_lm_head" in self.hparams:
+            self.gguf_writer.add_tie_lm_head(self.hparams["tie_lm_head"])
 
     def set_vocab(self):
         self._set_vocab_hf()
@@ -1560,7 +1561,6 @@ class InternLM2Model(Model):
         self.gguf_writer.add_add_space_prefix(add_prefix)
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        print(special_vocab)
         old_eos = special_vocab.special_token_ids["eos"]
         if "chat" in os.path.basename(self.dir_model.absolute()):
             # For the chat model, we replace the eos with '<|im_end|>'.
