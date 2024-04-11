@@ -14,7 +14,7 @@ function log {
 }
 
 function usage {
-    log "Usage: $0 [[--url] <url>] [--repo <repo>] [--file <file>] [--outdir dir [-h|--help]"
+    log "Usage: $0 [[--url] <url>] [--repo <repo>] [--file <file>] [--outdir <dir> [-h|--help]"
     exit 1
 }
 
