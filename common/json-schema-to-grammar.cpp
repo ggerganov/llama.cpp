@@ -53,21 +53,6 @@ static std::string build_repetition(const std::string & item_rule, int min_items
             res += repeat(")?", up_to_n);
             return res;
         }
-
-        if (up_to_n == 0) {
-            return "";
-        }
-
-        std::string res;
-        if (!separator_rule.empty() && prefix_with_sep) {
-            res = separator_rule + " " + item_rule;
-        } else {
-            res = item_rule;
-        }
-        if (up_to_n > 1) {
-            res += " " + opt_repetitions(up_to_n - 1, true);
-        }
-        return "(" + res + ")?";
     };
 
     if (min_items > 0 && max_items != min_items) {
