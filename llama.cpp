@@ -6496,7 +6496,7 @@ struct llm_build_context {
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
 
-                cur = build_moe(cur, n_tokens, il);
+                cur = build_moe_ffn(cur, n_tokens, LLM_FFN_SILU, il);
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
@@ -6528,7 +6528,8 @@ struct llm_build_context {
         return gf;
     }
 
-    ggml_tensor * build_moe(ggml_tensor * cur, int32_t n_tokens, int il) {
+    // REVIEW: will be replaced by https://github.com/ggerganov/llama.cpp/pull/6505
+    ggml_tensor * build_moe_ffn(ggml_tensor * cur, int32_t n_tokens, llm_ffn_op_type type_op, int il) {
         ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
         cb(logits, "ffn_moe_logits", il);
 
@@ -6560,13 +6561,25 @@ struct llm_build_context {
             ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, model.layers[il].ffn_up_exps, selected_experts, i, cur);
             cb(cur_up, "ffn_moe_up", il);
 
-            ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
-            cb(cur_gate, "ffn_moe_gate", il);
+            ggml_tensor * gate = ggml_mul_mat_id(ctx0, model.layers[il].ffn_gate_exps, selected_experts, i, cur);
+            cb(gate, "ffn_moe_gate", il);
 
-            cur_gate = ggml_silu(ctx0, cur_gate);
-            cb(cur_gate, "ffn_moe_silu", il);
+            switch (type_op) {
+                case LLM_FFN_SILU:
+                {
+                    gate = ggml_silu(ctx0, gate);
+                    cb(gate, "ffn_moe_silu", il);
+                } break;
+                case LLM_FFN_GELU:
+                {
+                    gate = ggml_gelu(ctx0, gate);
+                    cb(gate, "ffn_moe_gelu", il);
+                } break;
+                default:
+                    GGML_ASSERT(false);
+            }
 
-            cur_expert = ggml_mul(ctx0, cur_up, cur_gate);
+            cur_expert = ggml_mul(ctx0, cur_up, gate);
             cb(cur_expert, "ffn_moe_gate_par", il);
 
             cur_expert = ggml_mul_mat_id(ctx0, model.layers[il].ffn_down_exps, selected_experts, i, cur_expert); // [n_tokens, n_embd]
@@ -7034,7 +7047,7 @@ struct llm_build_context {
                     LLM_NORM_RMS, cb, il);
             cb(cur, "ffn_norm", il);
 
-            cur = build_moe(cur, n_tokens, il);
+            cur = build_moe_ffn(cur, n_tokens, LLM_FFN_GELU, il);
 
             // Grok
             // if layer_out_norm is present then apply it before adding the input
@@ -7170,7 +7183,7 @@ struct llm_build_context {
                                  LLM_NORM, cb, il);
             cb(cur, "attn_out_norm", il);
 
-            cur = build_moe(cur, n_tokens, il);
+            cur = build_moe_ffn(cur, n_tokens, LLM_FFN_SILU, il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
