@@ -3154,7 +3154,6 @@ typedef float (*vec_dot_q_mul_mat_sycl_t)(
 #define SYCL_SCALE_BLOCK_SIZE 256
 #define SYCL_CLAMP_BLOCK_SIZE 256
 #define SYCL_ROPE_BLOCK_SIZE 256
-#define SYCL_SOFT_MAX_BLOCK_SIZE 1024
 #define SYCL_ALIBI_BLOCK_SIZE 32
 #define SYCL_DIAG_MASK_INF_BLOCK_SIZE 32
 #define SYCL_QUANTIZE_BLOCK_SIZE 256
@@ -13080,11 +13079,13 @@ static void soft_max_f32_sycl(const float * x, const float * mask, const float *
                               const int nrows_y, const float scale, const float max_bias,
                               dpct::queue_ptr stream) {
     int nth = WARP_SIZE;
-    while (nth < ncols_x && nth < SYCL_SOFT_MAX_BLOCK_SIZE) nth *= 2;
+    int max_block_size = g_work_group_size;
+    while (nth < ncols_x && nth < max_block_size) nth *= 2;
+    if (nth>max_block_size) nth = max_block_size;
+
     const sycl::range<3> block_dims(1, 1, nth);
     const sycl::range<3> block_nums(1, 1, nrows_x);
     const size_t n_local_scratch = (GGML_PAD(ncols_x, WARP_SIZE) + WARP_SIZE);
-    static_assert(SYCL_SOFT_MAX_BLOCK_SIZE == 1024, "These values need to be adjusted.");
 
     const uint32_t n_head_kv   = nrows_x/nrows_y;
     const uint32_t n_head_log2 = 1u << (uint32_t) floorf(log2f((float) n_head_kv));
@@ -13094,6 +13095,12 @@ static void soft_max_f32_sycl(const float * x, const float * mask, const float *
 
     const size_t local_mem_size = stream->get_device().get_info<sycl::info::device::local_mem_size>();
     if (n_local_scratch*sizeof(float) < local_mem_size) {
+        if (ncols_x > max_block_size) {
+            soft_max_f32_submitter<true, 0, 0>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                                               max_bias, m0, m1, n_head_log2, block_nums,
+                                               block_dims, n_local_scratch, stream);
+            return;
+        }
         switch (ncols_x) {
             case 32:
                 soft_max_f32_submitter<true, 32, 32>(x, mask, pos, dst, ncols_x, nrows_y, scale,
