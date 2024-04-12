@@ -296,7 +296,7 @@ namespace grammar_parser {
                 pos = parse_space(pos + 1, is_nested);
 
                 if (!is_digit_char(*pos)) {
-                    throw std::runtime_error(std::string("expecting an int or ',' at ") + pos);
+                    throw std::runtime_error(std::string("expecting an int at ") + pos);
                 }
                 const char * int_end = parse_int(pos);
                 int min_times = std::stoul(std::string(pos, int_end - pos));
