@@ -59,9 +59,13 @@ Parentheses `()` can be used to group sequences, which allows for embedding alte
 
 ## Repetition and Optional Symbols
 
-- `*` after a symbol or sequence means that it can be repeated zero or more times.
-- `+` denotes that the symbol or sequence should appear one or more times.
-- `?` makes the preceding symbol or sequence optional.
+- `*` after a symbol or sequence means that it can be repeated zero or more times (equivalent to `{0,}`).
+- `+` denotes that the symbol or sequence should appear one or more times (equivalent to `{1,}`).
+- `?` makes the preceding symbol or sequence optional (equivalent to `{0,1}`).
+- `{m}` repeats the precedent symbol or sequence exactly `m` times
+- `{m,}` repeats the precedent symbol or sequence at least `m` times
+- `{m,n}` repeats the precedent symbol or sequence at betwen `m` and `n` (included) times (included)
+- `{,n}` repeats the precedent symbol or sequence at most `n` times (included)
 
 ## Comments and newlines
 
