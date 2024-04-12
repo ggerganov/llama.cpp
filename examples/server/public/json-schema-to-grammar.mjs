@@ -24,14 +24,16 @@ function _buildRepetition(itemRule, minItems, maxItems, opts={}) {
   }
 
   const optRepetitions = (upToN, prefixWithSep=false) => {
+    const content = separatorRule !== '' && prefixWithSep ? `${separatorRule} ${itemRule}` : itemRule;
     if (upToN === 0) {
       return '';
+    } else if (upToN === 1) {
+      return `(${content})?`;
+    } else if (separatorRule !== '' && !prefixWithSep) {
+      return `(${content} ${optRepetitions(upToN - 1, true)})?`;
+    } else {
+      return Array.from({ length: upToN }, () => `(${content}`).join(' ').trim() + Array.from({ length: upToN }, () => ')?').join('');
     }
-    let res = separatorRule !== '' && prefixWithSep ? separatorRule + ' ' + itemRule : itemRule;
-    if (upToN > 1) {
-      res += ' ' + optRepetitions(upToN - 1, true);
-    }
-    return `(${res})?`;
   };
 
   if (minItems > 0 && maxItems !== minItems) {
