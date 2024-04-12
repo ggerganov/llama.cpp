@@ -1729,6 +1729,7 @@ enum e_model {
     MODEL_4B,
     MODEL_7B,
     MODEL_8B,
+    MODEL_12B,
     MODEL_13B,
     MODEL_14B,
     MODEL_15B,
