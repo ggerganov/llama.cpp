@@ -174,11 +174,11 @@ namespace grammar_parser {
             //            Sstar  ::= Scopy Sstar |
 
             uint32_t content_rule_id = 0;
-            if (last_sym_start == out_elements.size() - 1) {
+            if (last_sym_start >= 0 && last_sym_start == out_elements.size() - 1 && out_elements[last_sym_start].type == LLAMA_GRETYPE_RULE_REF) {
                 // The repeated content is already a rule ref, no need to copy it
                 content_rule_id = out_elements[last_sym_start].value;
             } else {
-                content_rule_id = generate_symbol_id(state, rule_name);
+                content_rule_id = generate_symbol_id(state, rule_name + "_copy");
                 // add preceding symbol to generated copy rule
                 std::vector<llama_grammar_element> copy_rule(out_elements.begin() + last_sym_start, out_elements.end());
                 copy_rule.push_back({LLAMA_GRETYPE_END, 0});
