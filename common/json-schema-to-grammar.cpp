@@ -8,7 +8,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include "ggml.h"
 
 using json = nlohmann::ordered_json;
 
@@ -48,7 +47,6 @@ static std::string build_repetition(const std::string & item_rule, int min_items
         } else {
             std::string res = repeat("(" + content + " ", up_to_n);
             // strip trailing space
-            GGML_ASSERT(!res.empty());
             res = res.substr(0, res.length() - 1);
             res += repeat(")?", up_to_n);
             return res;
