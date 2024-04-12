@@ -107,9 +107,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
         // the top-k selected expert ids are stored in the ids tensor
         // for simplicity, always copy ids to host, because it is small
-        // take into account that ids is not contiguous!
         GGML_ASSERT(ids->ne[1] == src1->ne[1]);
-        GGML_ASSERT(n_as*ggml_nrows(ids)*sizeof(int) == GGML_PAD(ggml_nbytes(ids), n_as*sizeof(int)));
         m_ids.resize(ggml_nbytes(ids)/sizeof(int));
         ggml_backend_tensor_get(ids, m_ids.data(), 0, ggml_nbytes(ids));
 
