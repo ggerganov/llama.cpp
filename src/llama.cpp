@@ -5931,8 +5931,8 @@ static void llm_load_vocab(
             vocab.type = LLAMA_VOCAB_TYPE_RWKV;
 
             // default special tokens
-            vocab.special_bos_id = 0;
-            vocab.special_eos_id = 0;
+            vocab.special_bos_id = -1;
+            vocab.special_eos_id = -1;
             vocab.special_unk_id = -1;
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
@@ -8223,6 +8223,10 @@ static bool llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
                     }
                 } break;
+            case LLM_ARCH_RWKV:
+                {
+                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                }
             default:
                 throw std::runtime_error("unknown architecture");
         }
