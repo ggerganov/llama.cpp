@@ -3112,7 +3112,7 @@ struct llama_model_loader {
             }
         }
 
-        if (!llama_mmap::SUPPORTED || !ggml_backend_is_support_mmap()) {
+        if (!llama_mmap::SUPPORTED) {
             LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
             use_mmap = false;
         }

@@ -26,7 +26,6 @@ extern "C" {
     GGML_API           bool                  ggml_backend_buft_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend);
     GGML_API           bool                  ggml_backend_buft_is_host         (ggml_backend_buffer_type_t buft);
 
-
     // buffer
     enum ggml_backend_buffer_usage {
         GGML_BACKEND_BUFFER_USAGE_ANY = 0,
@@ -59,7 +58,6 @@ extern "C" {
     GGML_API ggml_backend_buffer_t      ggml_backend_alloc_buffer(ggml_backend_t backend, size_t size);
     GGML_API size_t                     ggml_backend_get_alignment(ggml_backend_t backend);
     GGML_API size_t                     ggml_backend_get_max_size(ggml_backend_t backend);
-    GGML_API bool                       ggml_backend_is_support_mmap(void);
 
     GGML_API void ggml_backend_tensor_set_async(ggml_backend_t backend,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
     GGML_API void ggml_backend_tensor_get_async(ggml_backend_t backend, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
