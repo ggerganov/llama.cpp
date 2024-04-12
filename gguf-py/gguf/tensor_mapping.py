@@ -228,6 +228,7 @@ class TensorNameMap:
             "model.layers.{bid}.feed_forward.w3",                     # internlm2
             "encoder.layers.{bid}.mlp.fc11",                          # nomic-bert
             "model.layers.{bid}.mlp.c_fc",                            # starcoder2
+            "encoder.layer.{bid}.mlp.gated_layers",  # jina-bert
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -248,7 +249,6 @@ class TensorNameMap:
             "model.layers.layers.{bid}.mlp.gate_proj",    # plamo
             "model.layers.{bid}.feed_forward.w1",         # internlm2
             "encoder.layers.{bid}.mlp.fc12",              # nomic-bert
-            "encoder.layer.{bid}.mlp.gated_layers",  # jina-bert
         ),
 
         MODEL_TENSOR.FFN_GATE_EXP: (

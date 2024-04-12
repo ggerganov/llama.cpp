@@ -1922,16 +1922,6 @@ struct llama_layer {
     // mamba bias
     struct ggml_tensor * ssm_conv1d_b;
     struct ggml_tensor * ssm_dt_b;
-
-    //glu mlp (jina-bert)
-    struct ggml_tensor * mlp_gated_layer_w;
-
-    struct ggml_tensor * mlp_wo_w;
-    struct ggml_tensor * mlp_wo_b;
-
-    struct ggml_tensor * mlp_norm_w;
-    struct ggml_tensor * mlp_norm_b;
-
 };
 
 struct llama_kv_cell {
@@ -4904,13 +4894,13 @@ static bool llm_load_tensors(
                         layer.attn_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "bias", i),   {n_embd});
 
                         // TODO: HANDLE ALL THE MLP
-                        layer.mlp_gated_layer_w = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE,        "weight", i), {n_embd, 2 * n_ff});
+                        layer.ffn_up = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,        "weight", i), {n_embd, 2 * n_ff});
 
-                        layer.mlp_wo_w = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN,        "weight", i), {n_ff, n_embd});
-                        layer.mlp_wo_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN,        "bias", i), {n_embd});
+                        layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN,        "weight", i), {n_ff, n_embd});
+                        layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN,      "bias", i), {n_embd});
 
-                        layer.mlp_norm_w = ml.create_tensor(ctx_split, tn(LLM_TENSOR_LAYER_OUT_NORM,        "weight", i), {n_embd});
-                        layer.mlp_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM,        "bias", i), {n_embd});
+                        layer.layer_out_norm = ml.create_tensor(ctx_split, tn(LLM_TENSOR_LAYER_OUT_NORM,        "weight", i), {n_embd});
+                        layer.layer_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM,        "bias", i), {n_embd});
                     }
                 } break;
             case LLM_ARCH_BLOOM:
@@ -7564,7 +7554,7 @@ struct llm_build_context {
             struct ggml_tensor * Vcur;
 
             // self-attention
-            if (model.arch == LLM_ARCH_BERT) {
+            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT) {
                 Qcur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), model.layers[il].bq);
                 cb(Qcur, "Qcur", il);
 
@@ -7654,7 +7644,7 @@ struct llm_build_context {
             cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
-            if (model.arch == LLM_ARCH_BERT) {
+            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT) {
                 cur = llm_build_ffn(ctx0, cur,
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
@@ -7676,6 +7666,7 @@ struct llm_build_context {
 
             // output layer norm
             cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].layer_out_norm, model.layers[il].layer_out_norm_b, LLM_NORM, cb, il);
+
 
             // input for next layer
             inpL = cur;
