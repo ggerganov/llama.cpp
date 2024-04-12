@@ -36,7 +36,7 @@ The `infill` program offers a seamless way to interact with LLaMA models, allowi
 
 ### Example
 
-Download a CodeLlama model:
+Download a model that supports infill, for example CodeLlama:
 ```console
 scripts/hf.sh --repo TheBloke/CodeLlama-13B-GGUF --file codellama-13b.Q5_K_S.gguf --outdir models
 ```
