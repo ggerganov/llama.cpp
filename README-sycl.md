@@ -339,7 +339,6 @@ Otherwise, you can run the script:
 
 *Notes:*
 
-- `mmap()` is not used for SYCL backend, so the parameter `--mmap` or `--no-mmap` is unavailable.
 - Upon execution, verify the selected device(s) ID(s) in the output log, which can for instance be displayed as follow:
 
 ```sh
@@ -507,7 +506,6 @@ Otherwise, run the following wrapper script:
 
 Note:
 
-- `mmap()` is not used for SYCL backend, so the parameter `--mmap` or `--no-mmap` is unavailable.
 - Upon execution, verify the selected device(s) ID(s) in the output log, which can for instance be displayed as follow:
 
 ```sh
@@ -550,7 +548,7 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 
 - General compiler error:
 
-  - Remove build folder or try a clean-build.
+  - Remove **build** folder or try a clean-build.
 
 - I can **not** see `[ext_oneapi_level_zero:gpu]` afer installing the GPU driver on Linux.
 
