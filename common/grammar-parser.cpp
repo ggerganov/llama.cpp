@@ -98,7 +98,7 @@ namespace grammar_parser {
             pos++;
         }
         if (pos == src) {
-            throw std::runtime_error(std::string("expecting name at ") + src);
+            throw std::runtime_error(std::string("expecting integer at ") + src);
         }
         return pos;
     }
@@ -159,6 +159,8 @@ namespace grammar_parser {
                 throw std::runtime_error(std::string("expecting preceding item to */+/?/{ at ") + pos);
             }
 
+            // apply transformation to previous symbol (last_sym_start to end) according to
+            // the following rewrite rules:
             // S*     --> S{0,}
             // S+     --> S{1,}
             // S?     --> S{0,1}
