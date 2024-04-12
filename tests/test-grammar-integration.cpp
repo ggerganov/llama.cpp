@@ -216,6 +216,30 @@ static void test_quantifiers() {
                 "aa",
                 "ba",
             }
+        },
+        {
+            // Grammar
+            R"""(
+root ::= cons+ vowel* cons? (vowel cons)*
+vowel ::= [aeiouy]
+cons ::= [bcdfghjklmnpqrstvwxyz]
+)""",
+            // Passing strings
+            {
+                "yes",
+                "no",
+                "noyes",
+                "crwth",
+                "four",
+                "bryyyy",
+            },
+            // Failing strings
+            {
+                "yess",
+                "yesno",
+                "forty",
+                "catyyy",
+            }
         }
     };
 
