@@ -174,7 +174,7 @@ namespace grammar_parser {
             //            Sstar  ::= Scopy Sstar |
 
             uint32_t content_rule_id = 0;
-            if (out_elements[last_sym_start].type == LLAMA_GRETYPE_RULE_REF) {
+            if (last_sym_start == out_elements.size() - 1) {
                 // The repeated content is already a rule ref, no need to copy it
                 content_rule_id = out_elements[last_sym_start].value;
             } else {
