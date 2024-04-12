@@ -7165,7 +7165,7 @@ struct llm_build_context {
 
             // feed-forward network
             // MoE branch
-            cur = llm_build_norm(ctx0, cur, hparams,
+            cur = llm_build_norm(ctx0, ffn_inp, hparams,
                                  model.layers[il].attn_out_norm, NULL,
                                  LLM_NORM, cb, il);
             cb(cur, "attn_out_norm", il);
