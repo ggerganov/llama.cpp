@@ -478,9 +478,8 @@ struct test_case {
             }
 
             double err = nmse(f1.data(), f2.data(), f1.size());
-            printf("[%s] NMSE = %.9f > %.9f \n", ggml_op_desc(t1), err, ud->max_err);
             if (err > ud->max_err) {
-                //printf("[%s] NMSE = %.9f > %.9f ", ggml_op_desc(t1), err, ud->max_err);
+                printf("[%s] NMSE = %.9f > %.9f ", ggml_op_desc(t1), err, ud->max_err);
                 //for (int i = 0; i < (int) f1.size(); i++) {
                 //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
                 //}
@@ -956,7 +955,7 @@ struct test_mul_mat_id : public test_case {
     const int64_t k;
 
     std::string vars() override {
-        return VARS_TO_STR7(type_a, type_b, n_mats, b, m, n, k);
+        return VARS_TO_STR8(type_a, type_b, n_mats, n_used, b, m, n, k);
     }
 
     double max_nmse_err() override {
@@ -976,13 +975,17 @@ struct test_mul_mat_id : public test_case {
             int n_mats = 8, int n_used = 2, bool b = false,
             int64_t m = 32, int64_t n = 32, int64_t k = 32)
         : type_a(type_a), type_b(type_b), n_mats(n_mats), n_used(n_used), b(b),
-            m(m), n(n), k(k) {}
+            m(m), n(n), k(k) {
+            GGML_ASSERT(n_used <= n_mats);
+        }
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         // C^T = A * B^T: (k, m) * (k, n) => (m, n)
         ggml_tensor * as = ggml_new_tensor_3d(ctx, type_a, k, m, n_mats);
         ggml_tensor * ids = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_mats, n);
-        ids = ggml_view_2d(ctx, ids, n_used, n, ids->nb[1], 0);
+        if (n_used != n_mats) {
+            ids = ggml_view_2d(ctx, ids, n_used, n, ids->nb[1], 0);
+        }
         ggml_tensor * b = ggml_new_tensor_3d(ctx, type_b, k, this->b ? 1 : n_used, n);
         ggml_tensor * out = ggml_mul_mat_id(ctx, as, b, ids);
         return out;
@@ -1958,9 +1961,6 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_IQ4_NL, GGML_TYPE_IQ3_S, GGML_TYPE_IQ4_XS,
     };
 
-test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 8*1024));
-test_cases.emplace_back(new test_moe(8, 2, 32, 4096, 8*1024));
-
     // unary ops
     for (int op = 0; op < GGML_UNARY_OP_COUNT; op++) {
         test_cases.emplace_back(new test_unary((ggml_unary_op) op));
@@ -2100,17 +2100,17 @@ test_cases.emplace_back(new test_moe(8, 2, 32, 4096, 8*1024));
     test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F32, 128, 45,  64, { 8,  1}, {4, 1}));
 
     for (ggml_type type_a : all_types) {
+    //for (ggml_type type_a : {GGML_TYPE_F16}) {
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
-            for (int n_mats : {2, 4, 8}) {
-                for (bool b : {false, true}) {
-                    // cur shape: 4096 1 32 1
-                    // ffn_up_exps shape: 4096 8192 8 1
-                    // selected_experts shape: 2 32 1 1
-                    int m = 8192;
-                    int n = 32;
-                    int k = 4096;
-                    test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, 2, b, m, n, k));
-                    test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, 2, b, m, 1, k));
+            for (int n_mats : {4, 8}) {
+                for (int n_used : {1, 2, 4}) {
+                    for (bool b : {false, true}) {
+                        for (int n : {1, 32}) {
+                            int m = 512;//8192;
+                            int k = 256;//4096;
+                            test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, n_used, b, m, n, k));
+                        }
+                    }
                 }
             }
         }
@@ -2193,6 +2193,8 @@ test_cases.emplace_back(new test_moe(8, 2, 32, 4096, 8*1024));
     test_cases.emplace_back(new test_llama(2));
     test_cases.emplace_back(new test_falcon(1));
     test_cases.emplace_back(new test_falcon(2));
+    test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 8*1024));
+    test_cases.emplace_back(new test_moe(8, 2, 32, 4096, 8*1024));
 #endif
 
     // run tests

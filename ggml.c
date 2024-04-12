@@ -11120,7 +11120,6 @@ static void ggml_compute_forward_mul_mat_id(
                     }
 
                     memcpy(&dst_col[iir0], tmp, (MIN(iir0 + blck_0, ir011) - iir0)*sizeof(float));
-
                 }
             }
         }
