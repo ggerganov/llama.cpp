@@ -77,6 +77,7 @@ class Model(ABC):
         for part_name in self.part_names:
             print(f"gguf: loading model part '{part_name}'")
             ctx: ContextManager[Any]
+
             if self.is_safetensors:
                 from safetensors import safe_open
                 ctx = cast(ContextManager[Any], safe_open(self.dir_model / part_name, framework="pt", device="cpu"))
@@ -91,6 +92,7 @@ class Model(ABC):
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name(self.dir_model.name)
+        print(f'self.block_count {self.block_count}')
         self.gguf_writer.add_block_count(self.block_count)
 
         if (n_ctx := self.find_hparam(["max_position_embeddings", "n_ctx"], optional=True)) is not None:
@@ -136,6 +138,7 @@ class Model(ABC):
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        print(f'Block_count {block_count} with tensor_map {tensor_map}')
         for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
@@ -2096,6 +2099,7 @@ class BertModel(Model):
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+
             if new_name is None:
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
@@ -2165,34 +2169,6 @@ class NomicBertModel(BertModel):
 @Model.register("JinaBertModel")
 class JinaBertModel(BertModel):
     model_arch = gguf.MODEL_ARCH.JINA_BERT
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        print(f'hparams {self.hparams}')
-
-        assert self.hparams["position_embedding_type"] == "alibi"
-
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #
-    #     assert self.hparams["position_embedding_type"] == "alibi"
-    #
-    #     # GeGLU activation
-    #     assert self.hparams["feed_forward_type"] == "geglu"
-    #
-    # def get_tensors(self):
-    #     assert self.vocab_size is not None
-    #     for name, data in super().get_tensors():
-    #         print(f'get_tensors: {name} {data.shape}')
-    #         # Nomic Embed's token embeddings tensor is padded, but llama.cpp wants tensor sizes to match exactly.
-    #         if name == 'embeddings.word_embeddings.weight' and data.shape[1] != self.vocab_size:
-    #             rounded_vocab_size = (self.vocab_size + 63) // 64 * 64
-    #             assert data.shape == (rounded_vocab_size, self.hparams["hidden_size"])
-    #             data = data[:self.vocab_size, :]
-    #         yield name, data
-
-
 
 @Model.register("GemmaForCausalLM")
 class GemmaModel(Model):
@@ -2461,9 +2437,7 @@ def main() -> None:
     print(f"Loading model: {dir_model.name}")
 
     hparams = Model.load_hparams(dir_model)
-
     with torch.inference_mode():
-        print(hparams["architectures"])
         model_class = Model.from_model_architecture(hparams["architectures"][0])
         model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
 

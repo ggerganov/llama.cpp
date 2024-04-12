@@ -680,6 +680,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_LAYER_OUT_NORM,  "blk.%d.layer_output_norm" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
     },
@@ -1921,6 +1922,16 @@ struct llama_layer {
     // mamba bias
     struct ggml_tensor * ssm_conv1d_b;
     struct ggml_tensor * ssm_dt_b;
+
+    //glu mlp (jina-bert)
+    struct ggml_tensor * mlp_gated_layer_w;
+
+    struct ggml_tensor * mlp_wo_w;
+    struct ggml_tensor * mlp_wo_b;
+
+    struct ggml_tensor * mlp_norm_w;
+    struct ggml_tensor * mlp_norm_b;
+
 };
 
 struct llama_kv_cell {
@@ -4813,7 +4824,6 @@ static bool llm_load_tensors(
                     }
                 } break;
             case LLM_ARCH_BERT:
-            case LLM_ARCH_JINA_BERT:
             case LLM_ARCH_NOMIC_BERT:
                 {
                     model.tok_embd     = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab});
@@ -4831,7 +4841,7 @@ static bool llm_load_tensors(
 
                         auto & layer = model.layers[i];
 
-                        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT) {
+                        if (model.arch == LLM_ARCH_BERT) {
                             layer.wq   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
                             layer.bq   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i),   {n_embd});
 
@@ -4852,7 +4862,7 @@ static bool llm_load_tensors(
                         layer.ffn_up          = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,        "weight", i), {n_embd, n_ff});
                         layer.ffn_down        = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN,      "weight", i), {n_ff, n_embd});
 
-                        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT) {
+                        if (model.arch == LLM_ARCH_BERT) {
                             layer.bo         = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd});
                             layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
 
@@ -4863,6 +4873,44 @@ static bool llm_load_tensors(
 
                         layer.layer_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "weight", i), {n_embd});
                         layer.layer_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "bias", i),   {n_embd});
+                    }
+                } break;
+            case LLM_ARCH_JINA_BERT:
+                {
+                    model.tok_embd     = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}); // word_embeddings
+                    model.type_embd    = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_TYPES, "weight"), {n_embd, n_vocab_type}); //token_type_embeddings
+                    model.tok_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd}); // LayerNorm
+                    model.tok_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "bias"),   {n_embd}); //LayerNorm bias? Not sure needed
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        ggml_context * ctx_layer = ctx_for_layer(i);
+                        ggml_context * ctx_split = ctx_for_layer_split(i);
+
+                        auto & layer = model.layers[i]; // JinaBertLayer
+
+                        layer.wq   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd}); 
+                        layer.bq   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i),   {n_embd});
+
+                        layer.wk   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
+                        layer.bk   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i),   {n_embd_gqa});
+
+                        layer.wv   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa});
+                        layer.bv   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i),   {n_embd_gqa});
+
+                        layer.wo              = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT,      "weight", i), {n_embd, n_embd}); //output_dens
+                        layer.bo              = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT,      "bias", i), {n_embd}); //output_dens
+
+                        layer.attn_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "weight", i), {n_embd}); //output_norm
+                        layer.attn_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "bias", i),   {n_embd});
+
+                        // TODO: HANDLE ALL THE MLP
+                        layer.mlp_gated_layer_w = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE,        "weight", i), {n_embd, 2 * n_ff});
+
+                        layer.mlp_wo_w = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN,        "weight", i), {n_ff, n_embd});
+                        layer.mlp_wo_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN,        "bias", i), {n_embd});
+
+                        layer.mlp_norm_w = ml.create_tensor(ctx_split, tn(LLM_TENSOR_LAYER_OUT_NORM,        "weight", i), {n_embd});
+                        layer.mlp_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM,        "bias", i), {n_embd});
                     }
                 } break;
             case LLM_ARCH_BLOOM:
@@ -9713,6 +9761,7 @@ static struct ggml_cgraph * llama_build_graph(
                 result = llm.build_refact();
             } break;
         case LLM_ARCH_BERT:
+        case LLM_ARCH_JINA_BERT:
         case LLM_ARCH_NOMIC_BERT:
             {
                 result = llm.build_bert();
