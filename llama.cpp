@@ -1638,17 +1638,17 @@ static size_t llama_get_device_memory(int device) {
 #if defined(GGML_USE_CUDA)
     size_t total;
     size_t free;
-    ggml_backend_cuda_get_device_memory(device, &total, &free);
+    ggml_backend_cuda_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_SYCL)
     size_t total;
     size_t free;
-    ggml_backend_sycl_get_device_memory(device, &total, &free);
+    ggml_backend_sycl_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_VULKAN)
     size_t total;
     size_t free;
-    ggml_backend_vk_get_device_memory(device, &total, &free);
+    ggml_backend_vk_get_device_memory(device, &free, &total);
     return free;
 #else
     return 1;
