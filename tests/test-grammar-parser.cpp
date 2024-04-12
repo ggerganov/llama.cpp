@@ -69,6 +69,12 @@ static void verify_parsing(const char *grammar_bytes, const std::vector<std::pai
 
     fprintf(stderr, "Testing grammar:%s\n", grammar_bytes);
 
+    if (parsed_grammar.symbol_ids.size() != expected.size()) {
+        fprintf(stderr, "Code to update expectation (set TEST_GRAMMAR_PARSER_PRINT_ALL=1 to print all):\n");
+        print_all();
+        assert(parsed_grammar.symbol_ids.size() == expected.size());
+    }
+
     for (auto it = parsed_grammar.symbol_ids.begin(); it != parsed_grammar.symbol_ids.end(); ++it)
     {
         std::string key = it->first;
@@ -116,6 +122,12 @@ static void verify_parsing(const char *grammar_bytes, const std::vector<std::pai
             index++;
         }
     }
+}
+
+static void verify_failure(const char *grammar_bytes) {
+    fprintf(stderr, "Testing expected failure:%s\n", grammar_bytes);
+    auto result = grammar_parser::parse(grammar_bytes);
+    assert(result.rules.empty() && "should have failed");
 }
 
 int main()
@@ -288,6 +300,14 @@ int main()
         {LLAMA_GRETYPE_ALT, 0},
         {LLAMA_GRETYPE_END, 0},
     });
+
+    verify_failure(R"""(
+        root ::= "a"{,}"
+    )""");
+
+    verify_failure(R"""(
+        root ::= "a"{,10}"
+    )""");
 
     verify_parsing(R"""(
         root  ::= (expr "=" term "\n")+

@@ -64,8 +64,8 @@ Parentheses `()` can be used to group sequences, which allows for embedding alte
 - `?` makes the preceding symbol or sequence optional (equivalent to `{0,1}`).
 - `{m}` repeats the precedent symbol or sequence exactly `m` times
 - `{m,}` repeats the precedent symbol or sequence at least `m` times
-- `{m,n}` repeats the precedent symbol or sequence at betwen `m` and `n` times (included)
-- `{,n}` repeats the precedent symbol or sequence at most `n` times (included)
+- `{m,n}` repeats the precedent symbol or sequence at between `m` and `n` times (included)
+- `{0,n}` repeats the precedent symbol or sequence at most `n` times (included)
 
 ## Comments and newlines
 

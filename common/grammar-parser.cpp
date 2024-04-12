@@ -187,7 +187,7 @@ namespace grammar_parser {
 
             uint32_t sub_rule_id = generate_symbol_id(state, rule_name);
             std::vector<llama_grammar_element> sub_rule;
-            for (size_t i = 0; i < min_times; i++) {
+            for (int i = 0; i < min_times; i++) {
                 sub_rule.push_back({LLAMA_GRETYPE_RULE_REF, content_rule_id});
             }
             if (max_times < 0) {
@@ -294,16 +294,15 @@ namespace grammar_parser {
                 handle_repetitions(0, 1);
             } else if (*pos == '{') {
                 pos = parse_space(pos + 1, is_nested);
-                size_t min_times = 0;
-                int max_times = -1;
 
-                if (is_digit_char(*pos)) {
-                    const char * int_end = parse_int(pos);
-                    min_times = std::stoul(std::string(pos, int_end - pos));
-                    pos = parse_space(int_end, is_nested);
-                } else if (*pos != ',') {
+                if (!is_digit_char(*pos)) {
                     throw std::runtime_error(std::string("expecting an int or ',' at ") + pos);
                 }
+                const char * int_end = parse_int(pos);
+                int min_times = std::stoul(std::string(pos, int_end - pos));
+                pos = parse_space(int_end, is_nested);
+
+                int max_times = -1;
 
                 if (*pos == '}') {
                     max_times = min_times;
