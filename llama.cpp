@@ -1183,24 +1183,7 @@ struct llama_mmap {
 
     llama_mmap(const llama_mmap &) = delete;
 
-#ifdef GGML_USE_SYCL
-    static constexpr bool SUPPORTED = false;
-
-    llama_mmap(struct llama_file * file, size_t prefetch = -1, bool numa = false) {
-        GGML_UNUSED(file);
-        GGML_UNUSED(prefetch);
-        GGML_UNUSED(numa);
-
-        throw std::runtime_error("mmap not supported");
-    }
-
-    void unmap_fragment(size_t first, size_t last) {
-        GGML_UNUSED(first);
-        GGML_UNUSED(last);
-
-        throw std::runtime_error("mmap not supported");
-    }
-#elif defined(_POSIX_MAPPED_FILES)
+#ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
 
     // list of mapped fragments (first_offset, last_offset)
@@ -3129,7 +3112,7 @@ struct llama_model_loader {
             }
         }
 
-        if (!llama_mmap::SUPPORTED) {
+        if (!llama_mmap::SUPPORTED || !ggml_backend_is_support_mmap()) {
             LLAMA_LOG_WARN("%s: mmap is not supported on this platform\n", __func__);
             use_mmap = false;
         }
