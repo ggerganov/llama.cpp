@@ -1745,6 +1745,8 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.yarn_orig_ctx     = params.yarn_orig_ctx;
     cparams.pooling_type      = params.pooling_type;
     cparams.defrag_thold      = params.defrag_thold;
+    cparams.cb_eval           = params.cb_eval;
+    cparams.cb_eval_user_data = params.cb_eval_user_data;
     cparams.offload_kqv       = !params.no_kv_offload;
 
     cparams.type_k = kv_cache_type_from_str(params.cache_type_k);
@@ -2192,7 +2194,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
     }
 
-    {
+    if (params.warmup) {
         LOG("warming up the model with an empty run\n");
 
         std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
@@ -2212,23 +2214,23 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special) {
-    return llama_tokenize(llama_get_model(ctx), text, add_bos, special);
+                        bool   add_special,
+                        bool   parse_special) {
+    return llama_tokenize(llama_get_model(ctx), text, add_special, parse_special);
 }
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special) {
+                        bool   add_special,
+                        bool   parse_special) {
     // upper limit for the number of tokens
-    int n_tokens = text.length() + add_bos;
+    int n_tokens = text.length() + 2 * add_special;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, special);
+    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, special);
+        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
