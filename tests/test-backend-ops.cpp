@@ -984,7 +984,7 @@ struct test_mul_mat_id : public test_case {
         ggml_tensor * ids = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_mats, n);
         ids = ggml_view_2d(ctx, ids, n_used, n, ids->nb[1], 0);
         ggml_tensor * b = ggml_new_tensor_3d(ctx, type_b, k, this->b ? 1 : n_used, n);
-        ggml_tensor * out = ggml_mul_mat_id(ctx, as, ids, b);
+        ggml_tensor * out = ggml_mul_mat_id(ctx, as, b, ids);
         return out;
     }
 
@@ -1908,18 +1908,16 @@ struct test_moe : public test_case {
         weights = ggml_div(ctx, weights, weights_sum); // [n_expert_used, n_tokens]
 
         cur = ggml_reshape_3d(ctx, cur, n_embd, 1, n_tokens);
-        ggml_tensor * up = ggml_mul_mat_id(ctx, ffn_up_exps, selected_experts, cur); // [n_ff, n_expert_used, n_tokens]
+        ggml_tensor * up = ggml_mul_mat_id(ctx, ffn_up_exps, cur, selected_experts); // [n_ff, n_expert_used, n_tokens]
 
-        ggml_tensor * gate = ggml_mul_mat_id(ctx, ffn_gate_exps, selected_experts, cur); // [n_ff, n_expert_used, n_tokens]
+        ggml_tensor * gate = ggml_mul_mat_id(ctx, ffn_gate_exps, cur, selected_experts); // [n_ff, n_expert_used, n_tokens]
 
         gate = ggml_silu(ctx, gate);
 
         ggml_tensor * par = ggml_mul(ctx, up, gate); // [n_ff, n_expert_used, n_tokens]
 
-        ggml_tensor * experts = ggml_mul_mat_id(ctx, ffn_down_exps, selected_experts, par); // [n_embd, n_expert_used, n_tokens]
+        ggml_tensor * experts = ggml_mul_mat_id(ctx, ffn_down_exps, par, selected_experts); // [n_embd, n_expert_used, n_tokens]
 
-        printf("mul: src0: %ld %ld %ld %ld\n", experts->ne[0], experts->ne[1], experts->ne[2], experts->ne[3]);
-        printf("mul: src1: %ld %ld %ld %ld\n", 1, n_expert_used, n_tokens, 1);
         experts = ggml_mul(ctx, experts,
                 ggml_reshape_3d(ctx, weights, 1, n_expert_used, n_tokens));
 
@@ -2105,13 +2103,14 @@ test_cases.emplace_back(new test_moe(8, 2, 32, 4096, 8*1024));
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
             for (int n_mats : {2, 4, 8}) {
                 for (bool b : {false, true}) {
-                        // cur shape: 4096 1 32 1
-                        // ffn_up_exps shape: 4096 8192 8 1
-                        // selected_experts shape: 2 32 1 1
-                        int m = 8192;
-                        int n = 32;
-                        int k = 4096;
-                        test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, 2, b, m, n, k));
+                    // cur shape: 4096 1 32 1
+                    // ffn_up_exps shape: 4096 8192 8 1
+                    // selected_experts shape: 2 32 1 1
+                    int m = 8192;
+                    int n = 32;
+                    int k = 4096;
+                    test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, 2, b, m, n, k));
+                    test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, 2, b, m, 1, k));
                 }
             }
         }

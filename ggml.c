@@ -338,14 +338,14 @@ ggml_fp16_t ggml_fp32_to_fp16(float x) {
     return GGML_FP32_TO_FP16(x);
 }
 
-void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, int n) {
-    for (int i = 0; i < n; i++) {
+void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, int64_t n) {
+    for (int64_t i = 0; i < n; i++) {
         y[i] = GGML_FP16_TO_FP32(x[i]);
     }
 }
 
-void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int n) {
-    int i = 0;
+void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int64_t n) {
+    int64_t i = 0;
 #if defined(__F16C__)
     for (; i + 7 < n; i += 8) {
         __m256 x_vec = _mm256_loadu_ps(x + i);
@@ -11015,7 +11015,6 @@ static void ggml_compute_forward_mul_mat_id(
         }
 
         // initialize matrix_row_counts
-        GGML_ASSERT(wdata == wdata_src1_end);
         memset(matrix_row_counts, 0, n_as*sizeof(int64_t));
 
 #define MMID_MATRIX_ROW(row_id, i1) matrix_rows[(row_id)*ne12 + (i1)]
@@ -20338,11 +20337,11 @@ size_t ggml_quantize_chunk(
         enum ggml_type   type,
            const float * src,
                   void * dst,
-                   int   start,
-                   int   nrows,
-                   int   n_per_row,
+               int64_t   start,
+               int64_t   nrows,
+               int64_t   n_per_row,
            const float * imatrix) {
-    const int n = nrows * n_per_row;
+    const int64_t n = (int64_t) nrows * n_per_row;
 
     if (ggml_quantize_requires_imatrix(type)) {
         GGML_ASSERT(imatrix != NULL);
@@ -20555,6 +20554,32 @@ static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
     ok = ok && gguf_fread_el(file,  p->data, p->n, offset);
 
     return ok;
+}
+
+static void gguf_free_kv(struct gguf_kv * kv) {
+    if (kv->key.data) {
+        GGML_FREE(kv->key.data);
+    }
+
+    if (kv->type == GGUF_TYPE_STRING) {
+        if (kv->value.str.data) {
+            GGML_FREE(kv->value.str.data);
+        }
+    }
+
+    if (kv->type == GGUF_TYPE_ARRAY) {
+        if (kv->value.arr.data) {
+            if (kv->value.arr.type == GGUF_TYPE_STRING) {
+                for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
+                    struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[j];
+                    if (str->data) {
+                        GGML_FREE(str->data);
+                    }
+                }
+            }
+            GGML_FREE(kv->value.arr.data);
+        }
+    }
 }
 
 struct gguf_context * gguf_init_empty(void) {
@@ -20906,31 +20931,7 @@ void gguf_free(struct gguf_context * ctx) {
     if (ctx->kv) {
         // free string memory - not great..
         for (uint64_t i = 0; i < ctx->header.n_kv; ++i) {
-            struct gguf_kv * kv = &ctx->kv[i];
-
-            if (kv->key.data) {
-                GGML_FREE(kv->key.data);
-            }
-
-            if (kv->type == GGUF_TYPE_STRING) {
-                if (kv->value.str.data) {
-                    GGML_FREE(kv->value.str.data);
-                }
-            }
-
-            if (kv->type == GGUF_TYPE_ARRAY) {
-                if (kv->value.arr.data) {
-                    if (kv->value.arr.type == GGUF_TYPE_STRING) {
-                        for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
-                            struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[j];
-                            if (str->data) {
-                                GGML_FREE(str->data);
-                            }
-                        }
-                    }
-                    GGML_FREE(kv->value.arr.data);
-                }
-            }
+            gguf_free_kv(&ctx->kv[i]);
         }
 
         GGML_FREE(ctx->kv);
@@ -21153,6 +21154,19 @@ static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
     ctx->header.n_kv++;
 
     return n_kv;
+}
+
+void gguf_remove_key(struct gguf_context * ctx, const char * key) {
+    const int idx = gguf_find_key(ctx, key);
+    if (idx >= 0) {
+        const int n_kv = gguf_get_n_kv(ctx);
+        gguf_free_kv(&ctx->kv[idx]);
+        for (int i = idx; i < n_kv-1; ++i) {
+            ctx->kv[i] = ctx->kv[i+1];
+        }
+        ctx->kv = realloc(ctx->kv, (n_kv - 1) * sizeof(struct gguf_kv));
+        ctx->header.n_kv--;
+    }
 }
 
 void gguf_set_val_u8(struct gguf_context * ctx, const char * key, uint8_t val) {

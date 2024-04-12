@@ -76,7 +76,6 @@ def main(args_in: list[str] | None = None) -> None:
                             data['metrics'][metric_name][metric_metric]=value
                             github_env.write(
                                 f"{escape_metric_name(metric_name)}_{escape_metric_name(metric_metric)}={value}\n")
-                token_seconds = data['metrics']['llamacpp_tokens_second']['avg']
                 iterations = data['root_group']['checks']['success completion']['passes']
 
     except Exception:
@@ -181,16 +180,16 @@ xychart-beta
     bench_results = {
         "i": iterations,
         "req": {
-            "p90": round(data['metrics']["http_req_duration"]["p(90)"], 2),
+            "p95": round(data['metrics']["http_req_duration"]["p(95)"], 2),
             "avg": round(data['metrics']["http_req_duration"]["avg"], 2),
         },
         "pp": {
-            "p90": round(data['metrics']["llamacpp_prompt_tokens"]["p(90)"], 2),
-            "avg": round(data['metrics']["llamacpp_prompt_tokens"]["avg"], 2),
+            "p95": round(data['metrics']["llamacpp_prompt_processing_second"]["p(95)"], 2),
+            "avg": round(data['metrics']["llamacpp_prompt_processing_second"]["avg"], 2),
             "0": round(mean(prometheus_metrics['prompt_tokens_seconds']), 2),
         },
         "tg": {
-            "p90": round(data['metrics']["llamacpp_tokens_second"]["p(90)"], 2),
+            "p95": round(data['metrics']["llamacpp_tokens_second"]["p(95)"], 2),
             "avg": round(data['metrics']["llamacpp_tokens_second"]["avg"], 2),
             "0": round(mean(prometheus_metrics['predicted_tokens_seconds']), 2),
         },
@@ -206,7 +205,7 @@ xychart-beta
 
 
 def start_benchmark(args):
-    k6_path = 'k6'
+    k6_path = './k6'
     if 'BENCH_K6_BIN_PATH' in os.environ:
         k6_path = os.environ['BENCH_K6_BIN_PATH']
     k6_args = [
