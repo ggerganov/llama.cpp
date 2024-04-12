@@ -153,7 +153,7 @@ namespace grammar_parser {
         size_t last_sym_start = out_elements.size();
         const char * pos = src;
 
-        auto handle_repetitions = [&](size_t min_times, int max_times) {
+        auto handle_repetitions = [&](int min_times, int max_times) {
 
             if (last_sym_start == out_elements.size()) {
                 throw std::runtime_error(std::string("expecting preceding item to */+/?/{ at ") + pos);
