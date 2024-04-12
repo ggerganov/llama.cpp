@@ -52,7 +52,7 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          ctest -L 'main|curl' --verbose --timeout 900
 
       - name: Determine tag name
         id: tag
@@ -101,7 +101,9 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON ..
+          # Metal is disabled due to intermittent failures with Github runners not having a GPU:
+          # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL=OFF -DLLAMA_CURL=ON ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -209,21 +211,21 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential libcurl4-openssl-dev
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          ctest -L 'main|curl' --verbose --timeout 900
 
       - name: Test llama2c conversion
         id: llama2c_test
@@ -938,6 +940,12 @@ jobs:
       - name: Download artifacts
         id: download-artifact
         uses: actions/download-artifact@v4
+        with:
+          path: ./artifact
+
+      - name: Move artifacts
+        id: move_artifacts
+        run: mkdir -p ./artifact/release && mv ./artifact/*/*.zip ./artifact/release
 
       - name: Create release
         id: create_release
@@ -956,7 +964,7 @@ jobs:
             const path = require('path');
             const fs = require('fs');
             const release_id = '${{ steps.create_release.outputs.id }}';
-            for (let file of await fs.readdirSync('./artifact')) {
+            for (let file of await fs.readdirSync('./artifact/release')) {
               if (path.extname(file) === '.zip') {
                 console.log('uploadReleaseAsset', file);
                 await github.repos.uploadReleaseAsset({
@@ -964,7 +972,7 @@ jobs:
                   repo: context.repo.repo,
                   release_id: release_id,
                   name: file,
-                  data: await fs.readFileSync(`./artifact/${file}`)
+                  data: await fs.readFileSync(`./artifact/release/${file}`)
                 });
               }
             }
