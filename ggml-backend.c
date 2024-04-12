@@ -196,7 +196,7 @@ size_t ggml_backend_get_max_size(ggml_backend_t backend) {
     return ggml_backend_buft_get_max_size(ggml_backend_get_default_buffer_type(backend));
 }
 
-bool ggml_backend_is_support_mmap() {
+bool ggml_backend_is_support_mmap(void) {
 #ifdef GGML_USE_SYCL
     return false;
 #endif
