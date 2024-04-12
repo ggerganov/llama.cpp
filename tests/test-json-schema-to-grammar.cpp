@@ -436,7 +436,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "pattern": "^(\\([0-9]{1,3}\\))?[0-9]{3}-[0-9]{4} a{3,5}nd...$"
         })""",
         R"""(
-            dot ::= [\U00000000-\x09\x0B\x0C\x0E-\U0010FFFF]
+            dot ::= [^\x0A\x0D]
             root ::= "\"" ("(" root-1 (root-1 (root-1)?)? ")")? root-1 root-1 root-1 "-" root-1 root-1 root-1 root-1 " " "aaa" ("a" ("a")?)? "nd" dot dot dot "\"" space
             root-1 ::= [0-9]
             space ::= " "?

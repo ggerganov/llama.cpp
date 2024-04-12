@@ -218,7 +218,7 @@ export class SchemaConverter {
         rule = '[\\U00000000-\\U0010FFFF]';
       } else {
         // Accept any character... except \n and \r line break chars (\x0A and \xOD)
-        rule = '[\\U00000000-\\x09\\x0B\\x0C\\x0E-\\U0010FFFF]';
+        rule = '[^\\x0A\\x0D]';
       }
       return this._addRule('dot', rule);
     };

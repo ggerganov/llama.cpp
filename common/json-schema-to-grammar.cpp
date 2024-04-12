@@ -257,7 +257,7 @@ private:
                 if (_dotall) {
                     rule = "[\\U00000000-\\U0010FFFF]";
                 } else {
-                    rule = "[\\U00000000-\\x09\\x0B\\x0C\\x0E-\\U0010FFFF]";
+                    rule = "[^\\x0A\\x0D]";
                 }
                 return _add_rule("dot", rule);
             };

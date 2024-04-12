@@ -83,7 +83,7 @@ STRING_FORMAT_RULES = {
 }
 
 DOTALL = '[\\U00000000-\\U0010FFFF]'
-DOT = '[\\U00000000-\\x09\\x0B\\x0C\\x0E-\\U0010FFFF]'
+DOT = '[^\\x0A\\x0D]'
 
 RESERVED_NAMES = set(["root", "dot", *PRIMITIVE_RULES.keys(), *STRING_FORMAT_RULES.keys()])
 
