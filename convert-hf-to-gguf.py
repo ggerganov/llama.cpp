@@ -1522,6 +1522,7 @@ class DbrxModel(Model):
 
             self.gguf_writer.add_tensor(new_name, data)
 
+
 @Model.register("MiniCPMForCausalLM")
 class MiniCPMModel(Model):
     model_arch = gguf.MODEL_ARCH.MINICPM
