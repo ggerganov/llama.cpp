@@ -1,4 +1,6 @@
 #include "common.h"
+#include "json.hpp"
+#include "json-schema-to-grammar.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -67,6 +69,8 @@
 #define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
 #define LLAMA_CURL_MAX_HEADER_LENGTH 256
 #endif // LLAMA_USE_CURL
+
+using json = nlohmann::ordered_json;
 
 int32_t get_num_physical_cores() {
 #ifdef __linux__
@@ -1148,6 +1152,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         );
         return true;
     }
+    if (arg == "-j" || arg == "--json-schema") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.grammar = json_schema_to_grammar(json::parse(argv[i]));
+        return true;
+    }
     if (arg == "--override-kv") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1353,6 +1365,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
     printf("  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
     printf("  --grammar-file FNAME  file to read grammar from\n");
+    printf("  -j SCHEMA, --json-schema SCHEMA\n");
+    printf("                        JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object.\n");
+    printf("                        For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead\n");
     printf("  --cfg-negative-prompt PROMPT\n");
     printf("                        negative prompt to use for guidance. (default: empty)\n");
     printf("  --cfg-negative-prompt-file FNAME\n");
