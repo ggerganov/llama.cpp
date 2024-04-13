@@ -139,4 +139,13 @@ pub fn build(b: *std.build.Builder) !void {
     if (server.target.isWindows()) {
         server.linkSystemLibrary("ws2_32");
     }
+
+    const server_assets = [_][]const u8{ "index.html", "index.js", "completion.js", "json-schema-to-grammar.mjs" };
+    for (server_assets) |asset| {
+        // Note: code can be simplified once setCwd is standard.
+        const gen_hpp = b.addSystemCommand(
+            &.{ "xxd", "-n", asset, "-i", b.fmt("examples/server/public/{s}", .{asset}), b.fmt("examples/server/{s}.hpp", .{asset}) },
+        );
+        server.step.dependOn(&gen_hpp.step);
+    }
 }
