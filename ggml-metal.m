@@ -1163,8 +1163,8 @@ static enum ggml_status ggml_metal_graph_compute(
 
                     float min;
                     float max;
-                    memcpy(&min, dst->op_params, sizeof(float));
-                    memcpy(&max, (float *) dst->op_params + 1, sizeof(float));
+                    memcpy(&min, ((int32_t *) dst->op_params) + 0, sizeof(float));
+                    memcpy(&max, ((int32_t *) dst->op_params) + 1, sizeof(float));
 
                     [encoder setComputePipelineState:pipeline];
                     [encoder setBuffer:id_src0   offset:offs_src0 atIndex:0];
