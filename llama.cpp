@@ -16477,7 +16477,7 @@ static int32_t llama_chat_apply_template_internal(
             ss << "### Response:\n";
         }
     } else if (tmpl == "command-r" || (tmpl.find("<|START_OF_TURN_TOKEN|>") != std::string::npos && tmpl.find("<|USER_TOKEN|>") != std::string::npos)) {
-	// CohereForAI/c4ai-command-r-plus
+        // CohereForAI/c4ai-command-r-plus
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "system") {
