@@ -2801,6 +2801,7 @@ namespace GGUFMeta {
                 case LLAMA_KV_OVERRIDE_TYPE_BOOL:  return "bool";
                 case LLAMA_KV_OVERRIDE_TYPE_INT:   return "int";
                 case LLAMA_KV_OVERRIDE_TYPE_FLOAT: return "float";
+                case LLAMA_KV_OVERRIDE_TYPE_STR:   return "str";
             }
             return "unknown";
         }
@@ -2819,6 +2820,9 @@ namespace GGUFMeta {
                     } break;
                     case LLAMA_KV_OVERRIDE_TYPE_FLOAT: {
                         LLAMA_LOG_INFO("%.6f\n", ovrd->float_value);
+                    } break;
+                    case LLAMA_KV_OVERRIDE_TYPE_STR: {
+                        LLAMA_LOG_INFO("%s\n", ovrd->str_value);
                     } break;
                     default:
                         // Shouldn't be possible to end up here, but just in case...
@@ -13698,6 +13702,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 gguf_set_val_i32(ctx_out, o.key, o.int_value);
             } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_BOOL) {
                 gguf_set_val_bool(ctx_out, o.key, o.bool_value);
+            } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_STR) {
+                gguf_set_val_str(ctx_out, o.key, o.str_value);
             } else {
                 LLAMA_LOG_WARN("%s: unknown KV override type for key %s\n", __func__, o.key);
             }

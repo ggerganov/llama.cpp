@@ -195,6 +195,7 @@ extern "C" {
         LLAMA_KV_OVERRIDE_TYPE_INT,
         LLAMA_KV_OVERRIDE_TYPE_FLOAT,
         LLAMA_KV_OVERRIDE_TYPE_BOOL,
+        LLAMA_KV_OVERRIDE_TYPE_STR,
     };
 
     struct llama_model_kv_override {
@@ -202,8 +203,9 @@ extern "C" {
         enum llama_model_kv_override_type tag;
         union {
             int64_t int_value;
-            double float_value;
-            bool bool_value;
+            double  float_value;
+            bool    bool_value;
+            char *  str_value   = nullptr;
         };
     };
 
