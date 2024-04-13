@@ -8,7 +8,6 @@
 #include <unordered_map>
 #include <fstream>
 #include <cmath>
-#include <algorithm>
 
 struct quant_option {
     std::string name;
@@ -53,6 +52,8 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing", },
 };
 
+static const char * const LLM_KV_QUANTIZE_IMATRIX_DATASET    = "quantize.imatrix.dataset";
+static const char * const LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES  = "quantize.imatrix.n_entries";
 
 static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
@@ -112,7 +113,7 @@ static void usage(const char * executable) {
     exit(1);
 }
 
-static void load_imatrix(const std::string & imatrix_file, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
+static void load_imatrix(const std::string & imatrix_file, std::string & imatrix_dataset, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
     std::ifstream in(imatrix_file.c_str(), std::ios::binary);
     if (!in) {
         printf("%s: failed to open %s\n",__func__, imatrix_file.c_str());
@@ -159,15 +160,27 @@ static void load_imatrix(const std::string & imatrix_file, std::unordered_map<st
             printf("%s: loaded data (size = %6d, ncall = %6d) for '%s'\n", __func__, int(e.size()), ncall, name.c_str());
         }
     }
+
+    // latest imatrix version contains the dataset filename at the end of the file
+    if (in.peek() != EOF) {
+        int dataset_len;
+        in.read((char *)&dataset_len, sizeof(dataset_len));
+        std::vector<char> dataset_as_vec(dataset_len+1);
+        in.read((char *)dataset_as_vec.data(), dataset_len);
+        dataset_as_vec[dataset_len] = 0;
+        imatrix_dataset = std::string{dataset_as_vec.data()};
+        printf("%s: imatrix dataset='%s'\n", __func__, imatrix_dataset.c_str());
+    }
     printf("%s: loaded %d importance matrix entries from %s\n", __func__, int(imatrix_data.size()), imatrix_file.c_str());
 }
 
 static void prepare_imatrix(const std::string & imatrix_file,
+        std::string & imatrix_dataset,
         const std::vector<std::string> & included_weights,
         const std::vector<std::string> & excluded_weights,
         std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
     if (!imatrix_file.empty()) {
-        load_imatrix(imatrix_file, imatrix_data);
+        load_imatrix(imatrix_file, imatrix_dataset, imatrix_data);
     }
     if (imatrix_data.empty()) {
         return;
@@ -208,43 +221,6 @@ static ggml_type parse_ggml_type(const char * arg) {
         }
     }
     return result;
-}
-
-static bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides) {
-    const char* sep = strchr(data, '=');
-    if (sep == nullptr || sep - data >= 128) {
-        fprintf(stderr, "%s: malformed KV override '%s'\n", __func__, data);
-        return false;
-    }
-    llama_model_kv_override kvo;
-    std::strncpy(kvo.key, data, sep - data);
-    kvo.key[sep - data] = 0;
-    sep++;
-    if (strncmp(sep, "int:", 4) == 0) {
-        sep += 4;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-        kvo.int_value = std::atol(sep);
-    } else if (strncmp(sep, "float:", 6) == 0) {
-        sep += 6;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-        kvo.float_value = std::atof(sep);
-    } else if (strncmp(sep, "bool:", 5) == 0) {
-        sep += 5;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
-        if (std::strcmp(sep, "true") == 0) {
-            kvo.bool_value = true;
-        } else if (std::strcmp(sep, "false") == 0) {
-            kvo.bool_value = false;
-        } else {
-            fprintf(stderr, "%s: invalid boolean value for KV override '%s'\n", __func__, data);
-            return false;
-        }
-    } else {
-        fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
-        return false;
-    }
-    overrides.emplace_back(std::move(kvo));
-    return true;
 }
 
 int main(int argc, char ** argv) {
@@ -313,10 +289,26 @@ int main(int argc, char ** argv) {
         usage(argv[0]);
     }
 
+    std::string imatrix_dataset;
     std::unordered_map<std::string, std::vector<float>> imatrix_data;
-    prepare_imatrix(imatrix_file, included_weights, excluded_weights, imatrix_data);
+    prepare_imatrix(imatrix_file, imatrix_dataset, included_weights, excluded_weights, imatrix_data);
     if (!imatrix_data.empty()) {
         params.imatrix = &imatrix_data;
+        if (!imatrix_dataset.empty()) {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_DATASET);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+            kvo.str_value = strdup(imatrix_dataset.c_str());
+            kv_overrides.emplace_back(std::move(kvo));
+        }
+
+        {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+            kvo.int_value = imatrix_data.size();
+            kv_overrides.emplace_back(std::move(kvo));
+        }
     }
     if (!kv_overrides.empty()) {
         kv_overrides.emplace_back();
