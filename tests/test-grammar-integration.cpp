@@ -10,6 +10,7 @@
 #include "unicode.h"
 #include <cassert>
 #include <string>
+#include <vector>
 
 static llama_grammar* build_grammar(const std::string & grammar_str) {
     auto parsed_grammar = grammar_parser::parse(grammar_str.c_str());
@@ -244,7 +245,9 @@ cons ::= [bcdfghjklmnpqrstvwxyz]
     };
 
     for (const auto & test_datum : test_data) {
-        const auto & [grammar_str, passing_strings, failing_strings] = test_datum;
+        const auto & grammar_str = std::get<0>(test_datum);
+        const auto & passing_strings = std::get<1>(test_datum);
+        const auto & failing_strings = std::get<2>(test_datum);
 
         auto grammar = build_grammar(grammar_str);
 
