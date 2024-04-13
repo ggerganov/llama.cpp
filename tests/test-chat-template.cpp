@@ -97,7 +97,6 @@ int main(void) {
         formatted_chat.resize(res);
         std::string output(formatted_chat.data(), formatted_chat.size());
         std::cout << output << "\n-------------------------\n";
-        std::cout << expected << "\n-------------------------\n";
         assert(output == expected);
     }
     return 0;
