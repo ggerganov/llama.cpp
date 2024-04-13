@@ -213,6 +213,15 @@ kernel void kernel_scale_4(
     dst[tpig] = src0[tpig] * scale;
 }
 
+kernel void kernel_clamp(
+        device const float * src0,
+        device       float * dst,
+        constant     float & min,
+        constant     float & max,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = src0[tpig] < min ? min : (src0[tpig] > max ? max : src0[tpig]);
+}
+
 kernel void kernel_relu(
         device const float * src0,
         device       float * dst,
