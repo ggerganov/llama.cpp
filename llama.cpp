@@ -241,7 +241,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_NOMIC_BERT,      "nomic-bert" },
     { LLM_ARCH_BLOOM,           "bloom"      },
     { LLM_ARCH_STABLELM,        "stablelm"   },
-    { LLM_ARCH_STABLELM,        "stablelm2"  },
+    { LLM_ARCH_STABLELM2,       "stablelm2"  },
     { LLM_ARCH_QWEN,            "qwen"       },
     { LLM_ARCH_QWEN2,           "qwen2"      },
     { LLM_ARCH_PHI2,            "phi2"       },
