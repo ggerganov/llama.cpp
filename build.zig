@@ -145,38 +145,23 @@ pub fn build(b: *std.build.Builder) !void {
         const input_path = b.fmt("examples/server/public/{s}", .{asset});
         const output_path = b.fmt("examples/server/{s}.hpp", .{asset});
 
-        const input_file = try std.fs.cwd().openFile(input_path, .{});
-        defer input_file.close();
-        const input = try input_file.readToEndAlloc(b.allocator, std.math.maxInt(usize));
+        const input = try std.fs.cwd().readFileAlloc(b.allocator, input_path, std.math.maxInt(usize));
         defer b.allocator.free(input);
 
-        const hex = try b.allocator.alloc(u8, input.len * 6);
-        defer b.allocator.free(hex);
-        var i: usize = 0;
+        var buf = std.ArrayList(u8).init(b.allocator);
+        defer buf.deinit();
+
         for (input) |byte| {
-            const high = byte >> 4;
-            const low = byte & 0xF;
-            hex[i] = '0';
-            hex[i + 1] = 'x';
-            hex[i + 2] = if (high < 10) high + '0' else high - 10 + 'A';
-            hex[i + 3] = if (low < 10) low + '0' else low - 10 + 'A';
-            hex[i + 4] = ',';
-            hex[i + 5] = ' ';
-            i += 6;
+            try std.fmt.format(buf.writer(), "0x{X:0>2}, ", .{byte});
         }
 
-        const output_file = try std.fs.cwd().createFile(output_path, .{});
-        defer output_file.close();
-
-        const name = try b.allocator.alloc(u8, asset.len);
+        var name = try std.mem.replaceOwned(u8, b.allocator, asset, "-", "_");
         defer b.allocator.free(name);
-        std.mem.copy(u8, name, asset);
-        std.mem.replaceScalar(u8, name, '-', '_');
         std.mem.replaceScalar(u8, name, '.', '_');
 
-        try output_file.writeAll(b.fmt(
+        try std.fs.cwd().writeFile(output_path, b.fmt(
             "unsigned char {s}[] = {{{s}}};\nunsigned int {s}_len = {d};\n",
-            .{ name, hex, name, input.len },
+            .{ name, buf.items, name, input.len },
         ));
 
         std.debug.print("Dumped hex of \"{s}\" ({s}) to {s}\n", .{ input_path, name, output_path });
