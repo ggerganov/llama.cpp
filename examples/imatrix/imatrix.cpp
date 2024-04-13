@@ -210,6 +210,9 @@ void IMatrixCollector::save_imatrix(const char * fname, const char * dataset) co
         if (nval > 0) out.write((const char *) p.second.values.data(), nval * sizeof(float));
     }
 
+    // Write the number of call the matrix was computed with
+    out.write((const char *) &m_last_call, sizeof(m_last_call));
+
     // Write the dataset name at the end of the file to later on specify it in quantize
     int n_dataset = strlen(dataset);
     out.write((const char *) &n_dataset, sizeof(n_dataset));

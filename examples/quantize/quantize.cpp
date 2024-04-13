@@ -53,7 +53,8 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
 };
 
 static const char * const LLM_KV_QUANTIZE_IMATRIX_DATASET    = "quantize.imatrix.dataset";
-static const char * const LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES  = "quantize.imatrix.n_entries";
+static const char * const LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES  = "quantize.imatrix.entries_count";
+static const char * const LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS   = "quantize.imatrix.chunks_count";
 
 static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
@@ -113,7 +114,7 @@ static void usage(const char * executable) {
     exit(1);
 }
 
-static void load_imatrix(const std::string & imatrix_file, std::string & imatrix_dataset, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
+static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_dataset, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
     std::ifstream in(imatrix_file.c_str(), std::ios::binary);
     if (!in) {
         printf("%s: failed to open %s\n",__func__, imatrix_file.c_str());
@@ -162,7 +163,9 @@ static void load_imatrix(const std::string & imatrix_file, std::string & imatrix
     }
 
     // latest imatrix version contains the dataset filename at the end of the file
+    int m_last_call = 0;
     if (in.peek() != EOF) {
+        in.read((char *)&m_last_call, sizeof(m_last_call));
         int dataset_len;
         in.read((char *)&dataset_len, sizeof(dataset_len));
         std::vector<char> dataset_as_vec(dataset_len+1);
@@ -171,19 +174,21 @@ static void load_imatrix(const std::string & imatrix_file, std::string & imatrix
         imatrix_dataset = std::string{dataset_as_vec.data()};
         printf("%s: imatrix dataset='%s'\n", __func__, imatrix_dataset.c_str());
     }
-    printf("%s: loaded %d importance matrix entries from %s\n", __func__, int(imatrix_data.size()), imatrix_file.c_str());
+    printf("%s: loaded %d importance matrix entries from %s computed on %d chunks\n", __func__, int(imatrix_data.size()), imatrix_file.c_str(), m_last_call);
+    return m_last_call;
 }
 
-static void prepare_imatrix(const std::string & imatrix_file,
+static int prepare_imatrix(const std::string & imatrix_file,
         std::string & imatrix_dataset,
         const std::vector<std::string> & included_weights,
         const std::vector<std::string> & excluded_weights,
         std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
+    int m_last_call = -1;
     if (!imatrix_file.empty()) {
-        load_imatrix(imatrix_file, imatrix_dataset, imatrix_data);
+        m_last_call = load_imatrix(imatrix_file, imatrix_dataset, imatrix_data);
     }
     if (imatrix_data.empty()) {
-        return;
+        return m_last_call;
     }
     if (!excluded_weights.empty()) {
         for (auto& name : excluded_weights) {
@@ -209,6 +214,7 @@ static void prepare_imatrix(const std::string & imatrix_file,
     if (!imatrix_data.empty()) {
         printf("%s: have %d importance matrix entries\n", __func__, int(imatrix_data.size()));
     }
+    return m_last_call;
 }
 
 static ggml_type parse_ggml_type(const char * arg) {
@@ -291,7 +297,7 @@ int main(int argc, char ** argv) {
 
     std::string imatrix_dataset;
     std::unordered_map<std::string, std::vector<float>> imatrix_data;
-    prepare_imatrix(imatrix_file, imatrix_dataset, included_weights, excluded_weights, imatrix_data);
+    int m_last_call = prepare_imatrix(imatrix_file, imatrix_dataset, included_weights, excluded_weights, imatrix_data);
     if (!imatrix_data.empty()) {
         params.imatrix = &imatrix_data;
         if (!imatrix_dataset.empty()) {
@@ -307,6 +313,14 @@ int main(int argc, char ** argv) {
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES);
             kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
             kvo.int_value = imatrix_data.size();
+            kv_overrides.emplace_back(std::move(kvo));
+        }
+
+        if (m_last_call > 0) {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+            kvo.int_value = m_last_call;
             kv_overrides.emplace_back(std::move(kvo));
         }
     }
