@@ -9930,9 +9930,9 @@ static struct ggml_cgraph * llama_build_graph(
                 result = llm.build_command_r();
             } break;
         case LLM_ARCH_DBRX:
-        {
-            result = llm.build_dbrx();
-        } break;
+            {
+                result = llm.build_dbrx();
+            } break;
         default:
             GGML_ASSERT(false);
     }
