@@ -20,8 +20,10 @@ set -x
 
 SPLIT=$1/gguf-split
 MAIN=$1/main
-WORK_PATH=$TMP_DIR
+WORK_PATH=$TMP_DIR/gguf-split
 CUR_DIR=$(pwd)
+
+mkdir -p "$WORK_PATH"
 
 # 1. Get a model
 (
