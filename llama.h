@@ -205,7 +205,7 @@ extern "C" {
             int64_t int_value;
             double  float_value;
             bool    bool_value;
-            char *  str_value   = nullptr;
+            char *  str_value;
         };
     };
 
