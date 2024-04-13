@@ -1655,9 +1655,9 @@ class GPT2Model(Model):
             self.gguf_writer.add_tensor(new_name, data)
 
             # note: GPT2 output is tied to (same as) wte in original model
-            if new_name == "token_embd.weight":
-                print(f"output.weight, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
-                self.gguf_writer.add_tensor("output.weight", data)
+            # if new_name == "token_embd.weight":
+            #     print(f"output.weight, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            #     self.gguf_writer.add_tensor("output.weight", data)
 
 
 @Model.register("PhiForCausalLM")

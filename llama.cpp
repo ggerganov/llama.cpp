@@ -11146,8 +11146,11 @@ struct llm_tokenizer_bpe {
 
                 const std::string str = std::string(symbol.text, symbol.n);
                 const auto token = vocab.token_to_id.find(str);
-
-                if (token == vocab.token_to_id.end()) {
+                // U+000A -> Ċ -> [UNK] (line feed, use [SEP] instead)
+                // U+0020 -> Ġ -> [UNK] (space, use U+3000 instead)
+                if (str == "Ċ" || str == "Ġ") {
+                    output.push_back(vocab.token_to_id.at("[UNK]"));
+                } else if (token == vocab.token_to_id.end()) {
                     for (auto j = str.begin(); j != str.end(); ++j) {
                         std::string byte_str(1, *j);
                         auto token_multibyte = vocab.token_to_id.find(byte_str);
