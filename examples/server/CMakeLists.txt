@@ -1,4 +1,4 @@
-set(SERVER_ASSETS 
+set(SERVER_ASSETS
     index.html
     index.js
     completion.js

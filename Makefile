@@ -794,7 +794,7 @@ server: examples/server/server.cpp examples/server/utils.hpp examples/server/htt
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
 
 examples/server/%.hpp: examples/server/public/%
-	xxd -n $(notdir $<) -i $< $@
+	( cd examples/server/public && xxd -i $(notdir $<) ../$(notdir $<).hpp )
 
 gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
