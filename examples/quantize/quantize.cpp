@@ -52,6 +52,7 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing", },
 };
 
+static const char * const LLM_KV_QUANTIZE_IMATRIX_FILE       = "quantize.imatrix.file";
 static const char * const LLM_KV_QUANTIZE_IMATRIX_DATASET    = "quantize.imatrix.dataset";
 static const char * const LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES  = "quantize.imatrix.entries_count";
 static const char * const LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS   = "quantize.imatrix.chunks_count";
@@ -300,6 +301,13 @@ int main(int argc, char ** argv) {
     int m_last_call = prepare_imatrix(imatrix_file, imatrix_dataset, included_weights, excluded_weights, imatrix_data);
     if (!imatrix_data.empty()) {
         params.imatrix = &imatrix_data;
+        {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_FILE);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+            kvo.str_value = strdup(imatrix_file.c_str());
+            kv_overrides.emplace_back(std::move(kvo));
+        }
         if (!imatrix_dataset.empty()) {
             llama_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_DATASET);
