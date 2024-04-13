@@ -16809,25 +16809,51 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
+class host_buffer {
+  private:
+    char *buf;
+    size_t size;
+
+  public:
+    host_buffer() {
+        buf = nullptr;
+        size = 0;
+    };
+
+    char *get_buffer(size_t new_size) {
+        if (new_size <= size)
+            return buf;
+        if (buf)
+            free(buf);
+        buf = (char *)malloc(new_size);
+        size = new_size;
+        return buf;
+    }
+
+    ~host_buffer() {
+        if (buf)
+            free(buf);
+    };
+};
+
 static void ggml_backend_sycl_buffer_set_tensor(ggml_backend_buffer_t buffer,
                                                 ggml_tensor *tensor,
                                                 const void *data, size_t offset,
                                                 size_t size) try {
     GGML_ASSERT(tensor->backend == GGML_BACKEND_TYPE_GPU);
-
+    static host_buffer g_set_tensor_host_buffer;
     ggml_backend_sycl_buffer_context * ctx = ( ggml_backend_sycl_buffer_context *)buffer->context;
 
     ggml_sycl_set_device(ctx->device);
     const dpct::queue_ptr stream = g_syclStreams[ctx->device][0];
     SYCL_CHECK(
         CHECK_TRY_ERROR(dpct::dev_mgr::instance().get_device(ctx->device).queues_wait_and_throw()));
-    char* host_buf = (char*)malloc(size);
+    char* host_buf = g_set_tensor_host_buffer.get_buffer(size);
     memcpy(host_buf, data, size);
     SYCL_CHECK(
         CHECK_TRY_ERROR((*stream)
                              .memcpy((char *)tensor->data + offset, host_buf, size)
                              .wait()));
-    free(host_buf);
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
