@@ -5054,8 +5054,8 @@ static bool llm_load_tensors(
                         layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, false);
 
                         // optional q and k layernorms, present in StableLM 2 12B
-                        layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM,"weight", i), {hparams.n_embd_head_k, hparams.n_head}, false);
-                        layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM,"weight", i), {hparams.n_embd_head_k, hparams.n_head_kv}, false);
+                        layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head}, false);
+                        layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {hparams.n_embd_head_k, hparams.n_head_kv}, false);
 
                         // optional FFN norm, not present in StableLM 2 12B which uses parallel residual
                         layer.ffn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, false);
@@ -8118,18 +8118,18 @@ struct llm_build_context {
                 cb(Kcur, "Kcur", il);
 
                 if (model.layers[il].attn_q_norm) {
-                   Qcur = llm_build_norm(ctx0, Qcur, hparams,
-                           model.layers[il].attn_q_norm,
-                           NULL,
-                           LLM_NORM, cb, il);
-                   cb(Qcur, "Qcur", il);
+                    Qcur = llm_build_norm(ctx0, Qcur, hparams,
+                            model.layers[il].attn_q_norm,
+                            NULL,
+                            LLM_NORM, cb, il);
+                    cb(Qcur, "Qcur", il);
                 }
                 if (model.layers[il].attn_k_norm) {
-                   Kcur = llm_build_norm(ctx0, Kcur, hparams,
-                           model.layers[il].attn_k_norm,
-                           NULL,
-                           LLM_NORM, cb, il);
-                   cb(Kcur, "Kcur", il);
+                    Kcur = llm_build_norm(ctx0, Kcur, hparams,
+                            model.layers[il].attn_k_norm,
+                            NULL,
+                            LLM_NORM, cb, il);
+                    cb(Kcur, "Kcur", il);
                 }
 
 
