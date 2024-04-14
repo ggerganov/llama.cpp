@@ -196,6 +196,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.MAMBA:          "mamba",
     MODEL_ARCH.XVERSE:         "xverse",
     MODEL_ARCH.COMMAND_R:      "command-r",
+    MODEL_ARCH.DBRX:           "dbrx",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
