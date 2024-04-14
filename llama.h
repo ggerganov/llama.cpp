@@ -290,6 +290,7 @@ extern "C" {
         bool pure;                           // quantize all tensors to the default type
         void * imatrix;                      // pointer to importance matrix data
         void * kv_overrides;                 // pointer to vector containing overrides
+        bool keep_split;                     // quantize to the same number of shards
     } llama_model_quantize_params;
 
     // grammar types

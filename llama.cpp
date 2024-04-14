@@ -3197,6 +3197,10 @@ struct llama_model_loader {
         return nullptr;
     }
 
+    const llama_tensor_weight * get_weight(int i) const {
+        return get_weight(get_tensor_name(i));
+    }
+
     const llama_tensor_weight & require_weight(const char * name) const {
         const llama_tensor_weight * weight = get_weight(name);
         if (!weight) {
@@ -13530,6 +13534,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
+    std::vector<gguf_context*> ctx_outs = {ctx_out};
 
     // copy the KV pairs from the input file
     gguf_set_kv     (ctx_out, ml.meta);
@@ -13593,24 +13598,63 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     // populate the original tensors so we get an initial meta data
     for (int i = 0; i < ml.n_tensors; ++i) {
-        const struct ggml_tensor * meta = ml.get_tensor_meta(i);
-        gguf_add_tensor(ctx_out, meta);
+        auto weight = ml.get_weight(i);
+        struct ggml_tensor * tensor = weight->tensor;
+        if (weight->idx != (ctx_outs.size() - 1) && params->keep_split) {
+            ctx_out = gguf_init_empty();
+            ctx_outs.push_back(ctx_out);
+        }
+        gguf_add_tensor(ctx_out, tensor);
     }
 
-    std::ofstream fout(fname_out, std::ios::binary);
-    fout.exceptions(std::ofstream::failbit); // fail fast on write errors
+    // Set split info if needed
+    uint16_t n_split = ctx_outs.size();
+    if (n_split > 1) {
+        for (int i = 0; i < ctx_outs.size(); ++i) {
+            gguf_set_val_u16(ctx_outs[i], ml.llm_kv(LLM_KV_SPLIT_NO).c_str(), i);
+            gguf_set_val_u16(ctx_outs[i], ml.llm_kv(LLM_KV_SPLIT_COUNT).c_str(), n_split);
+            gguf_set_val_i32(ctx_outs[i], ml.llm_kv(LLM_KV_SPLIT_TENSORS_COUNT).c_str(), ml.n_tensors);
+        }
+    }
+    
+    int cur_split = -1;
+    std::ofstream fout;
+    auto close_ofstream = [&]() {
+        // Write metadata and close file handler
+        if (fout.is_open()) {
+            fout.seekp(0);
+            std::vector<uint8_t> data(gguf_get_meta_size(ctx_outs[cur_split]));
+            gguf_get_meta_data(ctx_outs[cur_split], data.data());
+            fout.write((const char *) data.data(), data.size());
+            fout.close();
+        }
+    };
+    auto new_ofstream = [&]() {
+        ++cur_split;
+        std::string fname = fname_out;
+        if (params->keep_split) {
+            char split_path[PATH_MAX] = {0};
+            llama_split_path(split_path, sizeof(split_path), fname_out.c_str(), cur_split, n_split);
+            fname = std::string(split_path);
+        }
 
-    const size_t meta_size = gguf_get_meta_size(ctx_out);
-
-    LLAMA_LOG_INFO("%s: meta size = %zu bytes\n", __func__, meta_size);
-
-    // placeholder for the meta data
-    ::zeros(fout, meta_size);
+        fout = std::ofstream(fname, std::ios::binary);
+        fout.exceptions(std::ofstream::failbit); // fail fast on write errors
+        const size_t meta_size = gguf_get_meta_size(ctx_outs[cur_split]);
+        // placeholder for the meta data
+        ::zeros(fout, meta_size);
+    };
 
     const auto tn = LLM_TN(model.arch);
-
+    new_ofstream();
     for (int i = 0; i < ml.n_tensors; ++i) {
-        struct ggml_tensor * tensor = ml.get_tensor_meta(i);
+        auto weight = ml.get_weight(i);
+        struct ggml_tensor * tensor = weight->tensor;
+        if (weight->idx != cur_split && params->keep_split) {
+            GGML_ASSERT(cur_split == weight->idx-1 && "Invalid split index found in weight");
+            close_ofstream();
+            new_ofstream();
+        }
 
         const std::string name = ggml_get_name(tensor);
 
@@ -13765,25 +13809,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         total_size_new += new_size;
 
         // update the gguf meta data as we go
-        gguf_set_tensor_type(ctx_out, name.c_str(), new_type);
-        gguf_set_tensor_data(ctx_out, name.c_str(), new_data, new_size);
+        gguf_set_tensor_type(ctx_outs[cur_split], name.c_str(), new_type);
+        gguf_set_tensor_data(ctx_outs[cur_split], name.c_str(), new_data, new_size);
 
         // write tensor data + padding
         fout.write((const char *) new_data, new_size);
         zeros(fout, GGML_PAD(new_size, align) - new_size);
     }
-
-    // go back to beginning of file and write the updated meta data
-    {
-        fout.seekp(0);
-        std::vector<uint8_t> data(gguf_get_meta_size(ctx_out));
-        gguf_get_meta_data(ctx_out, data.data());
-        fout.write((const char *) data.data(), data.size());
+    close_ofstream();
+    for (auto & c:ctx_outs) {
+        gguf_free(c);
     }
-
-    fout.close();
-
-    gguf_free(ctx_out);
 
     LLAMA_LOG_INFO("%s: model size  = %8.2f MB\n", __func__, total_size_org/1024.0/1024.0);
     LLAMA_LOG_INFO("%s: quant size  = %8.2f MB\n", __func__, total_size_new/1024.0/1024.0);
