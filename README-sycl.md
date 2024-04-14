@@ -68,7 +68,7 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 
 | Intel GPU                     | Status  | Verified Model                        |
 |-------------------------------|---------|---------------------------------------|
-| Intel Data Center Max Series  | Support | Max 1550                              |
+| Intel Data Center Max Series  | Support | Max 1550, 1100                        |
 | Intel Data Center Flex Series | Support | Flex 170                              |
 | Intel Arc Series              | Support | Arc 770, 730M                         |
 | Intel built-in Arc GPU        | Support | built-in Arc GPU in Meteor Lake       |
@@ -84,8 +84,7 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 - **Execution Unit (EU)**
   - If the iGPU has less than 80 EUs, the inference speed will likely be too slow for practical use.
 
-### Nvidia GPU
-The BLAS acceleration on Nvidia GPU through oneAPI can be obtained using the Nvidia plugins for oneAPI and the cuBLAS backend of the upstream oneMKL library. Details and instructions on how to setup the runtime and library can be found in [this section](#i-setup-environment)
+### Other Vendor GPU
 
 **Verified devices**
 
@@ -94,14 +93,9 @@ The BLAS acceleration on Nvidia GPU through oneAPI can be obtained using the Nvi
 | Ampere Series            | Support | A100, A4000    |
 | Ampere Series *(Mobile)* | Support | RTX 40 Series  |
 
-*Notes:*
-  - Support for Nvidia targets through oneAPI is currently limited to Linux platforms.
-
-  - Please make sure the native oneAPI MKL *(dedicated to intel CPUs and GPUs)* is not "visible" at this stage to properly setup and use the built-from-source oneMKL with cuBLAS backend in llama.cpp for Nvidia GPUs.
-
-
 ## Docker
 The docker build option is currently limited to *intel GPU* targets.
+
 ### Build image
 ```sh
 # Using FP16
@@ -168,29 +162,10 @@ Platform #0: Intel(R) OpenCL HD Graphics
 - **Nvidia GPU**
 
 In order to target Nvidia GPUs through SYCL, please make sure the CUDA/CUBLAS native requirements *-found [here](README.md#cuda)-* are installed.
-Installation can be verified by running the following:
-```sh
-nvidia-smi
-```
-Please make sure at least one CUDA device is available, which can be displayed like this *(here an A100-40GB Nvidia GPU)*:
-```
-+---------------------------------------------------------------------------------------+
-| NVIDIA-SMI 535.54.03              Driver Version: 535.54.03    CUDA Version: 12.2     |
-|-----------------------------------------+----------------------+----------------------+
-| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
-|                                         |                      |               MIG M. |
-|=========================================+======================+======================|
-|   0  NVIDIA A100-PCIE-40GB          On  | 00000000:8D:00.0 Off |                    0 |
-| N/A   36C    P0              57W / 250W |      4MiB / 40960MiB |      0%      Default |
-|                                         |                      |             Disabled |
-+-----------------------------------------+----------------------+----------------------+
-```
-
 
 2. **Install Intel® oneAPI Base toolkit**
 
-- **Base installation**
+- **For Intel GPU**
 
 The base toolkit can be obtained from the official [Intel® oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html) page.
 
@@ -202,10 +177,10 @@ Upon a successful installation, SYCL is enabled for the available intel devices,
 
 - **Adding support to Nvidia GPUs**
 
-**oneAPI**: In order to enable SYCL support on Nvidia GPUs, please install the [Codeplay oneAPI Plugin for Nvidia GPUs](https://developer.codeplay.com/products/oneapi/nvidia/download). User should also make sure the plugin version matches the installed base toolkit one *(previous step)* for a seamless "oneAPI on Nvidia GPU" setup.
+**oneAPI Plugin**: In order to enable SYCL support on Nvidia GPUs, please install the [Codeplay oneAPI Plugin for Nvidia GPUs](https://developer.codeplay.com/products/oneapi/nvidia/download). User should also make sure the plugin version matches the installed base toolkit one *(previous step)* for a seamless "oneAPI on Nvidia GPU" setup.
 
 
-**oneMKL**: The current oneMKL releases *(shipped with the oneAPI base-toolkit)* do not contain the cuBLAS backend. A build from source of the upstream [oneMKL](https://github.com/oneapi-src/oneMKL) with the *cuBLAS* backend enabled is thus required to run it on Nvidia GPUs.
+**oneMKL for cuBlas**: The current oneMKL releases *(shipped with the oneAPI base-toolkit)* do not contain the cuBLAS backend. A build from source of the upstream [oneMKL](https://github.com/oneapi-src/oneMKL) with the *cuBLAS* backend enabled is thus required to run it on Nvidia GPUs.
 
 ```sh
 git clone https://github.com/oneapi-src/oneMKL
@@ -237,7 +212,7 @@ When targeting an intel GPU, the user should expect one or more level-zero devic
 
 - **Nvidia GPU**
 
-Similarly, user targetting Nvidia GPUs should expect at least one SYCL-CUDA device [`ext_oneapi_cuda:gpu`] as bellow:
+Similarly, user targeting Nvidia GPUs should expect at least one SYCL-CUDA device [`ext_oneapi_cuda:gpu`] as bellow:
 ```
 [opencl:acc:0] Intel(R) FPGA Emulation Platform for OpenCL(TM), Intel(R) FPGA Emulation Device OpenCL 1.2  [2023.16.12.0.12_195853.xmain-hotfix]
 [opencl:cpu:1] Intel(R) OpenCL, Intel(R) Xeon(R) Gold 6326 CPU @ 2.90GHz OpenCL 3.0 (Build 0) [2023.16.12.0.12_195853.xmain-hotfix]
@@ -260,6 +235,9 @@ cmake --build .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icp
 
 # Option 2: Use FP32 by default
 cmake --build .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+
+#build all binary
+cmake --build . --config Release -j -v
 ```
 
 #### Nvidia GPU
@@ -278,6 +256,10 @@ cmake --build .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=i
 
 # Option 2: Use FP32 by default
 cmake --build .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+
+#build all binary
+cmake --build . --config Release -j -v
+
 ```
 
 ### III. Run the inference
@@ -357,7 +339,6 @@ Otherwise, you can run the script:
 
 *Notes:*
 
-- By default, `mmap` is used to read the model file. In some cases, it causes runtime hang issues. Please disable it by passing `--no-mmap` to the `/bin/main` if faced with the issue.
 - Upon execution, verify the selected device(s) ID(s) in the output log, which can for instance be displayed as follow:
 
 ```sh
@@ -438,7 +419,7 @@ cd build
 
 cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
 
-make
+make -j
 ```
 
 Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former instructions:
@@ -525,7 +506,6 @@ Otherwise, run the following wrapper script:
 
 Note:
 
-- By default, `mmap` is used to read the model file. In some cases, it causes runtime hang issues. Please disable it by passing `--no-mmap` to the `main.exe` if faced with the issue.
 - Upon execution, verify the selected device(s) ID(s) in the output log, which can for instance be displayed as follow:
 
 ```sh
@@ -557,12 +537,6 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 
 ## Known Issues
 
-- Hanging during startup
-
-  llama.cpp uses *mmap* as the default mode for reading the model file and copying it to the GPU. In some systems, `memcpy` might behave abnormally and therefore hang.
-
-  - **Solution**: add `--no-mmap` or `--mmap 0` flag to the `main` executable.
-
 - `Split-mode:[row]` is not supported.
 
 ## Q&A
@@ -574,7 +548,7 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 
 - General compiler error:
 
-  - Remove build folder or try a clean-build.
+  - Remove **build** folder or try a clean-build.
 
 - I can **not** see `[ext_oneapi_level_zero:gpu]` afer installing the GPU driver on Linux.
 
