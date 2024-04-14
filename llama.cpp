@@ -13063,6 +13063,11 @@ struct llama_beam_search_data {
             }
             llama_logit_info logit_info(ctx);
             std::vector<llama_token_data> next_tokens = logit_info.top_k(n_beams);
+
+            // Clear the kv slot so that other beams may try different tokens at this position. The llama_decode()
+            // call in loop() will conclusively fill in the kv slot once the beams converge at this position.
+            llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
+
             size_t i=0;
             if (next_beams.size() < n_beams) {
                 for (; next_beams.size() < n_beams ; ++i) {
