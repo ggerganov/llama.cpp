@@ -25,6 +25,9 @@ CUR_DIR=$(pwd)
 
 mkdir -p "$WORK_PATH"
 
+# Clean up in case of previously failed test
+rm -f $WORK_PATH/ggml-model-split*.gguf $WORK_PATH/ggml-model-merge*.gguf
+
 # 1. Get a model
 (
   cd $WORK_PATH
@@ -81,3 +84,6 @@ echo
 $MAIN --model $WORK_PATH/ggml-model-split-2G-00001-of-00002.gguf --random-prompt --n-predict 32
 echo PASS
 echo
+
+# Clean up
+rm -f $WORK_PATH/ggml-model-split*.gguf $WORK_PATH/ggml-model-merge*.gguf
