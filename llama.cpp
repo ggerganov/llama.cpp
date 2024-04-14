@@ -8124,7 +8124,7 @@ struct llm_build_context {
                            LLM_NORM, cb, il);
                    cb(Qcur, "Qcur", il);
                 }
-                if (model.layers[il].attn_q_norm) {
+                if (model.layers[il].attn_k_norm) {
                    Kcur = llm_build_norm(ctx0, Kcur, hparams,
                            model.layers[il].attn_k_norm,
                            NULL,
@@ -8175,7 +8175,7 @@ struct llm_build_context {
                 } else {
                     // parallel residual
                     cur = inpSA;
-                 }
+                }
                 cur = llm_build_ffn(ctx0, cur,
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
