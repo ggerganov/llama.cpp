@@ -8088,9 +8088,7 @@ struct llm_build_context {
                     model.layers[il].attn_norm_b,
                     LLM_NORM, cb, il);
             cb(cur, "attn_norm", il);
-            if(n_layer >= 40) {
-                ffn_inp = cur;
-            }
+            ffn_inp = cur;
 
             // self-attention
             {
@@ -8178,9 +8176,7 @@ struct llm_build_context {
                 ffn_inp = ggml_add(ctx0, cur, inpSA);
                 cb(ffn_inp, "ffn_inp", il);
             }
-            else {
-                attn_out = cur;
-            }
+            attn_out = cur;
 
             // feed-forward network
             {
