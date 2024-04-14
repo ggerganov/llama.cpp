@@ -1186,20 +1186,6 @@ class PersimmonModel(Model):
 @Model.register("StableLmForCausalLM", "StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM")
 class StableLMModel(Model):
     model_arch = gguf.MODEL_ARCH.STABLELM
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.model_arch = (
-            gguf.MODEL_ARCH.STABLELM
-            if self.hparams["num_hidden_layers"] < 40
-            else gguf.MODEL_ARCH.STABLELM2
-        )
-        self.gguf_writer = gguf.GGUFWriter(
-            self.fname_out,
-            gguf.MODEL_ARCH_NAMES[self.model_arch],
-            endianess=self.endianess,
-            use_temp_file=False,
-        )
-
     def set_vocab(self):
         if (self.dir_model / "tokenizer.json").is_file():
             self._set_vocab_gpt2()

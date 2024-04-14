@@ -113,7 +113,6 @@ class MODEL_ARCH(IntEnum):
     NOMIC_BERT = auto()
     BLOOM = auto()
     STABLELM = auto()
-    STABLELM2 = auto()
     QWEN = auto()
     QWEN2 = auto()
     PHI2 = auto()
@@ -184,7 +183,6 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.NOMIC_BERT:     "nomic-bert",
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
-    MODEL_ARCH.STABLELM2:      "stablelm2",
     MODEL_ARCH.QWEN:           "qwen",
     MODEL_ARCH.QWEN2:          "qwen2",
     MODEL_ARCH.PHI2:           "phi2",
@@ -438,20 +436,6 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.FFN_NORM,
-        MODEL_TENSOR.FFN_GATE,
-        MODEL_TENSOR.FFN_DOWN,
-        MODEL_TENSOR.FFN_UP,
-    ],
-    MODEL_ARCH.STABLELM2: [
-        MODEL_TENSOR.TOKEN_EMBD,
-        MODEL_TENSOR.OUTPUT_NORM,
-        MODEL_TENSOR.OUTPUT,
-        MODEL_TENSOR.ROPE_FREQS,
-        MODEL_TENSOR.ATTN_NORM,
-        MODEL_TENSOR.ATTN_Q,
-        MODEL_TENSOR.ATTN_K,
-        MODEL_TENSOR.ATTN_V,
-        MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
