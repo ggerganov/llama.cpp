@@ -1232,59 +1232,13 @@ class StableLMModel(Model):
             if name.find("q_layernorm.norms") != -1:
                 q_norms[name] = data
                 if len(q_norms) >= (block_count * n_head):
-                    for bid in range(block_count):
-                        datas = []
-                        for xid in range(n_head):
-                            ename = f"model.layers.{bid}.self_attn.q_layernorm.norms.{xid}.weight"
-                            datas.append(q_norms[ename])
-                            del q_norms[ename]
-                        data = np.stack(datas, axis=0)
-                        data_dtype = data.dtype
-                        merged_name = f"model.layers.{bid}.self_attn.q_layernorm.weight"
-                        new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
-                        if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
-                            data = data.astype(np.float32)
-
-                        # if f16 desired, convert any float32 2-dim weight tensors to float16
-                        if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
-                            data = data.astype(np.float16)
-                        if new_name is None:
-                            print(f"Can not map tensor {name!r}")
-                            sys.exit()
-
-                        print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
-
-                        self.gguf_writer.add_tensor(new_name, data)
+                    self._stack_qk_norm(block_count, name, tensor_map, n_head, q_norms, n_dims, layer_name="q_layernorm")
                 continue
             if name.find("k_layernorm.norms") != -1:
                 k_norms[name] = data
                 if len(k_norms) >= (block_count * n_kv_head):
-                    for bid in range(block_count):
-                        full = True
-                        datas = []
-                        for xid in range(n_kv_head):
-                            ename = f"model.layers.{bid}.self_attn.k_layernorm.norms.{xid}.weight"
-                            datas.append(k_norms[ename])
-                            del k_norms[ename]
-                        data = np.stack(datas, axis=0)
-                        data_dtype = data.dtype
-                        merged_name = f"model.layers.{bid}.self_attn.k_layernorm.weight"
-                        new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
-                        if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
-                            data = data.astype(np.float32)
-
-                        # if f16 desired, convert any float32 2-dim weight tensors to float16
-                        if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
-                            data = data.astype(np.float16)
-                        if new_name is None:
-                            print(f"Can not map tensor {name!r}")
-                            sys.exit()
-
-                        print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
-
-                        self.gguf_writer.add_tensor(new_name, data)
+                    self._stack_qk_norm(block_count, name, tensor_map, n_kv_head, k_norms, n_dims, layer_name="k_layernorm")
                 continue
-
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
@@ -1308,6 +1262,30 @@ class StableLMModel(Model):
                 data = data.astype(np.float16)
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+    def _stack_qk_norm(self, block_count, name, tensor_map, n_head, norms, n_dims, layer_name="q_layernorm"):
+        for bid in range(block_count):
+            datas = []
+            for xid in range(n_head):
+                ename = f"model.layers.{bid}.self_attn.{layer_name}.norms.{xid}.weight"
+                datas.append(norms[ename])
+                del norms[ename]
+            data = np.stack(datas, axis=0)
+            data_dtype = data.dtype
+            merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
+            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
+                data = data.astype(np.float16)
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
