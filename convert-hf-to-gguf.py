@@ -164,7 +164,7 @@ class Model(ABC):
                 data = data.astype(np.float32)
 
             # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
@@ -1264,6 +1264,7 @@ class StableLMModel(Model):
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
+
     def _stack_qk_norm(self, block_count, name, tensor_map, n_head, norms, n_dims, layer_name="q_layernorm"):
         for bid in range(block_count):
             datas = []
@@ -1275,15 +1276,15 @@ class StableLMModel(Model):
             data_dtype = data.dtype
             merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
             if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
                 data = data.astype(np.float32)
 
             # if f16 desired, convert any float32 2-dim weight tensors to float16
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
                 data = data.astype(np.float16)
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
 
             print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
