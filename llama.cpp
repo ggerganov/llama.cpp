@@ -3567,6 +3567,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_3B:     return "3B";
         case MODEL_7B:     return "7B";
         case MODEL_8B:     return "8B";
+        case MODEL_12B:    return "12B";
         case MODEL_13B:    return "13B";
         case MODEL_14B:    return "14B";
         case MODEL_15B:    return "15B";
@@ -5052,16 +5053,14 @@ static bool llm_load_tensors(
                         layer.bk = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, false);
                         layer.bv = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, false);
 
-                        if (n_layer >= 40) {
-                            layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM,"weight", i), {hparams.n_embd_head_k, hparams.n_head});
-                            layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM,"weight", i), {hparams.n_embd_head_k, hparams.n_head_kv});
+                        // optional q and k layernorms, present in StableLM 2 12B
+                        layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM,"weight", i), {hparams.n_embd_head_k, hparams.n_head}, false);
+                        layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM,"weight", i), {hparams.n_embd_head_k, hparams.n_head_kv}, false);
 
-                        }
+                        // optional FFN norm, not present in StableLM 2 12B which uses parallel residual
+                        layer.ffn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, false);
+                        layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, false);
 
-                        if (n_layer < 40) {
-                            layer.ffn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
-                            layer.ffn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd});
-                        }
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
@@ -8068,8 +8067,6 @@ struct llm_build_context {
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
-        struct ggml_tensor * ffn_inp;
-        struct ggml_tensor * attn_out = cur;
 
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
 
@@ -8080,7 +8077,7 @@ struct llm_build_context {
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
         for (int il = 0; il < n_layer; ++il) {
-            struct ggml_tensor * inpSA = inpL;
+
 
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
@@ -8088,7 +8085,8 @@ struct llm_build_context {
                     model.layers[il].attn_norm_b,
                     LLM_NORM, cb, il);
             cb(cur, "attn_norm", il);
-            ffn_inp = cur;
+
+            struct ggml_tensor * inpSA = cur;
 
             // self-attention
             {
@@ -8113,25 +8111,20 @@ struct llm_build_context {
                     Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
                     cb(Vcur, "Vcur", il);
                 }
+
+                Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
+                cb(Qcur, "Qcur", il);
+                Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
+                cb(Kcur, "Kcur", il);
+
                 if (model.layers[il].attn_q_norm) {
-                   Qcur = ggml_view_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens,
-                           ggml_element_size(Qcur) * n_embd_head,
-                           ggml_element_size(Qcur) * n_embd_head * n_head,
-                           0);
-                   cb(Qcur, "Qcur", il);
-                   Kcur = ggml_view_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens,
-                           ggml_element_size(Kcur) * n_embd_head,
-                           ggml_element_size(Kcur) * n_embd_head * n_head_kv,
-                           0);
-                   cb(Kcur, "Kcur", il);
-
-
                    Qcur = llm_build_norm(ctx0, Qcur, hparams,
                            model.layers[il].attn_q_norm,
                            NULL,
                            LLM_NORM, cb, il);
                    cb(Qcur, "Qcur", il);
-
+                }
+                if (model.layers[il].attn_q_norm) {
                    Kcur = llm_build_norm(ctx0, Kcur, hparams,
                            model.layers[il].attn_k_norm,
                            NULL,
@@ -8141,14 +8134,14 @@ struct llm_build_context {
 
 
                 Qcur = ggml_rope_custom(
-                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos,
+                    ctx0, Qcur, inp_pos,
                     n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_custom(
-                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos,
+                    ctx0, Kcur, inp_pos,
                     n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
@@ -8159,62 +8152,49 @@ struct llm_build_context {
                         Kcur, Vcur, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
-            if (il == n_layer - 1 && n_layer < 40) {
+            if (il == n_layer - 1) {
                 // skip computing output for unused tokens
                 struct ggml_tensor * inp_out_ids = build_inp_out_ids();
                 cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
+                inpL  = ggml_get_rows(ctx0,  inpL, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
-            else if (il == n_layer - 1 && n_layer >= 40){
-                struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
-                inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
-                ffn_inp = ggml_get_rows(ctx0, ffn_inp, inp_out_ids);
-            }
-
-            if (n_layer < 40) {
-                ffn_inp = ggml_add(ctx0, cur, inpSA);
-                cb(ffn_inp, "ffn_inp", il);
-            }
-            attn_out = cur;
+            struct ggml_tensor * attn_out = cur;
+            // only used for non-parallel residual
+            struct ggml_tensor * ffn_inp  = ggml_add(ctx0, attn_out, inpL);
+            cb(cur, "ffn_inp", il);
 
             // feed-forward network
             {
-                if (n_layer < 40) {
+                if (model.layers[il].ffn_norm) {
                     cur = llm_build_norm(ctx0, ffn_inp, hparams,
                             model.layers[il].ffn_norm,
                             model.layers[il].ffn_norm_b,
                             LLM_NORM, cb, il);
                     cb(cur, "ffn_norm", il);
-                    cur = llm_build_ffn(ctx0, cur,
-                            model.layers[il].ffn_up,   NULL,
-                            model.layers[il].ffn_gate, NULL,
-                            model.layers[il].ffn_down, NULL,
-                            NULL,
-                            LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
-                    cb(cur, "ffn_out", il);
-                }
-                else {
-                    cur = llm_build_ffn(ctx0, ffn_inp,
-                        model.layers[il].ffn_up,   NULL,
-                        model.layers[il].ffn_gate, NULL,
-                        model.layers[il].ffn_down, NULL,
-                        NULL,
-                        LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
-                    cb(cur, "ffn_out", il);
-                }
+                } else {
+                    // parallel residual
+                    cur = inpSA;
+                 }
+                cur = llm_build_ffn(ctx0, cur,
+                         model.layers[il].ffn_up,   NULL,
+                         model.layers[il].ffn_gate, NULL,
+                         model.layers[il].ffn_down, NULL,
+                         NULL,
+                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
+                cb(cur, "ffn_out", il);
             }
 
-            if (n_layer < 40) {
+            if (model.layers[il].ffn_norm) {
+                // non-parallel residual
                 cur = ggml_add(ctx0, cur, ffn_inp);
-                cb(cur, "l_out", il);
-            }
-            else {
+            } else {
                 // add together residual + FFN + self-attention
                 cur = ggml_add(ctx0, cur, inpL);
                 cur = ggml_add(ctx0, cur, attn_out);
-                cb(cur, "l_out", il);
             }
+
+            cb(cur, "l_out", il);
 
             // input for next layer
             inpL = cur;
