@@ -1208,7 +1208,6 @@ class StableLMModel(Model):
             self._set_vocab_qwen()
 
     def set_gguf_parameters(self):
-        super().set_gguf_parameters()
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
 
@@ -1224,6 +1223,107 @@ class StableLMModel(Model):
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(self.find_hparam(["layer_norm_eps", "norm_eps"]))
 
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_head = self.hparams.get("num_attention_heads")
+        n_kv_head = self.hparams.get("num_key_value_heads")
+        q_norms = dict()
+        k_norms = dict()
+        for name, data_torch in self.get_tensors():
+            # we don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
+                continue
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+            n_dims = len(data.shape)
+            if name.find("q_layernorm.norms") != -1:
+                q_norms[name] = data
+                if len(q_norms) >= (block_count * n_head):
+                    for bid in range(block_count):
+                        datas = []
+                        for xid in range(n_head):
+                            ename = f"model.layers.{bid}.self_attn.q_layernorm.norms.{xid}.weight"
+                            datas.append(q_norms[ename])
+                            del q_norms[ename]
+                        data = np.stack(datas, axis=0)
+                        data_dtype = data.dtype
+                        merged_name = f"model.layers.{bid}.self_attn.q_layernorm.weight"
+                        new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+                        if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
+                            data = data.astype(np.float32)
+
+                        # if f16 desired, convert any float32 2-dim weight tensors to float16
+                        if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
+                            data = data.astype(np.float16)
+                        if new_name is None:
+                            print(f"Can not map tensor {name!r}")
+                            sys.exit()
+
+                        print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+
+                        self.gguf_writer.add_tensor(new_name, data)
+                continue
+            if name.find("k_layernorm.norms") != -1:
+                k_norms[name] = data
+                if len(k_norms) >= (block_count * n_kv_head):
+                    for bid in range(block_count):
+                        full = True
+                        datas = []
+                        for xid in range(n_kv_head):
+                            ename = f"model.layers.{bid}.self_attn.k_layernorm.norms.{xid}.weight"
+                            datas.append(k_norms[ename])
+                            del k_norms[ename]
+                        data = np.stack(datas, axis=0)
+                        data_dtype = data.dtype
+                        merged_name = f"model.layers.{bid}.self_attn.k_layernorm.weight"
+                        new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+                        if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
+                            data = data.astype(np.float32)
+
+                        # if f16 desired, convert any float32 2-dim weight tensors to float16
+                        if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
+                            data = data.astype(np.float16)
+                        if new_name is None:
+                            print(f"Can not map tensor {name!r}")
+                            sys.exit()
+
+                        print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+
+                        self.gguf_writer.add_tensor(new_name, data)
+                continue
+
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
 
 @Model.register("LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
 class LlamaModel(Model):
