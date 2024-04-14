@@ -8177,11 +8177,11 @@ struct llm_build_context {
                     cur = inpSA;
                  }
                 cur = llm_build_ffn(ctx0, cur,
-                         model.layers[il].ffn_up,   NULL,
-                         model.layers[il].ffn_gate, NULL,
-                         model.layers[il].ffn_down, NULL,
-                         NULL,
-                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
+                        model.layers[il].ffn_up,   NULL,
+                        model.layers[il].ffn_gate, NULL,
+                        model.layers[il].ffn_down, NULL,
+                        NULL,
+                        LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
 
