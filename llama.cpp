@@ -16625,6 +16625,21 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "### Response:\n";
         }
+    } else if (tmpl == "command-r" || (tmpl.find("<|START_OF_TURN_TOKEN|>") != std::string::npos && tmpl.find("<|USER_TOKEN|>") != std::string::npos)) {
+        // CohereForAI/c4ai-command-r-plus
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            } else if (role == "user") {
+                ss << "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            } else if (role == "assistant") {
+                ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            }
+        }
+        if (add_ass) {
+            ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>";
+        }
     } else {
         // template not supported
         return -1;
