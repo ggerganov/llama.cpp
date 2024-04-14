@@ -173,6 +173,7 @@ class TensorNameMap:
             "transformer.decoder_layer.{bid}.multi_head_attention.linear",  # Grok
             "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj",        # dbrx
        ),
+
         # Attention output norm
         MODEL_TENSOR.ATTN_OUT_NORM: (
             "encoder.layer.{bid}.attention.output.LayerNorm",  # bert
@@ -260,6 +261,7 @@ class TensorNameMap:
             "transformer.decoder_layer.{bid}.moe.linear",   # Grok (merged)
             "transformer.blocks.{bid}.ffn.experts.mlp.w1",  # dbrx
        ),
+
         # Feed-forward down
         MODEL_TENSOR.FFN_DOWN: (
             "gpt_neox.layers.{bid}.mlp.dense_4h_to_h",                # gptneox
