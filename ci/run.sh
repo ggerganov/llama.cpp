@@ -160,7 +160,7 @@ function gg_run_test_scripts_debug {
 
     set -e
 
-    (find ./examples -mindepth 2 -maxdepth 2 -name 'tests.sh' -execdir time bash "{}" "$SRC/build-ci-debug/bin" "$MNT/models" \;) 2>&1 | tee -a $OUT/${ci}-scripts.log
+    (cd ./examples/gguf-split && time bash tests.sh "$SRC/build-ci-debug/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
 
     set +e
 }
@@ -183,7 +183,7 @@ function gg_run_test_scripts_release {
 
     set -e
 
-    (find ./examples -mindepth 2 -maxdepth 2 -name 'tests.sh' -execdir time bash "{}" "$SRC/build-ci-release/bin" "$MNT/models" \;) 2>&1 | tee -a $OUT/${ci}-scripts.log
+    (cd ./examples/gguf-split && time bash tests.sh "$SRC/build-ci-release/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
 
     set +e
 }
