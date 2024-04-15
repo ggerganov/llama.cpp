@@ -15,4 +15,3 @@ extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_control;
 extern const std::multimap<uint32_t, uint32_t> unicode_map_nfd;
 extern const std::map<char32_t, char32_t> unicode_map_lowercase;
 extern const std::map<std::string, std::wstring> unicode_regex_to_wregex;
-extern const std::map<std::string, std::string> unicode_regex_to_regex;
