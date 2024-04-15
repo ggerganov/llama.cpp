@@ -145,6 +145,8 @@ pub fn build(b: *std.build.Builder) !void {
         const input_path = b.fmt("examples/server/public/{s}", .{asset});
         const output_path = b.fmt("examples/server/{s}.hpp", .{asset});
 
+        // Portable equivalent of `b.addSystemCommand(&.{ "xxd", "-n", asset, "-i", input_path, output_path }) })`:
+
         const input = try std.fs.cwd().readFileAlloc(b.allocator, input_path, std.math.maxInt(usize));
         defer b.allocator.free(input);
 

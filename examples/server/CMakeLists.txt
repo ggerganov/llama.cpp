@@ -9,7 +9,7 @@ foreach(asset ${SERVER_ASSETS})
     set(input "${CMAKE_CURRENT_SOURCE_DIR}/public/${asset}")
     set(output "${CMAKE_CURRENT_BINARY_DIR}/${asset}.hpp")
 
-    string(REGEX REPLACE "\\.| |-" "_" name "${asset}")
+    string(REGEX REPLACE "\\.|-" "_" name "${asset}")
     file(READ "${input}" data HEX)
     string(LENGTH ${data} hex_len)
     math(EXPR len "${hex_len} / 2")

@@ -795,10 +795,10 @@ server: examples/server/server.cpp examples/server/utils.hpp examples/server/htt
 # Portable equivalent of `cd examples/server/public && xxd -i $(notdir $<) ../$(notdir $<).hpp`:
 examples/server/%.hpp: examples/server/public/% Makefile
 	@( export NAME=$(subst .,_,$(subst -,_,$(notdir $<))) && \
-		 echo "unsigned char $${NAME}[] = {" && \
-		 cat $< | od -v -t x1 -An | sed -E 's/([0-9a-fA-F]+)/0x\1, /g' && \
-		 echo "};" && \
-		 echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
+		echo "unsigned char $${NAME}[] = {" && \
+		cat $< | od -v -t x1 -An | sed -E 's/([0-9a-fA-F]+)/0x\1, /g' && \
+		echo "};" && \
+		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
 	) > $@
 
 gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
