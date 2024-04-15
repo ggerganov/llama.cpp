@@ -1221,6 +1221,14 @@ class LlamaModel(Model):
         except FileNotFoundError:
             self._set_vocab_llama_hf()
 
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
+                                          special_token_types = ['prefix', 'suffix', 'middle', 'eot'])
+        special_vocab._set_special_token("prefix", 32007)
+        special_vocab._set_special_token("suffix", 32008)
+        special_vocab._set_special_token("middle", 32009)
+        special_vocab._set_special_token("eot",    32010)
+        special_vocab.add_to_gguf(self.gguf_writer)
+
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         hparams = self.hparams
@@ -2240,6 +2248,13 @@ class GemmaModel(Model):
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
+                                          special_token_types = ['prefix', 'suffix', 'middle', 'eot'])
+        special_vocab._set_special_token("prefix", 67)
+        special_vocab._set_special_token("suffix", 69)
+        special_vocab._set_special_token("middle", 68)
+        special_vocab._set_special_token("eot",    70)
+        special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
         hparams = self.hparams

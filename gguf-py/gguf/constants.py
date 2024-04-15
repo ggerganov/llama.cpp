@@ -90,6 +90,11 @@ class Keys:
         HF_JSON          = "tokenizer.huggingface.json"
         RWKV             = "tokenizer.rwkv.world"
         CHAT_TEMPLATE    = "tokenizer.chat_template"
+        # FIM/Infill special tokens constants
+        PREFIX_ID        = "tokenizer.ggml.prefix_token_id"
+        SUFFIX_ID        = "tokenizer.ggml.suffix_token_id"
+        MIDDLE_ID        = "tokenizer.ggml.middle_token_id"
+        EOT_ID           = "tokenizer.ggml.eot_token_id"
 
 
 #
@@ -885,3 +890,7 @@ KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
 KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
 KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
 KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV
+KEY_TOKENIZER_PRIFIX_ID  = Keys.Tokenizer.PREFIX_ID
+KEY_TOKENIZER_SUFFIX_ID  = Keys.Tokenizer.SUFFIX_ID
+KEY_TOKENIZER_MIDDLE_ID  = Keys.Tokenizer.MIDDLE_ID
+KEY_TOKENIZER_EOT_ID     = Keys.Tokenizer.EOT_ID
