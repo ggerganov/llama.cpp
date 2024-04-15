@@ -204,18 +204,22 @@ class GGUFWriter:
         for i in range(n_dims):
             self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
-            if tensor_dtype == np.float32:
-                dtype = GGMLQuantizationType.F32
-            elif tensor_dtype == np.float16:
+            if tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
+            elif tensor_dtype == np.float32:
+                dtype = GGMLQuantizationType.F32
+            elif tensor_dtype == np.float64:
+                dtype = GGMLQuantizationType.F64
             elif tensor_dtype == np.int8:
                 dtype = GGMLQuantizationType.I8
             elif tensor_dtype == np.int16:
                 dtype = GGMLQuantizationType.I16
             elif tensor_dtype == np.int32:
                 dtype = GGMLQuantizationType.I32
+            elif tensor_dtype == np.int64:
+                dtype = GGMLQuantizationType.I64
             else:
-                raise ValueError("Only F32, F16, I8, I16, I32 tensors are supported for now")
+                raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
             dtype = raw_dtype
         self.ti_data += self._pack("I", dtype)
@@ -292,6 +296,9 @@ class GGUFWriter:
     def add_author(self, author: str) -> None:
         self.add_string(Keys.General.AUTHOR, author)
 
+    def add_version(self, version: str) -> None:
+        self.add_string(Keys.General.VERSION, version)
+
     def add_tensor_data_layout(self, layout: str) -> None:
         self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
@@ -300,6 +307,9 @@ class GGUFWriter:
 
     def add_description(self, description: str) -> None:
         self.add_string(Keys.General.DESCRIPTION, description)
+
+    def add_licence(self, licence: str) -> None:
+        self.add_string(Keys.General.LICENSE, licence)
 
     def add_source_url(self, url: str) -> None:
         self.add_string(Keys.General.SOURCE_URL, url)
@@ -356,6 +366,9 @@ class GGUFWriter:
 
     def add_clamp_kqv(self, value: float) -> None:
         self.add_float32(Keys.Attention.CLAMP_KQV.format(arch=self.arch), value)
+
+    def add_logit_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.LOGIT_SCALE.format(arch=self.arch), value)
 
     def add_expert_count(self, count: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_COUNT.format(arch=self.arch), count)

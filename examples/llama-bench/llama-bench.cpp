@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cstdlib>
 #include <iterator>
 #include <map>
 #include <numeric>
@@ -112,11 +113,11 @@ static std::string get_cpu_info() {
 
 static std::string get_gpu_info() {
     std::string id;
-#ifdef GGML_USE_CUBLAS
-    int count = ggml_cuda_get_device_count();
+#ifdef GGML_USE_CUDA
+    int count = ggml_backend_cuda_get_device_count();
     for (int i = 0; i < count; i++) {
         char buf[128];
-        ggml_cuda_get_device_description(i, buf, sizeof(buf));
+        ggml_backend_cuda_get_device_description(i, buf, sizeof(buf));
         id += buf;
         if (i < count - 1) {
             id += "/";
@@ -247,6 +248,9 @@ static ggml_type ggml_type_from_name(const std::string & s) {
     }
     if (s == "q5_1") {
         return GGML_TYPE_Q5_1;
+    }
+    if (s == "iq4_nl") {
+        return GGML_TYPE_IQ4_NL;
     }
 
     return GGML_TYPE_COUNT;
@@ -804,7 +808,7 @@ struct test {
 
 const std::string test::build_commit = LLAMA_COMMIT;
 const int         test::build_number = LLAMA_BUILD_NUMBER;
-const bool        test::cuda         = !!ggml_cpu_has_cublas();
+const bool        test::cuda         = !!ggml_cpu_has_cuda();
 const bool        test::opencl       = !!ggml_cpu_has_clblast();
 const bool        test::vulkan       = !!ggml_cpu_has_vulkan();
 const bool        test::kompute      = !!ggml_cpu_has_kompute();
@@ -1123,15 +1127,19 @@ struct sql_printer : public printer {
 static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
     llama_set_n_threads(ctx, n_threads, n_threads);
 
-    //std::vector<llama_token> tokens(n_prompt, llama_token_bos(llama_get_model(ctx)));
-    //llama_decode(ctx, llama_batch_get_one(tokens.data(), n_prompt, n_past, 0));
-    //GGML_UNUSED(n_batch);
+    const llama_model * model = llama_get_model(ctx);
+    const int32_t n_vocab = llama_n_vocab(model);
 
-    std::vector<llama_token> tokens(n_batch, llama_token_bos(llama_get_model(ctx)));
+    std::vector<llama_token> tokens(n_batch);
+
     int n_processed = 0;
 
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
+        tokens[0] = n_processed == 0 && llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
+        for (int i = 1; i < n_tokens; i++) {
+            tokens[i] = std::rand() % n_vocab;
+        }
         llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens, n_past + n_processed, 0));
         n_processed += n_tokens;
     }
@@ -1142,11 +1150,15 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_bat
 static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
     llama_set_n_threads(ctx, n_threads, n_threads);
 
-    llama_token token = llama_token_bos(llama_get_model(ctx));
+    const llama_model * model = llama_get_model(ctx);
+    const int32_t n_vocab = llama_n_vocab(model);
+
+    llama_token token = llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
 
     for (int i = 0; i < n_gen; i++) {
         llama_decode(ctx, llama_batch_get_one(&token, 1, n_past + i, 0));
         llama_synchronize(ctx);
+        token = std::rand() % n_vocab;
     }
 }
 

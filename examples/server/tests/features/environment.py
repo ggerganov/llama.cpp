@@ -1,17 +1,18 @@
-import errno
 import os
-import socket
-import subprocess
-import time
-from contextlib import closing
 import signal
+import socket
+import sys
+import time
+import traceback
+from contextlib import closing
+from subprocess import TimeoutExpired
 
 
 def before_scenario(context, scenario):
     context.debug = 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON'
     if context.debug:
-        print("DEBUG=ON\n")
-    print(f"\x1b[33;42mStarting new scenario: {scenario.name}!\x1b[0m\n")
+        print("DEBUG=ON")
+    print(f"\x1b[33;42mStarting new scenario: {scenario.name}!\x1b[0m")
     port = 8080
     if 'PORT' in os.environ:
         port = int(os.environ['PORT'])
@@ -20,58 +21,45 @@ def before_scenario(context, scenario):
 
 
 def after_scenario(context, scenario):
-    if context.server_process is None:
-        return
-    if scenario.status == "failed":
-        if 'GITHUB_ACTIONS' in os.environ:
-            print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n\n")
-            if os.path.isfile('llama.log'):
-                with closing(open('llama.log', 'r')) as f:
-                    for line in f:
-                        print(line)
-        if not is_server_listening(context.server_fqdn, context.server_port):
-            print("\x1b[33;101mERROR: Server stopped listening\x1b[0m\n")
+    try:
+        if 'server_process' not in context or context.server_process is None:
+            return
+        if scenario.status == "failed":
+            if 'GITHUB_ACTIONS' in os.environ:
+                print(f"\x1b[33;101mSCENARIO FAILED: {scenario.name} server logs:\x1b[0m\n")
+                if os.path.isfile('llama.log'):
+                    with closing(open('llama.log', 'r')) as f:
+                        for line in f:
+                            print(line)
+            if not is_server_listening(context.server_fqdn, context.server_port):
+                print("\x1b[33;101mERROR: Server stopped listening\x1b[0m")
 
-    if not pid_exists(context.server_process.pid):
-        assert False, f"Server not running pid={context.server_process.pid} ..."
+        if context.server_process.poll() is not None:
+            assert False, f"Server not running pid={context.server_process.pid} ..."
 
-    server_graceful_shutdown(context)
+        server_graceful_shutdown(context)  # SIGINT
 
-    # Wait few for socket to free up
-    time.sleep(0.05)
+        try:
+            context.server_process.wait(0.5)
+        except TimeoutExpired:
+            print(f"server still alive after 500ms, force-killing pid={context.server_process.pid} ...")
+            context.server_process.kill()  # SIGKILL
+            context.server_process.wait()
 
-    attempts = 0
-    while pid_exists(context.server_process.pid) or is_server_listening(context.server_fqdn, context.server_port):
-        server_kill(context)
-        time.sleep(0.1)
-        attempts += 1
-        if attempts > 5:
-            server_kill_hard(context)
+        while is_server_listening(context.server_fqdn, context.server_port):
+            time.sleep(0.1)
+    except Exception:
+        print("ignoring error in after_scenario:")
+        traceback.print_exc(file=sys.stdout)
 
 
 def server_graceful_shutdown(context):
-    print(f"shutting down server pid={context.server_process.pid} ...\n")
+    print(f"shutting down server pid={context.server_process.pid} ...")
     if os.name == 'nt':
-        os.kill(context.server_process.pid, signal.CTRL_C_EVENT)
+        interrupt = signal.CTRL_C_EVENT
     else:
-        os.kill(context.server_process.pid, signal.SIGINT)
-
-
-def server_kill(context):
-    print(f"killing server pid={context.server_process.pid} ...\n")
-    context.server_process.kill()
-
-
-def server_kill_hard(context):
-    pid = context.server_process.pid
-    path = context.server_path
-
-    print(f"Server dangling exits, hard killing force {pid}={path}...\n")
-    if os.name == 'nt':
-        process = subprocess.check_output(['taskkill', '/F', '/pid', str(pid)]).decode()
-        print(process)
-    else:
-        os.kill(-pid, signal.SIGKILL)
+        interrupt = signal.SIGINT
+    context.server_process.send_signal(interrupt)
 
 
 def is_server_listening(server_fqdn, server_port):
@@ -79,22 +67,5 @@ def is_server_listening(server_fqdn, server_port):
         result = sock.connect_ex((server_fqdn, server_port))
         _is_server_listening = result == 0
         if _is_server_listening:
-            print(f"server is listening on {server_fqdn}:{server_port}...\n")
+            print(f"server is listening on {server_fqdn}:{server_port}...")
         return _is_server_listening
-
-
-def pid_exists(pid):
-    """Check whether pid exists in the current process table."""
-    if pid < 0:
-        return False
-    if os.name == 'nt':
-        output = subprocess.check_output(['TASKLIST', '/FI', f'pid eq {pid}']).decode()
-        print(output)
-        return "No tasks are running" not in output
-    else:
-        try:
-            os.kill(pid, 0)
-        except OSError as e:
-            return e.errno == errno.EPERM
-        else:
-            return True

@@ -40,7 +40,7 @@ if [ ! -z ${GG_BUILD_METAL} ]; then
 fi
 
 if [ ! -z ${GG_BUILD_CUDA} ]; then
-    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_CUBLAS=1"
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_CUDA=1"
 fi
 
 if [ ! -z ${GG_BUILD_SYCL} ]; then
@@ -151,6 +151,52 @@ function gg_sum_ctest_release {
     gg_printf '```\n'
     gg_printf '%s\n' "$(cat $OUT/${ci}-ctest.log)"
     gg_printf '```\n'
+}
+
+# test_scripts_debug
+
+function gg_run_test_scripts_debug {
+    cd ${SRC}
+
+    set -e
+
+    (cd ./examples/gguf-split && time bash tests.sh "$SRC/build-ci-debug/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+
+    set +e
+}
+
+function gg_sum_test_scripts_debug {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs test scripts in debug mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-scripts.log)"
+    gg_printf '```\n'
+    gg_printf '\n'
+}
+
+# test_scripts_release
+
+function gg_run_test_scripts_release {
+    cd ${SRC}
+
+    set -e
+
+    (cd ./examples/gguf-split && time bash tests.sh "$SRC/build-ci-release/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+
+    set +e
+}
+
+function gg_sum_test_scripts_release {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs test scripts in release mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-scripts.log)"
+    gg_printf '```\n'
+    gg_printf '\n'
 }
 
 function gg_get_model {
@@ -412,8 +458,8 @@ function gg_run_open_llama_7b_v2 {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUBLAS=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
-    (time make -j                                                             ) 2>&1 | tee -a $OUT/${ci}-make.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUDA=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time make -j                                                           ) 2>&1 | tee -a $OUT/${ci}-make.log
 
     python3 ../convert.py ${path_models}
 
@@ -575,7 +621,7 @@ function gg_run_embd_bge_small {
     cd ${SRC}
 
     gg_wget models-mnt/bge-small/ https://huggingface.co/BAAI/bge-small-en-v1.5/raw/main/config.json
-    gg_wget models-mnt/bge-small/ https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/main/tokenizer.model
+    gg_wget models-mnt/bge-small/ https://huggingface.co/BAAI/bge-small-en-v1.5/raw/main/tokenizer.json
     gg_wget models-mnt/bge-small/ https://huggingface.co/BAAI/bge-small-en-v1.5/raw/main/tokenizer_config.json
     gg_wget models-mnt/bge-small/ https://huggingface.co/BAAI/bge-small-en-v1.5/raw/main/special_tokens_map.json
     gg_wget models-mnt/bge-small/ https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/main/pytorch_model.bin
@@ -641,6 +687,9 @@ test $ret -eq 0 && gg_run ctest_release
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
     test $ret -eq 0 && gg_run embd_bge_small
+
+    test $ret -eq 0 && gg_run test_scripts_debug
+    test $ret -eq 0 && gg_run test_scripts_release
 
     if [ -z ${GG_BUILD_VRAM_GB} ] || [ ${GG_BUILD_VRAM_GB} -ge 8 ]; then
         if [ -z ${GG_BUILD_CUDA} ]; then

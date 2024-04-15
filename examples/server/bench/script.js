@@ -1,4 +1,4 @@
-import http from 'k6/http'
+import sse from 'k6/x/sse'
 import {check, sleep} from 'k6'
 import {SharedArray} from 'k6/data'
 import {Counter, Rate, Trend} from 'k6/metrics'
@@ -53,7 +53,9 @@ const data = new SharedArray('conversations', function () {
 
 const llamacpp_prompt_tokens = new Trend('llamacpp_prompt_tokens')
 const llamacpp_completion_tokens = new Trend('llamacpp_completion_tokens')
+
 const llamacpp_tokens_second = new Trend('llamacpp_tokens_second')
+const llamacpp_prompt_processing_second = new Trend('llamacpp_prompt_processing_second')
 
 const llamacpp_prompt_tokens_total_counter = new Counter('llamacpp_prompt_tokens_total_counter')
 const llamacpp_completion_tokens_total_counter = new Counter('llamacpp_completion_tokens_total_counter')
@@ -86,35 +88,62 @@ export default function () {
             }
         ],
         "model": model,
-        "stream": false,
+        "stream": true,
+        "seed": 42,
         "max_tokens": max_tokens
     }
 
-    const body = JSON.stringify(payload)
+    const params = {method: 'POST', body: JSON.stringify(payload)};
 
-    let res = http.post(`${server_url}/chat/completions`, body, {
-        headers: {'Content-Type': 'application/json'},
-        timeout: '300s'
+    const startTime = new Date()
+    let promptEvalEndTime = null
+    let prompt_tokens = 0
+    let completions_tokens = 0
+    let finish_reason = null
+    const res = sse.open(`${server_url}/chat/completions`, params, function (client) {
+        client.on('event', function (event) {
+            if (promptEvalEndTime == null) {
+                promptEvalEndTime = new Date()
+            }
+
+            let chunk = JSON.parse(event.data)
+            let choice = chunk.choices[0]
+            if (choice.finish_reason) {
+                finish_reason = choice.finish_reason
+            }
+
+            if (chunk.usage) {
+                prompt_tokens = chunk.usage.prompt_tokens
+                llamacpp_prompt_tokens.add(prompt_tokens)
+                llamacpp_prompt_tokens_total_counter.add(prompt_tokens)
+
+                completions_tokens = chunk.usage.completion_tokens
+                llamacpp_completion_tokens.add(completions_tokens)
+                llamacpp_completion_tokens_total_counter.add(completions_tokens)
+            }
+        })
+
+        client.on('error', function (e) {
+            console.log('An unexpected error occurred: ', e.error());
+            throw e;
+        })
     })
 
     check(res, {'success completion': (r) => r.status === 200})
 
-    if (res.status === 200) {
-        const completions = res.json()
+    const endTime = new Date()
 
-        llamacpp_prompt_tokens.add(completions.usage.prompt_tokens)
-        llamacpp_prompt_tokens_total_counter.add(completions.usage.prompt_tokens)
-
-        llamacpp_completion_tokens.add(completions.usage.completion_tokens)
-        llamacpp_completion_tokens_total_counter.add(completions.usage.completion_tokens)
-
-        llamacpp_completions_truncated_rate.add(completions.choices[0].finish_reason === 'length')
-        llamacpp_completions_stop_rate.add(completions.choices[0].finish_reason === 'stop')
-
-        llamacpp_tokens_second.add(completions.usage.total_tokens / res.timings.duration * 1.e3)
-    } else {
-        console.error(`response: ${res.body} request=${payload}`)
+    const promptEvalTime = promptEvalEndTime - startTime
+    if (promptEvalTime > 0) {
+        llamacpp_prompt_processing_second.add(prompt_tokens / (promptEvalEndTime - startTime) * 1.e3)
     }
+
+    const completion_time = endTime - promptEvalEndTime
+    if (completions_tokens > 0 && completion_time > 0) {
+        llamacpp_tokens_second.add(completions_tokens / completion_time * 1.e3)
+    }
+    llamacpp_completions_truncated_rate.add(finish_reason === 'length')
+    llamacpp_completions_stop_rate.add(finish_reason === 'stop')
 
     sleep(0.3)
 }
