@@ -15478,6 +15478,8 @@ size_t llama_state_set_data(struct llama_context * ctx, const uint8_t * src) {
                 GGML_ASSERT((uint32_t) id < ctx->cparams.n_batch);
                 ctx->output_ids[id] = i;
             }
+
+            ctx->n_outputs = n_outputs;
         }
     }
 
