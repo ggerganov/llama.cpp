@@ -1149,7 +1149,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                         id<MTLComputePipelineState> pipeline = nil;
 
-                        if (n % 4 == 0 && ggml_is_contiguous(src0)) {
+                        if (n % 4 == 0) {
                             n /= 4;
                             pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SCALE_4].pipeline;
                         } else {
@@ -1184,6 +1184,9 @@ static enum ggml_status ggml_metal_graph_compute(
                 } break;
                 case GGML_OP_UNARY:
                     switch (ggml_get_unary_op(gf->nodes[i])) {
+                        // we are not taking into account the strides, so for now require contiguous tensors
+                        GGML_ASSERT(ggml_is_contiguous(src0));
+
                         case GGML_UNARY_OP_TANH:
                             {
                                 id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_TANH].pipeline;
@@ -1214,7 +1217,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                                 id<MTLComputePipelineState> pipeline = nil;
 
-                                if (n % 4 == 0 && ggml_is_contiguous(src0)) {
+                                if (n % 4 == 0) {
                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_4].pipeline;
                                     n /= 4;
                                 } else {
@@ -1233,7 +1236,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                                 id<MTLComputePipelineState> pipeline = nil;
 
-                                if (n % 4 == 0 && ggml_is_contiguous(src0)) {
+                                if (n % 4 == 0) {
                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_QUICK_4].pipeline;
                                     n /= 4;
                                 } else {
@@ -1252,7 +1255,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                                 id<MTLComputePipelineState> pipeline = nil;
 
-                                if (n % 4 == 0 && ggml_is_contiguous(src0)) {
+                                if (n % 4 == 0) {
                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SILU_4].pipeline;
                                     n /= 4;
                                 } else {
