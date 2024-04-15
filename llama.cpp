@@ -13063,6 +13063,11 @@ struct llama_beam_search_data {
             }
             llama_logit_info logit_info(ctx);
             std::vector<llama_token_data> next_tokens = logit_info.top_k(n_beams);
+
+            // Clear the kv slot so that other beams may try different tokens at this position. The llama_decode()
+            // call in loop() will conclusively fill in the kv slot once the beams converge at this position.
+            llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
+
             size_t i=0;
             if (next_beams.size() < n_beams) {
                 for (; next_beams.size() < n_beams ; ++i) {
@@ -15473,6 +15478,8 @@ size_t llama_state_set_data(struct llama_context * ctx, const uint8_t * src) {
                 GGML_ASSERT((uint32_t) id < ctx->cparams.n_batch);
                 ctx->output_ids[id] = i;
             }
+
+            ctx->n_outputs = n_outputs;
         }
     }
 
@@ -16624,6 +16631,21 @@ static int32_t llama_chat_apply_template_internal(
         }
         if (add_ass) {
             ss << "### Response:\n";
+        }
+    } else if (tmpl == "command-r" || (tmpl.find("<|START_OF_TURN_TOKEN|>") != std::string::npos && tmpl.find("<|USER_TOKEN|>") != std::string::npos)) {
+        // CohereForAI/c4ai-command-r-plus
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            } else if (role == "user") {
+                ss << "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            } else if (role == "assistant") {
+                ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            }
+        }
+        if (add_ass) {
+            ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>";
         }
     } else {
         // template not supported
