@@ -565,6 +565,38 @@ ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/com
 
 endif # LLAMA_HIPBLAS
 
+ifdef LLAMA_MUSA
+	MUSA_PATH	?= /usr/local/musa
+	MUSA_ARCH   ?= 10
+	MCC                   ?= $(CCACHE) $(MUSA_PATH)/bin/mcc
+	LLAMA_CUDA_DMMV_X       ?= 32
+	LLAMA_CUDA_MMV_Y        ?= 1
+	LLAMA_CUDA_KQUANTS_ITER ?= 2
+	MK_CPPFLAGS += -DGGML_USE_MUSA -DGGML_USE_CUDA
+	MK_LDFLAGS  += -L$(MUSA_PATH)/lib -Wl,-rpath=$(MUSA_PATH)/lib
+	MK_LDFLAGS	+= -lmublas -lmusa -lmusart
+	MUSAFLAGS    += --cuda-gpu-arch=mp_$(MUSA_ARCH)
+	MUSAFLAGS    += -Wno-unknown-warning-option -Wno-gnu-anonymous-struct -Wno-nested-anon-types -Wno-invalid-noreturn
+	MUSAFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
+	MUSAFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
+	MUSAFLAGS    += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+ifdef LLAMA_CUDA_FORCE_DMMV
+	MUSAFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
+endif # LLAMA_CUDA_FORCE_DMMV
+ifdef LLAMA_CUDA_NO_PEER_COPY
+	MUSAFLAGS 	+= -DGGML_CUDA_NO_PEER_COPY
+endif # LLAMA_CUDA_NO_PEER_COPY
+	OBJS        += ggml-cuda.o
+	OBJS        += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
+
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
+	$(MCC) $(CXXFLAGS) $(MUSAFLAGS) -x musa -c -o $@ $<
+
+ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
+	$(MCC) $(CXXFLAGS) $(MUSAFLAGS) -x musa -c -o $@ $<
+
+endif # LLAMA_MUSA
+
 ifdef LLAMA_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit

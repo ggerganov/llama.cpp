@@ -18,6 +18,15 @@ typedef half2 ggml_half2;
 #define GGML_COMMON_AGGR
 
 #define GGML_COMMON_DECL
+#elif defined(GGML_COMMON_DECL_MUSA)
+#include <mublas.h>
+
+typedef half  ggml_half;
+typedef half2 ggml_half2;
+
+#define GGML_COMMON_AGGR
+
+#define GGML_COMMON_DECL
 #elif defined(GGML_COMMON_DECL_CUDA)
 #include <cuda_fp16.h>
 #include <cstdint>
@@ -73,7 +82,7 @@ typedef sycl::half2 ggml_half2;
 #define K_SCALE_SIZE 12
 #endif // GGML_QKK_64
 
-#if defined(GGML_COMMON_DECL_CUDA) || defined(GGML_COMMON_DECL_HIP) || defined(GGML_COMMON_DECL_SYCL)
+#if defined(GGML_COMMON_DECL_CUDA) || defined(GGML_COMMON_DECL_HIP) || defined(GGML_COMMON_DECL_SYCL) || defined(GGML_COMMON_DECL_MUSA)
 // QR = QK / number of values before dequantization
 // QI = number of 32 bit integers before dequantization
 
@@ -439,7 +448,7 @@ static_assert(sizeof(block_iq4_xs) == sizeof(ggml_half) + sizeof(uint16_t) + QK_
 #define GGML_TABLE_END() };
 
 #define GGML_COMMON_IMPL
-#elif defined(GGML_COMMON_IMPL_CUDA) || defined(GGML_COMMON_IMPL_HIP)
+#elif defined(GGML_COMMON_IMPL_CUDA) || defined(GGML_COMMON_IMPL_HIP) || defined(GGML_COMMON_IMPL_MUSA)
 #include <cstdint>
 
 #define GGML_TABLE_BEGIN(type, name, size) static const __device__ type name[size] = {

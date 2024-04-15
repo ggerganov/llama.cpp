@@ -8,6 +8,9 @@
 #if defined(GGML_USE_HIPBLAS)
 #define GGML_COMMON_DECL_HIP
 #define GGML_COMMON_IMPL_HIP
+#elif defined(GGML_USE_MUSA)
+#define GGML_COMMON_DECL_MUSA
+#define GGML_COMMON_IMPL_MUSA
 #else
 #define GGML_COMMON_DECL_CUDA
 #define GGML_COMMON_IMPL_CUDA
@@ -117,6 +120,10 @@
 #define CUBLAS_STATUS_EXECUTION_FAILED HIPBLAS_STATUS_EXECUTION_FAILED
 #define CUBLAS_STATUS_INTERNAL_ERROR HIPBLAS_STATUS_INTERNAL_ERROR
 #define CUBLAS_STATUS_NOT_SUPPORTED HIPBLAS_STATUS_NOT_SUPPORTED
+#elif defined(GGML_USE_MUSA)
+#include <musa.h>
+#include <mublas.h>
+#include "musa_compatible.cuh"
 #else
 #include <cuda_runtime.h>
 #include <cuda.h>
@@ -188,6 +195,26 @@ void ggml_cuda_error(const char * stmt, const char * func, const char * file, in
 #if CUDART_VERSION >= 12000
     static const char * cublas_get_error_str(const cublasStatus_t err) {
         return cublasGetStatusString(err);
+    }
+#elif defined(GGML_USE_MUSA)
+    static const char * cublas_get_error_str(const cublasStatus_t err) {
+        switch (err) {
+            case MUBLAS_STATUS_SUCCESS: return "MUBLAS_STATUS_SUCCESS";
+            case MUBLAS_STATUS_INVALID_HANDLE: return "MUBLAS_STATUS_INVALID_HANDLE";
+            case MUBLAS_STATUS_NOT_IMPLEMENTED: return "MUBLAS_STATUS_NOT_IMPLEMENTED";
+            case MUBLAS_STATUS_INVALID_POINTER: return "MUBLAS_STATUS_INVALID_POINTER";
+            case MUBLAS_STATUS_INVALID_SIZE: return "MUBLAS_STATUS_INVALID_SIZE";
+            case MUBLAS_STATUS_MEMORY_ERROR: return "MUBLAS_STATUS_MEMORY_ERROR";
+            case MUBLAS_STATUS_INTERNAL_ERROR: return "MUBLAS_STATUS_INTERNAL_ERROR";
+            case MUBLAS_STATUS_PERF_DEGRADED: return "MUBLAS_STATUS_PERF_DEGRADED";
+            case MUBLAS_STATUS_SIZE_QUERY_MISMATCH: return "MUBLAS_STATUS_SIZE_QUERY_MISMATCH";
+            case MUBLAS_STATUS_SIZE_INCREASED: return "MUBLAS_STATUS_SIZE_INCREASED";
+            case MUBLAS_STATUS_SIZE_UNCHANGED: return "MUBLAS_STATUS_SIZE_UNCHANGED";
+            case MUBLAS_STATUS_INVALID_VALUE: return "MUBLAS_STATUS_INVALID_VALUE";
+            case MUBLAS_STATUS_CONTINUE: return "MUBLAS_STATUS_CONTINUE";
+
+            default: return "unknown error";
+        }
     }
 #else
     static const char * cublas_get_error_str(const cublasStatus_t err) {

@@ -112,7 +112,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
     for (int id = 0; id < info.device_count; ++id) {
         int device_vmm = 0;
 
-#if !defined(GGML_USE_HIPBLAS)
+#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
         CUdevice device;
         CU_CHECK(cuDeviceGet(&device, id));
         CU_CHECK(cuDeviceGetAttribute(&device_vmm, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, device));
@@ -124,7 +124,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
             alloc_prop.location.id = id;
             CU_CHECK(cuMemGetAllocationGranularity(&info.devices[id].vmm_granularity, &alloc_prop, CU_MEM_ALLOC_GRANULARITY_RECOMMENDED));
         }
-#endif // !defined(GGML_USE_HIPBLAS)
+#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
         info.devices[id].vmm = !!device_vmm;
 
         cudaDeviceProp prop;
@@ -257,7 +257,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
 };
 
 // pool with virtual memory
-#if !defined(GGML_USE_HIPBLAS)
+#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
 struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
     static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 35; // 32 GB
 
@@ -351,10 +351,10 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         GGML_ASSERT(ptr == (void *) (pool_addr + pool_used));
     }
 };
-#endif // !defined(GGML_USE_HIPBLAS)
+#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
 
 std::unique_ptr<ggml_cuda_pool> ggml_backend_cuda_context::new_pool_for_device(int device) {
-#if !defined(GGML_USE_HIPBLAS)
+#if !defined(GGML_USE_HIPBLAS) &&  !defined(GGML_USE_MUSA)
     if (ggml_cuda_info().devices[device].vmm) {
         return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_vmm(device));
     }
@@ -1596,7 +1596,7 @@ static void ggml_cuda_op_mul_mat(
                         float * dhf_dst_i = (float *) ((char *) dst_off_device + i02*nb2 + i03*nb3);
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
                         dhf_dst_i += src1_col_0*ne0 + dev[id].row_low;
-#if !defined(GGML_USE_HIPBLAS)
+#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
                         // cudaMemcpy2DAsync may fail with copies between vmm pools of different devices
                         cudaMemcpy3DPeerParms p = {};
                         p.dstDevice = ctx.device;
@@ -1793,7 +1793,7 @@ static void ggml_cuda_mul_mat_batched_cublas(ggml_backend_cuda_context & ctx, co
     const int64_t r2 = ne12/ne02;
     const int64_t r3 = ne13/ne03;
 
-#if 0
+#if defined(GGML_USE_MUSA)
     // use cublasGemmEx
     {
         for (int i13 = 0; i13 < ne13; ++i13) {
@@ -1802,10 +1802,10 @@ static void ggml_cuda_mul_mat_batched_cublas(ggml_backend_cuda_context & ctx, co
                 int i02 = i12 / r2;
 
                 CUBLAS_CHECK(
-                        cublasGemmEx(g_cublas_handles[g_main_device], CUBLAS_OP_T, CUBLAS_OP_N,
+                        cublasGemmEx(ctx.cublas_handle(), CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
-                            alpha, (const char *) src0_as_f16 + i02*src0->nb[2]   + i03*src0->nb[3]  , CUDA_R_16F,   nb01/sizeof(half),
-                                   (const char *) src1_as_f16 + i12*src1->nb[2]/2 + i13*src1->nb[3]/2, CUDA_R_16F,   nb11/sizeof(float),
+                            alpha, (const char *) src0_f16 + i02*src0->nb[2]   + i03*src0->nb[3]  , CUDA_R_16F,   nb01/sizeof(half),
+                                   (const char *) src1_f16 + i12*src1->nb[2]/2 + i13*src1->nb[3]/2, CUDA_R_16F,   nb11/sizeof(float),
                             beta,  (      char *)       dst_t + i12*nbd2          + i13*nbd3,          cu_data_type, ne01,
                             cu_compute_type,
                             CUBLAS_GEMM_DEFAULT_TENSOR_OP));
