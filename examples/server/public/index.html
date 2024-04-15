@@ -51,26 +51,6 @@
       margin-bottom: 0.5em;
     }
 
-  button, input, textarea, .button, a.button, select {
-      color: #666;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      line-height: 1.5em;
-      padding: 0.25em 0.25em;
-      text-decoration: none;
-      font-size: 1.1rem;
-    }
-
-    button {
-      border: 1px solid #2a8aad;
-      background: #3584e4;
-      font-weight: normal;
-      color: #fff;
-    }
-    button:disabled {
-      background: #9cbce5;
-    }
-
     #write form {
       margin: 1em 0 0 0;
       display: flex;
@@ -587,7 +567,7 @@
         runCompletion();
       }
       return html`
-        <div class="right">
+        <div>
           <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
           <button onclick=${stop} disabled=${!generating.value}>Stop</button>
           <button onclick=${reset}>Reset</button>

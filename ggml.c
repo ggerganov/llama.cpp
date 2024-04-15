@@ -11012,7 +11012,6 @@ static void ggml_compute_forward_mul_mat_id(
         }
 
         // initialize matrix_row_counts
-        GGML_ASSERT(wdata == wdata_src1_end);
         memset(matrix_row_counts, 0, n_as*sizeof(int64_t));
 
         // group rows by src0 matrix
