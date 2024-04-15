@@ -1649,7 +1649,7 @@ class DbrxModel(Model):
         self.gguf_writer.add_layer_norm_eps(1e-5)
 
         self.gguf_writer.add_file_type(self.ftype)
-        print(f"gguf: file type = {self.ftype}")
+        logger.info(f"gguf: file type = {self.ftype}")
 
     def write_tensors(self):
         block_count = self.hparams.get("n_layers")
@@ -1692,7 +1692,7 @@ class DbrxModel(Model):
             # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
             new_name = tensor_map.get_name(name if not experts else name + ".weight", try_suffixes=(".weight",))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
+                logger.error(f"Can not map tensor {name!r}")
                 sys.exit()
 
             n_dims = len(data.shape)
@@ -1701,7 +1701,7 @@ class DbrxModel(Model):
             # Most of the codebase that takes in 1D tensors only handles F32 tensors
             # and most of the outputs tensors are F32.
             if data_dtype != np.float32 and n_dims == 1:
-                print(f"Can not map tensor {name!r}: all 1D tensors must be F32")
+                logger.error(f"Can not map tensor {name!r}: all 1D tensors must be F32")
                 sys.exit()
 
             # if f32 desired, convert any float16 to float32
@@ -1712,7 +1712,7 @@ class DbrxModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and n_dims > 1:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
