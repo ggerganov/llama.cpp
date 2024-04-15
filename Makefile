@@ -793,9 +793,13 @@ server: examples/server/server.cpp examples/server/utils.hpp examples/server/htt
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
 
 # Portable equivalent of `cd examples/server/public && xxd -i $(notdir $<) ../$(notdir $<).hpp`:
-examples/server/%.hpp: examples/server/public/%
-	@echo "unsigned char $(subst .,_,$(subst -,_,$(notdir $<)))[] = {$(shell cat $< | od -v -t x1 -An | sed -E 's/([0-9a-fA-F]+)/0x\1, /g' )}; \
-	       unsigned int  $(subst .,_,$(subst -,_,$(notdir $<)))_len = $(shell cat $< | wc -c );" > $@
+examples/server/%.hpp: examples/server/public/% Makefile
+	@( export NAME=$(subst .,_,$(subst -,_,$(notdir $<))) && \
+		 echo "unsigned char $${NAME}[] = {" && \
+		 cat $< | od -v -t x1 -An | sed -E 's/([0-9a-fA-F]+)/0x\1, /g' && \
+		 echo "};" && \
+		 echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
+	) > $@
 
 gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
