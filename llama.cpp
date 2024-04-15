@@ -746,19 +746,19 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
     {
         LLM_ARCH_QWEN2MOE,
         {
-            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
-            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
-            { LLM_TENSOR_OUTPUT,          "output" },
-            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
-            { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
-            { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
-            { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
-            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
-            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
-            { LLM_TENSOR_FFN_GATE_INP,    "blk.%d.ffn_gate_inp" },
-            { LLM_TENSOR_FFN_GATE_EXPS,   "blk.%d.ffn_gate_exps" },
-            { LLM_TENSOR_FFN_DOWN_EXPS,   "blk.%d.ffn_down_exps" },
-            { LLM_TENSOR_FFN_UP_EXPS,     "blk.%d.ffn_up_exps" },
+            { LLM_TENSOR_TOKEN_EMBD,              "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,             "output_norm" },
+            { LLM_TENSOR_OUTPUT,                  "output" },
+            { LLM_TENSOR_ATTN_NORM,               "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_Q,                  "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,                  "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,                  "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,                "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_NORM,                "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_GATE_INP,            "blk.%d.ffn_gate_inp" },
+            { LLM_TENSOR_FFN_GATE_EXPS,           "blk.%d.ffn_gate_exps" },
+            { LLM_TENSOR_FFN_DOWN_EXPS,           "blk.%d.ffn_down_exps" },
+            { LLM_TENSOR_FFN_UP_EXPS,             "blk.%d.ffn_up_exps" },
             { LLM_TENSOR_FFN_GATE_INP_SHARED_EXP, "blk.%d.ffn_gate_inp_shared_exp" },
             { LLM_TENSOR_FFN_GATE_SHARED_EXP,     "blk.%d.ffn_gate_shared_exp" },
             { LLM_TENSOR_FFN_DOWN_SHARED_EXP,     "blk.%d.ffn_down_shared_exp" },
@@ -1751,6 +1751,7 @@ enum e_model {
     MODEL_MEDIUM,
     MODEL_LARGE,
     MODEL_XL,
+    MODEL_A2_7B,
     MODEL_8x7B,
     MODEL_8x22B,
     MODEL_16x12B,
@@ -3916,7 +3917,7 @@ static void llm_load_hparams(
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
-                    case 24: model.type = e_model::MODEL_1B; break;
+                    case 24: model.type = e_model::MODEL_A2_7B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;

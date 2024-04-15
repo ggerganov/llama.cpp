@@ -228,7 +228,7 @@
 #define GGML_MAX_DIMS           4
 #define GGML_MAX_PARAMS         2048
 #define GGML_MAX_CONTEXTS       64
-#define GGML_MAX_SRC            62
+#define GGML_MAX_SRC            10
 #ifndef GGML_MAX_NAME
 #define GGML_MAX_NAME           64
 #endif

@@ -1006,7 +1006,6 @@ static bool ggml_is_view_op(enum ggml_op op) {
 
 // scheduler
 
-
 #ifndef GGML_SCHED_MAX_BACKENDS
 #define GGML_SCHED_MAX_BACKENDS 16
 #endif
@@ -1022,7 +1021,6 @@ static bool ggml_is_view_op(enum ggml_op op) {
 #ifndef GGML_SCHED_MAX_COPIES
 #define GGML_SCHED_MAX_COPIES 4
 #endif
-
 
 struct ggml_backend_sched_split {
     int backend_id;
