@@ -1149,7 +1149,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                         id<MTLComputePipelineState> pipeline = nil;
 
-                        if (n % 4 == 0) {
+                        if (n % 4 == 0 && ggml_is_contiguous(src0)) {
                             n /= 4;
                             pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SCALE_4].pipeline;
                         } else {
@@ -1214,7 +1214,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                                 id<MTLComputePipelineState> pipeline = nil;
 
-                                if (n%4 == 0) {
+                                if (n % 4 == 0 && ggml_is_contiguous(src0)) {
                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_4].pipeline;
                                     n /= 4;
                                 } else {
@@ -1233,7 +1233,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                                 id<MTLComputePipelineState> pipeline = nil;
 
-                                if (n%4 == 0) {
+                                if (n % 4 == 0 && ggml_is_contiguous(src0)) {
                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_QUICK_4].pipeline;
                                     n /= 4;
                                 } else {
@@ -1252,7 +1252,7 @@ static enum ggml_status ggml_metal_graph_compute(
 
                                 id<MTLComputePipelineState> pipeline = nil;
 
-                                if (n%4 == 0) {
+                                if (n % 4 == 0 && ggml_is_contiguous(src0)) {
                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SILU_4].pipeline;
                                     n /= 4;
                                 } else {
