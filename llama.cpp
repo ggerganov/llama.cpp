@@ -4228,6 +4228,18 @@ static void llm_load_vocab(
             if (add_space_prefix_keyidx != -1) {
                 vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
             } // The default value of add_space_prefix is true.
+        } else if (tokenizer_name == "bert") {
+            vocab.type = LLAMA_VOCAB_TYPE_WPM;
+
+            // default special tokens
+            vocab.special_bos_id  = -1;
+            vocab.special_eos_id  = -1;
+            vocab.special_unk_id  = 100;
+            vocab.special_sep_id  = 102;
+            vocab.special_pad_id  = 0;
+            vocab.special_cls_id  = 101;
+            vocab.special_mask_id = 103;
+            vocab.add_space_prefix = false;
         } else {
             if (tokenizer_name == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
@@ -4235,17 +4247,7 @@ static void llm_load_vocab(
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
             } else if (tokenizer_name == "deepseek_llm") {
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKLLM;
-			} else if (tokenizer_name == "bert") {
-				vocab.type = LLAMA_VOCAB_TYPE_WPM;
-
-				// default special tokens
-				vocab.special_bos_id = 101;
-				vocab.special_eos_id = 102;
-				vocab.special_unk_id = 100;
-				vocab.special_sep_id = -1;
-				vocab.special_pad_id = -1;
-				vocab.add_space_prefix = false;
-            } else {
+			} else {
                 LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
                 LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
                 vocab.type = LLAMA_VOCAB_TYPE_SPM;
@@ -4277,11 +4279,13 @@ static void llm_load_vocab(
             }
 
             // default special tokens
-            vocab.special_bos_id = 11;
-            vocab.special_eos_id = 11;
-            vocab.special_unk_id = -1;
-            vocab.special_sep_id = -1;
-            vocab.special_pad_id = -1;
+            vocab.special_bos_id  = 11;
+            vocab.special_eos_id  = 11;
+            vocab.special_unk_id  = -1;
+            vocab.special_sep_id  = -1;
+            vocab.special_pad_id  = -1;
+            vocab.special_cls_id  = -1;
+            vocab.special_mask_id = -1;
         }
     }
 
