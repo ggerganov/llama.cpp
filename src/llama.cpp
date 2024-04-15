@@ -1345,6 +1345,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
         LLM_ARCH_RWKV,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
         },
     },
     {
@@ -8226,6 +8227,16 @@ static bool llm_load_tensors(
             case LLM_ARCH_RWKV:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        ggml_context * ctx_layer = ctx_for_layer(i);
+
+                        auto & layer = model.layers[i];
+
+                        layer.attn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
+                        layer.attn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd});
+                    }
+
                 }
             default:
                 throw std::runtime_error("unknown architecture");
