@@ -213,7 +213,7 @@ class TensorNameMap:
             "transformer.blocks.{bid}.ffn.router.layer",  # dbrx
         ),
 
-        MODEL_TENSOR.FFN_GATE_INP_SHARED_EXP: (
+        MODEL_TENSOR.FFN_GATE_INP_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert_gate", # qwen2moe
         ),
 
@@ -247,7 +247,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.experts.up_proj",        # qwen2moe (merged)
         ),
 
-        MODEL_TENSOR.FFN_UP_SHARED_EXP: (
+        MODEL_TENSOR.FFN_UP_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.up_proj",  # qwen2moe
         ),
 
@@ -273,7 +273,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.experts.gate_proj",     # qwen2moe (merged)
         ),
 
-        MODEL_TENSOR.FFN_GATE_SHARED_EXP: (
+        MODEL_TENSOR.FFN_GATE_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.gate_proj",  # qwen2moe
         ),
 
@@ -306,7 +306,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.experts.down_proj",      # qwen2moe (merged)
         ),
 
-        MODEL_TENSOR.FFN_DOWN_SHARED_EXP: (
+        MODEL_TENSOR.FFN_DOWN_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.down_proj",  # qwen2moe
         ),
 

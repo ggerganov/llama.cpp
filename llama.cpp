@@ -431,7 +431,7 @@ enum llm_tensor {
     LLM_TENSOR_ATTN_OUT_NORM,
     LLM_TENSOR_ATTN_ROT_EMBD,
     LLM_TENSOR_FFN_GATE_INP,
-    LLM_TENSOR_FFN_GATE_INP_SHARED_EXP,
+    LLM_TENSOR_FFN_GATE_INP_SHEXP,
     LLM_TENSOR_FFN_NORM,
     LLM_TENSOR_FFN_GATE,
     LLM_TENSOR_FFN_DOWN,
@@ -440,12 +440,12 @@ enum llm_tensor {
     LLM_TENSOR_FFN_DOWN_EXP,  // split experts for backward compatibility
     LLM_TENSOR_FFN_GATE_EXP,
     LLM_TENSOR_FFN_UP_EXP,
-    LLM_TENSOR_FFN_DOWN_SHARED_EXP,
-    LLM_TENSOR_FFN_GATE_SHARED_EXP,
-    LLM_TENSOR_FFN_UP_SHARED_EXP,
     LLM_TENSOR_FFN_DOWN_EXPS, // merged experts
     LLM_TENSOR_FFN_GATE_EXPS,
     LLM_TENSOR_FFN_UP_EXPS,
+    LLM_TENSOR_FFN_DOWN_SHEXP,
+    LLM_TENSOR_FFN_GATE_SHEXP,
+    LLM_TENSOR_FFN_UP_SHEXP,
     LLM_TENSOR_ATTN_Q_NORM,
     LLM_TENSOR_ATTN_K_NORM,
     LLM_TENSOR_LAYER_OUT_NORM,
@@ -746,23 +746,23 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
     {
         LLM_ARCH_QWEN2MOE,
         {
-            { LLM_TENSOR_TOKEN_EMBD,              "token_embd" },
-            { LLM_TENSOR_OUTPUT_NORM,             "output_norm" },
-            { LLM_TENSOR_OUTPUT,                  "output" },
-            { LLM_TENSOR_ATTN_NORM,               "blk.%d.attn_norm" },
-            { LLM_TENSOR_ATTN_Q,                  "blk.%d.attn_q" },
-            { LLM_TENSOR_ATTN_K,                  "blk.%d.attn_k" },
-            { LLM_TENSOR_ATTN_V,                  "blk.%d.attn_v" },
-            { LLM_TENSOR_ATTN_OUT,                "blk.%d.attn_output" },
-            { LLM_TENSOR_FFN_NORM,                "blk.%d.ffn_norm" },
-            { LLM_TENSOR_FFN_GATE_INP,            "blk.%d.ffn_gate_inp" },
-            { LLM_TENSOR_FFN_GATE_EXPS,           "blk.%d.ffn_gate_exps" },
-            { LLM_TENSOR_FFN_DOWN_EXPS,           "blk.%d.ffn_down_exps" },
-            { LLM_TENSOR_FFN_UP_EXPS,             "blk.%d.ffn_up_exps" },
-            { LLM_TENSOR_FFN_GATE_INP_SHARED_EXP, "blk.%d.ffn_gate_inp_shared_exp" },
-            { LLM_TENSOR_FFN_GATE_SHARED_EXP,     "blk.%d.ffn_gate_shared_exp" },
-            { LLM_TENSOR_FFN_DOWN_SHARED_EXP,     "blk.%d.ffn_down_shared_exp" },
-            { LLM_TENSOR_FFN_UP_SHARED_EXP,       "blk.%d.ffn_up_shared_exp" },
+            { LLM_TENSOR_TOKEN_EMBD,         "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,        "output_norm" },
+            { LLM_TENSOR_OUTPUT,             "output" },
+            { LLM_TENSOR_ATTN_NORM,          "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_Q,             "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,             "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,             "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,           "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_NORM,           "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_GATE_INP,       "blk.%d.ffn_gate_inp" },
+            { LLM_TENSOR_FFN_GATE_EXPS,      "blk.%d.ffn_gate_exps" },
+            { LLM_TENSOR_FFN_DOWN_EXPS,      "blk.%d.ffn_down_exps" },
+            { LLM_TENSOR_FFN_UP_EXPS,        "blk.%d.ffn_up_exps" },
+            { LLM_TENSOR_FFN_GATE_INP_SHEXP, "blk.%d.ffn_gate_inp_shexp" },
+            { LLM_TENSOR_FFN_GATE_SHEXP,     "blk.%d.ffn_gate_shexp" },
+            { LLM_TENSOR_FFN_DOWN_SHEXP,     "blk.%d.ffn_down_shexp" },
+            { LLM_TENSOR_FFN_UP_SHEXP,       "blk.%d.ffn_up_shexp" },
         },
     },
     {
@@ -1938,11 +1938,11 @@ struct llama_layer {
     struct ggml_tensor * ffn_down_exps;
     struct ggml_tensor * ffn_up_exps ;
 
-    // ff shared expert
-    struct ggml_tensor * ffn_gate_inp_shared_exp;
-    struct ggml_tensor * ffn_gate_shared_exp;
-    struct ggml_tensor * ffn_down_shared_exp;
-    struct ggml_tensor * ffn_up_shared_exp;
+    // ff shared expert (shexp)
+    struct ggml_tensor * ffn_gate_inp_shexp;
+    struct ggml_tensor * ffn_gate_shexp;
+    struct ggml_tensor * ffn_down_shexp;
+    struct ggml_tensor * ffn_up_shexp;
 
     // ff bias
     struct ggml_tensor * ffn_down_b; // b2
@@ -5205,10 +5205,10 @@ static bool llm_load_tensors(
                         layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {  n_embd, n_ff_exp, n_expert});
 
                         // Shared expert branch
-                        layer.ffn_gate_inp_shared_exp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP_SHARED_EXP, "weight", i), {n_embd});
-                        layer.ffn_gate_shared_exp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SHARED_EXP, "weight", i), {n_embd,   n_ff});
-                        layer.ffn_down_shared_exp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SHARED_EXP, "weight", i), {  n_ff, n_embd});
-                        layer.ffn_up_shared_exp   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SHARED_EXP,   "weight", i), {n_embd,   n_ff});
+                        layer.ffn_gate_inp_shexp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP_SHEXP, "weight", i), {n_embd});
+                        layer.ffn_gate_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SHEXP, "weight", i), {n_embd,   n_ff});
+                        layer.ffn_down_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SHEXP, "weight", i), {  n_ff, n_embd});
+                        layer.ffn_up_shexp   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SHEXP,   "weight", i), {n_embd,   n_ff});
                     }
                 } break;
             case LLM_ARCH_PHI2:
@@ -8622,31 +8622,31 @@ struct llm_build_context {
                 }
             }
 
-            ggml_tensor * gate_shared_exp = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp_shared_exp, cur);
-            cb(gate_shared_exp, "ffn_moe_gate_inp_shared_exp", il);
+            // FFN shared expert
+            {
+                ggml_tensor * cur_gate_inp = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp_shexp, cur);
+                cb(cur_gate_inp, "ffn_shexp_gate_inp", il);
 
-            // sigmoid
-            ggml_tensor * logits_shared_exp = ggml_silu(ctx0, gate_shared_exp);
-            cb(logits_shared_exp, "ffn_moe_logits_shared_exp", il);
+                // sigmoid
+                ggml_tensor * cur_gate = ggml_div(ctx0, ggml_silu(ctx0, cur_gate_inp), cur_gate_inp);
+                cb(cur_gate, "ffn_shexp_gate", il);
 
-            ggml_tensor * probs_shared_exp = ggml_div(ctx0, logits_shared_exp, gate_shared_exp);
-            cb(probs_shared_exp, "ffn_moe_probs_shared_exp", il);
+                ggml_tensor * cur_ffn = llm_build_ffn(ctx0, cur,
+                        model.layers[il].ffn_up_shexp,   NULL,
+                        model.layers[il].ffn_gate_shexp, NULL,
+                        model.layers[il].ffn_down_shexp, NULL,
+                        NULL,
+                        LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
+                cb(cur_ffn, "ffn_shexp", il);
 
-            ggml_tensor * ffn_shared_exp = llm_build_ffn(ctx0, cur,
-                    model.layers[il].ffn_up_shared_exp,   NULL,
-                    model.layers[il].ffn_gate_shared_exp, NULL,
-                    model.layers[il].ffn_down_shared_exp, NULL,
-                    NULL,
-                    LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
-            cb(ffn_shared_exp, "ffn_moe_shared_exp", il);
+                ggml_tensor * ffn_shexp_out = ggml_mul(ctx0, cur_ffn, cur_gate);
+                cb(ffn_shexp_out, "ffn_shexp_out", il);
 
-            ggml_tensor * ffn_shared_exp_out = ggml_mul(ctx0, ffn_shared_exp, probs_shared_exp);
-            cb(ffn_shared_exp_out, "ffn_moe_shared_exp_out", il);
+                moe_out = ggml_add(ctx0, moe_out, ffn_shexp_out);
+                cb(moe_out, "ffn_out", il);
 
-            moe_out = ggml_add(ctx0, moe_out, ffn_shared_exp_out);
-            cb(moe_out, "ffn_out", il);
-
-            cur = moe_out;
+                cur = moe_out;
+            }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "l_out", il);
