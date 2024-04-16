@@ -222,6 +222,8 @@ endif # LLAMA_DISABLE_LOGS
 # disable ggml.c's use of sgemm.cpp
 ifdef LLAMA_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE=0
+else
+	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE=1
 endif
 
 # warnings

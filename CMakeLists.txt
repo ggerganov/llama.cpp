@@ -88,6 +88,7 @@ endif()
 # 3rd party libs
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
 option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
+option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"                       ON)
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
 option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
@@ -286,6 +287,7 @@ if (LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         )
 endif()
+
 if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
@@ -366,6 +368,10 @@ if (LLAMA_BLAS)
         "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
         " to set correct LLAMA_BLAS_VENDOR")
     endif()
+endif()
+
+if (LLAMA_LLAMAFILE)
+    add_compile_definitions(GGML_USE_LLAMAFILE)
 endif()
 
 if (LLAMA_QKK_64)

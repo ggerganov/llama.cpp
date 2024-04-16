@@ -33,12 +33,8 @@
 #include <unistd.h>
 #endif
 
-#ifndef GGML_USE_LLAMAFILE
 #ifdef __ARM_FEATURE_MATMUL_INT8
-#define GGML_USE_LLAMAFILE 0
-#else
-#define GGML_USE_LLAMAFILE 1
-#endif
+#undef GGML_USE_LLAMAFILE
 #endif
 
 #if defined(_MSC_VER)
@@ -10879,8 +10875,9 @@ UseGgmlGemm1:;
                 if (!llamafile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
                                      (const char *)src0->data + i12/r2*nb02 + i13/r3*nb03,
                                      nb01/ggml_type_size(src0->type),
-                                     (const char *)wdata + (nb12/ggml_type_size(src1->type)*ggml_type_size(vec_dot_type)*i12 +
-                                                            nb13/ggml_type_size(src1->type)*ggml_type_size(vec_dot_type)*i13),
+                                     (const char *)wdata + ggml_row_size(vec_dot_type,
+                                         nb12/ggml_type_size(src1->type)*i12 +
+                                         nb13/ggml_type_size(src1->type)*i13),
                                      row_size/ggml_type_size(vec_dot_type),
                                      (char *)dst->data + i12*nb2 + i13*nb3,
                                      nb1/ggml_type_size(dst->type),
