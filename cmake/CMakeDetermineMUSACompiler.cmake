@@ -6,6 +6,6 @@ set(CMAKE_MUSA_COMPILER_ARG1 "")
 set(CMAKE_MUSA_COMPILER_ENV_VAR "MCC")
 
 configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeMUSACompiler.cmake.in
+    ${CMAKE_CURRENT_LIST_DIR}/CMakeMUSACompiler.cmake.in
     ${CMAKE_PLATFORM_INFO_DIR}/CMakeMUSACompiler.cmake
 )
