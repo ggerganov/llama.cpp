@@ -567,7 +567,7 @@ endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_MUSA
 	MUSA_PATH	?= /usr/local/musa
-	MUSA_ARCH   ?= 10
+	MUSA_ARCH   ?= 21
 	MCC                   ?= $(CCACHE) $(MUSA_PATH)/bin/mcc
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1

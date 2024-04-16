@@ -1,0 +1,11 @@
+
+set(CMAKE_MUSA_ARCHITECTURES "mp_${MUSA_ARCH}")
+set(CMAKE_MUSA_COMPILER "${MUSA_MCC}")
+set(CMAKE_MUSA_COMPILER_ID "Clang")
+set(CMAKE_MUSA_COMPILER_ARG1 "")
+set(CMAKE_MUSA_COMPILER_ENV_VAR "MCC")
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeMUSACompiler.cmake.in
+    ${CMAKE_PLATFORM_INFO_DIR}/CMakeMUSACompiler.cmake
+)

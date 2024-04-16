@@ -102,6 +102,7 @@ set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
 option(LLAMA_CUDA_NO_PEER_COPY               "llama: do not use peer to peer copies"            OFF)
 option(LLAMA_CURL                            "llama: use libcurl to download model from an URL" OFF)
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
+option(LLAMA_MUSA                            "llama: use MUSA"                                  OFF)
 option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_VULKAN                          "llama: use Vulkan"                                OFF)
@@ -572,6 +573,49 @@ if (LLAMA_HIPBLAS)
     endif()
 
     set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
+endif()
+
+if (LLAMA_MUSA)
+    option(MUSA_ARCH "MUSA architecture" "21")
+
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+    find_package(MUSA     REQUIRED)
+
+    message(STATUS "MUSA found")
+
+    enable_language(MUSA)
+
+    set(GGML_HEADERS_MUSA ggml-cuda.h)
+
+    file(GLOB GGML_SOURCES_MUSA "ggml-cuda/*.cu")
+    list(APPEND GGML_SOURCES_MUSA "ggml-cuda.cu")
+
+    add_compile_definitions(GGML_USE_MUSA GGML_USE_CUDA)
+
+    if (LLAMA_CUDA_FORCE_DMMV)
+        add_compile_definitions(GGML_CUDA_FORCE_DMMV)
+    endif()
+
+    if (LLAMA_CUDA_FORCE_MMQ)
+        add_compile_definitions(GGML_CUDA_FORCE_MMQ)
+    endif()
+
+    if (LLAMA_CUDA_NO_PEER_COPY)
+        add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+    endif()
+
+    add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+    add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+    add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
+
+    set_source_files_properties(${GGML_SOURCES_MUSA} PROPERTIES LANGUAGE MUSA)
+
+    if (LLAMA_STATIC)
+        message(FATAL_ERROR "Static linking not supported for MUSA")
+    endif()
+
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} PUBLIC MUSA::musa MUSA::mublas MUSA::musart)
 endif()
 
 if (LLAMA_SYCL)
@@ -1160,6 +1204,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_KOMPUTE} ${GGML_HEADERS_KOMPUTE}
             ${GGML_SOURCES_VULKAN}  ${GGML_HEADERS_VULKAN}
             ${GGML_SOURCES_ROCM}    ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_MUSA}    ${GGML_HEADERS_MUSA}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
