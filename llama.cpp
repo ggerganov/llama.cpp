@@ -8159,9 +8159,8 @@ struct llm_build_context {
                 inpL  = ggml_get_rows(ctx0,  inpL, inp_out_ids);
                 inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
             }
-            struct ggml_tensor * attn_out = cur;
-            struct ggml_tensor * ffn_inp  = ggml_add(ctx0, attn_out, inpL);
-            cb(cur, "ffn_inp", il);
+            struct ggml_tensor * ffn_inp  = ggml_add(ctx0, cur, inpL);
+            cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
             {
