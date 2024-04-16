@@ -222,6 +222,10 @@ endif # LLAMA_DISABLE_LOGS
 # disable ggml.c's use of sgemm.cpp
 ifdef LLAMA_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE=0
+else
+	# TODO: temporary disabled until test-backend-ops becomes green
+	#MK_CPPFLAGS += -DGGML_USE_LLAMAFILE=1
+	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE=0
 endif
 
 # warnings

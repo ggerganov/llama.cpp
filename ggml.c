@@ -33,12 +33,8 @@
 #include <unistd.h>
 #endif
 
-#ifndef GGML_USE_LLAMAFILE
 #ifdef __ARM_FEATURE_MATMUL_INT8
-#define GGML_USE_LLAMAFILE 0
-#else
-#define GGML_USE_LLAMAFILE 1
-#endif
+#undef GGML_USE_LLAMAFILE
 #endif
 
 #if defined(_MSC_VER)
