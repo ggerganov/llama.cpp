@@ -4136,9 +4136,11 @@ static void llm_load_vocab(
             // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
             // new versions of these models have been published.
             std::string gen_name;
-            ml.get_key(LLM_KV_GENERAL_NAME, gen_name);
+            ml.get_key(LLM_KV_GENERAL_NAME, gen_name, false);
+
             std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
                 [](unsigned char c){ return std::tolower(c); });
+
             if (gen_name.find("code") != std::string::npos) {
                 if (model.arch == LLM_ARCH_LLAMA) {
                     vocab.special_prefix_id = 32007;
