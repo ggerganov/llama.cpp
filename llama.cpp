@@ -327,6 +327,10 @@ enum llm_kv {
     LLM_KV_TOKENIZER_ADD_PREFIX,
     LLM_KV_TOKENIZER_HF_JSON,
     LLM_KV_TOKENIZER_RWKV,
+    LLM_KV_TOKENIZER_PREFIX_ID,
+    LLM_KV_TOKENIZER_SUFFIX_ID,
+    LLM_KV_TOKENIZER_MIDDLE_ID,
+    LLM_KV_TOKENIZER_EOT_ID,
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -399,6 +403,10 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TOKENIZER_ADD_PREFIX,          "tokenizer.ggml.add_space_prefix"   },
     { LLM_KV_TOKENIZER_HF_JSON,             "tokenizer.huggingface.json"        },
     { LLM_KV_TOKENIZER_RWKV,                "tokenizer.rwkv.world"              },
+    { LLM_KV_TOKENIZER_PREFIX_ID,           "tokenizer.ggml.prefix_token_id"    },
+    { LLM_KV_TOKENIZER_SUFFIX_ID,           "tokenizer.ggml.suffix_token_id"    },
+    { LLM_KV_TOKENIZER_MIDDLE_ID,           "tokenizer.ggml.middle_token_id"    },
+    { LLM_KV_TOKENIZER_EOT_ID,              "tokenizer.ggml.eot_token_id"       },
 };
 
 struct LLM_KV {
@@ -2055,10 +2063,10 @@ struct llama_vocab {
     int special_add_eos = -1; // -1 unknown, 1 add, 0 don't add.
 
     id linefeed_id       = 13;
-    id special_prefix_id = 32007;
-    id special_middle_id = 32009;
-    id special_suffix_id = 32008;
-    id special_eot_id    = 32010;
+    id special_prefix_id = -1;
+    id special_suffix_id = -1;
+    id special_middle_id = -1;
+    id special_eot_id    = -1;
 
     bool add_space_prefix = true;
 
@@ -4072,6 +4080,30 @@ static void llm_load_vocab(
             vocab.special_cls_id  = -1;
             vocab.special_mask_id = -1;
 
+            // For Fill-In-the-Middle (FIM)/infill models which where converted
+            // prior to support of FIM special tokens in GGUF, the following
+            // will allow those models to continue to work. The general names
+            // of the known models are currently CodeLlama (LLM_ARCH_LLAMA) and
+            // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
+            // new versions of these models have been published.
+            std::string gen_name;
+            ml.get_key(LLM_KV_GENERAL_NAME, gen_name);
+            std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
+                [](unsigned char c){ return std::tolower(c); });
+            if (gen_name.find("code") != std::string::npos) {
+                if (model.arch == LLM_ARCH_LLAMA) {
+                    vocab.special_prefix_id = 32007;
+                    vocab.special_suffix_id = 32008;
+                    vocab.special_middle_id = 32009;
+                    vocab.special_eot_id    = 32010;
+                } else if (model.arch == LLM_ARCH_GEMMA) {
+                    vocab.special_prefix_id = 67;
+                    vocab.special_suffix_id = 69;
+                    vocab.special_middle_id = 68;
+                    vocab.special_eot_id    = 70;
+                }
+            }
+
             const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
             if (add_space_prefix_keyidx != -1) {
                 vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
@@ -4185,13 +4217,17 @@ static void llm_load_vocab(
     // special tokens
     {
         const std::vector<std::pair<enum llm_kv, int32_t &>> special_token_types = {
-            { LLM_KV_TOKENIZER_BOS_ID,  vocab.special_bos_id  },
-            { LLM_KV_TOKENIZER_EOS_ID,  vocab.special_eos_id  },
-            { LLM_KV_TOKENIZER_UNK_ID,  vocab.special_unk_id  },
-            { LLM_KV_TOKENIZER_SEP_ID,  vocab.special_sep_id  },
-            { LLM_KV_TOKENIZER_PAD_ID,  vocab.special_pad_id  },
-            { LLM_KV_TOKENIZER_CLS_ID,  vocab.special_cls_id  },
-            { LLM_KV_TOKENIZER_MASK_ID, vocab.special_mask_id },
+            { LLM_KV_TOKENIZER_BOS_ID,    vocab.special_bos_id    },
+            { LLM_KV_TOKENIZER_EOS_ID,    vocab.special_eos_id    },
+            { LLM_KV_TOKENIZER_UNK_ID,    vocab.special_unk_id    },
+            { LLM_KV_TOKENIZER_SEP_ID,    vocab.special_sep_id    },
+            { LLM_KV_TOKENIZER_PAD_ID,    vocab.special_pad_id    },
+            { LLM_KV_TOKENIZER_CLS_ID,    vocab.special_cls_id    },
+            { LLM_KV_TOKENIZER_MASK_ID,   vocab.special_mask_id   },
+            { LLM_KV_TOKENIZER_PREFIX_ID, vocab.special_prefix_id },
+            { LLM_KV_TOKENIZER_SUFFIX_ID, vocab.special_suffix_id },
+            { LLM_KV_TOKENIZER_MIDDLE_ID, vocab.special_middle_id },
+            { LLM_KV_TOKENIZER_EOT_ID,    vocab.special_eot_id    },
         };
         for (const auto & it : special_token_types) {
             const std::string & key = kv(std::get<0>(it));
