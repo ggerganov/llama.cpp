@@ -195,8 +195,12 @@ class Model(ABC):
 
     @staticmethod
     def load_hparams(dir_model):
-        with open(dir_model / "config.json", "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(dir_model / "config.json", "r", encoding="utf-8") as f1, \
+          open(dir_model / "tokenizer_config.json", "r", encoding="utf-8") as f2:
+            hparams = json.load(f1)
+            hparams.update(json.load(f2))
+
+        return hparams
 
     @classmethod
     def register(cls, *names: str) -> Callable[[AnyModel], AnyModel]:
@@ -362,6 +366,16 @@ class Model(ABC):
                         tokens.append(key)
                         scores.append(-1000.0)
                         toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+
+        if vocab_size > len(tokens):
+            pad_count = vocab_size - len(tokens)
+            print(
+                f"Padding vocab with {pad_count} token(s) - [PAD0] through [PAD{pad_count}]"
+            )
+            for i in range(1, pad_count + 1):
+                tokens.append(f"[PAD{i}]")
+                scores.append(-1000.0)
+                toktypes.append(SentencePieceTokenTypes.UNUSED)
 
         assert len(tokens) == vocab_size
 
@@ -1698,6 +1712,13 @@ class QwenModel(Model):
 @Model.register("Qwen2ForCausalLM")
 class Qwen2Model(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2
+    
+    def set_vocab(self):
+        print(f'Tokenizer class: {self.hparams.get("tokenizer_class")}')
+        if self.hparams.get("tokenizer_class") == "PreTrainedTokenizerFast":
+            self._set_vocab_sentencepiece()
+        else:
+            self._set_vocab_gpt2()
 
 
 @Model.register("GPT2LMHeadModel")
