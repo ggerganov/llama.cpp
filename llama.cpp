@@ -8185,15 +8185,7 @@ struct llm_build_context {
                 cb(cur, "ffn_out", il);
             }
 
-            if (model.layers[il].ffn_norm) {
-                // non-parallel residual
-                cur = ggml_add(ctx0, cur, ffn_inp);
-            } else {
-                // add together residual + FFN + self-attention
-                cur = ggml_add(ctx0, cur, inpL);
-                cur = ggml_add(ctx0, cur, attn_out);
-            }
-
+            cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "l_out", il);
 
             // input for next layer
