@@ -2279,8 +2279,9 @@ class GemmaModel(Model):
         for name, data_torch in self.get_tensors():
             # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
             # To prevent errors, skip loading lm_head.weight.
-            if "lm_head.weight" in name:
-                    continue
+            if name == "lm_head.weight":
+                print(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+                continue
 
             old_dtype = data_torch.dtype
 
