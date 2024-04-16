@@ -208,8 +208,13 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_GATE_INP: (
             "layers.{bid}.feed_forward.gate",             # mixtral
             "model.layers.{bid}.block_sparse_moe.gate",   # mixtral
+            "model.layers.{bid}.mlp.gate",                # qwen2moe
             "transformer.decoder_layer.{bid}.router",     # Grok
             "transformer.blocks.{bid}.ffn.router.layer",  # dbrx
+        ),
+
+        MODEL_TENSOR.FFN_GATE_INP_SHEXP: (
+            "model.layers.{bid}.mlp.shared_expert_gate", # qwen2moe
         ),
 
         # Feed-forward up
@@ -236,9 +241,14 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
-            "layers.{bid}.feed_forward.experts.w3",                 # mixtral (merged)
-            "transformer.decoder_layer.{bid}.moe.linear_v",         # Grok (merged)
-            "transformer.blocks.{bid}.ffn.experts.mlp.v1",          # dbrx
+            "layers.{bid}.feed_forward.experts.w3",          # mixtral (merged)
+            "transformer.decoder_layer.{bid}.moe.linear_v",  # Grok (merged)
+            "transformer.blocks.{bid}.ffn.experts.mlp.v1",   # dbrx
+            "model.layers.{bid}.mlp.experts.up_proj",        # qwen2moe (merged)
+        ),
+
+        MODEL_TENSOR.FFN_UP_SHEXP: (
+            "model.layers.{bid}.mlp.shared_expert.up_proj",  # qwen2moe
         ),
 
         # AWQ-activation gate
@@ -260,6 +270,11 @@ class TensorNameMap:
             "layers.{bid}.feed_forward.experts.w1",         # mixtral (merged)
             "transformer.decoder_layer.{bid}.moe.linear",   # Grok (merged)
             "transformer.blocks.{bid}.ffn.experts.mlp.w1",  # dbrx
+            "model.layers.{bid}.mlp.experts.gate_proj",     # qwen2moe (merged)
+        ),
+
+        MODEL_TENSOR.FFN_GATE_SHEXP: (
+            "model.layers.{bid}.mlp.shared_expert.gate_proj",  # qwen2moe
         ),
 
         # Feed-forward down
@@ -285,9 +300,14 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
-            "layers.{bid}.feed_forward.experts.w2",                 # mixtral (merged)
-            "transformer.decoder_layer.{bid}.moe.linear_1",         # Grok (merged)
-            "transformer.blocks.{bid}.ffn.experts.mlp.w2",          # dbrx
+            "layers.{bid}.feed_forward.experts.w2",          # mixtral (merged)
+            "transformer.decoder_layer.{bid}.moe.linear_1",  # Grok (merged)
+            "transformer.blocks.{bid}.ffn.experts.mlp.w2",   # dbrx
+            "model.layers.{bid}.mlp.experts.down_proj",      # qwen2moe (merged)
+        ),
+
+        MODEL_TENSOR.FFN_DOWN_SHEXP: (
+            "model.layers.{bid}.mlp.shared_expert.down_proj",  # qwen2moe
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
@@ -366,7 +386,7 @@ class TensorNameMap:
                 if tensor not in MODEL_TENSORS[arch]:
                     continue
                 # TODO: make this configurable
-                n_experts = 8
+                n_experts = 60
                 for xid in range(n_experts):
                     tensor_name = TENSOR_NAMES[tensor].format(bid = bid, xid = xid)
                     self.mapping[tensor_name] = (tensor, tensor_name)
