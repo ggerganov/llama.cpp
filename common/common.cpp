@@ -1,4 +1,6 @@
 #include "common.h"
+#include "json.hpp"
+#include "json-schema-to-grammar.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -16,6 +18,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cinttypes>
+#include <codecvt>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -27,7 +30,6 @@
 #ifndef NOMINMAX
 #   define NOMINMAX
 #endif
-#include <codecvt>
 #include <locale>
 #include <windows.h>
 #include <fcntl.h>
@@ -67,6 +69,8 @@
 #define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
 #define LLAMA_CURL_MAX_HEADER_LENGTH 256
 #endif // LLAMA_USE_CURL
+
+using json = nlohmann::ordered_json;
 
 int32_t get_num_physical_cores() {
 #ifdef __linux__
@@ -1148,6 +1152,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         );
         return true;
     }
+    if (arg == "-j" || arg == "--json-schema") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.grammar = json_schema_to_grammar(json::parse(argv[i]));
+        return true;
+    }
     if (arg == "--override-kv") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1353,6 +1365,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
     printf("  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
     printf("  --grammar-file FNAME  file to read grammar from\n");
+    printf("  -j SCHEMA, --json-schema SCHEMA\n");
+    printf("                        JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object.\n");
+    printf("                        For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead\n");
     printf("  --cfg-negative-prompt PROMPT\n");
     printf("                        negative prompt to use for guidance. (default: empty)\n");
     printf("  --cfg-negative-prompt-file FNAME\n");
@@ -1498,6 +1513,77 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
     }
 
     GGML_UNREACHABLE();
+}
+
+// Validate if a filename is safe to use
+// To validate a full path, split the path by the OS-specific path separator, and validate each part with this function
+bool validate_file_name(const std::string & filename) {
+    if (!filename.length()) {
+        // Empty filename invalid
+        return false;
+    }
+    if (filename.length() > 255) {
+        // Limit at common largest possible filename on Linux filesystems
+        // to avoid unnecessary further validation
+        // (On systems with smaller limits it will be caught by the OS)
+        return false;
+    }
+
+    std::u32string filename_utf32;
+    try {
+        std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+        filename_utf32 = converter.from_bytes(filename);
+
+        // If the reverse conversion mismatches, it means overlong UTF-8 sequences were used,
+        // or invalid encodings were encountered. Reject such attempts
+        std::string filename_reencoded = converter.to_bytes(filename_utf32);
+        if (filename_reencoded != filename) {
+            return false;
+        }
+    } catch (const std::exception &) {
+        return false;
+    }
+
+    // Check for forbidden codepoints:
+    // - Control characters
+    // - Unicode equivalents of illegal characters
+    // - UTF-16 surrogate pairs
+    // - UTF-8 replacement character
+    // - Byte order mark (BOM)
+    // - Illegal characters: / \ : * ? " < > |
+    for (char32_t c : filename_utf32) {
+        if (c <= 0x1F // Control characters (C0)
+            || c == 0x7F // Control characters (DEL)
+            || (c >= 0x80 && c <= 0x9F) // Control characters (C1)
+            || c == 0xFF0E // Fullwidth Full Stop (period equivalent)
+            || c == 0x2215 // Division Slash (forward slash equivalent)
+            || c == 0x2216 // Set Minus (backslash equivalent)
+            || (c >= 0xD800 && c <= 0xDFFF) // UTF-16 surrogate pairs
+            || c == 0xFFFD // Replacement Character (UTF-8)
+            || c == 0xFEFF // Byte Order Mark (BOM)
+            || c == '/' || c == '\\' || c == ':' || c == '*' // Illegal characters
+            || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
+            return false;
+        }
+    }
+
+    // Reject any leading or trailing ' ', or any trailing '.', these are stripped on Windows and will cause a different filename
+    // Unicode and other whitespace is not affected, only 0x20 space
+    if (filename.front() == ' ' || filename.back() == ' ' || filename.back() == '.') {
+        return false;
+    }
+
+    // Reject any ".." (currently stricter than necessary, it should be fine to just check for == ".." instead)
+    if (filename.find("..") != std::string::npos) {
+        return false;
+    }
+
+    // Reject "."
+    if (filename == ".") {
+        return false;
+    }
+
+    return true;
 }
 
 //
@@ -1674,6 +1760,8 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.yarn_orig_ctx     = params.yarn_orig_ctx;
     cparams.pooling_type      = params.pooling_type;
     cparams.defrag_thold      = params.defrag_thold;
+    cparams.cb_eval           = params.cb_eval;
+    cparams.cb_eval_user_data = params.cb_eval_user_data;
     cparams.offload_kqv       = !params.no_kv_offload;
 
     cparams.type_k = kv_cache_type_from_str(params.cache_type_k);
@@ -1928,11 +2016,6 @@ struct llama_model * llama_load_model_from_url(
         return NULL;
     }
 
-    if (!curl) {
-        fprintf(stderr, "%s: error initializing libcurl\n", __func__);
-        return NULL;
-    }
-
     if (!llama_download_file(curl, model_url, path_model)) {
         return NULL;
     }
@@ -2126,7 +2209,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
     }
 
-    {
+    if (params.warmup) {
         LOG("warming up the model with an empty run\n");
 
         std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
@@ -2146,23 +2229,23 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special) {
-    return llama_tokenize(llama_get_model(ctx), text, add_bos, special);
+                        bool   add_special,
+                        bool   parse_special) {
+    return llama_tokenize(llama_get_model(ctx), text, add_special, parse_special);
 }
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special) {
+                        bool   add_special,
+                        bool   parse_special) {
     // upper limit for the number of tokens
-    int n_tokens = text.length() + add_bos;
+    int n_tokens = text.length() + 2 * add_special;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, special);
+    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, special);
+        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_special, parse_special);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);

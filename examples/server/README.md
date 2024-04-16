@@ -11,57 +11,57 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
  * Continuous batching
  * Multimodal (wip)
  * Monitoring endpoints
+ * Schema-constrained JSON response format
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
 
 **Command line options:**
 
-- `--threads N`, `-t N`: Set the number of threads to use during generation. Not used if model layers are offloaded to GPU. The server is using batching, this parameter is used only if one token is to be processed on CPU backend.
+- `--threads N`, `-t N`: Set the number of threads to use during generation. Not used if model layers are offloaded to GPU. The server is using batching. This parameter is used only if one token is to be processed on CPU backend.
 - `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation. Not used if model layers are offloaded to GPU.
-- `--threads-http N`: number of threads in the http server pool to process requests (default: `max(std::thread::hardware_concurrency() - 1, --parallel N + 2)`)
+- `--threads-http N`: Number of threads in the http server pool to process requests. Default: `max(std::thread::hardware_concurrency() - 1, --parallel N + 2)`
 - `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
-- `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (default: unused).
-- `-hfr REPO, --hf-repo REPO`: Hugging Face model repository (default: unused).
-- `-hff FILE, --hf-file FILE`: Hugging Face model file (default: unused).
+- `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file. Default: unused
+- `-hfr REPO, --hf-repo REPO`: Hugging Face model repository. Default: unused
+- `-hff FILE, --hf-file FILE`: Hugging Face model file. Default: unused
 - `-a ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
-- `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
+- `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is `512`, but LLaMA models were built with a context of `2048`, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of `4096`.
 - `-ngl N`, `--n-gpu-layers N`: When compiled with GPU support, this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
-- `-mg i, --main-gpu i`: When using multiple GPUs this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default GPU 0 is used.
-- `-ts SPLIT, --tensor-split SPLIT`: When using multiple GPUs this option controls how large tensors should be split across all GPUs. `SPLIT` is a comma-separated list of non-negative values that assigns the proportion of data that each GPU should get in order. For example, "3,2" will assign 60% of the data to GPU 0 and 40% to GPU 1. By default the data is split in proportion to VRAM but this may not be optimal for performance.
-- `-b N`, `--batch-size N`: Set the batch size for prompt processing. Default: `2048`.
-- `-ub N`, `--ubatch-size N`: physical maximum batch size. Default: `512`.
-- `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
+- `-mg i, --main-gpu i`: When using multiple GPUs, this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default, GPU `0` is used.
+- `-ts SPLIT, --tensor-split SPLIT`: When using multiple GPUs, this option controls how large tensors should be split across all GPUs. `SPLIT` is a comma-separated list of non-negative values that assigns the proportion of data that each GPU should get in order. For example, "3,2" will assign 60% of the data to GPU 0 and 40% to GPU 1. By default, the data is split in proportion to VRAM, but this may not be optimal for performance.
+- `-b N`, `--batch-size N`: Set the batch size for prompt processing. Default: `2048`
+- `-ub N`, `--ubatch-size N`: Physical maximum batch size. Default: `512`
 - `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 - `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
-- `--numa STRATEGY`: Attempt one of the below optimization strategies  that help on some NUMA systems
+- `--numa STRATEGY`: Attempt one of the below optimization strategies that may help on some NUMA systems
 - `--numa distribute`: Spread execution evenly over all nodes
 - `--numa isolate`: Only spawn threads on CPUs on the node that execution started on
-- `--numa numactl`: Use the CPU map provided by numactl
-if run without this previously, it is recommended to drop the system page cache before using this
-see https://github.com/ggerganov/llama.cpp/issues/1437
+- `--numa numactl`: Use the CPU map provided by numactl. If run without this previously, it is recommended to drop the system
+page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/1437
 
-- `--numa`: Attempt optimizations that help on some NUMA systems.
+- `--numa`: Attempt optimizations that may help on some NUMA systems.
 - `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 - `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
-- `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`.
-- `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`.
-- `--port`: Set the port to listen. Default: `8080`.
-- `--path`: path from which to serve static files (default: disabled)
-- `--api-key`: Set an api key for request authorization. By default the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
-- `--api-key-file`: path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`'s.
-- `--embedding`: Enable embedding extraction, Default: disabled.
-- `-np N`, `--parallel N`: Set the number of slots for process requests (default: 1)
-- `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
-- `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load "a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+- `-to N`, `--timeout N`: Server read/write timeout in seconds. Default `600`
+- `--host`: Set the hostname or ip address to listen. Default `127.0.0.1`
+- `--port`: Set the port to listen. Default: `8080`
+- `--path`: Path from which to serve static files. Default: disabled
+- `--api-key`: Set an api key for request authorization. By default, the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
+- `--api-key-file`: Path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`s.
+- `--embedding`: Enable embedding extraction. Default: disabled
+- `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`
+- `-cb`, `--cont-batching`: Enable continuous batching (a.k.a dynamic batching).  Default: disabled
+- `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots). This is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
-- `--grp-attn-n`: Set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`
-- `--grp-attn-w`: Set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`
-- `-n N, --n-predict N`: Set the maximum tokens to predict (default: -1)
+- `--grp-attn-n`: Set the group attention factor to extend context size through self-extend. Used together with group attention width `--grp-attn-w`. Default: `1`, which is disabled.
+- `--grp-attn-w`: Set the group attention width to extend context size through self-extend.  Used together with group attention factor `--grp-attn-n`. Default: `512`
+- `-n N, --n-predict N`: Set the maximum tokens to predict. Default: `-1`
 - `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
-- `--metrics`: enable prometheus `/metrics` compatible endpoint (default: disabled)
-- `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name (default: template taken from model's metadata). We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
-- `--log-disable`: Output logs to stdout only, not to `llama.log`. default: enabled.
-- `--log-format FORMAT`: Define the log output to FORMAT: json or text (default: json)
+- `--metrics`: enable prometheus `/metrics` compatible endpoint. Default: disabled
+- `--slot-save-path PATH`: Specifies the path where the state of slots (the prompt cache) can be stored. If not provided, the slot management endpoints will be disabled.
+- `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name.  Default: template taken from model's metadata. We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
+- `--log-disable`: Output logs to stdout only, not to `llama.log`. Default: enabled
+- `--log-format FORMAT`: Define the log output to FORMAT: json or text Default: `json`
 
 **If compiled with `LLAMA_SERVER_SSL=ON`**
 - `--ssl-key-file FNAME`: path to file a PEM-encoded SSL private key
@@ -69,7 +69,7 @@ see https://github.com/ggerganov/llama.cpp/issues/1437
 
 ## Build
 
-server is build alongside everything else from the root of the project
+`server` is built alongside everything else from the root of the project
 
 - Using `make`:
 
@@ -85,7 +85,7 @@ server is build alongside everything else from the root of the project
 
 ## Build with SSL
 
-server can also be built with SSL support using OpenSSL 3
+`server` can also be built with SSL support using OpenSSL 3
 
 - Using `make`:
 
@@ -135,7 +135,7 @@ docker run -p 8080:8080 -v /path/to/models:/models --gpus all ghcr.io/ggerganov/
 
 ## Testing with CURL
 
-Using [curl](https://curl.se/). On Windows `curl.exe` should be available in the base OS.
+Using [curl](https://curl.se/). On Windows, `curl.exe` should be available in the base OS.
 
 ```sh
 curl --request POST \
@@ -159,7 +159,7 @@ mkdir llama-client
 cd llama-client
 ```
 
-Create a index.js file and put inside this:
+Create a index.js file and put this inside:
 
 ```javascript
 const prompt = `Building a website can be done in 10 simple steps:`;
@@ -190,8 +190,8 @@ node index.js
   - 503 -> `{"status": "loading model"}` if the model is still being loaded.
   - 500 -> `{"status": "error"}` if the model failed to load.
   - 200 -> `{"status": "ok", "slots_idle": 1, "slots_processing": 2 }` if the model is successfully loaded and the server is ready for further requests mentioned below.
-  - 200 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slot are currently available.
-  - 503 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if the query parameter `fail_on_no_slot` is provided and no slot are currently available.
+  - 200 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slots are currently available.
+  - 503 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if the query parameter `fail_on_no_slot` is provided and no slots are currently available.
 
   If the query parameter `include_slots` is passed, `slots` field will contain internal slots data except if `--slots-endpoint-disable` is set.
 
@@ -205,75 +205,77 @@ node index.js
       - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
       - The system prompt is empty
 
-    `temperature`: Adjust the randomness of the generated text (default: 0.8).
+    `temperature`: Adjust the randomness of the generated text. Default: `0.8`
 
-    `dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` (default: 0.0, 0.0 = disabled).
+    `dynatemp_range`: Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]` Default: `0.0`, which is disabled.
 
-    `dynatemp_exponent`: Dynamic temperature exponent (default: 1.0).
+    `dynatemp_exponent`: Dynamic temperature exponent. Default: `1.0`
 
-    `top_k`: Limit the next token selection to the K most probable tokens (default: 40).
+    `top_k`: Limit the next token selection to the K most probable tokens.  Default: `40`
 
-    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.95).
+    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Default: `0.95`
 
-    `min_p`: The minimum probability for a token to be considered, relative to the probability of the most likely token (default: 0.05).
+    `min_p`: The minimum probability for a token to be considered, relative to the probability of the most likely token. Default: `0.05`
 
-    `n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: -1, -1 = infinity).
+    `n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. Default: `-1`, where `-1` is infinity.
 
     `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded.
-    By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the prompt.
+    By default, this value is set to `0`, meaning no tokens are kept. Use `-1` to retain all tokens from the prompt.
 
     `stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
 
     `stop`: Specify a JSON array of stopping strings.
-    These words will not be included in the completion, so make sure to add them to the prompt for the next iteration (default: []).
+    These words will not be included in the completion, so make sure to add them to the prompt for the next iteration. Default: `[]`
 
-    `tfs_z`: Enable tail free sampling with parameter z (default: 1.0, 1.0 = disabled).
+    `tfs_z`: Enable tail free sampling with parameter z. Default: `1.0`, which is disabled.
 
-    `typical_p`: Enable locally typical sampling with parameter p (default: 1.0, 1.0 = disabled).
+    `typical_p`: Enable locally typical sampling with parameter p. Default: `1.0`, which is disabled.
 
-    `repeat_penalty`: Control the repetition of token sequences in the generated text (default: 1.1).
+    `repeat_penalty`: Control the repetition of token sequences in the generated text. Default: `1.1`
 
-    `repeat_last_n`: Last n tokens to consider for penalizing repetition (default: 64, 0 = disabled, -1 = ctx-size).
+    `repeat_last_n`: Last n tokens to consider for penalizing repetition. Default: `64`, where `0` is disabled and `-1` is ctx-size.
 
-    `penalize_nl`: Penalize newline tokens when applying the repeat penalty (default: true).
+    `penalize_nl`: Penalize newline tokens when applying the repeat penalty. Default: `true`
 
-    `presence_penalty`: Repeat alpha presence penalty (default: 0.0, 0.0 = disabled).
+    `presence_penalty`: Repeat alpha presence penalty. Default: `0.0`, which is disabled.
 
-    `frequency_penalty`: Repeat alpha frequency penalty (default: 0.0, 0.0 = disabled);
+    `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
 
-    `penalty_prompt`: This will replace the `prompt` for the purpose of the penalty evaluation. Can be either `null`, a string or an array of numbers representing tokens (default: `null` = use the original `prompt`).
+    `penalty_prompt`: This will replace the `prompt` for the purpose of the penalty evaluation. Can be either `null`, a string or an array of numbers representing tokens. Default: `null`, which is to use the original `prompt`.
 
-    `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation (default: 0, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0).
+    `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
 
-    `mirostat_tau`: Set the Mirostat target entropy, parameter tau (default: 5.0).
+    `mirostat_tau`: Set the Mirostat target entropy, parameter tau. Default: `5.0`
 
-    `mirostat_eta`: Set the Mirostat learning rate, parameter eta (default: 0.1).
+    `mirostat_eta`: Set the Mirostat learning rate, parameter eta.  Default: `0.1`
 
-    `grammar`: Set grammar for grammar-based sampling (default: no grammar)
+    `grammar`: Set grammar for grammar-based sampling.  Default: no grammar
 
-    `seed`: Set the random number generator (RNG) seed (default: -1, -1 = random seed).
+    `json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
 
-    `ignore_eos`: Ignore end of stream token and continue generating (default: false).
+    `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
-    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. (default: []).
+    `ignore_eos`: Ignore end of stream token and continue generating.  Default: `false`
 
-    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
+    `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. Default: `[]`
 
-    `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum (default: 0)
+    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token. Default: `0`
+
+    `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum. Default: `0`
 
     `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
-    `id_slot`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
+    `id_slot`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot.  Default: `-1`
 
-    `cache_prompt`: Re-use previously cached prompt from the last request if possible. This may prevent re-caching the prompt from scratch. (default: false)
+    `cache_prompt`: Re-use previously cached prompt from the last request if possible. This may prevent re-caching the prompt from scratch.  Default: `false`
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
-    `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. (default: `["top_k", "tfs_z", "typical_p", "top_p", "min_p", "temperature"]` - these are all the available values)
+    `samplers`: The order the samplers should be applied in. An array of strings representing sampler type names. If a sampler is not set, it will not be used. If a sampler is specified more than once, it will be applied multiple times. Default: `["top_k", "tfs_z", "typical_p", "top_p", "min_p", "temperature"]` - these are all the available values.
 
 ### Result JSON
 
-- Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
+- Note: When using streaming mode (`stream`), only `content` and `stop` will be returned until end of completion.
 
 - `completion_probabilities`: An array of token probabilities for each completion. The array's length is `n_predict`. Each item in the array has the following structure:
 
@@ -287,7 +289,7 @@ node index.js
     },
     {
       "prob": float,
-      "tok_str": "<second most likely tonen>"
+      "tok_str": "<second most likely token>"
     },
     ...
   ]
@@ -357,14 +359,16 @@ Notice that each `probs` is an array of length `n_probs`.
 
 - `assistant_name` - the required assistant name to generate the prompt in case you have specified a system prompt for all slots.
 - `user_name` - the required anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
-- `default_generation_settings` - the default generation settings for the `/completion` endpoint, has the same fields as the `generation_settings` response object from the `/completion` endpoint.
+- `default_generation_settings` - the default generation settings for the `/completion` endpoint, which has the same fields as the `generation_settings` response object from the `/completion` endpoint.
 - `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
 
 - **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only model with [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, ChatML template will be used.
 
     *Options:*
 
-    See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such are `mirostat` are supported.
+    See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
+
+    The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}`), similar to other OpenAI-inspired API providers.
 
     *Examples:*
 
@@ -514,16 +518,67 @@ Available metrics:
 - `llamacpp:tokens_predicted_total`: Number of generation tokens processed.
 - `llamacpp:prompt_tokens_seconds`: Average prompt throughput in tokens/s.
 - `llamacpp:predicted_tokens_seconds`: Average generation throughput in tokens/s.
-- `llamacpp:kv_cache_usage_ratio`: KV-cache usage. 1 means 100 percent usage.
+- `llamacpp:kv_cache_usage_ratio`: KV-cache usage. `1` means 100 percent usage.
 - `llamacpp:kv_cache_tokens`: KV-cache tokens.
-- `llamacpp:requests_processing`: Number of request processing.
-- `llamacpp:requests_deferred`: Number of request deferred.
+- `llamacpp:requests_processing`: Number of requests processing.
+- `llamacpp:requests_deferred`: Number of requests deferred.
+
+- **POST** `/slots/{id_slot}?action=save`: Save the prompt cache of the specified slot to a file.
+
+    *Options:*
+
+    `filename`: Name of the file to save the slot's prompt cache. The file will be saved in the directory specified by the `--slot-save-path` server parameter.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "filename": "slot_save_file.bin",
+    "n_saved": 1745,
+    "n_written": 14309796,
+    "timings": {
+        "save_ms": 49.865
+    }
+}
+```
+
+- **POST** `/slots/{id_slot}?action=restore`: Restore the prompt cache of the specified slot from a file.
+
+    *Options:*
+
+    `filename`: Name of the file to restore the slot's prompt cache from. The file should be located in the directory specified by the `--slot-save-path` server parameter.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "filename": "slot_save_file.bin",
+    "n_restored": 1745,
+    "n_read": 14309796,
+    "timings": {
+        "restore_ms": 42.937
+    }
+}
+```
+
+- **POST** `/slots/{id_slot}?action=erase`: Erase the prompt cache of the specified slot.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "n_erased": 1745
+}
+```
 
 ## More examples
 
 ### Change system prompt on runtime
 
-To use the server example to serve multiple chat-type clients while keeping the same system prompt, you can utilize the option `system_prompt` to achieve that. This only needs to be done once to establish it.
+To use the server example to serve multiple chat-type clients while keeping the same system prompt, you can utilize the option `system_prompt`. This only needs to be used once.
 
 `prompt`: Specify a context that you want all connecting clients to respect.
 
@@ -562,11 +617,11 @@ bash chat.sh
 
 ### OAI-like API
 
-The HTTP server supports OAI-like API: https://github.com/openai/openai-openapi
+The HTTP `server` supports an OAI-like API: https://github.com/openai/openai-openapi
 
 ### API errors
 
-Server returns error in the same format as OAI: https://github.com/openai/openai-openapi
+`server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
 
 Example of an error:
 

@@ -11,12 +11,16 @@ RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key 
     apt update -y && \
     apt-get install -y vulkan-sdk
 
+# Install cURL
+RUN apt-get update && \
+    apt-get install -y libcurl4-openssl-dev
+
 # Build it
 WORKDIR /app
 COPY . .
 RUN mkdir build && \
     cd build && \
-    cmake .. -DLLAMA_VULKAN=1 && \
+    cmake .. -DLLAMA_VULKAN=1 -DLLAMA_CURL=1 && \
     cmake --build . --config Release --target server
 
 # Clean up

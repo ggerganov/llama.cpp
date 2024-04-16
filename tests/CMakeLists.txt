@@ -25,7 +25,7 @@ function(llama_test source)
 
     add_executable(${TEST_TARGET} ${source} get-model.cpp)
     install(TARGETS ${TEST_TARGET} RUNTIME)
-    target_link_libraries(${TEST_TARGET} PRIVATE common json-schema-to-grammar)
+    target_link_libraries(${TEST_TARGET} PRIVATE common)
     add_test(
         NAME ${TEST_TARGET}
         WORKING_DIRECTORY ${LLAMA_TEST_WORKING_DIRECTORY}
@@ -59,6 +59,7 @@ llama_test(test-tokenizer-1-bpe.cpp    NAME test-tokenizer-1-gpt2             AR
 
 llama_test(test-grammar-parser.cpp)
 llama_test(test-llama-grammar.cpp)
+llama_test(test-grammar-integration.cpp)
 llama_test(test-grad0.cpp)
 # llama_test(test-opt.cpp) # SLOW
 llama_test(test-backend-ops.cpp)

@@ -16,6 +16,7 @@ import matplotlib
 import matplotlib.dates
 import matplotlib.pyplot as plt
 import requests
+from statistics import mean
 
 
 def main(args_in: list[str] | None = None) -> None:
@@ -75,7 +76,6 @@ def main(args_in: list[str] | None = None) -> None:
                             data['metrics'][metric_name][metric_metric]=value
                             github_env.write(
                                 f"{escape_metric_name(metric_name)}_{escape_metric_name(metric_metric)}={value}\n")
-                token_seconds = data['metrics']['llamacpp_tokens_second']['avg']
                 iterations = data['root_group']['checks']['success completion']['passes']
 
     except Exception:
@@ -109,6 +109,7 @@ def main(args_in: list[str] | None = None) -> None:
 
     # Prometheus
     end_time = time.time()
+    prometheus_metrics = {}
     if is_server_listening("0.0.0.0", 9090):
         metrics = ['prompt_tokens_seconds', 'predicted_tokens_seconds',
                    'kv_cache_usage_ratio', 'requests_processing', 'requests_deferred']
@@ -127,6 +128,7 @@ def main(args_in: list[str] | None = None) -> None:
                 values = metric_data['data']['result'][0]['values']
                 timestamps, metric_values = zip(*values)
                 metric_values = [float(value) for value in metric_values]
+                prometheus_metrics[metric] = metric_values
                 timestamps_dt = [datetime.fromtimestamp(int(ts)) for ts in timestamps]
                 plt.figure(figsize=(16, 10), dpi=80)
                 plt.plot(timestamps_dt, metric_values, label=metric)
@@ -176,17 +178,20 @@ xychart-beta
 
     # 140 chars max for commit status description
     bench_results = {
+        "i": iterations,
         "req": {
-            "p90": data['metrics']["http_req_duration"]["p(90)"],
-            "avg": data['metrics']["http_req_duration"]["avg"],
+            "p95": round(data['metrics']["http_req_duration"]["p(95)"], 2),
+            "avg": round(data['metrics']["http_req_duration"]["avg"], 2),
         },
         "pp": {
-            "p90": data['metrics']["llamacpp_prompt_tokens"]["p(90)"],
-            "avg": data['metrics']["llamacpp_prompt_tokens"]["avg"],
+            "p95": round(data['metrics']["llamacpp_prompt_processing_second"]["p(95)"], 2),
+            "avg": round(data['metrics']["llamacpp_prompt_processing_second"]["avg"], 2),
+            "0": round(mean(prometheus_metrics['prompt_tokens_seconds']), 2),
         },
         "tg": {
-            "p90": data['metrics']["llamacpp_tokens_second"]["p(90)"],
-            "avg": data['metrics']["llamacpp_tokens_second"]["avg"],
+            "p95": round(data['metrics']["llamacpp_tokens_second"]["p(95)"], 2),
+            "avg": round(data['metrics']["llamacpp_tokens_second"]["avg"], 2),
+            "0": round(mean(prometheus_metrics['predicted_tokens_seconds']), 2),
         },
     }
     with open("results.github.env", 'a') as github_env:
@@ -200,7 +205,7 @@ xychart-beta
 
 
 def start_benchmark(args):
-    k6_path = 'k6'
+    k6_path = './k6'
     if 'BENCH_K6_BIN_PATH' in os.environ:
         k6_path = os.environ['BENCH_K6_BIN_PATH']
     k6_args = [
