@@ -1151,6 +1151,8 @@ add_library(ggml OBJECT
             ggml-backend.h
             ggml-quants.c
             ggml-quants.h
+            sgemm.cpp
+            sgemm.h
             ${GGML_SOURCES_CUDA}    ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL}  ${GGML_HEADERS_OPENCL}
             ${GGML_SOURCES_METAL}   ${GGML_HEADERS_METAL}
