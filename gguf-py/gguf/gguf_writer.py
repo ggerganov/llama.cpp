@@ -469,6 +469,18 @@ class GGUFWriter:
     def add_chat_template(self, value: str) -> None:
         self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
 
+    def add_prefix_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.PREFIX_ID, id)
+
+    def add_suffix_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.SUFFIX_ID, id)
+
+    def add_middle_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.MIDDLE_ID, id)
+
+    def add_eot_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.EOT_ID, id)
+
     def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
         pack_prefix = ''
         if not skip_pack_prefix:

@@ -11,6 +11,7 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
  * Continuous batching
  * Multimodal (wip)
  * Monitoring endpoints
+ * Schema-constrained JSON response format
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
 
@@ -250,6 +251,8 @@ node index.js
 
     `grammar`: Set grammar for grammar-based sampling.  Default: no grammar
 
+    `json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
+
     `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
     `ignore_eos`: Ignore end of stream token and continue generating.  Default: `false`
@@ -364,6 +367,8 @@ Notice that each `probs` is an array of length `n_probs`.
     *Options:*
 
     See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
+
+    The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}`), similar to other OpenAI-inspired API providers.
 
     *Examples:*
 

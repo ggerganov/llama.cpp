@@ -28,14 +28,27 @@ static std::string ggml_ne_string(const ggml_tensor * t) {
 }
 
 static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne, const size_t * nb, int64_t n) {
+    GGML_ASSERT(n > 0);
     float sum = 0;
     for (int64_t i3 = 0; i3 < ne[3]; i3++) {
         printf("                                     [\n");
-        for (int64_t i2 = 0; i2 < ne[2] && i2 < n; i2++) {
+        for (int64_t i2 = 0; i2 < ne[2]; i2++) {
+            if (i2 == n && ne[2] > 2*n) {
+                printf("                                      ..., \n");
+                i2 = ne[2] - n;
+            }
             printf("                                      [\n");
-            for (int64_t i1 = 0; i1 < ne[1] && i1 < n; i1++) {
+            for (int64_t i1 = 0; i1 < ne[1]; i1++) {
+                if (i1 == n && ne[1] > 2*n) {
+                    printf("                                       ..., \n");
+                    i1 = ne[1] - n;
+                }
                 printf("                                       [");
-                for (int64_t i0 = 0; i0 < ne[0] && i0 < n; i0++) {
+                for (int64_t i0 = 0; i0 < ne[0]; i0++) {
+                    if (i0 == n && ne[0] > 2*n) {
+                        printf("..., ");
+                        i0 = ne[0] - n;
+                    }
                     size_t i = i3 * nb[3] + i2 * nb[2] + i1 * nb[1] + i0 * nb[0];
                     float v;
                     if (type == GGML_TYPE_F16) {
@@ -51,17 +64,14 @@ static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne
                     } else {
                         GGML_ASSERT(false);
                     }
-                    printf("%8.4f", v);
+                    printf("%12.4f", v);
                     sum += v;
-                    if (i0 < ne[0] - 1 && i0 < n - 1) printf(", ");
+                    if (i0 < ne[0] - 1) printf(", ");
                 }
-                if (ne[0] > n) printf(", ...");
                 printf("],\n");
             }
-            if (ne[1] > n) printf("                                       ...\n");
             printf("                                      ],\n");
         }
-        if (ne[2] > n) printf("                                     ...\n");
         printf("                                     ]\n");
         printf("                                     sum = %f\n", sum);
     }
