@@ -306,6 +306,13 @@ static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
 #endif // !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) && __CUDA_ARCH__ >= CC_PASCAL && CUDART_VERSION >= CUDART_HMAX
 }
 
+#if CUDART_VERSION < 12000
+static __device__ __forceinline__ uint __hgt2_mask(const half2 a, const half2 b) {
+    const uint mask_low  = 0x0000FFFF * ( __low2half(a) >  __low2half(b));
+    const uint mask_high = 0xFFFF0000 * (__high2half(a) > __high2half(b));
+    return mask_low | mask_high;
+}
+#endif // CUDART_VERSION < 12000
 
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
