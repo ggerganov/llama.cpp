@@ -1161,7 +1161,6 @@ extern "C" {
             enum ggml_prec       prec);
 
     // indirect matrix multiplication
-    // TODO: document
     GGML_API struct ggml_tensor * ggml_mul_mat_id(
             struct ggml_context * ctx,
             struct ggml_tensor  * as,

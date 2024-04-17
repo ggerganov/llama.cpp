@@ -7365,6 +7365,7 @@ struct llm_build_context {
                     n_expert, n_expert_used,
                     LLM_FFN_SILU, true,
                     cb, il);
+            cb(cur, "ffn_moe_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
@@ -8694,6 +8695,7 @@ struct llm_build_context {
                         n_expert, n_expert_used,
                         LLM_FFN_SILU, false,
                         cb, il);
+            cb(cur, "ffn_moe_out", il);
 
             // FFN shared expert
             {

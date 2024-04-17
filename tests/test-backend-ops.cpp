@@ -1613,7 +1613,6 @@ public:
     }
 };
 
-
 // Llama
 struct test_llama : public test_llm {
     static constexpr float freq_base = 10000.0f;
@@ -1860,90 +1859,6 @@ struct test_falcon : public test_llm {
     }
 };
 
-
-// Mixtral MOE
-struct test_moe : public test_case {
-    const int n_expert;
-    const int n_expert_used;
-    const int n_tokens;
-    const int n_embd;
-    const int n_ff;
-
-    std::string op_desc(ggml_tensor * t) override {
-        return "MOE";
-
-        GGML_UNUSED(t);
-    }
-
-    std::string vars() override {
-        return VARS_TO_STR5(n_expert, n_expert_used, n_tokens, n_embd, n_ff);
-    }
-
-    test_moe(int n_experts = 8, int n_experts_per_tok = 2, int n_tokens = 1, int n_embd = 4096, int n_ff = 14336)
-        : n_expert(n_experts), n_expert_used(n_experts_per_tok), n_tokens(n_tokens), n_embd(n_embd), n_ff(n_ff) {
-    }
-
-    ggml_tensor * build_graph(ggml_context * ctx) override {
-        ggml_type wtype = GGML_TYPE_F32;
-        ggml_tensor * ffn_gate_inp = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_expert);
-
-        ggml_tensor * ffn_gate_exps = ggml_new_tensor_3d(ctx, wtype, n_embd, n_ff, n_expert);
-        ggml_tensor * ffn_down_exps = ggml_new_tensor_3d(ctx, wtype, n_ff, n_embd, n_expert);
-        ggml_tensor * ffn_up_exps = ggml_new_tensor_3d(ctx, wtype, n_embd, n_ff, n_expert);
-
-        ggml_tensor * cur = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_tensor * logits = ggml_mul_mat(ctx, ffn_gate_inp, cur); // [n_expert, n_tokens]
-
-        //ggml_tensor * probs = ggml_soft_max(ctx, logits); // [n_expert, n_tokens]
-        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, nullptr, 1.0f/sqrtf(n_embd), 0.0f);
-
-        // select experts
-        ggml_tensor * selected_experts = ggml_top_k(ctx, probs, n_expert_used); // [n_expert_used, n_tokens]
-
-        ggml_tensor * weights = ggml_get_rows(ctx,
-                ggml_reshape_3d(ctx, probs, 1, n_expert, n_tokens), selected_experts); // [1, n_expert_used, n_tokens]
-
-        weights = ggml_reshape_2d(ctx, weights, n_expert_used, n_tokens);
-
-        ggml_tensor * weights_sum = ggml_sum_rows(ctx, weights); // [1, n_tokens]
-
-        weights = ggml_div(ctx, weights, weights_sum); // [n_expert_used, n_tokens]
-
-        cur = ggml_reshape_3d(ctx, cur, n_embd, 1, n_tokens);
-        ggml_tensor * up = ggml_mul_mat_id(ctx, ffn_up_exps, cur, selected_experts); // [n_ff, n_expert_used, n_tokens]
-
-        ggml_tensor * gate = ggml_mul_mat_id(ctx, ffn_gate_exps, cur, selected_experts); // [n_ff, n_expert_used, n_tokens]
-
-        gate = ggml_silu(ctx, gate);
-
-        ggml_tensor * par = ggml_mul(ctx, up, gate); // [n_ff, n_expert_used, n_tokens]
-
-        ggml_tensor * experts = ggml_mul_mat_id(ctx, ffn_down_exps, par, selected_experts); // [n_embd, n_expert_used, n_tokens]
-
-        experts = ggml_mul(ctx, experts,
-                ggml_reshape_3d(ctx, weights, 1, n_expert_used, n_tokens));
-
-        // aggregate experts
-        ggml_tensor * moe_out = nullptr;
-        for (int i = 0; i < n_expert_used; ++i) {
-            ggml_tensor * cur_expert = ggml_view_2d(ctx, experts, n_embd, n_tokens,
-                    experts->nb[2], i*experts->nb[1]);
-            cur_expert = ggml_cont(ctx, cur_expert);
-            if (i == 0) {
-                moe_out = cur_expert;
-            } else {
-                moe_out = ggml_add(ctx, moe_out, cur_expert);
-            }
-        }
-
-        cur = moe_out;
-
-        return cur;
-    }
-};
-
-
 static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op_name) {
     std::vector<std::unique_ptr<test_case>> test_cases;
     std::default_random_engine rng(0);
@@ -2030,10 +1945,6 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
             test_cases.emplace_back(new test_bin_bcast(op, type, ne, nr));
         }
     };
-
-    // mul: src0: 4096 2 32 1
-    // mul: src1: 1 2 32 1
-    add_test_bin_bcast(GGML_TYPE_F32, {1, 2, 32, 1}, {4096, 1, 1, 1});
 
     add_test_bin_bcast(GGML_TYPE_F32, {1, 1, 8, 1}, {1, 1, 1, 1});
     add_test_bin_bcast(GGML_TYPE_F32, {1, 1, 1, 1}, {32, 1, 1, 1});
@@ -2194,8 +2105,6 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_llama(2));
     test_cases.emplace_back(new test_falcon(1));
     test_cases.emplace_back(new test_falcon(2));
-    test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 8*1024));
-    test_cases.emplace_back(new test_moe(8, 2, 32, 4096, 8*1024));
 #endif
 
     // run tests

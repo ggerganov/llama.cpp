@@ -4588,7 +4588,7 @@ void ggml_mul_mat_set_prec(
 
     in b, n_experts_used can be broadcasted to match the n_expert_used of ids
 
-    c ~= as[:,:,i] @ b[:,i%r,t], i = ids[e,t] for all e in ids
+    c ~= as[:,:,i] @ b[:,i%r,t], i = ids[e,t] for all e,t in ids
 */
 struct ggml_tensor * ggml_mul_mat_id(
         struct ggml_context * ctx,
