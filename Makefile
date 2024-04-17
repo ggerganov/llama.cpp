@@ -1,7 +1,7 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
-	simple batched batched-bench save-load-state server gguf gguf-split llama-bench libllava.a llava-cli baby-llama beam-search  \
+	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama beam-search  \
 	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm tests/test-c.o
 
 # Binaries only useful for tests
@@ -10,7 +10,7 @@ TEST_TARGETS = \
 	tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama          \
 	tests/test-tokenizer-0-falcon tests/test-tokenizer-1-llama tests/test-tokenizer-1-bpe tests/test-rope      \
 	tests/test-backend-ops tests/test-model-load-cancel tests/test-autorelease                                 \
-	tests/test-json-schema-to-grammar
+	tests/test-json-schema-to-grammar tests/test-grammar-integration
 
 # Code coverage output files
 COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
@@ -218,6 +218,13 @@ endif
 ifdef LLAMA_DISABLE_LOGS
 	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
 endif # LLAMA_DISABLE_LOGS
+
+# disable ggml.c's use of sgemm.cpp
+ifdef LLAMA_NO_LLAMAFILE
+	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE=0
+else
+	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE=1
+endif
 
 # warnings
 WARN_FLAGS    = -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
@@ -646,7 +653,7 @@ CUDA_VERSION := $(shell $(NVCC) --version | grep -oP 'release (\K[0-9]+\.[0-9])'
 ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
 ifndef CUDA_DOCKER_ARCH
 ifndef CUDA_POWER_ARCH
-$(error I ERROR: For CUDA versions < 11.7 a target CUDA architecture must be explicitly provided via CUDA_DOCKER_ARCH)
+$(error I ERROR: For CUDA versions < 11.7 a target CUDA architecture must be explicitly provided via environment variable CUDA_DOCKER_ARCH, e.g. by running "export CUDA_DOCKER_ARCH=compute_XX" on Unix-like systems, where XX is the minimum compute capability that the code needs to run on. A list with compute capabilities can be found here: https://developer.nvidia.com/cuda-gpus )
 endif # CUDA_POWER_ARCH
 endif # CUDA_DOCKER_ARCH
 endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
@@ -676,19 +683,22 @@ ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
+sgemm.o: sgemm.cpp sgemm.h ggml.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 unicode.o: unicode.cpp unicode.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 unicode-data.o: unicode-data.cpp unicode-data.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o sgemm.o
 
 llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 COMMON_H_DEPS = common/common.h common/sampling.h common/log.h
-COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o
+COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o json-schema-to-grammar.o
 
 common.o: common/common.cpp $(COMMON_H_DEPS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -756,7 +766,7 @@ batched: examples/batched/batched.cpp                         ggml.o llama.o $(C
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-batched-bench: examples/batched-bench/batched-bench.cpp       build-info.o ggml.o llama.o common.o $(OBJS)
+batched-bench: examples/batched-bench/batched-bench.cpp       build-info.o ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -788,7 +798,7 @@ save-load-state: examples/save-load-state/save-load-state.cpp ggml.o llama.o $(C
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-server: examples/server/server.cpp examples/server/utils.hpp examples/server/httplib.h common/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp json-schema-to-grammar.o common/stb_image.h ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
+server: examples/server/server.cpp examples/server/utils.hpp examples/server/httplib.h common/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp common/stb_image.h ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
 
@@ -797,6 +807,10 @@ gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 gguf-split: examples/gguf-split/gguf-split.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+eval-callback: examples/eval-callback/eval-callback.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -915,6 +929,10 @@ tests/test-llama-grammar: tests/test-llama-grammar.cpp ggml.o grammar-parser.o $
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-grammar-parser: tests/test-grammar-parser.cpp ggml.o llama.o grammar-parser.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-grammar-integration: tests/test-grammar-integration.cpp ggml.o llama.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

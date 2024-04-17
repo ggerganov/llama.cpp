@@ -79,12 +79,18 @@ jobs:
             sleep 0.1
           done
 
-      - name: Install k6
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install k6 and xk6-sse
         id: k6_installation
         run: |
           cd examples/server/bench
-          wget --quiet https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz
-          tar xzf k6*.tar.gz --strip-components=1
+          go install go.k6.io/xk6/cmd/xk6@latest
+          xk6 build master \
+              --with github.com/phymbert/xk6-sse
 
       - name: Build
         id: cmake_build
@@ -118,7 +124,7 @@ jobs:
 
           cd examples/server/bench
           source venv/bin/activate
-          BENCH_K6_BIN_PATH=./k6 python bench.py \
+          python bench.py \
               --runner-label ${{ env.RUNNER_LABEL }} \
               --name ${{ github.job }} \
               --branch ${{ github.head_ref || github.ref_name }} \
@@ -228,9 +234,9 @@ jobs:
             <summary>Expand details for performance related PR only</summary>
 
             - Concurrent users: ${{ env.N_USERS }}, duration: ${{ github.event.inputs.duration || env.DURATION }}
-            - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(90)=${{ env.HTTP_REQ_DURATION_P_90_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
-            - Prompt processing (pp): avg=${{ env.LLAMACPP_PROMPT_TOKENS_AVG }}tk/s p(90)=${{ env.LLAMACPP_PROMPT_TOKENS_P_90_ }}tk/s **total=${{ env.LLAMACPP_PROMPT_TOKENS_TOTAL_COUNTER_RATE }}tk/s**
-            - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(90)=${{ env.LLAMACPP_TOKENS_SECOND_P_90_ }}tk/s **total=${{ env.LLAMACPP_COMPLETION_TOKENS_TOTAL_COUNTER_RATE }}tk/s**
+            - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(95)=${{ env.HTTP_REQ_DURATION_P_95_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
+            - Prompt processing (pp): avg=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_P_95_ }}tk/s
+            - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_TOKENS_SECOND_P_95_ }}tk/s
             - ${{ env.BENCH_GRAPH_XLABEL }}
 
 

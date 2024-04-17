@@ -406,7 +406,7 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: document.baseURI.replace(/\/+$/, '') })) {
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: location.pathname.replace(/\/+$/, '') })) {
         const data = chunk.data;
 
         if (data.stop) {
@@ -1015,6 +1015,10 @@
     }
 
     function App(props) {
+      useEffect(() => {
+        const query = new URLSearchParams(location.search).get("q");
+        if (query) chat(query);
+      }, []);
 
       return html`
         <div class="mode-${session.value.type}">

@@ -17,7 +17,7 @@ static bool llama_sample_grammar_string(struct llama_grammar * grammar, const st
     size_t pos = 0;
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         auto prev_stacks = grammar->stacks;
-        grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
+        llama_grammar_accept(grammar->rules, prev_stacks, *it, grammar->stacks);
         if (grammar->stacks.empty()) {
             error_pos = pos;
             error_msg = "Unexpected character '" + unicode_cpt_to_utf8(*it) + "'";

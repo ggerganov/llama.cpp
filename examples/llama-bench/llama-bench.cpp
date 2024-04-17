@@ -190,7 +190,7 @@ static const cmd_params cmd_params_defaults = {
     /* n_ubatch      */ {512},
     /* type_k        */ {GGML_TYPE_F16},
     /* type_v        */ {GGML_TYPE_F16},
-    /* n_threads     */ {get_num_physical_cores()},
+    /* n_threads     */ {get_math_cpu_count()},
     /* n_gpu_layers  */ {99},
     /* split_mode    */ {LLAMA_SPLIT_MODE_LAYER},
     /* main_gpu      */ {0},

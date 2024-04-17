@@ -1226,7 +1226,7 @@ static void ggml_cuda_op_mul_mat_cublas(
 
     // the main device has a larger memory buffer to hold the results from all GPUs
     // ldc == nrows of the matrix that cuBLAS writes into
-    int ldc = id == ctx.device ? ne0 : row_diff;
+    int64_t ldc = id == ctx.device ? ne0 : row_diff;
 
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
@@ -1378,8 +1378,8 @@ static void ggml_cuda_op_mul_mat(
     const int64_t ne0 = dst->ne[0];
     const int64_t ne1 = dst->ne[1];
 
-    const int nb2 = dst->nb[2];
-    const int nb3 = dst->nb[3];
+    const int64_t nb2 = dst->nb[2];
+    const int64_t nb3 = dst->nb[3];
 
     GGML_ASSERT(ggml_backend_buffer_is_cuda(dst->buffer));
     GGML_ASSERT(ggml_backend_buffer_is_cuda(src1->buffer));
@@ -1947,7 +1947,7 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
     } else if (!split && !fp16_performance_good && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
         // KQV single-batch
         ggml_cuda_mul_mat_vec_nc(ctx, src0, src1, dst);
-    } else if (!split && fp16_performance_good && src0->type == GGML_TYPE_F16 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
+    } else if (!split && src0->type == GGML_TYPE_F16 && (src1->type == GGML_TYPE_F16 || fp16_performance_good) && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
         // KQ + KQV multi-batch
         ggml_cuda_mul_mat_batched_cublas(ctx, src0, src1, dst);
     } else if (use_dequantize_mul_mat_vec) {
@@ -2622,6 +2622,7 @@ GGML_CALL bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size
         return false;
     }
 
+#if CUDART_VERSION >= 11100
     cudaError_t err = cudaHostRegister(buffer, size, cudaHostRegisterPortable | cudaHostRegisterReadOnly);
     if (err != cudaSuccess) {
         // clear the error
@@ -2632,6 +2633,9 @@ GGML_CALL bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size
         return false;
     }
     return true;
+#else
+    return false;
+#endif
 }
 
 GGML_CALL void ggml_backend_cuda_unregister_host_buffer(void * buffer) {
