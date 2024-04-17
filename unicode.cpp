@@ -357,6 +357,7 @@ static std::vector<size_t> unicode_gpt2_regex_preprocess(const std::wstring & wt
                 token += utf_char;
             }
         }
+        start += offset;
     }
 
     return bpe_offsets;
