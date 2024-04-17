@@ -6171,14 +6171,16 @@ static struct ggml_tensor * llm_build_moe_ffn(
         ggml_tensor * cur_expert = ggml_view_2d(ctx, experts, n_embd, n_tokens,
                 experts->nb[2], i*experts->nb[1]);
 
-        // FIXME: non-contiguous add broken in cuda
-        cur_expert = ggml_cont(ctx, cur_expert);
-
         if (i == 0) {
             moe_out = cur_expert;
         } else {
             moe_out = ggml_add(ctx, moe_out, cur_expert);
         }
+    }
+
+    if (n_expert_used == 1) {
+        // avoid returning a non-contiguous tensor
+        moe_out = ggml_cont(ctx, moe_out);
     }
 
     return moe_out;
