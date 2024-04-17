@@ -17165,10 +17165,10 @@ static void llama_log_internal_v(ggml_log_level level, const char * file, const 
     va_end(args_copy);
 }
 
-static void llama_log_internal(ggml_log_level level, const char * format, ...) {
+static void llama_log_internal(ggml_log_level level, const char * file, const char * func, int line, const char * format, ...) {
     va_list args;
     va_start(args, format);
-    llama_log_internal_v(level, format, args);
+    llama_log_internal_v(level, file, func, line, format, args);
     va_end(args);
 }
 
