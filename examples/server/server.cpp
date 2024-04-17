@@ -2722,6 +2722,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             params.embedding = true;
         } else if (arg == "-cb" || arg == "--cont-batching") {
             params.cont_batching = true;
+        } else if (arg == "-fa" || arg == "--flash-attn") {
+            params.flash_attn = true;
         } else if (arg == "-np" || arg == "--parallel") {
             if (++i >= argc) {
                 invalid_param = true;
