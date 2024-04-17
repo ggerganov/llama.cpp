@@ -110,10 +110,7 @@ def main() -> None:
 
     args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
 
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     logger.info(f'* Loading: {args.model}')
     reader = gguf.GGUFReader(args.model, 'r' if args.dry_run else 'r+')

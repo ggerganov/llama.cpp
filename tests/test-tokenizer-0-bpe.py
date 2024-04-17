@@ -20,11 +20,7 @@ parser.add_argument("--fname-tok",   help="path to a text file to tokenize")
 parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
 args = parser.parse_args()
-if args.verbose:
-    logging.basicConfig(level=logging.DEBUG)
-else:
-    logging.basicConfig(level=logging.INFO)
-
+logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 dir_tokenizer = args.dir_tokenizer
 
 tokenizer = AutoTokenizer.from_pretrained(dir_tokenizer)

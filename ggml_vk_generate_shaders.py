@@ -2775,10 +2775,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     if args.glslc:
         GLSLC = args.glslc

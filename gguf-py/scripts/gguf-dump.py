@@ -111,10 +111,7 @@ def main() -> None:
 
     args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
 
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     if not args.json:
         logger.info(f'* Loading: {args.model}')

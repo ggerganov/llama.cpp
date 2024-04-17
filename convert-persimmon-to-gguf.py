@@ -73,10 +73,7 @@ def main():
     parser.add_argument("--adept-inference-dir", type=str,  help="path to adept-inference code directory")
     parser.add_argument("--verbose",  action="store_true",  help="increase output verbosity")
     args = parser.parse_args()
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     sys.path.append(str(args.adept_inference_dir))
     persimmon_model = torch.load(args.ckpt_path)
     hparams = persimmon_model['args']
