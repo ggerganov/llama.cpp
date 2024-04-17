@@ -17149,7 +17149,7 @@ static void llama_log_internal_v(ggml_log_level level, const char * file, const 
     va_copy(args_copy, args);
     char buffer[1024];
     int len_prefix = snprintf(buffer, 1024, "[%s, %d]: ", func, line); // param file not used in this file
-    int len = vsnprintf(buffer + len_prefix, 1024 - len, format, args);
+    int len = vsnprintf(buffer + len_prefix, 1024 - len_prefix, format, args);
     if (len < (1024 - len_prefix)) {
 #if (defined __ANDROID__) || (defined ANDROID)
         __android_log_print(level, "llama.cpp", "%s", buffer);
