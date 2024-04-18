@@ -2,7 +2,6 @@
 
 import logging
 import os
-import sys
 import hashlib
 
 logger = logging.getLogger("verify-checksum-models")
@@ -77,9 +76,9 @@ for line in hash_list:
 
 
 # Print column headers for results table
-logger.info("filename".ljust(40) + "valid checksum".center(20) + "file missing".center(20))
-logger.info("-" * 80)
+print("filename".ljust(40) + "valid checksum".center(20) + "file missing".center(20)) # noqa: NP100
+print("-" * 80) # noqa: NP100
 
 # Output the results as a table
 for r in results:
-    sys.stdout.write(f"{r['filename']:40} {r['valid checksum']:^20} {r['file missing']:^20}\n")
+    print(f"{r['filename']:40} {r['valid checksum']:^20} {r['file missing']:^20}") # noqa: NP100
