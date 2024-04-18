@@ -2654,7 +2654,6 @@ class OlmoModel(Model):
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
         n_head = self.hparams.get("num_attention_heads")
         n_kv_head = self.hparams.get("num_key_value_heads")
-        n_experts = self.hparams.get("num_local_experts")
         for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
