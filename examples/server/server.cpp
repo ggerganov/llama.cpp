@@ -2282,17 +2282,6 @@ struct server_context {
             {"size",        llama_model_size    (model)},
         };
     }
-
-    json empty_model_meta() const {
-        return json {
-            {"vocab_type",  llama_vocab_type    (0)},
-            {"n_vocab",     llama_n_vocab       (0)},
-            {"n_ctx_train", llama_n_ctx_train   (0)},
-            {"n_embd",      llama_n_embd        (0)},
-            {"n_params",    llama_model_n_params(0)},
-            {"size",        llama_model_size    (0)},
-        };
-    }
 };
 
 static void server_print_usage(const char * argv0, const gpt_params & params, const server_params & sparams) {
