@@ -14882,12 +14882,13 @@ static void ggml_compute_forward_flash_attn_ext(
         struct ggml_tensor * dst) {
     switch (dst->op_params[1]) {
         case GGML_PREC_DEFAULT:
+        case GGML_PREC_F32:
             {
+                // uses F32 accumulators
                 ggml_compute_forward_flash_attn_ext_f16(params, q, k, v, mask, dst);
             } break;
         default:
             {
-                // TODO: implement F32 precision
                 GGML_ASSERT(false);
             } break;
     }
