@@ -154,8 +154,7 @@ class Model(ABC):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -572,8 +571,7 @@ class BloomModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -656,8 +654,7 @@ class MPTModel(Model):
             else:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -700,8 +697,7 @@ class OrionModel(Model):
         elif "model_max_length" in self.hparams:
             ctx_length = self.hparams["model_max_length"]
         else:
-            logger.error("gguf: can not find ctx length parameter.")
-            sys.exit()
+            raise ValueError("gguf: can not find ctx length parameter.")
 
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_name(self.dir_model.name)
@@ -739,8 +735,7 @@ class OrionModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -782,8 +777,7 @@ class BaichuanModel(Model):
         elif "model_max_length" in self.hparams:
             ctx_length = self.hparams["model_max_length"]
         else:
-            logger.error("gguf: can not find ctx length parameter.")
-            sys.exit()
+            raise ValueError("gguf: can not find ctx length parameter.")
 
         self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_source_hf_repo(hf_repo)
@@ -837,8 +831,7 @@ class BaichuanModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -940,8 +933,7 @@ class XverseModel(Model):
         elif "model_max_length" in self.hparams:
             ctx_length = self.hparams["model_max_length"]
         else:
-            logger.error("gguf: can not find ctx length parameter.")
-            sys.exit()
+            raise ValueError("gguf: can not find ctx length parameter.")
 
         self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_source_hf_repo(hf_repo)
@@ -990,8 +982,7 @@ class XverseModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1095,8 +1086,7 @@ class FalconModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1198,10 +1188,9 @@ class RefactModel(Model):
             data = data_torch.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight",))
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1267,8 +1256,7 @@ class PersimmonModel(Model):
             data = data_torch.to(torch.float32).squeeze().numpy()
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
             n_dims = len(data.shape)
             logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
@@ -1483,8 +1471,7 @@ class LlamaModel(Model):
 
                             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
                             if new_name is None:
-                                logger.error(f"Can not map tensor {name!r}")
-                                sys.exit()
+                                raise ValueError(f"Can not map tensor {name!r}")
 
                             logger.info(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
@@ -1494,8 +1481,7 @@ class LlamaModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1587,8 +1573,7 @@ class GrokModel(Model):
 
                             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
                             if new_name is None:
-                                logger.error(f"Can not map tensor {name!r}")
-                                sys.exit()
+                                raise ValueError(f"Can not map tensor {name!r}")
 
                             logger.info(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
@@ -1598,8 +1583,7 @@ class GrokModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1692,8 +1676,7 @@ class DbrxModel(Model):
             # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
             new_name = tensor_map.get_name(name if not experts else name + ".weight", try_suffixes=(".weight",))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1701,8 +1684,7 @@ class DbrxModel(Model):
             # Most of the codebase that takes in 1D tensors only handles F32 tensors
             # and most of the outputs tensors are F32.
             if data_dtype != np.float32 and n_dims == 1:
-                logger.error(f"Can not map tensor {name!r}: all 1D tensors must be F32")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}: all 1D tensors must be F32")
 
             # if f32 desired, convert any float16 to float32
             if self.ftype == 0 and data_dtype == np.float16:
@@ -1774,8 +1756,7 @@ class MiniCPMModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1858,8 +1839,7 @@ class QwenModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2027,8 +2007,7 @@ class GPT2Model(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2211,8 +2190,7 @@ class PlamoModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             # shuffle for broadcasting of gqa in ggml_mul_mat
             if new_name.endswith("attn_q.weight"):
@@ -2289,8 +2267,7 @@ class CodeShellModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2438,8 +2415,7 @@ in chat mode so that the conversation can end normally.")
         # map tensor names
         new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
         if new_name is None:
-            logger.error(f"Can not map tensor {name!r}")
-            sys.exit()
+            raise ValueError(f"Can not map tensor {name!r}")
 
         n_dims = len(data.shape)
         data_dtype = data.dtype
@@ -2567,8 +2543,7 @@ class BertModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             # convert any unsupported data types to float32
             if data_torch.dtype not in (torch.float16, torch.float32):
@@ -2684,8 +2659,7 @@ class GemmaModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2796,8 +2770,7 @@ class MambaModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                logger.error(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             if name.endswith(".A_log"):
                 logger.debug("A_log --> A ==> " + new_name)

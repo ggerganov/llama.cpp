@@ -122,8 +122,8 @@ def main():
         data = data_torch.to(torch.float32).squeeze().numpy()
         new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
         if new_name is None:
-            logger.error(f"Can not map tensor '{name}'")
-            sys.exit()
+            raise ValueError(f"Can not map tensor '{name}'")
+
         n_dims = len(data.shape)
         logger.debug(f"{new_name}, n_dims = {str(n_dims)}, {str(old_dtype)} --> {str(data.dtype)}")
         gguf_writer.add_tensor(new_name, data)
