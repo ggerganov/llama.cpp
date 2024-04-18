@@ -5781,6 +5781,21 @@ GGML_CALL void ggml_backend_vk_get_device_memory(int device, size_t * free, size
     }
 }
 
+GGML_CALL void ggml_backend_vk_get_free_device_memory(int device, size_t * free) {
+    GGML_ASSERT(device < (int) vk_instance.device_indices.size());
+
+    vk::PhysicalDevice vkdev = vk_instance.instance.enumeratePhysicalDevices()[vk_instance.device_indices[device]];
+
+    vk::PhysicalDeviceMemoryProperties memprops = vkdev.getMemoryProperties();
+
+    for (const vk::MemoryHeap& heap : memprops.memoryHeaps) {
+        if (heap.flags & vk::MemoryHeapFlagBits::eDeviceLocal) {
+            *free = heap.size;
+            break;
+        }
+    }
+}
+
 // backend registry
 GGML_CALL static ggml_backend_t ggml_backend_reg_vk_init(const char * params, void * user_data) {
     ggml_backend_t vk_backend = ggml_backend_vk_init((int) (intptr_t) user_data);

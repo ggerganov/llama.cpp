@@ -2612,6 +2612,11 @@ GGML_CALL void ggml_backend_cuda_get_device_memory(int device, size_t * free, si
     CUDA_CHECK(cudaMemGetInfo(free, total));
 }
 
+GGML_CALL void ggml_backend_cuda_get_free_device_memory(int device, size_t * free) {
+    size_t total;
+    ggml_backend_cuda_get_device_memory(device, free, &total);
+}
+
 GGML_CALL bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
     if (getenv("GGML_CUDA_REGISTER_HOST") == nullptr) {
         return false;

@@ -1712,6 +1712,28 @@ static size_t llama_get_device_memory(int device) {
 #endif
 }
 
+// TODO: implement for other backends to return free memory
+static size_t llama_get_available_device_memory(int device) {
+#if defined(GGML_USE_CUDA)
+    size_t free;
+    ggml_backend_cuda_get_free_device_memory(device, &free);
+    return free;
+#elif defined(GGML_USE_SYCL)
+    size_t total;
+    size_t free;
+    ggml_backend_sycl_get_free_device_memory(device, &total, &free);
+    return free;
+#elif defined(GGML_USE_VULKAN)
+    size_t total;
+    size_t free;
+    ggml_backend_vk_get_free_device_memory(device, &total, &free);
+    return free;
+#else
+    return 1;
+    GGML_UNUSED(device);
+#endif
+}
+
 //
 // globals
 //
@@ -3329,6 +3351,17 @@ struct llama_model_loader {
         return cur;
     }
 
+    size_t estimate_tensor_bytes(const std::string & name, const std::vector<int64_t> & ne, bool required = true) const {
+        const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
+
+        if (cur == NULL) {
+            return 0;
+        }
+
+        int64_t nbytes = ggml_nbytes(cur);
+        return nbytes;
+    }
+
     struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, bool required = true) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
 
@@ -4480,6 +4513,90 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id     != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,     vocab.id_to_token[vocab.linefeed_id].text.c_str() );     }
 }
 
+static int llm_determine_max_ngl(const llama_model_loader & ml, const llama_model & model, const int main_gpu, enum llama_split_mode split_mode) {
+    const auto & hparams = model.hparams;
+
+    // could become negative - use signed size_t
+    ssize_t available_gpu_memory = 0;
+    int n_layer = hparams.n_layer;
+
+    if (split_mode == LLAMA_SPLIT_MODE_LAYER) {
+        // veeery sketchy, there has to be a better way to do this
+        int deice_count = llama_get_device_count();
+        for (int i = 0; i < deice_count; ++i) {
+            available_gpu_memory += llama_get_available_device_memory(i);
+        }
+    } else {
+        available_gpu_memory = llama_get_available_device_memory(main_gpu);
+    }
+
+    // "avoid a scenario where an application ooms because llama.cpp only left 5 MB of VRAM" - https://github.com/ggerganov/llama.cpp/pull/6502#discussion_r1555060962
+    available_gpu_memory -= 50 * MiB;
+
+    // determine tensor sizes
+    size_t total_size = 0;
+    size_t extra_size = 0;
+    std::vector<size_t> layer_sizes(n_layer);
+    for (int i = 0; i < ml.n_tensors; ++i) {
+        const struct ggml_tensor * tensor = (const struct ggml_tensor *) ml.get_tensor_meta(i);
+        std::vector<int64_t> tensor_ne = { tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3] };
+        size_t tensor_size = ml.estimate_tensor_bytes(tensor->name, tensor_ne);
+        //LLAMA_LOG_INFO("%s: %-30s: %12ld\n", __func__, tensor->name, tensor_size);
+        // all layer specific tensor names have the prefix "blk."
+        if (strncmp(tensor->name, "blk.", 4) == 0) {
+            int layer_no;
+            sscanf(tensor->name+4, "%d", &layer_no);
+            layer_sizes[layer_no] += tensor_size;
+        } else {
+            extra_size += tensor_size;
+        }
+        total_size += tensor_size;
+    }
+
+    // TODO: get buffer size dynamically
+    size_t buf_size = 400 * MiB;
+    size_t buf_size_k = 200 * MiB;
+    size_t buf_size_v = 200 * MiB;
+
+    ssize_t buffer_size = buf_size + buf_size_k + buf_size_v;
+
+    // can/will be pretty big for large models
+    size_t n_ctx = hparams.n_ctx_train;
+
+    size_t ctx_size =
+            ggml_tensor_overhead()*(ml.n_tensors + 1) +
+            ggml_tensor_overhead()*hparams.n_expert*n_layer;
+
+    size_t context_size = n_ctx*ctx_size;
+
+    // Calculate the maximum number of layers that can fit into the available GPU memory
+    int max_ngl = 0;
+    ssize_t used_memory = extra_size+buffer_size+context_size;
+    for (int i = 0; i < n_layer; ++i) {
+        LLAMA_LOG_INFO("%s: layer %2d size:        %12ld\n", __func__, i, layer_sizes[i]);
+        used_memory += layer_sizes[i];
+        if (used_memory > available_gpu_memory) {
+            break;
+        }
+        max_ngl++;
+    }
+
+    LLAMA_LOG_INFO("%s: extra size:           %12ld\n", __func__, extra_size);
+    LLAMA_LOG_INFO("%s: ----------------------------------\n", __func__);
+    LLAMA_LOG_INFO("%s: total size:           %12ld\n", __func__, total_size);
+    LLAMA_LOG_INFO("%s: available_gpu_memory: %12ld\n", __func__, available_gpu_memory);
+    LLAMA_LOG_INFO("%s: buffer size:          %12ld\n", __func__, buffer_size);
+    LLAMA_LOG_INFO("%s: total context size:   %12ld\n", __func__, context_size);
+    LLAMA_LOG_INFO("%s: used memory:          %12ld\n", __func__, used_memory);
+    LLAMA_LOG_INFO("%s: ----------------------------------\n", __func__);
+    LLAMA_LOG_INFO("%s: tokens in context:      %ld\n",    __func__, n_ctx);
+    LLAMA_LOG_INFO("%s: per token context size: %ld\n", __func__, ctx_size);
+    LLAMA_LOG_INFO("%s: layer_count:            %d\n",    __func__, n_layer);
+    LLAMA_LOG_INFO("%s: max_ngl:                %d\n",    __func__, max_ngl);
+
+    return max_ngl;
+}
+
 // Returns false if cancelled by progress_callback
 static bool llm_load_tensors(
         llama_model_loader & ml,
@@ -4494,6 +4611,11 @@ static bool llm_load_tensors(
     model.t_start_us = ggml_time_us();
 
     auto & hparams = model.hparams;
+
+    if (n_gpu_layers == -2) {
+        n_gpu_layers = llm_determine_max_ngl(ml, model, main_gpu, split_mode);
+        LLAMA_LOG_INFO("%s: automatically set n_gpu_layers to %d\n", __func__, n_gpu_layers);
+    }
 
     model.split_mode   = split_mode;
     model.main_gpu     = main_gpu;

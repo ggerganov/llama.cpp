@@ -913,7 +913,12 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-        params.n_gpu_layers = std::stoi(argv[i]);
+        std::string argValue = argv[i];
+        if (argValue == "auto" || argValue == "a") {
+            params.n_gpu_layers = -2;
+        } else {
+            params.n_gpu_layers = std::stoi(argValue);
+        }
         if (!llama_supports_gpu_offload()) {
             fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
             fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
@@ -1495,6 +1500,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_supports_gpu_offload()) {
         printf("  -ngl N, --n-gpu-layers N\n");
         printf("                        number of layers to store in VRAM\n");
+        printf("                        set to 'auto' or 'a' to estimate max automatically based on VRAM size\n");
         printf("  -ngld N, --n-gpu-layers-draft N\n");
         printf("                        number of layers to store in VRAM for the draft model\n");
         printf("  -sm SPLIT_MODE, --split-mode SPLIT_MODE\n");
@@ -2641,7 +2647,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "model: %s # default: models/7B/ggml-model.bin\n", params.model.c_str());
     fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
     fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
-    fprintf(stream, "n_gpu_layers: %d # default: -1\n", params.n_gpu_layers);
+    fprintf(stream, "n_gpu_layers: %d # default: -1, auto: -2\n", params.n_gpu_layers);
     fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
     fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", sparams.n_probs);
     fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");

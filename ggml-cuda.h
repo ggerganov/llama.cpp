@@ -34,6 +34,7 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type
 GGML_API GGML_CALL int  ggml_backend_cuda_get_device_count(void);
 GGML_API GGML_CALL void ggml_backend_cuda_get_device_description(int device, char * description, size_t description_size);
 GGML_API GGML_CALL void ggml_backend_cuda_get_device_memory(int device, size_t * free, size_t * total);
+GGML_API GGML_CALL void ggml_backend_cuda_get_free_device_memory(int device, size_t * free);
 
 GGML_API GGML_CALL bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size);
 GGML_API GGML_CALL void ggml_backend_cuda_unregister_host_buffer(void * buffer);
