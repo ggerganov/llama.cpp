@@ -2494,6 +2494,280 @@ template [[host_name("kernel_flash_attn_ext_f16_h112")]] kernel flash_attn_ext_f
 template [[host_name("kernel_flash_attn_ext_f16_h128")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<128, 8, 32>;
 template [[host_name("kernel_flash_attn_ext_f16_h256")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<256, 8, 32>;
 
+#define HALF_MAX_HALF   half(65504.0f/2) // Use neg. of this instead of -INFINITY to initialize KQ max vals to avoid NaN upon subtraction.
+
+template<int64_t D, int64_t C> // head size, queries per threadgroup, cache items per threadgroup
+kernel void kernel_flash_attn_ext_vec_f16(
+        device const  char * q,
+        device const  char * k,
+        device const  char * v,
+        device const  char * mask,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        constant   int64_t & ne03,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
+        constant  uint64_t & nb03,
+        constant   int64_t & ne10,
+        constant   int64_t & ne11,
+        constant   int64_t & ne12,
+        constant   int64_t & ne13,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant  uint64_t & nb12,
+        constant  uint64_t & nb13,
+        constant   int64_t & ne31,
+        constant  uint64_t & nb31,
+        constant   int64_t & ne0,
+        constant   int64_t & ne1,
+        constant   int64_t & ne2,
+        constant   int64_t & ne3,
+        constant     float & scale,
+        threadgroup   half * shared [[threadgroup(0)]],
+        uint3  tgpig[[threadgroup_position_in_grid]],
+        uint3  tpitg[[thread_position_in_threadgroup]],
+        uint3    ntg[[threads_per_threadgroup]],
+        ushort tiisg[[thread_index_in_simdgroup]],
+        ushort sgitg[[simdgroup_index_in_threadgroup]]) {
+    const short nsg = ntg.y; // number of simdgroups
+
+    const short iq3 = tgpig[2];
+    const short iq2 = tgpig[1];
+    const short iq1 = tgpig[0];
+
+    const short D4 = D/4;
+    const short D8 = D/8;
+    const short NW = N_SIMDWIDTH;
+    const short SH = (C + 1); // shared memory per simdgroup in (half)
+
+    const short T  = D + nsg*SH; // shared memory size per query in (half)
+    const short T4 = T/4;        // shared memory size per query in (half4)
+
+    threadgroup half  * sq  = (threadgroup half  *) (shared +            0*D); // holds the query data
+    threadgroup half4 * sq4 = (threadgroup half4 *) (shared +            0*D); // same as above but in half4
+    threadgroup half  * ss  = (threadgroup half  *) (shared + sgitg*SH + 1*D); // scratch buffer for attention and diagonal matrix
+    threadgroup half4 * ss4 = (threadgroup half4 *) (shared + sgitg*SH + 1*D); // same as above but in half4
+    threadgroup half4 * sr4 = (threadgroup half4 *) (shared + sgitg*D  + 1*T); // scratch buffer for the results
+
+    // store the result for all queries in local memory in 8x8 matrices (the O matrix from the paper)
+    half4 lo[D4/NW];
+
+    // load heads from Q to shared memory
+    device const float4 * q4 = (device const float4 *) ((device const char *) q + (iq1*nb01 + iq2*nb02 + iq3*nb03));
+
+    for (short i = tiisg; i < D4; i += NW) {
+        if (iq1 < ne01) {
+            sq4[i] = (half4) q4[i];
+        } else {
+            sq4[i] = 0.0h;
+        }
+    }
+
+    // zero out lo
+    for (short i = tiisg; i < D4; i += NW) {
+        lo[i/NW] = 0.0h;
+    }
+
+    // zero out shared memory SH
+    for (short i = tiisg; i < SH/4; i += NW) {
+        ss4[i] = 0.0h;
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    {
+        half S = { 0.0h };
+        half M = { -HALF_MAX_HALF };
+
+        // assume K and V are same shape
+        const short ne22 = ne12;
+        const short ne23 = ne13;
+
+        const uint nb21 = nb11;
+        const uint nb22 = nb12;
+        const uint nb23 = nb13;
+
+        // broadcast
+        const short rk2 = ne02/ne12;
+        const short rk3 = ne03/ne13;
+
+        const short rv2 = ne02/ne22;
+        const short rv3 = ne03/ne23;
+
+        // k indices
+        const short ik2 = iq2 / rk2;
+        const short ik3 = iq3 / rk3;
+
+        // v indices
+        const short iv2 = iq2 / rv2;
+        const short iv3 = iq3 / rv3;
+
+        // load the queries from shared memory into local memory
+        half4 mq[D4];
+
+        for (short ii = 0; ii < D4; ii += NW) {
+            short i = ii + tiisg;
+            mq[i] = sq4[i];
+        }
+
+        // pointer to the mask
+        device const half4 * mp4 = (device const half4 *) (mask + iq1*nb31);
+
+        // loop over the KV cache
+        // each simdgroup handles blocks of Q rows and C columns
+        for (int ic0 = 0; ic0 < ne11; ic0 += C*nsg) {
+            const int ic = ic0 + C*sgitg;
+            if (ic >= ne11) {
+                break;
+            }
+
+            // Q*K^T
+            {
+#pragma unroll
+                for (short cc = 0; cc < C/4; ++cc) {
+                    half4 mqk = { 0.0h };
+
+                    device const half4 * pk4 = (device const half4 *) ((device const char *) k + ((ic + 4*cc)*nb11 + ik2*nb12 + ik3*nb13));
+
+#pragma unroll
+                    for (short ii = 0; ii < D4; ii += NW) {
+                        const short i = ii + tiisg;
+
+                        half4x4 mk;
+                        mk[0] = pk4[i + 0*(nb11/8)];
+                        mk[1] = pk4[i + 1*(nb11/8)];
+                        mk[2] = pk4[i + 2*(nb11/8)];
+                        mk[3] = pk4[i + 3*(nb11/8)];
+
+                        mqk += mq[i] * mk;
+                    }
+
+                    // reduce the results from the threads in the simdgroup
+                    mqk += simd_shuffle_down(mqk, 16);
+                    mqk += simd_shuffle_down(mqk,  8);
+                    mqk += simd_shuffle_down(mqk,  4);
+                    mqk += simd_shuffle_down(mqk,  2);
+                    mqk += simd_shuffle_down(mqk,  1);
+
+                    // mqk = mqk*scale + mask
+                    if (tiisg == 0) {
+                        half4 mm = mp4[ic/4 + cc];
+                        mqk = mqk*scale + mm;
+
+                        ss4[cc] = mqk;
+                    }
+                }
+            }
+
+            // online softmax
+            {
+                const short p = tiisg;
+
+                const half m = M;
+                const half s = ss[p];
+
+                M = simd_max(max(M, s));
+
+                const half ms = exp(m - M);
+                const half vs = exp(s - M);
+
+                S = S*ms + simd_sum(vs);
+
+                // the P matrix from the paper (Q rows, C columns)
+                ss[p] = vs;
+
+                // O = diag(ms)*O
+#pragma unroll
+                for (short ii = 0; ii < D4; ii += NW) {
+                    const short i = ii + tiisg;
+                    lo[i/NW] *= ms;
+                }
+            }
+
+            // O = O + (Q*K^T)*V
+            {
+#pragma unroll
+                for (short cc = 0; cc < C/4; ++cc) {
+                    device const half4 * pv4 = (device const half4 *) ((device const char *) v + ((ic + 4*cc)*nb21 + iv2*nb22 + iv3*nb23));
+
+#pragma unroll
+                    for (short ii = 0; ii < D4; ii += NW) {
+                        const short i = ii + tiisg;
+                        lo[i/NW] += pv4[i + 0*(nb21/8)] * ss[4*cc + 0];
+                        lo[i/NW] += pv4[i + 1*(nb21/8)] * ss[4*cc + 1];
+                        lo[i/NW] += pv4[i + 2*(nb21/8)] * ss[4*cc + 2];
+                        lo[i/NW] += pv4[i + 3*(nb21/8)] * ss[4*cc + 3];
+                    }
+                }
+            }
+
+        }
+
+        // these are needed for reducing the results from the simdgroups (reuse the ss buffer)
+        if (tiisg == 0) {
+            ss[0] = S;
+            ss[1] = M;
+        }
+    }
+
+    // store results to shared memory
+    for (short ii = 0; ii < D4; ii += NW) {
+        short i = ii + tiisg;
+        sr4[i] = lo[ii/NW];
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // parallel reduce
+    for (short r = nsg/2; r > 0; r >>= 1) {
+        if (sgitg < r) {
+            const half S0 = ss[       0];
+            const half S1 = ss[r*SH + 0];
+
+            const half M0 = ss[       1];
+            const half M1 = ss[r*SH + 1];
+
+            const half M = max(M0, M1);
+
+            const half ms0 = exp(M0 - M);
+            const half ms1 = exp(M1 - M);
+
+            const half S = S0*ms0 + S1*ms1;
+
+            if (tiisg == 0) {
+                ss[0] = S;
+                ss[1] = M;
+            }
+
+            // O_0 = diag(ms0)*O_0 + diag(ms1)*O_1
+            for (short ii = 0; ii < D4; ii += NW) {
+                short i = ii + tiisg;
+                sr4[i] = sr4[i]*ms0 + sr4[i + r*D4]*ms1;
+            }
+        }
+
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    device float4 * dst4 = (device float4 *) dst;
+
+    // final rescale with 1/S and store to global memory
+    if (sgitg == 0) {
+        const half S = ss[0];
+
+        for (short ii = 0; ii < D4; ii += NW) {
+            short i = ii + tiisg;
+            dst4[(iq3*ne2*ne1 + iq2 + (iq1)*ne1)*D4 + i] = (float4) sr4[i]/S;
+        }
+    }
+}
+
+template [[host_name("kernel_flash_attn_ext_vec_f16_h128")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<128, 32>;
+template [[host_name("kernel_flash_attn_ext_vec_f16_h256")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<256, 32>;
+
 kernel void kernel_cpy_f16_f16(
         device  const half * src0,
         device        half * dst,
