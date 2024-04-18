@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from enum import Enum, IntEnum, auto
 from typing import Any
 
@@ -857,8 +856,7 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.INT32
         # TODO: need help with 64-bit types in Python
         else:
-            logger.error(f"Unknown type: {type(val)}")
-            sys.exit()
+            raise ValueError(f"Unknown type: {type(val)}")
 
 
 # Note: Does not support GGML_QKK_64
