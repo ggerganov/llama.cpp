@@ -408,10 +408,7 @@ def handle_args():
 
 def main():
     cfg = handle_args()
-    if cfg.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if cfg.verbose else logging.INFO)
     logger.info(f'* Using config: {cfg}')
     logger.warning('=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===')
     if cfg.model_metadata_dir is None and (cfg.gqa == 1 or cfg.eps == '5.0e-06'):

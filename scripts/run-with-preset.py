@@ -67,10 +67,7 @@ if not known_args.yaml_files and not unknown_args:
     parser.print_help()
     sys.exit(0)
 
-if known_args.verbose:
-    logging.basicConfig(level=logging.DEBUG)
-else:
-    logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG if known_args.verbose else logging.INFO)
 
 props = dict()
 
