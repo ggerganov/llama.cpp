@@ -2692,7 +2692,7 @@ class OlmoModel(Model):
                 data = data.astype(np.float32)
 
             # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+            if self.ftype == 1 and data_dtype == np.float32 and n_dims == 2:
                 data = data.astype(np.float16)
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
