@@ -4,6 +4,7 @@
 #include "ggml-impl.h"
 #include "ggml-quants.h"
 #include "ggml.h"
+#include "sgemm.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -30,6 +31,10 @@
 
 #ifdef GGML_USE_METAL
 #include <unistd.h>
+#endif
+
+#ifdef __ARM_FEATURE_MATMUL_INT8
+#undef GGML_USE_LLAMAFILE
 #endif
 
 #if defined(_MSC_VER)
@@ -10810,6 +10815,28 @@ static void ggml_compute_forward_mul_mat(
     }
 #endif
 
+#if GGML_USE_LLAMAFILE
+    if (nb10 == ggml_type_size(src1->type)) {
+        for (int64_t i13 = 0; i13 < ne13; i13++)
+            for (int64_t i12 = 0; i12 < ne12; i12++)
+                if (!llamafile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
+                                     (const char *)src0->data + i12/r2*nb02 + i13/r3*nb03,
+                                     nb01/ggml_type_size(src0->type),
+                                     (const char *)src1->data + i12*nb12 + i13*nb13,
+                                     nb11/ggml_type_size(src1->type),
+                                     (char *)dst->data + i12*nb2 + i13*nb3,
+                                     nb1/ggml_type_size(dst->type),
+                                     ith, nth,
+                                     params->type,
+                                     src0->type,
+                                     src1->type,
+                                     dst->type))
+                    goto UseGgmlGemm1;
+        return;
+    }
+UseGgmlGemm1:;
+#endif
+
     if (params->type == GGML_TASK_TYPE_INIT) {
         if (ith != 0) {
             return;
@@ -10840,6 +10867,30 @@ static void ggml_compute_forward_mul_mat(
 
     const void * wdata    = (src1->type == vec_dot_type) ? src1->data : params->wdata;
     const size_t row_size = ggml_row_size(vec_dot_type, ne10);
+
+#if GGML_USE_LLAMAFILE
+    if (nb10 == ggml_type_size(src1->type) || src1->type != vec_dot_type) {
+        for (int64_t i13 = 0; i13 < ne13; i13++)
+            for (int64_t i12 = 0; i12 < ne12; i12++)
+                if (!llamafile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
+                                     (const char *)src0->data + i12/r2*nb02 + i13/r3*nb03,
+                                     nb01/ggml_type_size(src0->type),
+                                     (const char *)wdata + ggml_row_size(vec_dot_type,
+                                         nb12/ggml_type_size(src1->type)*i12 +
+                                         nb13/ggml_type_size(src1->type)*i13),
+                                     row_size/ggml_type_size(vec_dot_type),
+                                     (char *)dst->data + i12*nb2 + i13*nb3,
+                                     nb1/ggml_type_size(dst->type),
+                                     ith, nth,
+                                     params->type,
+                                     src0->type,
+                                     vec_dot_type,
+                                     dst->type))
+                    goto UseGgmlGemm2;
+        return;
+    }
+UseGgmlGemm2:;
+#endif
 
     const int64_t nr0 = ne01;          // src0 rows
     const int64_t nr1 = ne1*ne12*ne13; // src1 rows
@@ -11012,7 +11063,6 @@ static void ggml_compute_forward_mul_mat_id(
         }
 
         // initialize matrix_row_counts
-        GGML_ASSERT(wdata == wdata_src1_end);
         memset(matrix_row_counts, 0, n_as*sizeof(int64_t));
 
         // group rows by src0 matrix
@@ -20550,6 +20600,32 @@ static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
     return ok;
 }
 
+static void gguf_free_kv(struct gguf_kv * kv) {
+    if (kv->key.data) {
+        GGML_FREE(kv->key.data);
+    }
+
+    if (kv->type == GGUF_TYPE_STRING) {
+        if (kv->value.str.data) {
+            GGML_FREE(kv->value.str.data);
+        }
+    }
+
+    if (kv->type == GGUF_TYPE_ARRAY) {
+        if (kv->value.arr.data) {
+            if (kv->value.arr.type == GGUF_TYPE_STRING) {
+                for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
+                    struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[j];
+                    if (str->data) {
+                        GGML_FREE(str->data);
+                    }
+                }
+            }
+            GGML_FREE(kv->value.arr.data);
+        }
+    }
+}
+
 struct gguf_context * gguf_init_empty(void) {
     struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
 
@@ -20899,31 +20975,7 @@ void gguf_free(struct gguf_context * ctx) {
     if (ctx->kv) {
         // free string memory - not great..
         for (uint64_t i = 0; i < ctx->header.n_kv; ++i) {
-            struct gguf_kv * kv = &ctx->kv[i];
-
-            if (kv->key.data) {
-                GGML_FREE(kv->key.data);
-            }
-
-            if (kv->type == GGUF_TYPE_STRING) {
-                if (kv->value.str.data) {
-                    GGML_FREE(kv->value.str.data);
-                }
-            }
-
-            if (kv->type == GGUF_TYPE_ARRAY) {
-                if (kv->value.arr.data) {
-                    if (kv->value.arr.type == GGUF_TYPE_STRING) {
-                        for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
-                            struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[j];
-                            if (str->data) {
-                                GGML_FREE(str->data);
-                            }
-                        }
-                    }
-                    GGML_FREE(kv->value.arr.data);
-                }
-            }
+            gguf_free_kv(&ctx->kv[i]);
         }
 
         GGML_FREE(ctx->kv);
@@ -21146,6 +21198,19 @@ static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
     ctx->header.n_kv++;
 
     return n_kv;
+}
+
+void gguf_remove_key(struct gguf_context * ctx, const char * key) {
+    const int idx = gguf_find_key(ctx, key);
+    if (idx >= 0) {
+        const int n_kv = gguf_get_n_kv(ctx);
+        gguf_free_kv(&ctx->kv[idx]);
+        for (int i = idx; i < n_kv-1; ++i) {
+            ctx->kv[i] = ctx->kv[i+1];
+        }
+        ctx->kv = realloc(ctx->kv, (n_kv - 1) * sizeof(struct gguf_kv));
+        ctx->header.n_kv--;
+    }
 }
 
 void gguf_set_val_u8(struct gguf_context * ctx, const char * key, uint8_t val) {

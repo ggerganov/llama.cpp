@@ -11,35 +11,101 @@
 
 using json = nlohmann::ordered_json;
 
+template <typename Iterator>
+static std::string join(Iterator begin, Iterator end, const std::string & separator);
+
+static std::string repeat(const std::string & str, size_t n);
+
+static std::string build_repetition(const std::string & item_rule, int min_items, int max_items, const std::string & separator_rule = "", bool item_rule_is_literal = false) {
+    if (separator_rule.empty()) {
+        if (min_items == 0 && max_items == 1) {
+            return item_rule + "?";
+        } else if (min_items == 1 && max_items == std::numeric_limits<int>::max()) {
+            return item_rule + "+";
+        }
+    }
+
+    std::string result;
+    if (min_items > 0) {
+        if (item_rule_is_literal && separator_rule.empty()) {
+            result = "\"" + repeat(std::string(item_rule.begin() + 1, item_rule.end() - 1), min_items) + "\"";
+        } else {
+            std::vector<std::string> items(min_items, item_rule);
+            result = join(items.begin(), items.end(), separator_rule.empty() ? " " : " " + separator_rule + " ");
+        }
+    }
+
+    std::function<std::string(int, bool)> opt_repetitions = [&](int up_to_n, bool prefix_with_sep) -> std::string {
+        auto content = prefix_with_sep && !separator_rule.empty() ? separator_rule + " " + item_rule : item_rule;
+
+        if (up_to_n == 0) {
+            return "";
+        } else if (up_to_n == 1) {
+            return "(" + content + ")?";
+        } else if (!separator_rule.empty() && !prefix_with_sep) {
+            return "(" + content + " " + opt_repetitions(up_to_n - 1, true) + ")?";
+        } else {
+            std::string res = repeat("(" + content + " ", up_to_n);
+            // strip trailing space
+            res = res.substr(0, res.length() - 1);
+            res += repeat(")?", up_to_n);
+            return res;
+        }
+    };
+
+    if (min_items > 0 && max_items != min_items) {
+        result += " ";
+    }
+
+    if (max_items != std::numeric_limits<int>::max()) {
+        result += opt_repetitions(max_items - min_items, min_items > 0);
+    } else {
+        std::string item_operator = "(" + (separator_rule.empty() ? "" : separator_rule + " ") + item_rule + ")";
+        if (min_items == 0 && !separator_rule.empty()) {
+            result = "(" + item_rule + " " + item_operator + "*)?";
+        } else {
+            result += item_operator + "*";
+        }
+    }
+
+    return result;
+}
+
 const std::string SPACE_RULE = "\" \"?";
 
-std::unordered_map<std::string, std::string> PRIMITIVE_RULES = {
-    {"boolean", "(\"true\" | \"false\") space"},
-    {"number", "(\"-\"? ([0-9] | [1-9] [0-9]*)) (\".\" [0-9]+)? ([eE] [-+]? [0-9]+)? space"},
-    {"integer", "(\"-\"? ([0-9] | [1-9] [0-9]*)) space"},
-    {"value", "object | array | string | number | boolean"},
-    {"object", "\"{\" space ( string \":\" space value (\",\" space string \":\" space value)* )? \"}\" space"},
-    {"array", "\"[\" space ( value (\",\" space value)* )? \"]\" space"},
-    {"uuid", "\"\\\"\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
-                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
-                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
-                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
-                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] \"\\\"\" space"},
-    {"string", " \"\\\"\" (\n"
-               "        [^\"\\\\] |\n"
-               "        \"\\\\\" ([\"\\\\/bfnrt] | \"u\" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])\n"
-               "      )* \"\\\"\" space"},
-    {"null", "\"null\" space"}
+struct BuiltinRule {
+    std::string content;
+    std::vector<std::string> deps;
 };
-std::vector<std::string> OBJECT_RULE_NAMES = {"object", "array", "string", "number", "boolean", "null", "value"};
 
-std::unordered_map<std::string, std::string> DATE_RULES = {
-    {"date", "[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( \"0\" [1-9] | [1-2] [0-9] | \"3\" [0-1] )"},
-    {"time", "([01] [0-9] | \"2\" [0-3]) \":\" [0-5] [0-9] \":\" [0-5] [0-9] ( \".\" [0-9] [0-9] [0-9] )? ( \"Z\" | ( \"+\" | \"-\" ) ( [01] [0-9] | \"2\" [0-3] ) \":\" [0-5] [0-9] )"},
-    {"date-time", "date \"T\" time"},
-    {"date-string", "\"\\\"\" date \"\\\"\" space"},
-    {"time-string", "\"\\\"\" time \"\\\"\" space"},
-    {"date-time-string", "\"\\\"\" date-time \"\\\"\" space"}
+const std::string _up_to_15_digits = build_repetition("[0-9]", 0, 15);
+
+std::unordered_map<std::string, BuiltinRule> PRIMITIVE_RULES = {
+    {"boolean", {"(\"true\" | \"false\") space", {}}},
+    {"decimal-part", {"[0-9] " + _up_to_15_digits, {}}},
+    {"integral-part", {"[0-9] | [1-9] " + _up_to_15_digits, {}}},
+    {"number", {"(\"-\"? integral-part) (\".\" decimal-part)? ([eE] [-+]? integral-part)? space", {"integral-part", "decimal-part"}}},
+    {"integer", {"(\"-\"? integral-part) space", {"integral-part"}}},
+    {"value", {"object | array | string | number | boolean | null", {"object", "array", "string", "number", "boolean", "null"}}},
+    {"object", {"\"{\" space ( string \":\" space value (\",\" space string \":\" space value)* )? \"}\" space", {"string", "value"}}},
+    {"array", {"\"[\" space ( value (\",\" space value)* )? \"]\" space", {"value"}}},
+    {"uuid", {"\"\\\"\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
+                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
+                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
+                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] "
+                "\"-\" [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] \"\\\"\" space", {}}},
+    {"char",   {"[^\"\\\\] | \"\\\\\" ([\"\\\\/bfnrt] | \"u\" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])", {}}},
+    {"string", {"\"\\\"\" char* \"\\\"\" space", {"char"}}},
+    {"null", {"\"null\" space", {}}},
+};
+
+std::unordered_map<std::string, BuiltinRule> STRING_FORMAT_RULES = {
+    {"date", {"[0-9] [0-9] [0-9] [0-9] \"-\" ( \"0\" [1-9] | \"1\" [0-2] ) \"-\" ( \"0\" [1-9] | [1-2] [0-9] | \"3\" [0-1] )", {}}},
+    {"time", {"([01] [0-9] | \"2\" [0-3]) \":\" [0-5] [0-9] \":\" [0-5] [0-9] ( \".\" [0-9] [0-9] [0-9] )? ( \"Z\" | ( \"+\" | \"-\" ) ( [01] [0-9] | \"2\" [0-3] ) \":\" [0-5] [0-9] )", {}}},
+    {"date-time", {"date \"T\" time", {"date", "time"}}},
+    {"date-string", {"\"\\\"\" date \"\\\"\" space", {"date"}}},
+    {"time-string", {"\"\\\"\" time \"\\\"\" space", {"time"}}},
+    {"date-time-string", {"\"\\\"\" date-time \"\\\"\" space", {"date-time"}}}
 };
 
 static bool is_reserved_name(const std::string & name) {
@@ -47,7 +113,7 @@ static bool is_reserved_name(const std::string & name) {
     if (RESERVED_NAMES.empty()) {
         RESERVED_NAMES.insert("root");
         for (const auto &p : PRIMITIVE_RULES) RESERVED_NAMES.insert(p.first);
-        for (const auto &p : DATE_RULES) RESERVED_NAMES.insert(p.first);
+        for (const auto &p : STRING_FORMAT_RULES) RESERVED_NAMES.insert(p.first);
     }
     return RESERVED_NAMES.find(name) != RESERVED_NAMES.end();
 }
@@ -192,7 +258,7 @@ private:
                 if (_dotall) {
                     rule = "[\\U00000000-\\U0010FFFF]";
                 } else {
-                    rule = "[\\U00000000-\\x09\\x0B\\x0C\\x0E-\\U0010FFFF]";
+                    rule = "[^\\x0A\\x0D]";
                 }
                 return _add_rule("dot", rule);
             };
@@ -308,47 +374,21 @@ private:
                     auto &sub = last.first;
                     auto sub_is_literal = last.second;
 
-                    if (min_times == 0 && max_times == std::numeric_limits<int>::max()) {
-                        sub += "*";
-                    } else if (min_times == 0 && max_times == 1) {
-                        sub += "?";
-                    } else if (min_times == 1 && max_times == std::numeric_limits<int>::max()) {
-                        sub += "+";
-                    } else {
-                        if (!sub_is_literal) {
-                            std::string & sub_id = sub_rule_ids[sub];
-                            if (sub_id.empty()) {
-                                sub_id = _add_rule(name + "-" + std::to_string(sub_rule_ids.size()), sub);
-                            }
-                            sub = sub_id;
+                    if (!sub_is_literal) {
+                        std::string & sub_id = sub_rule_ids[sub];
+                        if (sub_id.empty()) {
+                            sub_id = _add_rule(name + "-" + std::to_string(sub_rule_ids.size()), sub);
                         }
-                        std::string result;
-                        if (sub_is_literal && min_times > 0) {
-                            result = "\"" + repeat(sub.substr(1, sub.length() - 2), min_times) + "\"";
-                        } else {
-                            for (int j = 0; j < min_times; j++) {
-                                if (j > 0) {
-                                    result += " ";
-                                }
-                                result += sub;
-                            }
-                        }
-                        if (min_times > 0 && min_times < max_times) {
-                            result += " ";
-                        }
-                        if (max_times == std::numeric_limits<int>::max()) {
-                            result += sub + "*";
-                        } else {
-                            for (int j = min_times; j < max_times; j++) {
-                                if (j > min_times) {
-                                    result += " ";
-                                }
-                                result += sub + "?";
-                            }
-                        }
-                        seq.back().first = result;
-                        seq.back().second = false;
+                        sub = sub_id;
                     }
+                    seq.back().first = build_repetition(
+                        sub_is_literal ? "\"" + sub + "\"" : sub,
+                        min_times,
+                        max_times,
+                        "",
+                        sub_is_literal
+                    );
+                    seq.back().second = false;
                 } else {
                     std::string literal;
                     auto is_non_literal = [&](char c) {
@@ -424,7 +464,7 @@ private:
         if (additional_properties.is_object() || (additional_properties.is_boolean() && additional_properties.get<bool>())) {
             std::string sub_name = name + (name.empty() ? "" : "-") + "additional";
             std::string value_rule = visit(additional_properties.is_object() ? additional_properties : json::object(), sub_name + "-value");
-            std::string kv_rule = _add_rule(sub_name + "-kv", _add_rule("string", PRIMITIVE_RULES.at("string")) + " \":\" space " + value_rule);
+            std::string kv_rule = _add_rule(sub_name + "-kv", _add_primitive("string", PRIMITIVE_RULES.at("string")) + " \":\" space " + value_rule);
             prop_kv_rule_names["*"] = kv_rule;
             optional_props.push_back("*");
         }
@@ -484,6 +524,25 @@ private:
         rule += " \"}\" space";
 
         return rule;
+    }
+
+    std::string _add_primitive(const std::string & name, const BuiltinRule & rule) {
+        auto n = _add_rule(name, rule.content);
+        for (const auto & dep : rule.deps) {
+            BuiltinRule dep_rule;
+            auto it = PRIMITIVE_RULES.find(dep);
+            if (it == PRIMITIVE_RULES.end()) {
+                it = STRING_FORMAT_RULES.find(dep);
+                if (it == STRING_FORMAT_RULES.end()) {
+                    _errors.push_back("Rule " + dep + " not known");
+                    continue;
+                }
+            }
+            if (_rules.find(dep) == _rules.end()) {
+                _add_primitive(dep, it->second);
+            }
+        }
+        return n;
     }
 
 public:
@@ -647,49 +706,33 @@ public:
                 return _add_rule(rule_name, rule);
             } else {
                 std::string item_rule_name = visit(items, name + (name.empty() ? "" : "-") + "item");
-                std::string list_item_operator = "( \",\" space " + item_rule_name + " )";
-                std::string successive_items;
                 int min_items = schema.contains("minItems") ? schema["minItems"].get<int>() : 0;
                 json max_items_json = schema.contains("maxItems") ? schema["maxItems"] : json();
-                int max_items = max_items_json.is_number_integer() ? max_items_json.get<int>() : -1;
-                if (min_items > 0) {
-                    successive_items += repeat(list_item_operator, min_items - 1);
-                    min_items--;
-                }
-                if (max_items >= 0 && max_items > min_items) {
-                    successive_items += repeat(list_item_operator + "?", max_items - min_items - 1);
-                } else {
-                    successive_items += list_item_operator + "*";
-                }
-                std::string rule;
-                if (min_items == 0) {
-                    rule =  "\"[\" space ( " + item_rule_name + " " + successive_items + " )? \"]\" space";
-                } else {
-                    rule =  "\"[\" space " + item_rule_name + " " + successive_items + " \"]\" space";
-                }
-                return _add_rule(rule_name, rule);
+                int max_items = max_items_json.is_number_integer() ? max_items_json.get<int>() : std::numeric_limits<int>::max();
+
+                return _add_rule(rule_name, "\"[\" space " + build_repetition(item_rule_name, min_items, max_items, "\",\" space") + " \"]\" space");
             }
         } else if ((schema_type.is_null() || schema_type == "string") && schema.contains("pattern")) {
             return _visit_pattern(schema["pattern"], rule_name);
         } else if ((schema_type.is_null() || schema_type == "string") && std::regex_match(schema_format, std::regex("^uuid[1-5]?$"))) {
-            return _add_rule(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
-        } else if ((schema_type.is_null() || schema_type == "string") && DATE_RULES.find(schema_format) != DATE_RULES.end()) {
-            for (const auto & kv : DATE_RULES) {
-                _add_rule(kv.first, kv.second);
-            }
-            return schema_format + "-string";
+            return _add_primitive(rule_name == "root" ? "root" : schema_format, PRIMITIVE_RULES.at("uuid"));
+        } else if ((schema_type.is_null() || schema_type == "string") && STRING_FORMAT_RULES.find(schema_format + "-string") != STRING_FORMAT_RULES.end()) {
+            auto prim_name = schema_format + "-string";
+            return _add_rule(rule_name, _add_primitive(prim_name, STRING_FORMAT_RULES.at(prim_name)));
+        } else if (schema_type == "string" && (schema.contains("minLength") || schema.contains("maxLength"))) {
+            std::string char_rule = _add_primitive("char", PRIMITIVE_RULES.at("char"));
+            int min_len = schema.contains("minLength") ? schema["minLength"].get<int>() : 0;
+            int max_len = schema.contains("maxLength") ? schema["maxLength"].get<int>() : std::numeric_limits<int>::max();
+            return _add_rule(rule_name, "\"\\\"\" " + build_repetition(char_rule, min_len, max_len) + " \"\\\"\" space");
         } else if (schema.empty() || schema_type == "object") {
-            for (const auto & n : OBJECT_RULE_NAMES) {
-                _add_rule(n, PRIMITIVE_RULES.at(n));
-            }
-            return _add_rule(rule_name, "object");
+            return _add_rule(rule_name, _add_primitive("object", PRIMITIVE_RULES.at("object")));
         } else {
             if (!schema_type.is_string() || PRIMITIVE_RULES.find(schema_type.get<std::string>()) == PRIMITIVE_RULES.end()) {
                 _errors.push_back("Unrecognized schema: " + schema.dump());
                 return "";
             }
             // TODO: support minimum, maximum, exclusiveMinimum, exclusiveMaximum at least for zero
-            return _add_rule(rule_name == "root" ? "root" : schema_type.get<std::string>(), PRIMITIVE_RULES.at(schema_type.get<std::string>()));
+            return _add_primitive(rule_name == "root" ? "root" : schema_type.get<std::string>(), PRIMITIVE_RULES.at(schema_type.get<std::string>()));
         }
     }
 
