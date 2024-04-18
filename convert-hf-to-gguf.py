@@ -1323,8 +1323,7 @@ class StableLMModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1341,7 +1340,7 @@ class StableLMModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1357,8 +1356,7 @@ class StableLMModel(Model):
             merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
             if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
                 data = data.astype(np.float32)
 
@@ -1366,7 +1364,7 @@ class StableLMModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1933,10 +1931,9 @@ class Qwen2MoeModel(Model):
 
                             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
                             if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
+                                raise ValueError(f"Can not map tensor {name!r}")
 
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+                            logger.debug(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
                             self.gguf_writer.add_tensor(new_name, data)
                 continue
@@ -1944,8 +1941,7 @@ class Qwen2MoeModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1962,7 +1958,7 @@ class Qwen2MoeModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -2642,7 +2638,7 @@ class GemmaModel(Model):
             # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
             # To prevent errors, skip loading lm_head.weight.
             if name == "lm_head.weight":
-                print(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+                logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
                 continue
 
             old_dtype = data_torch.dtype
