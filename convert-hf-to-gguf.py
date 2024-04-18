@@ -2644,8 +2644,8 @@ class OlmoModel(Model):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         self.gguf_writer.add_layer_norm_eps(1e-5)
-        if self.hparams.get("clip_qkv") is not None:
-            self.gguf_writer.add_clamp_kqv(self.hparams["attn_config"]["clip_qkv"])
+        if "clip_qkv" in self.hparams is not None:
+            self.gguf_writer.add_clamp_kqv(self.hparams["clip_qkv"])
 
     # Same as super class, but permuting q_proj, k_proj
     # Copied from: LlamaModel
