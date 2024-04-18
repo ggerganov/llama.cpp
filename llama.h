@@ -383,6 +383,7 @@ extern "C" {
 
     //optional:
     LLAMA_API void llama_numa_init(enum ggml_numa_strategy numa);
+    LLAMA_API void llama_rpc_init(const char * rpc_servers);
 
     // Call once at the end of the program - currently only used for MPI
     LLAMA_API void llama_backend_free(void);

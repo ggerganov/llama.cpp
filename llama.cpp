@@ -7,6 +7,10 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
+#ifdef GGML_USE_RPC
+#  include "ggml-rpc.h"
+#endif
+
 #ifdef GGML_USE_CUDA
 #  include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
@@ -1690,6 +1694,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
 
 #ifdef GGML_USE_METAL
     buft = ggml_backend_metal_buffer_type();
+#elif defined(GGML_USE_RPC)
+    buft = ggml_backend_rpc_buffer_type(gpu);
 #elif defined(GGML_USE_CUDA)
     buft = ggml_backend_cuda_buffer_type(gpu);
 #elif defined(GGML_USE_VULKAN)
@@ -1739,6 +1745,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(int fallback_g
 static size_t llama_get_device_count() {
 #if defined(GGML_USE_CUDA)
     return ggml_backend_cuda_get_device_count();
+#elif defined(GGML_USE_RPC)
+    return ggml_backend_rpc_get_server_count();
 #elif defined(GGML_USE_SYCL)
     return ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
@@ -1754,6 +1762,10 @@ static size_t llama_get_device_memory(int device) {
     size_t free;
     ggml_backend_cuda_get_device_memory(device, &free, &total);
     return free;
+#elif defined(GGML_USE_RPC)
+    // TODO: implement
+    GGML_UNUSED(device);
+    return 1;
 #elif defined(GGML_USE_SYCL)
     size_t total;
     size_t free;
@@ -15483,7 +15495,7 @@ bool llama_supports_mlock(void) {
 
 bool llama_supports_gpu_offload(void) {
 #if defined(GGML_USE_CUDA) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE)
+    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
@@ -15510,6 +15522,16 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
     if (numa != GGML_NUMA_STRATEGY_DISABLED) {
         ggml_numa_init(numa);
     }
+}
+
+void llama_rpc_init(const char * rpc_servers) {
+#ifdef GGML_USE_RPC
+    ggml_rpc_init(rpc_servers);
+#else
+    if (rpc_servers != nullptr) {
+        LLAMA_LOG_WARN("%s: RPC support is not enabled in this build\n", __func__);
+    }
+#endif
 }
 
 void llama_backend_free(void) {
@@ -15702,6 +15724,16 @@ struct llama_context * llama_new_context_with_model(
                 return nullptr;
             }
             ctx->backends.push_back(ctx->backend_metal);
+        }
+#elif defined(GGML_USE_RPC)
+        for (int server = 0; server < ggml_backend_rpc_get_server_count(); ++server) {
+            ggml_backend_t backend = ggml_backend_rpc_init(server);
+            if (backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize RPC%d backend\n", __func__, server);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
         }
 #elif defined(GGML_USE_CUDA)
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
