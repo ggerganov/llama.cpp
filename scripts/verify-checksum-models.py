@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sys
 import hashlib
 
 logger = logging.getLogger("verify-checksum-models")
@@ -81,4 +82,4 @@ logger.info("-" * 80)
 
 # Output the results as a table
 for r in results:
-    logger.info(f"{r['filename']:40} {r['valid checksum']:^20} {r['file missing']:^20}")
+    sys.stdout.write(f"{r['filename']:40} {r['valid checksum']:^20} {r['file missing']:^20}\n")
