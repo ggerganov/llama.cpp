@@ -10101,6 +10101,8 @@ struct llm_build_context {
     // based on the original build_llama() function, changes:
     //   * non-parametric layer norm
     //   * clamp qkv
+    //   * removed bias
+    //   * removed MoE
     struct ggml_cgraph * build_olmo() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
