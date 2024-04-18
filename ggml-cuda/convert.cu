@@ -45,6 +45,8 @@ static __global__ void dequantize_block_q8_0_f16(const void * __restrict__ vx, h
         vals[ix] = x0[ix];
     }
 
+    __syncthreads();
+
 #pragma unroll
     for (int iy = 0; iy < CUDA_Q8_0_NE_ALIGN; iy += 2*WARP_SIZE) {
         if (need_check && i0 + iy + 2*threadIdx.x >= k) {
