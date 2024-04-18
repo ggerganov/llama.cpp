@@ -243,7 +243,7 @@ elif repo is not None:
         sys.exit(1)
 else:
     logger.error("No compare target was provided and the current working directory "
-                 "is not part of a git repository from which a compare target could be inferred.")
+                 "is not part of a git repository from which a compare target could be inferred.\n")
     parser.print_help()
     sys.exit(1)
 
