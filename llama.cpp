@@ -17025,7 +17025,7 @@ static int32_t llama_chat_apply_template_internal(
                 ss << "<|begin_of_text|>";
                 first_message = false;
             }
-            ss << "<|start_header_id|>" << message->role << "<|end_header_id|>\n\n" << trim(message->content) << "<|eot_id|>";
+            ss << "<|start_header_id|>" << role << "<|end_header_id|>\n\n" << trim(message->content) << "<|eot_id|>";
         }
         if (add_ass) {
             ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
