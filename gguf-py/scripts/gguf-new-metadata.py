@@ -89,7 +89,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
             writer.add_val(val, field.types[0])
 
     if gguf.Keys.Tokenizer.CHAT_TEMPLATE in new_metadata:
-        logger.debug(f'Adding chat template(s)')
+        logger.debug('Adding chat template(s)')
         writer.add_chat_template(new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE])
         del new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE]
 
@@ -150,8 +150,8 @@ def main() -> None:
 
     if remove_metadata:
         logger.warning('*** Warning *** Warning *** Warning **')
-        logger.warning(f'* Most metadata is required for a fully functional GGUF file,')
-        logger.warning(f'* removing crucial metadata may result in a corrupt output file!')
+        logger.warning('* Most metadata is required for a fully functional GGUF file,')
+        logger.warning('* removing crucial metadata may result in a corrupt output file!')
 
         if not args.force:
             logger.warning('* Enter exactly YES if you are positive you want to proceed:')
