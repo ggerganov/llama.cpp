@@ -5,6 +5,7 @@ import logging
 import argparse
 import os
 import sys
+from tqdm import tqdm
 from pathlib import Path
 
 import numpy as np
@@ -63,31 +64,43 @@ def convert_byteorder(reader: gguf.GGUFReader, args: argparse.Namespace) -> None
         for part in field.parts:
             part.byteswap(inplace=True)
     logger.info(f"* Converting tensors ({len(reader.tensors)})")
-    for idx, tensor in enumerate(reader.tensors):
+
+    for idx, tensor in enumerate(pbar := tqdm(reader.tensors, desc="Converting tensor")):
         log_message = (
-            f"  - {idx:4}: Converting tensor {repr(tensor.name)}, type={tensor.tensor_type.name}, "
-            f"elements={tensor.n_elements}... "
+            f"Converting tensor {repr(tensor.name)}, "
+            f"type={tensor.tensor_type.name}, "
+            f"elements={tensor.n_elements} "
         )
-        tensor_type = tensor.tensor_type
+
+        # Byte-swap each part of the tensor's field
         for part in tensor.field.parts:
             part.byteswap(inplace=True)
-        if tensor_type != gguf.GGMLQuantizationType.Q8_0:
+
+        # Byte-swap tensor data if necessary
+        if tensor.tensor_type == gguf.GGMLQuantizationType.Q8_0:
+            # Handle Q8_0 tensor blocks (block_q8_0)
+            # Specific handling of block_q8_0 is required.
+            # Each block_q8_0 consists of an f16 delta (scaling factor) followed by 32 int8 quantizations.
+
+            block_size = 34 # 34 bytes = <f16 delta scaling factor> + 32 * <int8 quant>
+
+            n_blocks = len(tensor.data) // block_size
+            for block_num in (inner_pbar := tqdm(range(n_blocks), desc="Byte-swapping Blocks", leave=False)):
+                block_offs = block_num * block_size
+
+                # Byte-Swap f16 sized delta field
+                delta = tensor.data[block_offs:block_offs + 2].view(dtype=np.uint16)
+                delta.byteswap(inplace=True)
+
+                # Byte-Swap Q8 weights
+                if block_num % 100000 == 0:
+                    inner_pbar.set_description(f"Byte-swapping Blocks [{(n_blocks - block_num) // n_blocks}]")
+
+        else:
+            # Handle other tensor types
             tensor.data.byteswap(inplace=True)
-            logger.info(log_message)
-            continue
 
-        # A Q8_0 block consists of a f16 delta followed by 32 int8 quants, so 34 bytes
-        block_size = 34
-        n_blocks = len(tensor.data) // block_size
-        for block_num in range(n_blocks):
-            block_offs = block_num * block_size
-            # I know I said f16, but it doesn't matter here - any simple 16 bit type works.
-            delta = tensor.data[block_offs:block_offs + 2].view(dtype=np.uint16)
-            delta.byteswap(inplace=True)
-            if block_num % 100000 == 0:
-                log_message += f"[{(n_blocks - block_num) // 1000}K]"
-
-        logger.info(log_message)
+        pbar.set_description(log_message)
 
     logger.info("* Completion")
 
