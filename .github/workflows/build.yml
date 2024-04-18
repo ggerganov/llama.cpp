@@ -32,6 +32,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -88,6 +90,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -206,6 +210,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
