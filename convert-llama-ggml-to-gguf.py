@@ -128,7 +128,6 @@ class Tensor:
         self.start_offset = offset
         self.len_bytes = n_bytes
         offset += n_bytes
-        # logger.info(n_dims, name_len, dtype, self.dims, self.name, pad)
         return offset - orig_offset
 
 
@@ -347,7 +346,6 @@ class GGMLToGGUF:
                 temp = tempdims[1]
                 tempdims[1] = tempdims[0]
                 tempdims[0] = temp
-            # logger.info(f'+ {tensor.name} | {mapped_name} {tensor.dims} :: {tempdims}')
             gguf_writer.add_tensor(
                 mapped_name,
                 data[tensor.start_offset:tensor.start_offset + tensor.len_bytes],
