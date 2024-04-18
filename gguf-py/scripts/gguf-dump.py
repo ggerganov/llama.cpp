@@ -32,8 +32,8 @@ def get_file_host_endian(reader: GGUFReader) -> tuple[str, str]:
 # please see the comments in the modify_gguf.py example.
 def dump_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
     host_endian, file_endian = get_file_host_endian(reader)
-    logger.info(f'* File is {file_endian} endian, script is running on a {host_endian} endian host.')
-    logger.info(f'* Dumping {len(reader.fields)} key/value pair(s)')
+    print(f'* File is {file_endian} endian, script is running on a {host_endian} endian host.')  # noqa: NP100
+    print(f'* Dumping {len(reader.fields)} key/value pair(s)')  # noqa: NP100
     for n, field in enumerate(reader.fields.values(), 1):
         if not field.types:
             pretty_type = 'N/A'
@@ -50,13 +50,13 @@ def dump_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
                 log_message += ' = {0}'.format(repr(str(bytes(field.parts[-1]), encoding='utf8')[:60]))
             elif field.types[0] in reader.gguf_scalar_to_np:
                 log_message += ' = {0}'.format(field.parts[-1][0])
-        logger.info(log_message)
+        print(log_message)  # noqa: NP100
     if args.no_tensors:
         return
-    logger.info(f'* Dumping {len(reader.tensors)} tensor(s)')
+    print(f'* Dumping {len(reader.tensors)} tensor(s)')  # noqa: NP100
     for n, tensor in enumerate(reader.tensors, 1):
         prettydims = ', '.join('{0:5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
-        logger.info(f'  {n:5}: {tensor.n_elements:10} | {prettydims} | {tensor.tensor_type.name:7} | {tensor.name}')
+        print(f'  {n:5}: {tensor.n_elements:10} | {prettydims} | {tensor.tensor_type.name:7} | {tensor.name}')  # noqa: NP100
 
 
 def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
