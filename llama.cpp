@@ -4592,7 +4592,7 @@ static bool llm_load_tensors(
     size_t ctx_size = ggml_tensor_overhead()*(ml.n_tensors + 1); // +1 for models where tok_embd is duplicated as output
 
     // for moe merged tensors
-    ctx_size += ggml_tensor_overhead()*hparams.n_expert*n_layer;
+    ctx_size += ggml_tensor_overhead()*n_layer*3;
 
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
     for (auto & it : buft_layer_count) {
