@@ -146,10 +146,10 @@ struct bin_bcast_cuda {
             int64_t ne2 = cne[2];
             int64_t ne3 = cne[3];
 
-            int64_t ne00 = cne0[0]; GGML_UNUSED(ne00);
-            int64_t ne01 = cne0[1]; GGML_UNUSED(ne01);
-            int64_t ne02 = cne0[2]; GGML_UNUSED(ne02);
-            int64_t ne03 = cne0[3]; GGML_UNUSED(ne03);
+            //int64_t ne00 = cne0[0]; GGML_UNUSED(ne00);
+            //int64_t ne01 = cne0[1]; GGML_UNUSED(ne01);
+            //int64_t ne02 = cne0[2]; GGML_UNUSED(ne02);
+            //int64_t ne03 = cne0[3]; GGML_UNUSED(ne03);
 
             int64_t ne10 = cne1[0];
             int64_t ne11 = cne1[1];
