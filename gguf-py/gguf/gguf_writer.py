@@ -25,7 +25,7 @@ from .constants import (
     TokenType,
 )
 
-logger = logging.getLogger("gguf-writer")
+logger = logging.getLogger(__name__)
 
 
 class WriterState(Enum):

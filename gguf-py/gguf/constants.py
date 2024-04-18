@@ -4,7 +4,7 @@ import logging
 from enum import Enum, IntEnum, auto
 from typing import Any
 
-logger = logging.getLogger("constants")
+logger = logging.getLogger(__name__)
 
 #
 # constants

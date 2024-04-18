@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from .gguf_writer import GGUFWriter
 
-logger = logging.getLogger("vocab")
+logger = logging.getLogger(__name__)
 
 
 class SpecialVocab:
