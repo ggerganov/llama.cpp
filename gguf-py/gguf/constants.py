@@ -90,6 +90,8 @@ class Keys:
         HF_JSON          = "tokenizer.huggingface.json"
         RWKV             = "tokenizer.rwkv.world"
         CHAT_TEMPLATE    = "tokenizer.chat_template"
+        CHAT_TEMPLATE_N  = "tokenizer.chat_template.{name}"
+        CHAT_TEMPLATES   = "tokenizer.chat_templates"
         # FIM/Infill special tokens constants
         PREFIX_ID        = "tokenizer.ggml.prefix_token_id"
         SUFFIX_ID        = "tokenizer.ggml.suffix_token_id"

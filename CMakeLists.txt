@@ -43,6 +43,18 @@ else()
     set(LLAMA_METAL_DEFAULT OFF)
 endif()
 
+# TODO: fix this for Android CI
+#       https://github.com/ggerganov/llama.cpp/pull/6716#issuecomment-2061509191
+#if (CMAKE_SYSTEM_NAME MATCHES "ANDROID")
+#    set(LLAMA_LLAMAFILE_DEFAULT OFF)
+#else()
+#    set(LLAMA_LLAMAFILE_DEFAULT ON)
+#endif()
+
+# TODO: temporary disable until MoE is fixed
+#       https://github.com/ggerganov/llama.cpp/pull/6716
+set(LLAMA_LLAMAFILE_DEFAULT OFF)
+
 # general
 option(BUILD_SHARED_LIBS                "build shared libraries"                                OFF)
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
@@ -88,7 +100,7 @@ endif()
 # 3rd party libs
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
 option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
-option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"                       ON)
+option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"                       ${LLAMA_LLAMAFILE_DEFAULT})
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
 option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
@@ -372,6 +384,9 @@ endif()
 
 if (LLAMA_LLAMAFILE)
     add_compile_definitions(GGML_USE_LLAMAFILE)
+
+    set(GGML_HEADERS_LLAMAFILE sgemm.h)
+    set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
 endif()
 
 if (LLAMA_QKK_64)
@@ -1157,17 +1172,16 @@ add_library(ggml OBJECT
             ggml-backend.h
             ggml-quants.c
             ggml-quants.h
-            sgemm.cpp
-            sgemm.h
-            ${GGML_SOURCES_CUDA}    ${GGML_HEADERS_CUDA}
-            ${GGML_SOURCES_OPENCL}  ${GGML_HEADERS_OPENCL}
-            ${GGML_SOURCES_METAL}   ${GGML_HEADERS_METAL}
-            ${GGML_SOURCES_MPI}     ${GGML_HEADERS_MPI}
-            ${GGML_SOURCES_EXTRA}   ${GGML_HEADERS_EXTRA}
-            ${GGML_SOURCES_SYCL}    ${GGML_HEADERS_SYCL}
-            ${GGML_SOURCES_KOMPUTE} ${GGML_HEADERS_KOMPUTE}
-            ${GGML_SOURCES_VULKAN}  ${GGML_HEADERS_VULKAN}
-            ${GGML_SOURCES_ROCM}    ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_OPENCL}    ${GGML_HEADERS_OPENCL}
+            ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI}       ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA}     ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_SYCL}      ${GGML_HEADERS_SYCL}
+            ${GGML_SOURCES_KOMPUTE}   ${GGML_HEADERS_KOMPUTE}
+            ${GGML_SOURCES_VULKAN}    ${GGML_HEADERS_VULKAN}
+            ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
