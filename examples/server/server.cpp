@@ -1222,9 +1222,9 @@ struct server_context {
                     { "n_ctx_train", n_ctx_train },
                     { "ga_n", slot.ga_n },
                 });
-            slot.truncated = true;
+            slot.truncated      = true;
+            slot.stopped_limit  = true;
             slot.has_next_token = false; // stop prediction
-            slot.stopped_limit = true;
         }
 
         LOG_VERBOSE("next token", {
