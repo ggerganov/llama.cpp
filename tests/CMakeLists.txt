@@ -25,7 +25,7 @@ function(llama_test source)
 
     add_executable(${TEST_TARGET} ${source} get-model.cpp)
     install(TARGETS ${TEST_TARGET} RUNTIME)
-    target_link_libraries(${TEST_TARGET} PRIVATE common json-schema-to-grammar)
+    target_link_libraries(${TEST_TARGET} PRIVATE common)
     add_test(
         NAME ${TEST_TARGET}
         WORKING_DIRECTORY ${LLAMA_TEST_WORKING_DIRECTORY}

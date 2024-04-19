@@ -1,4 +1,6 @@
 #include "common.h"
+#include "json.hpp"
+#include "json-schema-to-grammar.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -68,6 +70,8 @@
 #define LLAMA_CURL_MAX_HEADER_LENGTH 256
 #endif // LLAMA_USE_CURL
 
+using json = nlohmann::ordered_json;
+
 int32_t get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
@@ -102,6 +106,79 @@ int32_t get_num_physical_cores() {
 #endif
     unsigned int n_threads = std::thread::hardware_concurrency();
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
+}
+
+#if defined(__x86_64__) && defined(__linux__)
+#include <pthread.h>
+
+static void cpuid(unsigned leaf, unsigned subleaf,
+                  unsigned *eax, unsigned *ebx, unsigned *ecx, unsigned *edx) {
+    __asm__("movq\t%%rbx,%%rsi\n\t"
+            "cpuid\n\t"
+            "xchgq\t%%rbx,%%rsi"
+            : "=a"(*eax), "=S"(*ebx), "=c"(*ecx), "=d"(*edx)
+            : "0"(leaf), "2"(subleaf));
+}
+
+static int pin_cpu(int cpu) {
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    CPU_SET(cpu, &mask);
+    return pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask);
+}
+
+static bool is_hybrid_cpu(void) {
+    unsigned eax, ebx, ecx, edx;
+    cpuid(7, 0, &eax, &ebx, &ecx, &edx);
+    return !!(edx & (1u << 15));
+}
+
+static bool is_running_on_efficiency_core(void) {
+    unsigned eax, ebx, ecx, edx;
+    cpuid(0x1a, 0, &eax, &ebx, &ecx, &edx);
+    int intel_atom = 0x20;
+    int core_type = (eax & 0xff000000u) >> 24;
+    return core_type == intel_atom;
+}
+
+static int count_math_cpus(int cpu_count) {
+    int result = 0;
+    for (int cpu = 0; cpu < cpu_count; ++cpu) {
+        if (pin_cpu(cpu)) {
+            return -1;
+        }
+        if (is_running_on_efficiency_core()) {
+            continue; // efficiency cores harm lockstep threading
+        }
+        ++cpu; // hyperthreading isn't useful for linear algebra
+        ++result;
+    }
+    return result;
+}
+
+#endif // __x86_64__ && __linux__
+
+/**
+ * Returns number of CPUs on system that are useful for math.
+ */
+int get_math_cpu_count() {
+#if defined(__x86_64__) && defined(__linux__)
+    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
+    if (cpu_count < 1) {
+        return get_num_physical_cores();
+    }
+    if (is_hybrid_cpu()) {
+        cpu_set_t affinity;
+        if (!pthread_getaffinity_np(pthread_self(), sizeof(affinity), &affinity)) {
+            int result = count_math_cpus(cpu_count);
+            pthread_setaffinity_np(pthread_self(), sizeof(affinity), &affinity);
+            if (result > 0) {
+                return result;
+            }
+        }
+    }
+#endif
+    return get_num_physical_cores();
 }
 
 void process_escapes(std::string & input) {
@@ -1148,6 +1225,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         );
         return true;
     }
+    if (arg == "-j" || arg == "--json-schema") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.grammar = json_schema_to_grammar(json::parse(argv[i]));
+        return true;
+    }
     if (arg == "--override-kv") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1353,6 +1438,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
     printf("  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
     printf("  --grammar-file FNAME  file to read grammar from\n");
+    printf("  -j SCHEMA, --json-schema SCHEMA\n");
+    printf("                        JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object.\n");
+    printf("                        For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead\n");
     printf("  --cfg-negative-prompt PROMPT\n");
     printf("                        negative prompt to use for guidance. (default: empty)\n");
     printf("  --cfg-negative-prompt-file FNAME\n");

@@ -90,6 +90,13 @@ class Keys:
         HF_JSON          = "tokenizer.huggingface.json"
         RWKV             = "tokenizer.rwkv.world"
         CHAT_TEMPLATE    = "tokenizer.chat_template"
+        CHAT_TEMPLATE_N  = "tokenizer.chat_template.{name}"
+        CHAT_TEMPLATES   = "tokenizer.chat_templates"
+        # FIM/Infill special tokens constants
+        PREFIX_ID        = "tokenizer.ggml.prefix_token_id"
+        SUFFIX_ID        = "tokenizer.ggml.suffix_token_id"
+        MIDDLE_ID        = "tokenizer.ggml.middle_token_id"
+        EOT_ID           = "tokenizer.ggml.eot_token_id"
 
 
 #
@@ -115,6 +122,7 @@ class MODEL_ARCH(IntEnum):
     STABLELM   = auto()
     QWEN       = auto()
     QWEN2      = auto()
+    QWEN2MOE   = auto()
     PHI2       = auto()
     PLAMO      = auto()
     CODESHELL  = auto()
@@ -126,44 +134,50 @@ class MODEL_ARCH(IntEnum):
     MAMBA      = auto()
     XVERSE     = auto()
     COMMAND_R  = auto()
+    DBRX       = auto()
+    OLMO       = auto()
 
 
 class MODEL_TENSOR(IntEnum):
-    TOKEN_EMBD      = auto()
-    TOKEN_EMBD_NORM = auto()
-    TOKEN_TYPES     = auto()
-    POS_EMBD        = auto()
-    OUTPUT          = auto()
-    OUTPUT_NORM     = auto()
-    ROPE_FREQS      = auto()
-    ATTN_Q          = auto()
-    ATTN_K          = auto()
-    ATTN_V          = auto()
-    ATTN_QKV        = auto()
-    ATTN_OUT        = auto()
-    ATTN_NORM       = auto()
-    ATTN_NORM_2     = auto()
-    ATTN_OUT_NORM   = auto()
-    ATTN_ROT_EMBD   = auto()
-    FFN_GATE_INP    = auto()
-    FFN_NORM        = auto()
-    FFN_GATE        = auto()
-    FFN_DOWN        = auto()
-    FFN_UP          = auto()
-    FFN_ACT         = auto()
-    FFN_GATE_EXP    = auto()
-    FFN_DOWN_EXP    = auto()
-    FFN_UP_EXP      = auto()
-    ATTN_Q_NORM     = auto()
-    ATTN_K_NORM     = auto()
-    LAYER_OUT_NORM  = auto()
-    SSM_IN          = auto()
-    SSM_CONV1D      = auto()
-    SSM_X           = auto()
-    SSM_DT          = auto()
-    SSM_A           = auto()
-    SSM_D           = auto()
-    SSM_OUT         = auto()
+    TOKEN_EMBD         = auto()
+    TOKEN_EMBD_NORM    = auto()
+    TOKEN_TYPES        = auto()
+    POS_EMBD           = auto()
+    OUTPUT             = auto()
+    OUTPUT_NORM        = auto()
+    ROPE_FREQS         = auto()
+    ATTN_Q             = auto()
+    ATTN_K             = auto()
+    ATTN_V             = auto()
+    ATTN_QKV           = auto()
+    ATTN_OUT           = auto()
+    ATTN_NORM          = auto()
+    ATTN_NORM_2        = auto()
+    ATTN_OUT_NORM      = auto()
+    ATTN_ROT_EMBD      = auto()
+    FFN_GATE_INP       = auto()
+    FFN_GATE_INP_SHEXP = auto()
+    FFN_NORM           = auto()
+    FFN_GATE           = auto()
+    FFN_DOWN           = auto()
+    FFN_UP             = auto()
+    FFN_ACT            = auto()
+    FFN_GATE_EXP       = auto()
+    FFN_DOWN_EXP       = auto()
+    FFN_UP_EXP         = auto()
+    FFN_GATE_SHEXP     = auto()
+    FFN_DOWN_SHEXP     = auto()
+    FFN_UP_SHEXP       = auto()
+    ATTN_Q_NORM        = auto()
+    ATTN_K_NORM        = auto()
+    LAYER_OUT_NORM     = auto()
+    SSM_IN             = auto()
+    SSM_CONV1D         = auto()
+    SSM_X              = auto()
+    SSM_DT             = auto()
+    SSM_A              = auto()
+    SSM_D              = auto()
+    SSM_OUT            = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -184,6 +198,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.STABLELM:       "stablelm",
     MODEL_ARCH.QWEN:           "qwen",
     MODEL_ARCH.QWEN2:          "qwen2",
+    MODEL_ARCH.QWEN2MOE:       "qwen2moe",
     MODEL_ARCH.PHI2:           "phi2",
     MODEL_ARCH.PLAMO:          "plamo",
     MODEL_ARCH.CODESHELL:      "codeshell",
@@ -195,44 +210,50 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.MAMBA:          "mamba",
     MODEL_ARCH.XVERSE:         "xverse",
     MODEL_ARCH.COMMAND_R:      "command-r",
+    MODEL_ARCH.DBRX:           "dbrx",
+    MODEL_ARCH.OLMO:           "olmo",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
-    MODEL_TENSOR.TOKEN_EMBD:      "token_embd",
-    MODEL_TENSOR.TOKEN_EMBD_NORM: "token_embd_norm",
-    MODEL_TENSOR.TOKEN_TYPES:     "token_types",
-    MODEL_TENSOR.POS_EMBD:        "position_embd",
-    MODEL_TENSOR.OUTPUT_NORM:     "output_norm",
-    MODEL_TENSOR.OUTPUT:          "output",
-    MODEL_TENSOR.ROPE_FREQS:      "rope_freqs",
-    MODEL_TENSOR.ATTN_NORM:       "blk.{bid}.attn_norm",
-    MODEL_TENSOR.ATTN_NORM_2:     "blk.{bid}.attn_norm_2",
-    MODEL_TENSOR.ATTN_QKV:        "blk.{bid}.attn_qkv",
-    MODEL_TENSOR.ATTN_Q:          "blk.{bid}.attn_q",
-    MODEL_TENSOR.ATTN_K:          "blk.{bid}.attn_k",
-    MODEL_TENSOR.ATTN_V:          "blk.{bid}.attn_v",
-    MODEL_TENSOR.ATTN_OUT:        "blk.{bid}.attn_output",
-    MODEL_TENSOR.ATTN_ROT_EMBD:   "blk.{bid}.attn_rot_embd",
-    MODEL_TENSOR.ATTN_Q_NORM:     "blk.{bid}.attn_q_norm",
-    MODEL_TENSOR.ATTN_K_NORM:     "blk.{bid}.attn_k_norm",
-    MODEL_TENSOR.ATTN_OUT_NORM:   "blk.{bid}.attn_output_norm",
-    MODEL_TENSOR.FFN_GATE_INP:    "blk.{bid}.ffn_gate_inp",
-    MODEL_TENSOR.FFN_NORM:        "blk.{bid}.ffn_norm",
-    MODEL_TENSOR.FFN_GATE:        "blk.{bid}.ffn_gate",
-    MODEL_TENSOR.FFN_DOWN:        "blk.{bid}.ffn_down",
-    MODEL_TENSOR.FFN_UP:          "blk.{bid}.ffn_up",
-    MODEL_TENSOR.FFN_ACT:         "blk.{bid}.ffn",
-    MODEL_TENSOR.FFN_GATE_EXP:    "blk.{bid}.ffn_gate_exps",
-    MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down_exps",
-    MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up_exps",
-    MODEL_TENSOR.LAYER_OUT_NORM:  "blk.{bid}.layer_output_norm",
-    MODEL_TENSOR.SSM_IN:          "blk.{bid}.ssm_in",
-    MODEL_TENSOR.SSM_CONV1D:      "blk.{bid}.ssm_conv1d",
-    MODEL_TENSOR.SSM_X:           "blk.{bid}.ssm_x",
-    MODEL_TENSOR.SSM_DT:          "blk.{bid}.ssm_dt",
-    MODEL_TENSOR.SSM_A:           "blk.{bid}.ssm_a",
-    MODEL_TENSOR.SSM_D:           "blk.{bid}.ssm_d",
-    MODEL_TENSOR.SSM_OUT:         "blk.{bid}.ssm_out",
+    MODEL_TENSOR.TOKEN_EMBD:         "token_embd",
+    MODEL_TENSOR.TOKEN_EMBD_NORM:    "token_embd_norm",
+    MODEL_TENSOR.TOKEN_TYPES:        "token_types",
+    MODEL_TENSOR.POS_EMBD:           "position_embd",
+    MODEL_TENSOR.OUTPUT_NORM:        "output_norm",
+    MODEL_TENSOR.OUTPUT:             "output",
+    MODEL_TENSOR.ROPE_FREQS:         "rope_freqs",
+    MODEL_TENSOR.ATTN_NORM:          "blk.{bid}.attn_norm",
+    MODEL_TENSOR.ATTN_NORM_2:        "blk.{bid}.attn_norm_2",
+    MODEL_TENSOR.ATTN_QKV:           "blk.{bid}.attn_qkv",
+    MODEL_TENSOR.ATTN_Q:             "blk.{bid}.attn_q",
+    MODEL_TENSOR.ATTN_K:             "blk.{bid}.attn_k",
+    MODEL_TENSOR.ATTN_V:             "blk.{bid}.attn_v",
+    MODEL_TENSOR.ATTN_OUT:           "blk.{bid}.attn_output",
+    MODEL_TENSOR.ATTN_ROT_EMBD:      "blk.{bid}.attn_rot_embd",
+    MODEL_TENSOR.ATTN_Q_NORM:        "blk.{bid}.attn_q_norm",
+    MODEL_TENSOR.ATTN_K_NORM:        "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.ATTN_OUT_NORM:      "blk.{bid}.attn_output_norm",
+    MODEL_TENSOR.FFN_GATE_INP:       "blk.{bid}.ffn_gate_inp",
+    MODEL_TENSOR.FFN_GATE_INP_SHEXP: "blk.{bid}.ffn_gate_inp_shexp",
+    MODEL_TENSOR.FFN_NORM:           "blk.{bid}.ffn_norm",
+    MODEL_TENSOR.FFN_GATE:           "blk.{bid}.ffn_gate",
+    MODEL_TENSOR.FFN_DOWN:           "blk.{bid}.ffn_down",
+    MODEL_TENSOR.FFN_UP:             "blk.{bid}.ffn_up",
+    MODEL_TENSOR.FFN_GATE_SHEXP:     "blk.{bid}.ffn_gate_shexp",
+    MODEL_TENSOR.FFN_DOWN_SHEXP:     "blk.{bid}.ffn_down_shexp",
+    MODEL_TENSOR.FFN_UP_SHEXP:       "blk.{bid}.ffn_up_shexp",
+    MODEL_TENSOR.FFN_ACT:            "blk.{bid}.ffn",
+    MODEL_TENSOR.FFN_GATE_EXP:       "blk.{bid}.ffn_gate_exps",
+    MODEL_TENSOR.FFN_DOWN_EXP:       "blk.{bid}.ffn_down_exps",
+    MODEL_TENSOR.FFN_UP_EXP:         "blk.{bid}.ffn_up_exps",
+    MODEL_TENSOR.LAYER_OUT_NORM:     "blk.{bid}.layer_output_norm",
+    MODEL_TENSOR.SSM_IN:             "blk.{bid}.ssm_in",
+    MODEL_TENSOR.SSM_CONV1D:         "blk.{bid}.ssm_conv1d",
+    MODEL_TENSOR.SSM_X:              "blk.{bid}.ssm_x",
+    MODEL_TENSOR.SSM_DT:             "blk.{bid}.ssm_dt",
+    MODEL_TENSOR.SSM_A:              "blk.{bid}.ssm_a",
+    MODEL_TENSOR.SSM_D:              "blk.{bid}.ssm_d",
+    MODEL_TENSOR.SSM_OUT:            "blk.{bid}.ssm_out",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -438,6 +459,8 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
     ],
     MODEL_ARCH.QWEN: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -466,6 +489,25 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.QWEN2MOE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_GATE_INP_SHEXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
     ],
     MODEL_ARCH.PLAMO: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -641,6 +683,30 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_UP,
         MODEL_TENSOR.ATTN_K_NORM,
         MODEL_TENSOR.ATTN_Q_NORM,
+    ],
+    MODEL_ARCH.DBRX: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_OUT_NORM,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+    ],
+    MODEL_ARCH.OLMO: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
     ],
     # TODO
 }
@@ -870,3 +936,7 @@ KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
 KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
 KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
 KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV
+KEY_TOKENIZER_PRIFIX_ID  = Keys.Tokenizer.PREFIX_ID
+KEY_TOKENIZER_SUFFIX_ID  = Keys.Tokenizer.SUFFIX_ID
+KEY_TOKENIZER_MIDDLE_ID  = Keys.Tokenizer.MIDDLE_ID
+KEY_TOKENIZER_EOT_ID     = Keys.Tokenizer.EOT_ID
