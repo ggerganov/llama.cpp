@@ -17018,13 +17018,8 @@ static int32_t llama_chat_apply_template_internal(
         }
     } else if (tmpl == "llama3" || (tmpl.find("<|start_header_id|>") != std::string::npos && tmpl.find("<|end_header_id|>") != std::string::npos)) {
         // Llama 3
-        bool first_message = true; // add BOS at the beginning
         for (auto message : chat) {
             std::string role(message->role);
-            if (first_message) {
-                ss << "<|begin_of_text|>";
-                first_message = false;
-            }
             ss << "<|start_header_id|>" << role << "<|end_header_id|>\n\n" << trim(message->content) << "<|eot_id|>";
         }
         if (add_ass) {
