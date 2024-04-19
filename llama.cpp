@@ -2930,6 +2930,16 @@ namespace GGUFMeta {
         }
 
         template<typename OT>
+        static typename std::enable_if<std::is_same<OT, char *>::value, char *>::type
+        try_override(T & target, const struct llama_model_kv_override * ovrd) {
+            if (validate_override(LLAMA_KV_OVERRIDE_TYPE_STR, ovrd)) {
+                target = ovrd->str_value;
+                return true;
+            }
+            return false;
+        }
+
+        template<typename OT>
         static typename std::enable_if<std::is_same<OT, std::string>::value, bool>::type
         try_override(T & target, const struct llama_model_kv_override * ovrd) {
             (void)target;
@@ -14975,6 +14985,14 @@ struct llama_model * llama_load_model_from_file(
 
 void llama_free_model(struct llama_model * model) {
     delete model;
+}
+
+void llama_model_kv_override_free(struct llama_model_kv_override * kv_overrides) {
+    for (const struct llama_model_kv_override *p = kv_overrides; p->key[0] != 0; p++) {
+        if (p->tag == LLAMA_KV_OVERRIDE_TYPE_STR) {
+            delete p->str_value;
+        }
+    }
 }
 
 struct llama_context * llama_new_context_with_model(

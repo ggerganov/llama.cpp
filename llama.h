@@ -209,6 +209,9 @@ extern "C" {
         };
     };
 
+    // Frees all allocated memory
+    LLAMA_API void llama_model_kv_override_free(struct llama_model_kv_override * ctx);
+
     struct llama_model_params {
         int32_t n_gpu_layers; // number of layers to store in VRAM
         enum llama_split_mode split_mode; // how to split the model across multiple GPUs
