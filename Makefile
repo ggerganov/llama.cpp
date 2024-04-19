@@ -384,6 +384,15 @@ ifdef LLAMA_OPENBLAS
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
 endif # LLAMA_OPENBLAS
 
+# TODO: temporary disable until MoE is fixed
+#       https://github.com/ggerganov/llama.cpp/pull/6716
+LLAMA_NO_LLAMAFILE := 1
+
+ifndef LLAMA_NO_LLAMAFILE
+	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
+	OBJS        += sgemm.o
+endif
+
 ifdef LLAMA_BLIS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
@@ -480,11 +489,9 @@ ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/com
 
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
 	$(NVCC_COMPILE)
-
 endif # LLAMA_CUDA
 
 ifdef LLAMA_CLBLAST
-
 	MK_CPPFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags-only-I clblast OpenCL)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other clblast OpenCL)
 	MK_CXXFLAGS += $(shell pkg-config --cflags-only-other clblast OpenCL)
@@ -602,6 +609,11 @@ ifdef LLAMA_MPI
 ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
+
+ifndef LLAMA_NO_LLAMAFILE
+sgemm.o: sgemm.cpp sgemm.h ggml.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+endif
 
 GF_CC := $(CC)
 include scripts/get-flags.mk

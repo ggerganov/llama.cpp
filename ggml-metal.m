@@ -41,8 +41,11 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_TANH,
     GGML_METAL_KERNEL_TYPE_RELU,
     GGML_METAL_KERNEL_TYPE_GELU,
+    GGML_METAL_KERNEL_TYPE_GELU_4,
     GGML_METAL_KERNEL_TYPE_GELU_QUICK,
+    GGML_METAL_KERNEL_TYPE_GELU_QUICK_4,
     GGML_METAL_KERNEL_TYPE_SILU,
+    GGML_METAL_KERNEL_TYPE_SILU_4,
     GGML_METAL_KERNEL_TYPE_SOFT_MAX,
     GGML_METAL_KERNEL_TYPE_SOFT_MAX_4,
     GGML_METAL_KERNEL_TYPE_DIAG_MASK_INF,
@@ -473,8 +476,11 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_TANH,                      tanh,                   true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_RELU,                      relu,                   true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GELU,                      gelu,                   true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GELU_4,                    gelu_4,                 true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GELU_QUICK,                gelu_quick,             true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GELU_QUICK_4,              gelu_quick_4,           true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SILU,                      silu,                   true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SILU_4,                    silu_4,                 true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SOFT_MAX,                  soft_max,               ctx->support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SOFT_MAX_4,                soft_max_4,             ctx->support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_DIAG_MASK_INF,             diag_mask_inf,          true);
@@ -1178,6 +1184,9 @@ static enum ggml_status ggml_metal_graph_compute(
                 } break;
                 case GGML_OP_UNARY:
                     switch (ggml_get_unary_op(gf->nodes[i])) {
+                        // we are not taking into account the strides, so for now require contiguous tensors
+                        GGML_ASSERT(ggml_is_contiguous(src0));
+
                         case GGML_UNARY_OP_TANH:
                             {
                                 id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_TANH].pipeline;
@@ -1204,42 +1213,60 @@ static enum ggml_status ggml_metal_graph_compute(
                             } break;
                         case GGML_UNARY_OP_GELU:
                             {
-                                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU].pipeline;
+                                int64_t n = ggml_nelements(dst);
+
+                                id<MTLComputePipelineState> pipeline = nil;
+
+                                if (n % 4 == 0) {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_4].pipeline;
+                                    n /= 4;
+                                } else {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU].pipeline;
+                                }
 
                                 [encoder setComputePipelineState:pipeline];
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
 
-                                const int64_t n = ggml_nelements(dst);
-                                GGML_ASSERT(n % 4 == 0);
-
-                                [encoder dispatchThreadgroups:MTLSizeMake(n/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                             } break;
                         case GGML_UNARY_OP_GELU_QUICK:
                             {
-                                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_QUICK].pipeline;
+                                int64_t n = ggml_nelements(dst);
+
+                                id<MTLComputePipelineState> pipeline = nil;
+
+                                if (n % 4 == 0) {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_QUICK_4].pipeline;
+                                    n /= 4;
+                                } else {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_GELU_QUICK].pipeline;
+                                }
 
                                 [encoder setComputePipelineState:pipeline];
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
 
-                                const int64_t n = ggml_nelements(dst);
-                                GGML_ASSERT(n % 4 == 0);
-
-                                [encoder dispatchThreadgroups:MTLSizeMake(n/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                             } break;
                         case GGML_UNARY_OP_SILU:
                             {
-                                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SILU].pipeline;
+                                int64_t n = ggml_nelements(dst);
+
+                                id<MTLComputePipelineState> pipeline = nil;
+
+                                if (n % 4 == 0) {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SILU_4].pipeline;
+                                    n /= 4;
+                                } else {
+                                    pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SILU].pipeline;
+                                }
 
                                 [encoder setComputePipelineState:pipeline];
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
 
-                                const int64_t n = ggml_nelements(dst);
-                                GGML_ASSERT(n % 4 == 0);
-
-                                [encoder dispatchThreadgroups:MTLSizeMake(n/4, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                             } break;
                         default:
                             {
@@ -1705,15 +1732,10 @@ static enum ggml_status ggml_metal_graph_compute(
                     } break;
                 case GGML_OP_MUL_MAT_ID:
                     {
-                        //GGML_ASSERT(ne00 == ne10);
-                        //GGML_ASSERT(ne03 == ne13);
                         const int n_as = src0->ne[2];
 
-                        // max size of the src1ids array in the kernel shared buffer
-                        GGML_ASSERT(ne11 <= 4096);
-
                         // src2 = ids
-                        const int64_t  ne20 = src2->ne[0]; GGML_UNUSED(ne20);
+                        const int64_t  ne20 = src2->ne[0];
                         const int64_t  ne21 = src2->ne[1];
                         const int64_t  ne22 = src2->ne[2]; GGML_UNUSED(ne22);
                         const int64_t  ne23 = src2->ne[3]; GGML_UNUSED(ne23);
@@ -1734,15 +1756,13 @@ static enum ggml_status ggml_metal_graph_compute(
 
                         // find the break-even point where the matrix-matrix kernel becomes more efficient compared
                         // to the matrix-vector kernel
-                        int ne11_mm_min = n_as;
+                        // ne20 = n_used_experts
+                        // ne21 = n_rows
+                        const int dst_rows = ne20*ne21;
+                        const int dst_rows_min = n_as;
 
-                        const int idx = ((int32_t *) dst->op_params)[0];
-
-                        // batch size
-                        GGML_ASSERT(ne21 == ne11); // ?
-                        GGML_ASSERT(ne12 == 1 && ne13 == 1); // no broadcasting
-                        const uint r2 = 1;
-                        const uint r3 = 1;
+                        // max size of the rowids array in the kernel shared buffer
+                        GGML_ASSERT(dst_rows <= 2048);
 
                         // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
                         // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
@@ -1752,7 +1772,7 @@ static enum ggml_status ggml_metal_graph_compute(
                         // !!!
                         if ([ctx->device supportsFamily:MTLGPUFamilyApple7] &&
                             ne00 % 32 == 0 && ne00 >= 64 &&
-                            ne11 > ne11_mm_min) {
+                            dst_rows > dst_rows_min) {
 
                             // some Metal matrix data types require aligned pointers
                             // ref: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf (Table 2.5)
@@ -1794,26 +1814,26 @@ static enum ggml_status ggml_metal_graph_compute(
                             [encoder setBuffer:id_src1 offset:offs_src1    atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst     atIndex:2];
                             [encoder setBuffer:id_src2 offset:offs_src2    atIndex:3];
-                            [encoder setBytes:&nb21    length:sizeof(nb21) atIndex:4];
-                            [encoder setBytes:&ne00    length:sizeof(ne00) atIndex:5];
-                            [encoder setBytes:&ne02    length:sizeof(ne02) atIndex:6];
-                            [encoder setBytes:&nb01    length:sizeof(nb01) atIndex:7];
-                            [encoder setBytes:&nb02    length:sizeof(nb02) atIndex:8];
-                            [encoder setBytes:&ne12    length:sizeof(ne12) atIndex:9];
-                            [encoder setBytes:&ne13    length:sizeof(ne13) atIndex:10];
-                            [encoder setBytes:&nb10    length:sizeof(nb10) atIndex:11];
-                            [encoder setBytes:&nb11    length:sizeof(nb11) atIndex:12];
-                            [encoder setBytes:&nb12    length:sizeof(nb12) atIndex:13];
-                            [encoder setBytes:&ne0     length:sizeof(ne0)  atIndex:14];
-                            [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:15];
-                            [encoder setBytes:&nb1     length:sizeof(nb1)  atIndex:16];
-                            [encoder setBytes:&r2      length:sizeof(r2)   atIndex:17];
-                            [encoder setBytes:&r3      length:sizeof(r3)   atIndex:18];
-                            [encoder setBytes:&idx     length:sizeof(idx)  atIndex:19];
+                            [encoder setBytes:&ne20    length:sizeof(ne20) atIndex:4];
+                            [encoder setBytes:&ne21    length:sizeof(ne21) atIndex:5];
+                            [encoder setBytes:&nb21    length:sizeof(nb21) atIndex:6];
+                            [encoder setBytes:&ne00    length:sizeof(ne00) atIndex:7];
+                            [encoder setBytes:&ne02    length:sizeof(ne02) atIndex:8];
+                            [encoder setBytes:&nb01    length:sizeof(nb01) atIndex:9];
+                            [encoder setBytes:&nb02    length:sizeof(nb02) atIndex:10];
+                            [encoder setBytes:&ne11    length:sizeof(ne11) atIndex:11];
+                            [encoder setBytes:&ne12    length:sizeof(ne12) atIndex:12];
+                            [encoder setBytes:&ne13    length:sizeof(ne13) atIndex:13];
+                            [encoder setBytes:&nb10    length:sizeof(nb10) atIndex:14];
+                            [encoder setBytes:&nb11    length:sizeof(nb11) atIndex:15];
+                            [encoder setBytes:&nb12    length:sizeof(nb12) atIndex:16];
+                            [encoder setBytes:&ne0     length:sizeof(ne0)  atIndex:17];
+                            [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:18];
+                            [encoder setBytes:&nb1     length:sizeof(nb1)  atIndex:19];
 
-                            [encoder setThreadgroupMemoryLength:GGML_PAD(8192 + 2*ne11, 16) atIndex:0];
+                            [encoder setThreadgroupMemoryLength:GGML_PAD(8192 + dst_rows*4/*sizeof(ushort2)*/, 16) atIndex:0];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake((ne11 + 31)/32, (ne01 + 63)/64, n_as*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake((ne21 + 31)/32, (ne01 + 63)/64, n_as) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
                         } else {
                             int nth0 = 32;
                             int nth1 = 1;
@@ -1966,72 +1986,72 @@ static enum ggml_status ggml_metal_graph_compute(
                                 GGML_ASSERT(ne00 >= nth0*nth1);
                             }
 
-                            const int64_t _ne1 = 1; // kernels needs a reference in constant memory
-
                             [encoder setComputePipelineState:pipeline];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
                             [encoder setBuffer:id_src2 offset:offs_src2 atIndex:3];
-                            [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:4];
-                            [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:5];
-                            [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:6];
-                            [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:7];
-                            [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:8];
-                            [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:9];
-                            [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:10];
-                            [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:11];
-                            [encoder setBytes:&_ne1 length:sizeof(_ne1) atIndex:12];
-                            [encoder setBytes:&ne12 length:sizeof(ne12) atIndex:13];
-                            [encoder setBytes:&ne13 length:sizeof(ne13) atIndex:14];
-                            [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:15];
-                            [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:16];
-                            [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:17];
-                            [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:18];
-                            [encoder setBytes:&_ne1 length:sizeof(_ne1) atIndex:19];
-                            [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:20];
-                            [encoder setBytes:&r2   length:sizeof(r2)   atIndex:21];
-                            [encoder setBytes:&r3   length:sizeof(r3)   atIndex:22];
-                            [encoder setBytes:&idx  length:sizeof(idx)  atIndex:23];
+                            [encoder setBytes:&ne20 length:sizeof(ne20) atIndex:4];
+                            [encoder setBytes:&ne21 length:sizeof(ne21) atIndex:5];
+                            [encoder setBytes:&nb21 length:sizeof(nb21) atIndex:6];
+                            [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:7];
+                            [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:8];
+                            [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:9];
+                            [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:10];
+                            [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:11];
+                            [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:12];
+                            [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:13];
+                            [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:14];
+                            [encoder setBytes:&ne12 length:sizeof(ne12) atIndex:15];
+                            [encoder setBytes:&ne13 length:sizeof(ne13) atIndex:16];
+                            [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:17];
+                            [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:18];
+                            [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:19];
+                            [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:20];
+                            [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:21];
+                            [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:22];
+
+                            const int64_t _ne1 = 1;
+                            const int tgz = dst_rows;
 
                             if (src0t == GGML_TYPE_Q4_0  || src0t == GGML_TYPE_Q4_1  || src0t == GGML_TYPE_Q5_0 ||
                                 src0t == GGML_TYPE_Q5_1  || src0t == GGML_TYPE_Q8_0  || src0t == GGML_TYPE_Q2_K ||
                                 src0t == GGML_TYPE_IQ1_S || src0t == GGML_TYPE_IQ1_M || src0t == GGML_TYPE_IQ2_S) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src0t == GGML_TYPE_IQ2_XXS || src0t == GGML_TYPE_IQ2_XS) {
                                 const int mem_size = src0t == GGML_TYPE_IQ2_XXS ? 256*8+128 : 512*8+128;
                                 [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src0t == GGML_TYPE_IQ3_XXS || src0t == GGML_TYPE_IQ3_S) {
                                 const int mem_size = src0t == GGML_TYPE_IQ3_XXS ? 256*4+128 : 512*4;
                                 [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src0t == GGML_TYPE_IQ4_NL || src0t == GGML_TYPE_IQ4_XS) {
                                 const int mem_size = 32*sizeof(float);
                                 [encoder setThreadgroupMemoryLength:mem_size atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src0t == GGML_TYPE_Q4_K) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src0t == GGML_TYPE_Q3_K) {
 #ifdef GGML_QKK_64
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
 #else
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
 #endif
                             }
                             else if (src0t == GGML_TYPE_Q5_K) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                             else if (src0t == GGML_TYPE_Q6_K) {
-                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, _ne1, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, _ne1, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             } else {
-                                const int64_t ny = (_ne1 + nrows - 1)/nrows;
-                                [encoder dispatchThreadgroups:MTLSizeMake(ne01, ny, ne21*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                const int64_t ny = (_ne1 + nrows - 1)/nrows; // = _ne1
+                                [encoder dispatchThreadgroups:MTLSizeMake(ne01, ny, tgz) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                             }
                         }
                     } break;
