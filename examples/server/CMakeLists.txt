@@ -1,31 +1,29 @@
-set(SERVER_ASSETS
+set(TARGET server)
+option(LLAMA_SERVER_VERBOSE "Build verbose logging option for Server" ON)
+option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+set(TARGET_SRCS
+    server.cpp
+    utils.hpp
+    httplib.h
+)
+set(PUBLIC_ASSETS
     index.html
     index.js
     completion.js
     json-schema-to-grammar.mjs
 )
-foreach(asset ${SERVER_ASSETS})
-    # Portable equivalent of `cd public && xxd -i ${asset} ../${asset}.hpp`
+foreach(asset ${PUBLIC_ASSETS})
     set(input "${CMAKE_CURRENT_SOURCE_DIR}/public/${asset}")
     set(output "${CMAKE_CURRENT_BINARY_DIR}/${asset}.hpp")
-
-    string(REGEX REPLACE "\\.|-" "_" name "${asset}")
-    file(READ "${input}" data HEX)
-    string(LENGTH ${data} hex_len)
-    math(EXPR len "${hex_len} / 2")
-    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," data ${data})
-    file(WRITE "${output}" "unsigned char ${name}[] = {${data}};\nunsigned int ${name}_len = ${len};\n")
+    list(APPEND TARGET_SRCS ${output})
+    add_custom_command(
+        DEPENDS "${input}"
+        OUTPUT "${output}"
+        COMMAND "${CMAKE_COMMAND}" "-DINPUT=${input}" "-DOUTPUT=${output}" -P "${PROJECT_SOURCE_DIR}/scripts/xxd.cmake"
+    )
 endforeach()
-
-set(TARGET server)
-option(LLAMA_SERVER_VERBOSE "Build verbose logging option for Server" ON)
-option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
-add_executable(${TARGET}
-    server.cpp
-    utils.hpp
-    httplib.h
-)
+add_executable(${TARGET} ${TARGET_SRCS})
 install(TARGETS ${TARGET} RUNTIME)
 target_compile_definitions(${TARGET} PRIVATE
     SERVER_VERBOSE=$<BOOL:${LLAMA_SERVER_VERBOSE}>
