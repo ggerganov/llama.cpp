@@ -416,7 +416,7 @@ mkdir -p build
 cd build
 @call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 --force
 
-# Option 1: Use FP32 by default
+# Option 1: Use FP32 (recommended for better performance in most cases)
 cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
 
 # Option 2: Or FP16
