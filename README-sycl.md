@@ -253,7 +253,7 @@ mkdir -p build && cd build
 # Option 1: Use FP32 (recommended for better performance in most cases)
 cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 
-# Option 2: Use FP16 for better performance in long-prompt inference
+# Option 2: Use FP16
 cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
 #build all binary
