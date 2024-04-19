@@ -5799,6 +5799,12 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_RWKV: 
+            {
+                // TODO: Re-using mamba keys right now, but RWKV isn't state-space
+                ml.get_key(LLM_KV_SSM_INNER_SIZE, hparams.ssm_d_inner);
+                ml.get_key(LLM_KV_SSM_STATE_SIZE, hparams.ssm_d_state);
+            } break;
         default: (void)0;
     }
 
