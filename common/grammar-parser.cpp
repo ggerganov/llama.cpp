@@ -161,76 +161,48 @@ namespace grammar_parser {
 
             // apply transformation to previous symbol (last_sym_start to end) according to
             // the following rewrite rules:
+            // S{m,n} --> S S S (m times) S'(n-m)
+            //            S'(x)   ::= S S'(x-1) |
+            //            S'(1)   ::= S |
+            // S{m,} -->  S S S (m times) S'
+            //            S'     ::= S S' |
             // S*     --> S{0,}
+            //        --> S'     ::= S S' |
             // S+     --> S{1,}
+            //        --> S S'
+            //            S'     ::= S S' |
             // S?     --> S{0,1}
-            // S{m,n} --> S'     ::= Scopy Scopy Scopy... (m times) S(n-m)
-            //            Scopy  ::= S
-            //            S(x)   ::= Scopy S(x-1) |
-            //            S(x-1) ::= Scopy S(x-2) |
-            //            S(1)   ::= Scopy |
-            // S{m,} -->  S'     ::= Scopy Scopy Scopy (m times) Sstar
-            //            Scopy  ::= S
-            //            Sstar  ::= Scopy Sstar |
-            // And if S is a reference to a rule, then we skip the S_copy indirection
+            //        --> S'
+            //            S'     ::= S |
 
-            uint32_t content_rule_id = 0;
-            if (last_sym_start == out_elements.size() - 1 && out_elements[last_sym_start].type == LLAMA_GRETYPE_RULE_REF) {
-                // The repeated content is already a rule ref, no need to copy it
-                content_rule_id = out_elements[last_sym_start].value;
+            std::vector<llama_grammar_element> previous_elements(out_elements.begin() + last_sym_start, out_elements.end());
+            if (min_times == 0) {
+                out_elements.resize(last_sym_start);
             } else {
-                content_rule_id = generate_symbol_id(state, rule_name + "_copy");
-                // add preceding symbol to generated copy rule
-                std::vector<llama_grammar_element> copy_rule(out_elements.begin() + last_sym_start, out_elements.end());
-                copy_rule.push_back({LLAMA_GRETYPE_END, 0});
-                add_rule(state, content_rule_id, copy_rule);
-            }
-
-            uint32_t sub_rule_id = generate_symbol_id(state, rule_name);
-            std::vector<llama_grammar_element> sub_rule;
-            for (int i = 0; i < min_times; i++) {
-                sub_rule.push_back({LLAMA_GRETYPE_RULE_REF, content_rule_id});
-            }
-            if (max_times < 0) {
-                uint32_t star_rule_id = generate_symbol_id(state, rule_name + "_star");
-                add_rule(state, star_rule_id, {
-                    {LLAMA_GRETYPE_RULE_REF, content_rule_id},
-                    {LLAMA_GRETYPE_RULE_REF, star_rule_id},
-                    {LLAMA_GRETYPE_ALT, 0},
-                    {LLAMA_GRETYPE_END, 0}
-                });
-                sub_rule.push_back({LLAMA_GRETYPE_RULE_REF, star_rule_id});
-            } else {
-                uint32_t last_rec_rule_id = 0;
-                auto n_opt = max_times - min_times;
-                for (int i = 0; i < n_opt; i++) {
-                    uint32_t rec_rule_id = generate_symbol_id(state, rule_name + "_" + std::to_string(i + 1));
-                    if (i == 0) {
-                        add_rule(state, rec_rule_id, {
-                            {LLAMA_GRETYPE_RULE_REF, content_rule_id},
-                            {LLAMA_GRETYPE_ALT, 0},
-                            {LLAMA_GRETYPE_END, 0}
-                        });
-                    } else {
-                        add_rule(state, rec_rule_id, {
-                            {LLAMA_GRETYPE_RULE_REF, content_rule_id},
-                            {LLAMA_GRETYPE_RULE_REF, last_rec_rule_id},
-                            {LLAMA_GRETYPE_ALT, 0},
-                            {LLAMA_GRETYPE_END, 0}
-                        });
-                    }
-                    last_rec_rule_id = rec_rule_id;
-                }
-                if (n_opt > 0) {
-                    sub_rule.push_back({LLAMA_GRETYPE_RULE_REF, last_rec_rule_id});
+                // Repeat the previous elements (min_times - 1) times
+                for (int i = 1; i < min_times; i++) {
+                    out_elements.insert(out_elements.end(), previous_elements.begin(), previous_elements.end());
                 }
             }
-            sub_rule.push_back({LLAMA_GRETYPE_END, 0});
-            add_rule(state, sub_rule_id, sub_rule);
 
-            // in original rule, replace previous symbol with reference to generated rule
-            out_elements.resize(last_sym_start);
-            out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
+            uint32_t last_rec_rule_id = 0;
+            auto n_opt = max_times < 0 ? 1 : max_times - min_times;
+
+            std::vector<llama_grammar_element> rec_rule(previous_elements);
+            for (int i = 0; i < n_opt; i++) {
+                rec_rule.resize(previous_elements.size());
+                uint32_t rec_rule_id = generate_symbol_id(state, rule_name);
+                if (i > 0 || max_times < 0) {
+                    rec_rule.push_back({LLAMA_GRETYPE_RULE_REF, max_times < 0 ? rec_rule_id : last_rec_rule_id});
+                }
+                rec_rule.push_back({LLAMA_GRETYPE_ALT, 0});
+                rec_rule.push_back({LLAMA_GRETYPE_END, 0});
+                add_rule(state, rec_rule_id, rec_rule);
+                last_rec_rule_id = rec_rule_id;
+            }
+            if (n_opt > 0) {
+                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, last_rec_rule_id});
+            }
         };
 
         while (*pos) {
