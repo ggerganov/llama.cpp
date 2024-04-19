@@ -1852,12 +1852,20 @@ int main(int argc, char ** argv) {
 
     const int32_t n_ctx = params.n_ctx;
 
+    if (n_ctx <= 0) {
+        fprintf(stderr, "%s: perplexity tool requires '--ctx-size' > 0\n", __func__);
+        return 1;
+    }
+
     const bool ppl = !params.hellaswag && !params.winogrande && !params.multiple_choice && !params.kl_divergence;
+
     if (ppl) {
-        int n_seq = std::max(1, params.n_batch / n_ctx);
-        int32_t n_kv = n_seq * n_ctx;
+        const int32_t n_seq = std::max(1, params.n_batch / n_ctx);
+        const int32_t n_kv = n_seq * n_ctx;
+
         params.n_parallel = n_seq;
-        params.n_ctx = n_kv;
+        params.n_ctx      = n_kv;
+
         params.n_batch = std::min(params.n_batch, n_kv);
     } else {
         params.n_batch = std::min(params.n_batch, params.n_ctx);
