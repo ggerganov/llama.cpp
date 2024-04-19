@@ -90,6 +90,8 @@ class Keys:
         HF_JSON          = "tokenizer.huggingface.json"
         RWKV             = "tokenizer.rwkv.world"
         CHAT_TEMPLATE    = "tokenizer.chat_template"
+        CHAT_TEMPLATE_N  = "tokenizer.chat_template.{name}"
+        CHAT_TEMPLATES   = "tokenizer.chat_templates"
         # FIM/Infill special tokens constants
         PREFIX_ID        = "tokenizer.ggml.prefix_token_id"
         SUFFIX_ID        = "tokenizer.ggml.suffix_token_id"
@@ -133,6 +135,7 @@ class MODEL_ARCH(IntEnum):
     XVERSE     = auto()
     COMMAND_R  = auto()
     DBRX       = auto()
+    OLMO       = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -208,6 +211,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.XVERSE:         "xverse",
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
+    MODEL_ARCH.OLMO:           "olmo",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -692,6 +696,17 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_EXP,
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
+    ],
+    MODEL_ARCH.OLMO: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
     ],
     # TODO
 }
