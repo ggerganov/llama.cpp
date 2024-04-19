@@ -773,34 +773,22 @@ extern "C" {
     // shape: [n_embd] (1-dimensional)
     LLAMA_API float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id);
 
-    // Get the mean pooled embeddings for a subset of the tokens from the encoding.
-    //
-    // They will not be normalized. see llama_embd_normalize for that.
-    //
-    // The mean pooling here is done outside of the device and thus will work
-    // for model types that currently refuse to build a pooling layer in the
-    // device. Currently two large llama embedding models, GritLM and
-    // e5-mistral are supported; notably both of those are initialized via
-    // build_llama which won't have a pooling layer, inp_mean. Both models rely
-    // on prompts that are tokenized and which contribute to the attention but
-    // which may or may not be included in the mean pooling, depending on the
-    // application.
-    //
-    // TODO: 1. support inp_mean in llama models when mean pooling is specified
-    // so we can have the man calculated on the device and
-    // TODO: 2. also have the context own the destination pooled embedding
-    // memory to be more consistent with other apis, but also continue to
-    // allow application control over skipping some tokens.
-    //
-    // skip_tokens: The number of tokens to skip from the beginning of the batch tokens
-    // batch_tokens: The number of tokens in the batch
-    // dest: The destination array to store the mean pooled embeddings
-    //
-    // 'dest' array pointer must have the same length as the embeddings
-    // 'batch_tokens' - 'skip_tokens' is the number of tokens to pool
-    // [skip_tokens, batch_tokens) is the range of tokens to pool
-    //
-    LLAMA_API void llama_get_embeddings_mean_pooled(struct llama_context * ctx, int32_t skip_tokens, int32_t batch_tokens, float *dest);
+    /// @details: Get the mean pooled embeddings for a subset of the tokens from the encoding.
+    /// @param ctx Pointer to the llama_context.
+    /// @param skip_tokens  The number of tokens to skip from the beginning of the embeddings array of arrays.
+    /// @param dest will store the mean pooled embeddings, so it must point to sizeof(float) * llama_n_embd(model) bytes
+    ///
+    /// If you used llama_batch_get_one and have instructions to skip from the
+    /// embedding, or used llama_batch_add but wish to skip some tokens from the
+    /// beginning even though they have the 'logits' boolean set to true, then
+    /// set skip_tokens to a non-zero value.
+    ///
+    /// Results will not be normalized. Pass the dest of this as src to llama_embd_normalize for that.
+    ///
+    /// The mean pooling here is done outside of the device and thus will work
+    /// for model types that currently don't use the inp_mean pooling layer in the
+    /// device. See the examples/gritlm/gritlm.cpp for an example of how to use this.
+    LLAMA_API void llama_get_embeddings_mean_pooled(struct llama_context * ctx, int32_t skip_tokens, float *dest);
 
     //
     // Vocab

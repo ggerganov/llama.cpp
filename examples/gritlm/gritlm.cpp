@@ -57,8 +57,10 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         float * raw_embed = emb_unorm.data();
 
         // retrieve summed up token embeddings, skipping instruction tokens,
-        // and writes the result to raw_embed
-        llama_get_embeddings_mean_pooled(ctx, n_inst, n_toks, raw_embed);
+        // and writes the result to raw_embed. We pass 0 for number of
+        // instructions to skip as we have already marked logits = false in the
+        // llama_batch_add loop for instruction tokens.
+        llama_get_embeddings_mean_pooled(ctx, 0, raw_embed);
         std::vector<float> emb_norm(emb_unorm.size());
         llama_embd_normalize(emb_unorm.data(), emb_norm.data(), n_embd);
         result.push_back(emb_norm);

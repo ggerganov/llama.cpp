@@ -16609,19 +16609,24 @@ float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id
     return it->second.data();
 }
 
-void llama_get_embeddings_mean_pooled(struct llama_context * ctx, int32_t skip_tokens, int32_t batch_tokens, float *dest) {
+void llama_get_embeddings_mean_pooled(struct llama_context * ctx, int32_t skip_tokens, float *dest) {
     GGML_ASSERT(dest);
-    GGML_ASSERT(batch_tokens > 0);
     GGML_ASSERT(skip_tokens >= 0);
+
+    int32_t n_embd = ctx->model.hparams.n_embd;
+    int32_t batch_tokens = ctx->n_outputs;
     GGML_ASSERT(skip_tokens < batch_tokens);
+    GGML_ASSERT(ctx->embd_size >= (size_t)(batch_tokens * n_embd));
+
     float inv_tokens_to_pool = 1.0f / (batch_tokens - skip_tokens);
     GGML_ASSERT(inv_tokens_to_pool > 0.0f);
     GGML_ASSERT(inv_tokens_to_pool <= 1.0f);
-    float * all_token_embedddings = ctx->embd.data();
-    const llama_model * mdl = llama_get_model(ctx);
-    int32_t n_embd = llama_n_embd(mdl); // length of each embedding
+
+    for (int32_t i = 0; i < n_embd; i++) {
+        dest[i] = 0.0f;
+    }
     for (int32_t i = skip_tokens; i < batch_tokens; i++) {
-        float * token_embedding = all_token_embedddings + i * n_embd;
+        float * token_embedding = ctx->embd + i * n_embd;
         for (int32_t j = 0; j < n_embd; j++) {
             dest[j] += token_embedding[j];
         }
