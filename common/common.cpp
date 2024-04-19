@@ -2099,8 +2099,7 @@ struct llama_model * llama_load_model_from_url(
     }
 
     if(params.hf_token!=NULL){
-        struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "Authorization: Bearer " + params.hf_token);
+        struct curl_slist * headers = curl_slist_append(NULL, "Authorization: Bearer " + params.hf_token);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     }
 
