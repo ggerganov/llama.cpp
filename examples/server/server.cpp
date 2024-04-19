@@ -1208,6 +1208,25 @@ struct server_context {
             LOG_VERBOSE("eos token found", {});
         }
 
+        auto n_ctx_train = llama_n_ctx_train(model);
+        if (slot.params.n_predict < 1 && slot.ga_n == 1 && slot.n_decoded >= n_ctx_train) {
+            LOG_WARNING(
+                "n_predict is not set and self-context extend is disabled. Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop",
+                {
+                    { "id_slot", slot.id },
+                    { "params.n_predict", slot.params.n_predict },
+                    { "slot.n_predict", slot.n_predict },
+                    { "slot.n_decoded", slot.n_decoded },
+                    { "n_slots", params.n_parallel },
+                    { "n_ctx", n_ctx },
+                    { "n_ctx_train", n_ctx_train },
+                    { "ga_n", slot.ga_n },
+                });
+            slot.truncated = true;
+            slot.has_next_token = false; // stop prediction
+            slot.stopped_limit = true;
+        }
+
         LOG_VERBOSE("next token", {
             {"id_slot",        slot.id},
             {"id_task",        slot.id_task},
@@ -2258,23 +2277,7 @@ struct server_context {
                     });
                 }
 
-                auto n_ctx_train = llama_n_ctx_train(model);
-                bool stop_prediction = false;
-                if (slot.params.n_predict < 1 && slot.ga_n == 1 && slot.n_decoded >= n_ctx_train) {
-                    LOG_WARNING("n_predict is not set and self-context extend is disabled. Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
-                        {"params.n_predict", slot.params.n_predict},
-                        {"slot.n_predict",   slot.n_predict},
-                        {"slot.n_decoded",   slot.n_decoded},
-                        {"n_slots",          params.n_parallel},
-                        {"n_ctx",            n_ctx},
-                        {"n_ctx_train",      n_ctx_train},
-                        {"ga_n",             slot.ga_n},
-                    });
-                    slot.truncated  = true;
-                    stop_prediction = true;
-                }
-
-                if (!process_token(result, slot) || stop_prediction) {
+                if (!process_token(result, slot)) {
                     slot.release();
                     slot.print_timings();
                     send_final_response(slot);
