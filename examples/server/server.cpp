@@ -1209,18 +1209,19 @@ struct server_context {
         }
 
         auto n_ctx_train = llama_n_ctx_train(model);
-        if (slot.params.n_predict < 1 && slot.ga_n == 1 && slot.n_decoded >= n_ctx_train) {
-            LOG_WARNING(
-                "n_predict is not set and self-context extend is disabled. Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop",
-                {
-                    { "id_slot", slot.id },
+        if (slot.params.n_predict < 1 && slot.ga_n == 1
+                    && (int32_t) slot.prompt_tokens.size() + slot.n_decoded >= n_ctx_train) {
+            LOG_WARNING("n_predict is not set and self-context extend is disabled."
+                        " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
+                    { "id_slot",          slot.id },
                     { "params.n_predict", slot.params.n_predict },
-                    { "slot.n_predict", slot.n_predict },
-                    { "slot.n_decoded", slot.n_decoded },
-                    { "n_slots", params.n_parallel },
-                    { "n_ctx", n_ctx },
-                    { "n_ctx_train", n_ctx_train },
-                    { "ga_n", slot.ga_n },
+                    { "slot.n_predict",   slot.n_predict },
+                    { "slot.n_decoded",   slot.n_decoded },
+                    { "n_slots",          params.n_parallel },
+                    { "slot.n_ctx",       slot.n_ctx },
+                    { "n_ctx",            n_ctx },
+                    { "n_ctx_train",      n_ctx_train },
+                    { "ga_n",             slot.ga_n },
                 });
             slot.truncated      = true;
             slot.stopped_limit  = true;
