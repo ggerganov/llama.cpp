@@ -2636,6 +2636,66 @@ class CommandR2Model(Model):
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
 
 
+@Model.register("OlmoForCausalLM")
+@Model.register("OLMoForCausalLM")
+class OlmoModel(Model):
+    model_arch = gguf.MODEL_ARCH.OLMO
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_layer_norm_eps(1e-5)
+        if "clip_qkv" in self.hparams is not None:
+            self.gguf_writer.add_clamp_kqv(self.hparams["clip_qkv"])
+
+    # Same as super class, but permuting q_proj, k_proj
+    # Copied from: LlamaModel
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_head = self.hparams.get("num_attention_heads")
+        n_kv_head = self.hparams.get("num_key_value_heads")
+        for name, data_torch in self.get_tensors():
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.numpy()
+
+            if name.endswith("q_proj.weight"):
+                data = permute(data, n_head, n_head)
+            if name.endswith("k_proj.weight"):
+                data = permute(data, n_head, n_kv_head)
+
+            data = data.squeeze()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # 1d tensors need to be converted to float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+
 ###### CONVERSION LOGIC ######
 
 

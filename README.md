@@ -122,6 +122,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
+- [x] [OLMo](https://allenai.org/olmo)
 
 (instructions for supporting more models: [HOWTO-add-model.md](./docs/HOWTO-add-model.md))
 
