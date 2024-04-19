@@ -422,7 +422,6 @@ cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CX
 # Option 2: Or FP16
 cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
 
-
 make -j
 ```
 
