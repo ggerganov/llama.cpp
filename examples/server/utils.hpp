@@ -385,6 +385,7 @@ static json oaicompat_completion_params_parse(
     // We must add their end sequences to list of stop words
     llama_params["stop"].push_back("<|im_end|>"); // chatml
     llama_params["stop"].push_back("<end_of_turn>"); // gemma
+    llama_params["stop"].push_back("<|eot_id|>"); // llama-3
 
     // Handle "response_format" field
     if (body.contains("response_format")) {
