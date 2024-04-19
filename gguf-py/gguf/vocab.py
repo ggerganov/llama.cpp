@@ -141,7 +141,7 @@ class SpecialVocab:
         with open(tokenizer_config_file, encoding = 'utf-8') as f:
             tokenizer_config = json.load(f)
         chat_template = tokenizer_config.get('chat_template')
-        if chat_template is None or isinstance(chat_template, str):
+        if chat_template is None or isinstance(chat_template, (str, list)):
             self.chat_template = chat_template
         else:
             print(
