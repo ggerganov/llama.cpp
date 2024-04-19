@@ -223,7 +223,8 @@ GGML_CALL void ggml_backend_tensor_set(struct ggml_tensor * tensor, const void *
 
     GGML_ASSERT(buf != NULL && "tensor buffer not set");
     GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
+    //GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
+    GGML_ASSERT(offset + (size & ~(1u << 31)) <= ggml_nbytes(tensor) && "tensor write out of bounds");
 
     if (!size) {
         return;

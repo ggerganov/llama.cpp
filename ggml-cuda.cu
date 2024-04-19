@@ -29,6 +29,7 @@
 #include "ggml-cuda/tsembd.cuh"
 #include "ggml-cuda/unary.cuh"
 #include "ggml-cuda/upscale.cuh"
+#include "ggml-cuda/dsc.h"
 
 #include <algorithm>
 #include <array>
@@ -45,6 +46,8 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <iostream> // debug
 
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
@@ -78,6 +81,10 @@ int ggml_cuda_get_device() {
     CUDA_CHECK(cudaGetDevice(&id));
     return id;
 }
+
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+std::unique_ptr<DirectStorageCUDA> dsc;
+#endif
 
 static ggml_cuda_device_info ggml_cuda_init() {
 #ifdef __HIP_PLATFORM_AMD__
@@ -148,6 +155,10 @@ static ggml_cuda_device_info ggml_cuda_init() {
 
     // configure logging to stdout
     // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
+
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+    dsc = std::move(DirectStorageCUDA::create(8 * 1024 * 1024, 64));
+#endif
 
     return info;
 }
@@ -418,12 +429,67 @@ GGML_CALL static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t
     }
 }
 
+struct FileInfo {
+    std::vector<DirectStorageCUDA::File> handles;
+    size_t handle_idx = 0;
+
+    DirectStorageCUDA::File& getFile() {
+        auto& temp = handles[handle_idx];
+            ++handle_idx;
+        handle_idx %= handles.size();
+        return temp;
+    }
+};
+
+std::map<std::string, FileInfo> files;
+
 GGML_CALL static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
 
     ggml_cuda_set_device(ctx->device);
-    CUDA_CHECK(cudaMemcpyAsync((char *)tensor->data + offset, data, size, cudaMemcpyHostToDevice, cudaStreamPerThread));
-    CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+    if (size & (1u << 31)) {
+        size &= ~(1u << 31);
+        if (data == nullptr) {
+            dsc->flush();
+            return;
+        }
+        struct Temp {
+            const char* filename;
+            size_t weights_off;
+        };
+        Temp* t = (Temp*)data;
+
+        std::string filename = t->filename;
+        auto it = files.find(filename);
+        if (it == files.end()) {
+            files[filename].handles.push_back(dsc->openFile(filename));
+
+#if 0
+            // This is a hack to evaluate how fast data can be read from a 2nd disk.
+            std::filesystem::path p(filename);
+            std::filesystem::path p2("d:");
+            p2 /= "\\lmcache";
+            p2 /= p.filename().c_str();
+            std::cout << p2.string() << std::endl;
+            if (std::filesystem::exists(p2)) {
+                std::cout << "opening " << p2.string() << std::endl;
+                files[filename].handles.push_back(dsc->openFile(p2.string().c_str()));
+            }
+            std::cout << "2nd file" << std::endl;
+#endif
+
+            it = files.find(filename);
+        }
+
+        dsc->loadFile(it->second.getFile(), t->weights_off, size, (char*)tensor->data + offset);
+    }
+    else
+#endif
+    {
+        CUDA_CHECK(cudaMemcpyAsync((char*)tensor->data + offset, data, size, cudaMemcpyHostToDevice, cudaStreamPerThread));
+        CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
+    }
 }
 
 GGML_CALL static void ggml_backend_cuda_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {

@@ -103,6 +103,8 @@ option(LLAMA_BLAS                            "llama: use BLAS"                  
 option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"                       ${LLAMA_LLAMAFILE_DEFAULT})
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
+option(LLAMA_CUDA_DIRECT_STORAGE             "llama: use DirectStorage to upload tensors"       OFF)
+set(LLAMA_DIRECT_STORAGE_DIR "" CACHE PATH   "llama: path to DirectStorage directory fetched with nuget. See https://devblogs.microsoft.com/directx/directstorage-api-downloads/" )
 option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
 option(LLAMA_CUDA_FORCE_MMQ                  "llama: use mmq kernels instead of cuBLAS"         OFF)
@@ -152,7 +154,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 # Compile flags
 #
 
-if (LLAMA_SYCL)
+if (LLAMA_SYCL OR LLAMA_CUDA_DIRECT_STORAGE)
     set(CMAKE_CXX_STANDARD 17)
 else()
     set(CMAKE_CXX_STANDARD 11)
@@ -411,6 +413,15 @@ if (LLAMA_CUDA)
 
         file(GLOB GGML_SOURCES_CUDA "ggml-cuda/*.cu")
         list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
+
+        if (LLAMA_CUDA_DIRECT_STORAGE)
+            file(GLOB GGML_SOURCES_CUDA_C "ggml-cuda/*.cpp")
+            file(GLOB GGML_SOURCES_CUDA_H "ggml-cuda/*.h")
+            list(APPEND GGML_SOURCES_CUDA ${GGML_SOURCES_CUDA_C})
+            list(APPEND GGML_SOURCES_CUDA ${GGML_SOURCES_CUDA_H})
+
+            add_compile_definitions(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+        endif()
 
         add_compile_definitions(GGML_USE_CUDA)
         if (LLAMA_CUDA_FORCE_DMMV)
@@ -1172,15 +1183,15 @@ add_library(ggml OBJECT
             ggml-backend.h
             ggml-quants.c
             ggml-quants.h
-            ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
-            ${GGML_SOURCES_OPENCL}    ${GGML_HEADERS_OPENCL}
-            ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
-            ${GGML_SOURCES_MPI}       ${GGML_HEADERS_MPI}
-            ${GGML_SOURCES_EXTRA}     ${GGML_HEADERS_EXTRA}
-            ${GGML_SOURCES_SYCL}      ${GGML_HEADERS_SYCL}
-            ${GGML_SOURCES_KOMPUTE}   ${GGML_HEADERS_KOMPUTE}
-            ${GGML_SOURCES_VULKAN}    ${GGML_HEADERS_VULKAN}
-            ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_CUDA}    ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_OPENCL}  ${GGML_HEADERS_OPENCL}
+            ${GGML_SOURCES_METAL}   ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI}     ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA}   ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_SYCL}    ${GGML_HEADERS_SYCL}
+            ${GGML_SOURCES_KOMPUTE} ${GGML_HEADERS_KOMPUTE}
+            ${GGML_SOURCES_VULKAN}  ${GGML_HEADERS_VULKAN}
+            ${GGML_SOURCES_ROCM}    ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
             )
 
@@ -1196,6 +1207,14 @@ if (BUILD_SHARED_LIBS)
     add_library(ggml_shared SHARED $<TARGET_OBJECTS:ggml>)
     target_link_libraries(ggml_shared PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
     install(TARGETS ggml_shared LIBRARY)
+endif()
+
+if (LLAMA_CUDA_DIRECT_STORAGE)
+    set_property(TARGET ggml PROPERTY VS_PACKAGE_REFERENCES "Microsoft.Direct3D.DirectStorage_1.2.2")
+
+    target_include_directories(ggml PRIVATE "${LLAMA_DIRECT_STORAGE_DIR}/native/include")
+    target_link_directories(ggml PRIVATE "${LLAMA_DIRECT_STORAGE_DIR}/native/lib/x64")
+    target_link_libraries(ggml PUBLIC "${LLAMA_DIRECT_STORAGE_DIR}/native/lib/x64/dstorage.lib" cuda cudart d3d12)
 endif()
 
 # llama

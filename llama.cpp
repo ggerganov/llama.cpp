@@ -7,6 +7,9 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
+#include <chrono>
+#include <iostream>
+
 #ifdef GGML_USE_CUDA
 #  include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
@@ -1176,8 +1179,10 @@ struct llama_file {
     // use FILE * so we don't have to re-open the file to mmap
     FILE * fp;
     size_t size;
+    std::string filename;
 
     llama_file(const char * fname, const char * mode) {
+        filename = fname;
         fp = ggml_fopen(fname, mode);
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
@@ -3459,7 +3464,9 @@ struct llama_model_loader {
     size_t size_data = 0;
     std::vector<std::pair<size_t, size_t>> mmaps_used;
 
-    // Returns false if cancelled by progress_callback
+
+
+    // Returns false if canceled by progress_callback
     bool load_all_data(
             struct ggml_context * ctx,
             llama_buf_map & bufs_mmap,
@@ -3467,6 +3474,14 @@ struct llama_model_loader {
             llama_progress_callback progress_callback,
             void * progress_callback_user_data) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
+
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+        struct ggml_tensor* last_tensor = nullptr;
+
+        // debug statistics
+        size_t total_data_read = 0;
+        auto start = std::chrono::high_resolution_clock::now();
+#endif
 
         std::vector<no_init<uint8_t>> read_buf;
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
@@ -3511,15 +3526,38 @@ struct llama_model_loader {
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(cur->data, ggml_nbytes(cur));
                 } else {
+
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+                    // backdoor to load tensors with DirectStorage
+                    last_tensor = cur;
+                    struct Temp {
+                        const char* filename;
+                        size_t weights_off;
+                    };
+
+                    Temp t;
+                    t.filename = file->filename.c_str();
+                    t.weights_off = weight->offs;
+
+                    ggml_backend_tensor_set(cur, &t, 0, n_size | (1u << 31));
+#else
                     read_buf.resize(ggml_nbytes(cur));
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(read_buf.data(), ggml_nbytes(cur));
                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
+#endif
+
                 }
             }
 
             size_done += n_size;
         }
+
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+        // trigger flush of unread data
+        if (last_tensor)
+            ggml_backend_tensor_set(last_tensor, 0, 0, 1u << 31);
+#endif
 
         // check if this is the last call and do final cleanup
         if (size_done >= size_data) {
@@ -3540,6 +3578,14 @@ struct llama_model_loader {
                 return progress_callback(1.0f, progress_callback_user_data);
             }
         }
+
+#if defined(ENABLE_DIRECT_STORAGE_CUDA)
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::ratio<1,1>> delta(end - start);
+        //auto seconds = std::chrono::duration_cast<double, std::chrono::seconds>(delta);
+        std::cout << "load time: " << delta.count() << std::endl;;
+#endif
+
 
         return true;
     }
@@ -5874,6 +5920,7 @@ static bool llm_load_tensors(
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
     model.t_load_us = ggml_time_us() - model.t_start_us;
+    std::cout << "model load time: " << model.t_load_us / 1000.0f << "ms" << std::endl;
     return true;
 }
 
@@ -14213,7 +14260,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     // mmap consistently increases speed Linux, and also increases speed on Windows with
     // hot cache. It may cause a slowdown on macOS, possibly related to free memory.
-#if defined(__linux__) || defined(_WIN32)
+#if false && defined(__linux__) || defined(_WIN32)
     constexpr bool use_mmap = true;
 #else
     constexpr bool use_mmap = false;
