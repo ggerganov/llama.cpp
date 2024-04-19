@@ -1303,7 +1303,7 @@ class LlamaModel(Model):
         except FileNotFoundError:
             try:
                 self._set_vocab_llama_hf()
-            except TypeError:
+            except (FileNotFoundError, TypeError):
                 # Llama 3
                 self._set_vocab_gpt2()
 
