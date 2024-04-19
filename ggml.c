@@ -12410,7 +12410,7 @@ static void ggml_compute_forward_soft_max_f32(
     float * wp = (float *) params->wdata + (nc + CACHE_LINE_SIZE_F32) * ith;
 
     // when max_bias <= 0.0f, src2 is not used and we default it to src0 to avoid branching
-    float * pos = src2 ? (float *) src2->data : src0->data;
+    ggml_fp16_t * pos = src2 ? (ggml_fp16_t *) src2->data : src0->data;
 
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * sp = (float *)((char *) src0->data + i1*src0->nb[1]);
@@ -12433,7 +12433,7 @@ static void ggml_compute_forward_soft_max_f32(
             const float slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);
 
             for (int i = 0; i < nc; i++) {
-                wp[i] = wp[i] + slope*pos[i];
+                wp[i] = wp[i] + slope*ggml_fp16_to_fp32(pos[i]);
             }
         }
 

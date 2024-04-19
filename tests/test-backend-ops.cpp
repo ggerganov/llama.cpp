@@ -1103,6 +1103,12 @@ struct test_soft_max : public test_case {
         return VARS_TO_STR5(type, ne, mask, scale, max_bias);
     }
 
+    // the 1024 test with bias occasionally fails:
+    // SOFT_MAX(type=f32,ne=[1024,16,1,1],mask=1,scale=1.000000,max_bias=8.000000): [SOFT_MAX] NMSE = 0.000000103 > 0.000000100 FAIL
+    virtual double max_nmse_err() override {
+        return 1e-6;
+    }
+
     test_soft_max(ggml_type type = GGML_TYPE_F32,
             std::array<int64_t, 4> ne = {10, 10, 10, 10},
             bool mask = false,
@@ -2180,7 +2186,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
             for (float scale : {1.0f, 0.1f}) {
                 for (int64_t ne0 : {16, 1024}) {
                     for (int64_t ne1 : {16, 1024}) {
-                        test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}, mask, scale, max_bias));
+                        test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0,   ne1,   1, 1}, mask, scale, max_bias));
                         test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0-1, ne1-1, 1, 1}, mask, scale, max_bias));
                     }
                 }
