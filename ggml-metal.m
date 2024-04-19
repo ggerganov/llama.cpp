@@ -451,7 +451,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
         }
 
         /*
-            GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
+            GGML_METAL_LOG_INFO("%s: loaded %-40s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
                     (int) kernel->pipeline.maxTotalThreadsPerThreadgroup, \
                     (int) kernel->pipeline.threadExecutionWidth); \
         */
@@ -461,7 +461,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
             id<MTLFunction> metal_function = [metal_library newFunctionWithName:@"kernel_"#name]; \
             kernel->pipeline = [ctx->device newComputePipelineStateWithFunction:metal_function error:&error]; \
             [metal_function release]; \
-            GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
+            GGML_METAL_LOG_INFO("%s: loaded %-40s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
                     (int) kernel->pipeline.maxTotalThreadsPerThreadgroup, \
                     (int) kernel->pipeline.threadExecutionWidth); \
             if (error) { \
@@ -470,7 +470,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
                 return NULL; \
             } \
         } else { \
-            GGML_METAL_LOG_WARN("%s: skipping %-32s (not supported)\n", __func__, "kernel_"#name); \
+            GGML_METAL_LOG_WARN("%s: skipping %-40s (not supported)\n", __func__, "kernel_"#name); \
         }
 
         // simd_sum and simd_max requires MTLGPUFamilyApple7
