@@ -14987,14 +14987,6 @@ void llama_free_model(struct llama_model * model) {
     delete model;
 }
 
-void llama_model_kv_override_free(struct llama_model_kv_override * kv_overrides) {
-    for (const struct llama_model_kv_override *p = kv_overrides; p->key[0] != 0; p++) {
-        if (p->tag == LLAMA_KV_OVERRIDE_TYPE_STR) {
-            delete p->str_value;
-        }
-    }
-}
-
 struct llama_context * llama_new_context_with_model(
                  struct llama_model * model,
         struct llama_context_params   params) {

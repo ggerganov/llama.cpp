@@ -172,6 +172,9 @@ struct gpt_params {
 
 bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 
+// Frees all allocated memory
+void llama_model_kv_override_free(struct llama_model_kv_override * ctx);
+
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
