@@ -1201,7 +1201,7 @@ struct server_context {
             });
         }
 
-        if (result.tok == llama_token_eos(model)) {
+        if (llama_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 

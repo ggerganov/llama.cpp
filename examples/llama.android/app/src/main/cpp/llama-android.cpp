@@ -408,7 +408,7 @@ Java_com_example_llama_Llm_completion_1loop(
     const auto new_token_id = llama_sample_token_greedy(context, &candidates_p);
 
     const auto n_cur = env->CallIntMethod(intvar_ncur, la_int_var_value);
-    if (new_token_id == llama_token_eos(model) || n_cur == n_len) {
+    if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
         return env->NewStringUTF("");
     }
 

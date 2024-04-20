@@ -299,7 +299,7 @@ int main(int argc, char ** argv) {
                 }
                 fflush(stdout);
 
-                if (id == llama_token_eos(model)) {
+                if (llama_token_is_eog(model, id)) {
                     has_eos = true;
                 }
 

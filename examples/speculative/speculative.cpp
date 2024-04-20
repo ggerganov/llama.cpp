@@ -360,7 +360,7 @@ int main(int argc, char ** argv) {
                     }
                 }
 
-                if (token_id == llama_token_eos(model_tgt)) {
+                if (llama_token_is_eog(model_tgt, token_id)) {
                     has_eos = true;
                 }
                 ++n_predict;
