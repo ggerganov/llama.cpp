@@ -258,9 +258,10 @@ int main(int argc, char ** argv) {
             params.prompt = "<|im_start|>system\n" + params.prompt + "<|im_end|>";
         }
         if (params.chaton) {
-            LOG_TEELN("DBUG:%s:AA:%s", __func__, params.prompt.c_str());
-            params.prompt = llama_chat_apply_template_simple(params.chaton_template_id, "system", params.prompt, false);
-            LOG_TEELN("DBUG:%s:BB:%s", __func__, params.prompt.c_str());
+            if (!llama_chat_apply_template_simple(params.chaton_template_id, "system", params.prompt, params.prompt, false)) {
+                LOG_TEELN("ERRR:%s:Wrt:%s:%s:%s", __func__, params.chaton_template_id.c_str(), "system", params.prompt.c_str());
+                exit(2);
+            }
         }
         embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
     } else {
@@ -897,7 +898,11 @@ int main(int argc, char ** argv) {
 
                     std::vector<int> line_inp;
                     if (params.chaton) {
-                        std::string f_chat = llama_chat_apply_template_simple(params.chaton_template_id, "user", buffer.c_str(), true);
+                        std::string f_chat;
+                        if (!llama_chat_apply_template_simple(params.chaton_template_id, "user", buffer.c_str(), f_chat, true)) {
+                            LOG_TEELN("ERRR:%s:Wrt:%s:%s:%s", __func__, params.chaton_template_id.c_str(), "user", params.prompt.c_str());
+                            exit(2);
+                        }
                         line_inp = ::llama_tokenize(ctx, f_chat, false, true);
                         LOG("formatted input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp).c_str());
                         embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
