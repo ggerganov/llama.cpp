@@ -574,6 +574,12 @@ Building the program with BLAS support may lead to some performance improvements
 
   Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
 
+  Linux packaging:
+  Fedora Linux:
+  ```bash
+  sudo dnf install clblast
+  ```
+
   Alternatively, they may be built from source.
 
   - <details>
