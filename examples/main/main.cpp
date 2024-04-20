@@ -373,14 +373,9 @@ int main(int argc, char ** argv) {
     // handle chaton mode, it adds on to any reverse prompt specified explicitly by the user
     if (params.chaton) {
         params.interactive_first = true;
-        std::vector<std::string> resp_ends = llama_chat_reverse_prompt(params.chaton_template_id);
-        if (resp_ends.size() == 0) {
+        if (!llama_chat_reverse_prompt(params.chaton_template_id, params.antiprompt)) {
             LOG_TEELN("ERRR:%s:ChatOn:Unsupported ChatTemplateType:%s", __func__, params.chaton_template_id.c_str());
             exit(1);
-        }
-        for (size_t i = 0; i < resp_ends.size(); i++)
-        {
-            params.antiprompt.emplace_back(resp_ends[i]);
         }
     }
 

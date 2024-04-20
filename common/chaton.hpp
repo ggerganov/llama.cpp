@@ -36,16 +36,18 @@ inline bool llama_chat_apply_template_simple(
 }
 
 // return what should be the reverse prompt for the given template id
-// ie possible end text tag(s) of specified model type's chat query response
-inline std::vector<std::string> llama_chat_reverse_prompt(std::string &template_id) {
-    std::vector<std::string> rends;
-
+// ie possible end text tag(s) of specified model type's chat query response.
+// Note that It adds these reverse prompts to any that may already exist in the passed vector.
+inline bool llama_chat_reverse_prompt(std::string &template_id, std::vector<std::string> &rprompts) {
     if (template_id == "chatml") {
-        rends.push_back("<|im_start|>user\n");
+        rprompts.push_back("<|im_start|>user\n");
     } else if (template_id == "llama2") {
-        rends.push_back("</s>");
+        rprompts.push_back("</s>");
     } else if (template_id == "llama3") {
-        rends.push_back("<|eot_id|>");
+        rprompts.push_back("<|eot_id|>");
+    } else {
+        LOG_TEELN("WARN:%s:Unknown template [%s] requested", __func__, template_id.c_str());
+        return false;
     }
-    return rends;
+    return true;
 }
