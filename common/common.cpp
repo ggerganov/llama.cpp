@@ -108,7 +108,9 @@ int32_t get_num_physical_cores() {
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
-#if defined(__x86_64__) && defined(__linux__)
+// TODO: disabled until Android CI is fixed
+//       https://github.com/ggerganov/llama.cpp/pull/6780
+#if defined(__x86_64__) && defined(__linux__) && defined(__TMP_DISABLED__)
 #include <pthread.h>
 
 static void cpuid(unsigned leaf, unsigned subleaf,
@@ -162,7 +164,9 @@ static int count_math_cpus(int cpu_count) {
  * Returns number of CPUs on system that are useful for math.
  */
 int get_math_cpu_count() {
-#if defined(__x86_64__) && defined(__linux__)
+// TODO: disabled until Android CI is fixed
+//       https://github.com/ggerganov/llama.cpp/pull/6780
+#if defined(__x86_64__) && defined(__linux__) && defined(__TMP_DISABLED__)
     int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
     if (cpu_count < 1) {
         return get_num_physical_cores();
