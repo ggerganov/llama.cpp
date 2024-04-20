@@ -198,7 +198,7 @@ def main() -> None:
 
             if len(ids) > 1:
                 logger.warning(f'Multiple "{token}" tokens found, choosing ID {ids[0]}, use --special-token-by-id if you want another:')
-                logger.warning(', '.join(ids))
+                logger.warning(', '.join(str(i) for i in ids))
 
     for name, id_string in args.special_token_by_id or []:
         if name not in token_names:
