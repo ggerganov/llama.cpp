@@ -384,10 +384,6 @@ ifdef LLAMA_OPENBLAS
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
 endif # LLAMA_OPENBLAS
 
-# TODO: temporary disable until MoE is fixed
-#       https://github.com/ggerganov/llama.cpp/pull/6716
-LLAMA_NO_LLAMAFILE := 1
-
 ifndef LLAMA_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
 	OBJS        += sgemm.o

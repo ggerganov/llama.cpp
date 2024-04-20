@@ -10825,7 +10825,7 @@ static void ggml_compute_forward_mul_mat(
 #endif
 
 #if GGML_USE_LLAMAFILE
-    if (nb10 == ggml_type_size(src1->type)) {
+    if (src1_cont) {
         for (int64_t i13 = 0; i13 < ne13; i13++)
             for (int64_t i12 = 0; i12 < ne12; i12++)
                 if (!llamafile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
@@ -10878,7 +10878,7 @@ UseGgmlGemm1:;
     const size_t row_size = ggml_row_size(vec_dot_type, ne10);
 
 #if GGML_USE_LLAMAFILE
-    if (nb10 == ggml_type_size(src1->type) || src1->type != vec_dot_type) {
+    if (src1_cont) {
         for (int64_t i13 = 0; i13 < ne13; i13++)
             for (int64_t i12 = 0; i12 < ne12; i12++)
                 if (!llamafile_sgemm(ne01, ne11, ne00/ggml_blck_size(src0->type),
