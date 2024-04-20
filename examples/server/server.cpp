@@ -3133,6 +3133,8 @@ int main(int argc, char ** argv) {
                     res_error(res, format_error_response("Model failed to load", ERROR_TYPE_SERVER));
                     return false;
                 } break;
+            default:
+                break;
         }
         return true;
     };
