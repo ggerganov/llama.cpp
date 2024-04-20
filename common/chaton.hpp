@@ -1,5 +1,21 @@
 #pragma once
 
+/**
+ *
+ * Provides a simple and dumb helpers which help chat with llm chat/instruct models
+ * using the chat template expected by them.
+ *
+ * Normally used to tag system prompt and user messages.
+ * Currently used by example/main programs.
+ *
+ * This builds on the llama_chat_apply_template. When adding support for new chat templates
+ * remember to update llama_chat_apply_template_internal as well as llama_chat_reverse_prompt.
+ *
+ * example/main program uses this when --chaton TEMPLATE_ID is passed to it along with -i
+ * sample TEMPLATE_ID's include chatml, llama2, llama3, ...
+ *
+ */
+
 #include <vector>
 #include <string>
 
