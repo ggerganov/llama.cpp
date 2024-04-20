@@ -1175,7 +1175,7 @@ add_library(ggml OBJECT
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
-target_compile_features   (ggml PUBLIC c_std_11) # don't bump
+target_compile_features   (ggml PUBLIC cxx_std_17) # don't bump
 
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 

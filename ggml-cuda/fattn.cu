@@ -7,6 +7,12 @@
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #include <rocwmma/rocwmma.hpp>
 namespace wmma = rocwmma;
+inline __device__ __half2 __hmax2(__half2 x, __half2 y) {
+    return __half2_raw{
+            {{__hmax(__half2_raw(x).x, __half2_raw(y).x),
+            __hmax(__half2_raw(x).y, __half2_raw(y).y)}}
+    };
+}
 #else
 #include <mma.h>
 namespace wmma = nvcuda::wmma;
@@ -339,7 +345,7 @@ static __global__ void flash_attn_ext_f16(
             frag_c_KQ KQ_c[ncols/frag_n];
 #pragma unroll
             for (int j = 0; j < ncols/frag_n; ++j) {
-                wmma::fill_fragment(KQ_c[j], 0.0f);
+                wmma::fill_fragment(KQ_c[j], KQ_acc_t{0.0f});
             }
 #pragma unroll
             for (int k_KQ_0 = 0; k_KQ_0 < D; k_KQ_0 += 16) {
@@ -470,7 +476,7 @@ static __global__ void flash_attn_ext_f16(
         for (int i_VKQ_0 = 0; i_VKQ_0 < D; i_VKQ_0 += VKQ_stride) {
 #pragma unroll
             for (int j = 0; j < ncols/frag_n; ++j) {
-                wmma::fill_fragment(VKQ_c[i_VKQ_0/VKQ_stride][j], 0.0f);
+                wmma::fill_fragment(VKQ_c[i_VKQ_0/VKQ_stride][j], __half{0.0f});
             }
 
 #pragma unroll
