@@ -266,7 +266,7 @@ bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> &
     } else if (strncmp(sep, "str:", 4) == 0) {
         sep += 4;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-        kvo.str_value = strdup(sep);
+        strncpy(kvo.str_value, sep, 128);
     } else {
         fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
         return false;
@@ -2232,10 +2232,6 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         return std::make_tuple(nullptr, nullptr);
     }
 
-    if (!params.kv_overrides.empty()) {
-        llama_model_kv_override_free(params.kv_overrides.data());
-    }
-
     auto cparams = llama_context_params_from_gpt_params(params);
 
     llama_context * lctx = llama_new_context_with_model(model, cparams);
@@ -2955,12 +2951,4 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
     }
 
     return result;
-}
-
-void llama_model_kv_override_free(struct llama_model_kv_override * kv_overrides) {
-    for (const struct llama_model_kv_override *p = kv_overrides; p->key[0] != 0; p++) {
-        if (p->tag == LLAMA_KV_OVERRIDE_TYPE_STR) {
-            delete p->str_value;
-        }
-    }
 }
