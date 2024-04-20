@@ -907,6 +907,18 @@ sudo dnf install numactl
 ```bash
 sudo apt install numactl
 ```
+- <details>
+  <summary>Unix:</summary>
+
+    - Fedora linux package:
+    ```bash
+    sudo dnf install numactl
+    ```
+    - Debian or Ubuntu linux package:
+    ```bash
+    sudo apt install numactl
+    ```
+  </details>
 
 ### Obtaining and using the Facebook LLaMA 2 model
 
