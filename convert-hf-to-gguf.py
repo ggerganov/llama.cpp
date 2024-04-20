@@ -2531,28 +2531,34 @@ class MambaModel(Model):
 
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MODEL)
             self.gguf_writer.add_tokenizer_model(bytes(field.parts[-1]))
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.LIST)
             self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.TOKEN_TYPE)
             self.gguf_writer.add_token_types([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MERGES)
             self.gguf_writer.add_token_merges([bytes(field.parts[i]) for i in field.data])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.BOS_ID)
             self.gguf_writer.add_bos_token_id(field.parts[-1].tolist()[0])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.EOS_ID)
             self.gguf_writer.add_eos_token_id(field.parts[-1].tolist()[0])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.UNK_ID)
             self.gguf_writer.add_unk_token_id(field.parts[-1].tolist()[0])
 
     def set_gguf_parameters(self):
-        d_model = self.find_hparam(["hidden_size", "d_model"])
-        d_conv  = self.find_hparam(["conv_kernel", "d_conv"], optional=True) or 4
+        d_model = self.find_hparam(["hidden_size",       "d_model"])
+        d_conv  = self.find_hparam(["conv_kernel",       "d_conv"],  optional=True) or 4
         d_inner = self.find_hparam(["intermediate_size", "d_inner"], optional=True) or 2 * d_model
-        d_state = self.find_hparam(["state_size", "d_state"], optional=True) or 16
+        d_state = self.find_hparam(["state_size",        "d_state"], optional=True) or 16
         # ceiling division
         # ref: https://stackoverflow.com/a/17511341/22827863
         # ref: https://github.com/state-spaces/mamba/blob/ce59daea3a090d011d6476c6e5b97f6d58ddad8b/mamba_ssm/modules/mamba_simple.py#L58
-        dt_rank = self.find_hparam(["time_step_rank", "dt_rank"], optional=True) or -(d_model // -16)
+        dt_rank      = self.find_hparam(["time_step_rank",     "dt_rank"],      optional=True) or -(d_model // -16)
         rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional=True) or 1e-5
 
         # Fail early for models which don't have a block expansion factor of 2

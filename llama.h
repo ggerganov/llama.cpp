@@ -783,6 +783,9 @@ extern "C" {
 
     LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
 
+    // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
+    LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
@@ -796,7 +799,7 @@ extern "C" {
     // Returns -1 if unknown, 1 for true or 0 for false.
     LLAMA_API int32_t         llama_add_eos_token(const struct llama_model * model);
 
-    // codellama infill tokens
+    // Codellama infill tokens
     LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
     LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
     LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix

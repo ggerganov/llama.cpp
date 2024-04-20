@@ -45,7 +45,7 @@ static const char * sample(struct llama_sampling_context * ctx_sampling,
     const llama_token id = llama_sampling_sample(ctx_sampling, ctx_llama, NULL);
     llama_sampling_accept(ctx_sampling, ctx_llama, id, true);
     static std::string ret;
-    if (id == llama_token_eos(llama_get_model(ctx_llama))) {
+    if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
     } else {
         ret = llama_token_to_piece(ctx_llama, id);
