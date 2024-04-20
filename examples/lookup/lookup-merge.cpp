@@ -33,11 +33,13 @@ int main(int argc, char ** argv){
     }
 
     fprintf(stderr, "lookup-merge: loading file %s\n", args[0].c_str());
-    llama_ngram_cache ngram_cache_merged = llama_ngram_cache_load(args[0]);
+    llama_ngram_cache ngram_cache_merged;
+    GGML_ASSERT(llama_ngram_cache_load(ngram_cache_merged, args[0]));
 
     for (size_t i = 1; i < args.size()-1; ++i) {
         fprintf(stderr, "lookup-merge: loading file %s\n", args[i].c_str());
-        llama_ngram_cache ngram_cache = llama_ngram_cache_load(args[i]);
+        llama_ngram_cache ngram_cache;
+        GGML_ASSERT(llama_ngram_cache_load(ngram_cache, args[i]));
 
         llama_ngram_cache_merge(ngram_cache_merged, ngram_cache);
     }

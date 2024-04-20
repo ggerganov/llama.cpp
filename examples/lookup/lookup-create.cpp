@@ -34,7 +34,7 @@ int main(int argc, char ** argv){
 
 
     llama_ngram_cache ngram_cache;
-    llama_ngram_cache_update(ngram_cache, LLAMA_NGRAM_STATIC, LLAMA_NGRAM_STATIC, inp, inp.size(), true);
+    llama_ngram_cache_update(ngram_cache, LLAMA_NGRAM_STATIC, LLAMA_NGRAM_STATIC, inp.data(), inp.size(), inp.size(), true);
     fprintf(stderr, "%s: hashing done, writing file to %s\n", __func__, params.lookup_cache_static.c_str());
 
     llama_ngram_cache_save(ngram_cache, params.lookup_cache_static);

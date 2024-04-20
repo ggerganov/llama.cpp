@@ -51,7 +51,6 @@ Feature: Results
   Scenario Outline: consistent results with same seed and varying batch size
     Given 4 slots
     And   <temp> temperature
-    # And   0 as draft
     Then  the server is starting
     Then  the server is healthy
 
@@ -79,3 +78,32 @@ Feature: Results
       # and https://github.com/ggerganov/llama.cpp/pull/6122#discussion_r1531405574 .
       # |  2         | 1.0  |
       # |  4         | 1.0  |
+
+  Scenario Outline: consistent results with same seed and varying n_draft
+    Given 0.0 temperature
+    Given <n_slots> slots
+    Given 0 as draft
+    Then  the server is starting
+    Then  the server is healthy
+
+    Given 4 prompts "Write a very long story about AI." with seed 42
+    And   concurrent completion requests
+    Then  the server is busy
+    Then  the server is idle
+    And   all slots are idle
+
+    Given 3 as draft
+    Then  the server is starting
+    Then  the server is healthy
+
+    Given 4 prompts "Write a very long story about AI." with seed 42
+    And   concurrent completion requests
+    Then the server is busy
+    Then the server is idle
+    And  all slots are idle
+
+    Then all predictions are equal
+    Examples:
+      | n_slots |
+      | 1       |
+      | 2       |

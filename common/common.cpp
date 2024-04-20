@@ -1594,9 +1594,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
     printf("  -lcs FNAME, --lookup-cache-static FNAME\n");
-    printf("                        path to static lookup cache to use for lookup decoding (not updated by generation)\n");
+    printf("                        path to static lookup cache to use for n-gram lookup decoding (not updated by generation)\n");
     printf("  -lcd FNAME, --lookup-cache-dynamic FNAME\n");
-    printf("                        path to dynamic lookup cache to use for lookup decoding (updated by generation)\n");
+    printf("                        path to dynamic lookup cache to use for n-gram lookup decoding (updated by generation)\n");
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                        advanced option to override model metadata by key. may be specified multiple times.\n");
     printf("                        types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
