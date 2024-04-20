@@ -25,6 +25,7 @@ class MetadataDetails:
     value: Any
     description: str = ''
 
+
 def get_byteorder(reader: gguf.GGUFReader) -> gguf.GGUFEndian:
     if np.uint32(1) == np.uint32(1).newbyteorder("<"):
         # Host is little endian
@@ -67,12 +68,12 @@ def get_field_data(reader: gguf.GGUFReader, key: str) -> Any:
 
 
 def find_token(token_list: Sequence[int], token: str) -> Sequence[int]:
-        token_ids = [index for index, value in enumerate(token_list) if value == token]
+    token_ids = [index for index, value in enumerate(token_list) if value == token]
 
-        if len(token_ids) == 0:
-            raise LookupError(f'Unable to find "{token}" in token list!')
+    if len(token_ids) == 0:
+        raise LookupError(f'Unable to find "{token}" in token list!')
 
-        return token_ids
+    return token_ids
 
 
 def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new_metadata: Mapping[str, MetadataDetails], remove_metadata: Sequence[str]) -> None:
