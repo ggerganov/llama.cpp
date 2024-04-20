@@ -139,6 +139,8 @@ struct gpt_params {
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
     bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
+    bool chaton            = false; // chaton mode (used to chat with models which have been trained for chat and or instruct operation)
+    std::string chaton_template_id = "";   // the internal chat template to use
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 

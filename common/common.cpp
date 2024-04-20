@@ -868,6 +868,15 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.chatml = true;
         return true;
     }
+    if (arg == "--chaton") {
+        params.chaton = true;
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.chaton_template_id = argv[i];
+        return true;
+    }
     if (arg == "--infill") {
         params.infill = true;
         return true;
@@ -1378,6 +1387,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --version             show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
+    printf("  --chaton TEMPLATE_ID  allow the interactive mode to apply the specified chat template before sending user input to model (you need to specify -i also)\n");
+    printf("                        TEMPLATE_ID could be chatml, llama3, ...\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
     printf("  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
