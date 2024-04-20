@@ -102,4 +102,4 @@ Grammars currently have performance gotchas (see https://github.com/ggerganov/ll
 
 A common pattern is to allow repetitions of a pattern `x` up to N times.
 
-While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) will result in extremely slow inference. Instead, you can write `(x (x (x ... (x)?...)?)?)?` (w/ N-deep nesting)
+While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) may result in extremely slow sampling. Instead, you can write `x{0,N}` (or `(x (x (x ... (x)?...)?)?)?` w/ N-deep nesting in earlier llama.cpp versions).
