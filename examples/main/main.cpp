@@ -258,7 +258,9 @@ int main(int argc, char ** argv) {
             params.prompt = "<|im_start|>system\n" + params.prompt + "<|im_end|>";
         }
         if (params.chaton) {
+            LOG_TEELN("DBUG:%s:AA:%s", __func__, params.prompt.c_str());
             params.prompt = llama_chat_apply_template_simple(params.chaton_template_id, "system", params.prompt, false);
+            LOG_TEELN("DBUG:%s:BB:%s", __func__, params.prompt.c_str());
         }
         embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
     } else {
@@ -372,7 +374,7 @@ int main(int argc, char ** argv) {
         params.interactive_first = true;
         std::vector<std::string> resp_ends = llama_chat_reverse_prompt(params.chaton_template_id);
         if (resp_ends.size() == 0) {
-            LOG_TEELN("ERRR:%s:ChatOn:Unsupported ChatType:%s", __func__, params.chaton_template_id.c_str());
+            LOG_TEELN("ERRR:%s:ChatOn:Unsupported ChatTemplateType:%s", __func__, params.chaton_template_id.c_str());
             exit(1);
         }
         for (size_t i = 0; i < resp_ends.size(); i++)
