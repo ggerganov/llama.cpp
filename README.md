@@ -48,6 +48,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#constrained-output-with-grammars">Constrained output with grammars</a></li>
         <li><a href="#instruct-mode">Instruct mode</a></li>
+        <li><a href="#cli-commands">Cli commands</a></li>
         <li><a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a></li>
         <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
         <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
@@ -891,6 +892,21 @@ The majority (54%) are using public transit. This includes buses, trams and metr
 > List 5 words that start with "ca".
 cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 >
+```
+
+### Cli commands
+
+- #### Numa (attempt optimizations that help on some NUMA systems):
+To use it in numactl mode you will need the package
+
+## Unix
+- Fedora linux package:
+```bash
+sudo dnf install numactl
+```
+- Debian or Ubuntu linux package:
+```bash
+sudo apt install numactl
 ```
 
 ### Obtaining and using the Facebook LLaMA 2 model
