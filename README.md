@@ -549,7 +549,7 @@ Building the program with BLAS support may lead to some performance improvements
   OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
 
   You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
-    - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
+    - For Ubuntu, Debian, and Fedora the packages `opencl-headers`, `ocl-icd` may be needed.
 
     - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
 
