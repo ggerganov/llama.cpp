@@ -894,9 +894,7 @@ cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
 >
 ```
 
-### Cli commands
-
-- #### Numa
+### Numa
 attempt optimizations that help on some NUMA systems.
 To use it in numactl mode you will need the package
 
