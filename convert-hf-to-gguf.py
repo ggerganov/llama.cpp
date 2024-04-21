@@ -1207,8 +1207,90 @@ class StableLMModel(Model):
         rotary_factor = self.find_hparam(["partial_rotary_factor", "rope_pct"])
         self.gguf_writer.add_rope_dimension_count(int(rotary_factor * (hparams["hidden_size"] // hparams["num_attention_heads"])))
         self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(hparams["num_key_value_heads"])
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(self.find_hparam(["layer_norm_eps", "norm_eps"]))
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_head = self.hparams.get("num_attention_heads")
+        n_kv_head = self.hparams.get("num_key_value_heads")
+        q_norms = dict()
+        k_norms = dict()
+        for name, data_torch in self.get_tensors():
+            # we don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
+                continue
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+            n_dims = len(data.shape)
+            if name.find("q_layernorm.norms") != -1:
+                q_norms[name] = data
+                if len(q_norms) >= (block_count * n_head):
+                    self._stack_qk_norm(block_count, name, tensor_map, n_head, q_norms, n_dims, layer_name="q_layernorm")
+                continue
+            if name.find("k_layernorm.norms") != -1:
+                k_norms[name] = data
+                if len(k_norms) >= (block_count * n_kv_head):
+                    self._stack_qk_norm(block_count, name, tensor_map, n_kv_head, k_norms, n_dims, layer_name="k_layernorm")
+                continue
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+    def _stack_qk_norm(self, block_count, name, tensor_map, n_head, norms, n_dims, layer_name="q_layernorm"):
+        for bid in range(block_count):
+            datas = []
+            for xid in range(n_head):
+                ename = f"model.layers.{bid}.self_attn.{layer_name}.norms.{xid}.weight"
+                datas.append(norms[ename])
+                del norms[ename]
+            data = np.stack(datas, axis=0)
+            data_dtype = data.dtype
+            merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
+            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
 
 
 @Model.register("LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
@@ -1219,7 +1301,23 @@ class LlamaModel(Model):
         try:
             self. _set_vocab_sentencepiece()
         except FileNotFoundError:
-            self._set_vocab_llama_hf()
+            try:
+                self._set_vocab_llama_hf()
+            except (FileNotFoundError, TypeError):
+                # Llama 3
+                self._set_vocab_gpt2()
+
+        # Apply to CodeLlama only (and ignore for Llama 3 with a vocab size of 128256)
+        if self.hparams.get("vocab_size", 32000) == 32016:
+            special_vocab = gguf.SpecialVocab(
+                self.dir_model, load_merges=False,
+                special_token_types = ['prefix', 'suffix', 'middle', 'eot']
+            )
+            special_vocab._set_special_token("prefix", 32007)
+            special_vocab._set_special_token("suffix", 32008)
+            special_vocab._set_special_token("middle", 32009)
+            special_vocab._set_special_token("eot",    32010)
+            special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
@@ -1692,6 +1790,105 @@ class Qwen2Model(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2
 
 
+@Model.register("Qwen2MoeForCausalLM")
+class Qwen2MoeModel(Model):
+    model_arch = gguf.MODEL_ARCH.QWEN2MOE
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        if (n_experts := self.hparams.get("num_experts")) is not None:
+            self.gguf_writer.add_expert_count(n_experts)
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_experts = self.hparams.get("num_experts")
+        experts = dict()
+        for name, data_torch in self.get_tensors():
+            # we don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
+                continue
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+
+            # process the experts separately
+            if name.find("experts") != -1:
+                experts[name] = data
+                if len(experts) >= n_experts * 3:
+                    # merge the experts into a single 3d tensor
+                    for bid in range(block_count):
+                        for w_name in ["down_proj", "gate_proj", "up_proj"]:
+                            full = True
+                            for xid in range(n_experts):
+                                ename = f"model.layers.{bid}.mlp.experts.{xid}.{w_name}.weight"
+                                if ename not in experts:
+                                    full = False
+                                    break
+                            if not full:
+                                continue
+
+                            datas = []
+                            for xid in range(n_experts):
+                                ename = f"model.layers.{bid}.mlp.experts.{xid}.{w_name}.weight"
+                                datas.append(experts[ename])
+                                del experts[ename]
+
+                            data = np.stack(datas, axis=0)
+                            data_dtype = data.dtype
+
+                            if self.ftype == 0 and data_dtype == np.float16:
+                                data = data.astype(np.float32)
+
+                            if self.ftype == 1 and data_dtype == np.float32:
+                                data = data.astype(np.float16)
+
+                            merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
+
+                            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+                            if new_name is None:
+                                print(f"Can not map tensor {name!r}")
+                                sys.exit()
+
+                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+
+                            self.gguf_writer.add_tensor(new_name, data)
+                continue
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+        if len(experts) > 0:
+            raise ValueError(f"Unprocessed experts: {experts.keys()}")
+
+
 @Model.register("GPT2LMHeadModel")
 class GPT2Model(Model):
     model_arch = gguf.MODEL_ARCH.GPT2
@@ -2005,6 +2202,8 @@ class InternLM2Model(Model):
         old_eos = special_vocab.special_token_ids["eos"]
         if "chat" in os.path.basename(self.dir_model.absolute()):
             # For the chat model, we replace the eos with '<|im_end|>'.
+            # TODO: this is a hack, should be fixed
+            #       https://github.com/ggerganov/llama.cpp/pull/6745#issuecomment-2067687048
             special_vocab.special_token_ids["eos"] = self._try_get_sft_eos(tokenizer)
             print(f"Replace eos:{old_eos} with a special token:{special_vocab.special_token_ids['eos']} \
 in chat mode so that the conversation can end normally.")
@@ -2241,6 +2440,16 @@ class GemmaModel(Model):
     def set_vocab(self):
         self._set_vocab_sentencepiece()
 
+        # TODO: these special tokens should be exported only for the CodeGemma family
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
+                                          special_token_types = ['prefix', 'suffix', 'middle', 'fsep', 'eot'])
+        special_vocab._set_special_token("prefix", 67)
+        special_vocab._set_special_token("suffix", 69)
+        special_vocab._set_special_token("middle", 68)
+        special_vocab._set_special_token("fsep",   70)
+        special_vocab._set_special_token("eot",    107)
+        special_vocab.add_to_gguf(self.gguf_writer)
+
     def set_gguf_parameters(self):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
@@ -2262,6 +2471,12 @@ class GemmaModel(Model):
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
 
         for name, data_torch in self.get_tensors():
+            # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
+            # To prevent errors, skip loading lm_head.weight.
+            if name == "lm_head.weight":
+                print(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+                continue
+
             old_dtype = data_torch.dtype
 
             # convert any unsupported data types to float32
@@ -2321,28 +2536,34 @@ class MambaModel(Model):
 
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MODEL)
             self.gguf_writer.add_tokenizer_model(bytes(field.parts[-1]))
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.LIST)
             self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.TOKEN_TYPE)
             self.gguf_writer.add_token_types([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MERGES)
             self.gguf_writer.add_token_merges([bytes(field.parts[i]) for i in field.data])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.BOS_ID)
             self.gguf_writer.add_bos_token_id(field.parts[-1].tolist()[0])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.EOS_ID)
             self.gguf_writer.add_eos_token_id(field.parts[-1].tolist()[0])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.UNK_ID)
             self.gguf_writer.add_unk_token_id(field.parts[-1].tolist()[0])
 
     def set_gguf_parameters(self):
-        d_model = self.find_hparam(["hidden_size", "d_model"])
-        d_conv  = self.find_hparam(["conv_kernel", "d_conv"], optional=True) or 4
+        d_model = self.find_hparam(["hidden_size",       "d_model"])
+        d_conv  = self.find_hparam(["conv_kernel",       "d_conv"],  optional=True) or 4
         d_inner = self.find_hparam(["intermediate_size", "d_inner"], optional=True) or 2 * d_model
-        d_state = self.find_hparam(["state_size", "d_state"], optional=True) or 16
+        d_state = self.find_hparam(["state_size",        "d_state"], optional=True) or 16
         # ceiling division
         # ref: https://stackoverflow.com/a/17511341/22827863
         # ref: https://github.com/state-spaces/mamba/blob/ce59daea3a090d011d6476c6e5b97f6d58ddad8b/mamba_ssm/modules/mamba_simple.py#L58
-        dt_rank = self.find_hparam(["time_step_rank", "dt_rank"], optional=True) or -(d_model // -16)
+        dt_rank      = self.find_hparam(["time_step_rank",     "dt_rank"],      optional=True) or -(d_model // -16)
         rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional=True) or 1e-5
 
         # Fail early for models which don't have a block expansion factor of 2
@@ -2432,6 +2653,66 @@ class CommandR2Model(Model):
         super().set_gguf_parameters()
         self.gguf_writer.add_logit_scale(self.hparams["logit_scale"])
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
+
+
+@Model.register("OlmoForCausalLM")
+@Model.register("OLMoForCausalLM")
+class OlmoModel(Model):
+    model_arch = gguf.MODEL_ARCH.OLMO
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_layer_norm_eps(1e-5)
+        if "clip_qkv" in self.hparams is not None:
+            self.gguf_writer.add_clamp_kqv(self.hparams["clip_qkv"])
+
+    # Same as super class, but permuting q_proj, k_proj
+    # Copied from: LlamaModel
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_head = self.hparams.get("num_attention_heads")
+        n_kv_head = self.hparams.get("num_key_value_heads")
+        for name, data_torch in self.get_tensors():
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.numpy()
+
+            if name.endswith("q_proj.weight"):
+                data = permute(data, n_head, n_head)
+            if name.endswith("k_proj.weight"):
+                data = permute(data, n_head, n_kv_head)
+
+            data = data.squeeze()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # 1d tensors need to be converted to float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
 
 
 ###### CONVERSION LOGIC ######

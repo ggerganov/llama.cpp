@@ -112,6 +112,7 @@ pub fn build(b: *std.build.Builder) !void {
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
 
     const ggml = make.obj("ggml", "ggml.c");
+    const sgemm = make.obj("sgemm", "sgemm.cpp");
     const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
     const ggml_backend = make.obj("ggml-backend", "ggml-backend.c");
     const ggml_quants = make.obj("ggml-quants", "ggml-quants.c");
@@ -128,15 +129,44 @@ pub fn build(b: *std.build.Builder) !void {
     const clip = make.obj("clip", "examples/llava/clip.cpp");
     const llava = make.obj("llava", "examples/llava/llava.cpp");
 
-    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, sampling, console, grammar_parser });
-    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo });
-    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo });
-    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo });
-    _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, train });
-    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, train });
+    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, sgemm, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, sampling, console, grammar_parser });
+    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, sgemm, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo });
+    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, sgemm, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo });
+    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, sgemm, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo });
+    _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, sgemm, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, train });
+    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, sgemm, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, train });
 
-    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, sampling, grammar_parser, clip, llava });
+    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, sgemm, ggml_alloc, ggml_backend, ggml_quants, llama, unicode, unicode_data, common, json_schema_to_grammar, buildinfo, sampling, grammar_parser, clip, llava });
     if (server.target.isWindows()) {
         server.linkSystemLibrary("ws2_32");
+    }
+
+    const server_assets = [_][]const u8{ "index.html", "index.js", "completion.js", "json-schema-to-grammar.mjs" };
+    for (server_assets) |asset| {
+        const input_path = b.fmt("examples/server/public/{s}", .{asset});
+        const output_path = b.fmt("examples/server/{s}.hpp", .{asset});
+
+        // Portable equivalent of `b.addSystemCommand(&.{ "xxd", "-n", asset, "-i", input_path, output_path }) })`:
+
+        const input = try std.fs.cwd().readFileAlloc(b.allocator, input_path, std.math.maxInt(usize));
+        defer b.allocator.free(input);
+
+        var buf = std.ArrayList(u8).init(b.allocator);
+        defer buf.deinit();
+
+        for (input) |byte| {
+            try std.fmt.format(buf.writer(), "0x{X:0>2}, ", .{byte});
+        }
+
+        var name = try std.mem.replaceOwned(u8, b.allocator, asset, "-", "_");
+        defer b.allocator.free(name);
+        std.mem.replaceScalar(u8, name, '.', '_');
+
+        try std.fs.cwd().writeFile(output_path, b.fmt(
+            "unsigned char {s}[] = {{{s}}};\nunsigned int {s}_len = {d};\n",
+            .{ name, buf.items, name, input.len },
+        ));
+
+        std.debug.print("Dumped hex of \"{s}\" ({s}) to {s}\n", .{ input_path, name, output_path });
     }
 }
