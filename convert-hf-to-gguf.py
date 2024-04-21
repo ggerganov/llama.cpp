@@ -2202,6 +2202,8 @@ class InternLM2Model(Model):
         old_eos = special_vocab.special_token_ids["eos"]
         if "chat" in os.path.basename(self.dir_model.absolute()):
             # For the chat model, we replace the eos with '<|im_end|>'.
+            # TODO: this is a hack, should be fixed
+            #       https://github.com/ggerganov/llama.cpp/pull/6745#issuecomment-2067687048
             special_vocab.special_token_ids["eos"] = self._try_get_sft_eos(tokenizer)
             print(f"Replace eos:{old_eos} with a special token:{special_vocab.special_token_ids['eos']} \
 in chat mode so that the conversation can end normally.")
