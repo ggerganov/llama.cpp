@@ -7,8 +7,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from typing import Any, Mapping, Sequence
-from dataclasses import dataclass
+from typing import Any, Mapping, Sequence, NamedTuple
 
 # Necessary to load the local gguf package
 if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
@@ -19,8 +18,7 @@ import gguf
 logger = logging.getLogger("gguf-new-metadata")
 
 
-@dataclass
-class MetadataDetails:
+class MetadataDetails(NamedTuple):
     type: gguf.GGUFValueType
     value: Any
     description: str = ''
