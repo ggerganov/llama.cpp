@@ -2947,3 +2947,46 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
 
     return result;
 }
+
+// apply chat template for (n_msgs - 1) and (n_msgs), then get the added part
+std::string chat_get_added_part(const std::vector<chat_message> & messages, const std::string & tmpl) {
+    auto apply_chat_template = [&tmpl](const std::vector<chat_message> & msgs, size_t delta, bool add_ass) {
+        std::vector<llama_chat_message> chat(msgs.size());
+        size_t alloc_size = 0;
+        size_t chat_size = chat.size() - delta;
+        for (size_t i = 0; i < msgs.size(); ++i) {
+            chat[i].role    = msgs[i].role.c_str();
+            chat[i].content = msgs[i].content.c_str();
+            alloc_size += msgs[i].role.size() + msgs[i].content.size();
+        }
+
+        const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
+        std::vector<char> buf(alloc_size * 2);
+
+        // run the first time to get the total output length
+        int32_t res = llama_chat_apply_template(nullptr, ptr_tmpl, chat.data(), chat_size, add_ass, buf.data(), buf.size());
+
+        // if it turns out that our buffer is too small, we resize it
+        if ((size_t) res > buf.size()) {
+            buf.resize(res);
+            res = llama_chat_apply_template(nullptr, ptr_tmpl, chat.data(), chat_size, add_ass, buf.data(), buf.size());
+        }
+
+        const std::string formatted_chat(buf.data(), res);
+        return formatted_chat;
+    };
+
+    std::string formatted_chat_last = messages.size() > 0
+        ? apply_chat_template(messages, 1, false) // (n_msgs - 1) messages
+        : "";
+    std::string formatted_chat_curr = apply_chat_template(messages, 0, true);
+
+    // Extract the added part (user prompt)
+    auto get_diff_part = [](const std::string & str1, const std::string & str2) {
+        size_t i = 0;
+        while (i < str1.size() && i < str2.size() && str1[i] == str2[i])
+            ++i;
+        return str2.substr(i);
+    };
+    return get_diff_part(formatted_chat_last, formatted_chat_curr);
+}
