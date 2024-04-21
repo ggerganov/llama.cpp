@@ -2857,8 +2857,7 @@ class OlmoModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2875,7 +2874,7 @@ class OlmoModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
