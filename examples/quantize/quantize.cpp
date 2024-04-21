@@ -305,14 +305,14 @@ int main(int argc, char ** argv) {
             llama_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_FILE);
             kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-            strncpy(kvo.str_value, imatrix_file.c_str(), 128);
+            strncpy(kvo.val_str, imatrix_file.c_str(), 128);
             kv_overrides.emplace_back(std::move(kvo));
         }
         if (!imatrix_dataset.empty()) {
             llama_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_DATASET);
             kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-            strncpy(kvo.str_value, imatrix_dataset.c_str(), 128);
+            strncpy(kvo.val_str, imatrix_dataset.c_str(), 128);
             kv_overrides.emplace_back(std::move(kvo));
         }
 
@@ -320,7 +320,7 @@ int main(int argc, char ** argv) {
             llama_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES);
             kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-            kvo.int_value = imatrix_data.size();
+            kvo.val_i64 = imatrix_data.size();
             kv_overrides.emplace_back(std::move(kvo));
         }
 
@@ -328,7 +328,7 @@ int main(int argc, char ** argv) {
             llama_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS);
             kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-            kvo.int_value = m_last_call;
+            kvo.val_i64 = m_last_call;
             kv_overrides.emplace_back(std::move(kvo));
         }
     }

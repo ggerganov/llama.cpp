@@ -235,7 +235,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 }
 
 bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides) {
-    const char* sep = strchr(data, '=');
+    const char * sep = strchr(data, '=');
     if (sep == nullptr || sep - data >= 128) {
         fprintf(stderr, "%s: malformed KV override '%s'\n", __func__, data);
         return false;
@@ -247,18 +247,18 @@ bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> &
     if (strncmp(sep, "int:", 4) == 0) {
         sep += 4;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-        kvo.int_value = std::atol(sep);
+        kvo.val_i64 = std::atol(sep);
     } else if (strncmp(sep, "float:", 6) == 0) {
         sep += 6;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-        kvo.float_value = std::atof(sep);
+        kvo.val_f64 = std::atof(sep);
     } else if (strncmp(sep, "bool:", 5) == 0) {
         sep += 5;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
         if (std::strcmp(sep, "true") == 0) {
-            kvo.bool_value = true;
+            kvo.val_bool = true;
         } else if (std::strcmp(sep, "false") == 0) {
-            kvo.bool_value = false;
+            kvo.val_bool = false;
         } else {
             fprintf(stderr, "%s: invalid boolean value for KV override '%s'\n", __func__, data);
             return false;
@@ -266,7 +266,7 @@ bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> &
     } else if (strncmp(sep, "str:", 4) == 0) {
         sep += 4;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-        strncpy(kvo.str_value, sep, 128);
+        strncpy(kvo.val_str, sep, 128);
     } else {
         fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
         return false;
@@ -276,7 +276,7 @@ bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> &
 }
 
 bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param) {
-    llama_sampling_params& sparams = params.sparams;
+    llama_sampling_params & sparams = params.sparams;
 
     if (arg == "-s" || arg == "--seed") {
         if (++i >= argc) {

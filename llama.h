@@ -199,13 +199,15 @@ extern "C" {
     };
 
     struct llama_model_kv_override {
-        char key[128];
         enum llama_model_kv_override_type tag;
-        char str_value[128];
+
+        char key[128];
+
         union {
-            int64_t int_value;
-            double  float_value;
-            bool    bool_value;
+            int64_t val_i64;
+            double  val_f64;
+            bool    val_bool;
+            char    val_str[128];
         };
     };
 
