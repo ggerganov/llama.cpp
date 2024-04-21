@@ -2200,6 +2200,7 @@ struct ggml_context {
     bool   mem_buffer_owned;
     bool   no_alloc;
     bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
+    bool   use_hwaccel;
 
     int    n_objects;
 
@@ -2759,6 +2760,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
         /*.no_alloc           =*/ params.no_alloc,
         /*.no_alloc_save      =*/ params.no_alloc,
+        /*.use_hwaccel        =*/ params.use_hwaccel,
         /*.n_objects          =*/ 0,
         /*.objects_begin      =*/ NULL,
         /*.objects_end        =*/ NULL,
@@ -2990,8 +2992,12 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         /*.data         =*/ obj_alloc_size > 0 ? (void *)(result + 1) : data,
         /*.name         =*/ { 0 },
         /*.extra        =*/ NULL,
+        /*.rank         =*/ n_dims,
         /*.padding      =*/ { 0 },
     };
+
+    if (ctx->use_hwaccel)
+        result->backend = GGML_BACKEND_TYPE_GPU;
 
     // TODO: this should not be needed as long as we don't rely on aligned SIMD loads
     //ggml_assert_aligned(result->data);
