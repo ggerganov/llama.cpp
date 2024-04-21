@@ -512,8 +512,8 @@ class tinyBLAS_Q0_ARM {
         for (int job = start; job < end; ++job) {
             int ii = m0 + job / xtiles * RM;
             int jj = n0 + job % xtiles * RN;
-            D Cv[RN][RM] = {};
-            for (int l = 0; l < k; l += KN)
+            float32x4_t Cv[RN][RM] = {};
+            for (int l = 0; l < k; ++l)
                 for (int j = 0; j < RN; ++j)
                     for (int i = 0; i < RM; ++i)
                         Cv[j][i] = vmlaq_n_f32(Cv[j][i],
@@ -534,6 +534,7 @@ class tinyBLAS_Q0_ARM {
     inline int8x16_t load_lo(const block_q8_0 *b) {
         return vld1q_s8(b->qs);
     }
+
     inline int8x16_t load_hi(const block_q8_0 *b) {
         return vld1q_s8(b->qs + 16);
     }
@@ -543,6 +544,7 @@ class tinyBLAS_Q0_ARM {
                                                      vdupq_n_u8(0x0f))),
                         vdupq_n_s8(0x8));
     }
+
     inline int8x16_t load_hi(const block_q4_0 *b) {
         return vsubq_s8(vreinterpretq_s8_u8(vshrq_n_u8(vld1q_u8(b->qs), 4)),
                         vdupq_n_s8(0x8));
