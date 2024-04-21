@@ -1600,12 +1600,12 @@ struct llama_mlock {
 };
 using llama_mlocks = std::vector<std::unique_ptr<llama_mlock>>;
 
-static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
+static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
+    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), special);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
+        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), special);
         GGML_ASSERT(check == -n_tokens);
     }
     else {
@@ -17019,7 +17019,7 @@ static std::string llama_decode_text(const std::string & text) {
 }
 
 // does not write null-terminator to buf
-int32_t llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int32_t length) {
+int32_t llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int32_t length, bool special) {
     if (0 <= token && token < llama_n_vocab(model)) {
         switch (llama_vocab_get_type(model->vocab)) {
         case LLAMA_VOCAB_TYPE_WPM:
@@ -17034,7 +17034,9 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
-            } else if (llama_is_user_defined_token(model->vocab, token)) {
+            } else if (
+                    (llama_is_user_defined_token(model->vocab, token)) ||
+                    (llama_is_control_token     (model->vocab, token) && special)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 if (length < (int) result.length()) {
                     return -(int) result.length();
@@ -17047,8 +17049,6 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
                 }
                 memcpy(buf, "\xe2\x96\x85", 3);
                 return 3;
-            } else if (llama_is_control_token(model->vocab, token)) {
-                ;
             } else if (llama_is_byte_token(model->vocab, token)) {
                 if (length < 1) {
                     return -1;
@@ -17069,15 +17069,15 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
-            } else if (llama_is_user_defined_token(model->vocab, token)) {
+            } else if (
+                    (llama_is_user_defined_token(model->vocab, token)) ||
+                    (llama_is_control_token     (model->vocab, token) && special)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 if (length < (int) result.length()) {
                     return -(int) result.length();
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
-            } else if (llama_is_control_token(model->vocab, token)) {
-                ;
             }
             break;
         }
