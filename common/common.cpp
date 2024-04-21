@@ -2000,9 +2000,9 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
 
         //  display download progress if not sharded
-        if(isShard){
+        if (isShard) {
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-        }else{
+        } else {
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
         }
 
