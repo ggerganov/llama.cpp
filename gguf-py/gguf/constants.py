@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import logging
 from enum import Enum, IntEnum, auto
 from typing import Any
-
-logger = logging.getLogger(__name__)
 
 #
 # constants
