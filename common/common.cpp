@@ -1866,7 +1866,7 @@ void llama_batch_add(
 
 #ifdef LLAMA_USE_CURL
 
-static bool llama_download_file(CURL * curl, const char * url, const char * path) {
+static bool llama_download_file(CURL * curl, const char * url, const char * path, boolean_t isShard) {
     bool force_download = false;
 
     // Set the URL, allow to follow http redirection
@@ -2000,7 +2000,18 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
 
         //  display download progress
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        //curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+        std::cout<<"HEREEEEEEEEEEEEEE\n";
+        std::cout<<isShard<<"\n";
+        std::cout<<"ENDDDDDDDDDDDDD\n";
+        //curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L); // original
+        if(isShard){
+            std::cout<<"AAAAAAAAAAAA";
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+        }else{
+            std::cout<<"BBBBBBBBBBBB";
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        }
 
         // helper function to hide password in URL
         auto llama_download_hide_password_in_url = [](const std::string & url) -> std::string {
@@ -2075,6 +2086,7 @@ struct llama_model * llama_load_model_from_url(
         const char * model_url,
         const char * path_model,
         const struct llama_model_params & params) {
+    std::cout<<"ISSSSSSUUUUUUEEEEEEE\n";
     // Basic validation of the model_url
     if (!model_url || strlen(model_url) == 0) {
         fprintf(stderr, "%s: invalid model_url\n", __func__);
@@ -2089,7 +2101,7 @@ struct llama_model * llama_load_model_from_url(
         return NULL;
     }
 
-    if (!llama_download_file(curl, model_url, path_model)) {
+    if (!llama_download_file(curl, model_url, path_model, false)) {
         return NULL;
     }
 
@@ -2117,6 +2129,8 @@ struct llama_model * llama_load_model_from_url(
 
     curl_easy_cleanup(curl);
 
+    std::cout<<"HELLLLLLLOOOOOO\n";
+    std::cout<<"SPLITS "<<n_split<<"\n";
     if (n_split > 1) {
         char split_prefix[PATH_MAX] = {0};
         char split_url_prefix[LLAMA_CURL_MAX_URL_LENGTH] = {0};
@@ -2148,7 +2162,7 @@ struct llama_model * llama_load_model_from_url(
                 llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
                 auto * curl = curl_easy_init();
-                bool res = llama_download_file(curl, split_url, split_path);
+                bool res = llama_download_file(curl, split_url, split_path, true);
                 curl_easy_cleanup(curl);
 
                 return res;
