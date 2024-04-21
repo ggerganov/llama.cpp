@@ -326,18 +326,16 @@ extern "C" {
     // get ggml_status name string
     GGML_API GGML_CALL const char * ggml_status_to_string(enum ggml_status status);
 
+    // ieee 754-2008 half-precision float16
+    // todo: make this not an integral type
     typedef uint16_t ggml_fp16_t;
+    GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t);
+    GGML_API ggml_fp16_t ggml_fp32_to_fp16(float);
+    GGML_API void        ggml_fp16_to_fp32_row(const ggml_fp16_t *, float *, int64_t);
+    GGML_API void        ggml_fp32_to_fp16_row(const float *, ggml_fp16_t *, int64_t);
 
-    // convert FP16 <-> FP32
-    GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t x);
-    GGML_API ggml_fp16_t ggml_fp32_to_fp16(float x);
-
-    GGML_API void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, int64_t n);
-    GGML_API void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int64_t n);
-
-    // bfloat16
-    struct ggml_bf16_s;
-    typedef struct ggml_bf16_s ggml_bf16_t;
+    // google brain half-precision bfloat16
+    typedef struct { uint16_t bits; } ggml_bf16_t;
     GGML_API ggml_bf16_t ggml_fp32_to_bf16(float);
     GGML_API float       ggml_bf16_to_fp32(ggml_bf16_t);  // consider just doing << 16
     GGML_API void        ggml_bf16_to_fp32_row(const ggml_bf16_t *, float *, int64_t);
