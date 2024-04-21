@@ -169,10 +169,9 @@ static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_
         in.read((char *)&m_last_call, sizeof(m_last_call));
         int dataset_len;
         in.read((char *)&dataset_len, sizeof(dataset_len));
-        std::vector<char> dataset_as_vec(dataset_len+1);
-        in.read((char *)dataset_as_vec.data(), dataset_len);
-        dataset_as_vec[dataset_len] = 0;
-        imatrix_dataset = std::string{dataset_as_vec.data()};
+        std::vector<char> dataset_as_vec(dataset_len);
+        in.read(dataset_as_vec.data(), dataset_len);
+        imatrix_dataset.assign(dataset_as_vec.begin(), dataset_as_vec.end());
         printf("%s: imatrix dataset='%s'\n", __func__, imatrix_dataset.c_str());
     }
     printf("%s: loaded %d importance matrix entries from %s computed on %d chunks\n", __func__, int(imatrix_data.size()), imatrix_file.c_str(), m_last_call);
