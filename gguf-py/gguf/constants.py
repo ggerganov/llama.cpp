@@ -872,6 +872,7 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.I32:     (1, 4),
     GGMLQuantizationType.I64:     (1, 8),
     GGMLQuantizationType.F64:     (1, 8),
+    GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
 }
 
 
