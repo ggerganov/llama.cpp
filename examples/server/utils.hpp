@@ -381,11 +381,6 @@ static json oaicompat_completion_params_parse(
     } else {
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
-    // Some chat templates don't use EOS token to stop generation
-    // We must add their end sequences to list of stop words
-    llama_params["stop"].push_back("<|im_end|>"); // chatml
-    llama_params["stop"].push_back("<end_of_turn>"); // gemma
-    llama_params["stop"].push_back("<|eot_id|>"); // llama-3
 
     // Handle "response_format" field
     if (body.contains("response_format")) {

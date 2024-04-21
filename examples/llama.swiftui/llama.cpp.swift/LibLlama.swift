@@ -158,7 +158,7 @@ actor LlamaContext {
             new_token_id = llama_sample_token_greedy(context, &candidates_p)
         }
 
-        if new_token_id == llama_token_eos(model) || n_cur == n_len {
+        if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
             print("\n")
             let new_token_str = String(cString: temporary_invalid_cchars + [0])
             temporary_invalid_cchars.removeAll()
