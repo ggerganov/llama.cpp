@@ -18,7 +18,9 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 /**
- * Google Brain 16-bit floating point number.
+ * Converts brain16 to float32.
+ *
+ * The bfloat16 floating point format has the following structure:
  *
  *       ┌sign
  *       │
@@ -52,16 +54,7 @@
  *       │┌─┴─┐┌─┴──────┐
  *     0b0000000000000000 IEEE binary16
  *
- * So be warned that converting between them, destroys several bits.
- *
  * @see IEEE 754-2008
- */
-struct ggml_bf16_s {
-    uint16_t bits;
-};
-
-/**
- * Converts brain16 to float32.
  */
 static inline float ggml_compute_bf16_to_fp32(ggml_bf16_t h) {
     union {
