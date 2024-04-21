@@ -16,6 +16,9 @@
 #include "ggml-metal.h"
 #endif
 
+#if defined(__clang__) || defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic ignored "-Wcast-qual"
+#endif
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 

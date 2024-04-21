@@ -1,5 +1,7 @@
 #include "common.h"
 
+#include "../llava/clip.h"
+#include "../llava/llava.h"
 #include "console.h"
 #include "llama.h"
 
@@ -194,6 +196,9 @@ int main(int argc, char ** argv) {
     g_model = &model;
     g_ctx = &ctx;
 
+    clip_ctx* ctx_clip = nullptr;
+    llava_image_embed* image_embed = nullptr;
+
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
@@ -205,6 +210,27 @@ int main(int argc, char ** argv) {
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
         return 1;
+    }
+
+    if (!params.image.empty() && params.mmproj.empty()) {
+        LOG_TEE("%s: error: image specified without mmproj\n", __func__);
+        return 1;
+    }
+
+    if (!params.mmproj.empty()) {
+        ctx_clip = clip_model_load(params.mmproj.c_str(), /*verbosity=*/1);
+        if (!ctx_clip) {
+            LOG_TEE("%s: error: failed to load mmproj (CLIP)\n", __func__);
+            return 1;
+        }
+
+        if (!params.image.empty()) {
+            image_embed = llava_image_embed_make_with_filename(ctx_clip, params.n_threads, params.image.c_str());
+            if (!image_embed) {
+                LOG_TEE("%s: error: failed to load image\n", __func__);
+                return 1;
+            }
+        }
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
@@ -250,13 +276,22 @@ int main(int argc, char ** argv) {
     LOG("add_bos: %d\n", add_bos);
 
     std::vector<llama_token> embd_inp;
+    int embd_img_pos = -1;
 
     if (params.interactive_first || params.instruct || params.chatml || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
         if (params.chatml) {
             params.prompt = "<|im_start|>system\n" + params.prompt + "<|im_end|>";
         }
-        embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
+        const auto epos = params.prompt.find("<image>");
+        if (epos + 1 && image_embed) {
+            embd_inp = ::llama_tokenize(ctx, params.prompt.substr(0, epos), true, true);
+            embd_img_pos = embd_inp.size();
+            auto end = ::llama_tokenize(ctx, params.prompt.substr(epos + 7), false, true);
+            embd_inp.insert(embd_inp.end(), end.begin(), end.end());
+        } else {
+            embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
+        }
     } else {
         LOG("use session tokens\n");
         embd_inp = session_tokens;
@@ -333,8 +368,10 @@ int main(int argc, char ** argv) {
     }
 
     // number of tokens to keep when resetting context
-    if (params.n_keep < 0 || params.n_keep > (int) embd_inp.size() || params.instruct || params.chatml) {
+    bool n_keep_full = false;
+    if (params.n_keep < 0 || params.n_keep > (int)embd_inp.size() || params.instruct || params.chatml) {
         params.n_keep = (int)embd_inp.size();
+        n_keep_full = true;
     } else {
         params.n_keep += add_bos; // always keep the BOS token
     }
@@ -454,6 +491,10 @@ int main(int argc, char ** argv) {
     LOG_TEE("sampling: \n%s\n", llama_sampling_print(sparams).c_str());
     LOG_TEE("sampling order: \n%s\n", llama_sampling_order_print(sparams).c_str());
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
+    // Extend n_keep with embedded image size (there is an edge case with
+    // explicit n_keep that it must include at least 1 token after img)
+    if (embd_img_pos >= 0 && (params.n_keep > embd_img_pos || n_keep_full))
+        params.n_keep += image_embed->n_image_pos;
 
     // group-attention state
     // number of grouped KV tokens so far (used only if params.grp_attn_n > 1)
@@ -659,26 +700,36 @@ int main(int argc, char ** argv) {
                 }
             }
 
-            for (int i = 0; i < (int) embd.size(); i += params.n_batch) {
-                int n_eval = (int) embd.size() - i;
-                if (n_eval > params.n_batch) {
-                    n_eval = params.n_batch;
+            auto decode_tokens = [&](int start, int count) -> void {
+                if (count == -1)
+                    count = embd.size() - start;
+                for (int i = start; i < count; i += params.n_batch) {
+                    int n_eval = count - i;
+                    if (n_eval > params.n_batch) {
+                        n_eval = params.n_batch;
+                    }
+
+                    LOG("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd).c_str());
+
+                    llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0));
+
+                    n_past += n_eval;
+
+                    LOG("n_past = %d\n", n_past);
+                    // Display total tokens alongside total time
+                    if (params.n_print > 0 && n_past % params.n_print == 0) {
+                        LOG_TEE("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
+                    }
                 }
+            };
 
-                LOG("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd).c_str());
-
-                if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
-                    LOG_TEE("%s : failed to eval\n", __func__);
-                    return 1;
-                }
-
-                n_past += n_eval;
-
-                LOG("n_past = %d\n", n_past);
-                // Display total tokens alongside total time
-                if (params.n_print > 0 && n_past % params.n_print == 0) {
-                    LOG_TEE("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
-                }
+            if (embd_img_pos >= 0) {
+                decode_tokens(0, embd_img_pos);
+                llava_eval_image_embed(ctx, image_embed, params.n_batch, &n_past);
+                decode_tokens(embd_img_pos, -1);
+                embd_img_pos = -1;
+            } else {
+                decode_tokens(0, embd.size());
             }
 
             if (!embd.empty() && !path_session.empty()) {
@@ -943,6 +994,11 @@ int main(int argc, char ** argv) {
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     if (ctx_guidance) { llama_free(ctx_guidance); }
+
+    if (image_embed)
+        llava_image_embed_free(image_embed);
+    if (ctx_clip)
+        clip_free(ctx_clip);
     llama_free(ctx);
     llama_free_model(model);
 
