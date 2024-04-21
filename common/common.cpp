@@ -1999,17 +1999,10 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<CURLOPT_WRITEFUNCTION_PTR>(write_callback));
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
 
-        //  display download progress
-        //curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-        std::cout<<"HEREEEEEEEEEEEEEE\n";
-        std::cout<<isShard<<"\n";
-        std::cout<<"ENDDDDDDDDDDDDD\n";
-        //curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L); // original
+        //  display download progress if not sharded
         if(isShard){
-            std::cout<<"AAAAAAAAAAAA";
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
         }else{
-            std::cout<<"BBBBBBBBBBBB";
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
         }
 
@@ -2086,7 +2079,6 @@ struct llama_model * llama_load_model_from_url(
         const char * model_url,
         const char * path_model,
         const struct llama_model_params & params) {
-    std::cout<<"ISSSSSSUUUUUUEEEEEEE\n";
     // Basic validation of the model_url
     if (!model_url || strlen(model_url) == 0) {
         fprintf(stderr, "%s: invalid model_url\n", __func__);
@@ -2129,8 +2121,6 @@ struct llama_model * llama_load_model_from_url(
 
     curl_easy_cleanup(curl);
 
-    std::cout<<"HELLLLLLLOOOOOO\n";
-    std::cout<<"SPLITS "<<n_split<<"\n";
     if (n_split > 1) {
         char split_prefix[PATH_MAX] = {0};
         char split_url_prefix[LLAMA_CURL_MAX_URL_LENGTH] = {0};
