@@ -4309,11 +4309,21 @@ static void llm_load_vocab(
             }
         }
 
-        // find EOT token "<|eot_id|>"
+        // find EOT token: "<|eot_id|>", "<|im_emd|>", "<end_of_turn>", etc.
+        //
         // TODO: convert scripts should provide this token through the KV metadata LLAMA_KV_TOKENIZER_EOT_ID
+        //       for now, we apply this workaround to find the EOT token based on its text
         if (vocab.special_eot_id == -1) {
             for (const auto & t : vocab.token_to_id) {
-                if (t.first == "<|eot_id|>" && vocab.id_to_token[t.second].type == LLAMA_TOKEN_TYPE_CONTROL) {
+                if (
+                        // TODO: gemma "<end_of_turn>" is exported as a normal token, so the following check does not work
+                        //       need to fix convert script
+                        //vocab.id_to_token[t.second].type == LLAMA_TOKEN_TYPE_CONTROL &&
+                        (t.first == "<|eot_id|>" ||
+                         t.first == "<|im_emd|>" ||
+                         t.first == "<end_of_turn>"
+                        )
+                   ) {
                     vocab.special_eot_id = t.second;
                     break;
                 }
