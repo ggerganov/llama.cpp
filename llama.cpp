@@ -13187,6 +13187,10 @@ static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_
         }
     }
 
+    if (next_candidates.empty()) {
+        return rejects;
+    }
+
     const auto * stack_pos_after = llama_grammar_match_char(stack_pos, 0).second;
 
     // update top of stack to next element, if any
