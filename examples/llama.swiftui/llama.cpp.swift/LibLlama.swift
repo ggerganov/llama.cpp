@@ -322,7 +322,7 @@ actor LlamaContext {
         defer {
             result.deallocate()
         }
-        let nTokens = llama_token_to_piece(model, token, result, 8)
+        let nTokens = llama_token_to_piece(model, token, result, 8, false)
 
         if nTokens < 0 {
             let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: Int(-nTokens))
@@ -330,7 +330,7 @@ actor LlamaContext {
             defer {
                 newResult.deallocate()
             }
-            let nNewTokens = llama_token_to_piece(model, token, newResult, -nTokens)
+            let nNewTokens = llama_token_to_piece(model, token, newResult, -nTokens, false)
             let bufferPointer = UnsafeBufferPointer(start: newResult, count: Int(nNewTokens))
             return Array(bufferPointer)
         } else {

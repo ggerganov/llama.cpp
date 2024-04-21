@@ -828,11 +828,13 @@ extern "C" {
     // Uses the vocabulary in the provided context.
     // Does not write null terminator to the buffer.
     // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+    // @param special If true, special tokens are rendered in the output.
     LLAMA_API int32_t llama_token_to_piece(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,
-                               int32_t   length);
+                               int32_t   length,
+                                  bool   special);
 
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"

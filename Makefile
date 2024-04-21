@@ -699,7 +699,7 @@ OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
 llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-COMMON_H_DEPS = common/common.h common/sampling.h common/log.h
+COMMON_H_DEPS = common/common.h common/sampling.h common/log.h llama.h
 COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o json-schema-to-grammar.o
 
 common.o: common/common.cpp $(COMMON_H_DEPS)
