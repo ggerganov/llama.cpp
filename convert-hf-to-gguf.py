@@ -2439,12 +2439,15 @@ class GemmaModel(Model):
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()
+
+        # TODO: these special tokens should be exported only for the CodeGemma family
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
-                                          special_token_types = ['prefix', 'suffix', 'middle', 'eot'])
+                                          special_token_types = ['prefix', 'suffix', 'middle', 'fsep', 'eot'])
         special_vocab._set_special_token("prefix", 67)
         special_vocab._set_special_token("suffix", 69)
         special_vocab._set_special_token("middle", 68)
-        special_vocab._set_special_token("eot",    70)
+        special_vocab._set_special_token("fsep",   70)
+        special_vocab._set_special_token("eot",    107)
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):

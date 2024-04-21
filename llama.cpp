@@ -2104,7 +2104,7 @@ struct llama_vocab {
     id special_prefix_id = -1;
     id special_suffix_id = -1;
     id special_middle_id = -1;
-    id special_eot_id    = -1;
+    id special_eot_id    = -1; // TODO: move above after "eos_id", and here add "file separator" token
 
     bool add_space_prefix = true;
 
@@ -4151,7 +4151,10 @@ static void llm_load_vocab(
                     vocab.special_prefix_id = 67;
                     vocab.special_suffix_id = 69;
                     vocab.special_middle_id = 68;
-                    vocab.special_eot_id    = 70;
+                    // TODO: this is not EOT, it is "file separator" token, needs fix
+                    //       https://huggingface.co/google/codegemma-7b-it/blob/9b1d9231388358c04d90bd003458f5070d97db44/tokenizer_config.json#L565-L572
+                    //vocab.special_eot_id    = 70;
+                    vocab.special_eot_id    = 107;
                 }
             }
 
