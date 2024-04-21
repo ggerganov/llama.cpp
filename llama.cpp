@@ -13320,7 +13320,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         grammar->token_codepoints.resize(n_vocab);
         grammar->token_pieces.resize(n_vocab);
         for (llama_token id = 0; id < n_vocab; ++id) {
-            const std::string piece = llama_token_to_piece(ctx, id);
+            const std::string piece = llama_token_to_piece(ctx, id, false);
             grammar->token_pieces[id] = piece;
             grammar->token_codepoints[id] = decode_utf8(piece, {0, 0});
         }
