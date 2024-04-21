@@ -1301,15 +1301,23 @@ class LlamaModel(Model):
         try:
             self. _set_vocab_sentencepiece()
         except FileNotFoundError:
-            self._set_vocab_llama_hf()
+            try:
+                self._set_vocab_llama_hf()
+            except (FileNotFoundError, TypeError):
+                # Llama 3
+                self._set_vocab_gpt2()
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
-                                          special_token_types = ['prefix', 'suffix', 'middle', 'eot'])
-        special_vocab._set_special_token("prefix", 32007)
-        special_vocab._set_special_token("suffix", 32008)
-        special_vocab._set_special_token("middle", 32009)
-        special_vocab._set_special_token("eot",    32010)
-        special_vocab.add_to_gguf(self.gguf_writer)
+        # Apply to CodeLlama only (and ignore for Llama 3 with a vocab size of 128256)
+        if self.hparams.get("vocab_size", 32000) == 32016:
+            special_vocab = gguf.SpecialVocab(
+                self.dir_model, load_merges=False,
+                special_token_types = ['prefix', 'suffix', 'middle', 'eot']
+            )
+            special_vocab._set_special_token("prefix", 32007)
+            special_vocab._set_special_token("suffix", 32008)
+            special_vocab._set_special_token("middle", 32009)
+            special_vocab._set_special_token("eot",    32010)
+            special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
@@ -2194,6 +2202,8 @@ class InternLM2Model(Model):
         old_eos = special_vocab.special_token_ids["eos"]
         if "chat" in os.path.basename(self.dir_model.absolute()):
             # For the chat model, we replace the eos with '<|im_end|>'.
+            # TODO: this is a hack, should be fixed
+            #       https://github.com/ggerganov/llama.cpp/pull/6745#issuecomment-2067687048
             special_vocab.special_token_ids["eos"] = self._try_get_sft_eos(tokenizer)
             print(f"Replace eos:{old_eos} with a special token:{special_vocab.special_token_ids['eos']} \
 in chat mode so that the conversation can end normally.")
@@ -2429,12 +2439,15 @@ class GemmaModel(Model):
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()
+
+        # TODO: these special tokens should be exported only for the CodeGemma family
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
-                                          special_token_types = ['prefix', 'suffix', 'middle', 'eot'])
+                                          special_token_types = ['prefix', 'suffix', 'middle', 'fsep', 'eot'])
         special_vocab._set_special_token("prefix", 67)
         special_vocab._set_special_token("suffix", 69)
         special_vocab._set_special_token("middle", 68)
-        special_vocab._set_special_token("eot",    70)
+        special_vocab._set_special_token("fsep",   70)
+        special_vocab._set_special_token("eot",    107)
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -2523,28 +2536,34 @@ class MambaModel(Model):
 
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MODEL)
             self.gguf_writer.add_tokenizer_model(bytes(field.parts[-1]))
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.LIST)
             self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.TOKEN_TYPE)
             self.gguf_writer.add_token_types([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MERGES)
             self.gguf_writer.add_token_merges([bytes(field.parts[i]) for i in field.data])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.BOS_ID)
             self.gguf_writer.add_bos_token_id(field.parts[-1].tolist()[0])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.EOS_ID)
             self.gguf_writer.add_eos_token_id(field.parts[-1].tolist()[0])
+
             field = neox_reader.get_field(gguf.Keys.Tokenizer.UNK_ID)
             self.gguf_writer.add_unk_token_id(field.parts[-1].tolist()[0])
 
     def set_gguf_parameters(self):
-        d_model = self.find_hparam(["hidden_size", "d_model"])
-        d_conv  = self.find_hparam(["conv_kernel", "d_conv"], optional=True) or 4
+        d_model = self.find_hparam(["hidden_size",       "d_model"])
+        d_conv  = self.find_hparam(["conv_kernel",       "d_conv"],  optional=True) or 4
         d_inner = self.find_hparam(["intermediate_size", "d_inner"], optional=True) or 2 * d_model
-        d_state = self.find_hparam(["state_size", "d_state"], optional=True) or 16
+        d_state = self.find_hparam(["state_size",        "d_state"], optional=True) or 16
         # ceiling division
         # ref: https://stackoverflow.com/a/17511341/22827863
         # ref: https://github.com/state-spaces/mamba/blob/ce59daea3a090d011d6476c6e5b97f6d58ddad8b/mamba_ssm/modules/mamba_simple.py#L58
-        dt_rank = self.find_hparam(["time_step_rank", "dt_rank"], optional=True) or -(d_model // -16)
+        dt_rank      = self.find_hparam(["time_step_rank",     "dt_rank"],      optional=True) or -(d_model // -16)
         rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional=True) or 1e-5
 
         # Fail early for models which don't have a block expansion factor of 2
