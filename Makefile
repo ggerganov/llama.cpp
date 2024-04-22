@@ -760,7 +760,7 @@ bench-phi-knc.s: bench-phi-knc.c
 ggml-phi-knc.s: ggml-phi-knc.c
 	$(CC) $(CFLAGS) -S $< -o $(call GET_ASM_FILE, $<)
 
-bench-phi-knc: bench-phi-knc.c ggml-phi-knc.o
+bench-phi-knc: bench-phi-knc.c ggml-phi-knc.o ggml-phi-knc-dot_q5_K_q8_K.o
 	$(CC) $(CFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CC) $(CFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
