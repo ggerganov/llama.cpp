@@ -16107,7 +16107,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         return;
     }
 
-    fprintf(stdout, "Computing forward (%s) for tensor %s\n", GGML_OP_NAME[tensor->op], tensor->name);
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
@@ -16444,7 +16443,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
-    fprintf(stdout, "After FORWARD %s (%p): Shape:%li, %li, %li, %li tensor: %9.6f, %9.6f, %9.6f, %9.6f \n", tensor->name, tensor, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3], ((float *)(tensor->data))[0], ((float *)(tensor->data))[1], ((float *)(tensor->data))[2], ((float *)(tensor->data))[3]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
