@@ -3,40 +3,40 @@
 	"llama2": {
 		"global": {
 			"prefix": "[INST] ",
-			"suffix": " [/INST]",
+			"suffix": " [/INST]"
 		},
 		"system": {
 			"prefix": " <<SYS>>\n",
-			"suffix": "\n<</SYS>>\n\n",
+			"suffix": "\n<</SYS>>\n\n"
 		},
 		"user": {
 			"prefix": "",
-			"suffix": "",
+			"suffix": ""
 		},
 		"assistant": {
 			"prefix": "",
-			"suffix": "",
+			"suffix": ""
 		},
-		"reverse-prompt": "</s>",
+		"reverse-prompt": "</s>"
 	},
 	"llama3": {
 		"global": {
 			"prefix": "",
-			"suffix": "",
+			"suffix": ""
 		},
 		"system": {
 			"prefix": "<|start_header_id|>system<|end_header_id|>\n\n",
-			"suffix": "<|eot_id|>\n\n",
+			"suffix": "<|eot_id|>\n\n"
 		},
 		"user": {
 			"prefix": "<|start_header_id|>user<|end_header_id|>\n\n",
-			"suffix": "<|eot_id|>\n\n",
+			"suffix": "<|eot_id|>\n\n"
 		},
 		"assistant": {
 			"prefix": "<|start_header_id|>assistant<|end_header_id|>\n\n",
-			"suffix": "",
+			"suffix": ""
 		},
-		"reverse-prompt": "<|eot_id|>",
-	},
+		"reverse-prompt": "<|eot_id|>"
+	}
 }
 
