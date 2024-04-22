@@ -52,7 +52,7 @@
 			"suffix": "<|im_end|>\n"
 		},
 		"assistant": {
-			"prefix": "<|im_start|>assistant\n"
+			"prefix": "<|im_start|>assistant\n",
 			"suffix": ""
 		},
 		"reverse-prompt": "<|im_start|>user\n"
