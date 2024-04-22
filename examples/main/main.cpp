@@ -143,8 +143,10 @@ int main(int argc, char ** argv) {
     atexit([]() { console::cleanup(); });
 
     if (params.chaton) {
-        chaton_meta_load(params.chaton_json);
-        chaton_meta_dump();
+        chaton_meta_load(params.chaton_meta_json);
+        if (!chaton_meta_ok()) {
+            exit(1);
+        }
     }
 
     if (params.logits_all) {

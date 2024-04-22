@@ -13,6 +13,10 @@
  *    d. systemuser-1st-user-has-prefix
  *       * if a combination of 1 system message followed by 1 or more user messages is seen,
  *         then include user prefix only if this flag is set.
+ *       * one or two models which I looked at seem to require not just BoS, but also the user-role-tag-prefix
+ *         to also be controlled wrt this case. So not differentiating between BoS and any user-role-tag-prefix
+ *         However if this needs to be decoupled, then maybe will add begin and end keys to role blocks in the json.
+ *         then depending on what model needs, one can setup role-begin and role-prefix suitably.
  * 2. Give the below option to user wrt system prompt, this should give the flexibility to either keep system prompt simple or complex in a flexible yet simple way.
  *    a. the system prompt they specify using -f, is used as is with parse_special when tokenising or
  *    b. whether the system prefix and suffix is added, but without parse_special tokenisation of system-prompt provided by user.
@@ -35,6 +39,9 @@ const auto K_SYSTEM = "system";
 const auto K_USER = "user";
 const auto K_PREFIX = "prefix";
 const auto K_SUFFIX = "suffix";
+const auto K_BEGIN = "begin";
+const auto K_END = "end";
+const auto K_GLOBAL = "global";
 const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
 
 
@@ -48,26 +55,25 @@ inline bool chaton_meta_load(std::string &fname) {
     return true;
 }
 
+inline void _chaton_meta_dump() {
+    LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, conMeta.dump(4).c_str());
+}
+
 inline bool chaton_meta_ok() {
     if (conMeta == nullptr) {
+        LOG_TEELN("ERRR:%s:ChatOn Meta: Not loaded yet...", __func__);
         return false;
     }
+    _chaton_meta_dump();
     return true;
 }
 
-inline void chaton_meta_dump() {
-    if (!chaton_meta_ok()) {
-        LOG_TEELN("ERRR:%s:ChatOn Meta: Not loaded yet...", __func__);
-        return;
-    }
-    LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, conMeta.dump(4).c_str());
-}
 
 // Return user-prefix + msg + user-suffix
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
     std::stringstream ss;
-    ss << conMeta[tmpl][role]["prefix"] << content << conMeta[tmpl][role]["suffix"];
+    ss << conMeta[tmpl][role][K_PREFIX] << content << conMeta[tmpl][role][K_SUFFIX];
     std::string taggedStr = ss.str();
     LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), taggedStr.c_str());
     return taggedStr;
@@ -79,7 +85,7 @@ inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<llama_chat_message> &msgs) {
     std::stringstream ss;
-    ss << conMeta[tmpl]["global"]["begin"];
+    ss << conMeta[tmpl][K_GLOBAL][K_BEGIN];
     int cntSystem = 0;
     int cntUser = 0;
     int cntOthers = 0;
@@ -103,9 +109,9 @@ inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<
             cntOthers += 1;
             ss << prefix;
         }
-        ss << content << conMeta[tmpl][role]["suffix"];
+        ss << content << conMeta[tmpl][role][K_SUFFIX];
     }
-    ss << conMeta[tmpl]["global"]["end"];
+    ss << conMeta[tmpl][K_GLOBAL][K_END];
     std::string taggedMsgs = ss.str();
     LOG_TEELN("DBUG:%s:%s:%s", __func__, tmpl.c_str(), taggedMsgs.c_str());
     return taggedMsgs;

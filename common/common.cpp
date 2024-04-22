@@ -915,12 +915,12 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.chatml = true;
         return true;
     }
-    if (arg == "--chaton-json") {
+    if (arg == "--chaton-meta-json") {
         if (++i >= argc) {
             invalid_param = true;
             return true;
         }
-        params.chaton_json = argv[i];
+        params.chaton_meta_json = argv[i];
         return true;
     }
     if (arg == "--chaton-template-id") {
