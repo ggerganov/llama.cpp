@@ -14184,6 +14184,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
         /*.quantize_output_tensor      =*/ true,
         /*.only_copy                   =*/ false,
         /*.pure                        =*/ false,
+        /*.keep_split                  =*/ false,
         /*.imatrix                     =*/ nullptr,
         /*.kv_overrides                =*/ nullptr,
     };

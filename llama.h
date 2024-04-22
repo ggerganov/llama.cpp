@@ -288,9 +288,9 @@ extern "C" {
         bool quantize_output_tensor;         // quantize output.weight
         bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                           // quantize all tensors to the default type
+        bool keep_split;                     // quantize to the same number of shards
         void * imatrix;                      // pointer to importance matrix data
         void * kv_overrides;                 // pointer to vector containing overrides
-        bool keep_split;                     // quantize to the same number of shards
     } llama_model_quantize_params;
 
     // grammar types
