@@ -2436,6 +2436,11 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
     // pointer to CUDA cpy kernel, which is required to identify
     // kernel parameters which need updated in the graph for each token
     void* ggmlCudaCpyFn = nullptr;
+
+    if(ggml_backend_cuda_get_device_count() > 1){
+        useCudaGraph = false; // disable CUDA graphs for multi-gpu for now. TO DO investigate
+    }
+
     if(useCudaGraph) {
 
         if(cudaGraph.instance == nullptr) cudaGraphUpdateRequired=true;
@@ -2447,6 +2452,9 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
             // Identify if the graph needs updated for this token due to the number of elements changing
             // (identified by inspecting soft max op parameters)
             if(node->op == GGML_OP_SOFT_MAX) {
+                if(node->src[1]->ne[1] > 1){
+                    useCudaGraph = false; // disable CUDA graphs for batch size > 1 for now. TO DO investigate
+                }
                 if(node->src[0]->ne[0] != cudaGraph.softmax_ne0) {
                     cudaGraphUpdateRequired = true;
                     cudaGraph.softmax_ne0 = node->src[0]->ne[0];
