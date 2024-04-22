@@ -77,12 +77,59 @@ typedef DWORD thread_ret_t;
 static int pthread_create(pthread_t * out, void * unused, thread_ret_t(*func)(void *), void * arg) {
     (void) unused;
     HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
+
+#if defined(_WIN32)
+    HANDLE hToken;
+    DWORD_PTR processAffinityMask;
+    DWORD_PTR systemAffinityMask;
+
+    BOOL bToken = OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &hToken);
+    if (bToken) {
+
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_INFORMATION, FALSE, GetCurrentProcessId());
+        if (hProcess) {
+            if (GetProcessAffinityMask(hProcess, &processAffinityMask, &systemAffinityMask)) {
+                SetThreadAffinityMask(handle, processAffinityMask);
+            }
+        }
+        if (hProcess)
+            CloseHandle(hProcess);
+    }
+    
+    HANDLE hProcess2 = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetCurrentProcessId());
+
+    PROCESS_POWER_THROTTLING_STATE PowerThrottling;
+    RtlZeroMemory(&PowerThrottling, sizeof(PowerThrottling));
+    PowerThrottling.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+
+    PowerThrottling.ControlMask = PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+    PowerThrottling.StateMask = 0;
+	PowerThrottling.StateMask = PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+
+    SetProcessInformation(hProcess2,
+        ProcessPowerThrottling,
+        &PowerThrottling,
+        sizeof(PowerThrottling));
+   
+    RtlZeroMemory(&PowerThrottling, sizeof(PowerThrottling));
+    PowerThrottling.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+    PowerThrottling.StateMask = 0;
+    PowerThrottling.StateMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+    SetProcessInformation(hProcess2,
+        ProcessPowerThrottling,
+        &PowerThrottling,
+        sizeof(PowerThrottling));
+
+	if (hProcess2)
+		CloseHandle(hProcess2);
+#endif
     if (handle == NULL)
     {
         return EAGAIN;
     }
 
     *out = handle;
+
     return 0;
 }
 
