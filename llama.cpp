@@ -4340,7 +4340,7 @@ static void llm_load_vocab(
             }
         }
 
-        // find EOT token: "<|eot_id|>", "<|im_emd|>", "<end_of_turn>", etc.
+        // find EOT token: "<|eot_id|>", "<|im_end|>", "<end_of_turn>", etc.
         //
         // TODO: convert scripts should provide this token through the KV metadata LLAMA_KV_TOKENIZER_EOT_ID
         //       for now, we apply this workaround to find the EOT token based on its text
@@ -4351,7 +4351,7 @@ static void llm_load_vocab(
                         //       need to fix convert script
                         //vocab.id_to_token[t.second].type == LLAMA_TOKEN_TYPE_CONTROL &&
                         (t.first == "<|eot_id|>" ||
-                         t.first == "<|im_emd|>" ||
+                         t.first == "<|im_end|>" ||
                          t.first == "<end_of_turn>"
                         )
                    ) {
