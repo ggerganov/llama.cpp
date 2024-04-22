@@ -854,6 +854,10 @@ extern "C" {
                                int32_t   length,
                                   bool   special);
 
+    //
+    // Chat template
+    //
+
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
     /// NOTE: This function does not use a jinja parser. It only support a pre-defined list of template. See more: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
@@ -872,6 +876,54 @@ extern "C" {
                                   bool   add_ass,
                                   char * buf,
                                int32_t   length);
+
+    /// Get the Jinja model saved inside given model
+    /// @param model The pointer to llama_model
+    /// @param name Template name (can be a nullptr for default template). See: https://github.com/ggerganov/llama.cpp/pull/6588
+    /// @param buf The output buffer
+    /// @param length The size of the allocated buffer
+    /// @return The total number of bytes of the template. If a named template cannot be found, it will use default template. If no template can be found, it returns -1
+    LLAMA_API int32_t llama_chat_get_model_template(
+                const struct llama_model * model,
+                              const char * name,
+                                    char * buf,
+                                 int32_t   length);
+
+    /// Get the enum llama_chat_template based on Jinja template
+    /// @param tmpl Jinja template (a string)
+    /// @return The currect enum llama_chat_template
+    LLAMA_API llama_chat_template llama_chat_get_template_type(const char * tmpl);
+
+    /// Get the format prefix for a given message
+    /// @param tmpl Use enum llama_chat_template
+    /// @param role The role of the current message
+    /// @param prev_role The role of the previous message, can be nullptr
+    /// @param buf The output buffer
+    /// @param length The size of the allocated buffer
+    /// @return The total number of bytes of the output string
+    LLAMA_API int32_t llama_chat_get_prefix(
+                const llama_chat_template   tmpl,
+                               const char * role,
+                               const char * prev_role,
+                                     char * buf,
+                                  int32_t   length);
+
+    /// Get the format postfix for a given message
+    /// @param tmpl Use enum llama_chat_template
+    /// @param role The role of the current message
+    /// @param prev_role The role of the previous message, can be nullptr
+    /// @param buf The output buffer
+    /// @param length The size of the allocated buffer
+    /// @return The total number of bytes of the output string
+    LLAMA_API int32_t llama_chat_get_postfix(
+                const llama_chat_template   tmpl,
+                               const char * role,
+                               const char * prev_role,
+                                     char * buf,
+                                  int32_t   length);
+
+    /// Check if a given template support system message or not
+    LLAMA_API bool llama_chat_support_system_message(const llama_chat_template tmpl);
 
     //
     // Grammar
