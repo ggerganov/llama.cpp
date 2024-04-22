@@ -17,8 +17,8 @@
  *    a. the system prompt they specify using -f, is used as is with parse_special when tokenising or
  *    b. whether the system prefix and suffix is added, but without parse_special tokenisation of system-prompt provided by user.
  * 3. chat-apply-template uses the json file, which was loaded, to decide on how to generate the tagged messages for tokenisation
- *    a. input: [ { role: message }, { role: message}, ....]
- *    b. output: [ {flag: data}, { flag: data}, {flag: data}, ....]
+ *    a. input: [ { role, message }, { role, message}, ....]
+ *    b. output: [ {flag, data}, { flag, data}, {flag, data}, ....]
  *       * flag is whether to do parse_special for this data, during tokenization or not
  *
  */
@@ -55,14 +55,28 @@ inline void chaton_meta_dump() {
     LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, conMeta.dump(4).c_str());
 }
 
+// NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
     std::stringstream ss;
-    ss << conMeta[tmpl]["global"]["begin"];
     ss << conMeta[tmpl][role]["prefix"] << content << conMeta[tmpl][role]["suffix"];
-    ss << conMeta[tmpl]["global"]["end"];
     std::string taggedStr = ss.str();
     LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), taggedStr.c_str());
     return taggedStr;
+}
+
+// NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
+inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<llama_chat_message> &msgs) {
+    std::stringstream ss;
+    ss << conMeta[tmpl]["global"]["begin"];
+    for(auto msg: msgs) {
+        auto role = msg.role;
+        auto content = msg.content;
+        ss << conMeta[tmpl][role]["prefix"] << content << conMeta[tmpl][role]["suffix"];
+    }
+    ss << conMeta[tmpl]["global"]["end"];
+    std::string taggedMsgs = ss.str();
+    LOG_TEELN("DBUG:%s:%s:%s", __func__, tmpl.c_str(), taggedMsgs.c_str());
+    return taggedMsgs;
 }
 
 inline std::string chaton_tmpl_role_part(const std::string &tmpl, const std::string &role, const std::string &part) {
