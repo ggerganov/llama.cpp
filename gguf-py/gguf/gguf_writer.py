@@ -6,7 +6,8 @@ import struct
 import tempfile
 from enum import Enum, auto
 from io import BufferedWriter
-from typing import IO, Any, Sequence
+from typing import IO, Any, Sequence, Mapping
+from string import ascii_letters, digits
 
 import numpy as np
 
@@ -466,8 +467,46 @@ class GGUFWriter:
     def add_add_space_prefix(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.ADD_PREFIX, value)
 
-    def add_chat_template(self, value: str) -> None:
+    def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
+        if isinstance(value, list):
+            template_default = None
+            template_names = set()
+
+            for choice in value:
+                name = choice.get('name', '')
+                template = choice.get('template')
+
+                # Allowing non-alphanumerical characters in template name is probably not a good idea, so filter it
+                name = ''.join((c if c in ascii_letters + digits else '_' for c in name))
+
+                if name and template is not None:
+                    if name == 'default':
+                        template_default = template
+                    else:
+                        template_names.add(name)
+                        self.add_string(Keys.Tokenizer.CHAT_TEMPLATE_N.format(name=name), template)
+
+            if template_names:
+                self.add_array(Keys.Tokenizer.CHAT_TEMPLATES, list(template_names))
+
+            if template_default is None:
+                return
+
+            value = template_default
+
         self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
+
+    def add_prefix_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.PREFIX_ID, id)
+
+    def add_suffix_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.SUFFIX_ID, id)
+
+    def add_middle_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.MIDDLE_ID, id)
+
+    def add_eot_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.Tokenizer.EOT_ID, id)
 
     def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
         pack_prefix = ''

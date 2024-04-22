@@ -39,6 +39,7 @@ extern char const *LLAMA_BUILD_TARGET;
 
 struct llama_control_vector_load_info;
 
+int get_math_cpu_count();
 int32_t get_num_physical_cores();
 
 //
@@ -48,7 +49,7 @@ int32_t get_num_physical_cores();
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
-    int32_t n_threads             = get_num_physical_cores();
+    int32_t n_threads             = get_math_cpu_count();
     int32_t n_threads_draft       = -1;
     int32_t n_threads_batch       = -1;    // number of threads to use for batch processing (-1 = use n_threads)
     int32_t n_threads_batch_draft = -1;
@@ -79,6 +80,9 @@ struct gpt_params {
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
+
+    ggml_backend_sched_eval_callback cb_eval = nullptr;
+    void * cb_eval_user_data                 = nullptr;
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
@@ -156,6 +160,7 @@ struct gpt_params {
     bool infill            = false; // use infill mode
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
     bool no_kv_offload     = false; // disable KV offloading
+    bool warmup            = true;  // warmup run
 
     std::string cache_type_k = "f16"; // KV cache data type for the K
     std::string cache_type_v = "f16"; // KV cache data type for the V
@@ -223,14 +228,14 @@ void llama_batch_add(
 std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special = false);
+                        bool   add_special,
+                        bool   parse_special = false);
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
-                        bool   add_bos,
-                        bool   special = false);
+                        bool   add_special,
+                        bool   parse_special = false);
 
 // tokenizes a token into a piece
 // should work similar to Python's `tokenizer.id_to_piece`

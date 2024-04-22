@@ -22,7 +22,7 @@ After building, run: `./llava-cli` to see the usage. For example:
 
 ## Model conversion
 
-- Clone `mobileVLM-1.7B` and `clip-vit-large-patch14-336` locally:
+1. Clone `mobileVLM-1.7B` and `clip-vit-large-patch14-336` locally:
 
 ```sh
 git clone https://huggingface.co/mtgv/MobileVLM-1.7B

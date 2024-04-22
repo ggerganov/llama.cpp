@@ -783,9 +783,14 @@ extern "C" {
 
     LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
 
+    // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
+    LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+    LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
+    LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
 
     // Returns -1 if unknown, 1 for true or 0 for false.
@@ -794,7 +799,7 @@ extern "C" {
     // Returns -1 if unknown, 1 for true or 0 for false.
     LLAMA_API int32_t         llama_add_eos_token(const struct llama_model * model);
 
-    // codellama infill tokens
+    // Codellama infill tokens
     LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
     LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
     LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
@@ -808,26 +813,28 @@ extern "C" {
     /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
     /// @return Returns the number of tokens on success, no more than n_tokens_max
     /// @return Returns a negative number on failure - the number of tokens that would have been returned
-    /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
-    ///                Does not insert a leading space.
+    /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
+    ///                      as plaintext. Does not insert a leading space.
     LLAMA_API int32_t llama_tokenize(
         const struct llama_model * model,
                       const char * text,
                          int32_t   text_len,
                      llama_token * tokens,
                          int32_t   n_tokens_max,
-                            bool   add_bos,
-                            bool   special);
+                            bool   add_special,
+                            bool   parse_special);
 
     // Token Id -> Piece.
     // Uses the vocabulary in the provided context.
     // Does not write null terminator to the buffer.
     // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+    // @param special If true, special tokens are rendered in the output.
     LLAMA_API int32_t llama_token_to_piece(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,
-                               int32_t   length);
+                               int32_t   length,
+                                  bool   special);
 
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
@@ -1095,10 +1102,11 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
     struct llama_context * ctx
 );
 
-std::vector<std::vector<const llama_grammar_element *>> llama_grammar_accept(
+void llama_grammar_accept(
         const std::vector<std::vector<llama_grammar_element>>         & rules,
         const std::vector<std::vector<const llama_grammar_element *>> & stacks,
-        const uint32_t                                                  chr);
+        const uint32_t                                                  chr,
+        std::vector<std::vector<const llama_grammar_element *>>       & new_stacks);
 
 std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
         const std::string & src,

@@ -689,6 +689,7 @@ struct server_context {
         n_ctx = llama_n_ctx(ctx);
 
         add_bos_token = llama_should_add_bos_token(model);
+        GGML_ASSERT(llama_add_eos_token(model) != 1);
 
         return true;
     }
@@ -758,7 +759,7 @@ struct server_context {
         metrics.init();
     }
 
-    std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const {
+    std::vector<llama_token> tokenize(const json & json_prompt, bool add_special) const {
         // TODO: currently, we tokenize using special tokens by default
         //       this is not always correct (see https://github.com/ggerganov/llama.cpp/pull/4160#issuecomment-1824826216)
         //       but it's better compared to completely ignoring ChatML and other chat templates
@@ -776,7 +777,7 @@ struct server_context {
 
                     std::vector<llama_token> p;
                     if (first) {
-                        p = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
+                        p = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
                         first = false;
                     } else {
                         p = ::llama_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
@@ -793,7 +794,7 @@ struct server_context {
             }
         } else {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
+            prompt_tokens = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
         }
 
         return prompt_tokens;
@@ -858,7 +859,7 @@ struct server_context {
         slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
         // process "json_schema" and "grammar"
-        if (data.contains("json_schema") && data.contains("grammar")) {
+        if (data.contains("json_schema") && !data["json_schema"].is_null() && data.contains("grammar") && !data["grammar"].is_null()) {
             send_error(task, "Either \"json_schema\" or \"grammar\" can be specified, but not both", ERROR_TYPE_INVALID_REQUEST);
             return false;
         } else if (data.contains("json_schema") && !data.contains("grammar")) {
@@ -1058,7 +1059,7 @@ struct server_context {
         system_tokens.clear();
 
         if (!system_prompt.empty()) {
-            system_tokens = ::llama_tokenize(ctx, system_prompt, add_bos_token);
+            system_tokens = ::llama_tokenize(ctx, system_prompt, true);
 
             llama_batch_clear(batch);
 
@@ -1082,7 +1083,7 @@ struct server_context {
                 };
 
                 if (llama_decode(ctx, batch_view) != 0) {
-                    LOG_TEE("%s: llama_decode() failed\n", __func__);
+                    LOG_ERROR("llama_decode() failed", {});
                     return;
                 }
             }
@@ -1200,7 +1201,7 @@ struct server_context {
             });
         }
 
-        if (result.tok == llama_token_eos(model)) {
+        if (llama_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
@@ -1280,7 +1281,11 @@ struct server_context {
     }
 
     void send_error(const int id_task, const int id_multi, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
-        LOG_TEE("task %i - error: %s\n", id_task, error.c_str());
+        LOG_ERROR("task error", {
+            {"id_multi", id_multi},
+            {"id_task", id_task},
+            {"error", error},
+        });
 
         server_task_result res;
         res.id       = id_task;
@@ -1914,7 +1919,7 @@ struct server_context {
                             prefix_tokens.push_back(llama_token_middle(model));
                             prompt_tokens = prefix_tokens;
                         } else {
-                            prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);  // add BOS if there isn't system prompt
+                            prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
                         }
 
                         slot.n_past = 0;
@@ -2185,7 +2190,11 @@ struct server_context {
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
-                    LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
+                    LOG_ERROR("failed to decode the batch: KV cache is full - try increasing it via the context size", {
+                        {"i",   i},
+                        {"n_batch",  ret},
+                        {"ret",   ret},
+                    });
                     for (auto & slot : slots) {
                         slot.state = SLOT_STATE_PROCESSING;
                         slot.command = SLOT_COMMAND_NONE;
@@ -2195,11 +2204,15 @@ struct server_context {
                     break; // break loop of n_batch
                 }
 
-                LOG_TEE("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
-
                 // retry with half the batch size to try to find a free slot in the KV cache
                 n_batch /= 2;
                 i -= n_batch;
+
+                LOG_WARNING("failed to find free space in the KV cache, retrying with smaller batch size - try increasing it via the context size or enable defragmentation", {
+                    {"i",   i},
+                    {"n_batch",  n_batch},
+                    {"ret",   ret},
+                });
 
                 continue; // continue loop of n_batch
             }

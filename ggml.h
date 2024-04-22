@@ -1161,13 +1161,11 @@ extern "C" {
             enum ggml_prec       prec);
 
     // indirect matrix multiplication
-    //  ggml_mul_mat_id(ctx, as, ids, id, b) ~= ggml_mul_mat(as[ids[id]], b)
     GGML_API struct ggml_tensor * ggml_mul_mat_id(
             struct ggml_context * ctx,
             struct ggml_tensor  * as,
-            struct ggml_tensor  * ids,
-            int                   id,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            struct ggml_tensor  * ids);
 
     // A: m columns, n rows,
     // B: p columns, n rows,
@@ -2288,6 +2286,9 @@ extern "C" {
     GGML_API size_t         gguf_get_tensor_offset(const struct gguf_context * ctx, int i);
     GGML_API char *         gguf_get_tensor_name  (const struct gguf_context * ctx, int i);
     GGML_API enum ggml_type gguf_get_tensor_type  (const struct gguf_context * ctx, int i);
+
+    // removes key if it exists
+    GGML_API void gguf_remove_key(struct gguf_context * ctx, const char * key);
 
     // overrides existing values or adds a new one
     GGML_API void gguf_set_val_u8  (struct gguf_context * ctx, const char * key, uint8_t  val);

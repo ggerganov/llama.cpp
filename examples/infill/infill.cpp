@@ -239,6 +239,7 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s\n", get_system_info(params).c_str());
     }
     const bool add_bos = llama_should_add_bos_token(model);
+    GGML_ASSERT(llama_add_eos_token(model) != 1);
     LOG("add_bos: %d\n", add_bos);
 
     bool suff_rm_leading_spc = params.escape;
@@ -279,10 +280,10 @@ int main(int argc, char ** argv) {
     if (ctx_guidance) {
         LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(sparams.cfg_negative_prompt));
 
-        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, add_bos);
+        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, true);
         LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp).c_str());
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true);
         LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp).c_str());
 
         original_prompt_len = original_inp.size();
@@ -585,7 +586,7 @@ int main(int argc, char ** argv) {
 
             // deal with eot token in infill mode
             if ((llama_sampling_last(ctx_sampling) == llama_token_eot(model) || is_interacting) && params.interactive){
-                if(is_interacting && !params.interactive_first) {
+                if (is_interacting && !params.interactive_first) {
                     // print an eot token
                     printf("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
                 }
@@ -650,8 +651,8 @@ int main(int argc, char ** argv) {
                 // LOG_TEE("took new input\n");
                 is_interacting = false;
             }
-            // deal with end of text token in interactive mode
-            else if (llama_sampling_last(ctx_sampling) == llama_token_eos(model)) {
+            // deal with end of generation tokens in interactive mode
+            else if (llama_token_is_eog(model, llama_sampling_last(ctx_sampling))) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
@@ -730,8 +731,8 @@ int main(int argc, char ** argv) {
             }
         }
 
-        // end of text token
-        if (!embd.empty() && embd.back() == llama_token_eos(model) && !params.interactive) {
+        // end of generation
+        if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !params.interactive) {
             break;
         }
 
