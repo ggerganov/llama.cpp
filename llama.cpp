@@ -17177,6 +17177,11 @@ static int32_t llama_chat_get_prefix(
         }
         return output;
     };
+    auto str_tofirstcap = [](std::string & str) {
+        std::string output(str);
+        output[0] = toupper(output[0]);
+        return output;
+    };
     switch (tmpl) {
         case LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED:
             return -1;
@@ -17189,13 +17194,20 @@ static int32_t llama_chat_get_prefix(
             }
             break;
         case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS:
-            if (!sprev_role.empty()) {
-                ss << "<s>";
+            if (srole == "system") {
+                ss << "[INST] <<SYS>>\n";
+            } else if (srole == "user" && sprev_role != "system") {
+                if (!sprev_role.empty()) {
+                    ss << "<s>";
+                }
+                ss << "[INST] ";
+            } else if (srole == "assistant") {
+                ss << " ";
             }
-            // do not add "break"
+            break;
         case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS:
             if (srole == "system") {
-                ss << "[INST]<<SYS>>\n";
+                ss << "[INST] <<SYS>>\n";
             } else if (srole == "user" && sprev_role != "system") {
                 ss << "[INST] ";
             }
@@ -17216,15 +17228,16 @@ static int32_t llama_chat_get_prefix(
         case LLAMA_CHAT_TEMPLATE_ORION:
             // for orion, "user" is "human"
             srole = srole == "user" ? "human" : srole;
-            srole[0] = toupper(srole[0]); // upper case for first letter
-            ss << srole << ": ";
+            ss << str_tofirstcap(srole) << ": ";
+            if (srole == "assistant") {
+                ss << "</s>";
+            }
             break;
         case LLAMA_CHAT_TEMPLATE_OPENCHAT:
             if (srole == "system") {
                 ss << "";
             } else {
-                srole[0] = toupper(srole[0]); // upper case for first letter
-                ss << "GPT4 Correct " << srole << ": ";
+                ss << "GPT4 Correct " << str_tofirstcap(srole) << ": ";
             }
             break;
         case LLAMA_CHAT_TEMPLATE_VICUNA:
@@ -17250,7 +17263,7 @@ static int32_t llama_chat_get_prefix(
     }
     std::string output = ss.str();
     snprintf(buf, length, "%s", output.c_str());
-    return output.size() + 1;
+    return output.size();
 }
 
 static int32_t llama_chat_get_postfix(
@@ -17271,14 +17284,18 @@ static int32_t llama_chat_get_postfix(
         case LLAMA_CHAT_TEMPLATE_LLAMA2:
             if (srole == "user") {
                 ss << " [/INST]";
+            } else if (srole == "assistant") {
+                ss << "</s>";
             }
             break;
         case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS:
         case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS:
             if (srole == "system") {
                 ss << "\n<</SYS>>\n\n";
-            } else {
-                ss << "</s>";
+            } else if (srole == "user") {
+                ss << " [/INST]";
+            } else if (srole == "assistant") {
+                ss << " </s>";
             }
             break;
         case LLAMA_CHAT_TEMPLATE_ZEPHYR:
@@ -17291,7 +17308,11 @@ static int32_t llama_chat_get_postfix(
             ss << "<end_of_turn>\n";
             break;
         case LLAMA_CHAT_TEMPLATE_ORION:
-            ss << "</s>";
+            if (srole == "assistant") {
+                ss << "</s>";
+            } else {
+                ss << "\n\n";
+            }
             break;
         case LLAMA_CHAT_TEMPLATE_OPENCHAT:
             srole[0] = toupper(srole[0]);
@@ -17299,7 +17320,11 @@ static int32_t llama_chat_get_postfix(
             break;
         case LLAMA_CHAT_TEMPLATE_VICUNA:
         case LLAMA_CHAT_TEMPLATE_VICUNA_ORCA:
-            ss << "</s>\n";
+            if (srole == "assistant") {
+                ss << "</s>\n";
+            } else {
+                ss << "\n";
+            }
             break;
         case LLAMA_CHAT_TEMPLATE_DEEPSEEK:
             if (srole == "user") {
@@ -17317,7 +17342,25 @@ static int32_t llama_chat_get_postfix(
     }
     std::string output = ss.str();
     snprintf(buf, length, "%s", output.c_str());
-    return output.size() + 1;
+    return output.size();
+}
+
+static bool llama_chat_support_system_message(const llama_chat_template tmpl) {
+    switch (tmpl) {
+        case LLAMA_CHAT_TEMPLATE_CHATML:
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS:
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS:
+        case LLAMA_CHAT_TEMPLATE_ZEPHYR:
+        case LLAMA_CHAT_TEMPLATE_MONARCH:
+        case LLAMA_CHAT_TEMPLATE_ORION:
+        case LLAMA_CHAT_TEMPLATE_OPENCHAT:
+        case LLAMA_CHAT_TEMPLATE_VICUNA_ORCA:
+        case LLAMA_CHAT_TEMPLATE_COMMAND_R:
+        case LLAMA_CHAT_TEMPLATE_LLAMA3:
+            return true;
+        default:
+            return false;
+    }
 }
 
 LLAMA_API int32_t llama_chat_apply_template(
@@ -17342,6 +17385,7 @@ LLAMA_API int32_t llama_chat_apply_template(
 
     // detect template type
     llama_chat_template ttmpl = llama_chat_get_template_type(curr_tmpl.c_str());
+    bool support_system_message = llama_chat_support_system_message(ttmpl);
     if (ttmpl == LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED) {
         return -1;
     }
@@ -17349,22 +17393,37 @@ LLAMA_API int32_t llama_chat_apply_template(
     // format the chat to string
     std::stringstream ss;
     std::string prev_role;
-    std::vector<char> prefix(1024, 0);
-    std::vector<char> postfix(1024, 0);
     for (size_t i = 0; i < n_msg; i++) {
         std::string role(chat[i].role);
         std::string content(chat[i].content);
+        if (!support_system_message) {
+            // if the template does not support system message, we convert it to user message
+            role = role == "system" ? "user" : role;
+        }
+        std::vector<char> prefix(1024, 0);
+        std::vector<char> postfix(1024, 0);
         llama_chat_get_prefix(ttmpl, role.c_str(), prev_role.c_str(), prefix.data(), prefix.size());
         llama_chat_get_postfix(ttmpl, role.c_str(), prev_role.c_str(), postfix.data(), postfix.size());
-        ss << std::string(prefix.data(), prefix.size()) << content << std::string(postfix.data(), postfix.size());
+        ss << std::string(prefix.data()) << trim(content) << std::string(postfix.data());
         prev_role = role;
+    }
+
+    if (add_ass) {
+        std::vector<char> prefix(1024, 0);
+        llama_chat_get_prefix(ttmpl, "assistant", prev_role.c_str(), prefix.data(), prefix.size());
+        std::string assistant_prompt(prefix.data());
+        if (assistant_prompt.back() == ' ') {
+            // Some templates need trailing space to be tokenized with the next word. We should make sure there is no trailing in the output text
+            assistant_prompt.pop_back();
+        }
+        ss << assistant_prompt;
     }
 
     std::string output = ss.str();
     if (buf && length > 0) {
         snprintf(buf, length, "%s", output.c_str());
     }
-    return output.size() + 1;
+    return output.size();
 }
 
 LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {
