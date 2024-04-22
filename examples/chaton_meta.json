@@ -37,6 +37,25 @@
 			"suffix": ""
 		},
 		"reverse-prompt": "<|eot_id|>"
+	},
+	"chatml": {
+		"global": {
+			"prefix": "",
+			"suffix": ""
+		},
+		"system": {
+			"prefix": "<|im_start|>system\n",
+			"suffix": "<|im_end|>\n"
+		},
+		"user": {
+			"prefix": "\n<|im_start|>user\n",
+			"suffix": "<|im_end|>\n"
+		},
+		"assistant": {
+			"prefix": "<|im_start|>assistant\n"
+			"suffix": ""
+		},
+		"reverse-prompt": "<|im_start|>user\n"
 	}
 }
 
