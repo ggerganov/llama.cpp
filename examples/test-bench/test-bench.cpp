@@ -415,9 +415,16 @@ struct test_mul_mat : public test_case {
 };
 
 void bench_mul_mat(ggml_backend_t backend) {
-    auto test = test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F16, 512, 256, 1024, { 1,  1}, {1, 1});
+    auto test1 = test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F16, 11008, 1, 4096, { 1,  1}, {1, 1});
+    auto test2 = test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_Q4_0, 11008, 1, 4096, { 1,  1}, {1, 1});
 
-    test.eval_perf(backend, "MUL_MAT", 8000 /*n_runs*/);
+    auto test3 = test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F16, 512, 256, 1024, { 1,  1}, {1, 1});
+    auto test4 = test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_Q4_0, 512, 256, 1024, { 1,  1}, {1, 1});
+
+    test1.eval_perf(backend, "MUL_MAT", 8000 /*n_runs*/);
+    test2.eval_perf(backend, "MUL_MAT", 8000 /*n_runs*/);
+    test3.eval_perf(backend, "MUL_MAT", 8000 /*n_runs*/);
+    test4.eval_perf(backend, "MUL_MAT", 8000 /*n_runs*/);
 }
 
 int main() {
