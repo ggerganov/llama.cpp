@@ -12476,8 +12476,9 @@ static void ggml_compute_forward_alibi_f32(
 
         for (int64_t i = 0; i < ne0; i++) {
             for (int64_t j = 0; j < ne1; j++) {
+                float * const src = (float *)((char *) src0->data + i*nb0 + j*nb1 + k*nb2);
                 float *      pdst = (float *)((char *)  dst->data + i*nb0 + j*nb1 + k*nb2);
-                pdst[0] = -1.0f * i * m_k;
+                pdst[0] = i * m_k + src[0];
             }
         }
     }

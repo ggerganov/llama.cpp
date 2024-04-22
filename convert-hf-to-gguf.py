@@ -92,7 +92,6 @@ class Model(ABC):
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name(self.dir_model.name)
-        print(f'self.block_count {self.block_count}')
         self.gguf_writer.add_block_count(self.block_count)
 
         if (n_ctx := self.find_hparam(["max_position_embeddings", "n_ctx"], optional=True)) is not None:
@@ -138,7 +137,6 @@ class Model(ABC):
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        print(f'Block_count {block_count} with tensor_map {tensor_map}')
         for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
@@ -2186,6 +2184,9 @@ class JinaBertModel(BertModel):
                 continue
 
             yield name, data
+
+
+JinaBertForMaskedML = JinaBertModel
 
 
 @Model.register("GemmaForCausalLM")
