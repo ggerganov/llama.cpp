@@ -2,8 +2,8 @@
 {
 	"llama2": {
 		"global": {
-			"prefix": "",
-			"suffix": ""
+			"begin": "",
+			"end": ""
 		},
 		"system": {
 			"prefix": "[INST] <<SYS>>\n",
@@ -21,8 +21,8 @@
 	},
 	"llama3": {
 		"global": {
-			"prefix": "",
-			"suffix": ""
+			"begin": "",
+			"end": ""
 		},
 		"system": {
 			"prefix": "<|start_header_id|>system<|end_header_id|>\n",
@@ -40,8 +40,8 @@
 	},
 	"chatml": {
 		"global": {
-			"prefix": "",
-			"suffix": ""
+			"begin": "",
+			"end": ""
 		},
 		"system": {
 			"prefix": "<|im_start|>system\n",
