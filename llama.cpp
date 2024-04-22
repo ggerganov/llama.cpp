@@ -13478,7 +13478,7 @@ llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_da
     return result;
 }
 
-llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates) {
+llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng) {
     GGML_ASSERT(ctx);
 
     const int64_t t_start_sample_us = ggml_time_us();
@@ -13491,7 +13491,6 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
     }
 
     std::discrete_distribution<> dist(probs.begin(), probs.end());
-    auto & rng = ctx->rng;
     int idx = dist(rng);
 
     llama_token result = candidates->data[idx].id;
@@ -13499,6 +13498,10 @@ llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_arra
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     ctx->n_sample++;
     return result;
+}
+
+llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates) {
+    return llama_sample_token_with_rng(ctx, candidates, ctx->rng);
 }
 
 void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token) {

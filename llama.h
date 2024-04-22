@@ -987,7 +987,7 @@ extern "C" {
             struct llama_context * ctx,
           llama_token_data_array * candidates);
 
-    /// @details Randomly selects a token from the candidates based on their probabilities.
+    /// @details Randomly selects a token from the candidates based on their probabilities using the RNG of ctx.
     LLAMA_API llama_token llama_sample_token(
             struct llama_context * ctx,
           llama_token_data_array * candidates);
@@ -1074,8 +1074,9 @@ extern "C" {
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
 #ifdef LLAMA_API_INTERNAL
 
-#include <vector>
+#include <random>
 #include <string>
+#include <vector>
 
 struct ggml_tensor;
 
@@ -1111,6 +1112,10 @@ void llama_grammar_accept(
 std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
         const std::string & src,
         llama_partial_utf8   partial_start);
+
+// Randomly selects a token from the candidates based on their probabilities using given std::mt19937.
+// This is a temporary workaround in order to fix race conditions when sampling with multiple sequences.
+llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng);
 
 #endif // LLAMA_API_INTERNAL
 

@@ -1028,7 +1028,7 @@ struct server_context {
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
                 return false;
             }
-            llama_set_rng_seed(ctx, slot.params.seed);
+            llama_sampling_set_rng_seed(slot.ctx_sampling, slot.params.seed);
         }
 
         slot.command = SLOT_COMMAND_LOAD_PROMPT;

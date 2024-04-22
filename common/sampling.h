@@ -4,9 +4,10 @@
 
 #include "grammar-parser.h"
 
+#include <random>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 // sampler types
 enum class llama_sampler_type : char {
@@ -79,6 +80,8 @@ struct llama_sampling_context {
     // TODO: replace with ring-buffer
     std::vector<llama_token>      prev;
     std::vector<llama_token_data> cur;
+
+    std::mt19937 rng;
 };
 
 #include "common.h"
@@ -92,6 +95,9 @@ void llama_sampling_free(struct llama_sampling_context * ctx);
 // - clear prev tokens
 // - reset grammar
 void llama_sampling_reset(llama_sampling_context * ctx);
+
+// Set the sampler seed
+void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t seed);
 
 // Copy the sampler context
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst);

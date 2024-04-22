@@ -240,7 +240,6 @@ int main(int argc, char ** argv) {
                 return 1;
             }
             session_tokens.resize(n_token_count_out);
-            llama_set_rng_seed(ctx, params.seed);
             LOG_TEE("%s: loaded a session with prompt size of %d tokens\n", __func__, (int)session_tokens.size());
         }
     }
@@ -521,6 +520,7 @@ int main(int argc, char ** argv) {
     }
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
+    llama_sampling_set_rng_seed(ctx_sampling, params.seed);
 
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
