@@ -65,6 +65,7 @@ add_library(${TARGET} STATIC
     train.cpp
     ngram-cache.h
     ngram-cache.cpp
+    chaton.hpp
     )
 
 if (BUILD_SHARED_LIBS)
