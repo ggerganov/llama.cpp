@@ -1866,7 +1866,7 @@ void llama_batch_add(
 
 #ifdef LLAMA_USE_CURL
 
-static bool llama_download_file(CURL * curl, const char * url, const char * path, boolean_t isShard) {
+static bool llama_download_file(CURL * curl, const char * url, const char * path, boolean_t is_shard) {
     bool force_download = false;
 
     // Set the URL, allow to follow http redirection
@@ -2000,7 +2000,7 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
 
         //  display download progress if not sharded
-        if (isShard) {
+        if (is_shard) {
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
         } else {
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
