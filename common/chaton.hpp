@@ -50,3 +50,20 @@ inline void chaton_meta_dump() {
     }
     LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, conMeta.dump(4).c_str());
 }
+
+inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::string &role, const std::string &content) {
+    std::stringstream ss;
+    ss << conMeta[tmpl]["global"]["prefix"];
+    ss << conMeta[tmpl][role]["prefix"] << content << conMeta[tmpl][role]["suffix"];
+    ss << conMeta[tmpl]["global"]["suffix"];
+    std::string taggedStr = ss.str();
+    return taggedStr;
+}
+
+inline std::string chaton_tmpl_role_part(const std::string &tmpl, const std::string &role, const std::string &part) {
+    return conMeta[tmpl][role][part];
+}
+
+inline std::string chaton_tmpl_part(const std::string &tmpl, const std::string &part) {
+    return conMeta[tmpl][part];
+}

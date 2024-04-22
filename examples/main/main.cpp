@@ -256,10 +256,13 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
-    if (params.interactive_first || params.instruct || params.chatml || !params.prompt.empty() || session_tokens.empty()) {
+    if (params.interactive_first || params.instruct || params.chatml || params.chaton || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
         if (params.chatml) {
             params.prompt = "<|im_start|>system\n" + params.prompt + "<|im_end|>";
+        }
+        if (params.chaton) {
+            params.prompt = chaton_tmpl_apply(params.chaton_template_id, "system", params.prompt);
         }
         embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
     } else {
@@ -338,7 +341,7 @@ int main(int argc, char ** argv) {
     }
 
     // number of tokens to keep when resetting context
-    if (params.n_keep < 0 || params.n_keep > (int) embd_inp.size() || params.instruct || params.chatml) {
+    if (params.n_keep < 0 || params.n_keep > (int) embd_inp.size() || params.instruct || params.chatml || params.chaton) {
         params.n_keep = (int)embd_inp.size();
     } else {
         params.n_keep += add_bos; // always keep the BOS token
@@ -367,6 +370,16 @@ int main(int argc, char ** argv) {
     else if (params.chatml) {
         params.interactive_first = true;
         params.antiprompt.emplace_back("<|im_start|>user\n");
+    }
+
+    // chaton mode
+    const auto chaton_assitant_prefix = ::llama_tokenize(ctx, chaton_tmpl_role_part(params.chaton_template_id, "assistant", "prefix"), false, true);
+    if (params.chaton) {
+        params.interactive = true; // may remove later, by requiring user to explicitly request interactive mode
+        params.interactive_first = true;
+        params.input_prefix = chaton_tmpl_role_part(params.chaton_template_id, "user", "prefix");
+        params.input_suffix = chaton_tmpl_role_part(params.chaton_template_id, "user", "suffix");
+        params.antiprompt.emplace_back(chaton_tmpl_part(params.chaton_template_id, "reverse-prompt"));
     }
 
     // enable interactive mode if interactive start is specified
@@ -822,7 +835,7 @@ int main(int argc, char ** argv) {
             if (n_past > 0 && is_interacting) {
                 LOG("waiting for user input\n");
 
-                if (params.instruct || params.chatml) {
+                if (params.instruct || params.chatml || params.chaton) {
                     printf("\n> ");
                 }
 
@@ -900,6 +913,11 @@ int main(int argc, char ** argv) {
                     if (params.chatml) {
                         LOG("inserting chatml suffix\n");
                         embd_inp.insert(embd_inp.end(), cml_sfx.begin(), cml_sfx.end());
+                    }
+                    // chaton mode: insert assistant prefix
+                    if (params.chaton) {
+                        LOG("inserting chaton assistant prefix\n");
+                        embd_inp.insert(embd_inp.end(), chaton_assitant_prefix.begin(), chaton_assitant_prefix.end());
                     }
 
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
