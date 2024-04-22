@@ -9,10 +9,10 @@
  *    b. user-prefix, user-suffix, assistant-prefix
  *       * these override the in-prefix and in-suffix
  *    c. reverse-prompt
- *    d. Later if required look at adding
- *       * global-begin-marker, global-end-marker
- *       * per-msg-begin-marker, per-msg-end-marker
- *       * is system-per-msg-end-marker and user-per-msg-begin-marker used for system+user combo
+ *    d. global-begin, global-end
+ *    d. systemuser-1st-user-has-prefix
+ *       * if a combination of 1 system message followed by 1 or more user messages is seen,
+ *         then include user prefix only if this flag is set.
  * 2. Give the below option to user wrt system prompt, this should give the flexibility to either keep system prompt simple or complex in a flexible yet simple way.
  *    a. the system prompt they specify using -f, is used as is with parse_special when tokenising or
  *    b. whether the system prefix and suffix is added, but without parse_special tokenisation of system-prompt provided by user.
@@ -29,6 +29,14 @@
 #include <json.hpp>
 
 #include "log.h"
+
+
+const auto K_SYSTEM = "system";
+const auto K_USER = "user";
+const auto K_PREFIX = "prefix";
+const auto K_SUFFIX = "suffix";
+const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
+
 
 using json = nlohmann::json;
 
@@ -55,6 +63,7 @@ inline void chaton_meta_dump() {
     LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, conMeta.dump(4).c_str());
 }
 
+// Return user-prefix + msg + user-suffix
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
     std::stringstream ss;
@@ -64,14 +73,37 @@ inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::
     return taggedStr;
 }
 
+// global-begin + [role-prefix + msg + role-suffix] + global-end
+// if there is a combination of system-user messages,
+//    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<llama_chat_message> &msgs) {
     std::stringstream ss;
     ss << conMeta[tmpl]["global"]["begin"];
-    for(auto msg: msgs) {
+    int cntSystem = 0;
+    int cntUser = 0;
+    int cntOthers = 0;
+    for(const auto msg: msgs) {
         auto role = msg.role;
         auto content = msg.content;
-        ss << conMeta[tmpl][role]["prefix"] << content << conMeta[tmpl][role]["suffix"];
+        auto prefix = conMeta[tmpl][role][K_PREFIX];
+        if (role == K_SYSTEM) {
+            cntSystem += 1;
+            ss << prefix;
+        } else if (role == K_USER) {
+            cntUser += 1;
+            if ((cntSystem == 1) && (cntUser == 1)) {
+                if (conMeta[tmpl][K_SYSTEMUSER_1ST_USER_HAS_PREFIX]) {
+                    ss << prefix;
+                }
+            } else {
+                ss << prefix;
+            }
+        } else {
+            cntOthers += 1;
+            ss << prefix;
+        }
+        ss << content << conMeta[tmpl][role]["suffix"];
     }
     ss << conMeta[tmpl]["global"]["end"];
     std::string taggedMsgs = ss.str();

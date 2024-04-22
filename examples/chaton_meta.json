@@ -17,7 +17,8 @@
 			"prefix": "",
 			"suffix": ""
 		},
-		"reverse-prompt": "</s>"
+		"reverse-prompt": "</s>",
+		"systemuser-1st-user-has-prefix": false
 	},
 	"llama3": {
 		"global": {
@@ -36,7 +37,8 @@
 			"prefix": "<|start_header_id|>assistant<|end_header_id|>\n",
 			"suffix": ""
 		},
-		"reverse-prompt": "<|eot_id|>"
+		"reverse-prompt": "<|eot_id|>",
+		"systemuser-1st-user-has-prefix": true
 	},
 	"chatml": {
 		"global": {
@@ -55,7 +57,8 @@
 			"prefix": "<|im_start|>assistant\n",
 			"suffix": ""
 		},
-		"reverse-prompt": "<|im_start|>user\n"
+		"reverse-prompt": "<|im_start|>user\n",
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 
