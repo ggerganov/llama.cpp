@@ -114,6 +114,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
         /*.mem_size   =*/ ctx_size,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false, // NOTE: this should be false when using the legacy API
+        /*.use_hwaccel=*/ false
     };
 
     // Python reference code for full unpad:

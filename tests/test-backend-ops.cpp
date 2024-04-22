@@ -359,6 +359,7 @@ struct test_case {
             /* .mem_size = */ ggml_tensor_overhead()*128 + ggml_graph_overhead(),
             /* .mem_base = */ NULL,
             /* .no_alloc = */ true,
+            /* .use_hwaccel=*/false
         };
         ggml_context * ctx = ggml_init(params);
 
@@ -520,6 +521,7 @@ struct test_case {
             /* .mem_size = */ ggml_tensor_overhead()*128 + ggml_graph_overhead_custom(graph_nodes, false),
             /* .mem_base = */ NULL,
             /* .no_alloc = */ true,
+            /* .use_hwaccel=*/false
         };
         ggml_context * ctx = ggml_init(params);
 

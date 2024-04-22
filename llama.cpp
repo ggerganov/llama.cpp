@@ -2378,6 +2378,7 @@ static bool llama_kv_cache_init(
             /*.mem_size   =*/ 2u*n_layers*ggml_tensor_overhead(),
             /*.mem_buffer =*/ NULL,
             /*.no_alloc   =*/ true,
+            /*.use_hwaccel=*/ false
         };
         ggml_context * ctx = ggml_init(params);
         if (!ctx) {
@@ -4664,6 +4665,7 @@ static bool llm_load_tensors(
             /*.mem_size   =*/ ctx_size,
             /*.mem_buffer =*/ NULL,
             /*.no_alloc   =*/ true,
+            /*.use_hwaccel=*/ false
         };
         ggml_context * ctx = ggml_init(params);
         if (!ctx) {
@@ -6535,6 +6537,7 @@ struct llm_build_context {
             /*.mem_size   =*/ buf_compute_meta.size(),
             /*.mem_buffer =*/ buf_compute_meta.data(),
             /*.no_alloc   =*/ true,
+            /*.use_hwaccel=*/ false
         };
 
         ctx0 = ggml_init(params);
@@ -14679,6 +14682,7 @@ static int llama_apply_lora_from_file_internal(
             /* .mem_size   */ ggml_tensor_overhead()*128 + ggml_graph_overhead(),
             /* .mem_buffer */ nullptr,
             /* .no_alloc   */ true,
+            /* .use_hwaccel*/ false
         };
         ggml_context * lora_ctx = ggml_init(lora_init_params);
         if (lora_ctx == nullptr) {
@@ -14929,7 +14933,7 @@ void llama_backend_init(void) {
 
     // needed to initialize f16 tables
     {
-        struct ggml_init_params params = { 0, NULL, false };
+        struct ggml_init_params params = { 0, NULL, false, false };
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
     }
@@ -15540,6 +15544,7 @@ static bool llama_control_vector_init(struct llama_control_vector & cvec, const 
             /*.mem_size   =*/ n_layers * ggml_tensor_overhead(),
             /*.mem_buffer =*/ NULL,
             /*.no_alloc   =*/ true,
+            /*.use_hwaccel=*/ false
         };
         ggml_context * ctx = ggml_init(params);
         if (!ctx) {

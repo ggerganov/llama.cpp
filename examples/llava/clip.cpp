@@ -543,6 +543,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         /*.mem_size   =*/ ctx->buf_compute_meta.size(),
         /*.mem_buffer =*/ ctx->buf_compute_meta.data(),
         /*.no_alloc   =*/ true,
+        /*.use_hwaccel=*/ false
     };
 
     struct ggml_context * ctx0 = ggml_init(params);
@@ -1020,9 +1021,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     {
         std::vector<uint8_t> read_buf;
         struct ggml_init_params params = {
-            /*.mem_size =*/ (n_tensors + 1) * ggml_tensor_overhead(),
+            /*.mem_size   =*/ (n_tensors + 1) * ggml_tensor_overhead(),
             /*.mem_buffer =*/ NULL,
-            /*.no_alloc =*/ true,
+            /*.no_alloc   =*/ true,
+            /*.use_hwaccel=*/ false
         };
 
         new_clip->ctx_data = ggml_init(params);

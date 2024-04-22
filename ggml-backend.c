@@ -1238,7 +1238,8 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
     struct ggml_init_params params = {
         /* .mem_size =   */ sizeof(sched->context_buffer),
         /* .mem_buffer = */ sched->context_buffer,
-        /* .no_alloc =   */ true
+        /* .no_alloc =   */ true,
+        /* .use_hwaccel =*/ false
     };
 
     ggml_free(sched->ctx);
@@ -1980,7 +1981,8 @@ struct ggml_backend_graph_copy ggml_backend_graph_copy(ggml_backend_t backend, s
     struct ggml_init_params params = {
         /* .mem_size   = */ ggml_tensor_overhead()*hash_set.size + ggml_graph_overhead_custom(graph->size, false),
         /* .mem_buffer = */ NULL,
-        /* .no_alloc   = */ true
+        /* .no_alloc   = */ true,
+        /* .use_hwaccel =*/ false
     };
 
     struct ggml_context * ctx_allocated = ggml_init(params);

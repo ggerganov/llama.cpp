@@ -128,6 +128,7 @@ int main(int /*argc*/, const char ** /*argv*/) {
         /* .mem_size   = */ 128*1024*1024,
         /* .mem_buffer = */ NULL,
         /* .no_alloc   = */ false,
+        /* .use_hwaccel= */ false
     };
 
     std::vector<uint8_t> work_buffer;

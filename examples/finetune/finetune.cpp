@@ -1634,6 +1634,7 @@ int main(int argc, char ** argv) {
         ggml_tensor_overhead() * 2, // mem_size
         NULL,                       // mem_buffer
         true,                       // no_alloc
+        false                       // use_hwaccel
     };
     struct ggml_context * ctx_input = ggml_init(ctx_input_params);
 
@@ -1656,6 +1657,7 @@ int main(int argc, char ** argv) {
         estimated_compute_size_wo_data, // mem_size
         NULL,                           // mem_buffer
         true,                           // no_alloc
+        false                           // use_hwaccel
     };
     struct ggml_context * ctx_compute = NULL;
 
@@ -1825,6 +1827,7 @@ int main(int argc, char ** argv) {
         max_work_size, // mem_size
         NULL,          // mem_buffer
         false,         // no_alloc
+        false          // use_hwaccel
     };
     struct ggml_context * ctx_work = ggml_init(ctx_work_params);
 

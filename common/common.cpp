@@ -2810,6 +2810,7 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
             /* .mem_size   = */ ggml_tensor_overhead() * 128 + ggml_graph_overhead(),
             /* .mem_buffer = */ nullptr,
             /* .no_alloc   = */ true,
+            /* .use_hwaccel= */ false
         };
         ggml_context * meta_ctx = ggml_init(meta_params);
         struct gguf_init_params meta_gguf_params = {
@@ -2880,6 +2881,7 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
         /* .mem_size   = */ ggml_tensor_overhead() * n_tensors + n_bytes,
         /* .mem_buffer = */ nullptr,
         /* .no_alloc   = */ false,
+        /* .use_hwaccel= */ false
     };
     struct ggml_context * ctx = ggml_init(ggml_params);
 

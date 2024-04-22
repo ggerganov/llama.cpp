@@ -43,6 +43,7 @@ static bool gguf_ex_write(const std::string & fname) {
         /*.mem_size   =*/ 128ull*1024ull*1024ull,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
+        /*.use_hwaccel=*/ false
     };
 
     struct ggml_context * ctx_data = ggml_init(params);

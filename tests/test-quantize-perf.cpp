@@ -265,6 +265,7 @@ int main(int argc, char * argv[]) {
         /* .mem_size   = */ 1*1024,
         /* .mem_buffer = */ NULL,
         /* .no_alloc   = */ true,
+        /* .use_hwaccel= */ false
     };
     struct ggml_context * ctx = ggml_init(ggml_params);
 

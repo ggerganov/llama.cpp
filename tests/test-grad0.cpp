@@ -359,6 +359,7 @@ int main(int argc, const char ** argv) {
         /* .mem_size   = */ 256*1024*1024,
         /* .mem_buffer = */ NULL,
         /* .no_alloc   = */ false,
+        /* .use_hwaccel= */ false
     };
 
     int64_t ne[4];

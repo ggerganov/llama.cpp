@@ -1522,6 +1522,7 @@ int main(int argc, char ** argv) {
             /*.mem_size   =*/ compute_size,
             /*.mem_buffer =*/ compute_addr,
             /*.no_alloc   =*/ false,
+            /*.use_hwaccel=*/ false
         };
 
         struct ggml_context * ctx0 = ggml_init(params);
@@ -1598,6 +1599,7 @@ int main(int argc, char ** argv) {
                 /*.mem_size   =*/ compute_size,
                 /*.mem_buffer =*/ compute_addr,
                 /*.no_alloc   =*/ false,
+                /*.use_hwaccel=*/ false
             };
             struct ggml_context * ctx0 = ggml_init(params);
 
