@@ -147,6 +147,24 @@ extern "C" {
         LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
     };
 
+    enum llama_chat_template {
+        LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED  = 0,
+        LLAMA_CHAT_TEMPLATE_CHATML         = 1, // Example: teknium/OpenHermes-2.5-Mistral-7B
+        LLAMA_CHAT_TEMPLATE_LLAMA2         = 2, // Original llama2 template (no <<SYS>> support)
+        LLAMA_CHAT_TEMPLATE_LLAMA2_SYS     = 3, // <<SYS>> support (example: bofenghuang/vigogne-2-70b-chat)
+        LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS = 4, // <<SYS>> support with BOS inside history (example: TomGrc/FusionNet_34Bx2_MoE)
+        LLAMA_CHAT_TEMPLATE_ZEPHYR         = 5, // Example: HuggingFaceH4/zephyr-orpo-141b-A35b-v0.1
+        LLAMA_CHAT_TEMPLATE_MONARCH        = 6, // Example: mlabonne/AlphaMonarch-7B
+        LLAMA_CHAT_TEMPLATE_GEMMA          = 7, // Example: google/gemma-7b-it
+        LLAMA_CHAT_TEMPLATE_ORION          = 8, // Example: OrionStarAI/Orion-14B-Chat
+        LLAMA_CHAT_TEMPLATE_OPENCHAT       = 9, // Example: openchat/openchat-3.5-0106
+        LLAMA_CHAT_TEMPLATE_VICUNA         = 10, // Example: NousResearch/Nous-Capybara-34B
+        LLAMA_CHAT_TEMPLATE_VICUNA_ORCA    = 11, // Variant of vicuna that supports system role
+        LLAMA_CHAT_TEMPLATE_DEEPSEEK       = 12, // Example: deepseek-ai/deepseek-coder-33b-instruct
+        LLAMA_CHAT_TEMPLATE_COMMAND_R      = 13, // Example: CohereForAI/c4ai-command-r-plus
+        LLAMA_CHAT_TEMPLATE_LLAMA3         = 14, // Example: meta-llama/Meta-Llama-3-8B-Instruct
+    };
+
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
