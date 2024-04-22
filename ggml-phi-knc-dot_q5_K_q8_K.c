@@ -177,7 +177,7 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
 // Unpack 256 unsigned 5 bit values into an 8 bit vector.
 // Handles q4 not being aligned correctly.
 // Requires dst to be aligned.
-inline static void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint8x16_t * dst)
+void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint8x16_t * dst)
 {
     uint8_t lowmask = 0x0F;
     uint8_t m=1;
@@ -280,7 +280,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         uint8x16_t q5 [QK_K/16];
 
         // combine our 4 and 1 bit vector sets into a 5 bit vector (in 8 bits).
-        GGML_5bit_Unpack((const uint8x16_t *)x[i].qs, x[i].qh, q5);
+        GGML_5bit_Unpack_Unaligned((const uint8x16_t *)x[i].qs, x[i].qh, q5);
 
         // extract scales and mins..
         memcpy(utmp, x[i].scales, 12);
