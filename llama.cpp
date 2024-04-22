@@ -13534,7 +13534,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
-    std::vector<gguf_context*> ctx_outs = {ctx_out};
 
     // copy the KV pairs from the input file
     gguf_set_kv     (ctx_out, ml.meta);
@@ -13596,19 +13595,28 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<no_init<uint8_t>> work;
     std::vector<no_init<float>> f32_conv_buf;
 
+    uint16_t n_split = 1;
+    // Assume split index is continuous
+    if (params->keep_split) {
+        for (int i = 0; i < ml.n_tensors; ++i) {
+            n_split = std::max(uint16_t(ml.get_weight(i)->idx+1), n_split);
+        }
+    }
+    std::vector<gguf_context*> ctx_outs(n_split, NULL);
+    ctx_outs[0] = ctx_out;
+
     // populate the original tensors so we get an initial meta data
     for (int i = 0; i < ml.n_tensors; ++i) {
         auto weight = ml.get_weight(i);
+        uint16_t i_split = params->keep_split ? weight->idx : 0;
         struct ggml_tensor * tensor = weight->tensor;
-        if (weight->idx != (ctx_outs.size() - 1) && params->keep_split) {
-            ctx_out = gguf_init_empty();
-            ctx_outs.push_back(ctx_out);
+        if (ctx_outs[i_split] == NULL) {
+            ctx_outs[i_split] = gguf_init_empty();
         }
-        gguf_add_tensor(ctx_out, tensor);
+        gguf_add_tensor(ctx_outs[i_split], tensor);
     }
 
     // Set split info if needed
-    uint16_t n_split = ctx_outs.size();
     if (n_split > 1) {
         for (int i = 0; i < ctx_outs.size(); ++i) {
             gguf_set_val_u16(ctx_outs[i], ml.llm_kv(LLM_KV_SPLIT_NO).c_str(), i);
@@ -13629,8 +13637,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             fout.close();
         }
     };
-    auto new_ofstream = [&]() {
-        ++cur_split;
+    auto new_ofstream = [&](int index = 0) {
+        cur_split = index;
+        GGML_ASSERT(ctx_outs[cur_split] && "Find uninitialized gguf_context");
         std::string fname = fname_out;
         if (params->keep_split) {
             char split_path[PATH_MAX] = {0};
@@ -13651,9 +13660,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         auto weight = ml.get_weight(i);
         struct ggml_tensor * tensor = weight->tensor;
         if (weight->idx != cur_split && params->keep_split) {
-            GGML_ASSERT(cur_split == weight->idx-1 && "Invalid split index found in weight");
             close_ofstream();
-            new_ofstream();
+            new_ofstream(weight->idx);
         }
 
         const std::string name = ggml_get_name(tensor);
