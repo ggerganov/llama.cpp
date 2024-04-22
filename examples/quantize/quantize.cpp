@@ -354,7 +354,7 @@ int main(int argc, char ** argv) {
         }
     } else {
         fname_out = argv[arg_idx];
-        if (params.keep_split && fname_out.find(suffix) !=std::string::npos) {
+        if (params.keep_split && fname_out.find(suffix) != std::string::npos) {
             fname_out = fname_out.substr(0, fname_out.length() - suffix.length());
         }
         arg_idx++;
