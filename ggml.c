@@ -5473,7 +5473,7 @@ static struct ggml_tensor * ggml_soft_max_impl(
     GGML_ASSERT(ggml_is_contiguous(a));
 
     if (mask) {
-        GGML_ASSERT(mask->type == GGML_TYPE_F16);
+        GGML_ASSERT(mask->type == GGML_TYPE_F16 || mask->type == GGML_TYPE_F32);
         GGML_ASSERT(ggml_is_contiguous(mask));
         GGML_ASSERT(ggml_is_matrix(mask));
         GGML_ASSERT(mask->ne[1] >= a->ne[1]);
@@ -5481,8 +5481,12 @@ static struct ggml_tensor * ggml_soft_max_impl(
 
     if (pos) {
         GGML_ASSERT(ggml_is_vector(pos));
-        GGML_ASSERT(pos->type == GGML_TYPE_F16);
+        GGML_ASSERT(pos->type == GGML_TYPE_F16 || pos->type == GGML_TYPE_F32);
         GGML_ASSERT(pos->ne[0] == a->ne[0]);
+    }
+
+    if (pos && mask) {
+        GGML_ASSERT(pos->type == mask->type);
     }
 
     if (max_bias > 0.0f) {
@@ -12410,20 +12414,30 @@ static void ggml_compute_forward_soft_max_f32(
     float * wp = (float *) params->wdata + (nc + CACHE_LINE_SIZE_F32) * ith;
 
     // when max_bias <= 0.0f, src2 is not used and we default it to src0 to avoid branching
-    ggml_fp16_t * pos = src2 ? (ggml_fp16_t *) src2->data : src0->data;
+    ggml_fp16_t * pos_f16 = src2 ? (ggml_fp16_t *) src2->data : src0->data;
+    float       * pos_f32 = src2 ? (float       *) src2->data : src0->data;
+
+    const bool use_f16 = (src1 && src1->type == GGML_TYPE_F16) || (src2 && src2->type == GGML_TYPE_F16);
 
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * sp = (float *)((char *) src0->data + i1*src0->nb[1]);
         float * dp = (float *)((char *)  dst->data +  i1*dst->nb[1]);
 
         // broadcast the mask across rows
-        ggml_fp16_t * mp = src1 ? (ggml_fp16_t *)((char *) src1->data) + (i1%ne01)*ne00 : NULL;
+        ggml_fp16_t * mp_f16 = src1 ? (ggml_fp16_t *)((char *) src1->data) + (i1%ne01)*ne00 : NULL;
+        float       * mp_f32 = src1 ? (float       *)((char *) src1->data) + (i1%ne01)*ne00 : NULL;
 
         ggml_vec_cpy_f32  (nc, wp, sp);
         ggml_vec_scale_f32(nc, wp, scale);
-        if (mp) {
-            for (int i = 0; i < nc; ++i) {
-                wp[i] += GGML_FP16_TO_FP32(mp[i]);
+        if (mp_f32) {
+            if (use_f16) {
+                for (int i = 0; i < nc; ++i) {
+                    wp[i] += GGML_FP16_TO_FP32(mp_f16[i]);
+                }
+            } else {
+                for (int i = 0; i < nc; ++i) {
+                    wp[i] += mp_f32[i];
+                }
             }
         }
 
@@ -12432,8 +12446,14 @@ static void ggml_compute_forward_soft_max_f32(
             const uint32_t h  = (i1/ne01)%ne02; // head
             const float slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);
 
-            for (int i = 0; i < nc; i++) {
-                wp[i] = wp[i] + slope*ggml_fp16_to_fp32(pos[i]);
+            if (use_f16) {
+                for (int i = 0; i < nc; ++i) {
+                    wp[i] += slope*GGML_FP16_TO_FP32(pos_f16[i]);
+                }
+            } else {
+                for (int i = 0; i < nc; ++i) {
+                    wp[i] += slope*pos_f32[i];
+                }
             }
         }
 

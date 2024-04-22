@@ -6710,14 +6710,14 @@ struct llm_build_context {
         }
         cb(lctx.inp_KQ_mask, "KQ_mask", -1);
         ggml_set_input(lctx.inp_KQ_mask);
-        return ggml_cast(ctx0, lctx.inp_KQ_mask, GGML_TYPE_F16);
+        return flash_attn ? ggml_cast(ctx0, lctx.inp_KQ_mask, GGML_TYPE_F16) : lctx.inp_KQ_mask;
     }
 
     struct ggml_tensor * build_inp_KQ_pos() {
         lctx.inp_KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, n_kv);
         cb(lctx.inp_KQ_pos, "KQ_pos", -1);
         ggml_set_input(lctx.inp_KQ_pos);
-        return ggml_cast(ctx0, lctx.inp_KQ_pos, GGML_TYPE_F16);
+        return flash_attn ? ggml_cast(ctx0, lctx.inp_KQ_pos, GGML_TYPE_F16) : lctx.inp_KQ_pos;
     }
 
     struct ggml_tensor * build_inp_mean() {
