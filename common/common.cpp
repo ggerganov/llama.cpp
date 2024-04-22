@@ -92,7 +92,7 @@ int32_t PhysicalCores = std::thread::hardware_concurrency();
 // CPUSET logging
 //
 
-#define CPUSET_DEBUG 1
+#define CPUSET_DEBUG 0
 #if (CPUSET_DEBUG >= 1)
 #define CPUSET_PRINT_DEBUG(...) printf(__VA_ARGS__)
 #else
