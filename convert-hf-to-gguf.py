@@ -2736,6 +2736,11 @@ class JinaBertModel(BertModel):
 
             yield name, data
 
+    def set_vocab(self, *args, **kwargs):
+        super().set_vocab()
+        self.gguf_writer.add_add_bos_token(True)
+        self.gguf_writer.add_add_eos_token(True)
+
 
 JinaBertForMaskedML = JinaBertModel
 
