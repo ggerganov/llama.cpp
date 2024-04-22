@@ -12258,7 +12258,7 @@ static void ggml_compute_forward_soft_max_f32(
             const float slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);
 
             for (int i = 0; i < nc; i++) {
-                if (pos == NULL) {
+                if (pos != NULL) {
                     wp[i] = wp[i] + pos[i];
                 } else {
                     wp[i] = wp[i] - slope*abs(i1%nc - i);
