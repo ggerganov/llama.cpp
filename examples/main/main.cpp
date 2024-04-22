@@ -1,4 +1,5 @@
 #include "common.h"
+#include "chaton.hpp"
 
 #include "console.h"
 #include "llama.h"
@@ -140,6 +141,11 @@ int main(int argc, char ** argv) {
     // (note for later: this is a slightly awkward choice)
     console::init(params.simple_io, params.use_color);
     atexit([]() { console::cleanup(); });
+
+    if (params.chaton) {
+        chaton_meta_load(params.chaton_json);
+        chaton_meta_dump();
+    }
 
     if (params.logits_all) {
         printf("\n************\n");

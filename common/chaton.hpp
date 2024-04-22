@@ -19,4 +19,34 @@
  *
  */
 
+#include <string>
+#include <fstream>
+#include <iostream>
+#include <json.hpp>
 
+#include "log.h"
+
+using json = nlohmann::json;
+
+json conMeta;
+
+inline bool chaton_meta_load(std::string &fname) {
+    std::ifstream f(fname);
+    conMeta = json::parse(f);
+    return true;
+}
+
+inline bool chaton_meta_ok() {
+    if (conMeta == nullptr) {
+        return false;
+    }
+    return true;
+}
+
+inline void chaton_meta_dump() {
+    if (!chaton_meta_ok()) {
+        LOG_TEELN("ERRR:%s:ChatOn Meta: Not loaded yet...", __func__);
+        return;
+    }
+    LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, conMeta.dump(4).c_str());
+}
