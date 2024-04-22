@@ -34,6 +34,7 @@ lcov-report/
 gcovr-report/
 
 build*
+!build.zig
 cmake-build-*
 out/
 tmp/
@@ -100,6 +101,9 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+examples/server/*.html.hpp
+examples/server/*.js.hpp
+examples/server/*.mjs.hpp
 
 poetry.lock
 poetry.toml

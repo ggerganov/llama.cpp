@@ -10,6 +10,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Recent API changes
 
+- [2024 Apr 21] `llama_token_to_piece` can now optionally render special tokens https://github.com/ggerganov/llama.cpp/pull/6807
 - [2024 Apr 4] State and session file functions reorganized under `llama_state_*` https://github.com/ggerganov/llama.cpp/pull/6341
 - [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
 - [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
@@ -95,7 +96,7 @@ Typically finetunes of the base models below are supported as well.
 - [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [x] [DBRX](https://huggingface.co/databricks/dbrx-instruct)
-- [X] Falcon
+- [X] [Falcon](https://huggingface.co/models?search=tiiuae/falcon)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
@@ -122,6 +123,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
+- [x] [OLMo](https://allenai.org/olmo)
 
 (instructions for supporting more models: [HOWTO-add-model.md](./docs/HOWTO-add-model.md))
 
@@ -548,7 +550,7 @@ Building the program with BLAS support may lead to some performance improvements
   OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
 
   You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
-    - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
+    - For Ubuntu, Debian, and Fedora the packages `opencl-headers`, `ocl-icd` may be needed.
 
     - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
 
@@ -572,6 +574,12 @@ Building the program with BLAS support may lead to some performance improvements
   ##### Installing CLBlast
 
   Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
+
+  Linux packaging:
+  Fedora Linux:
+  ```bash
+  sudo dnf install clblast
+  ```
 
   Alternatively, they may be built from source.
 
