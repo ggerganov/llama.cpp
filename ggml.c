@@ -12258,7 +12258,11 @@ static void ggml_compute_forward_soft_max_f32(
             const float slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);
 
             for (int i = 0; i < nc; i++) {
-                wp[i] = wp[i] - slope*abs(i1%nc - i);
+                if (pos == NULL) {
+                    wp[i] = wp[i] + pos[i];
+                } else {
+                    wp[i] = wp[i] - slope*abs(i1%nc - i);
+                }
             }
         }
 
@@ -12472,7 +12476,6 @@ static void ggml_compute_forward_alibi_f32(
 
         for (int64_t i = 0; i < ne0; i++) {
             for (int64_t j = 0; j < ne1; j++) {
-                float * const src = (float *)((char *) src0->data + i*nb0 + j*nb1 + k*nb2);
                 float *      pdst = (float *)((char *)  dst->data + i*nb0 + j*nb1 + k*nb2);
                 pdst[0] = -1.0f * i * m_k;
             }
