@@ -1866,7 +1866,7 @@ void llama_batch_add(
 
 #ifdef LLAMA_USE_CURL
 
-static bool llama_download_file(CURL * curl, const char * url, const char * path, boolean_t is_shard) {
+static bool llama_download_file(CURL * curl, const char * url, const char * path, bool is_shard) {
     bool force_download = false;
 
     // Set the URL, allow to follow http redirection
