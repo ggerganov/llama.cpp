@@ -3795,6 +3795,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
                 ml.get_key(LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT, hparams.n_vocab_type);
                 ml.get_key(LLM_KV_POOLING_TYPE,               hparams.pooling_type);
+                hparams.f_max_alibi_bias = 8.0f;
 
                 switch (hparams.n_layer) {
                     case 4: model.type = e_model::MODEL_33M; break; // jina-embeddings-small
@@ -4001,7 +4002,7 @@ static void llm_load_hparams(
 
     model.ftype = ml.ftype;
 
-    if (hparams.f_max_alibi_bias > 0.0f) {
+    if (hparams.f_max_alibi_bias > 0.0f && model.arch != LLM_ARCH_JINA_BERT) {
         hparams.need_kq_pos = true;
     }
 
@@ -4519,7 +4520,6 @@ static bool llm_load_tensors(
         model.layers.resize(n_layer);
 
         const auto tn = LLM_TN(model.arch);
-        //std::printf("JOAN HERE ARCH %i", model.arch);
         switch (model.arch) {
             case LLM_ARCH_LLAMA:
             case LLM_ARCH_REFACT:
@@ -7525,7 +7525,7 @@ struct llm_build_context {
         struct ggml_tensor * inp_pos = nullptr;
 
         if (model.arch != LLM_ARCH_JINA_BERT) {
-            inp_pos  = build_inp_pos();
+            inp_pos = build_inp_pos();
         }
         struct ggml_tensor * inp_mean = build_inp_mean();
         struct ggml_tensor * inp_cls  = build_inp_cls();

@@ -5406,10 +5406,6 @@ static struct ggml_tensor * ggml_soft_max_impl(
         GGML_ASSERT(pos->ne[0] == a->ne[0]);
     }
 
-    if (max_bias > 0.0f) {
-        GGML_ASSERT(pos);
-    }
-
     bool is_node = false;
 
     if (a->grad) {
@@ -12241,11 +12237,11 @@ static void ggml_compute_forward_soft_max_f32(
     float * wp = (float *) params->wdata + (nc + CACHE_LINE_SIZE_F32) * ith;
 
     // when max_bias <= 0.0f, src2 is not used and we default it to src0 to avoid branching
-    float * pos = src2 ? (float *) src2->data : src0->data;
+    float * pos = src2 ? (float *) src2->data : NULL;
 
     for (int i1 = ir0; i1 < ir1; i1++) {
         float * sp = (float *)((char *) src0->data + i1*src0->nb[1]);
-        float * dp = (float *)((char *)  dst->data +  i1*dst->nb[1]);
+        float * dp = (float *)((char *)  dst->data + i1*dst->nb[1]);
 
         // broadcast the mask across rows
         float * mp = src1 ? (float *)((char *) src1->data + (i1%ne11)*src1->nb[1]) : NULL;
@@ -12262,7 +12258,7 @@ static void ggml_compute_forward_soft_max_f32(
             const float slope = h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1);
 
             for (int i = 0; i < nc; i++) {
-                wp[i] = wp[i] + slope*pos[i];
+                wp[i] = wp[i] - slope*abs(i1%nc - i);
             }
         }
 
@@ -12478,7 +12474,7 @@ static void ggml_compute_forward_alibi_f32(
             for (int64_t j = 0; j < ne1; j++) {
                 float * const src = (float *)((char *) src0->data + i*nb0 + j*nb1 + k*nb2);
                 float *      pdst = (float *)((char *)  dst->data + i*nb0 + j*nb1 + k*nb2);
-                pdst[0] = i * m_k + src[0];
+                pdst[0] = -1.0f * i * m_k;
             }
         }
     }
@@ -16111,6 +16107,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         return;
     }
 
+    fprintf(stdout, "Computing forward (%s) for tensor %s\n", GGML_OP_NAME[tensor->op], tensor->name);
     switch (tensor->op) {
         case GGML_OP_DUP:
             {
@@ -16447,6 +16444,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
+    fprintf(stdout, "After FORWARD %s (%p): Shape:%li, %li, %li, %li tensor: %9.6f, %9.6f, %9.6f, %9.6f \n", tensor->name, tensor, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3], ((float *)(tensor->data))[0], ((float *)(tensor->data))[1], ((float *)(tensor->data))[2], ((float *)(tensor->data))[3]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

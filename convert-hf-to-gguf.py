@@ -2175,17 +2175,12 @@ class JinaBertModel(BertModel):
         self.intermediate_size = self.hparams["intermediate_size"]
 
     def get_tensors(self):
-        import string
-        print(f'Intermediate SIZE: {self.intermediate_size}')
-
         for name, data in super().get_tensors():
             if 'gated_layers' in name:
-                print(f'name {name} => {data.shape}')
                 d1 = data[:self.intermediate_size, :]
                 name1 = name.replace('gated_layers', 'gated_layers_w')
                 d2 = data[self.intermediate_size:, :]
                 name2 = name.replace('gated_layers', 'gated_layers_v')
-                print(f'd1 {d1.shape}, d2 {d2.shape}')
                 yield name1, d1
                 yield name2, d2
                 continue
