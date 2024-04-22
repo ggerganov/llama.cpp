@@ -2714,6 +2714,7 @@ class OlmoModel(Model):
 
             self.gguf_writer.add_tensor(new_name, data)
 
+
 @Model.register("JinaBertModel")
 class JinaBertModel(BertModel):
     model_arch = gguf.MODEL_ARCH.JINA_BERT
