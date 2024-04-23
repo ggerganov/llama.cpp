@@ -49,12 +49,23 @@ extern bool server_log_json;
 #define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
+static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra);
+
 template <typename T>
 static T json_value(const json &body, const std::string &key, const T &default_value) {
     // Fallback null to default value
-    return body.contains(key) && !body.at(key).is_null()
-        ? body.value(key, default_value)
-        : default_value;
+    if (body.contains(key) && !body.at(key).is_null()){
+        try {
+            return body.value(key, default_value);
+        }
+        catch (nlohmann::json_abi_v3_11_3::detail::type_error const&){
+            std::string message = "Wrong type supplied for parameter '" + key + "'. Expected '" + typeid(default_value).name() + "', using default value.";
+            server_log("WARN", __func__, __LINE__, message.c_str(), body);
+            return default_value;
+        }
+    } else {
+        return default_value;
+    }
 }
 
 static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra) {
@@ -370,10 +381,6 @@ static json oaicompat_completion_params_parse(
     } else {
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
-    // Some chat templates don't use EOS token to stop generation
-    // We must add their end sequences to list of stop words
-    llama_params["stop"].push_back("<|im_end|>"); // chatml
-    llama_params["stop"].push_back("<end_of_turn>"); // gemma
 
     // Handle "response_format" field
     if (body.contains("response_format")) {
@@ -556,6 +563,15 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
         {"model",   modelname},
         {"object",  "chat.completion.chunk"}
     };
+    if (!finish_reason.empty()) {
+        int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
+        int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
+        ret.push_back({"usage", json {
+            {"completion_tokens", num_tokens_predicted},
+            {"prompt_tokens",     num_prompt_tokens},
+            {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
+        }});
+    }
 
     return std::vector<json>({ret});
 }

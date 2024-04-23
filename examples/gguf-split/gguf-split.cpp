@@ -59,10 +59,10 @@ static size_t split_str_to_n_bytes(std::string str) {
     int n;
     if (str.back() == 'M') {
         sscanf(str.c_str(), "%d", &n);
-        n_bytes = n * 1024 * 1024; // megabytes
+        n_bytes = (size_t)n * 1024 * 1024; // megabytes
     } else if (str.back() == 'G') {
         sscanf(str.c_str(), "%d", &n);
-        n_bytes = n * 1024 * 1024 * 1024; // gigabytes
+        n_bytes = (size_t)n * 1024 * 1024 * 1024; // gigabytes
     } else {
         throw std::invalid_argument("error: supported units are M (megabytes) or G (gigabytes), but got: " + std::string(1, str.back()));
     }

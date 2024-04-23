@@ -24,15 +24,15 @@ on:
   push:
     branches:
       - master
-    paths: ['.github/workflows/bench.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/bench/**.*']
+    paths: ['llama.cpp', 'ggml.c', 'ggml-backend.c', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
   pull_request_target:
     types: [opened, synchronize, reopened]
-    paths: ['.github/workflows/bench.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/bench/**.*']
+    paths: ['llama.cpp', 'ggml.c', 'ggml-backend.c', 'ggml-quants.c', '**/*.cu', 'examples/server/*.h*', 'examples/server/*.cpp']
   schedule:
     -  cron: '04 2 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ github.event.inputs.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -42,11 +42,21 @@ jobs:
       RUNNER_LABEL: Standard_NC4as_T4_v3 # FIXME Do not find a way to not duplicate it
       N_USERS: 8
       DURATION: 10m
+
+    strategy:
+      matrix:
+        model: [phi-2]
+        ftype: [q4_0, q8_0, f16]
+        include:
+          - model: phi-2
+            ftype: q4_0
+            pr_comment_enabled: "true"
+
     if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.head_ref == 'master' || github.ref_name == 'master' || github.event.push.ref == 'refs/heads/master' }}
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
@@ -69,12 +79,18 @@ jobs:
             sleep 0.1
           done
 
-      - name: Install k6
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install k6 and xk6-sse
         id: k6_installation
         run: |
           cd examples/server/bench
-          wget --quiet https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz
-          tar xzf k6*.tar.gz --strip-components=1
+          go install go.k6.io/xk6/cmd/xk6@latest
+          xk6 build master \
+              --with github.com/phymbert/xk6-sse
 
       - name: Build
         id: cmake_build
@@ -108,7 +124,7 @@ jobs:
 
           cd examples/server/bench
           source venv/bin/activate
-          BENCH_K6_BIN_PATH=./k6 python bench.py \
+          python bench.py \
               --runner-label ${{ env.RUNNER_LABEL }} \
               --name ${{ github.job }} \
               --branch ${{ github.head_ref || github.ref_name }} \
@@ -116,7 +132,7 @@ jobs:
               --scenario script.js \
               --duration ${{ github.event.inputs.duration || env.DURATION }} \
               --hf-repo ggml-org/models	 \
-              --hf-file phi-2/ggml-model-q4_0.gguf \
+              --hf-file ${{ matrix.model }}/ggml-model-${{ matrix.ftype }}.gguf \
               --model-path-prefix /models \
               --parallel ${{ env.N_USERS }} \
               -ngl 33 \
@@ -134,7 +150,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results
+          name: bench-server-${{ github.job }}-${{ env.RUNNER_LABEL }}-${{ matrix.model }}-${{ matrix.ftype }}
           compression-level: 9
           path: |
             examples/server/bench/*.jpg
@@ -146,7 +162,7 @@ jobs:
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
           sha: ${{ inputs.sha || github.event.pull_request.head.sha || github.sha }}
-          context: bench-server-baseline
+          context: bench-server-${{ github.job }}-${{ env.RUNNER_LABEL }}-${{ matrix.model }}-${{ matrix.ftype }}
           description: |
             ${{ env.BENCH_RESULTS }}
           state: 'success'
@@ -203,21 +219,26 @@ jobs:
       - name: Comment PR
         uses: mshick/add-pr-comment@v2
         id: comment_pr
-        if: ${{ github.event.pull_request != '' }}
+        if: ${{ github.event.pull_request != '' && matrix.pr_comment_enabled == 'true' }}
         with:
-          message-id: bench-${{ github.job }}-${{ env.RUNNER_LABEL }}
+          message-id: bench-server-${{ github.job }}-${{ env.RUNNER_LABEL }}-${{ matrix.model }}-${{ matrix.ftype }}
           message: |
-            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+            <p align="center">
 
-            - Concurrent users: ${{ env.N_USERS }}, duration: ${{ github.event.inputs.duration || env.DURATION }}
-            - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(90)=${{ env.HTTP_REQ_DURATION_P_90_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
-            - Prompt processing (pp): avg=${{ env.LLAMACPP_PROMPT_TOKENS_AVG }}tk/s p(90)=${{ env.LLAMACPP_PROMPT_TOKENS_P_90_ }}tk/s **total=${{ env.LLAMACPP_PROMPT_TOKENS_TOTAL_COUNTER_RATE }}tk/s**
-            - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(90)=${{ env.LLAMACPP_TOKENS_SECOND_P_90_ }}tk/s **total=${{ env.LLAMACPP_COMPLETION_TOKENS_TOTAL_COUNTER_RATE }}tk/s**
-            - ${{ env.BENCH_GRAPH_XLABEL }}
+            📈 **llama.cpp server** for _${{ github.job }}_ on _${{ env.RUNNER_LABEL }}_ for `${{ matrix.model }}`-`${{ matrix.ftype }}`: **${{ env.BENCH_ITERATIONS}} iterations** 🚀
+
+            </p>
 
             <details>
 
-            <summary>Time series</summary>
+            <summary>Expand details for performance related PR only</summary>
+
+            - Concurrent users: ${{ env.N_USERS }}, duration: ${{ github.event.inputs.duration || env.DURATION }}
+            - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(95)=${{ env.HTTP_REQ_DURATION_P_95_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
+            - Prompt processing (pp): avg=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_P_95_ }}tk/s
+            - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_TOKENS_SECOND_P_95_ }}tk/s
+            - ${{ env.BENCH_GRAPH_XLABEL }}
+
 
             <p align="center">
 

@@ -33,7 +33,7 @@ if 'NO_LOCAL_GGUF' not in os.environ:
 import gguf
 
 if TYPE_CHECKING:
-    from typing import TypeAlias
+    from typing_extensions import Self, TypeAlias
 
 if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
     faulthandler.register(signal.SIGUSR1)
@@ -139,7 +139,8 @@ class GGMLFileType(enum.IntEnum):
         dt = GGML_FILE_TYPE_TO_DATA_TYPE.get(self)
         if dt is None:
             raise ValueError(self)
-        # 1D tensors are always F32.
+        # Convert all 1D tensors to F32.  Most of the codebase that takes in 1D tensors only handles F32 tensors, and most of the outputs tensors are F32.
+        #  Also The 1d tensors aren't much of a performance/size issue.  So instead of having to have separate F32 and F16 implementations of both, just convert everything to F32 for now.
         return dt if len(tensor.shape) > 1 else DT_F32
 
 
@@ -516,7 +517,7 @@ class LlamaHfVocab(Vocab):
     tokenizer_model = "llama"
     name = "hfft"
 
-    def __init__(self, base_path: Path, ignore_nonllama: bool = False):
+    def __init__(self, base_path: Path):
         fname_tokenizer = base_path / FAST_TOKENIZER_FILE
         # if this fails, FileNotFoundError propagates to caller
         with open(fname_tokenizer, encoding='utf-8') as f:
@@ -524,9 +525,14 @@ class LlamaHfVocab(Vocab):
 
         # pre-check so we know if we need transformers
         tokenizer_model: dict[str, Any] = tokenizer_json['model']
-        if ignore_nonllama:
-            pass  # workaround incorrect use of this class for WordPiece
-        elif (
+        is_llama3 = (
+            tokenizer_model['type'] == 'BPE' and tokenizer_model.get('ignore_merges', False)
+            and not tokenizer_model.get('byte_fallback', True)
+        )
+        if is_llama3:
+            raise TypeError('Llama 3 must be converted with BpeVocab')
+
+        if not is_llama3 and (
             tokenizer_model['type'] != 'BPE' or not tokenizer_model.get('byte_fallback', False)
             or tokenizer_json['decoder']['type'] != 'Sequence'
         ):
@@ -646,16 +652,17 @@ def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
 
 
 class Tensor(ABC):
+    ndarray: NDArray
     data_type: DataType
 
     @abstractmethod
-    def astype(self, data_type: DataType) -> Tensor: ...
+    def astype(self, data_type: DataType) -> Self: ...
     @abstractmethod
-    def permute(self, n_head: int, n_head_kv: int) -> Tensor: ...
+    def permute(self, n_head: int, n_head_kv: int) -> Self: ...
     @abstractmethod
-    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor: ...
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> Self: ...
     @abstractmethod
-    def part(self, n_part: int) -> UnquantizedTensor: ...
+    def part(self, n_part: int) -> Self: ...
     @abstractmethod
     def to_ggml(self) -> GGMLCompatibleTensor: ...
 
@@ -672,13 +679,13 @@ class UnquantizedTensor(Tensor):
         self.ndarray = ndarray
         self.data_type = NUMPY_TYPE_TO_DATA_TYPE[ndarray.dtype]
 
-    def astype(self, data_type: DataType) -> Tensor:
+    def astype(self, data_type: DataType) -> UnquantizedTensor:
         dtype = data_type.dtype
         if self.data_type == DT_BF16:
             self.ndarray = bf16_to_fp32(self.ndarray)
         return UnquantizedTensor(self.ndarray.astype(dtype))
 
-    def to_ggml(self) -> UnquantizedTensor:
+    def to_ggml(self) -> Self:
         return self
 
     def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor:
@@ -826,6 +833,15 @@ def part_lazy(lazy_tensor: LazyTensor, n_part: int) -> LazyTensor:
     s = lazy_tensor.shape.copy()
     s[0] = s[0] // 3
     return LazyTensor(load, s, lazy_tensor.data_type, 'part ' + lazy_tensor.description)
+
+
+def pack_experts_lazy(lazy_tensors: list[LazyTensor]) -> LazyTensor:
+    def load() -> Tensor:
+        tensors = [lazy_tensor.load() for lazy_tensor in lazy_tensors]
+        return UnquantizedTensor(np.array([tensor.ndarray for tensor in tensors]))
+    s = lazy_tensors[0].shape.copy()
+    s.insert(0, len(lazy_tensors))
+    return LazyTensor(load, s, lazy_tensors[0].data_type, 'pack_experts ' + ' | '.join(lt.description for lt in lazy_tensors))
 
 
 # Functionality that simulates `torch.load` but where individual tensors are
@@ -1246,6 +1262,22 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
 
     tmp = model
 
+    # merge experts into one tensor
+    if params.n_experts and params.n_experts > 0:
+        for i_l in range(params.n_layer):
+            for w in range(1, 4):
+                experts = []
+                for e in range(params.n_experts):
+                    if f"layers.{i_l}.feed_forward.experts.{e}.w{w}.weight" in model:
+                        experts.append(model[f"layers.{i_l}.feed_forward.experts.{e}.w{w}.weight"])
+                        del tmp[f"layers.{i_l}.feed_forward.experts.{e}.w{w}.weight"]
+                    elif f"model.layers.{i_l}.block_sparse_moe.experts.{e}.w{w}.weight" in model:
+                        experts.append(model[f"model.layers.{i_l}.block_sparse_moe.experts.{e}.w{w}.weight"])
+                        del tmp[f"model.layers.{i_l}.block_sparse_moe.experts.{e}.w{w}.weight"]
+                    else:
+                        raise ValueError(f"Expert tensor not found: layers.{i_l}.feed_forward.experts.{e}.w{w}.weight")
+                tmp[f"layers.{i_l}.feed_forward.experts.w{w}.weight"] = pack_experts_lazy(experts)
+
     # HF models permut or pack some of the tensors, so we need to undo that
     for i in itertools.count():
         if f"model.layers.{i}.self_attn.q_proj.weight" in model:
@@ -1325,7 +1357,7 @@ def load_some_model(path: Path) -> ModelPlus:
     # Be extra-friendly and accept either a file or a directory:
     if path.is_dir():
         # Check if it's a set of safetensors files first
-        globs = ["model-00001-of-*.safetensors", "model.safetensors"]
+        globs = ["model-00001-of-*.safetensors", "model.safetensors", "consolidated.safetensors"]
         files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             # Try the PyTorch patterns too, with lower priority

@@ -47,7 +47,7 @@ struct beam_search_callback_data {
 // In this case, end-of-beam (eob) is equivalent to end-of-sentence (eos) but this need not always be the same.
 // For example, eob can be flagged due to maximum token length, stop words, etc.
 static bool is_at_eob(const beam_search_callback_data & callback_data, const llama_token * tokens, size_t n_tokens) {
-    return n_tokens && tokens[n_tokens-1] == llama_token_eos(llama_get_model(callback_data.ctx));
+    return n_tokens && llama_token_is_eog(llama_get_model(callback_data.ctx), tokens[n_tokens-1]);
 }
 
 // Function matching type llama_beam_search_callback_fn_t.
