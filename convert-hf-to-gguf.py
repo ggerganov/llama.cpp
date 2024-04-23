@@ -1978,8 +1978,92 @@ class Phi2Model(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_add_bos_token(False)
 
+@Model.register("Phi3MiniForCausalLM")
+class Phi3MiniModel(Model):
+    model_arch = gguf.MODEL_ARCH.PHI3
+    
+    def set_vocab(self):
+        from sentencepiece import SentencePieceProcessor
 
-@Model.register("PlamoForCausalLM")
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+
+        if not tokenizer_path.is_file():
+            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
+            sys.exit(1)
+
+        tokenizer = SentencePieceProcessor(str(tokenizer_path))
+        
+        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
+        
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
+        for token_id in range(tokenizer.vocab_size()):
+            
+            piece = tokenizer.id_to_piece(token_id)
+            text = piece.encode("utf-8")
+            score = tokenizer.get_score(token_id)
+
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.is_unknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.is_control(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.is_unused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.is_byte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
+
+        added_tokens_file = self.dir_model / 'added_tokens.json'
+        if added_tokens_file.is_file():
+            with open(added_tokens_file, "r", encoding="utf-8") as f:
+                added_tokens_json = json.load(f)
+
+                for key in added_tokens_json:
+                    token_id = added_tokens_json[key]
+                    if (token_id >= vocab_size):
+                        print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        continue
+                    
+                    tokens[token_id] = key.encode("utf-8")
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+            
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+        
+    def set_gguf_parameters(self):
+        block_count = get_key_opts(self.hparams, ["num_hidden_layers", "n_layer"])
+
+        rot_pct = 1.0
+        n_embd = get_key_opts(self.hparams, ["hidden_size", "n_embd"])
+        n_head = get_key_opts(self.hparams, ["num_attention_heads", "n_head"])
+        rms_eps = get_key_opts(self.hparams, ["rms_norm_eps"])
+
+        self.gguf_writer.add_name("Phi3")
+        self.gguf_writer.add_context_length(get_key_opts(self.hparams, ["n_positions", "max_position_embeddings"]))
+
+        self.gguf_writer.add_embedding_length(n_embd)
+        self.gguf_writer.add_feed_forward_length(8192)
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(n_head)
+        self.gguf_writer.add_head_count_kv(n_head)
+        # self.gguf_writer.add_layer_norm_eps(get_key_opts(self.hparams, ["rms_norm_eps", "layer_norm_eps"]))
+        self.gguf_writer.add_layer_norm_rms_eps(rms_eps)
+        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_add_bos_token(False)
+        
 class PlamoModel(Model):
     model_arch = gguf.MODEL_ARCH.PLAMO
 
@@ -2802,6 +2886,29 @@ def main() -> None:
 
         print(f"Model successfully exported to '{fname_out}'")
 
+def main_dbg():
+    dir_model = Path("d:/models/phi3")
+    fname_out = Path("c:/models/phi3_fp16.gguf")
+    
+    print(f"Loading model: {dir_model.name}")
+
+    hparams = Model.load_hparams(dir_model)
+
+    with torch.inference_mode():
+        model_class = Model.from_model_architecture(hparams["architectures"][0])
+        model_instance = model_class(dir_model, gguf.GGMLQuantizationType.F16, fname_out, None)
+
+        print("Set model parameters")
+        model_instance.set_gguf_parameters()
+
+        print("Set model tokenizer")
+        model_instance.set_vocab()
+
+        print(f"Exporting model to '{fname_out}'")
+        model_instance.write()
+
+        print(f"Model successfully exported to '{fname_out}'")
+
 
 if __name__ == '__main__':
-    main()
+    main_dbg()

@@ -117,6 +117,7 @@ class TensorNameMap:
             "h.{bid}.attn.c_attn",                                                 # gpt2
             "transformer.h.{bid}.mixer.Wqkv",                                      # phi2
             "encoder.layers.{bid}.attn.Wqkv",                                      # nomic-bert
+            "model.layers.{bid}.self_attn.qkv_proj"                                # phi3
         ),
 
         # Attention query
@@ -234,6 +235,7 @@ class TensorNameMap:
             "h.{bid}.mlp.c_fc",                                       # gpt2
             "transformer.h.{bid}.mlp.fc1",                            # phi2
             "model.layers.{bid}.mlp.fc1",                             # phi2
+            "model.layers.{bid}.mlp.gate_up_proj",                    # phi3
             "model.layers.layers.{bid}.mlp.up_proj",                  # plamo
             "model.layers.{bid}.feed_forward.w3",                     # internlm2
             "encoder.layers.{bid}.mlp.fc11",                          # nomic-bert
