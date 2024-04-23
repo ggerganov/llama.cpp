@@ -42,7 +42,7 @@ echo PASS
 echo
 
 # 3. Requant model with '--keep_split'
-$QUANTIZE --allow-requantize --keep_split $WORK_PATH/ggml-model-split-00001-of-00006.gguf $WORK_PATH/ggml-model-requant.gguf Q4_K 
+$QUANTIZE --allow-requantize --keep_split $WORK_PATH/ggml-model-split-00001-of-00006.gguf $WORK_PATH/ggml-model-requant.gguf Q4_K
 echo PASS
 echo
 
@@ -52,7 +52,7 @@ echo PASS
 echo
 
 # 4. Requant mode without '--keep_split'
-$QUANTIZE --allow-requantize $WORK_PATH/ggml-model-split-00001-of-00006.gguf $WORK_PATH/ggml-model-requant-merge.gguf Q4_K 
+$QUANTIZE --allow-requantize $WORK_PATH/ggml-model-split-00001-of-00006.gguf $WORK_PATH/ggml-model-requant-merge.gguf Q4_K
 echo PASS
 echo
 
