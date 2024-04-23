@@ -338,7 +338,12 @@ class Model(ABC):
         tokenizer = SentencePieceProcessor(str(tokenizer_path))
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
 
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
         for token_id in range(tokenizer.vocab_size()):
+
             piece = tokenizer.id_to_piece(token_id)
             text = piece.encode("utf-8")
             score = tokenizer.get_score(token_id)
@@ -353,9 +358,9 @@ class Model(ABC):
             elif tokenizer.is_byte(token_id):
                 toktype = SentencePieceTokenTypes.BYTE
 
-            tokens.append(text)
-            scores.append(score)
-            toktypes.append(toktype)
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
@@ -363,20 +368,14 @@ class Model(ABC):
                 added_tokens_json = json.load(f)
 
                 for key in added_tokens_json:
-                    key = key.encode("utf-8")
-                    if key not in tokens:
-                        tokens.append(key)
-                        scores.append(-1000.0)
-                        toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+                    token_id = added_tokens_json[key]
+                    if (token_id >= vocab_size):
+                        print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        continue
 
-        # pad remaining tokens
-        for i in range(vocab_size - len(tokens)):
-            print(f"gguf: padding token {i}")
-            tokens.append(f"[PAD{i}]")
-            scores.append(-1000.0)
-            toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
-
-        assert len(tokens) == vocab_size
+                    tokens[token_id] = key.encode("utf-8")
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_token_list(tokens)
