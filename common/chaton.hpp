@@ -1,29 +1,53 @@
 #pragma once
 
 /***
- * Keep chatting with model and needed role tagging using special tokens simple and flexible,
- * while building on existing interactive flow and its in-prefix, in-suffix and antiprompt/reverse-promot
+ *
+ * ## Overview
+ *
+ * Helps chat with a model, by allowing role based special token tagging, based on the specified chat-handshake-template-standard.
+ * This is used by main, to build on existing interactive flow and its in-prefix, in-suffix and antiprompt/reverse-promot
  *
  * 1. Use a json file to configure the needed tags for each of the supported chat-handshake-template-standard
- *    a. system-prefix, system-suffix,
- *    b. user-prefix, user-suffix, assistant-prefix
- *       * these override the in-prefix and in-suffix
+ *    a. system -> prefix & suffix,
+ *    b. user -> prefix & suffix, assistant -> prefix
+ *       * [main] these override the in-prefix and in-suffix
  *    c. reverse-prompt
- *    d. global-begin, global-end
+ *       * [main] this adds to any reverese-prompt specified using cmdline
+ *    d. global -> begin & end
  *    d. systemuser-1st-user-has-prefix
- *       * if a combination of 1 system message followed by 1 or more user messages is seen,
- *         then include user prefix only if this flag is set.
- *       * one or two models which I looked at seem to require not just BoS, but also the user-role-tag-prefix
- *         to also be controlled wrt this case. So not differentiating between BoS and any user-role-tag-prefix
- *         However if this needs to be decoupled, then maybe will add begin and end keys to role blocks in the json.
- *         then depending on what model needs, one can setup role-begin and role-prefix suitably.
- * 2. Give the below option to user wrt system prompt, this should give the flexibility to either keep system prompt simple or complex in a flexible yet simple way.
- *    a. the system prompt they specify using -f, is used as is with parse_special when tokenising or
- *    b. whether the system prefix and suffix is added, but without parse_special tokenisation of system-prompt provided by user.
- * 3. chat-apply-template uses the json file, which was loaded, to decide on how to generate the tagged messages for tokenisation
+ *       * if a combination of system and user messages/prompts is passed,
+ *         then for the 1st user message following the 1st system message,
+ *         include user prefix only if this flag is set. [chaton-tmpl-apply]
+ *       * [later] one or two models which I looked at seem to require not just BoS, but also the user-role-prefix-tag
+ *         to also be controlled wrt this case. So not differentiating between BoS and any user-role-prefix-tag.
+ *         However if bos and user-role-prefix-tag need to be decoupled, where only bos needs this treatment,
+ *         then maybe add begin and end keys (to specify the BoS) in addition to prefix and suffix keys (to specify user-role-prefix-tag), to role blocks in the json.
+ *         and inturn control only begin and not prefix, wrt whether to add or not.
+ * 2. [main] currently the user specified system prompt (-p + -f) is tagged using system role tags,
+ *    and inturn this tagged message is tokenized with parse_special flag.
+ *    So any special token related tags in the user specified system prompt will get parsed as special.
+ * 3. chaton-tmpl-apply uses the json file, which was loaded, to decide on how to generate the tagged messages for tokenisation.
  *    a. input: [ { role, message }, { role, message}, ....]
- *    b. output: [ {flag, data}, { flag, data}, {flag, data}, ....]
- *       * flag is whether to do parse_special for this data, during tokenization or not
+ *    b. output: currently a single string is returned which contains the tagged message(s).
+ *       [later] if it is needed to differentiate between the special tags added by this from user specified prompts/messages,
+ *       then return [ {flag, data}, { flag, data}, {flag, data}, ....],
+ *       where the flag specifies whether parse_special should be used or not for the corresponding data, during tokenization.
+ *
+ * ## Adding support for new model / chat-handshake-template-standard
+ *
+ * 1. Add suitable entries in json for that model/standard
+ * 2. Update the flow in chaton-tmpl-apply, as needed.
+ *    Try to update and or reuse the generic flow in chaton-tmpl-apply, as much as possible,
+ *    before trying to add a custom logic.
+ *    If you update the generic flow, cross check if existing json files will need to be updated or not.
+ *
+ * ## Notes
+ *
+ * Currently Main doesnt use chaton-tmpl-apply, but only 
+ * * chaton-tmpl-apply-single (for system prompt) and
+ * * chaton-tmpl-role-part which maps the user prefix, suffix and reverse-prompt to
+ *   in-prefix, in-suffix and antiprompt of main.
+ * These always adds any role specific prefix and suffix around the passed message.
  *
  */
 
@@ -33,6 +57,7 @@
 #include <json.hpp>
 
 #include "log.h"
+#include "llama.h"
 
 
 const auto K_SYSTEM = "system";
