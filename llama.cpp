@@ -4352,6 +4352,7 @@ static void llm_load_vocab(
                         //vocab.id_to_token[t.second].type == LLAMA_TOKEN_TYPE_CONTROL &&
                         (t.first == "<|eot_id|>" ||
                          t.first == "<|im_end|>" ||
+                         t.first == "<|end|>" ||
                          t.first == "<end_of_turn>"
                         )
                    ) {
