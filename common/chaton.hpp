@@ -9,23 +9,23 @@
  *
  * 1. Use a json file to configure the needed tags for each of the supported chat-handshake-template-standard
  *    a. system -> prefix & suffix,
- *    b. user -> prefix & suffix, assistant -> prefix
- *       * [main] these override the in-prefix and in-suffix
+ *    b. user -> begin, prefix & suffix; assistant -> prefix
+ *       * [main] these override the in-prefix (begin+prefix) and in-suffix
  *    c. reverse-prompt
  *       * [main] this adds to any reverese-prompt specified using cmdline
  *    d. global -> begin & end
- *    d. systemuser-1st-user-has-prefix
- *       * if a combination of system and user messages/prompts is passed,
+ *    e. systemuser-1st-user-has-begin and systemuser-1st-user-has-prefix
+ *       * [chaton-tmpl-apply] if a combination of system and user messages/prompts is passed,
  *         then for the 1st user message following the 1st system message,
- *         include user prefix only if this flag is set. [chaton-tmpl-apply]
- *       * [later] one or two models which I looked at seem to require not just BoS, but also the user-role-prefix-tag
- *         to also be controlled wrt this case. So not differentiating between BoS and any user-role-prefix-tag.
- *         However if bos and user-role-prefix-tag need to be decoupled, where only bos needs this treatment,
- *         then maybe add begin and end keys (to specify the BoS) in addition to prefix and suffix keys (to specify user-role-prefix-tag), to role blocks in the json.
- *         and inturn control only begin and not prefix, wrt whether to add or not.
+ *         include user begin and prefix only if corresponding flags is set.
+ *       * begin should normally relate to BoS while prefix should relate to Role Identifier tag.
+ *         If there is no need for seperate handling of BoS and RoleIdTag, then one could even
+ *         set both BoS and RoleIdTag to one of these entries itself.
+ *
  * 2. [main] currently the user specified system prompt (-p + -f) is tagged using system role tags,
  *    and inturn this tagged message is tokenized with parse_special flag.
  *    So any special token related tags in the user specified system prompt will get parsed as special.
+ *
  * 3. chaton-tmpl-apply uses the json file, which was loaded, to decide on how to generate the tagged messages for tokenisation.
  *    a. input: [ { role, message }, { role, message}, ....]
  *    b. output: currently a single string is returned which contains the tagged message(s).
