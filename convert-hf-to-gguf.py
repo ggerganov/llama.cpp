@@ -2715,7 +2715,7 @@ class OlmoModel(Model):
             self.gguf_writer.add_tensor(new_name, data)
 
 
-@Model.register("JinaBertModel")
+@Model.register("JinaBertModel", "JinaBertForMaskedLM")
 class JinaBertModel(BertModel):
     model_arch = gguf.MODEL_ARCH.JINA_BERT
 
@@ -2741,8 +2741,6 @@ class JinaBertModel(BertModel):
         self.gguf_writer.add_add_bos_token(True)
         self.gguf_writer.add_add_eos_token(True)
 
-
-JinaBertForMaskedML = JinaBertModel
 
 ###### CONVERSION LOGIC ######
 
