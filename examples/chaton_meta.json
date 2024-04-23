@@ -79,6 +79,26 @@
 		},
 		"reverse-prompt": "</s>",
 		"systemuser-1st-user-has-prefix": true
+	},
+	"gemma": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "",
+			"suffix": ""
+		},
+		"user": {
+			"prefix": "<start_of_turn>user\n",
+			"suffix": "<end_of_turn>\n"
+		},
+		"assistant": {
+			"prefix": "<start_of_turn>model\n",
+			"suffix": ""
+		},
+		"reverse-prompt": "<eos>",
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 
