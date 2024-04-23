@@ -62,6 +62,7 @@
 
 const auto K_SYSTEM = "system";
 const auto K_USER = "user";
+const auto K_ASSISTANT = "assistant";
 const auto K_PREFIX = "prefix";
 const auto K_SUFFIX = "suffix";
 const auto K_BEGIN = "begin";
@@ -80,16 +81,37 @@ inline bool chaton_meta_load(std::string &fname) {
     return true;
 }
 
-inline void _chaton_meta_dump() {
-    LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, conMeta.dump(4).c_str());
+inline void _chaton_meta_dump(std::string &tmpl) {
+    json theJson;
+    if (tmpl.empty()) {
+        theJson = conMeta;
+    } else {
+        theJson = conMeta[tmpl];
+    }
+    LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, theJson.dump(4).c_str());
+    if (!tmpl.empty()) {
+        LOG("INFO:%s:%s:%s", __func__, "global->begin", chaton_tmpl_role_part(tmpl, K_GLOBAL, K_BEGIN));
+        LOG("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_part(tmpl, K_GLOBAL, K_END));
+        LOG("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_part(tmpl, K_SYSTEM, K_PREFIX));
+        LOG("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_part(tmpl, K_SYSTEM, K_SUFFIX));
+        LOG("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_part(tmpl, K_USER, K_PREFIX));
+        LOG("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_part(tmpl, K_USER, K_SUFFIX));
+        LOG("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_part(tmpl, K_ASSISTANT, K_PREFIX));
+        LOG("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_part(tmpl, K_ASSISTANT, K_SUFFIX));
+    }
 }
 
-inline bool chaton_meta_ok() {
+/**
+ * if tmpl is
+ * * empty string, then dump the full loaded chaton-meta
+ * * chaton-template-id, then dump contents related to that specific chat-handshake-template-standard
+ */
+inline bool chaton_meta_ok(std::string &tmpl) {
     if (conMeta == nullptr) {
         LOG_TEELN("ERRR:%s:ChatOn Meta: Not loaded yet...", __func__);
         return false;
     }
-    _chaton_meta_dump();
+    _chaton_meta_dump(tmpl);
     return true;
 }
 
