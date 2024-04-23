@@ -153,6 +153,28 @@
 		"reverse-prompt": "<｜end▁of▁sentence｜>",
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
+	},
+	"monarch": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "<s>system\n",
+			"suffix": "</s>\n"
+		},
+		"user": {
+			"begin": "<s>",
+			"prefix": "user\n",
+			"suffix": "</s>\n"
+		},
+		"assistant": {
+			"prefix": "<s>assistant\n",
+			"suffix": " </s>\n"
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-1st-user-has-begin": false,
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 

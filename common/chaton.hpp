@@ -50,7 +50,7 @@
  * These always adds any role specific prefix and suffix around the passed message.
  *
  * Sample chaton_meta.json includes template info for
- * * llama2, llama3, gemma, chatml, zephyr, deepseek
+ * * llama2, llama3, gemma, chatml, zephyr, deepseek, monarch
  *
  */
 
@@ -197,6 +197,7 @@ inline void _chaton_meta_dump(std::string &tmpl) {
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_PREFIX).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_SUFFIX).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, chaton_tmpl_kv(tmpl, K_REVERSE_PROMPT).c_str());
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_BEGIN));
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
     }
 }
