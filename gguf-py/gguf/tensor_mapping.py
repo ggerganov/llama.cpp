@@ -318,6 +318,7 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.q_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.q_norm",                            # cohere
             "transformer.blocks.{bid}.attn.q_ln",                             # sea-lion
+            "encoder.layer.{bid}.attention.self.layer_norm_q"                 # jina-bert
         ),
 
         MODEL_TENSOR.ATTN_K_NORM: (
@@ -325,6 +326,7 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.k_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.k_norm",                            # cohere
             "transformer.blocks.{bid}.attn.k_ln",                             # sea-lion
+            "encoder.layer.{bid}.attention.self.layer_norm_k"                 # jina-bert
         ),
 
         MODEL_TENSOR.ROPE_FREQS: (
@@ -335,7 +337,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.LayerNorm",         # bert
             "encoder.layers.{bid}.norm2",                   # nomic-bert
             "transformer.decoder_layer.{bid}.rms_norm_3",   # Grok
-            "encoder.layer.{bid}.mlp.layernorm",  # jina-bert
+            "encoder.layer.{bid}.mlp.layernorm",            # jina-bert
         ),
 
         MODEL_TENSOR.SSM_IN: (

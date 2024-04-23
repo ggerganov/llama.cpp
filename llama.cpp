@@ -697,7 +697,9 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_TOKEN_TYPES,     "token_types" },
             { LLM_TENSOR_ATTN_OUT_NORM,   "blk.%d.attn_output_norm" },
             { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_Q_NORM,     "blk.%d.attn_q_norm" },
             { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_K_NORM,     "blk.%d.attn_k_norm" },
             { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_LAYER_OUT_NORM,  "blk.%d.layer_output_norm" },
@@ -5127,8 +5129,14 @@ static bool llm_load_tensors(
                         layer.wq   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
                         layer.bq   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i),   {n_embd});
 
+                        layer.attn_q_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd}, false);
+                        layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias", i), {n_embd}, false);
+
                         layer.wk   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
                         layer.bk   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K,   "bias", i),   {n_embd_gqa});
+
+                        layer.attn_k_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd}, false);
+                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias", i), {n_embd}, false);
 
                         layer.wv   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa});
                         layer.bv   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_V,   "bias", i),   {n_embd_gqa});
@@ -8023,9 +8031,22 @@ struct llm_build_context {
                 Qcur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), model.layers[il].bq);
                 cb(Qcur, "Qcur", il);
 
+                if (model.layers[il].attn_q_norm) {
+                    Qcur = llm_build_norm(ctx0, Qcur, hparams,
+                            model.layers[il].attn_q_norm,
+                            model.layers[il].attn_q_norm_b,
+                            LLM_NORM, cb, il);
+                }
+
                 Kcur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wk, cur), model.layers[il].bk);
                 cb(Kcur, "Kcur", il);
 
+                if (model.layers[il].attn_k_norm) {
+                    Kcur = llm_build_norm(ctx0, Kcur, hparams,
+                            model.layers[il].attn_k_norm,
+                            model.layers[il].attn_k_norm_b,
+                            LLM_NORM, cb, il);
+                }
                 Vcur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wv, cur), model.layers[il].bv);
                 cb(Vcur, "Vcur", il);
 
