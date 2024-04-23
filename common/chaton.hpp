@@ -49,6 +49,9 @@
  *   in-prefix, in-suffix and antiprompt of main.
  * These always adds any role specific prefix and suffix around the passed message.
  *
+ * Sample chaton_meta.json includes template info for
+ * * llama2, llama3, gemma, chatml, zephyr, deepseek
+ *
  */
 
 #include <string>

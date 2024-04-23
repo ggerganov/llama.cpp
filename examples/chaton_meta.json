@@ -99,6 +99,46 @@
 		},
 		"reverse-prompt": "<eos>",
 		"systemuser-1st-user-has-prefix": true
+	},
+	"deepseek-alt": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "",
+			"suffix": "\n"
+		},
+		"user": {
+			"prefix": "### Instruction:\n",
+			"suffix": "\n"
+		},
+		"assistant": {
+			"prefix": "### Response:\n",
+			"suffix": "\n<|EOT|>\n"
+		},
+		"reverse-prompt": "<|EOT|>",
+		"systemuser-1st-user-has-prefix": true
+	},
+	"deepseek": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "",
+			"suffix": "\n\n"
+		},
+		"user": {
+			"prefix": "User: ",
+			"suffix": "\n\n"
+		},
+		"assistant": {
+			"prefix": "Assistant: ",
+			"suffix": " <｜end▁of▁sentence｜>\n"
+		},
+		"reverse-prompt": "<｜end▁of▁sentence｜>",
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 
