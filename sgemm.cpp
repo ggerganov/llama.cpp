@@ -763,8 +763,8 @@ class tinyBLAS_Q0_AVX {
 #else
         const __m128i usMaddubs0 = _mm_maddubs_epi16(_mm256_extractf128_si256(u, 0), _mm256_extractf128_si256(s, 0));
         const __m128i usMaddubs1 = _mm_maddubs_epi16(_mm256_extractf128_si256(u, 1), _mm256_extractf128_si256(s, 1));
-        const __m128i onefill = _mm_set1_epi16(1);
-        res = MM256_SET_M128I(_mm_madd_epi16(onefill, usMaddubs1), _mm_madd_epi16(onefill, usMaddubs0));
+        const __m128i oneFill = _mm_set1_epi16(1);
+        res = MM256_SET_M128I(_mm_madd_epi16(oneFill, usMaddubs1), _mm_madd_epi16(oneFill, usMaddubs0));
 #endif
         return _mm256_cvtepi32_ps(res);
     }
