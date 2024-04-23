@@ -15092,7 +15092,7 @@ struct llama_context * llama_new_context_with_model(
     // ref: https://github.com/ggerganov/llama.cpp/pull/5021
     if (cparams.n_batch < GGML_KQ_MASK_PAD) {
         LLAMA_LOG_WARN("%s: n_batch is less than GGML_KQ_MASK_PAD - increasing to %d\n", __func__, GGML_KQ_MASK_PAD);
-        cparams.n_batch = std::max((uint32_t) GGML_KQ_MASK_PAD, params.n_batch);
+        cparams.n_batch = GGML_KQ_MASK_PAD;
     }
 
     cparams.n_ubatch         = std::min(cparams.n_batch, params.n_ubatch == 0 ? params.n_batch : params.n_ubatch);
