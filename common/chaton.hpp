@@ -99,6 +99,8 @@ inline void _chaton_meta_dump(std::string &tmpl) {
         LOG("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_kv(tmpl, K_USER, K_SUFFIX));
         LOG("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_PREFIX));
         LOG("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_SUFFIX));
+        LOG("INFO:%s:%s:%d", __func__, K_REVERSE_PROMPT, chaton_tmpl_kv(tmpl, K_REVERSE_PROMPT));
+        LOG("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
     }
 }
 
@@ -174,5 +176,11 @@ inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::strin
 inline std::string chaton_tmpl_kv(const std::string &tmpl, const std::string &key) {
     std::string got = conMeta[tmpl][key];
     LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), key.c_str(), got.c_str());
+    return got;
+}
+
+inline bool chaton_tmpl_kv_bool(const std::string &tmpl, const std::string &key) {
+    bool got = conMeta[tmpl][key];
+    LOG_TEELN("DBUG:%s:%s:%s:%d", __func__, tmpl.c_str(), key.c_str(), got);
     return got;
 }
