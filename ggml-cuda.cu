@@ -2419,8 +2419,11 @@ struct ggml_cudaGraph {
     int softmax_ne0 = 0;
     cudaGraphNode_t nodes[MAX_NODES_IN_CUDA_GRAPH];
     cudaKernelNodeParams params[MAX_NODES_IN_CUDA_GRAPH];
+    bool disableDueToGpuArch=false;
 };
 #endif
+
+const bool disableCudaGraphs = (getenv("LLAMACPP_DISABLE_CUDA_GRAPHS") != nullptr);
 
 GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
@@ -2437,8 +2440,21 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
     // kernel parameters which need updated in the graph for each token
     void* ggmlCudaCpyFn = nullptr;
 
-    if(ggml_backend_cuda_get_device_count() > 1){
-        useCudaGraph = false; // disable CUDA graphs for multi-gpu for now. TO DO investigate
+
+    if(cudaGraph.count==0){        
+        cudaDeviceProp prop;
+        int device;
+        cudaGetDevice(&device);
+        cudaGetDeviceProperties(&prop, device);
+        if (prop.major < 8){
+            cudaGraph.disableDueToGpuArch=true;
+        }
+    }
+
+    // Disable CUDA graphs in presence of env var or old GPU.
+    // Also disable for multi-gpu for now. TO DO investigate
+    if(disableCudaGraphs || cudaGraph.disableDueToGpuArch || ggml_backend_cuda_get_device_count() > 1){
+        useCudaGraph = false;
     }
 
     if(useCudaGraph) {
