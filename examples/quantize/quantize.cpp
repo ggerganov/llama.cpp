@@ -49,10 +49,10 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0,   " 6.70G, +0.0004 ppl @ LLaMA-v1-7B", },
     { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "13.00G              @ 7B", },
     { "F32",    LLAMA_FTYPE_ALL_F32,       "26.00G              @ 7B", },
+    { "CUSTOM", LLAMA_FTYPE_CUSTOM,        "per-layer scheme from file (quant.cfg)", },
     // Note: Ensure COPY comes after F32 to avoid ftype 0 from matching.
     { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing", },
 };
-
 
 static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
@@ -247,6 +247,60 @@ static bool parse_kv_override(const char * data, std::vector<llama_model_kv_over
     return true;
 }
 
+static bool read_custom_quant_config(const std::string& filename, llama_model_quantize_ftype_override& override) {
+    std::ifstream file(filename);
+    std::string line;
+    std::vector<std::string> names;
+    std::vector<ggml_type> types;
+
+    printf("%s: reading custom quantization scheme from %s:\n", __func__, filename.c_str());
+
+    if (!file.is_open()) {
+        fprintf(stderr, "%s: failed to open file: '%s'\n", __func__, filename.c_str());
+        return false;
+    }
+
+    while (getline(file, line)) {
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#') continue;
+            printf("  %s\n", line.c_str());
+
+        // default file type
+        if (line.find("ftype=") == 0) {
+            int ftype = std::stoi(line.substr(6));
+            override.default_ftype = static_cast<llama_ftype>(ftype);
+            printf("  default ftype = %i\n", ftype);
+            continue;
+        }
+
+        // tensor overrides
+        size_t pos = line.find('=');
+        if (pos != std::string::npos) {
+            std::string name = line.substr(0, pos);
+            int type = std::stoi(line.substr(pos + 1));
+            names.push_back(name);
+            types.push_back(static_cast<ggml_type>(type));
+            printf("  %s = %i\n", name.c_str(), type);
+        }
+    }
+
+    printf("\n");
+
+    // allocate memory for names and types
+    override.names = new const char*[names.size()];
+    override.types = new ggml_type[types.size()];
+    override.count = names.size();
+
+    for (size_t i = 0; i < names.size(); ++i) {
+        override.names[i] = strdup(names[i].c_str());
+        override.types[i] = types[i];
+    }
+
+    file.close();
+
+    return true;
+}
+
 int main(int argc, char ** argv) {
     if (argc < 3) {
         usage(argv[0]);
@@ -352,13 +406,24 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: missing ftype\n", __func__);
             return 1;
         }
+       
         if (!try_parse_ftype(argv[arg_idx], params.ftype, ftype_str)) {
             fprintf(stderr, "%s: invalid ftype '%s'\n", __func__, argv[3]);
             return 1;
         }
+       
         if (ftype_str == "COPY") {
            params.only_copy = true;
         }
+       
+        if (ftype_str == "CUSTOM") {
+            params.override_ftype = new llama_model_quantize_ftype_override;
+            if(!read_custom_quant_config("quant.cfg", *params.override_ftype)) {
+                fprintf(stderr, "%s: failed to read custom quant config file!\n", __func__);
+                return 1;
+            }
+        }
+       
         arg_idx++;
     }
 
