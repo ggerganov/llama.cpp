@@ -83,6 +83,70 @@ using json = nlohmann::json;
 
 json conMeta;
 
+
+/**
+ * Helps keep user prompt and chat-hs-template tag parts seperate, but in sequence
+ */
+class ChatParts {
+
+    std::vector<std::string> parts = {};
+    std::string types = {""};
+
+public:
+    // Identify string with special tokens that need to be processed.
+    static const auto S = 's';
+    // Identify string which shouldnt have special token processing done.
+    static const auto N = 'n';
+    // Identify no string condition and or ignore string.
+    static const auto X = '?';
+
+    ChatParts() :parts{}, types{""} {}
+
+    char last_type() {
+        if (types.length() == 0) {
+            return ChatParts::X;
+        }
+        return types[types.length()-1];
+    }
+
+    void add_part(char type, const std::string &part) {
+        if (last_type() == type) {
+            parts[parts.size()-1] += part;
+        } else {
+            parts.emplace_back(part);
+            types += type;
+        }
+    }
+
+    std::string str() {
+        std::string allin = "";
+        for(auto part: parts) {
+            allin += part;
+        }
+        return allin;
+    }
+
+    std::string name() {
+        return typeid(*this).name();
+    }
+
+    void dump() {
+        std::string me = name() + ":" + __func__;
+        LOGXLN("INFO:%s:NumTypes:%zu", me.c_str(), types.length());
+        LOGXLN("INFO:%s:NumParts:%zu", me.c_str(), parts.size());
+        LOGXLN("INFO:%s:StrLength:%zu", me.c_str(), str().length());
+        if (parts.size() != types.length()) {
+            LOG_TEELN("DBUG:%s:Mismatch between parts and types", me.c_str());
+        }
+        int i = 0;
+        for(auto part: parts) {
+            LOGXLN("INFO:%s:%c:%s", me.c_str(), types[i], part.c_str());
+            i += 1;
+        }
+    }
+
+};
+
 inline bool chaton_meta_load(std::string &fname) {
     std::ifstream f(fname);
     conMeta = json::parse(f);
@@ -93,6 +157,7 @@ inline bool chaton_meta_load(std::string &fname) {
 // Return user-prefix + msg + user-suffix
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
+    ChatParts cp = {};
     std::stringstream ss;
     std::string begin = "";
     try {
@@ -102,8 +167,18 @@ inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::
     }
     std::string prefix = conMeta[tmpl][role][K_PREFIX];
     std::string suffix = conMeta[tmpl][role][K_SUFFIX];
+    cp.add_part(ChatParts::S, begin);
+    cp.add_part(ChatParts::S, prefix);
+    cp.add_part(ChatParts::N, content);
+    cp.add_part(ChatParts::S, suffix);
+    cp.dump();
     ss << begin << prefix << content << suffix;
     std::string taggedStr = ss.str();
+    std::string cpStr = cp.str();
+    if (taggedStr != cpStr) {
+        LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), taggedStr.c_str());
+        exit(2);
+    }
     LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), taggedStr.c_str());
     return taggedStr;
 }
