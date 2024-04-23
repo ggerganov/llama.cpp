@@ -700,64 +700,6 @@ void quantize_row_q4_0(const float * restrict x, void * restrict y, int64_t k) {
     quantize_row_q4_0_reference(x, y, k);
 }
 
-void quantize_row_q4_0_aarch64(const float * src, void * dst, int n, int k) {
-    int nrows_interleaved, blocklen_per_row;
-    typedef block_q4_0x8 block_q4_0xn;
-    typedef block_q4_0xn (*make_block_q4_0xn_t)(const block_q4_0 *, unsigned int, unsigned int);
-    make_block_q4_0xn_t make_block_q4_0xn = make_block_q4_0x8;
-
-    if (ggml_cpu_has_sve() && (svcntw() == 8)) {
-        nrows_interleaved = 8;
-        blocklen_per_row = 8;
-        typedef block_q4_0x8 block_q4_0xn;
-        make_block_q4_0xn = make_block_q4_0x8;
-    }
-    else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        nrows_interleaved = 4;
-        blocklen_per_row = 8;
-        typedef block_q4_0x4 block_q4_0xn;
-        make_block_q4_0xn = make_block_q4_0x4;
-    }
-    else if (ggml_cpu_has_neon()) {
-        nrows_interleaved = 4;
-        blocklen_per_row = 4;
-        typedef block_q4_0x4 block_q4_0xn;
-        make_block_q4_0xn = make_block_q4_0x4;
-    }
-    else {
-        assert(false);
-    }
-
-    assert(k % QK4_0 == 0);
-    const int nb = k / QK4_0;
-
-    block_q4_0xn * out_ptr_B = (block_q4_0xn *) malloc(sizeof(block_q4_0xn) * nb);
-    block_q4_0xn * out_ptr_B_start = out_ptr_B;
-
-    for (int b = 0; b < n; b += nrows_interleaved * k) {
-        const block_q4_0 * in_ptrs[nrows_interleaved];
-
-        for (int i  = 0; i < nrows_interleaved; i++ ) {
-            in_ptrs[i] = (block_q4_0 *) dst + (b + i * k) / QK4_0;
-            quantize_row_q4_0_reference(src + b + i * k, in_ptrs[i], k);
-        }
-
-        for (int64_t x = 0; x < nb; x++) {
-            *out_ptr_B = make_block_q4_0xn(in_ptrs, blocklen_per_row, 0x88);
-            out_ptr_B++;
-
-            for (int i = 0; i < nrows_interleaved; i++) {
-                in_ptrs[i]++;
-            }
-        }
-        out_ptr_B = out_ptr_B_start;
-        memcpy ((block_q4_0 *) dst + b / QK4_0, out_ptr_B_start, sizeof(block_q4_0xn) * nb);
-    }
-    if (out_ptr_B_start) free(out_ptr_B_start);
-
-    return (n / QK4_0 * sizeof(block_q4_0));
-}
-
 
 void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * restrict y, int64_t k) {
     const int qk = QK4_1;
@@ -14835,6 +14777,7 @@ void quantize_row_iq2_s(const float * restrict x, void * restrict vy, int64_t k)
     assert(k % QK_K == 0);
     block_iq2_s * restrict y = vy;
     quantize_row_iq2_s_reference(x, y, k);
+}
 
 // Routines to create the blocked formats
 // Note input is array of pointers.
