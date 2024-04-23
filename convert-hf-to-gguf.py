@@ -2063,6 +2063,7 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_add_bos_token(False)
         
+@Model.register("PlamoForCausalLM")
 class PlamoModel(Model):
     model_arch = gguf.MODEL_ARCH.PLAMO
 
@@ -2885,29 +2886,5 @@ def main() -> None:
 
         print(f"Model successfully exported to '{fname_out}'")
 
-def main_dbg():
-    dir_model = Path("d:/models/phi3")
-    fname_out = Path("c:/models/phi3_fp16.gguf")
-    
-    print(f"Loading model: {dir_model.name}")
-
-    hparams = Model.load_hparams(dir_model)
-
-    with torch.inference_mode():
-        model_class = Model.from_model_architecture(hparams["architectures"][0])
-        model_instance = model_class(dir_model, gguf.GGMLQuantizationType.F16, fname_out, None)
-
-        print("Set model parameters")
-        model_instance.set_gguf_parameters()
-
-        print("Set model tokenizer")
-        model_instance.set_vocab()
-
-        print(f"Exporting model to '{fname_out}'")
-        model_instance.write()
-
-        print(f"Model successfully exported to '{fname_out}'")
-
-
 if __name__ == '__main__':
-    main_dbg()
+    main()
