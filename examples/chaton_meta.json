@@ -59,6 +59,26 @@
 		},
 		"reverse-prompt": "<|im_start|>user\n",
 		"systemuser-1st-user-has-prefix": true
+	},
+	"zephyr": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "<|system|>\n",
+			"suffix": "<|endoftext|>\n"
+		},
+		"user": {
+			"prefix": "<|user|>\n",
+			"suffix": "<|endoftext|>\n"
+		},
+		"assistant": {
+			"prefix": "<|assistant|>\n",
+			"suffix": ""
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 
