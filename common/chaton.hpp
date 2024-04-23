@@ -92,7 +92,12 @@ inline bool chaton_meta_load(std::string &fname) {
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
     std::stringstream ss;
-    std::string begin = conMeta[tmpl][role][K_BEGIN];
+    std::string begin = "";
+    try {
+        begin = conMeta[tmpl][role][K_BEGIN];
+    } catch (json::exception &err) {
+
+    }
     std::string prefix = conMeta[tmpl][role][K_PREFIX];
     std::string suffix = conMeta[tmpl][role][K_SUFFIX];
     ss << begin << prefix << content << suffix;
@@ -114,7 +119,12 @@ inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<
     for(const auto msg: msgs) {
         auto role = msg.role;
         auto content = msg.content;
-        auto begin = conMeta[tmpl][role][K_BEGIN];
+        std::string begin = "";
+        try {
+            begin = conMeta[tmpl][role][K_BEGIN];
+        } catch (json::exception &err) {
+
+        }
         auto prefix = conMeta[tmpl][role][K_PREFIX];
         if (role == K_SYSTEM) {
             cntSystem += 1;
