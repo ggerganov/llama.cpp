@@ -294,7 +294,7 @@ extern "C" {
         enum ggml_type token_embedding_type; // itoken embeddings tensor type
         bool allow_requantize;               // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor;         // quantize output.weight
-        bool only_copy;                      // only copy tensors - ftype,override_ftype, allow_requantize and quantize_output_tensor are ignored
+        bool only_copy;                      // only copy tensors - ftype, override_ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                           // quantize all tensors to the default type
         void * imatrix;                      // pointer to importance matrix data
         void * kv_overrides;                 // pointer to vector containing overrides
