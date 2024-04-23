@@ -72,6 +72,7 @@ const auto K_SUFFIX = "suffix";
 const auto K_BEGIN = "begin";
 const auto K_END = "end";
 const auto K_GLOBAL = "global";
+const auto K_SYSTEMUSER_1ST_USER_HAS_BEGIN = "systemuser-1st-user-has-begin";
 const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
 const auto K_REVERSE_PROMPT = "reverse-prompt";
 
@@ -91,7 +92,10 @@ inline bool chaton_meta_load(std::string &fname) {
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
 inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
     std::stringstream ss;
-    ss << conMeta[tmpl][role][K_PREFIX] << content << conMeta[tmpl][role][K_SUFFIX];
+    std::string begin = conMeta[tmpl][role][K_BEGIN];
+    std::string prefix = conMeta[tmpl][role][K_PREFIX];
+    std::string suffix = conMeta[tmpl][role][K_SUFFIX];
+    ss << begin << prefix << content << suffix;
     std::string taggedStr = ss.str();
     LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), taggedStr.c_str());
     return taggedStr;
@@ -110,22 +114,26 @@ inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<
     for(const auto msg: msgs) {
         auto role = msg.role;
         auto content = msg.content;
+        auto begin = conMeta[tmpl][role][K_BEGIN];
         auto prefix = conMeta[tmpl][role][K_PREFIX];
         if (role == K_SYSTEM) {
             cntSystem += 1;
-            ss << prefix;
+            ss << begin << prefix;
         } else if (role == K_USER) {
             cntUser += 1;
             if ((cntSystem == 1) && (cntUser == 1)) {
+                if (conMeta[tmpl][K_SYSTEMUSER_1ST_USER_HAS_BEGIN]) {
+                    ss << begin;
+                }
                 if (conMeta[tmpl][K_SYSTEMUSER_1ST_USER_HAS_PREFIX]) {
                     ss << prefix;
                 }
             } else {
-                ss << prefix;
+                ss << begin << prefix;
             }
         } else {
             cntOthers += 1;
-            ss << prefix;
+            ss << begin << prefix;
         }
         ss << content << conMeta[tmpl][role][K_SUFFIX];
     }
@@ -173,6 +181,7 @@ inline void _chaton_meta_dump(std::string &tmpl) {
         LOGXLN("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_kv(tmpl, K_GLOBAL, K_END).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_PREFIX).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_SUFFIX).c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user->begin", chaton_tmpl_role_kv(tmpl, K_USER, K_BEGIN).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_kv(tmpl, K_USER, K_PREFIX).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_kv(tmpl, K_USER, K_SUFFIX).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_PREFIX).c_str());
