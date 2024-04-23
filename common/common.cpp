@@ -243,6 +243,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.seed = std::stoul(argv[i]);
+        sparams.seed = std::stoul(argv[i]);
         return true;
     }
     if (arg == "-t" || arg == "--threads") {

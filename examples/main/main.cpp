@@ -520,7 +520,6 @@ int main(int argc, char ** argv) {
     }
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
-    llama_sampling_set_rng_seed(ctx_sampling, params.seed);
 
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict

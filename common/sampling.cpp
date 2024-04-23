@@ -35,7 +35,7 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 
     result->prev.resize(params.n_prev);
 
-    llama_sampling_set_rng_seed(result, LLAMA_DEFAULT_SEED);
+    llama_sampling_set_rng_seed(result, params.seed);
 
     return result;
 }
