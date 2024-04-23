@@ -82,42 +82,6 @@ inline bool chaton_meta_load(std::string &fname) {
     return true;
 }
 
-inline void _chaton_meta_dump(std::string &tmpl) {
-    json theJson;
-    if (tmpl.empty()) {
-        theJson = conMeta;
-    } else {
-        theJson = conMeta[tmpl];
-    }
-    LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, theJson.dump(4).c_str());
-    if (!tmpl.empty()) {
-        LOG("INFO:%s:%s:%s", __func__, "global->begin", chaton_tmpl_role_kv(tmpl, K_GLOBAL, K_BEGIN));
-        LOG("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_kv(tmpl, K_GLOBAL, K_END));
-        LOG("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_PREFIX));
-        LOG("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_SUFFIX));
-        LOG("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_kv(tmpl, K_USER, K_PREFIX));
-        LOG("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_kv(tmpl, K_USER, K_SUFFIX));
-        LOG("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_PREFIX));
-        LOG("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_SUFFIX));
-        LOG("INFO:%s:%s:%d", __func__, K_REVERSE_PROMPT, chaton_tmpl_kv(tmpl, K_REVERSE_PROMPT));
-        LOG("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
-    }
-}
-
-/**
- * if tmpl is
- * * empty string, then dump the full loaded chaton-meta
- * * chaton-template-id, then dump contents related to that specific chat-handshake-template-standard
- */
-inline bool chaton_meta_ok(std::string &tmpl) {
-    if (conMeta == nullptr) {
-        LOG_TEELN("ERRR:%s:ChatOn Meta: Not loaded yet...", __func__);
-        return false;
-    }
-    _chaton_meta_dump(tmpl);
-    return true;
-}
-
 
 // Return user-prefix + msg + user-suffix
 // NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
@@ -183,4 +147,45 @@ inline bool chaton_tmpl_kv_bool(const std::string &tmpl, const std::string &key)
     bool got = conMeta[tmpl][key];
     LOG_TEELN("DBUG:%s:%s:%s:%d", __func__, tmpl.c_str(), key.c_str(), got);
     return got;
+}
+
+
+/**
+ * if tmpl is
+ * * empty string, then dump the full loaded chaton-meta
+ * * chaton-template-id, then dump contents related to that specific chat-handshake-template-standard
+ */
+inline void _chaton_meta_dump(std::string &tmpl) {
+    json theJson;
+    if (tmpl.empty()) {
+        theJson = conMeta;
+    } else {
+        theJson = conMeta[tmpl];
+    }
+    LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, theJson.dump(4).c_str());
+    if (!tmpl.empty()) {
+        LOG("INFO:%s:%s:%s", __func__, "global->begin", chaton_tmpl_role_kv(tmpl, K_GLOBAL, K_BEGIN).c_str());
+        LOG("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_kv(tmpl, K_GLOBAL, K_END).c_str());
+        LOG("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_PREFIX).c_str());
+        LOG("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_SUFFIX).c_str());
+        LOG("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_kv(tmpl, K_USER, K_PREFIX).c_str());
+        LOG("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_kv(tmpl, K_USER, K_SUFFIX).c_str());
+        LOG("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_PREFIX).c_str());
+        LOG("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_SUFFIX).c_str());
+        LOG("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, chaton_tmpl_kv(tmpl, K_REVERSE_PROMPT).c_str());
+        LOG("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
+    }
+}
+
+/**
+ * Check that a meta-json file has been loaded.
+ * Verify that specified chaton-template-id contains required fields in meta-json, using meta-dump
+ */
+inline bool chaton_meta_ok(std::string &tmpl) {
+    if (conMeta == nullptr) {
+        LOG_TEELN("ERRR:%s:ChatOn Meta: Not loaded yet...", __func__);
+        return false;
+    }
+    _chaton_meta_dump(tmpl);
+    return true;
 }
