@@ -34,7 +34,10 @@ class InteropBuffer {
 public:
   virtual ~InteropBuffer() = 0;
   virtual void* get_device_ptr() const = 0;
+
+#if defined(DEBUG_READBACK)
   virtual void* get_host_ptr() const = 0;
+#endif
 };
 
 class DirectStorageCUDA

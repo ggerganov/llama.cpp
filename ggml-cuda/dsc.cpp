@@ -124,14 +124,16 @@ public:
     D3D12_HEAP_PROPERTIES bufferHeapProps = {};
     bufferHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
+#define USE_HEAP
 
+#if defined(USE_HEAP)
     D3D12_HEAP_DESC hd = {};
     hd.SizeInBytes = size;
     hd.Properties = bufferHeapProps;
     hd.Flags = D3D12_HEAP_FLAG_SHARED;
     hd.Alignment = 0;
     d3d_device->CreateHeap(&hd, IID_PPV_ARGS(&m_d3d_heap));
-
+#endif
 
     D3D12_RESOURCE_DESC bufferDesc = {};
     bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -143,27 +145,25 @@ public:
     bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     bufferDesc.SampleDesc.Count = 1;
 
-//#define USE_BUFFER
-#if defined(USE_BUFFER) // 
-    winrt::check_hresult(d3d_device->CreateCommittedResource(
-      &bufferHeapProps,
-      D3D12_HEAP_FLAG_NONE | D3D12_HEAP_FLAG_SHARED,
-      &bufferDesc,
-      D3D12_RESOURCE_STATE_COMMON,
-      nullptr,
-      IID_PPV_ARGS(m_d3d_buffer.put())));
-#else
+#if defined(USE_HEAP)
     winrt::check_hresult(d3d_device->CreatePlacedResource(
-      m_d3d_heap.get(),
-      0,
-      &bufferDesc,
-      D3D12_RESOURCE_STATE_COMMON,
-      nullptr,
-      IID_PPV_ARGS(m_d3d_buffer.put())));
+        m_d3d_heap.get(),
+        0,
+        &bufferDesc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS(m_d3d_buffer.put())));
+#else
+    winrt::check_hresult(d3d_device->CreateCommittedResource(
+        &bufferHeapProps,
+        D3D12_HEAP_FLAG_NONE | D3D12_HEAP_FLAG_SHARED,
+        &bufferDesc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS(m_d3d_buffer.put())));
 #endif
 
-#if 0
-    // debug begin
+#if defined(DEBUG_READBACK)
     bufferHeapProps.Type = D3D12_HEAP_TYPE_READBACK;
     winrt::check_hresult(d3d_device->CreateCommittedResource(
       &bufferHeapProps,
@@ -176,27 +176,26 @@ public:
     m_host_buffer->Map(0, nullptr, &m_host_ptr);
     d3d_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmdallocator));
     d3d_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmdallocator.get(), nullptr, IID_PPV_ARGS(&m_cmdlist));
-#endif
 
     D3D12_COMMAND_QUEUE_DESC qd = {};
     qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     d3d_device->CreateCommandQueue(&qd, IID_PPV_ARGS(&m_cmd_queue));
-    // debug end
+#endif
 
     // create a shared handle to require to import the d3d buffer into CUDA
     HANDLE sharedHandle;
     WindowsSecurityAttributes windowsSecurityAttributes;
     LPCWSTR name = NULL;
-#if USE_BUFFER
-    d3d_device->CreateSharedHandle(m_d3d_buffer.get(), windowsSecurityAttributes, GENERIC_ALL, name, &sharedHandle);
-
-    cudaExternalMemoryHandleDesc externalMemoryHandleDesc = {};
-    externalMemoryHandleDesc.type = cudaExternalMemoryHandleTypeD3D12Resource;
-#else
+#if defined(USE_HEAP)
     d3d_device->CreateSharedHandle(m_d3d_heap.get(), windowsSecurityAttributes, GENERIC_ALL, name, &sharedHandle);
 
     cudaExternalMemoryHandleDesc externalMemoryHandleDesc = {};
     externalMemoryHandleDesc.type = cudaExternalMemoryHandleTypeD3D12Heap;
+#else
+    d3d_device->CreateSharedHandle(m_d3d_buffer.get(), windowsSecurityAttributes, GENERIC_ALL, name, &sharedHandle);
+
+    cudaExternalMemoryHandleDesc externalMemoryHandleDesc = {};
+    externalMemoryHandleDesc.type = cudaExternalMemoryHandleTypeD3D12Resource;
 #endif
     externalMemoryHandleDesc.handle.win32.handle = sharedHandle;
     externalMemoryHandleDesc.size = bufferDesc.Width;
@@ -212,11 +211,6 @@ public:
     externalMemoryBufferDesc.flags = 0;
 
     result = cudaExternalMemoryGetMappedBuffer(&m_cuda_dev_ptr, m_externalMemory, &externalMemoryBufferDesc);
-    result = cudaDeviceSynchronize();
-
-    auto err = cudaMemset(m_cuda_dev_ptr, 255, 512*1024*1024);
-    result = cudaDeviceSynchronize();
-    std::cout << "err: " << err << std::endl;
   }
 
   ~InteropBufferImpl() {
@@ -235,19 +229,19 @@ public:
     return m_d3d_buffer.get();
   }
 
+#if defined(DEBUG_READBACK)
   void* get_host_ptr() const {
-#if 0
     m_cmdlist->Reset(m_cmdallocator.get(), nullptr);
     m_cmdlist->CopyResource(m_host_buffer.get(), m_d3d_buffer.get());
     m_cmdlist->Close();
 
     ID3D12CommandList *ptr = m_cmdlist.get();
     m_cmd_queue->ExecuteCommandLists(1, &ptr);
-    Sleep(2);
-#endif
+    Sleep(2); // actually one would have to wait for an event here
 
     return m_host_ptr;
   }
+#endif
 
 private:
   winrt::com_ptr<ID3D12CommandQueue> m_cmd_queue = {};
@@ -257,11 +251,12 @@ private:
   cudaExternalMemory_t m_externalMemory;
   void* m_cuda_dev_ptr;
 
-  // debug
+#if defined(DEBUG_READBACK)
   winrt::com_ptr<ID3D12Resource> m_host_buffer = {};
   winrt::com_ptr<ID3D12GraphicsCommandList> m_cmdlist = {};
   winrt::com_ptr<ID3D12CommandAllocator> m_cmdallocator = {};
   void* m_host_ptr;
+#endif
 };
 
 class DirectStorageCUDAImpl : public DirectStorageCUDA
@@ -450,6 +445,7 @@ private:
         InteropBufferImpl* ibi = static_cast<InteropBufferImpl*>(interop_buffer);
         bool flushed;
         while (read_len) {
+            //std::cout << file.get() << std::endl;
           size_t request_size = min(m_chunk_size, read_len);
 
           DSTORAGE_REQUEST request = {};
@@ -462,7 +458,6 @@ private:
           request.Destination.Buffer.Resource = ibi->get_d3d_buffer();
           request.Destination.Buffer.Offset = interop_buffer_offset;
           request.Destination.Buffer.Size = request_size;
-          //std::cout << read_start / (1024*1024) << " / " << interop_buffer_offset / (1024 * 1024) << "/" << request_size / (1024 * 1024) << std::endl;
 
           m_d3d_storage_queue->EnqueueRequest(&request);
 
@@ -471,7 +466,7 @@ private:
           read_start += request_size;
 
           m_enqueued = true;
-          //flush(true);
+          //flush(false); // flushing less often improves perf a little bit, but removes ability to track current load status
         };
 
       }

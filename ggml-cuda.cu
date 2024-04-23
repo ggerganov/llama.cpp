@@ -379,13 +379,35 @@ struct ggml_backend_cuda_buffer_context {
     int device;
     void * dev_ptr = nullptr;
     std::string name;
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+    std::unique_ptr<InteropBuffer> direct_storage_buffer;
+#endif
 
     ggml_backend_cuda_buffer_context(int device, void * dev_ptr) :
         device(device), dev_ptr(dev_ptr),
         name(GGML_CUDA_NAME + std::to_string(device)) {
+
     }
 
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+    ggml_backend_cuda_buffer_context(int device, std::unique_ptr<InteropBuffer> && direct_storage_buffer_) :
+        device(device), dev_ptr(nullptr),
+        name(GGML_CUDA_NAME + std::to_string(device)),
+        direct_storage_buffer(std::move(direct_storage_buffer_))
+    {
+        dev_ptr = direct_storage_buffer->get_device_ptr();
+    }
+#endif
+
+
     ~ggml_backend_cuda_buffer_context() {
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+        if (direct_storage_buffer) {
+            direct_storage_buffer.reset();
+            dev_ptr = nullptr;
+        }
+#endif
+
         CUDA_CHECK(cudaFree(dev_ptr));
     }
 };
@@ -451,7 +473,8 @@ GGML_CALL static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t 
     if (size & (1u << 31)) {
         size &= ~(1u << 31);
         if (data == nullptr) {
-            dsc->flush();
+            std::cout << "flush" << std::endl;
+            dsc->flush(true);
             return;
         }
         struct Temp {
@@ -465,7 +488,8 @@ GGML_CALL static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t 
         if (it == files.end()) {
             files[filename].handles.push_back(dsc->openFile(filename));
 
-#if 0
+#define COPY_RAID
+#if defined(COPY_RAID)
             // This is a hack to evaluate how fast data can be read from a 2nd disk.
             std::filesystem::path p(filename);
             std::filesystem::path p2("d:");
@@ -482,7 +506,34 @@ GGML_CALL static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t 
             it = files.find(filename);
         }
 
-        dsc->loadFile(it->second.getFile(), t->weights_off, size, (char*)tensor->data + offset);
+        //dsc->loadFile(it->second.getFile(), t->weights_off, size, (char*)tensor->data + offset);
+        if (ctx->direct_storage_buffer) {
+            size_t tensor_offset = (char*)tensor->data - (char*)ctx->direct_storage_buffer->get_device_ptr();
+#if defined(COPY_RAID)
+            size_t blocksize = 4 * 1024 * 1024;
+            for (size_t idx = 0; idx < size; idx += blocksize) {
+                size_t read_len = size - idx;
+                if (read_len > blocksize)
+                    read_len = blocksize;
+                dsc->loadFile(it->second.getFile(), t->weights_off + idx, read_len, ctx->direct_storage_buffer.get(), offset + tensor_offset + idx);
+            }
+#else
+            dsc->loadFile(it->second.getFile(), t->weights_off, size, ctx->direct_storage_buffer.get(), offset + tensor_offset);
+#endif
+        }
+        else {
+#if defined(COPY_RAID)
+            size_t blocksize = 2 * 1024 * 1024;
+            for (size_t idx = 0; idx < size; idx += blocksize) {
+                size_t read_len = size - idx;
+                if (read_len > blocksize)
+                    read_len = blocksize;
+                dsc->loadFile(it->second.getFile(), t->weights_off + idx, read_len, (char*)tensor->data + offset + idx);
+        }
+#else
+            dsc->loadFile(it->second.getFile(), t->weights_off, size, (char*)tensor->data + offset);
+#endif
+        }
     }
     else
 #endif
@@ -561,15 +612,20 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffe
 
     size = std::max(size, (size_t)1); // cudaMalloc returns null for size 0
 
-    void * dev_ptr;
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+    if (size < 512 * 1024 * 1024) {
+        auto interop_buffer = dsc->create_interop_buffer(size);
+        ggml_backend_cuda_buffer_context* ctx = new ggml_backend_cuda_buffer_context(buft_ctx->device, std::move(interop_buffer));
+        return ggml_backend_buffer_init(buft, ggml_backend_cuda_buffer_interface, ctx, size);
+    }
+#endif
+    void* dev_ptr;
     cudaError_t err = cudaMalloc(&dev_ptr, size);
     if (err != cudaSuccess) {
-        fprintf(stderr, "%s: allocating %.2f MiB on device %d: cudaMalloc failed: %s\n", __func__, size/1024.0/1024.0, buft_ctx->device, cudaGetErrorString(err));
+        fprintf(stderr, "%s: allocating %.2f MiB on device %d: cudaMalloc failed: %s\n", __func__, size / 1024.0 / 1024.0, buft_ctx->device, cudaGetErrorString(err));
         return nullptr;
     }
-
-    ggml_backend_cuda_buffer_context * ctx = new ggml_backend_cuda_buffer_context(buft_ctx->device, dev_ptr);
-
+    ggml_backend_cuda_buffer_context* ctx = new ggml_backend_cuda_buffer_context(buft_ctx->device, dev_ptr);
     return ggml_backend_buffer_init(buft, ggml_backend_cuda_buffer_interface, ctx, size);
 }
 
@@ -605,11 +661,21 @@ GGML_CALL static bool ggml_backend_cuda_buffer_type_supports_backend(ggml_backen
     return buft_ctx->device == cuda_ctx->device;
 }
 
+GGML_CALL static size_t ggml_backend_cuda_get_max_size(ggml_backend_buffer_type_t buft)
+{
+#if defined(GGML_ENABLE_DIRECT_STORAGE_CUDA)
+    //return 512 * 1024 * 1024; // dx interop limit
+    return SIZE_MAX;
+#else
+    return SIZE_MAX;
+#endif
+}// allocation max size
+
 static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_cuda_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_cuda_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_buffer_type_get_alignment,
-    /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
+    /* .get_max_size     = */ ggml_backend_cuda_get_max_size, // defaults to SIZE_MAX
     /* .get_alloc_size   = */ ggml_backend_cuda_buffer_type_get_alloc_size,
     /* .supports_backend = */ ggml_backend_cuda_buffer_type_supports_backend,
     /* .is_host          = */ NULL,
@@ -774,7 +840,7 @@ GGML_CALL static const char * ggml_backend_cuda_split_buffer_get_name(ggml_backe
 
 static bool ggml_backend_buffer_is_cuda_split(ggml_backend_buffer_t buffer) {
     return buffer->iface.get_name == ggml_backend_cuda_split_buffer_get_name;
-    GGML_UNUSED(ggml_backend_buffer_is_cuda_split); // only used in debug builds currently, avoid unused function warning in release builds
+    GGML_UNUSED(&ggml_backend_buffer_is_cuda_split); // only used in debug builds currently, avoid unused function warning in release builds
 }
 
 GGML_CALL static void ggml_backend_cuda_split_buffer_free_buffer(ggml_backend_buffer_t buffer) {
