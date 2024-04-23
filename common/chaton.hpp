@@ -90,14 +90,14 @@ inline void _chaton_meta_dump(std::string &tmpl) {
     }
     LOG_TEELN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, theJson.dump(4).c_str());
     if (!tmpl.empty()) {
-        LOG("INFO:%s:%s:%s", __func__, "global->begin", chaton_tmpl_role_part(tmpl, K_GLOBAL, K_BEGIN));
-        LOG("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_part(tmpl, K_GLOBAL, K_END));
-        LOG("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_part(tmpl, K_SYSTEM, K_PREFIX));
-        LOG("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_part(tmpl, K_SYSTEM, K_SUFFIX));
-        LOG("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_part(tmpl, K_USER, K_PREFIX));
-        LOG("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_part(tmpl, K_USER, K_SUFFIX));
-        LOG("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_part(tmpl, K_ASSISTANT, K_PREFIX));
-        LOG("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_part(tmpl, K_ASSISTANT, K_SUFFIX));
+        LOG("INFO:%s:%s:%s", __func__, "global->begin", chaton_tmpl_role_kv(tmpl, K_GLOBAL, K_BEGIN));
+        LOG("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_kv(tmpl, K_GLOBAL, K_END));
+        LOG("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_PREFIX));
+        LOG("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, K_SUFFIX));
+        LOG("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_kv(tmpl, K_USER, K_PREFIX));
+        LOG("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_kv(tmpl, K_USER, K_SUFFIX));
+        LOG("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_PREFIX));
+        LOG("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, K_SUFFIX));
     }
 }
 
@@ -164,14 +164,14 @@ inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<
     return taggedMsgs;
 }
 
-inline std::string chaton_tmpl_role_part(const std::string &tmpl, const std::string &role, const std::string &part) {
-    std::string got = conMeta[tmpl][role][part];
-    LOG_TEELN("DBUG:%s:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), part.c_str(), got.c_str());
+inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::string &role, const std::string &key) {
+    std::string got = conMeta[tmpl][role][key];
+    LOG_TEELN("DBUG:%s:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), key.c_str(), got.c_str());
     return got;
 }
 
-inline std::string chaton_tmpl_part(const std::string &tmpl, const std::string &part) {
-    std::string got = conMeta[tmpl][part];
-    LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), part.c_str(), got.c_str());
+inline std::string chaton_tmpl_kv(const std::string &tmpl, const std::string &key) {
+    std::string got = conMeta[tmpl][key];
+    LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), key.c_str(), got.c_str());
     return got;
 }
