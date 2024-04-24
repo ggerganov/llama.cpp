@@ -36,7 +36,7 @@ SPACE_RULE = '" "?'
 PRIMITIVE_RULES = {
     'boolean'      : BuiltinRule('("true" | "false") space', []),
     'decimal-part' : BuiltinRule('[0-9]{1,16}', []),
-    'integral-part': BuiltinRule('[0-9] | [1-9] [0-9]{0,15}', []),
+    'integral-part': BuiltinRule('[0-9] | [1-9] [0-9]{1,15}', []),
     'number'       : BuiltinRule('("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space', ['integral-part', 'decimal-part']),
     'integer'      : BuiltinRule('("-"? integral-part) space', ['integral-part']),
     'value'        : BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
