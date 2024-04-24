@@ -242,7 +242,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
+        // This is temporary, in the future the samplign state will be moved fully to llama_sampling_context.
         params.seed = std::stoul(argv[i]);
+        sparams.seed = std::stoul(argv[i]);
         return true;
     }
     if (arg == "-t" || arg == "--threads") {
