@@ -308,7 +308,10 @@ inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::strin
     std::string got = "";
     std::string sKeys = "";
     for(auto key: keys) {
-        got += conMeta[tmpl][role][key];
+        try {
+            got += conMeta[tmpl][role][key];
+        } catch (json::exception &err) {
+        }
         sKeys += "+";
         sKeys += key;
     }
@@ -343,20 +346,20 @@ inline void _chaton_meta_dump(std::string &tmpl) {
     }
     LOGXLN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, theJson.dump(4).c_str());
     if (!tmpl.empty()) {
-        LOGXLN("INFO:%s:%s:%s", __func__, "global->begin", chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_BEGIN}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_END}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->begin", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_BEGIN}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_PREFIX}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_SUFFIX}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->end", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_END}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->begin", chaton_tmpl_role_kv(tmpl, K_USER, {K_BEGIN}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_kv(tmpl, K_USER, {K_PREFIX}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_kv(tmpl, K_USER, {K_SUFFIX}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->end", chaton_tmpl_role_kv(tmpl, K_USER, {K_END}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->begin", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_BEGIN}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_PREFIX}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_SUFFIX}).c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->end", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_END}).c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "global->begin", conMeta[tmpl][K_GLOBAL][K_BEGIN].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "global->end", conMeta[tmpl][K_GLOBAL][K_END].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system->begin", conMeta[tmpl][K_SYSTEM][K_BEGIN].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system->prefix", conMeta[tmpl][K_SYSTEM][K_PREFIX].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system->suffix", conMeta[tmpl][K_SYSTEM][K_SUFFIX].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system->end", conMeta[tmpl][K_SYSTEM][K_END].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user->begin", conMeta[tmpl][K_USER][K_BEGIN].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user->prefix", conMeta[tmpl][K_USER][K_PREFIX].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user->suffix", conMeta[tmpl][K_USER][K_SUFFIX].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user->end", conMeta[tmpl][K_USER][K_END].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->begin", conMeta[tmpl][K_ASSISTANT][K_BEGIN].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->prefix", conMeta[tmpl][K_ASSISTANT][K_PREFIX].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->suffix", conMeta[tmpl][K_ASSISTANT][K_SUFFIX].c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->end", conMeta[tmpl][K_ASSISTANT][K_END].c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, chaton_tmpl_kv(tmpl, K_REVERSE_PROMPT).c_str());
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX));
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_END));
