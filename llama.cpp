@@ -17185,6 +17185,7 @@ LLAMA_API int32_t llama_chat_get_prefix(
         return output;
     };
     // ttmpl means "typed template"
+    // before adding a new template, please see the guide here: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template#how-to-add-a-new-template
     switch (ttmpl) {
         case LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED:
             return -1;
