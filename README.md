@@ -76,7 +76,7 @@ variety of hardware - locally and in the cloud.
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 
 Since its [inception](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022), the project has
-improved significantly thanks to many contributions. It is the main playground for developing new features for the
+improved significantly, thanks to many contributions. It is the main playground for developing new features for the
 [ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
@@ -445,7 +445,7 @@ Building the program with BLAS support may lead to some performance improvements
   Check [BLIS.md](docs/BLIS.md) for more information.
 
 - #### SYCL
-  SYCL is a higher-level programming model to improve programming productivity on various hardware accelerators.
+  SYCL is a higher-level programming model used to improve programming productivity on various hardware accelerators.
 
   llama.cpp based on SYCL is used to **support Intel GPU** (Data Center Max series, Flex series, Arc series, Built-in GPU and iGPU).
 
@@ -1113,7 +1113,7 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m 
 - Avoid adding third-party dependencies, extra files, extra headers, etc.
 - Always consider cross-compatibility with other operating systems and architectures
 - Avoid fancy looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
-- There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
+- There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc). Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
