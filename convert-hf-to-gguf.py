@@ -1978,6 +1978,7 @@ class Phi2Model(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_add_bos_token(False)
 
+
 @Model.register("Phi3ForCausalLM")
 class Phi3MiniModel(Model):
     model_arch = gguf.MODEL_ARCH.PHI3
@@ -2061,6 +2062,7 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_layer_norm_rms_eps(rms_eps)
         self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
         self.gguf_writer.add_file_type(self.ftype)
+
 
 @Model.register("PlamoForCausalLM")
 class PlamoModel(Model):
@@ -2884,6 +2886,7 @@ def main() -> None:
             model_instance.write()
 
         print(f"Model successfully exported to '{fname_out}'")
+
 
 if __name__ == '__main__':
     main()
