@@ -98,7 +98,7 @@ namespace grammar_parser {
             pos++;
         }
         if (pos == src) {
-            throw std::runtime_error(std::string("expecting integer at ") + src);
+            throw std::runtime_error(std::string("expecting name at ") + src);
         }
         return pos;
     }
@@ -109,7 +109,7 @@ namespace grammar_parser {
             pos++;
         }
         if (pos == src) {
-            throw std::runtime_error(std::string("expecting name at ") + src);
+            throw std::runtime_error(std::string("expecting integer at ") + src);
         }
         return pos;
     }
