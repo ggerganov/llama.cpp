@@ -2440,12 +2440,11 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
     // kernel parameters which need updated in the graph for each token
     void* ggmlCudaCpyFn = nullptr;
 
-
     if(cudaGraph.count==0){        
         cudaDeviceProp prop;
         int device;
-        cudaGetDevice(&device);
-        cudaGetDeviceProperties(&prop, device);
+        CUDA_CHECK(cudaGetDevice(&device));
+        CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
         if (prop.major < 8){
             cudaGraph.disableDueToGpuArch=true;
         }
