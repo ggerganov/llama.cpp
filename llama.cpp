@@ -17307,7 +17307,7 @@ LLAMA_API int32_t llama_chat_get_model_template(
     }
 }
 
-LLAMA_API llama_chat_template llama_chat_get_template_type(const char * tmpl) {
+LLAMA_API llama_chat_template llama_chat_get_typed_template(const char * tmpl) {
     if (tmpl == nullptr) {
         return LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED;
     }
@@ -17596,7 +17596,7 @@ LLAMA_API int32_t llama_chat_apply_template(
     }
 
     // detect template type
-    llama_chat_template ttmpl = llama_chat_get_template_type(curr_tmpl.c_str());
+    llama_chat_template ttmpl = llama_chat_get_typed_template(curr_tmpl.c_str());
     bool support_system_message = llama_chat_support_system_message(ttmpl);
     if (ttmpl == LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED) {
         return -1;

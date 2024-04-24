@@ -892,12 +892,12 @@ extern "C" {
                                     char * buf,
                                  int32_t   length);
 
-    /// Get the enum llama_chat_template based on Jinja template
+    /// Get the value of enum llama_chat_template based on given Jinja template
     /// @param tmpl Jinja template (a string)
-    /// @return The currect enum llama_chat_template
-    LLAMA_API llama_chat_template llama_chat_get_template_type(const char * tmpl);
+    /// @return The correct value of enum llama_chat_template
+    LLAMA_API llama_chat_template llama_chat_get_typed_template(const char * tmpl);
 
-    /// Get the format prefix for a given message
+    /// Get the format prefix for a given message (based on role)
     /// @param tmpl Use enum llama_chat_template
     /// @param role The role of the current message
     /// @param prev_role The role of the previous message, can be nullptr
@@ -911,7 +911,7 @@ extern "C" {
                                      char * buf,
                                   int32_t   length);
 
-    /// Get the format postfix for a given message
+    /// Get the format postfix for a given message (based on role)
     /// @param tmpl Use enum llama_chat_template
     /// @param role The role of the current message
     /// @param prev_role The role of the previous message, can be nullptr
