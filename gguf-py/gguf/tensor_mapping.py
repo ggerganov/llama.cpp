@@ -238,7 +238,7 @@ class TensorNameMap:
             "model.layers.{bid}.feed_forward.w3",                     # internlm2
             "encoder.layers.{bid}.mlp.fc11",                          # nomic-bert
             "model.layers.{bid}.mlp.c_fc",                            # starcoder2
-            "encoder.layer.{bid}.mlp.gated_layers_v",                 # jina-bert
+            "encoder.layer.{bid}.mlp.gated_layers_v",                 # jina-bert-v2
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -265,7 +265,7 @@ class TensorNameMap:
             "model.layers.layers.{bid}.mlp.gate_proj",    # plamo
             "model.layers.{bid}.feed_forward.w1",         # internlm2
             "encoder.layers.{bid}.mlp.fc12",              # nomic-bert
-            "encoder.layer.{bid}.mlp.gated_layers_w",     # jina-bert
+            "encoder.layer.{bid}.mlp.gated_layers_w",     # jina-bert-v2
         ),
 
         MODEL_TENSOR.FFN_GATE_EXP: (
@@ -299,7 +299,7 @@ class TensorNameMap:
             "model.layers.{bid}.feed_forward.w2",                     # internlm2
             "encoder.layers.{bid}.mlp.fc2",                           # nomic-bert
             "model.layers.{bid}.mlp.c_proj",                          # starcoder2
-            "encoder.layer.{bid}.mlp.wo",                             # jina-bert
+            "encoder.layer.{bid}.mlp.wo",                             # jina-bert-v2
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
@@ -318,7 +318,7 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.q_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.q_norm",                            # cohere
             "transformer.blocks.{bid}.attn.q_ln",                             # sea-lion
-            "encoder.layer.{bid}.attention.self.layer_norm_q"                 # jina-bert
+            "encoder.layer.{bid}.attention.self.layer_norm_q"                 # jina-bert-v2
         ),
 
         MODEL_TENSOR.ATTN_K_NORM: (
@@ -326,7 +326,7 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.k_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.k_norm",                            # cohere
             "transformer.blocks.{bid}.attn.k_ln",                             # sea-lion
-            "encoder.layer.{bid}.attention.self.layer_norm_k"                 # jina-bert
+            "encoder.layer.{bid}.attention.self.layer_norm_k"                 # jina-bert-v2
         ),
 
         MODEL_TENSOR.ROPE_FREQS: (
@@ -337,7 +337,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.LayerNorm",         # bert
             "encoder.layers.{bid}.norm2",                   # nomic-bert
             "transformer.decoder_layer.{bid}.rms_norm_3",   # Grok
-            "encoder.layer.{bid}.mlp.layernorm",            # jina-bert
+            "encoder.layer.{bid}.mlp.layernorm",            # jina-bert-v2
         ),
 
         MODEL_TENSOR.SSM_IN: (

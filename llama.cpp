@@ -205,7 +205,7 @@ enum llm_arch {
     LLM_ARCH_REFACT,
     LLM_ARCH_BERT,
     LLM_ARCH_NOMIC_BERT,
-    LLM_ARCH_JINA_BERT,
+    LLM_ARCH_JINA_BERT_V2,
     LLM_ARCH_BLOOM,
     LLM_ARCH_STABLELM,
     LLM_ARCH_QWEN,
@@ -241,7 +241,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_REFACT,          "refact"     },
     { LLM_ARCH_BERT,            "bert"       },
     { LLM_ARCH_NOMIC_BERT,      "nomic-bert" },
-    { LLM_ARCH_JINA_BERT,       "jina-bert"  },
+    { LLM_ARCH_JINA_BERT_V2,    "jina-bert-v2"},
     { LLM_ARCH_BLOOM,           "bloom"      },
     { LLM_ARCH_STABLELM,        "stablelm"   },
     { LLM_ARCH_QWEN,            "qwen"       },
@@ -690,7 +690,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
         },
     },
     {
-        LLM_ARCH_JINA_BERT,
+        LLM_ARCH_JINA_BERT_V2,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM, "token_embd_norm" },
@@ -3893,7 +3893,7 @@ static void llm_load_hparams(
                         model.type = e_model::MODEL_335M; break; // bge-large
                 }
             } break;
-        case LLM_ARCH_JINA_BERT:
+        case LLM_ARCH_JINA_BERT_V2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
@@ -4137,7 +4137,7 @@ static void llm_load_hparams(
 
     model.ftype = ml.ftype;
 
-    if (hparams.f_max_alibi_bias > 0.0f && model.arch != LLM_ARCH_JINA_BERT) {
+    if (hparams.f_max_alibi_bias > 0.0f && model.arch != LLM_ARCH_JINA_BERT_V2) {
         hparams.need_kq_pos = true;
     }
 
@@ -5113,7 +5113,7 @@ static bool llm_load_tensors(
                         layer.layer_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "bias", i),   {n_embd});
                     }
                 } break;
-            case LLM_ARCH_JINA_BERT:
+            case LLM_ARCH_JINA_BERT_V2:
                 {
                     model.tok_embd     = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}); // word_embeddings
                     model.type_embd    = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_TYPES, "weight"), {n_embd, n_vocab_type}); //token_type_embeddings
@@ -7994,7 +7994,7 @@ struct llm_build_context {
         struct ggml_tensor * inpL;
         struct ggml_tensor * inp_pos = nullptr;
 
-        if (model.arch != LLM_ARCH_JINA_BERT) {
+        if (model.arch != LLM_ARCH_JINA_BERT_V2) {
             inp_pos = build_inp_pos();
         }
         struct ggml_tensor * inp_mean = build_inp_mean();
@@ -8027,7 +8027,7 @@ struct llm_build_context {
             struct ggml_tensor * Vcur;
 
             // self-attention
-            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT) {
+            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT_V2) {
                 Qcur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), model.layers[il].bq);
                 cb(Qcur, "Qcur", il);
 
@@ -8137,7 +8137,7 @@ struct llm_build_context {
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                         NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
-            } else if (model.arch == LLM_ARCH_JINA_BERT) {
+            } else if (model.arch == LLM_ARCH_JINA_BERT_V2) {
                 cur = llm_build_ffn(ctx0, cur,
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
@@ -10544,7 +10544,7 @@ static struct ggml_cgraph * llama_build_graph(
                 result = llm.build_refact();
             } break;
         case LLM_ARCH_BERT:
-        case LLM_ARCH_JINA_BERT:
+        case LLM_ARCH_JINA_BERT_V2:
         case LLM_ARCH_NOMIC_BERT:
             {
                 result = llm.build_bert();
@@ -15473,7 +15473,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_REFACT:
         case LLM_ARCH_BLOOM:
         case LLM_ARCH_MAMBA:
-        case LLM_ARCH_JINA_BERT:
+        case LLM_ARCH_JINA_BERT_V2:
             return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values

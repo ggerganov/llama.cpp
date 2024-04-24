@@ -118,7 +118,7 @@ class MODEL_ARCH(IntEnum):
     REFACT     = auto()
     BERT       = auto()
     NOMIC_BERT = auto()
-    JINA_BERT  = auto()
+    JINA_BERT_V2 = auto()
     BLOOM      = auto()
     STABLELM   = auto()
     QWEN       = auto()
@@ -195,7 +195,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.NOMIC_BERT:     "nomic-bert",
-    MODEL_ARCH.JINA_BERT:      "jina-bert",
+    MODEL_ARCH.JINA_BERT_V2:   "jina-bert-v2",
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
     MODEL_ARCH.QWEN:           "qwen",
@@ -380,7 +380,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_UP,
         MODEL_TENSOR.LAYER_OUT_NORM,
     ],
-    MODEL_ARCH.JINA_BERT: [
+    MODEL_ARCH.JINA_BERT_V2: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.TOKEN_TYPES,

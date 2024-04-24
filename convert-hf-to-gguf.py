@@ -2718,8 +2718,8 @@ class OlmoModel(Model):
 
 
 @Model.register("JinaBertModel", "JinaBertForMaskedLM")
-class JinaBertModel(BertModel):
-    model_arch = gguf.MODEL_ARCH.JINA_BERT
+class JinaBertV2Model(BertModel):
+    model_arch = gguf.MODEL_ARCH.JINA_BERT_V2
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
