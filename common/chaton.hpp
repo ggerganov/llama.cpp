@@ -7,17 +7,18 @@
  * Helps chat with a model, by allowing role based special token tagging, based on the specified chat-handshake-template-standard.
  * This is used by main, to build on existing interactive flow and its in-prefix, in-suffix and antiprompt/reverse-promot
  *
- * 1. Use a json file to configure the needed tags for each of the supported chat-handshake-template-standard
- *    a. system -> prefix & suffix,
- *    b. user -> begin, prefix & suffix; assistant -> prefix
- *       * [main] these override the in-prefix (begin+prefix) and in-suffix
+ * 1. [ToDo] Use a json file to configure the needed tags for each of the supported chat-handshake-template-standard
+ *    * global-> begin & end
+ *    * system -> begin, prefix, suffix & end
+ *    * user -> begin, prefix, suffix & end; assistant -> begin, prefix, suffix & end
+ *      * [main] these override the in-prefix (begin+prefix) and in-suffix
  *    c. reverse-prompt
- *       * [main] this adds to any reverese-prompt specified using cmdline
- *    d. global -> begin & end
- *    e. systemuser-1st-user-has-begin and systemuser-1st-user-has-prefix
+ *      * [main] this adds to any reverese-prompt specified using cmdline
+ *    e. systemuser-sys-has-suffix, systemuser-sys-has-end, systemuser-1st-user-has-begin and systemuser-1st-user-has-prefix
  *       * [chaton-tmpl-apply] if a combination of system and user messages/prompts is passed,
- *         then for the 1st user message following the 1st system message,
- *         include user begin and prefix only if corresponding flags is set.
+ *         then for system messages suffix and end, as well as
+ *         for the 1st user message following the 1st system message,
+ *         include system suffix and end and user begin and prefix only if corresponding flags is set.
  *       * begin should normally relate to BoS while prefix should relate to Role Identifier tag.
  *         If there is no need for seperate handling of BoS and RoleIdTag, then one could even
  *         set both BoS and RoleIdTag to one of these entries itself.
@@ -74,6 +75,8 @@ const auto K_SUFFIX = "suffix";
 const auto K_BEGIN = "begin";
 const auto K_END = "end";
 const auto K_GLOBAL = "global";
+const auto K_SYSTEMUSER_SYSTEM_HAS_SUFFIX = "systemuser-systemp-has-suffix";
+const auto K_SYSTEMUSER_SYSTEM_HAS_END = "systemuser-system-has-end";
 const auto K_SYSTEMUSER_1ST_USER_HAS_BEGIN = "systemuser-1st-user-has-begin";
 const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
 const auto K_REVERSE_PROMPT = "reverse-prompt";
@@ -342,14 +345,21 @@ inline void _chaton_meta_dump(std::string &tmpl) {
     if (!tmpl.empty()) {
         LOGXLN("INFO:%s:%s:%s", __func__, "global->begin", chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_BEGIN}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "global->end", chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_END}).c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system->begin", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_BEGIN}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "system->prefix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_PREFIX}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "system->suffix", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_SUFFIX}).c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system->end", chaton_tmpl_role_kv(tmpl, K_SYSTEM, {K_END}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "user->begin", chaton_tmpl_role_kv(tmpl, K_USER, {K_BEGIN}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "user->prefix", chaton_tmpl_role_kv(tmpl, K_USER, {K_PREFIX}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "user->suffix", chaton_tmpl_role_kv(tmpl, K_USER, {K_SUFFIX}).c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user->end", chaton_tmpl_role_kv(tmpl, K_USER, {K_END}).c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->begin", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_BEGIN}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->prefix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_PREFIX}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->suffix", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_SUFFIX}).c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->end", chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_END}).c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, chaton_tmpl_kv(tmpl, K_REVERSE_PROMPT).c_str());
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX));
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_END));
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_BEGIN));
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
     }
