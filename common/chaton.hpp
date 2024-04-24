@@ -214,11 +214,17 @@ inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::
     return tagged;
 }
 
-// global-begin + [role-prefix + msg + role-suffix] + global-end
+// global-begin + [[role-begin] + [role-prefix] + msg + role-suffix] + global-end
 // if there is a combination of system-user messages,
 //    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
-// NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
-inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<llama_chat_message> &msgs) {
+// NOTE: returns types and lens to help identify the parts of the tagged msg, which relate to passed and added tags
+inline bool chaton_tmpl_apply_ex(
+        const std::string &tmpl,
+        const std::vector<llama_chat_message> &msgs,
+        std::string &tagged,
+        std::string &types,
+        std::vector<int> &lens
+        ) {
     ChatParts cp = {};
     std::stringstream ss;
     ss << conMeta[tmpl][K_GLOBAL][K_BEGIN];
@@ -271,15 +277,28 @@ inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<
     ss << conMeta[tmpl][K_GLOBAL][K_END];
     cp.add_part(ChatParts::S, conMeta[tmpl][K_GLOBAL][K_END]);
     cp.dump();
-    std::string taggedMsgs = ss.str();
+    tagged = ss.str();
     std::string cpStr = cp.str();
-    if (taggedMsgs != cpStr) {
-        LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), taggedMsgs.c_str());
+    if (tagged != cpStr) {
+        LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), tagged.c_str());
         exit(2);
     }
-    LOGLN("DBUG:%s:%s:%s", __func__, tmpl.c_str(), taggedMsgs.c_str());
+    LOGLN("DBUG:%s:%s:%s", __func__, tmpl.c_str(), tagged.c_str());
     LOGLN("DBUG:%s:%s:CntSys[%d]:CntUsr[%d]:CntOthers[%d]", __func__, tmpl.c_str(), cntSystem, cntUser, cntOthers);
-    return taggedMsgs;
+    types = cp.get_types();
+    lens = cp.get_partslens();
+    return true;
+}
+
+// global-begin + [[role-begin] + [role-prefix] + msg + role-suffix] + global-end
+// if there is a combination of system-user messages,
+//    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
+inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<llama_chat_message> &msgs) {
+    std::string tagged;
+    std::string types;
+    std::vector<int> lens;
+    chaton_tmpl_apply_ex(tmpl, msgs, tagged, types, lens);
+    return tagged;
 }
 
 inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::string &role, const std::vector<std::string> &keys) {
