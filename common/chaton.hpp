@@ -169,8 +169,14 @@ inline bool chaton_meta_load(std::string &fname) {
 
 
 // Return user-prefix + msg + user-suffix
-// NOTE: This currently doesnt return about which parts of the tagged message contain tags and which parts the user message
-inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
+inline bool chaton_tmpl_apply_single_ex(
+        const std::string &tmpl,
+        const std::string &role,
+        const std::string &content,
+        std::string &tagged,
+        std::string &types,
+        std::vector<int> &lens
+        ) {
     ChatParts cp = {};
     std::stringstream ss;
     std::string begin = "";
@@ -187,14 +193,25 @@ inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::
     cp.add_part(ChatParts::S, suffix);
     cp.dump();
     ss << begin << prefix << content << suffix;
-    std::string taggedStr = ss.str();
+    tagged = ss.str();
     std::string cpStr = cp.str();
-    if (taggedStr != cpStr) {
-        LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), taggedStr.c_str());
+    if (tagged != cpStr) {
+        LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), tagged.c_str());
         exit(2);
     }
-    LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), taggedStr.c_str());
-    return taggedStr;
+    LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), tagged.c_str());
+    types = cp.get_types();
+    lens = cp.get_partslens();
+    return true;
+}
+
+// Return user-prefix + msg + user-suffix, types string and lens vector wrt the parts that make up the returned string
+inline std::string chaton_tmpl_apply_single(const std::string &tmpl, const std::string &role, const std::string &content) {
+    std::string tagged;
+    std::string types;
+    std::vector<int> lens;
+    chaton_tmpl_apply_single_ex(tmpl, role, content, tagged, types, lens);
+    return tagged;
 }
 
 // global-begin + [role-prefix + msg + role-suffix] + global-end
