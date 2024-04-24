@@ -16,7 +16,7 @@
 		},
 		"assistant": {
 			"prefix": "",
-			"suffix": ""
+			"suffix": "</s>"
 		},
 		"reverse-prompt": "</s>",
 		"systemuser-1st-user-has-begin": false,
@@ -38,7 +38,7 @@
 		},
 		"assistant": {
 			"prefix": "<|start_header_id|>assistant<|end_header_id|>\n",
-			"suffix": ""
+			"suffix": "<|eot_id|>\n\n"
 		},
 		"reverse-prompt": "<|eot_id|>",
 		"systemuser-1st-user-has-begin": true,
@@ -60,7 +60,7 @@
 		},
 		"assistant": {
 			"prefix": "<|im_start|>assistant\n",
-			"suffix": ""
+			"suffix": "<|im_end|>\n"
 		},
 		"reverse-prompt": "<|im_start|>user\n",
 		"systemuser-1st-user-has-begin": true,
@@ -82,7 +82,7 @@
 		},
 		"assistant": {
 			"prefix": "<|assistant|>\n",
-			"suffix": ""
+			"suffix": "<|endoftext|>\n"
 		},
 		"reverse-prompt": "</s>",
 		"systemuser-1st-user-has-begin": true,
@@ -104,7 +104,7 @@
 		},
 		"assistant": {
 			"prefix": "<start_of_turn>model\n",
-			"suffix": ""
+			"suffix": "<end_of_turn>\n"
 		},
 		"reverse-prompt": "<eos>",
 		"systemuser-1st-user-has-begin": true,
