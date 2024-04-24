@@ -690,3 +690,12 @@ You can use html formatting if needed.
   </body>
 </html>
 ```
+
+### Update default parameters
+
+Update with desired values in `examples/server/public/params.js` and set
+`--path` flag to the server. For instance,
+
+```bash
+--path /path/to/llama.cpp/examples/server/public/
+```
