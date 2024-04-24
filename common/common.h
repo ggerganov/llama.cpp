@@ -56,8 +56,8 @@ struct CPU_SET_INFORMATION
 
 #endif
 
-static const int BEST_CORES            = 0;
-static const int WORST_CORES           = 1;
+static const int32_t BEST_CORES            = 0;
+static const int32_t WORST_CORES           = 1;
 
 int get_math_cpu_count();
 int32_t get_num_physical_cores();
@@ -73,8 +73,12 @@ struct gpt_params {
     int32_t n_threads_draft       = -1;
     int32_t n_threads_batch       = -1;    // number of threads to use for batch processing (-1 = use n_threads)
     int32_t n_threads_batch_draft = -1;
+    bool    n_threads_auto        = true;
     int32_t cpuset_lltraversal    = 0;
     int32_t cpuset_order          = WORST_CORES;
+    int64_t cpuset_cpumask        = 0;
+    int32_t cpuset_allowzero      = 0;
+    int32_t cpuset_allowthreads   = 0;
     int32_t n_predict             = -1;    // new tokens to predict
     int32_t n_ctx                 = 512;   // context size
     int32_t n_batch               = 2048;  // logical batch size for prompt processing (must be >=32 to use BLAS)

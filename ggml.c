@@ -78,11 +78,10 @@ static int pthread_create(pthread_t * out, void * unused, thread_ret_t(*func)(vo
     (void) unused;
     HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
 
-#if defined(_WIN32)
     HANDLE hToken;
     DWORD_PTR processAffinityMask;
     DWORD_PTR systemAffinityMask;
-
+        
     BOOL bToken = OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &hToken);
     if (bToken) {
 
@@ -122,7 +121,6 @@ static int pthread_create(pthread_t * out, void * unused, thread_ret_t(*func)(vo
 
 	if (hProcess2)
 		CloseHandle(hProcess2);
-#endif
     if (handle == NULL)
     {
         return EAGAIN;
