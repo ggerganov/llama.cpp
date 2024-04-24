@@ -895,7 +895,7 @@ extern "C" {
     /// Get the value of enum llama_chat_template based on given Jinja template
     /// @param tmpl Jinja template (a string)
     /// @return The correct value of enum llama_chat_template
-    LLAMA_API llama_chat_template llama_chat_get_typed_template(const char * tmpl);
+    LLAMA_API enum llama_chat_template llama_chat_get_typed_template(const char * tmpl);
 
     /// Get the format prefix for a given message (based on role)
     /// @param tmpl Use enum llama_chat_template
@@ -905,11 +905,11 @@ extern "C" {
     /// @param length The size of the allocated buffer
     /// @return The total number of bytes of the output string
     LLAMA_API int32_t llama_chat_get_prefix(
-                const llama_chat_template   tmpl,
-                               const char * role,
-                               const char * prev_role,
-                                     char * buf,
-                                  int32_t   length);
+                const enum llama_chat_template   tmpl,
+                                    const char * role,
+                                    const char * prev_role,
+                                          char * buf,
+                                       int32_t   length);
 
     /// Get the format postfix for a given message (based on role)
     /// @param tmpl Use enum llama_chat_template
@@ -919,14 +919,14 @@ extern "C" {
     /// @param length The size of the allocated buffer
     /// @return The total number of bytes of the output string
     LLAMA_API int32_t llama_chat_get_postfix(
-                const llama_chat_template   tmpl,
-                               const char * role,
-                               const char * prev_role,
-                                     char * buf,
-                                  int32_t   length);
+                const enum llama_chat_template   tmpl,
+                                    const char * role,
+                                    const char * prev_role,
+                                          char * buf,
+                                       int32_t   length);
 
     /// Check if a given template support system message or not
-    LLAMA_API bool llama_chat_support_system_message(const llama_chat_template tmpl);
+    LLAMA_API bool llama_chat_support_system_message(const enum llama_chat_template tmpl);
 
     //
     // Grammar
