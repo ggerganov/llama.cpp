@@ -54,7 +54,7 @@ int main(void) {
         // teknium/OpenHermes-2.5-Mistral-7B
         "<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nWho are you<|im_end|>\n<|im_start|>assistant\nI am an assistant<|im_end|>\n<|im_start|>user\nAnother question<|im_end|>\n<|im_start|>assistant\n",
         // mistralai/Mistral-7B-Instruct-v0.2
-        "[INST] You are a helpful assistant [/INST][INST] Hello [/INST]Hi there</s>[INST] Who are you [/INST]I am an assistant</s>[INST] Another question [/INST]",
+        "[INST] You are a helpful assistant\n\nHello [/INST]Hi there</s>[INST] Who are you [/INST]I am an assistant</s>[INST] Another question [/INST]",
         // TheBloke/FusionNet_34Bx2_MoE-AWQ
         "[INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\nHello [/INST] Hi there </s><s>[INST] Who are you [/INST] I am an assistant </s><s>[INST] Another question [/INST]",
         // bofenghuang/vigogne-2-70b-chat
@@ -62,15 +62,15 @@ int main(void) {
         // mlabonne/AlphaMonarch-7B
         "system\nYou are a helpful assistant</s>\n<s>user\nHello</s>\n<s>assistant\nHi there</s>\n<s>user\nWho are you</s>\n<s>assistant\nI am an assistant</s>\n<s>user\nAnother question</s>\n<s>assistant\n",
         // google/gemma-7b-it
-        "<start_of_turn>user\nYou are a helpful assistant<end_of_turn>\n<start_of_turn>user\nHello<end_of_turn>\n<start_of_turn>model\nHi there<end_of_turn>\n<start_of_turn>user\nWho are you<end_of_turn>\n<start_of_turn>model\nI am an assistant<end_of_turn>\n<start_of_turn>user\nAnother question<end_of_turn>\n<start_of_turn>model\n",
+        "<start_of_turn>user\nYou are a helpful assistant\n\nHello<end_of_turn>\n<start_of_turn>model\nHi there<end_of_turn>\n<start_of_turn>user\nWho are you<end_of_turn>\n<start_of_turn>model\nI am an assistant<end_of_turn>\n<start_of_turn>user\nAnother question<end_of_turn>\n<start_of_turn>model\n",
         // OrionStarAI/Orion-14B-Chat
         "System: You are a helpful assistant\n\nHuman: Hello\n\nAssistant: </s>Hi there</s>Human: Who are you\n\nAssistant: </s>I am an assistant</s>Human: Another question\n\nAssistant: </s>",
         // openchat/openchat-3.5-0106
         "You are a helpful assistant<|end_of_turn|>GPT4 Correct User: Hello<|end_of_turn|>GPT4 Correct Assistant: Hi there<|end_of_turn|>GPT4 Correct User: Who are you<|end_of_turn|>GPT4 Correct Assistant: I am an assistant<|end_of_turn|>GPT4 Correct User: Another question<|end_of_turn|>GPT4 Correct Assistant:",
         // deepseek-ai/deepseek-coder-33b-instruct
-        "### Instruction:\nYou are a helpful assistant\n### Instruction:\nHello\n### Response:\nHi there\n<|EOT|>\n### Instruction:\nWho are you\n### Response:\nI am an assistant\n<|EOT|>\n### Instruction:\nAnother question\n### Response:\n",
+        "### Instruction:\nYou are a helpful assistant\n\nHello\n### Response:\nHi there\n<|EOT|>\n### Instruction:\nWho are you\n### Response:\nI am an assistant\n<|EOT|>\n### Instruction:\nAnother question\n### Response:\n",
         // eachadea/vicuna-13b-1.1
-        "USER: You are a helpful assistant\nUSER: Hello\nASSISTANT: Hi there</s>\nUSER: Who are you\nASSISTANT: I am an assistant</s>\nUSER: Another question\nASSISTANT:",
+        "USER: You are a helpful assistant\n\nHello\nASSISTANT: Hi there</s>\nUSER: Who are you\nASSISTANT: I am an assistant</s>\nUSER: Another question\nASSISTANT:",
         // Orca-Vicuna
         "SYSTEM: You are a helpful assistant\nUSER: Hello\nASSISTANT: Hi there</s>\nUSER: Who are you\nASSISTANT: I am an assistant</s>\nUSER: Another question\nASSISTANT:",
         // CohereForAI/c4ai-command-r-plus

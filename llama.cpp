@@ -17074,7 +17074,7 @@ static std::string trim(const std::string & str) {
     return str.substr(start, end - start);
 }
 
-static int32_t llama_chat_get_model_template(
+LLAMA_API int32_t llama_chat_get_model_template(
         const struct llama_model * model,
         const char * name,
         char * buf,
@@ -17110,7 +17110,7 @@ static int32_t llama_chat_get_model_template(
     }
 }
 
-static llama_chat_template llama_chat_get_template_type(const char * tmpl) {
+LLAMA_API llama_chat_template llama_chat_get_template_type(const char * tmpl) {
     if (tmpl == nullptr) {
         return LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED;
     }
@@ -17161,7 +17161,7 @@ static llama_chat_template llama_chat_get_template_type(const char * tmpl) {
     }
 }
 
-static int32_t llama_chat_get_prefix(
+LLAMA_API int32_t llama_chat_get_prefix(
         const llama_chat_template tmpl,
         const char * role,
         const char * prev_role,
@@ -17266,7 +17266,7 @@ static int32_t llama_chat_get_prefix(
     return output.size();
 }
 
-static int32_t llama_chat_get_postfix(
+LLAMA_API int32_t llama_chat_get_postfix(
         const llama_chat_template tmpl,
         const char * role,
         const char * prev_role,
@@ -17345,7 +17345,7 @@ static int32_t llama_chat_get_postfix(
     return output.size();
 }
 
-static bool llama_chat_support_system_message(const llama_chat_template tmpl) {
+LLAMA_API bool llama_chat_support_system_message(const llama_chat_template tmpl) {
     switch (tmpl) {
         case LLAMA_CHAT_TEMPLATE_CHATML:
         case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS:
@@ -17377,7 +17377,7 @@ LLAMA_API int32_t llama_chat_apply_template(
         int32_t res = llama_chat_get_model_template(model, nullptr, model_template.data(), model_template.size());
         if (res < 0) {
             // worst case: there is no information about template, we will use chatml by default
-            curr_tmpl = "chatml"; // see llama_chat_apply_template_internal
+            curr_tmpl = "chatml";
         } else {
             curr_tmpl = std::string(model_template.data(), model_template.size());
         }
@@ -17393,12 +17393,18 @@ LLAMA_API int32_t llama_chat_apply_template(
     // format the chat to string
     std::stringstream ss;
     std::string prev_role;
+    bool merge_system_message = false;
     for (size_t i = 0; i < n_msg; i++) {
         std::string role(chat[i].role);
         std::string content(chat[i].content);
-        if (!support_system_message) {
-            // if the template does not support system message, we convert it to user message
-            role = role == "system" ? "user" : role;
+        // if the template does not support system message, we merge it with the next message
+        if (role == "system" && !support_system_message) {
+            merge_system_message = true;
+            continue;
+        }
+        if (merge_system_message && i > 0) {
+            content = std::string(chat[i - 1].content) + "\n\n" + content;
+            merge_system_message = false;
         }
         std::vector<char> prefix(1024, 0);
         std::vector<char> postfix(1024, 0);
