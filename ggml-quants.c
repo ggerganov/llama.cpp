@@ -12389,3 +12389,206 @@ void quantize_row_iq2_s(const float * restrict x, void * restrict vy, int64_t k)
     block_iq2_s * restrict y = vy;
     quantize_row_iq2_s_reference(x, y, k);
 }
+
+static bool validate_float(float f, size_t i) {
+    if (isinf(f)) {
+        fprintf(stderr, "ggml_validate_row_data: found inf value at block %zu\n", i);
+        return false;
+    }
+
+    if (isnan(f)) {
+        fprintf(stderr, "ggml_validate_row_data: found nan value at block %zu\n", i);
+        return false;
+    }
+
+    return true;
+}
+
+static bool validate_f16(ggml_fp16_t f, size_t i) {
+    return validate_float(GGML_FP16_TO_FP32(f), i);
+}
+
+#define VALIDATE_ROW_DATA_D_F16_IMPL(type, data, nb) \
+    const type * q = (const type *) (data); \
+    for (size_t i = 0; i < (nb); ++i) { \
+        if (!validate_f16(q[i].d, i)) { \
+            return false; \
+        } \
+    }
+
+#define VALIDATE_ROW_DATA_DM_F16_IMPL(type, data, nb, d, m) \
+    const type * q = (const type *) (data); \
+    for (size_t i = 0; i < (nb); ++i) { \
+        if (!validate_f16(q[i].d, i) || !validate_f16(q[i].m, i)) { \
+            return false; \
+        } \
+    }
+
+bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbytes) {
+    if (type < 0 || type >= GGML_TYPE_COUNT) {
+        fprintf(stderr, "%s: invalid type %d\n", __func__, type);
+        return false;
+    }
+
+    // size check
+    if (nbytes % ggml_type_size(type) != 0) {
+        fprintf(stderr, "%s: invalid size %zu for type %d\n", __func__, nbytes, type);
+        return false;
+    }
+
+    size_t nb = nbytes/ggml_type_size(type);
+
+    switch (type) {
+        case GGML_TYPE_F16:
+            {
+                const ggml_fp16_t * f = (const ggml_fp16_t *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                    if (!validate_f16(f[i], i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_F32:
+            {
+                const float * f = (const float *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                    if (!validate_float(f[i], i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_F64:
+            {
+                const double * f = (const double *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                    if (!validate_float(f[i], i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_Q4_0:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q4_0, data, nb);
+            } break;
+        case GGML_TYPE_Q4_1:
+            {
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q4_1, data, nb, d, m);
+            } break;
+        case GGML_TYPE_Q5_0:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q5_0, data, nb);
+            } break;
+        case GGML_TYPE_Q5_1:
+            {
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q5_1, data, nb, d, m);
+            } break;
+        case GGML_TYPE_Q8_0:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q8_0, data, nb);
+            } break;
+        case GGML_TYPE_Q2_K:
+            {
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q2_K, data, nb, d, dmin);
+            } break;
+        case GGML_TYPE_Q3_K:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q3_K, data, nb);
+            } break;
+        case GGML_TYPE_Q4_K:
+            {
+            #ifdef GGML_QKK_64
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q4_K, data, nb, d[0], d[1]);
+            #else
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q4_K, data, nb, d, dmin);
+            #endif
+            } break;
+        case GGML_TYPE_Q5_K:
+            {
+            #ifdef GGML_QKK_64
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q5_K, data, nb);
+            #else
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q5_K, data, nb, d, dmin);
+            #endif
+            } break;
+        case GGML_TYPE_Q6_K:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q6_K, data, nb);
+            } break;
+        case GGML_TYPE_Q8_K:
+            {
+                const block_q8_K * q = (const block_q8_K *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                    if (!validate_float(q[i].d, i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_IQ1_S:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq1_s, data, nb);
+            } break;
+        case GGML_TYPE_IQ1_M:
+            {
+                const block_iq1_m * q = (const block_iq1_m *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                #if QK_K == 64
+                    if (!validate_f16(q[i].d, i)) {
+                        return false;
+                    }
+                #else
+                    iq1m_scale_t scale;
+                    const uint16_t * sc = (const uint16_t *)q[i].scales;
+                    scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+                    if (!validate_f16(scale.f16, i)) {
+                        return false;
+                    }
+                #endif
+                }
+            } break;
+        case GGML_TYPE_IQ2_XXS:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq2_xxs, data, nb);
+            } break;
+        case GGML_TYPE_IQ2_XS:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq2_xs, data, nb);
+            } break;
+        case GGML_TYPE_IQ2_S:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq2_s, data, nb);
+            } break;
+        case GGML_TYPE_IQ3_XXS:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq3_xxs, data, nb);
+            } break;
+
+        case GGML_TYPE_IQ3_S:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq3_s, data, nb);
+            } break;
+        case GGML_TYPE_IQ4_XS:
+        #if QK_K != 64
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq4_xs, data, nb);
+            } break;
+        #endif
+        // with QK_K == 64, iq4_xs is iq4_nl
+        case GGML_TYPE_IQ4_NL:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq4_nl, data, nb);
+            } break;
+        case GGML_TYPE_I8:
+        case GGML_TYPE_I16:
+        case GGML_TYPE_I32:
+        case GGML_TYPE_I64:
+            // nothing to validate
+            break;
+        default:
+            {
+                fprintf(stderr, "%s: invalid type %d\n", __func__, type);
+                return false;
+            }
+    }
+
+    return true;
+}

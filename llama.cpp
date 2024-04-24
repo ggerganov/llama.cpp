@@ -3472,6 +3472,10 @@ struct llama_model_loader {
             file->seek(w.offs, SEEK_SET);
             file->read_raw(cur->data, ggml_nbytes(cur));
         }
+
+        if (!ggml_validate_row_data(cur->type, cur->data, ggml_nbytes(cur))) {
+            throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+        }
     }
 
     size_t size_done = 0;
@@ -3509,12 +3513,17 @@ struct llama_model_loader {
                 if (bufs_mmap.count(weight->idx)) {
                     buf_mmap = bufs_mmap.at(weight->idx);
                 }
+
+                if (!ggml_validate_row_data(cur->type, (uint8_t *) mapping->addr + weight->offs, n_size)) {
+                    throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+                }
+
                 GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
                 if (buf_mmap && cur->data == nullptr) {
                     ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + weight->offs);
                     if (lmlocks) {
                         const auto & lmlock = lmlocks->at(weight->idx);
-                        lmlock->grow_to(weight->offs + ggml_nbytes(cur));
+                        lmlock->grow_to(weight->offs + n_size);
                     }
 
                     auto & mmap_used = mmaps_used[weight->idx];
@@ -3528,12 +3537,18 @@ struct llama_model_loader {
                 const auto & file = files.at(weight->idx);
                 if (ggml_backend_buffer_is_host(cur->buffer)) {
                     file->seek(weight->offs, SEEK_SET);
-                    file->read_raw(cur->data, ggml_nbytes(cur));
+                    file->read_raw(cur->data, n_size);
+                    if (!ggml_validate_row_data(cur->type, cur->data, n_size)) {
+                        throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+                    }
                 } else {
-                    read_buf.resize(ggml_nbytes(cur));
+                    read_buf.resize(n_size);
                     file->seek(weight->offs, SEEK_SET);
-                    file->read_raw(read_buf.data(), ggml_nbytes(cur));
+                    file->read_raw(read_buf.data(), n_size);
                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
+                    if (!ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
+                        throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+                    }
                 }
             }
 
