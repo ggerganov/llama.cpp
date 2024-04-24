@@ -2328,10 +2328,25 @@ std::vector<llama_token> llama_tokenize(
 
 std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), false);
+    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), true);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), false);
+        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), true);
+        GGML_ASSERT(check == -n_tokens);
+    } else {
+        result.resize(n_tokens);
+    }
+
+    return std::string(result.data(), result.size());
+}
+
+// duplicate with ability to specify whether to use special token
+std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+    std::vector<char> result(8, 0);
+    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), special);
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), special);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
