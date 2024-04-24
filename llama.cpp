@@ -19,6 +19,8 @@
 #  include "ggml-sycl.h"
 #elif defined(GGML_USE_KOMPUTE)
 #   include "ggml-kompute.h"
+#elif defined(GGML_USE_QNN)
+#   include "ggml-qnn.h"
 #endif
 
 #ifdef GGML_USE_METAL
@@ -2377,6 +2379,8 @@ static size_t llama_get_device_count(const llama_model & model) {
     count = ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
     count = ggml_backend_vk_get_device_count();
+#elif defined(GGML_USE_QNN)
+    count = ggml_backend_qnn_get_device_count();
 #endif
 #if defined(GGML_USE_RPC)
     count += model.rpc_servers.size();
@@ -2409,6 +2413,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
     if (buft == nullptr) {
         LLAMA_LOG_WARN("%s: cannot use GPU %d, check `vulkaninfo --summary`\n", __func__, gpu);
     }
+#elif defined(GGML_USE_QNN)
+    buft = ggml_backend_qnn_buffer_type(gpu);
 #endif
 
     if (buft == nullptr) {
@@ -15899,6 +15905,8 @@ size_t llama_max_devices(void) {
     return GGML_SYCL_MAX_DEVICES;
 #elif defined(GGML_USE_VULKAN)
     return GGML_VK_MAX_DEVICES;
+#elif defined(GGML_USE_QNN)
+    return GGML_QNN_MAX_DEVICES;
 #else
     return 1;
 #endif
@@ -15914,7 +15922,7 @@ bool llama_supports_mlock(void) {
 
 bool llama_supports_gpu_offload(void) {
 #if defined(GGML_USE_CUDA) || defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
-    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
+    defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC) || defined(GGML_USE_QNN)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
 #else
@@ -16220,6 +16228,19 @@ struct llama_context * llama_new_context_with_model(
             auto * backend = ggml_backend_kompute_init(model->main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
+                llama_free(ctx);
+                return nullptr;
+            }
+            ctx->backends.push_back(backend);
+        }
+#elif defined(GGML_USE_QNN)
+        if (model->n_gpu_layers > 0) {
+            //the second param is data path of prebuit QNN libs provided by Qualcomm
+            //can be hardcoded to "/data/local/tmp/" for Android command line application
+            //or specified in JNI layer for Android APK application
+            ggml_backend_t backend = ggml_backend_qnn_init(model->main_gpu, "/data/local/tmp/");
+            if (nullptr == backend) {
+                LLAMA_LOG_ERROR("%s: failed to initialize QNN backend\n", __func__);
                 llama_free(ctx);
                 return nullptr;
             }
