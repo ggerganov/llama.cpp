@@ -50,7 +50,7 @@ struct BuiltinRule {
 std::unordered_map<std::string, BuiltinRule> PRIMITIVE_RULES = {
     {"boolean", {"(\"true\" | \"false\") space", {}}},
     {"decimal-part", {"[0-9]{1,16}", {}}},
-    {"integral-part", {"[0-9] | [1-9] [0-9]{0,15}", {}}},
+    {"integral-part", {"[0-9] | [1-9] [0-9]{1,15}", {}}},
     {"number", {"(\"-\"? integral-part) (\".\" decimal-part)? ([eE] [-+]? integral-part)? space", {"integral-part", "decimal-part"}}},
     {"integer", {"(\"-\"? integral-part) space", {"integral-part"}}},
     {"value", {"object | array | string | number | boolean | null", {"object", "array", "string", "number", "boolean", "null"}}},
