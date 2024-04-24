@@ -163,6 +163,7 @@ extern "C" {
         LLAMA_CHAT_TEMPLATE_DEEPSEEK       = 12, // Example: deepseek-ai/deepseek-coder-33b-instruct
         LLAMA_CHAT_TEMPLATE_COMMAND_R      = 13, // Example: CohereForAI/c4ai-command-r-plus
         LLAMA_CHAT_TEMPLATE_LLAMA3         = 14, // Example: meta-llama/Meta-Llama-3-8B-Instruct
+        LLAMA_CHAT_TEMPLATE_PHI3           = 15, // Example: microsoft/Phi-3-mini-128k-instruct
     };
 
     typedef struct llama_token_data {

@@ -17295,15 +17295,6 @@ LLAMA_API int32_t llama_chat_get_model_template(
         if (model_template.empty()) {
             model_template = get_meta(default_meta);
         }
-    } else if (tmpl == "phi3" || (tmpl.find("<|assistant|>") != std::string::npos && tmpl.find("<|end|>") != std::string::npos )) {
-        // Phi 3
-        for (auto message : chat) {
-            std::string role(message->role);
-            ss << "<|" << role << "|>\n" << trim(message->content) << "<|end|>\n";
-        }
-        if (add_ass) {
-            ss << "<|assistant|>\n";
-        }
     } else {
         // default template
         model_template = get_meta(default_meta);
@@ -17361,6 +17352,8 @@ LLAMA_API llama_chat_template llama_chat_get_template_type(const char * tmpl) {
         return LLAMA_CHAT_TEMPLATE_COMMAND_R;
     } else if (stmpl == "llama3" || (tmpl_contains("<|start_header_id|>") && tmpl_contains("<|end_header_id|>"))) {
         return LLAMA_CHAT_TEMPLATE_LLAMA3;
+    } else if (stmpl == "phi3" || (tmpl_contains("<|assistant|>") && tmpl_contains("<|end|>"))) {
+        return LLAMA_CHAT_TEMPLATE_PHI3;
     } else {
         // template not supported
         return LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED;
@@ -17470,6 +17463,9 @@ LLAMA_API int32_t llama_chat_get_prefix(
         case LLAMA_CHAT_TEMPLATE_LLAMA3:
             ss << "<|start_header_id|>" << srole << "<|end_header_id|>\n\n";
             break;
+        case LLAMA_CHAT_TEMPLATE_PHI3:
+            ss << "<|" << srole << "|>\n";
+            break;
     }
     std::string output = ss.str();
     snprintf(buf, length, "%s", output.c_str());
@@ -17549,6 +17545,9 @@ LLAMA_API int32_t llama_chat_get_postfix(
         case LLAMA_CHAT_TEMPLATE_LLAMA3:
             ss << "<|eot_id|>";
             break;
+        case LLAMA_CHAT_TEMPLATE_PHI3:
+            ss << "<|end|>\n";
+            break;
     }
     std::string output = ss.str();
     snprintf(buf, length, "%s", output.c_str());
@@ -17567,6 +17566,7 @@ LLAMA_API bool llama_chat_support_system_message(const llama_chat_template ttmpl
         case LLAMA_CHAT_TEMPLATE_VICUNA_ORCA:
         case LLAMA_CHAT_TEMPLATE_COMMAND_R:
         case LLAMA_CHAT_TEMPLATE_LLAMA3:
+        case LLAMA_CHAT_TEMPLATE_PHI3:
             return true;
         default:
             return false;
