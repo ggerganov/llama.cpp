@@ -1981,7 +1981,7 @@ class Phi2Model(Model):
 @Model.register("Phi3ForCausalLM")
 class Phi3MiniModel(Model):
     model_arch = gguf.MODEL_ARCH.PHI3
-    
+
     def set_vocab(self):
         from sentencepiece import SentencePieceProcessor
 
@@ -1992,15 +1992,15 @@ class Phi3MiniModel(Model):
             sys.exit(1)
 
         tokenizer = SentencePieceProcessor(str(tokenizer_path))
-        
+
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
-        
+
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
         toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
-            
+
             piece = tokenizer.id_to_piece(token_id)
             text = piece.encode("utf-8")
             score = tokenizer.get_score(token_id)
@@ -2029,11 +2029,11 @@ class Phi3MiniModel(Model):
                     if (token_id >= vocab_size):
                         print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                         continue
-                    
+
                     tokens[token_id] = key.encode("utf-8")
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
-            
+
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
@@ -2041,7 +2041,7 @@ class Phi3MiniModel(Model):
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
-        
+
     def set_gguf_parameters(self):
         block_count = self.find_hparam(["num_hidden_layers", "n_layer"])
 
@@ -2061,8 +2061,7 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_layer_norm_rms_eps(rms_eps)
         self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
         self.gguf_writer.add_file_type(self.ftype)
-        self.gguf_writer.add_add_bos_token(False)
-        
+
 @Model.register("PlamoForCausalLM")
 class PlamoModel(Model):
     model_arch = gguf.MODEL_ARCH.PLAMO
