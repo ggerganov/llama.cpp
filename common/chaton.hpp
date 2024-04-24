@@ -85,7 +85,9 @@ json conMeta;
 
 
 /**
- * Helps keep user prompt and chat-hs-template tag parts seperate, but in sequence
+ * Helps keep user prompt and chat-hs-template tag parts seperate, but in sequence.
+ * Inturn gives the flexibility to tokenize with or without parse_special flag, wrt the different parts of the chat msg(s).
+ * One could use the triplet of str, get_types and get_partslens to achieve the above mentioned flexibility.
  */
 class ChatParts {
 
@@ -100,7 +102,7 @@ public:
     // Identify no string condition and or ignore string.
     static const auto X = '?';
 
-    ChatParts() :parts{}, types{""} {}
+    ChatParts() : parts{}, types{""} {}
 
     char last_type() {
         if (types.length() == 0) {
@@ -124,6 +126,18 @@ public:
             allin += part;
         }
         return allin;
+    }
+
+    std::string get_types() {
+        return types;
+    }
+
+    std::vector<int> get_partslens() {
+        std::vector<int> lens = {};
+        for(auto part: parts) {
+            lens.push_back(part.length());
+        }
+        return lens;
     }
 
     std::string name() {
