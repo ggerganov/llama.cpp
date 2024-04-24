@@ -1790,7 +1790,7 @@ class QwenModel(Model):
 @Model.register("Qwen2ForCausalLM")
 class Qwen2Model(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2
-    
+
     def set_vocab(self):
         try:
             self._set_vocab_sentencepiece()
