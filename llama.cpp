@@ -15599,6 +15599,10 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
     return LLAMA_ROPE_TYPE_NONE;
 }
 
+enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
+    return ctx->cparams.pooling_type;
+}
+
 int32_t llama_n_vocab(const struct llama_model * model) {
     return model->hparams.n_vocab;
 }
