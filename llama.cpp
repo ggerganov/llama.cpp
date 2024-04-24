@@ -247,7 +247,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_QWEN2,           "qwen2"      },
     { LLM_ARCH_QWEN2MOE,        "qwen2moe"   },
     { LLM_ARCH_PHI2,            "phi2"       },
-	{ LLM_ARCH_PHI3,            "phi3"       },
+    { LLM_ARCH_PHI3,            "phi3"       },
     { LLM_ARCH_PLAMO,           "plamo"      },
     { LLM_ARCH_CODESHELL,       "codeshell"  },
     { LLM_ARCH_ORION,           "orion"      },
@@ -3980,7 +3980,7 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
-		case LLM_ARCH_PHI3:
+        case LLM_ARCH_PHI3:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
