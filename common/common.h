@@ -86,8 +86,8 @@ struct gpt_params {
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
-    llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
-    llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
+    enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
+    enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
 
     // // sampling parameters
     struct llama_sampling_params sparams;
@@ -237,11 +237,12 @@ std::vector<llama_token> llama_tokenize(
                         bool   add_special,
                         bool   parse_special = false);
 
-// tokenizes a token into a piece
+// tokenizes a token into a piece, optionally renders special/control tokens
 // should work similar to Python's `tokenizer.id_to_piece`
 std::string llama_token_to_piece(
         const struct llama_context * ctx,
-                       llama_token   token);
+                       llama_token   token,
+                       bool          special = true);
 
 // TODO: these should be moved in llama.h C-style API under single `llama_detokenize` function
 //       that takes into account the tokenizer type and decides how to handle the leading space

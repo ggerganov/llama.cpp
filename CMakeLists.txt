@@ -43,17 +43,11 @@ else()
     set(LLAMA_METAL_DEFAULT OFF)
 endif()
 
-# TODO: fix this for Android CI
-#       https://github.com/ggerganov/llama.cpp/pull/6716#issuecomment-2061509191
-#if (CMAKE_SYSTEM_NAME MATCHES "ANDROID")
-#    set(LLAMA_LLAMAFILE_DEFAULT OFF)
-#else()
-#    set(LLAMA_LLAMAFILE_DEFAULT ON)
-#endif()
-
-# TODO: temporary disable until MoE is fixed
-#       https://github.com/ggerganov/llama.cpp/pull/6716
-set(LLAMA_LLAMAFILE_DEFAULT OFF)
+if (CMAKE_SYSTEM_NAME MATCHES "ANDROID")
+    set(LLAMA_LLAMAFILE_DEFAULT OFF)
+else()
+    set(LLAMA_LLAMAFILE_DEFAULT ON)
+endif()
 
 # general
 option(BUILD_SHARED_LIBS                "build shared libraries"                                OFF)

@@ -854,7 +854,7 @@ struct server_context {
         slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
         slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
         slot.params.n_discard          = json_value(data, "n_discard",         default_params.n_discard);
-        slot.params.seed               = json_value(data, "seed",              default_params.seed);
+        slot.sparams.seed              = json_value(data, "seed",              default_sparams.seed);
         slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
         slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
@@ -1028,7 +1028,6 @@ struct server_context {
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
                 return false;
             }
-            llama_set_rng_seed(ctx, slot.params.seed);
         }
 
         slot.command = SLOT_COMMAND_LOAD_PROMPT;
@@ -1118,7 +1117,7 @@ struct server_context {
 
     bool process_token(completion_token_output & result, server_slot & slot) {
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = llama_token_to_piece(ctx, result.tok);
+        const std::string token_str = llama_token_to_piece(ctx, result.tok, false);
         slot.sampled = result.tok;
 
         // search stop word and delete it
