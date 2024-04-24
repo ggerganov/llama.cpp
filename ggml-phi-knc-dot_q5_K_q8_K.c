@@ -1,5 +1,6 @@
 /* Xeon PHI IMCI support. */
 /* formatted by using emacs, with (M-x set-variable RET c-basic-offset RET 4 RET) executed. */
+/* formatted by using emacs, with (M-x set-variable RET indent-tabs-mode RET nil RET) executed. */
 
 // For uint32_t
 #include <stdint.h>
@@ -35,48 +36,50 @@ void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 
 }
 
-/* convert a FP16 to a FP32. */
+/* Convert a FP16 to a FP32. */
 float GGML_PHI_FP16_TO_FP32(ggml_fp16_t src)
 {
-  // we only care aboun one result.
-  uint32_t mask=0x0001;
+    // we only care aboun one result.
+    uint32_t mask=0x0001;
 
-  // we declare this as an array, so it ends up in a different memory section.
-  float f32[1] __attribute__((aligned(64)));
+    // we declare this as an array, so it ends up in a different memory section.
+    float f32[1] __attribute__((aligned(64)));
 
-  __asm__ __volatile__ (
-                       "kmov\t%[M],\t%%k1\n\t"
-                       "vbroadcastss\t%[SRC]%{float16%},\t%%zmm1%{%%k1%}\n\t"
-                       "vmovaps\t\t%%zmm1,\t%[DST]%{%%k1%}\n\t"
-                        : [DST] "+m"  (f32)
-                        : [SRC]  "m"  (src),
-                          [M]    "r"  (mask)
-                        : "zmm1", "memory", "k1");
-  return f32[0];
+    __asm__ __volatile__ (
+                          "kmov\t%[M],\t%%k1\n\t"
+                          "vbroadcastss\t%[SRC]%{float16%},\t%%zmm1%{%%k1%}\n\t"
+                          "vmovaps\t\t%%zmm1,\t%[DST]%{%%k1%}\n\t"
+                          : [DST] "+m"  (f32)
+                          : [SRC]  "m"  (src),
+                            [M]    "r"  (mask)
+                          : "zmm1", "memory", "k1");
+    return f32[0];
 }
 
-/* convert a FP32 to a FP16. */
+/* Convert a FP32 to a FP16. */
 ggml_fp16_t GGML_PHI_FP32_TO_FP16(float src)
 {
-  uint32_t mask=0x0001;
+    uint32_t mask=0x0001;
 
-  // we declare this as an array, so it ends up in a different memory section.
-  ggml_fp16_t f16[1] __attribute__((aligned(64)));
+    // we declare this as an array, so it ends up in a different memory section.
+    ggml_fp16_t f16[1] __attribute__((aligned(64)));
 
-  __asm__ __volatile__ (
-                       "kmov\t%[M],\t%%k1\n\t"
-                       "vbroadcastss\t%[SRC],\t%%zmm2%{%%k1%}\n\t"
-                       "vmovaps\t\t%%zmm2%{float16%},\t%[DST]%{%%k1%}\n\t"
-                        : [DST]  "+m"  (f16)
-                        : [SRC]   "m"  (src),
-                          [M]     "r"  (mask)
-                        : "zmm2", "memory", "k1");
-  return f16[0];
+    __asm__ __volatile__ (
+                          "kmov\t%[M],\t%%k1\n\t"
+                          "vbroadcastss\t%[SRC],\t%%zmm2%{%%k1%}\n\t"
+                          "vmovaps\t\t%%zmm2%{float16%},\t%[DST]%{%%k1%}\n\t"
+                          : [DST]  "+m"  (f16)
+                          : [SRC]   "m"  (src),
+                            [M]     "r"  (mask)
+                          : "zmm2", "memory", "k1");
+    return f16[0];
 }
 
 
 // This function perform two multiplies of an I8x16 and an I8x16 vector into two I16x16 vectors. then does an FMA on the scaled result of multiplying the two I16x16 vectors, adding the result into an I32x16. When done, it multiplies this I32x16 by a float, returning a F32x16.
-// it loops 8 times. well, actually four, with an unroll.
+// It loops 8 times. well, actually four, with an unroll.
+// Handles q8 being unaligned.
+// Requires q5 to be aligned.
 void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_t *q8, uint8x16_t *q5, const uint8_t *scale, ggml_fp16_t scaleX, float scaleY, float32x16_t *res)
 {
     uint8_t zero = 0;
@@ -97,7 +100,7 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
                           "mov\t%[SRC8],\t%%r13\n\t"
                           "mov\t%[SRC8],\t%%r12\n\t"
                           "mov\t%[OFFSET],\t%%r10\n\t"
-                          "cmp\t$32,%%r10\n\t"                                // Examine OFFSET, and decide which (if any) of the vloadunpackhd invocations needs to be increaned by 64.
+                          "cmp\t$32,%%r10\n\t"                                // Examine OFFSET, and decide which (if any) of the vloadunpackhd invocations needs to be increased by 64.
                           "jl\t20f\n\t"
                           "cmp\t$48,%%r10\n\t"
                           "jl\t21f\n\t"
@@ -170,7 +173,7 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
                             [SCALE]  "r" (scale),
                             [SCALEX] "m" (scaleX),
                             [SCALEY] "m" (scaleY),
-                            [Z]     "m"  (zero)
+                            [Z]      "m" (zero)
                           : "zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "zmm9", "zmm10", "zmm11", "zmm12", "zmm13", "zmm14", "zmm15", "cc", "ecx", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "memory");
 }
 
@@ -192,15 +195,15 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "mov\t$0,%%ecx\n\t"                               // initialize our counter.
                           "vpbroadcastd\t%[MASK]%{uint8%},\t%%zmm0\n\t"     // load our mask.
                           "vpbroadcastd\t%[BIT5]%{uint8},\t%%zmm1\n\t"      // load the bit we want to add (conditionally).
-                          "vpbroadcastd\t%[M]%{uint8%},\t%%zmm2\n\t"        // select which bit we want to test for.
+                          "vpbroadcastd\t%[M]%{uint8%},\t%%zmm2\n\t"        // Select which bit we want to test for. Start with bit 1.
                           "vmovdqa32\t(%[SRC1])%{uint8%},\t%%zmm3\n\t"      // load 16 sets of 8 bit packed single bits.
                           "vmovdqa32\t16(%[SRC1])%{uint8%},\t%%zmm4\n\t"    // load the next 16 sets of 8 bit packed single bits.
 
                           "1:\n\t"
                           "inc\t%%ecx\n\t"                                  // we are in the loop. increment the counter.
 
-                          "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"            // perform our test.
-                          "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"            // perform our test.
+                          "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"            // Test to see if our selected bit is set.
+                          "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"            // Test to see if our selected bit is set.
 
                           "vloadunpackld\t\t(%%r9)%{uint8%},\t%%zmm5\n\t"   // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vloadunpackhd\t\t16(%%r9)%{uint8%},\t%%zmm5\n\t" // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
