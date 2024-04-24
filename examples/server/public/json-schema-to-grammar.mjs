@@ -34,7 +34,7 @@ class BuiltinRule {
 const PRIMITIVE_RULES = {
   boolean        : new BuiltinRule('("true" | "false") space', []),
   'decimal-part' : new BuiltinRule('[0-9]{1,16}', []),
-  'integral-part': new BuiltinRule('[0-9] | [1-9] [0-9]{1,15}', []),
+  'integral-part': new BuiltinRule('[0] | [1-9] [0-9]{1,15}', []),
   number         : new BuiltinRule('("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space', ['integral-part', 'decimal-part']),
   integer        : new BuiltinRule('("-"? integral-part) space', ['integral-part']),
   value          : new BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
