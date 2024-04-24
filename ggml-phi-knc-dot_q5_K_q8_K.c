@@ -215,7 +215,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vloadunpackhd\t\t32(%%r9)%{uint8%},\t%%zmm7\n\t" // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vprefetch1\t32(%%r9)\n\t"                        // pull the next set of 4 bit sequences into the L2 cache.
                           "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"            // apply a mask, storing the next low four bits of vector zmm1 into zmm5.
-                          "vpaddd\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"        // turn on bit 5 for all values that passed the prior test.
+                          "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"        // turn on bit 5 for all values that passed the prior test.
                           "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"     // save our result.
                           
                           "add\t$32,\t%%r8\n\t"
