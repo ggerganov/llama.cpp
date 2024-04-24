@@ -12512,7 +12512,12 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     }
                 }
 
-                GGML_ASSERT(vocab.special_add_eos != 1);
+                //GGML_ASSERT(vocab.special_add_eos != 1);
+                //TODO: Check this, why this tokenizer does not add at the end, why not leaving up to the `gguf` exporter?
+                if (add_special && vocab.special_add_eos == 1) {
+                    GGML_ASSERT(vocab.special_add_eos != -1);
+                    output.push_back(vocab.special_eos_id);
+                }
             } break;
         case LLAMA_VOCAB_TYPE_WPM:
             {
