@@ -163,7 +163,7 @@ namespace grammar_parser {
             // the following rewrite rules:
             // S{m,n} --> S S S (m times) S'(n-m)
             //            S'(x)   ::= S S'(x-1) |
-            //            (... x definitions of these S' rules ...)
+            //            (... n-m definitions of these S' rules ...)
             //            S'(1)   ::= S |
             // S{m,} -->  S S S (m times) S'
             //            S'     ::= S S' |
