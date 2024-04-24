@@ -14196,6 +14196,26 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
     return new_size;
 }
 
+static bool match_string(const std::string& str, const std::string& pattern, uint32_t string_index = 0, uint32_t pattern_index = 0) {
+    // if both index pointers reach the end of str and pattern respectively
+    if (string_index == str.size() && pattern_index == pattern.size()) {
+        return true;
+    }
+
+    // if pattern character is '*', it can match with any sequence of characters.
+    if (pattern_index < pattern.size() && pattern[pattern_index] == '*') {
+        // move pattern index by 1 and match rest, or keep string index same and move pattern index
+        return match_string(str, pattern, string_index, pattern_index + 1) || (string_index < str.size() && match_string(str, pattern, string_index + 1, pattern_index));
+    }
+
+    // if current characters match or pattern character is '?'
+    if (string_index < str.size() && pattern_index < pattern.size() && (str[string_index] == pattern[pattern_index] || pattern[pattern_index] == '?')) {
+        return match_string(str, pattern, string_index + 1, pattern_index + 1);
+    }
+
+    return false;
+}
+
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type default_type;
 
@@ -14428,8 +14448,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             // type as determined by the ftype.
             if(params->override_ftype) {
                 for (uint32_t i = 0; i < params->override_ftype->count; ++i) {
-                    if (strcmp(params->override_ftype->names[i], tensor->name) == 0) {
-                        //LLAMA_LOG_INFO("\n%s: %s %s ---> %s\n", __func__, tensor->name, ggml_type_name(new_type), ggml_type_name(params->override_ftype->types[i]));
+                    if (match_string(tensor->name, params->override_ftype->names[i])) {
+                        // printf("\n -----> %s, %s\n", params->override_ftype->names[i], tensor->name);
                         new_type = params->override_ftype->types[i];
                         break;
                     }

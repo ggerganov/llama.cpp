@@ -263,7 +263,6 @@ static bool read_custom_quant_config(const std::string& filename, llama_model_qu
     while (getline(file, line)) {
         // Skip empty lines and comments
         if (line.empty() || line[0] == '#') continue;
-            printf("  %s\n", line.c_str());
 
         // default file type
         if (line.find("ftype=") == 0) {
