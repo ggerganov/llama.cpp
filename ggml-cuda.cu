@@ -2411,19 +2411,19 @@ GGML_CALL static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {
 
 #ifdef USE_CUDA_GRAPH
 #define MAX_NODES_IN_CUDA_GRAPH 10000
-struct ggml_cudaGraph {
-    int count=0;
+struct ggml_cuda_graph {
+    int count = 0;
     cudaGraph_t graph = nullptr;
     cudaGraphExec_t instance = nullptr;
-    size_t numNodes = 0;
+    size_t num_nodes = 0;
     int softmax_ne0 = 0;
     cudaGraphNode_t nodes[MAX_NODES_IN_CUDA_GRAPH];
     cudaKernelNodeParams params[MAX_NODES_IN_CUDA_GRAPH];
-    bool disableDueToGpuArch=false;
+    bool disable_due_to_gpu_arch = false;
 };
 #endif
 
-const bool disableCudaGraphs = (getenv("LLAMACPP_DISABLE_CUDA_GRAPHS") != nullptr);
+const bool disable_cuda_graphs = (getenv("LLAMACPP_DISABLE_CUDA_GRAPHS") != nullptr);
 
 GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
@@ -2432,33 +2432,29 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
 
 #ifdef USE_CUDA_GRAPH
     // Objects required for CUDA Graph
-    static ggml_cudaGraph cudaGraph;
-    bool useCudaGraph = (cudaGraph.count>=7); //avoid CUDA graphs on first few steps due to incompatible initialisations.
-    char** updatedKernelArg[MAX_NODES_IN_CUDA_GRAPH];
-    bool cudaGraphUpdateRequired = false;
+    static ggml_cuda_graph cuda_graph;
+    bool use_cuda_graph = (cuda_graph.count >= 7); //avoid CUDA graphs on first few steps due to incompatible initialisations.
+    char ** updated_kernel_arg[MAX_NODES_IN_CUDA_GRAPH];
+    bool cuda_graph_update_required = false;
     // pointer to CUDA cpy kernel, which is required to identify
     // kernel parameters which need updated in the graph for each token
-    void* ggmlCudaCpyFn = nullptr;
+    void * ggml_cuda_cpy_fn_ptr = nullptr;
 
-    if(cudaGraph.count==0){        
-        cudaDeviceProp prop;
-        int device;
-        CUDA_CHECK(cudaGetDevice(&device));
-        CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
-        if (prop.major < 8){
-            cudaGraph.disableDueToGpuArch=true;
+    if(cuda_graph.count == 0){
+        if (ggml_cuda_info().devices[cuda_ctx->device].cc < 800){
+            cuda_graph.disable_due_to_gpu_arch=true;
         }
     }
 
     // Disable CUDA graphs in presence of env var or old GPU.
     // Also disable for multi-gpu for now. TO DO investigate
-    if(disableCudaGraphs || cudaGraph.disableDueToGpuArch || ggml_backend_cuda_get_device_count() > 1){
-        useCudaGraph = false;
+    if(disable_cuda_graphs || cuda_graph.disable_due_to_gpu_arch || ggml_backend_cuda_get_device_count() > 1){
+        use_cuda_graph = false;
     }
 
-    if(useCudaGraph) {
+    if(use_cuda_graph) {
 
-        if(cudaGraph.instance == nullptr) cudaGraphUpdateRequired=true;
+        if(cuda_graph.instance == nullptr) cuda_graph_update_required=true;
 
         // Loop over nodes in GGML graph to obtain info needed for CUDA graph
         int k=0;
@@ -2468,36 +2464,36 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
             // (identified by inspecting soft max op parameters)
             if(node->op == GGML_OP_SOFT_MAX) {
                 if(node->src[1]->ne[1] > 1){
-                    useCudaGraph = false; // disable CUDA graphs for batch size > 1 for now. TO DO investigate
+                    use_cuda_graph = false; // disable CUDA graphs for batch size > 1 for now. TO DO investigate
                 }
-                if(node->src[0]->ne[0] != cudaGraph.softmax_ne0) {
-                    cudaGraphUpdateRequired = true;
-                    cudaGraph.softmax_ne0 = node->src[0]->ne[0];
+                if(node->src[0]->ne[0] != cuda_graph.softmax_ne0) {
+                    cuda_graph_update_required = true;
+                    cuda_graph.softmax_ne0 = node->src[0]->ne[0];
                 }
             }
             if(node->op == GGML_OP_CPY) {
                 // store the copy op parameter which changes with each token.
-                updatedKernelArg[k++]=(char**) &(node->src[1]->data);
-                if(ggmlCudaCpyFn == nullptr){
+                updated_kernel_arg[k++]=(char **) &(node->src[1]->data);
+                if(ggml_cuda_cpy_fn_ptr == nullptr){
                     // store a pointer to the copy op CUDA kernel to identify it later
-                    ggmlCudaCpyFn = ggml_cuda_cpy_fn(node->src[0], node->src[1]);
+                    ggml_cuda_cpy_fn_ptr = ggml_cuda_cpy_fn(node->src[0], node->src[1]);
                 }
             }
         }
     }
 
-    if(useCudaGraph && cudaGraphUpdateRequired) { // Start CUDA graph capture
+    if(use_cuda_graph && cuda_graph_update_required) { // Start CUDA graph capture
         CUDA_CHECK(cudaStreamBeginCapture(cuda_ctx->stream(), cudaStreamCaptureModeGlobal));
     }
 
 #else
-    bool useCudaGraph = false;
-    bool cudaGraphUpdateRequired = false;
+    bool use_cuda_graph = false;
+    bool cuda_graph_update_required = false;
 #endif
     
     // Only perfom the graph exection if CUDA graphs are not enebled, or we are capturing the graph.
     // With use of CUDA graphs, the execution will be performed by the graph launch.
-    if(!useCudaGraph || cudaGraphUpdateRequired) {
+    if(!use_cuda_graph || cuda_graph_update_required) {
         //temporarily avoid indenting here to make code review easier
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_tensor * node = cgraph->nodes[i];
@@ -2524,67 +2520,74 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
     }
 
     #ifdef USE_CUDA_GRAPH
-    if(useCudaGraph && (cudaGraphUpdateRequired)) { // End CUDA graph capture
-        CUDA_CHECK(cudaStreamEndCapture(cuda_ctx->stream(), &cudaGraph.graph));
+    if(use_cuda_graph && (cuda_graph_update_required)) { // End CUDA graph capture
+        CUDA_CHECK(cudaStreamEndCapture(cuda_ctx->stream(), &cuda_graph.graph));
     }
-    if(useCudaGraph){
+    if(use_cuda_graph){
 
-        if(cudaGraph.instance == nullptr) { // Create executable graph from captured graph.
-            CUDA_CHECK(cudaGraphInstantiate(&cudaGraph.instance, cudaGraph.graph, NULL, NULL, 0));
+        if(cuda_graph.instance == nullptr) { // Create executable graph from captured graph.
+            CUDA_CHECK(cudaGraphInstantiate(&cuda_graph.instance, cuda_graph.graph, NULL, NULL, 0));
         }
 
 
         // Perform update to graph (if required for this token), and change copy parameter (required for every token)
 
-        if(cudaGraphUpdateRequired) {
+        if(cuda_graph_update_required) {
             // Extract nodes from graph
-            if(cudaGraph.numNodes == 0) {
-                CUDA_CHECK(cudaGraphGetNodes(cudaGraph.graph, nullptr, &cudaGraph.numNodes));
+            if(cuda_graph.num_nodes == 0) {
+                // First call with null argument gets number of nodes in graph
+                CUDA_CHECK(cudaGraphGetNodes(cuda_graph.graph, nullptr, &cuda_graph.num_nodes));
             }
-            CUDA_CHECK(cudaGraphGetNodes(cudaGraph.graph, cudaGraph.nodes, &cudaGraph.numNodes));
+            // Subsequent call with non-null argument gets nodes
+            CUDA_CHECK(cudaGraphGetNodes(cuda_graph.graph, cuda_graph.nodes, &cuda_graph.num_nodes));
 
             // Loop over nodes, and extract kernel parameters fro each node
-            for(size_t i=0; i<cudaGraph.numNodes; i++) {
-                cudaGraphNodeType nodeType;
-                CUDA_CHECK(cudaGraphNodeGetType(cudaGraph.nodes[i], &nodeType));
-                if (nodeType == cudaGraphNodeTypeKernel) {
-                    auto statRT = cudaGraphKernelNodeGetParams(cudaGraph.nodes[i], &cudaGraph.params[i]); // Get params using runtime
-                    if(statRT == cudaErrorInvalidDeviceFunction) {
+            for(size_t i=0; i<cuda_graph.num_nodes; i++) {
+                cudaGraphNodeType node_type;
+                CUDA_CHECK(cudaGraphNodeGetType(cuda_graph.nodes[i], &node_type));
+                if (node_type == cudaGraphNodeTypeKernel) {
+                    auto stat = cudaGraphKernelNodeGetParams(cuda_graph.nodes[i], &cuda_graph.params[i]); // Get params using runtime
+                    if(stat == cudaErrorInvalidDeviceFunction) {
                         // Fails due to incorrect handling by CUDA runtime of CUDA BLAS node.
                         // We don't need to update blas nodes, so clear error and move on.
                         cudaGetLastError();
+                    }
+                    else {
+                        GGML_ASSERT(stat == cudaSuccess);
                     }
                 }
             }
         }
 
-        // Update copy kernel param (required every token)
-        if(!cudaGraphUpdateRequired) { // on update steps, the live parameters will already be captured
+        // One of the arguments to the copy kernel is updated for each token, hence we need to
+        // replace that argument with the updated value in the CUDA graph  
+        if(!cuda_graph_update_required) { // on update steps, the live parameters will already be captured
             int k=0;
-            for(size_t i=0; i<cudaGraph.numNodes; i++) {
-                if(cudaGraph.params[i].func == ggmlCudaCpyFn) {
-                    char** updatedKernelArgPointer = updatedKernelArg[k++];
-                    cudaGraph.params[i].kernelParams[1] = updatedKernelArgPointer;
-                    CUDA_CHECK(cudaGraphKernelNodeSetParams(cudaGraph.nodes[i], &cudaGraph.params[i]));
+            for(size_t i=0; i<cuda_graph.num_nodes; i++) {
+                if(cuda_graph.params[i].func == ggml_cuda_cpy_fn_ptr) {
+                    char ** updated_kernel_arg_ptr = updated_kernel_arg[k++];
+                    cuda_graph.params[i].kernelParams[1] = updated_kernel_arg_ptr;
+                    CUDA_CHECK(cudaGraphKernelNodeSetParams(cuda_graph.nodes[i], &cuda_graph.params[i]));
                 }
             }
         }
 
         // Update graph executable
-        cudaGraphExecUpdateResultInfo resultInfo;
-        auto stat = cudaGraphExecUpdate(cudaGraph.instance, cudaGraph.graph, &resultInfo);
-        if(stat == cudaErrorGraphExecUpdateFailure)
-        {
+        cudaGraphExecUpdateResultInfo result_info;
+        auto stat = cudaGraphExecUpdate(cuda_graph.instance, cuda_graph.graph, &result_info);
+        if(stat == cudaErrorGraphExecUpdateFailure) {
             // The pre-existing graph exec cannot be updated due to violated constraints
-            // so instead clar error and re-instantiate
+            // so instead clear error and re-instantiate
             cudaGetLastError();
-            CUDA_CHECK(cudaGraphInstantiate(&cudaGraph.instance, cudaGraph.graph, NULL, NULL, 0));          
+            CUDA_CHECK(cudaGraphInstantiate(&cuda_graph.instance, cuda_graph.graph, NULL, NULL, 0));          
         }
-
+        else {
+            GGML_ASSERT(stat == cudaSuccess);
+        }
         // Launch graph
-        CUDA_CHECK(cudaGraphLaunch(cudaGraph.instance, cuda_ctx->stream()));
+        CUDA_CHECK(cudaGraphLaunch(cuda_graph.instance, cuda_ctx->stream()));
     }
-    cudaGraph.count++;
+    cuda_graph.count++;
 #endif
     return GGML_STATUS_SUCCESS;
 }
