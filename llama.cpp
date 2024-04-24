@@ -17303,7 +17303,7 @@ LLAMA_API int32_t llama_chat_get_model_template(
         return -1;
     } else {
         snprintf(buf, length, "%s", model_template.c_str());
-        return model_template.size();
+        return model_template.size() + 1;
     }
 }
 
@@ -17469,7 +17469,7 @@ LLAMA_API int32_t llama_chat_get_prefix(
     }
     std::string output = ss.str();
     snprintf(buf, length, "%s", output.c_str());
-    return output.size();
+    return output.size() + 1;
 }
 
 LLAMA_API int32_t llama_chat_get_postfix(
@@ -17551,7 +17551,7 @@ LLAMA_API int32_t llama_chat_get_postfix(
     }
     std::string output = ss.str();
     snprintf(buf, length, "%s", output.c_str());
-    return output.size();
+    return output.size() + 1;
 }
 
 LLAMA_API bool llama_chat_support_system_message(const enum llama_chat_template ttmpl) {
@@ -17641,7 +17641,7 @@ LLAMA_API int32_t llama_chat_apply_template(
     if (buf && length > 0) {
         snprintf(buf, length, "%s", output.c_str());
     }
-    return output.size();
+    return output.size() + 1;
 }
 
 LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {

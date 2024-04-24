@@ -870,7 +870,7 @@ extern "C" {
     /// @param add_ass Whether to end the prompt with the token(s) that indicate the start of an assistant message.
     /// @param buf A buffer to hold the output formatted prompt. The recommended alloc size is 2 * (total number of characters of all messages)
     /// @param length The size of the allocated buffer
-    /// @return The total number of bytes of the formatted prompt. If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
+    /// @return The total number of bytes of the formatted prompt (null terminator included). If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
     LLAMA_API int32_t llama_chat_apply_template(
               const struct llama_model * model,
                             const char * tmpl,
@@ -885,7 +885,7 @@ extern "C" {
     /// @param name Template name (can be a nullptr for default template). See: https://github.com/ggerganov/llama.cpp/pull/6588
     /// @param buf The output buffer
     /// @param length The size of the allocated buffer
-    /// @return The total number of bytes of the template. If a named template cannot be found, it will use default template. If no template can be found, it returns -1
+    /// @return The total number of bytes of the template (null terminator included). If a named template cannot be found, it will use default template. If no template can be found, it returns -1
     LLAMA_API int32_t llama_chat_get_model_template(
                 const struct llama_model * model,
                               const char * name,
@@ -903,7 +903,7 @@ extern "C" {
     /// @param prev_role The role of the previous message, can be nullptr
     /// @param buf The output buffer
     /// @param length The size of the allocated buffer
-    /// @return The total number of bytes of the output string
+    /// @return The total number of bytes of the output string (null terminator included)
     LLAMA_API int32_t llama_chat_get_prefix(
                 const enum llama_chat_template   tmpl,
                                     const char * role,
@@ -917,7 +917,7 @@ extern "C" {
     /// @param prev_role The role of the previous message, can be nullptr
     /// @param buf The output buffer
     /// @param length The size of the allocated buffer
-    /// @return The total number of bytes of the output string
+    /// @return The total number of bytes of the output string (null terminator included)
     LLAMA_API int32_t llama_chat_get_postfix(
                 const enum llama_chat_template   tmpl,
                                     const char * role,
