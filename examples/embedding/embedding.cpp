@@ -49,6 +49,12 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
         }
 
         float * out = output + batch.seq_id[i][0] * n_embd;
+        //TODO: I would also add a parameter here to enable normalization or not.
+        /*fprintf(stdout, "unnormalized_embedding:");
+        for (int hh = 0; hh < n_embd; hh++) {
+            fprintf(stdout, "%9.6f ", embd[hh]);
+        }
+        fprintf(stdout, "\n");*/
         llama_embd_normalize(embd, out, n_embd);
     }
 }
@@ -124,6 +130,8 @@ int main(int argc, char ** argv) {
     }
 
     // add SEP if not present
+    // JoanFM: I propose to remove this line so that user can make sure that their model is properly configured to tokenize as expected.
+    // We could also add a parameter, but I think that adding parameters specific for the examples can become messy and unmantaibable easy
     for (auto & inp : inputs) {
         if (inp.empty() || inp.back() != llama_token_sep(model)) {
             inp.push_back(llama_token_sep(model));
