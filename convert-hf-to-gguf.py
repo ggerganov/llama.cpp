@@ -441,9 +441,7 @@ class Model(ABC):
 
         if vocab_size > len(tokens):
             pad_count = vocab_size - len(tokens)
-            print(
-                f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]"
-            )
+            logger.debug(f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]")
             for i in range(1, pad_count + 1):
                 tokens.append(f"[PAD{i}]")
                 scores.append(-1000.0)
@@ -2065,8 +2063,7 @@ class Phi3MiniModel(Model):
         tokenizer_path = self.dir_model / 'tokenizer.model'
 
         if not tokenizer_path.is_file():
-            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
-            sys.exit(1)
+            raise ValueError(f'Error: Missing {tokenizer_path}')
 
         tokenizer = SentencePieceProcessor(str(tokenizer_path))
 
@@ -2104,7 +2101,7 @@ class Phi3MiniModel(Model):
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
                     if (token_id >= vocab_size):
-                        print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        logger.debug(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                         continue
 
                     tokens[token_id] = key.encode("utf-8")
