@@ -39,6 +39,26 @@ extern char const *LLAMA_BUILD_TARGET;
 
 struct llama_control_vector_load_info;
 
+#ifdef _WIN32
+struct CPU_SET_INFORMATION
+{
+    int32_t LogicalProcessorIndex;
+    int32_t Id;
+    int32_t Group;
+    int32_t CoreIndex;
+    int32_t LastLevelCacheIndex;
+    int32_t NumaNodeIndex;
+    int32_t EfficiencyClass;
+    int32_t SchedulingClass;
+    int32_t Priority;
+    int32_t Threads;
+};
+
+#endif
+
+static const int32_t BEST_CORES            = 0;
+static const int32_t WORST_CORES           = 1;
+
 int get_math_cpu_count();
 int32_t get_num_physical_cores();
 
@@ -53,6 +73,12 @@ struct gpt_params {
     int32_t n_threads_draft       = -1;
     int32_t n_threads_batch       = -1;    // number of threads to use for batch processing (-1 = use n_threads)
     int32_t n_threads_batch_draft = -1;
+    bool    n_threads_auto        = true;
+    int32_t cpuset_lltraversal    = 0;
+    int32_t cpuset_order          = WORST_CORES;
+    int64_t cpuset_cpumask        = 0;
+    int32_t cpuset_allowzero      = 0;
+    int32_t cpuset_allowthreads   = 0;
     int32_t n_predict             = -1;    // new tokens to predict
     int32_t n_ctx                 = 512;   // context size
     int32_t n_batch               = 2048;  // logical batch size for prompt processing (must be >=32 to use BLAS)
