@@ -92,7 +92,7 @@ struct gpt_params {
     // // sampling parameters
     struct llama_sampling_params sparams;
 
-    std::string model                = "models/7B/ggml-model-f16.gguf"; // model path
+    std::string model                = "";  // model path
     std::string model_draft          = "";  // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = "";  // model url to download
