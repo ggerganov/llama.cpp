@@ -1310,6 +1310,29 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     return false;
 }
 
+void gpt_params_handle_model_default(gpt_params & params) {
+    if (!params.hf_repo.empty()) {
+        // short-hand to avoid specifying --hf-file -> default it to --model
+        if (params.hf_file.empty()) {
+            if (params.model.empty()) {
+                throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
+            }
+            params.hf_file = params.model;
+        } else if (params.model.empty()) {
+            params.model = "models/" + string_split(params.hf_file, '/').back();
+        }
+    } else if (!params.model_url.empty()) {
+        if (params.model.empty()) {
+            auto f = string_split(params.model_url, '#').front();
+            f = string_split(f, '?').front();
+            f = string_split(f, '/').back();
+            params.model =  "models/" + f;
+        }
+    } else if (params.model.empty()) {
+        params.model =  "models/7B/ggml-model-f16.gguf";
+    }
+}
+
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
@@ -1338,26 +1361,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
     }
 
-    if (!params.hf_repo.empty()) {
-        // short-hand to avoid specifying --hf-file -> default it to --model
-        if (params.hf_file.empty()) {
-            if (params.model.empty()) {
-                throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
-            }
-            params.hf_file = params.model;
-        } else if (params.model.empty()) {
-            params.model = "models/" + string_split(params.hf_file, '/').back();
-        }
-    } else if (!params.model_url.empty()) {
-        if (params.model.empty()) {
-            auto f = string_split(params.model_url, '#').front();
-            f = string_split(f, '?').front();
-            f = string_split(f, '/').back();
-            params.model =  "models/" + f;
-        }
-    } else if (params.model.empty()) {
-        params.model =  "models/7B/ggml-model-f16.gguf";
-    }
+    gpt_params_handle_model_default(params);
 
     if (params.escape) {
         process_escapes(params.prompt);

@@ -2846,6 +2846,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
         }
     }
 
+    gpt_params_handle_model_default(params);
+
     if (!params.kv_overrides.empty()) {
         params.kv_overrides.emplace_back();
         params.kv_overrides.back().key[0] = 0;
