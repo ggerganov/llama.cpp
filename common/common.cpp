@@ -77,7 +77,7 @@
 
 using json = nlohmann::ordered_json;
 
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__linux__) && defined(__x86_64__))
 std::vector<CPU_SET_INFORMATION> cpuset;
 std::vector<CPU_SET_INFORMATION> cpuset_best;
 std::vector<CPU_SET_INFORMATION> cpuset_worst;
@@ -92,12 +92,24 @@ int32_t PhysicalCores = std::thread::hardware_concurrency();
 // CPUSET logging
 //
 
-#define CPUSET_DEBUG 1
+#define CPUSET_DEBUG 0
 #if (CPUSET_DEBUG >= 1)
 #define CPUSET_PRINT_DEBUG(...) printf(__VA_ARGS__)
 #else
 #define CPUSET_PRINT_DEBUG(...)
 #endif
+
+bool cpuset_sorter_best(CPU_SET_INFORMATION const& lhs, CPU_SET_INFORMATION const& rhs) {
+        return lhs.SchedulingClass > rhs.SchedulingClass;
+}
+
+bool cpuset_sorter_worst(CPU_SET_INFORMATION const& lhs, CPU_SET_INFORMATION const& rhs) {
+        return lhs.SchedulingClass < rhs.SchedulingClass;
+}
+
+#endif
+
+#if defined(_WIN32)
 
 int32_t get_pos_procMask(ULONG_PTR procMask) {
             std::bitset<64> bMask = procMask;
@@ -114,14 +126,6 @@ int32_t get_pos_procMask(ULONG_PTR procMask) {
 int32_t get_count_procMask(ULONG_PTR procMask) {
             std::bitset<64> bMask = procMask;
             return bMask.count();
-}
-
-bool cpuset_sorter_best(CPU_SET_INFORMATION const& lhs, CPU_SET_INFORMATION const& rhs) {
-        return lhs.SchedulingClass > rhs.SchedulingClass;
-}
-
-bool cpuset_sorter_worst(CPU_SET_INFORMATION const& lhs, CPU_SET_INFORMATION const& rhs) {
-        return lhs.SchedulingClass < rhs.SchedulingClass;
 }
 
 ULONG generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
@@ -202,12 +206,250 @@ ULONG generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal,
 }
 #endif
 
+#if defined(__x86_64__) && defined(__linux__)
+#include <pthread.h>
+
+int32_t setCpuAffinity(std::bitset<64> cpuMask) {
+    int32_t coreSelected = cpuMask.count();
+
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+
+    for (int32_t i = 0; i < 64; ++i) {
+        if (cpuMask[i] == 1) {
+            CPUSET_PRINT_DEBUG("Setting CPU %d\n", i);
+            CPU_SET(i, &mask);
+        }
+    }
+
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
+            CPUSET_PRINT_DEBUG("setCpuAffinity sched_setaffinity error\n");
+    }
+    if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == -1) {
+            CPUSET_PRINT_DEBUG("setCpuAffinity pthread_setaffinity_np error\n");
+    }
+     
+    return coreSelected;
+}
+
+uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
+    std::bitset<64> bMask;
+    std::vector<CPU_SET_INFORMATION> _cpuset;
+    int32_t bVal = 0;
+    int32_t assigned_t = 0;
+    int32_t llcache = -1;
+
+    if (cpuMask != 0) {
+        std::bitset<64> reqMask = cpuMask;
+        CPUSET_PRINT_DEBUG("Custom cpuMask: %s\n", reqMask.to_string().c_str());
+        bMask = cpuMask;
+        return bMask.to_ullong();
+    }
+
+    if (direction == BEST_CORES) {
+        _cpuset = cpuset_best;
+    } else {
+        _cpuset = cpuset_worst;
+    }
+    CPUSET_PRINT_DEBUG("\ngenerate_Mask dir=%d req_threads=%d lltraversal=%d llcache=%d\n", direction, req_threads, lltraversal, llcache);
+    for (auto index : _cpuset) {
+        bVal = 0;
+        if ((index.LogicalProcessorIndex != 0 || allowcz) &&
+            ((cpuset_smt && index.Threads > 1) || !cpuset_smt || allowtc) &&
+            index.EfficiencyClass == 0 &&
+            ((llcache == index.LastLevelCacheIndex && lltraversal == 0) || llcache == -1 || lltraversal == 1)
+            ) {
+            if (lltraversal == 0) {
+                CPUSET_PRINT_DEBUG("### cache for lltraversal %d pre llcache=%d now_cache=%u\n", lltraversal, llcache, index.LastLevelCacheIndex);
+                llcache = index.LastLevelCacheIndex;
+                CPUSET_PRINT_DEBUG("### cache for lltraversal %d pos llcache=%d now_cache=%u\n", lltraversal, llcache, index.LastLevelCacheIndex);
+            } 
+            bVal = 1;
+        }
+        if (req_threads > 0 && assigned_t >= req_threads) { bVal = 0;}
+        if(bVal == 1) {
+            assigned_t++;
+            CPUSET_PRINT_DEBUG("--> Assigned LogicalCoreIndex: %d lltraversal=%d llcache=%d now_cache=%u\n", index.LogicalProcessorIndex, lltraversal, llcache, index.LastLevelCacheIndex);
+        }
+        bMask[index.LogicalProcessorIndex] = bVal;
+        CPUSET_PRINT_DEBUG("LogicalCoreIndex: %d b:%d smt=%d thrds=%d lltraversal=%d acz=%d atc=%d\n", index.LogicalProcessorIndex, bVal, cpuset_smt, index.Threads, lltraversal, allowcz, allowtc);
+    }
+    return bMask.to_ullong();
+}
+
+static void cpuid(unsigned leaf, unsigned subleaf,
+                  unsigned *eax, unsigned *ebx, unsigned *ecx, unsigned *edx) {
+    __asm__("movq\t%%rbx,%%rsi\n\t"
+            "cpuid\n\t"
+            "xchgq\t%%rbx,%%rsi"
+            : "=a"(*eax), "=S"(*ebx), "=c"(*ecx), "=d"(*edx)
+            : "0"(leaf), "2"(subleaf));
+}
+
+static int pin_cpu(int cpu) {
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    CPU_SET(cpu, &mask);
+    return pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask);
+}
+
+static bool is_hybrid_cpu(void) {
+    unsigned eax, ebx, ecx, edx;
+    cpuid(7, 0, &eax, &ebx, &ecx, &edx);
+    return !!(edx & (1u << 15));
+}
+
+static bool is_running_on_efficiency_core(void) {
+    unsigned eax, ebx, ecx, edx;
+    cpuid(0x1a, 0, &eax, &ebx, &ecx, &edx);
+    int intel_atom = 0x20;
+    int core_type = (eax & 0xff000000u) >> 24;
+    return core_type == intel_atom;
+}
+
+static int count_math_cpus(int cpu_count) {
+    int result = 0;
+    for (int cpu = 0; cpu < cpu_count; ++cpu) {
+        if (pin_cpu(cpu)) {
+            return -1;
+        }
+        if (is_running_on_efficiency_core()) {
+            continue; // efficiency cores harm lockstep threading
+        }
+        ++cpu; // hyperthreading isn't useful for linear algebra
+        ++result;
+    }
+    return result;
+}
+
+uint64_t set_procMask(int32_t direction = 0 , int32_t req_threads = 0, int32_t lltraversal = 0, int32_t allowtc = 0, int32_t allowcz = 0, int64_t cpuMask = 0) {
+    std::bitset<64> bMask;
+
+    bMask = generate_Mask(direction, req_threads, lltraversal, allowtc, allowcz, cpuMask);
+
+    numPhysicalCores = bMask.count();
+
+    CPUSET_PRINT_DEBUG("Generated Mask: %s\n", bMask.to_string().c_str());
+    return bMask.to_ullong();
+}
+
+#endif
+
 int32_t get_num_physical_cores() {
-#ifdef __linux__ // __x86_64__ && __linux__
+#if defined(__linux__) && defined(__x86_64__) // __x86_64__ && __linux__
+    if (numPhysicalCores > 0) {
+        return numPhysicalCores;    
+    }
     // enumerate the set of thread siblings, num entries is num cores
+    fprintf(stderr, "physical cpus count\n");
+    std::unordered_set<std::string> siblings;
+    int32_t cursize = 0;
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    bool is_hybrid = is_hybrid_cpu();
+    bool is_hybrid_core = false;
+    std::vector<CPU_SET_INFORMATION> _cpuset;
+    int32_t numLogicalCores = 0;
+
+    for (uint32_t cpu=0; cpu < UINT32_MAX; ++cpu) {
+        fprintf(stderr, "physical cpu check %d\n", cpu);
+        std::ifstream thread_siblings("/sys/devices/system/cpu/cpu"
+            + std::to_string(cpu) + "/topology/thread_siblings");
+        if (!thread_siblings.is_open()) {
+            break; // no more cpus
+        }
+        is_hybrid_core = false;
+        if (is_hybrid) {
+            if (pin_cpu(cpu) == 0) {
+                if (is_running_on_efficiency_core()) is_hybrid_core = true;
+            }
+        }
+        numLogicalCores++;
+
+        CPU_SET_INFORMATION _cpuset;
+        _cpuset.LogicalProcessorIndex = cpu;
+        _cpuset.CoreIndex = cpu;
+        _cpuset.Id = cpu;
+        _cpuset.Group = 0;
+        _cpuset.LastLevelCacheIndex = 0;
+        _cpuset.NumaNodeIndex = 0;
+        _cpuset.EfficiencyClass = is_hybrid_core ? 1 : 0;
+        _cpuset.Threads = 1;
+
+        std::ifstream cppc_tag("/sys/devices/system/cpu/cpu"
+            + std::to_string(cpu) + "/acpi_cppc/highest_perf");
+        if (!cppc_tag.is_open()) {
+            _cpuset.SchedulingClass = 256-cpu;
+        } else {
+            std::string line;
+            if (std::getline(cppc_tag, line)) {
+                int32_t _thistag = std::stoi(line);    
+                _cpuset.SchedulingClass = _thistag;
+            }
+        }
+
+        if (is_hybrid_core) continue;
+        std::string line;
+        if (std::getline(thread_siblings, line)) {
+            cursize = static_cast<int32_t>(siblings.size());
+            siblings.insert(line);
+            if (static_cast<int32_t>(siblings.size()) > cursize ) {
+                _cpuset.Threads = 2;
+                CPU_SET(cpu, &mask);
+                fprintf(stderr, "physical cpu %u: %s\n", cpu, line.c_str());
+            } else {
+                cpuset_smt = true;
+            }
+        }
+        cpuset.push_back(_cpuset);
+    }
+    if (!siblings.empty()) {
+        cpuset_enable = true;
+        if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
+                fprintf(stdout, "sched_setaffinity error\n");
+        }
+        if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == -1) {
+                fprintf(stdout, "pthread_setaffinity_np error\n");
+        }
+        fprintf(stderr, "physical cpus %li\n", siblings.size());
+
+        cpuset_best = cpuset;
+        cpuset_worst = cpuset;
+        std::sort(cpuset_best.begin(), cpuset_best.end(), &cpuset_sorter_best);
+        std::sort(cpuset_worst.begin(), cpuset_worst.end(), &cpuset_sorter_worst);
+
+        //int32_t physicalCount = 0;
+        int32_t physicalCount = static_cast<int32_t>(siblings.size());
+        //physicalCount = get_count_procMask(generate_Mask(WORST_CORES, 0, 1, 0, 1, 0));
+
+        CPUSET_PRINT_DEBUG("\n\n### Logical Processors Summary ###\n\n");
+
+        for (int32_t _logicalCore = 0; _logicalCore < numLogicalCores;)
+        {
+                CPUSET_PRINT_DEBUG("\nLogical: %u\n", _logicalCore);
+                CPUSET_PRINT_DEBUG("Threads: %u\n", cpuset[_logicalCore].Threads);
+                CPUSET_PRINT_DEBUG("Id: %u\n", cpuset[_logicalCore].Id);
+                CPUSET_PRINT_DEBUG("Group: %u\n", cpuset[numLogicalCores].Group);
+                CPUSET_PRINT_DEBUG("LastLevelCacheIndex: %u\n", cpuset[_logicalCore].LastLevelCacheIndex);
+                CPUSET_PRINT_DEBUG("NumaNodeIndex: %u\n", cpuset[_logicalCore].NumaNodeIndex);
+                CPUSET_PRINT_DEBUG("LogicalProcessorIndex: %u\n", cpuset[_logicalCore].LogicalProcessorIndex);
+                CPUSET_PRINT_DEBUG("EfficiencyClass: %u\n", cpuset[_logicalCore].EfficiencyClass);
+                CPUSET_PRINT_DEBUG("SchedulingClass: %u\n", cpuset[_logicalCore].SchedulingClass);
+                _logicalCore++;
+        }
+
+        CPUSET_PRINT_DEBUG("\n\n<Grand total> \n\n");    
+        CPUSET_PRINT_DEBUG("Total Physical: %d\n", physicalCount);    
+        CPUSET_PRINT_DEBUG("Total Logical: %u\n", numLogicalCores);    
+
+        numPhysicalCores = physicalCount;
+        return physicalCount;
+    }
+#elif defined(__linux__) // __linux__
+// enumerate the set of thread siblings, num entries is num cores
     std::unordered_set<std::string> siblings;
     for (uint32_t cpu=0; cpu < UINT32_MAX; ++cpu) {
-        std::ifstream thread_siblings("/sys/devices/system/cpu"
+        std::ifstream thread_siblings("/sys/devices/system/cpu/cpu"
             + std::to_string(cpu) + "/topology/thread_siblings");
         if (!thread_siblings.is_open()) {
             break; // no more cpus
@@ -289,6 +531,7 @@ int32_t get_num_physical_cores() {
                 _cpuset.NumaNodeIndex = nextCPUSet->CpuSet.NumaNodeIndex;
                 _cpuset.EfficiencyClass = nextCPUSet->CpuSet.EfficiencyClass;
                 _cpuset.SchedulingClass = nextCPUSet->CpuSet.SchedulingClass;
+                _cpuset.Threads = 1;
                 cpuset.push_back(_cpuset);
                 numLogicalCores++;
         }
@@ -370,58 +613,10 @@ int32_t get_num_physical_cores() {
     return physicalCount;
 #endif
     unsigned int n_threads = std::thread::hardware_concurrency();
-    return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;}
-
-
-#if defined(__x86_64__) && defined(__linux__)
-#include <pthread.h>
-
-static void cpuid(unsigned leaf, unsigned subleaf,
-                  unsigned *eax, unsigned *ebx, unsigned *ecx, unsigned *edx) {
-    __asm__("movq\t%%rbx,%%rsi\n\t"
-            "cpuid\n\t"
-            "xchgq\t%%rbx,%%rsi"
-            : "=a"(*eax), "=S"(*ebx), "=c"(*ecx), "=d"(*edx)
-            : "0"(leaf), "2"(subleaf));
+    return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
-static int pin_cpu(int cpu) {
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-    CPU_SET(cpu, &mask);
-    return pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask);
-}
-
-static bool is_hybrid_cpu(void) {
-    unsigned eax, ebx, ecx, edx;
-    cpuid(7, 0, &eax, &ebx, &ecx, &edx);
-    return !!(edx & (1u << 15));
-}
-
-static bool is_running_on_efficiency_core(void) {
-    unsigned eax, ebx, ecx, edx;
-    cpuid(0x1a, 0, &eax, &ebx, &ecx, &edx);
-    int intel_atom = 0x20;
-    int core_type = (eax & 0xff000000u) >> 24;
-    return core_type == intel_atom;
-}
-
-static int count_math_cpus(int cpu_count) {
-    int result = 0;
-    for (int cpu = 0; cpu < cpu_count; ++cpu) {
-        if (pin_cpu(cpu)) {
-            return -1;
-        }
-        if (is_running_on_efficiency_core()) {
-            continue; // efficiency cores harm lockstep threading
-        }
-        ++cpu; // hyperthreading isn't useful for linear algebra
-        ++result;
-    }
-    return result;
-}
-
-#elif defined(_WIN32)
+#if defined(_WIN32)
 
 #define STATUS_ACCESS_DENIED ((NTSTATUS)0xC0000022L)
 #define STATUS_SUCCESS		 ((NTSTATUS)0)
@@ -436,30 +631,6 @@ typedef enum _PROCESSINFOCLASS {
 	ProcessDefaultCpuSetsInformation = 66,
 	ProcessAllowedCpuSetsInformation = 67,
 } PROCESSINFOCLASS;
-
-extern "C"
-NTSTATUS
-NTAPI
-NtQuerySystemInformationEx(
-	_In_ SYSTEM_INFORMATION_CLASS SystemInformationClass,
-	_In_reads_bytes_(InputBufferLength) PVOID InputBuffer,
-	_In_ ULONG InputBufferLength,
-	_Out_writes_bytes_opt_(SystemInformationLength) PVOID SystemInformation,
-	_In_ ULONG SystemInformationLength,
-	_Out_opt_ PULONG ReturnLength
-);
-
-
-extern "C"
-NTSTATUS
-NTAPI
-NtQueryInformationProcess(
-	_In_ HANDLE ProcessHandle,
-	_In_ PROCESSINFOCLASS ProcessInformationClass,
-	_Out_writes_bytes_opt_(ProcessInformationLength) PVOID ProcessInformation,
-	_In_ ULONG ProcessInformationLength,
-	_Out_opt_ PULONG ReturnLength
-);
 
 int32_t setCpuAffinity(std::bitset<64> cpuMask) {
     DWORD_PTR processAffinityMask;
@@ -571,7 +742,7 @@ int32_t setCpuAffinity(std::bitset<64> cpuMask) {
     return coreSelected;
 }
 
-ULONG set_procMask(int32_t direction = 0 , int32_t req_threads = 0, int32_t lltraversal = 0, int32_t allowtc = 0, int32_t allowcz = 0, int64_t cpuMask = 0) {
+ULONG set_procMask(int32_t direction = 0, int32_t req_threads = 0, int32_t lltraversal = 0, int32_t allowtc = 0, int32_t allowcz = 0, int64_t cpuMask = 0) {
     std::bitset<64> bMask;
 
     bMask = generate_Mask(direction, req_threads, lltraversal, allowtc, allowcz, cpuMask);
@@ -588,7 +759,7 @@ ULONG set_procMask(int32_t direction = 0 , int32_t req_threads = 0, int32_t lltr
  * Returns number of CPUs on system that are useful for math.
  */
 int get_math_cpu_count() {
-#if defined(__x86_64__) && defined(__linux__)
+#if defined(__x86_164__) && defined(__linux__)
     int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
     if (cpu_count < 1) {
         return get_num_physical_cores();
@@ -604,7 +775,7 @@ int get_math_cpu_count() {
         }
     }
 
-#elif defined(_WIN32)
+#elif defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
     int32_t _numPhysical = get_num_physical_cores();
     if (cpuset_enable) {
         // Initial Affinity set
@@ -615,7 +786,7 @@ int get_math_cpu_count() {
     return get_num_physical_cores();
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
 int get_math_cpu_count(int32_t req_threads, int32_t cpuset_order, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
     int32_t _numPhysical = get_num_physical_cores();
     if (cpuset_enable) {
@@ -694,7 +865,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         std::string value(argv[i]);
         if (value == "1" || value == "on" || value == "true" || value == "True") { params.cpuset_allowzero = 1; }
         else if (value == "0" || value == "off" || value == "false" || value == "False") { params.cpuset_allowzero = 0; }
@@ -707,7 +878,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         std::string value(argv[i]);
         if (value == "1" || value == "on" || value == "true" || value == "True") { params.cpuset_allowthreads = 1; }
         else if (value == "0" || value == "off" || value == "false" || value == "False") { params.cpuset_allowthreads = 0; }
@@ -720,7 +891,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         std::string value(argv[i]);
         std::size_t pos{};
         int64_t cpuMask = 0;
@@ -749,7 +920,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         std::string value(argv[i]);
         if (value == "1" || value == "on" || value == "true" || value == "True") { params.cpuset_lltraversal = 1; }
         else if (value == "0" || value == "off" || value == "false" || value == "False") { params.cpuset_lltraversal = 0; }
@@ -762,7 +933,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         std::string value(argv[i]);
         if (value == "1" || value == "on" || value == "true" || value == "True") { params.cpuset_order = BEST_CORES; }
         else if (value == "0" || value == "off" || value == "false" || value == "False") { params.cpuset_order = WORST_CORES; }
@@ -775,7 +946,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         params.n_threads = std::stoi(argv[i]);
         if (params.n_threads <= 0) {
             params.n_threads = numPhysicalCores;
@@ -795,7 +966,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.n_threads_batch = std::stoi(argv[i]);
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         if (params.n_threads_batch <= 0 || params.n_threads_batch > numPhysicalCores) {
             params.n_threads_batch = numPhysicalCores;
 #else            
@@ -811,7 +982,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.n_threads_draft = std::stoi(argv[i]);
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         if (params.n_threads_draft <= 0 || params.n_threads_draft > numPhysicalCores) {
             params.n_threads_draft = numPhysicalCores;
 #else            
@@ -827,7 +998,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.n_threads_batch_draft = std::stoi(argv[i]);
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         if (params.n_threads_batch_draft <= 0 || params.n_threads_batch_draft > numPhysicalCores) {
             params.n_threads_batch_draft = numPhysicalCores;
 #else            
@@ -1874,9 +2045,14 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         }
     }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
     params.n_threads = get_math_cpu_count(params.n_threads_auto ? 0 : params.n_threads, params.cpuset_order, params.cpuset_lltraversal, params.cpuset_allowthreads, params.cpuset_allowzero, params.cpuset_cpumask);
+#endif
+#if defined(_WIN32)
     CPUSET_PRINT_DEBUG("Using %d threads order=%d llcache=%d acm=%d acz=%d cpumask=%lli\n", params.n_threads, params.cpuset_order, params.cpuset_lltraversal, params.cpuset_allowthreads, params.cpuset_allowzero, params.cpuset_cpumask);
+#endif
+#if defined(__x86_64__) && defined(__linux__)
+    CPUSET_PRINT_DEBUG("Using %d threads order=%d llcache=%d acm=%d acz=%d cpumask=%li\n", params.n_threads, params.cpuset_order, params.cpuset_lltraversal, params.cpuset_allowthreads, params.cpuset_allowzero, params.cpuset_cpumask);
 #endif
 
     if (invalid_param) {
@@ -2040,7 +2216,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     if (llama_supports_mmap()) {
         printf("  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         printf("  -bco                  change the order of the selected cores from the best to worst (default: worst to best)\n");
         printf("  -llct                 allow the core selection to traverse the last level cache (default: disabled)\n");
         printf("  -acz                  allow the core selection to pick the core 0 as well (default: disabled)\n");
@@ -3240,13 +3416,18 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     dump_vector_float_yaml(stream, "tensor_split", tensor_split_vector);
 
     fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
-#if defined(_WIN32)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
     fprintf(stream, "threads: %d # default: %u\n", params.n_threads, get_math_cpu_count());
     fprintf(stream, "bco: %d # default: 0\n", params.cpuset_order);
     fprintf(stream, "llct: %d # default: 0\n", params.cpuset_lltraversal);
     fprintf(stream, "acz: %d # default: 0\n", params.cpuset_allowzero);
     fprintf(stream, "atc: %d # default: 0\n", params.cpuset_allowthreads);
+#if defined(_WIN32)
     fprintf(stream, "ccm: %lli # default: none\n", params.cpuset_cpumask);
+#endif
+#if defined(__x86_64__) && defined(__linux__)
+    fprintf(stream, "ccm: %li # default: none\n", params.cpuset_cpumask);
+#endif
 #else
 
     fprintf(stream, "threads: %d # default: %u\n", params.n_threads, std::thread::hardware_concurrency());

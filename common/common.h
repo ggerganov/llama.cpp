@@ -39,7 +39,7 @@ extern char const *LLAMA_BUILD_TARGET;
 
 struct llama_control_vector_load_info;
 
-#ifdef _WIN32
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
 struct CPU_SET_INFORMATION
 {
     int32_t LogicalProcessorIndex;
@@ -54,8 +54,12 @@ struct CPU_SET_INFORMATION
     int32_t Threads;
 };
 
-#endif
+bool cpuset_sorter_best(CPU_SET_INFORMATION const& lhs, CPU_SET_INFORMATION const& rhs);
 
+bool cpuset_sorter_worst(CPU_SET_INFORMATION const& lhs, CPU_SET_INFORMATION const& rhs);
+
+int get_math_cpu_count(int32_t req_threads, int32_t cpuset_order, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask);
+#endif
 static const int32_t BEST_CORES            = 0;
 static const int32_t WORST_CORES           = 1;
 
