@@ -11,6 +11,7 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
  * Continuous batching
  * Multimodal (wip)
  * Monitoring endpoints
+ * Schema-constrained JSON response format
 
 The project is under active development, and we are [looking for feedback and contributors](https://github.com/ggerganov/llama.cpp/issues/4216).
 
@@ -57,6 +58,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - `-n N, --n-predict N`: Set the maximum tokens to predict. Default: `-1`
 - `--slots-endpoint-disable`: To disable slots state monitoring endpoint. Slots state may contain user data, prompts included.
 - `--metrics`: enable prometheus `/metrics` compatible endpoint. Default: disabled
+- `--slot-save-path PATH`: Specifies the path where the state of slots (the prompt cache) can be stored. If not provided, the slot management endpoints will be disabled.
 - `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name.  Default: template taken from model's metadata. We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
 - `--log-disable`: Output logs to stdout only, not to `llama.log`. Default: enabled
 - `--log-format FORMAT`: Define the log output to FORMAT: json or text Default: `json`
@@ -249,6 +251,8 @@ node index.js
 
     `grammar`: Set grammar for grammar-based sampling.  Default: no grammar
 
+    `json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
+
     `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
     `ignore_eos`: Ignore end of stream token and continue generating.  Default: `false`
@@ -363,6 +367,8 @@ Notice that each `probs` is an array of length `n_probs`.
     *Options:*
 
     See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such as `mirostat` are supported.
+
+    The `response_format` parameter supports both plain JSON output (e.g. `{"type": "json_object"}`) and schema-constrained JSON (e.g. `{"type": "json_object", "schema": {"type": "string", "minLength": 10, "maxLength": 100}}`), similar to other OpenAI-inspired API providers.
 
     *Examples:*
 
@@ -516,6 +522,57 @@ Available metrics:
 - `llamacpp:kv_cache_tokens`: KV-cache tokens.
 - `llamacpp:requests_processing`: Number of requests processing.
 - `llamacpp:requests_deferred`: Number of requests deferred.
+
+- **POST** `/slots/{id_slot}?action=save`: Save the prompt cache of the specified slot to a file.
+
+    *Options:*
+
+    `filename`: Name of the file to save the slot's prompt cache. The file will be saved in the directory specified by the `--slot-save-path` server parameter.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "filename": "slot_save_file.bin",
+    "n_saved": 1745,
+    "n_written": 14309796,
+    "timings": {
+        "save_ms": 49.865
+    }
+}
+```
+
+- **POST** `/slots/{id_slot}?action=restore`: Restore the prompt cache of the specified slot from a file.
+
+    *Options:*
+
+    `filename`: Name of the file to restore the slot's prompt cache from. The file should be located in the directory specified by the `--slot-save-path` server parameter.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "filename": "slot_save_file.bin",
+    "n_restored": 1745,
+    "n_read": 14309796,
+    "timings": {
+        "restore_ms": 42.937
+    }
+}
+```
+
+- **POST** `/slots/{id_slot}?action=erase`: Erase the prompt cache of the specified slot.
+
+### Result JSON
+
+```json
+{
+    "id_slot": 0,
+    "n_erased": 1745
+}
+```
 
 ## More examples
 

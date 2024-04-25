@@ -24,7 +24,7 @@ After building, run: `./llava-cli` to see the usage. For example:
 
 ## LLaVA 1.5
 
-- Clone a LLaVA and a CLIP model ([available options](https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md)). For example:
+1. Clone a LLaVA and a CLIP model ([available options](https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md)). For example:
 
 ```sh
 git clone https://huggingface.co/liuhaotian/llava-v1.5-7b

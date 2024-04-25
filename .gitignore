@@ -34,6 +34,7 @@ lcov-report/
 gcovr-report/
 
 build*
+!build.zig
 cmake-build-*
 out/
 tmp/
@@ -48,6 +49,7 @@ models-mnt
 /convert-llama2c-to-ggml
 /embd-input-test
 /embedding
+/eval-callback
 /gguf
 /gguf-llama-simple
 /gguf-split
@@ -99,6 +101,9 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+examples/server/*.html.hpp
+examples/server/*.js.hpp
+examples/server/*.mjs.hpp
 
 poetry.lock
 poetry.toml

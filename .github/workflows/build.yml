@@ -32,6 +32,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -52,7 +54,7 @@ jobs:
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          ctest -L 'main|curl' --verbose --timeout 900
 
       - name: Determine tag name
         id: tag
@@ -88,6 +90,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -101,7 +105,9 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON ..
+          # Metal is disabled due to intermittent failures with Github runners not having a GPU:
+          # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL=OFF -DLLAMA_CURL=ON ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -204,26 +210,28 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential libcurl4-openssl-dev
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          ctest -L 'main|curl' --verbose --timeout 900
 
       - name: Test llama2c conversion
         id: llama2c_test
@@ -235,6 +243,33 @@ jobs:
           wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin
           ./bin/convert-llama2c-to-ggml --copy-vocab-from-model ./tok512.bin --llama2c-model stories260K.bin --llama2c-output-model stories260K.gguf
           ./bin/main -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          cp LICENSE ./build/bin/
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
+          name: llama-bin-ubuntu-x64.zip
 
 #  ubuntu-latest-cmake-sanitizer:
 #    runs-on: ubuntu-latest
@@ -938,6 +973,12 @@ jobs:
       - name: Download artifacts
         id: download-artifact
         uses: actions/download-artifact@v4
+        with:
+          path: ./artifact
+
+      - name: Move artifacts
+        id: move_artifacts
+        run: mkdir -p ./artifact/release && mv ./artifact/*/*.zip ./artifact/release
 
       - name: Create release
         id: create_release
@@ -956,7 +997,7 @@ jobs:
             const path = require('path');
             const fs = require('fs');
             const release_id = '${{ steps.create_release.outputs.id }}';
-            for (let file of await fs.readdirSync('./artifact')) {
+            for (let file of await fs.readdirSync('./artifact/release')) {
               if (path.extname(file) === '.zip') {
                 console.log('uploadReleaseAsset', file);
                 await github.repos.uploadReleaseAsset({
@@ -964,7 +1005,7 @@ jobs:
                   repo: context.repo.repo,
                   release_id: release_id,
                   name: file,
-                  data: await fs.readFileSync(`./artifact/${file}`)
+                  data: await fs.readFileSync(`./artifact/release/${file}`)
                 });
               }
             }

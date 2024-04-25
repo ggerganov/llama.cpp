@@ -61,7 +61,10 @@ enum server_task_type {
     SERVER_TASK_TYPE_COMPLETION,
     SERVER_TASK_TYPE_CANCEL,
     SERVER_TASK_TYPE_NEXT_RESPONSE,
-    SERVER_TASK_TYPE_METRICS
+    SERVER_TASK_TYPE_METRICS,
+    SERVER_TASK_TYPE_SLOT_SAVE,
+    SERVER_TASK_TYPE_SLOT_RESTORE,
+    SERVER_TASK_TYPE_SLOT_ERASE,
 };
 
 struct server_task {
@@ -128,6 +131,7 @@ struct server_params {
 
     bool slots_endpoint   = true;
     bool metrics_endpoint = false;
+    std::string slot_save_path;
 };
 
 struct server_slot {
@@ -685,6 +689,7 @@ struct server_context {
         n_ctx = llama_n_ctx(ctx);
 
         add_bos_token = llama_should_add_bos_token(model);
+        GGML_ASSERT(llama_add_eos_token(model) != 1);
 
         return true;
     }
@@ -754,7 +759,7 @@ struct server_context {
         metrics.init();
     }
 
-    std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const {
+    std::vector<llama_token> tokenize(const json & json_prompt, bool add_special) const {
         // TODO: currently, we tokenize using special tokens by default
         //       this is not always correct (see https://github.com/ggerganov/llama.cpp/pull/4160#issuecomment-1824826216)
         //       but it's better compared to completely ignoring ChatML and other chat templates
@@ -772,7 +777,7 @@ struct server_context {
 
                     std::vector<llama_token> p;
                     if (first) {
-                        p = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
+                        p = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
                         first = false;
                     } else {
                         p = ::llama_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
@@ -789,7 +794,7 @@ struct server_context {
             }
         } else {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
+            prompt_tokens = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
         }
 
         return prompt_tokens;
@@ -849,12 +854,12 @@ struct server_context {
         slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
         slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
         slot.params.n_discard          = json_value(data, "n_discard",         default_params.n_discard);
-        slot.params.seed               = json_value(data, "seed",              default_params.seed);
+        slot.sparams.seed              = json_value(data, "seed",              default_sparams.seed);
         slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
         slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
         // process "json_schema" and "grammar"
-        if (data.contains("json_schema") && data.contains("grammar")) {
+        if (data.contains("json_schema") && !data["json_schema"].is_null() && data.contains("grammar") && !data["grammar"].is_null()) {
             send_error(task, "Either \"json_schema\" or \"grammar\" can be specified, but not both", ERROR_TYPE_INVALID_REQUEST);
             return false;
         } else if (data.contains("json_schema") && !data.contains("grammar")) {
@@ -1023,7 +1028,6 @@ struct server_context {
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
                 return false;
             }
-            llama_set_rng_seed(ctx, slot.params.seed);
         }
 
         slot.command = SLOT_COMMAND_LOAD_PROMPT;
@@ -1054,7 +1058,7 @@ struct server_context {
         system_tokens.clear();
 
         if (!system_prompt.empty()) {
-            system_tokens = ::llama_tokenize(ctx, system_prompt, add_bos_token);
+            system_tokens = ::llama_tokenize(ctx, system_prompt, true);
 
             llama_batch_clear(batch);
 
@@ -1078,7 +1082,7 @@ struct server_context {
                 };
 
                 if (llama_decode(ctx, batch_view) != 0) {
-                    LOG_TEE("%s: llama_decode() failed\n", __func__);
+                    LOG_ERROR("llama_decode() failed", {});
                     return;
                 }
             }
@@ -1113,7 +1117,7 @@ struct server_context {
 
     bool process_token(completion_token_output & result, server_slot & slot) {
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = llama_token_to_piece(ctx, result.tok);
+        const std::string token_str = llama_token_to_piece(ctx, result.tok, false);
         slot.sampled = result.tok;
 
         // search stop word and delete it
@@ -1196,7 +1200,7 @@ struct server_context {
             });
         }
 
-        if (result.tok == llama_token_eos(model)) {
+        if (llama_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
@@ -1276,7 +1280,11 @@ struct server_context {
     }
 
     void send_error(const int id_task, const int id_multi, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
-        LOG_TEE("task %i - error: %s\n", id_task, error.c_str());
+        LOG_ERROR("task error", {
+            {"id_multi", id_multi},
+            {"id_task", id_task},
+            {"error", error},
+        });
 
         server_task_result res;
         res.id       = id_task;
@@ -1612,6 +1620,107 @@ struct server_context {
                     }
                     queue_results.send(res);
                 } break;
+            case SERVER_TASK_TYPE_SLOT_SAVE:
+                {
+                    int id_slot = task.data["id_slot"];
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    const size_t token_count = slot->cache_tokens.size();
+                    const int64_t t_start = ggml_time_us();
+
+                    std::string filename = task.data["filename"];
+                    std::string filepath = task.data["filepath"];
+
+                    const size_t nwrite = llama_state_seq_save_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), token_count);
+
+                    const int64_t t_end = ggml_time_us();
+                    const double t_save_ms = (t_end - t_start) / 1000.0;
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",   id_slot },
+                        { "filename",  filename },
+                        { "n_saved",   token_count }, // tokens saved
+                        { "n_written", nwrite },      // bytes written
+                        { "timings", {
+                            { "save_ms", t_save_ms }
+                        } }
+                    };
+                    queue_results.send(result);
+                } break;
+            case SERVER_TASK_TYPE_SLOT_RESTORE:
+                {
+                    int id_slot = task.data["id_slot"];
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    const int64_t t_start = ggml_time_us();
+
+                    std::string filename = task.data["filename"];
+                    std::string filepath = task.data["filepath"];
+
+                    slot->cache_tokens.resize(slot->n_ctx);
+                    size_t token_count = 0;
+                    size_t nread = llama_state_seq_load_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), slot->cache_tokens.size(), &token_count);
+                    if (nread == 0) {
+                        slot->cache_tokens.resize(0);
+                        send_error(task, "Unable to restore slot, no available space in KV cache or invalid slot save file", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+                    slot->cache_tokens.resize(token_count);
+
+                    const int64_t t_end = ggml_time_us();
+                    const double t_restore_ms = (t_end - t_start) / 1000.0;
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",    id_slot },
+                        { "filename",   filename },
+                        { "n_restored", token_count }, // tokens restored
+                        { "n_read",     nread },       // bytes read
+                        { "timings", {
+                            { "restore_ms", t_restore_ms }
+                        } }
+                    };
+                    queue_results.send(result);
+                } break;
+            case SERVER_TASK_TYPE_SLOT_ERASE:
+                {
+                    int id_slot = task.data["id_slot"];
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    // Erase token cache
+                    const size_t n_erased = slot->cache_tokens.size();
+                    llama_kv_cache_seq_rm(ctx, slot->id + 1, -1, -1);
+                    slot->cache_tokens.clear();
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",  id_slot },
+                        { "n_erased", n_erased }
+                    };
+                    queue_results.send(result);
+                } break;
         }
     }
 
@@ -1809,7 +1918,7 @@ struct server_context {
                             prefix_tokens.push_back(llama_token_middle(model));
                             prompt_tokens = prefix_tokens;
                         } else {
-                            prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);  // add BOS if there isn't system prompt
+                            prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
                         }
 
                         slot.n_past = 0;
@@ -2080,7 +2189,11 @@ struct server_context {
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
-                    LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
+                    LOG_ERROR("failed to decode the batch: KV cache is full - try increasing it via the context size", {
+                        {"i",   i},
+                        {"n_batch",  ret},
+                        {"ret",   ret},
+                    });
                     for (auto & slot : slots) {
                         slot.state = SLOT_STATE_PROCESSING;
                         slot.command = SLOT_COMMAND_NONE;
@@ -2090,11 +2203,15 @@ struct server_context {
                     break; // break loop of n_batch
                 }
 
-                LOG_TEE("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
-
                 // retry with half the batch size to try to find a free slot in the KV cache
                 n_batch /= 2;
                 i -= n_batch;
+
+                LOG_WARNING("failed to find free space in the KV cache, retrying with smaller batch size - try increasing it via the context size or enable defragmentation", {
+                    {"i",   i},
+                    {"n_batch",  n_batch},
+                    {"ret",   ret},
+                });
 
                 continue; // continue loop of n_batch
             }
@@ -2249,6 +2366,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
     printf("  --metrics                 enable prometheus compatible metrics endpoint (default: %s).\n", sparams.metrics_endpoint ? "enabled" : "disabled");
+    printf("  --slot-save-path PATH     path to save slot kv cache (default: disabled)\n");
     printf("\n");
     printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
@@ -2657,6 +2775,16 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             sparams.slots_endpoint = false;
         } else if (arg == "--metrics") {
             sparams.metrics_endpoint = true;
+        } else if (arg == "--slot-save-path") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.slot_save_path = argv[i];
+            // if doesn't end with DIRECTORY_SEPARATOR, add it
+            if (!sparams.slot_save_path.empty() && sparams.slot_save_path[sparams.slot_save_path.size() - 1] != DIRECTORY_SEPARATOR) {
+                sparams.slot_save_path += DIRECTORY_SEPARATOR;
+            }
         } else if (arg == "--chat-template") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -3159,6 +3287,112 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
+    const auto handle_slots_save = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        json request_data = json::parse(req.body);
+        std::string filename = request_data["filename"];
+        if (!validate_file_name(filename)) {
+            res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+        std::string filepath = sparams.slot_save_path + filename;
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_SAVE;
+        task.data = {
+            { "id_slot", id_slot },
+            { "filename", filename },
+            { "filepath", filepath }
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slots_restore = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        json request_data = json::parse(req.body);
+        std::string filename = request_data["filename"];
+        if (!validate_file_name(filename)) {
+            res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+        std::string filepath = sparams.slot_save_path + filename;
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_RESTORE;
+        task.data = {
+            { "id_slot", id_slot },
+            { "filename", filename },
+            { "filepath", filepath }
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slots_erase = [&ctx_server, &res_error](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_ERASE;
+        task.data = {
+            { "id_slot", id_slot },
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slots_action = [&res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        std::string id_slot_str = req.path_params.at("id_slot");
+        int id_slot;
+
+        try {
+            id_slot = std::stoi(id_slot_str);
+        } catch (const std::exception &) {
+            res_error(res, format_error_response("Invalid slot ID", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+
+        std::string action = req.get_param_value("action");
+
+        if (action == "save") {
+            handle_slots_save(req, res, id_slot);
+        } else if (action == "restore") {
+            handle_slots_restore(req, res, id_slot);
+        } else if (action == "erase") {
+            handle_slots_erase(req, res, id_slot);
+        } else {
+            res_error(res, format_error_response("Invalid action", ERROR_TYPE_INVALID_REQUEST));
+        }
+    };
+
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
@@ -3521,6 +3755,10 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/embeddings",       handle_embeddings);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
+    if (!sparams.slot_save_path.empty()) {
+        // only enable slot endpoints if slot_save_path is set
+        svr->Post("/slots/:id_slot",  handle_slots_action);
+    }
 
     //
     // Start the server

@@ -381,10 +381,6 @@ static json oaicompat_completion_params_parse(
     } else {
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
-    // Some chat templates don't use EOS token to stop generation
-    // We must add their end sequences to list of stop words
-    llama_params["stop"].push_back("<|im_end|>"); // chatml
-    llama_params["stop"].push_back("<end_of_turn>"); // gemma
 
     // Handle "response_format" field
     if (body.contains("response_format")) {
@@ -567,6 +563,15 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
         {"model",   modelname},
         {"object",  "chat.completion.chunk"}
     };
+    if (!finish_reason.empty()) {
+        int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
+        int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
+        ret.push_back({"usage", json {
+            {"completion_tokens", num_tokens_predicted},
+            {"prompt_tokens",     num_prompt_tokens},
+            {"total_tokens",      num_tokens_predicted + num_prompt_tokens}
+        }});
+    }
 
     return std::vector<json>({ret});
 }

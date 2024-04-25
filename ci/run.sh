@@ -153,6 +153,55 @@ function gg_sum_ctest_release {
     gg_printf '```\n'
 }
 
+# test_scripts_debug
+
+function gg_run_test_scripts_debug {
+    cd ${SRC}
+
+    set -e
+
+    # TODO: too slow, run on dedicated node
+    (cd ./examples/gguf-split && time bash tests.sh "$SRC/build-ci-debug/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+   #(cd ./examples/quantize   && time bash tests.sh "$SRC/build-ci-debug/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+
+    set +e
+}
+
+function gg_sum_test_scripts_debug {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs test scripts in debug mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-scripts.log)"
+    gg_printf '```\n'
+    gg_printf '\n'
+}
+
+# test_scripts_release
+
+function gg_run_test_scripts_release {
+    cd ${SRC}
+
+    set -e
+
+    (cd ./examples/gguf-split && time bash tests.sh "$SRC/build-ci-release/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+    (cd ./examples/quantize   && time bash tests.sh "$SRC/build-ci-release/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+
+    set +e
+}
+
+function gg_sum_test_scripts_release {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs test scripts in release mode\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-scripts.log)"
+    gg_printf '```\n'
+    gg_printf '\n'
+}
+
 function gg_get_model {
     local gguf_3b="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
     local gguf_7b="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
@@ -641,6 +690,9 @@ test $ret -eq 0 && gg_run ctest_release
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
     test $ret -eq 0 && gg_run embd_bge_small
+
+    test $ret -eq 0 && gg_run test_scripts_debug
+    test $ret -eq 0 && gg_run test_scripts_release
 
     if [ -z ${GG_BUILD_VRAM_GB} ] || [ ${GG_BUILD_VRAM_GB} -ge 8 ]; then
         if [ -z ${GG_BUILD_CUDA} ]; then

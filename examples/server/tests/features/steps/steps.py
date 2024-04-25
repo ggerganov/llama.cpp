@@ -49,6 +49,9 @@ def step_server_config(context, server_fqdn, server_port):
     context.n_predict = None
     context.n_prompts = 0
     context.n_server_predict = None
+    context.slot_save_path = None
+    context.id_slot = None
+    context.cache_prompt = None
     context.n_slots = None
     context.prompt_prefix = None
     context.prompt_suffix = None
@@ -58,6 +61,7 @@ def step_server_config(context, server_fqdn, server_port):
     context.server_metrics = False
     context.server_process = None
     context.seed = None
+    context.draft = None
     context.server_seed = None
     context.user_api_key = None
     context.response_format = None
@@ -104,6 +108,11 @@ def step_n_gpu_layer(context, ngl):
     context.n_gpu_layer = ngl
 
 
+@step('{draft:d} as draft')
+def step_draft(context, draft):
+    context.draft = draft
+
+
 @step('{n_ctx:d} KV cache size')
 def step_n_ctx(context, n_ctx):
     context.n_ctx = n_ctx
@@ -117,6 +126,21 @@ def step_n_slots(context, n_slots):
 @step('{n_predict:d} server max tokens to predict')
 def step_server_n_predict(context, n_predict):
     context.n_server_predict = n_predict
+
+
+@step('{slot_save_path} as slot save path')
+def step_slot_save_path(context, slot_save_path):
+    context.slot_save_path = slot_save_path
+
+
+@step('using slot id {id_slot:d}')
+def step_id_slot(context, id_slot):
+    context.id_slot = id_slot
+
+
+@step('prompt caching is enabled')
+def step_enable_prompt_cache(context):
+    context.cache_prompt = True
 
 
 @step('continuous batching')
@@ -212,6 +236,8 @@ async def step_request_completion(context, api_error):
                                           context.base_url,
                                           debug=context.debug,
                                           n_predict=context.n_predict,
+                                          cache_prompt=context.cache_prompt,
+                                          id_slot=context.id_slot,
                                           seed=await completions_seed(context),
                                           expect_api_error=expect_api_error,
                                           user_api_key=context.user_api_key)
@@ -232,6 +258,15 @@ def step_n_tokens_predicted_with_content(context, predicted_n, re_content):
 def step_n_tokens_predicted(context, predicted_n):
     context.completion = context.tasks_result.pop()
     assert_n_tokens_predicted(context.completion, predicted_n)
+
+
+@step('all predictions are equal')
+@async_run_until_complete
+async def step_predictions_equal(context):
+    n_completions = await gather_tasks_results(context)
+    assert n_completions >= 2, "need at least 2 completions"
+    assert_all_predictions_equal(context.tasks_result)
+    context.tasks_result = []
 
 
 @step('the completion is  truncated')
@@ -711,12 +746,48 @@ async def concurrent_requests(context, f_completion, *args, **kwargs):
     await asyncio.sleep(0.1)
 
 
+@step('the slot {slot_id:d} is saved with filename "{filename}"')
+@async_run_until_complete
+async def step_save_slot(context, slot_id, filename):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/slots/{slot_id}?action=save',
+                                json={"filename": filename},
+                                headers={"Content-Type": "application/json"}) as response:
+            context.response = response
+
+
+@step('the slot {slot_id:d} is restored with filename "{filename}"')
+@async_run_until_complete
+async def step_restore_slot(context, slot_id, filename):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/slots/{slot_id}?action=restore',
+                                json={"filename": filename},
+                                headers={"Content-Type": "application/json"}) as response:
+            context.response = response
+
+
+@step('the slot {slot_id:d} is erased')
+@async_run_until_complete
+async def step_erase_slot(context, slot_id):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/slots/{slot_id}?action=erase',
+                                headers={"Content-Type": "application/json"}) as response:
+            context.response = response
+
+
+@step('the server responds with status code {status_code:d}')
+def step_server_responds_with_status_code(context, status_code):
+    assert context.response.status == status_code
+
+
 async def request_completion(prompt,
                              base_url,
                              debug=False,
                              prompt_prefix=None,
                              prompt_suffix=None,
                              n_predict=None,
+                             cache_prompt=False,
+                             id_slot=None,
                              seed=None,
                              expect_api_error=None,
                              user_api_key=None):
@@ -738,6 +809,8 @@ async def request_completion(prompt,
                                     "prompt": prompt,
                                     "input_suffix": prompt_suffix,
                                     "n_predict": n_predict if n_predict is not None else -1,
+                                    "cache_prompt": cache_prompt,
+                                    "id_slot": id_slot,
                                     "seed": seed if seed is not None else 42
                                 },
                                 headers=headers,
@@ -962,6 +1035,23 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
         assert n_predicted == expected_predicted_n, (f'invalid number of tokens predicted:'
                                                      f' {n_predicted} <> {expected_predicted_n}')
 
+def assert_all_predictions_equal(completion_responses):
+    content_0 = completion_responses[0]['content']
+
+    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+        print(f"content 0: {content_0}")
+
+    i = 1
+    for response in completion_responses[1:]:
+        content = response['content']
+
+        if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+            print(f"content {i}: {content}")
+
+        assert content == content_0, "contents not equal"
+
+        i += 1
+
 
 async def gather_tasks_results(context):
     n_tasks = len(context.concurrent_tasks)
@@ -1090,6 +1180,8 @@ def start_server_background(context):
         server_args.extend(['--ubatch-size', context.n_ubatch])
     if context.n_gpu_layer:
         server_args.extend(['--n-gpu-layers', context.n_gpu_layer])
+    if context.draft is not None:
+        server_args.extend(['--draft', context.draft])
     if context.server_continuous_batching:
         server_args.append('--cont-batching')
     if context.server_embeddings:
@@ -1104,6 +1196,8 @@ def start_server_background(context):
         server_args.extend(['--parallel', context.n_slots])
     if context.n_server_predict:
         server_args.extend(['--n-predict', context.n_server_predict])
+    if context.slot_save_path:
+        server_args.extend(['--slot-save-path', context.slot_save_path])
     if context.server_api_key:
         server_args.extend(['--api-key', context.server_api_key])
     if context.n_ga:

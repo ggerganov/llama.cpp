@@ -406,7 +406,7 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: document.baseURI.replace(/\/+$/, '') })) {
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: location.pathname.replace(/\/+$/, '') })) {
         const data = chunk.data;
 
         if (data.stop) {
@@ -881,11 +881,11 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/^#{1,6} (.*)$/gim, '<h3>$1</h3>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/__(.*?)__/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/_(.*?)_/g, '<em>$1</em>')
+        .replace(/(^|\n)#{1,6} ([^\n]*)(?=([^`]*`[^`]*`)*[^`]*$)/g, '$1<h3>$2</h3>')
+        .replace(/\*\*(.*?)\*\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
+        .replace(/__(.*?)__(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
+        .replace(/_(.*?)_(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
         .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
         .replace(/\n/gim, '<br />');
@@ -1015,6 +1015,10 @@
     }
 
     function App(props) {
+      useEffect(() => {
+        const query = new URLSearchParams(location.search).get("q");
+        if (query) chat(query);
+      }, []);
 
       return html`
         <div class="mode-${session.value.type}">
