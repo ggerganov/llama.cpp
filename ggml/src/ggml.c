@@ -12377,7 +12377,7 @@ UseGgmlGemm2:;
         for (int row_iter = ((ne11 / 8) * 8) + ((ne11 - rows_processed) / 4 * 4); row_iter < ne11; row_iter++) {
             gemv(ne00, ne01, 1, (float *)((char *) dst->data + (row_iter * nb1)), (const char *) src0->data, (const char *) wdata + (src1_cont || src1->type != vec_dot_type ? (row_iter)*row_size : (row_iter * nb11)), ith, nth);
         }
-    } 
+    }
     else if ((ggml_n_dims(src0) == 2) && (ne11 >= 4) && (type == GGML_TYPE_Q4_0_AARCH64)) {
         // use batch-sized 4 GEMM kernel
         for (int row_iter = 0; row_iter < ne11 / 4; row_iter++) {
