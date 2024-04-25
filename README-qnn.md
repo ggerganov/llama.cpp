@@ -11,7 +11,7 @@
 
 ## Background
 
-Android maintained its position as the leading mobile operating system worldwide in the fourth quarter of 2023 with <b><a  href="https://www.statista.com/statistics/272698/global-market-share-held-by-mobile-operating-systems-since-2009/">a market share of 70.1 percent </a></b> . Qualcomm is No.1 mobile SoC semiconductor company in our planet currently. 
+Android maintained its position as the leading mobile operating system worldwide in the fourth quarter of 2023 with <b><a  href="https://www.statista.com/statistics/272698/global-market-share-held-by-mobile-operating-systems-since-2009/">a market share of 70.1 percent </a></b> . Qualcomm is No.1 mobile SoC semiconductor company in our planet currently.
 
 
 **QNN**(Qualcomm Neural Network, aka Qualcomm AI Engine Direct) SDK is verified to work with the following versions of the ML frameworks:
@@ -115,7 +115,7 @@ Please add the **[QNN]** prefix/tag in issues/PRs titles to help the community c
 
 - only support FP32 / FP16 and the input and output tensors must be of the <b>same data type</b>
 
-- lack of [implementation of other GGML-OPs using QNN API](https://github.com/zhouwg/llama.cpp/blob/qualcomm_qnn_backend_for_ggml/ggml-qnn.cpp#L3452). this work is very similar to <a href="https://github.com/zhouwg/llama.cpp/blob/qualcomm_qnn_backend_for_ggml/ggml-qnn.cpp#L2983">GGML_OP_ADD / GGML_OP_MUL / GGML_OP_MULMAT</a> in ggml-qnn.cpp 
+- lack of [implementation of other GGML-OPs using QNN API](https://github.com/zhouwg/llama.cpp/blob/qualcomm_qnn_backend_for_ggml/ggml-qnn.cpp#L3452). this work is very similar to <a href="https://github.com/zhouwg/llama.cpp/blob/qualcomm_qnn_backend_for_ggml/ggml-qnn.cpp#L2983">GGML_OP_ADD / GGML_OP_MUL / GGML_OP_MULMAT</a> in ggml-qnn.cpp
 
 - multithreading not working with QNN GPU&HTP (aka DSP) backend
 
