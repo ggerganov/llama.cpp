@@ -6,19 +6,26 @@
 			"end": ""
 		},
 		"system": {
+			"begin": "<s>",
 			"prefix": "[INST] <<SYS>>\n",
-			"suffix": "\n<</SYS>> [/INST]\n\n"
+			"suffix": "\n<</SYS>> ",
+			"end": "[/INST]\n\n"
 		},
 		"user": {
-			"begin": "",
+			"begin": "<s>",
 			"prefix": "[INST] ",
-			"suffix": " [/INST]\n\n"
+			"suffix": " [/INST]\n\n",
+			"end": ""
 		},
 		"assistant": {
+			"begin": "",
 			"prefix": "",
-			"suffix": "</s>"
+			"suffix": "",
+			"end": "</s>"
 		},
 		"reverse-prompt": "</s>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": false,
 		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": false
 	},
@@ -28,19 +35,26 @@
 			"end": ""
 		},
 		"system": {
+			"begin": "",
 			"prefix": "<|start_header_id|>system<|end_header_id|>\n",
-			"suffix": "<|eot_id|>\n\n"
+			"suffix": "<|eot_id|>\n\n",
+			"end": ""
 		},
 		"user": {
 			"begin": "",
 			"prefix": "<|start_header_id|>user<|end_header_id|>\n",
-			"suffix": "<|eot_id|>\n\n"
+			"suffix": "<|eot_id|>\n\n",
+			"end": ""
 		},
 		"assistant": {
+			"begin": "",
 			"prefix": "<|start_header_id|>assistant<|end_header_id|>\n",
-			"suffix": "<|eot_id|>\n\n"
+			"suffix": "<|eot_id|>\n\n",
+			"end": ""
 		},
 		"reverse-prompt": "<|eot_id|>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
 	},
