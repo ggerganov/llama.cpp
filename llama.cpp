@@ -16180,6 +16180,9 @@ size_t llama_state_get_size(const struct llama_context * ctx) {
         + s_kv_cells
     );
 
+    // on session change it is very likely that the state size has changed - so we need to update this function
+    static_assert(LLAMA_SESSION_VERSION == 6, "So you just bumped the session version - good. But did you remember to update llama_state_get_size?");
+
     return s_total;
 }
 
