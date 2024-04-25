@@ -135,6 +135,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
+- [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
 
 **HTTP server**
 
