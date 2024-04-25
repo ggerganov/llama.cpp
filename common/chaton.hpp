@@ -171,6 +171,34 @@ inline bool chaton_meta_load(std::string &fname) {
 }
 
 
+inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::string &role, const std::vector<std::string> &keys) {
+    std::string got = "";
+    std::string sKeys = "";
+    for(auto key: keys) {
+        try {
+            got += conMeta[tmpl][role][key];
+        } catch (json::exception &err) {
+        }
+        sKeys += "+";
+        sKeys += key;
+    }
+    LOGLN("DBUG:%s:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), sKeys.c_str(), got.c_str());
+    return got;
+}
+
+inline std::string chaton_tmpl_kv(const std::string &tmpl, const std::string &key) {
+    std::string got = conMeta[tmpl][key];
+    LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), key.c_str(), got.c_str());
+    return got;
+}
+
+inline bool chaton_tmpl_kv_bool(const std::string &tmpl, const std::string &key) {
+    bool got = conMeta[tmpl][key];
+    LOGLN("DBUG:%s:%s:%s:%d", __func__, tmpl.c_str(), key.c_str(), got);
+    return got;
+}
+
+
 // Return user-prefix + msg + user-suffix
 inline bool chaton_tmpl_apply_single_ex(
         const std::string &tmpl,
@@ -308,33 +336,6 @@ inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<
     return tagged;
 }
 
-inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::string &role, const std::vector<std::string> &keys) {
-    std::string got = "";
-    std::string sKeys = "";
-    for(auto key: keys) {
-        try {
-            got += conMeta[tmpl][role][key];
-        } catch (json::exception &err) {
-        }
-        sKeys += "+";
-        sKeys += key;
-    }
-    LOGLN("DBUG:%s:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), sKeys.c_str(), got.c_str());
-    return got;
-}
-
-inline std::string chaton_tmpl_kv(const std::string &tmpl, const std::string &key) {
-    std::string got = conMeta[tmpl][key];
-    LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), key.c_str(), got.c_str());
-    return got;
-}
-
-inline bool chaton_tmpl_kv_bool(const std::string &tmpl, const std::string &key) {
-    bool got = conMeta[tmpl][key];
-    LOGLN("DBUG:%s:%s:%s:%d", __func__, tmpl.c_str(), key.c_str(), got);
-    return got;
-}
-
 
 /**
  * if tmpl is
@@ -386,7 +387,7 @@ inline void _chaton_meta_dump(std::string &tmpl) {
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
 
         if (!userEnd.empty()) {
-            LOG_TEELN("WARN:%s:User->End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd);
+            LOG_TEELN("WARN:%s:User->End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
         }
     }
 }
