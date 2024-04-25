@@ -182,20 +182,13 @@ inline bool chaton_tmpl_apply_single_ex(
         ) {
     ChatParts cp = {};
     std::stringstream ss;
-    std::string begin = "";
-    try {
-        begin = conMeta[tmpl][role][K_BEGIN];
-    } catch (json::exception &err) {
-
-    }
-    std::string prefix = conMeta[tmpl][role][K_PREFIX];
-    std::string suffix = conMeta[tmpl][role][K_SUFFIX];
-    cp.add_part(ChatParts::S, begin);
-    cp.add_part(ChatParts::S, prefix);
+    std::string beginPrefix = chaton_tmpl_role_kv(tmpl, role, {K_BEGIN, K_PREFIX});
+    std::string suffixEnd = chaton_tmpl_role_kv(tmpl, role, {K_SUFFIX, K_END});
+    cp.add_part(ChatParts::S, beginPrefix);
     cp.add_part(ChatParts::N, content);
-    cp.add_part(ChatParts::S, suffix);
+    cp.add_part(ChatParts::S, suffixEnd);
     cp.dump();
-    ss << begin << prefix << content << suffix;
+    ss << beginPrefix << content << suffixEnd;
     tagged = ss.str();
     std::string cpStr = cp.str();
     if (tagged != cpStr) {
