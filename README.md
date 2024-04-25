@@ -93,6 +93,7 @@ Typically finetunes of the base models below are supported as well.
 
 - [X] LLaMA 🦙
 - [x] LLaMA 2 🦙🦙
+- [x] LLaMA 3 🦙🦙🦙
 - [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [x] [DBRX](https://huggingface.co/databricks/dbrx-instruct)
