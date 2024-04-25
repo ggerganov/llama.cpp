@@ -63,6 +63,7 @@ class GGUFWriter:
         self.kv_data_count = 0
         self.ti_data = bytearray()
         self.ti_data_count = 0
+        self.ti_names = set()
         self.use_temp_file = use_temp_file
         self.temp_file = None
         self.tensors = []
@@ -196,6 +197,10 @@ class GGUFWriter:
     ) -> None:
         if self.state is not WriterState.EMPTY:
             raise ValueError(f'Expected output file to be empty, got {self.state}')
+
+        if name in self.ti_names:
+            raise ValueError(f'Duplicated tensor name {name}')
+        self.ti_names.add(name)
 
         encoded_name = name.encode("utf8")
         self.ti_data += self._pack("Q", len(encoded_name))

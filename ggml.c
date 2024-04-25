@@ -21360,6 +21360,10 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
 void gguf_add_tensor(
              struct gguf_context * ctx,
         const struct ggml_tensor * tensor) {
+    if (gguf_find_tensor(ctx, tensor->name) != -1) {
+        GGML_ASSERT(false && "duplicated tensor name");
+    }
+    
     const int idx = ctx->header.n_tensors;
     ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
 
