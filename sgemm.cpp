@@ -737,7 +737,7 @@ class tinyBLAS_Q0_AVX {
                         __m128i ali1 = load1(A + lda * (ii + i) + l);
                         __m128i blj0 = load0(B + ldb * (jj + j) + l);
                         __m128i blj1 = load1(B + ldb * (jj + j) + l);
-                        
+
                         __m128i sepAA0 = _mm_sign_epi8(ali0, ali0);
                         __m128i sepAA1 = _mm_sign_epi8(ali1, ali1);
                         __m128i sepBA0 = _mm_sign_epi8(blj0, ali0);
