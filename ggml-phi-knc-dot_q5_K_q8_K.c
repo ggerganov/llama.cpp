@@ -86,16 +86,16 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
     uint64_t q8offset=((uint64_t) q8) & 0x3f;
 
     __asm__ __volatile__ (
-                          "vprefetchenta\t(%[RES])\n\t"
+                          "vprefetchenta\t(%[RES])\n\t"                       // Issue our memory requests first thing.
                           "vprefetch0\t64(%[SCALE])\n\t"
                           "vprefetch0\t(%[SRC8])\n\t"
                           "vprefetch0\t64(%[SRC8])\n\t"
                           "vprefetch0\t(%[SRC5])\n\t"
-                          "mov\t%[SRC8],\t%%r11\n\t"                          // use r11 to store the address for vloadunpackld.
+                          "mov\t%[SRC8],\t%%r11\n\t"                          // Use r11 to store the address for vloadunpackld.
                           "mov\t%[SRC5],\t%%r8\n\t"
                           "mov\t%[SCALE],\t%%r9\n\t"
                           "mov\t$0,\t%%ecx\n\t"
-                          "mov\t%[SRC8],\t%%r15\n\t"                          // use r12-r15 to store the addresses for vloadunpackhd.
+                          "mov\t%[SRC8],\t%%r15\n\t"                          // Use r12-r15 to store the addresses for vloadunpackhd.
                           "mov\t%[SRC8],\t%%r14\n\t"
                           "mov\t%[SRC8],\t%%r13\n\t"
                           "mov\t%[SRC8],\t%%r12\n\t"
@@ -104,68 +104,68 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
                           "jl\t20f\n\t"
                           "cmp\t$48,%%r10\n\t"
                           "jl\t21f\n\t"
-                          "add\t$64,%%r12\n\t"                                // greater than 48.
+                          "add\t$64,%%r12\n\t"                                // Greater than 48.
                           "jmp\t18f\n\t"
                           "21:\n\t"
-                          "add\t$64,%%r13\n\t"                                // between 48 and 32.
+                          "add\t$64,%%r13\n\t"                                // Between 49 and 32.
                           "jmp\t18f\n\t"
-                          "20:\n\t"                                           // less than 32...
+                          "20:\n\t"                                           // Less than 32...
                           "cmp\t$16,%%r10\n\t"
-                          "jz\t18f\n\t"                                       // zero
+                          "jz\t18f\n\t"                                       // Zero.
                           "jl\t23f\n\t"
-                          "add\t$64,%%r14\n\t"                                // between 32 and 16...
+                          "add\t$64,%%r14\n\t"                                // Between 32 and 16.
                           "jmp\t18f\n\t"
                           "23:\n\t"
-                          "add\t$64,%%r15\n\t"                                // between 16 and zero..
+                          "add\t$64,%%r15\n\t"                                // Between 16 and zero.
                           "18:\n\t"
-                          "vbroadcastss\t%[SCALEY],\t%%zmm3\n\t"              // load the scale factors coresponding to the two input vectors.
+                          "vbroadcastss\t%[SCALEY],\t%%zmm3\n\t"              // Load the scale factors coresponding to the two input vectors.
                           "vbroadcastss\t%[SCALEX]%{float16%},\t%%zmm4\n\t"
-                          "vmulps\t%%zmm3,\t%%zmm4,\t%%zmm5\n\t"              // prepare the factor we're going to multiply the result by..
-                          "vmovaps\t\t(%[RES]),\t%%zmm6\n\t"                  // load our inital state from sum..
-                          "vpbroadcastd\t%[Z]%{uint8%},\t%%zmm7\n\t"          // empty our result.
+                          "vmulps\t%%zmm3,\t%%zmm4,\t%%zmm5\n\t"              // Brepare the factor we're going to multiply the result by..
+                          "vmovaps\t\t(%[RES]),\t%%zmm6\n\t"                  // Load our inital state from sum..
+                          "vpbroadcastd\t%[Z]%{uint8%},\t%%zmm7\n\t"          // Empty our result.
                           "1:\n\t"
-                          "inc\t%%ecx\n\t"                                    // we are in our loop, increment our counter.
-                          "vloadunpackld\t\t(%%r11)%{sint8%},\t%%zmm8\n\t"    // load the item we will be multiplying from. upscale it from int8 to int32.
-                          "vloadunpackld\t\t16(%%r11)%{sint8%},\t%%zmm9\n\t"  // load the item we will be multiplying from. upscale it from int8 to int32.
-                          "vloadunpackld\t\t32(%%r11)%{sint8%},\t%%zmm10\n\t" // load the item we will be multiplying from. upscale it from int8 to int32.
-                          "vloadunpackld\t\t48(%%r11)%{sint8%},\t%%zmm11\n\t" // load the item we will be multiplying from. upscale it from int8 to int32.
-                          "vprefetch1\t128(%%r11)\n\t"                        // prepare for a run-through.
+                          "inc\t%%ecx\n\t"                                    // We are in our loop, increment our counter.
+                          "vloadunpackld\t\t(%%r11)%{sint8%},\t%%zmm8\n\t"    // Load the item we will be multiplying from. Upscale it from int8 to int32.
+                          "vloadunpackld\t\t16(%%r11)%{sint8%},\t%%zmm9\n\t"  // Load the item we will be multiplying from. Upscale it from int8 to int32.
+                          "vloadunpackld\t\t32(%%r11)%{sint8%},\t%%zmm10\n\t" // Load the item we will be multiplying from. Upscale it from int8 to int32.
+                          "vloadunpackld\t\t48(%%r11)%{sint8%},\t%%zmm11\n\t" // Load the item we will be multiplying from. Upscale it from int8 to int32.
+                          "vprefetch1\t128(%%r11)\n\t"                        // Prepare for a run-through.
                           "add\t$64,\t%%r11\n\t"
-                          "vloadunpackhd\t\t(%%r12)%{sint8%},\t%%zmm8\n\t"    // load the item we will be multiplying from. upscale it from int8 to int32.
+                          "vloadunpackhd\t\t(%%r12)%{sint8%},\t%%zmm8\n\t"    // Load the item we will be multiplying from. Upscale it from int8 to int32.
                           "add\t$64,\t%%r12\n\t"
-                          "vloadunpackhd\t\t16(%%r13)%{sint8%},\t%%zmm9\n\t"  // load the item we will be multiplying from. upscale it from int8 to int32.
+                          "vloadunpackhd\t\t16(%%r13)%{sint8%},\t%%zmm9\n\t"  // Load the item we will be multiplying from. Upscale it from int8 to int32.
                           "add\t$64,\t%%r13\n\t"
-                          "vloadunpackhd\t\t32(%%r14)%{sint8%},\t%%zmm10\n\t" // load the item we will be multiplying from. upscale it from int8 to int32.
+                          "vloadunpackhd\t\t32(%%r14)%{sint8%},\t%%zmm10\n\t" // Load the item we will be multiplying from. Upscale it from int8 to int32.
                           "add\t$64,\t%%r14\n\t"
-                          "vloadunpackhd\t\t48(%%r15)%{sint8%},\t%%zmm11\n\t" // load the item we will be multiplying from. upscale it from int8 to int32.
+                          "vloadunpackhd\t\t48(%%r15)%{sint8%},\t%%zmm11\n\t" // Load the item we will be multiplying from. Upscale it from int8 to int32.
                           "add\t$64,\t%%r15\n\t"
-                          "vmovdqa32\t\t(%%r8)%{uint8%},\t%%zmm12\n\t"        // load the item we will be multiplying with. upscale it from int8 to int32.
-                          "vpmulld\t%%zmm8,\t%%zmm12,\t%%zmm13\n\t"           // perform our 64 bit multiply, low side.
-                          "vmovdqa32\t\t16(%%r8)%{uint8%},\t%%zmm14\n\t"      // load the item we will be multiplying with. upscale it from int8 to int32.
-                          "vpmulld\t%%zmm9,\t%%zmm14,\t%%zmm15\n\t"           // perform our 64 bit multiply, low side.
-                          "vmovdqa32\t\t32(%%r8)%{uint8%},\t%%zmm0\n\t"       // load the item we will be multiplying with. upscale it from int8 to int32.
-                          "vpmulld\t%%zmm10,\t%%zmm0,\t%%zmm1\n\t"            // perform our 64 bit multiply, low side.
-                          "vmovdqa32\t\t48(%%r8)%{uint8%},\t%%zmm2\n\t"       // load the item we will be multiplying with. upscale it from int8 to int32.
-                          "vpmulld\t%%zmm11,\t%%zmm2,\t%%zmm3\n\t"            // perform our 64 bit multiply, low side.
-                          "vprefetch1\t64(%%r8)\n\t"                          // prepare for a run-through.
+                          "vmovdqa32\t\t(%%r8)%{uint8%},\t%%zmm12\n\t"        // Load the item we will be multiplying with. Upscale it from int8 to int32.
+                          "vpmulld\t%%zmm8,\t%%zmm12,\t%%zmm13\n\t"           // Perform our 64 bit multiply, low side.
+                          "vmovdqa32\t\t16(%%r8)%{uint8%},\t%%zmm14\n\t"      // Load the item we will be multiplying with. Upscale it from int8 to int32.
+                          "vpmulld\t%%zmm9,\t%%zmm14,\t%%zmm15\n\t"           // Perform our 64 bit multiply, low side.
+                          "vmovdqa32\t\t32(%%r8)%{uint8%},\t%%zmm0\n\t"       // Load the item we will be multiplying with. Upscale it from int8 to int32.
+                          "vpmulld\t%%zmm10,\t%%zmm0,\t%%zmm1\n\t"            // Perform our 64 bit multiply, low side.
+                          "vmovdqa32\t\t48(%%r8)%{uint8%},\t%%zmm2\n\t"       // Load the item we will be multiplying with. Upscale it from int8 to int32.
+                          "vpmulld\t%%zmm11,\t%%zmm2,\t%%zmm3\n\t"            // Perform our 64 bit multiply, low side.
+                          "vprefetch1\t64(%%r8)\n\t"                          // Prepare for a run-through.
                           "add\t$64,\t%%r8\n\t"
-                          "vpbroadcastd\t(%%r9)%{uint8%},\t%%zmm4\n\t"        // load the item we will be multiplying by.
-                          "vpbroadcastd\t1(%%r9)%{uint8%},\t%%zmm8\n\t"       // load the item we will be multiplying by.
+                          "vpbroadcastd\t(%%r9)%{uint8%},\t%%zmm4\n\t"        // Load the item we will be multiplying by.
+                          "vpbroadcastd\t1(%%r9)%{uint8%},\t%%zmm8\n\t"       // Load the item we will be multiplying by.
                           "vprefetch1\t2(%%r9)\n\t"
                           "add\t$2,\t%%r9\n\t"
-                          "vprefetch0\t(%%r11)\n\t"                           // prepare for a run-through.
-                          "vprefetch0\t64(%%r11)\n\t"                         // prepare for a run-through.
-                          "vprefetch0\t(%%r8)\n\t"                            // prepare for a run-through.
-                          "vprefetch0\t(%%r9)\n\t"                            // prepare for a run-through.
-                          "cmp\t$4,\t%%ecx\n\t"                               // see if this is our last run-through.
-                          "vpmadd231d\t%%zmm13,\t%%zmm4,\t%%zmm7\n\t"         // perform our multiply-add.
-                          "vpmadd231d\t%%zmm15,\t%%zmm4,\t%%zmm7\n\t"         // perform our multiply-add.
-                          "vpmadd231d\t%%zmm1,\t%%zmm8,\t%%zmm7\n\t"          // perform our multiply-add.
-                          "vpmadd231d\t%%zmm3,\t%%zmm8,\t%%zmm7\n\t"          // perform our multiply-add.
+                          "vprefetch0\t(%%r11)\n\t"                           // Prepare for a run-through.
+                          "vprefetch0\t64(%%r11)\n\t"                         // Prepare for a run-through.
+                          "vprefetch0\t(%%r8)\n\t"                            // Prepare for a run-through.
+                          "vprefetch0\t(%%r9)\n\t"                            // Prepare for a run-through.
+                          "cmp\t$4,\t%%ecx\n\t"                               // See if this is our last run-through.
+                          "vpmadd231d\t%%zmm13,\t%%zmm4,\t%%zmm7\n\t"         // Perform our multiply-add.
+                          "vpmadd231d\t%%zmm15,\t%%zmm4,\t%%zmm7\n\t"         // Perform our multiply-add.
+                          "vpmadd231d\t%%zmm1,\t%%zmm8,\t%%zmm7\n\t"          // Perform our multiply-add.
+                          "vpmadd231d\t%%zmm3,\t%%zmm8,\t%%zmm7\n\t"          // Perform our multiply-add.
                           "jl\t1b\n\t"
-                          "vcvtfxpntdq2ps\t$0,%%zmm7,\t%%zmm9\n\t"            // convert our ints to floats.
+                          "vcvtfxpntdq2ps\t$0,%%zmm7,\t%%zmm9\n\t"            // Convert our ints to floats.
                           "vfmadd231ps\t%%zmm5,\t%%zmm9,\t%%zmm6\n\t"         // Perform a fused multiply add.
-                          "vmovaps\t\t%%zmm6,\t(%[RES])\n\t"                  // save the result.
+                          "vmovaps\t\t%%zmm6,\t(%[RES])\n\t"                  // Save the result.
                           : [RES]   "+r" (res)
                           : [SRC8]   "r" (q8),
                             [OFFSET] "m" (q8offset),
@@ -190,54 +190,54 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vprefetch0\t(%[SRC1])\n\t"                       // Issue our memory requests first thing.
                           "vprefetch0\t(%[SRC4])\n\t"
                           "vprefetchenta\t(%[DST])\n\t"
-                          "mov\t%[SRC4],\t%%r9\n\t"                         // load the address of the head of our 4-bit list.
-                          "mov\t%[DST],\t%%r8\n\t"                          // load the address of the head of our destination list.
-                          "mov\t$0,%%ecx\n\t"                               // initialize our counter.
-                          "vpbroadcastd\t%[MASK]%{uint8%},\t%%zmm0\n\t"     // load our mask.
-                          "vpbroadcastd\t%[BIT5]%{uint8},\t%%zmm1\n\t"      // load the bit we want to add (conditionally).
+                          "mov\t%[SRC4],\t%%r9\n\t"                         // Load the address of the head of our 4-bit list.
+                          "mov\t%[DST],\t%%r8\n\t"                          // Load the address of the head of our destination list.
+                          "mov\t$0,%%ecx\n\t"                               // Initialize our counter.
+                          "vpbroadcastd\t%[MASK]%{uint8%},\t%%zmm0\n\t"     // Load our mask.
+                          "vpbroadcastd\t%[BIT5]%{uint8},\t%%zmm1\n\t"      // Load the bit we want to add (conditionally).
                           "vpbroadcastd\t%[M]%{uint8%},\t%%zmm2\n\t"        // Select which bit we want to test for. Start with bit 1.
-                          "vmovdqa32\t(%[SRC1])%{uint8%},\t%%zmm3\n\t"      // load 16 sets of 8 bit packed single bits.
-                          "vmovdqa32\t16(%[SRC1])%{uint8%},\t%%zmm4\n\t"    // load the next 16 sets of 8 bit packed single bits.
+                          "vmovdqa32\t(%[SRC1])%{uint8%},\t%%zmm3\n\t"      // Load 16 sets of 8 bit packed single bits.
+                          "vmovdqa32\t16(%[SRC1])%{uint8%},\t%%zmm4\n\t"    // Load the next 16 sets of 8 bit packed single bits.
 
                           "1:\n\t"
-                          "inc\t%%ecx\n\t"                                  // we are in the loop. increment the counter.
+                          "inc\t%%ecx\n\t"                                  // We are in the loop. increment the counter.
 
                           "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"            // Test to see if our selected bit is set.
                           "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"            // Test to see if our selected bit is set.
 
-                          "vloadunpackld\t\t(%%r9)%{uint8%},\t%%zmm5\n\t"   // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vloadunpackhd\t\t16(%%r9)%{uint8%},\t%%zmm5\n\t" // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vpandd\t%%zmm0,\t%%zmm5,\t%%zmm6\n\t"            // apply a mask, storing the low four bits of vector zmm5 into zmm6.
-                          "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"         // turn on bit 5 for all values that passed the prior test.
-                          "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"       // save our result.
+                          "vloadunpackld\t\t(%%r9)%{uint8%},\t%%zmm5\n\t"   // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+                          "vloadunpackhd\t\t16(%%r9)%{uint8%},\t%%zmm5\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+                          "vpandd\t%%zmm0,\t%%zmm5,\t%%zmm6\n\t"            // Apply a mask, storing the low four bits of vector zmm5 into zmm6.
+                          "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
+                          "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"       // Save our result.
 
-                          "vloadunpackld\t\t16(%%r9)%{uint8%},\t%%zmm7\n\t" // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vloadunpackhd\t\t32(%%r9)%{uint8%},\t%%zmm7\n\t" // load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vprefetch1\t32(%%r9)\n\t"                        // pull the next set of 4 bit sequences into the L2 cache.
-                          "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"            // apply a mask, storing the next low four bits of vector zmm1 into zmm5.
-                          "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"        // turn on bit 5 for all values that passed the prior test.
-                          "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"     // save our result.
+                          "vloadunpackld\t\t16(%%r9)%{uint8%},\t%%zmm7\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+                          "vloadunpackhd\t\t32(%%r9)%{uint8%},\t%%zmm7\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+                          "vprefetch1\t32(%%r9)\n\t"                        // Pull the next set of 4 bit sequences into the L2 cache.
+                          "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"            // Apply a mask, storing the next low four bits of vector zmm1 into zmm5.
+                          "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
+                          "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"     // Save our result.
                           
                           "add\t$32,\t%%r8\n\t"
                           "cmp\t$4,\t%%ecx\n\t"
 
-                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"               // select which bit we want to test for.
+                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                // Select which bit we want to test for.
                           
-                          "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"           // perform our test.
-                          "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"           // perform our test.
-                          "vpsrld\t$4,\t%%zmm5,\t%%zmm6\n\t"               // load our even 4 bit sequence
-                          "vpsrld\t$4,\t%%zmm7,\t%%zmm8\n\t"               // load our even 4 bit sequence
-                          "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"       // turn on bit 5 for all values that passed the prior test.
-                          "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"       // turn on bit 5 for all values that passed the prior test.
-                          "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"      // save our result.
-                          "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"    // save our result.
+                          "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"            // Perform our test.
+                          "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"            // Perform our test.
+                          "vpsrld\t$4,\t%%zmm5,\t%%zmm6\n\t"                // Load our even 4 bit sequence
+                          "vpsrld\t$4,\t%%zmm7,\t%%zmm8\n\t"                // Load our even 4 bit sequence
+                          "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
+                          "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
+                          "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"       // Save our result.
+                          "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"     // Save our result.
                           "vprefetchenta\t32(%%r8)\n\t"
 
                           "je\t2f\n\t"
 
                           "vprefetch0\t32(%%r9)\n\t"
                           "vprefetch1\t96(%%r9)\n\t"
-                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"               // select which bit we want to test for.
+                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                // Select which bit we want to test for.
                           "add\t$32,\t%%r9\n\t"
                           "add\t$32,\t%%r8\n\t"
                           "jmp\t1b\n\t"
