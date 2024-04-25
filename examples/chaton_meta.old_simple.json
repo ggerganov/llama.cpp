@@ -1,0 +1,180 @@
+
+{
+	"llama2": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "[INST] <<SYS>>\n",
+			"suffix": "\n<</SYS>> [/INST]\n\n"
+		},
+		"user": {
+			"begin": "",
+			"prefix": "[INST] ",
+			"suffix": " [/INST]\n\n"
+		},
+		"assistant": {
+			"prefix": "",
+			"suffix": "</s>"
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-1st-user-has-begin": false,
+		"systemuser-1st-user-has-prefix": false
+	},
+	"llama3": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "<|start_header_id|>system<|end_header_id|>\n",
+			"suffix": "<|eot_id|>\n\n"
+		},
+		"user": {
+			"begin": "",
+			"prefix": "<|start_header_id|>user<|end_header_id|>\n",
+			"suffix": "<|eot_id|>\n\n"
+		},
+		"assistant": {
+			"prefix": "<|start_header_id|>assistant<|end_header_id|>\n",
+			"suffix": "<|eot_id|>\n\n"
+		},
+		"reverse-prompt": "<|eot_id|>",
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
+	},
+	"chatml": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "<|im_start|>system\n",
+			"suffix": "<|im_end|>\n"
+		},
+		"user": {
+			"begin": "",
+			"prefix": "\n<|im_start|>user\n",
+			"suffix": "<|im_end|>\n"
+		},
+		"assistant": {
+			"prefix": "<|im_start|>assistant\n",
+			"suffix": "<|im_end|>\n"
+		},
+		"reverse-prompt": "<|im_start|>user\n",
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
+	},
+	"zephyr": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "<|system|>\n",
+			"suffix": "<|endoftext|>\n"
+		},
+		"user": {
+			"begin": "",
+			"prefix": "<|user|>\n",
+			"suffix": "<|endoftext|>\n"
+		},
+		"assistant": {
+			"prefix": "<|assistant|>\n",
+			"suffix": "<|endoftext|>\n"
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
+	},
+	"gemma": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "",
+			"suffix": ""
+		},
+		"user": {
+			"begin": "",
+			"prefix": "<start_of_turn>user\n",
+			"suffix": "<end_of_turn>\n"
+		},
+		"assistant": {
+			"prefix": "<start_of_turn>model\n",
+			"suffix": "<end_of_turn>\n"
+		},
+		"reverse-prompt": "<eos>",
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
+	},
+	"deepseek-alt": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "",
+			"suffix": "\n"
+		},
+		"user": {
+			"begin": "",
+			"prefix": "### Instruction:\n",
+			"suffix": "\n"
+		},
+		"assistant": {
+			"prefix": "### Response:\n",
+			"suffix": "\n<|EOT|>\n"
+		},
+		"reverse-prompt": "<|EOT|>",
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
+	},
+	"deepseek": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "",
+			"suffix": "\n\n"
+		},
+		"user": {
+			"begin": "",
+			"prefix": "User: ",
+			"suffix": "\n\n"
+		},
+		"assistant": {
+			"prefix": "Assistant: ",
+			"suffix": " <｜end▁of▁sentence｜>\n"
+		},
+		"reverse-prompt": "<｜end▁of▁sentence｜>",
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
+	},
+	"monarch": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"prefix": "<s>system\n",
+			"suffix": "</s>\n"
+		},
+		"user": {
+			"begin": "<s>",
+			"prefix": "user\n",
+			"suffix": "</s>\n"
+		},
+		"assistant": {
+			"prefix": "<s>assistant\n",
+			"suffix": " </s>\n"
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-1st-user-has-begin": false,
+		"systemuser-1st-user-has-prefix": true
+	}
+}
+
