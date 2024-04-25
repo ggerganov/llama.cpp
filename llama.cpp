@@ -2985,6 +2985,7 @@ struct llama_model_loader {
     size_t  n_bytes    = 0;
 
     bool use_mmap = false;
+    bool check_tensors;
 
     llama_files files;
     llama_ftype ftype;
@@ -3014,7 +3015,7 @@ struct llama_model_loader {
     std::string arch_name;
     LLM_KV      llm_kv    = LLM_KV(LLM_ARCH_UNKNOWN);
 
-    llama_model_loader(const std::string & fname, bool use_mmap, const struct llama_model_kv_override * param_overrides_p) {
+    llama_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
         int trace = 0;
         if (getenv("LLAMA_TRACE")) {
             trace = atoi(getenv("LLAMA_TRACE"));
@@ -3218,6 +3219,7 @@ struct llama_model_loader {
         }
 
         this->use_mmap = use_mmap;
+        this->check_tensors = check_tensors;
     }
 
     ~llama_model_loader() {
@@ -3473,7 +3475,7 @@ struct llama_model_loader {
             file->read_raw(cur->data, ggml_nbytes(cur));
         }
 
-        if (!ggml_validate_row_data(cur->type, cur->data, ggml_nbytes(cur))) {
+        if (check_tensors && !ggml_validate_row_data(cur->type, cur->data, ggml_nbytes(cur))) {
             throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
         }
     }
@@ -3514,7 +3516,7 @@ struct llama_model_loader {
                     buf_mmap = bufs_mmap.at(weight->idx);
                 }
 
-                if (!ggml_validate_row_data(cur->type, (uint8_t *) mapping->addr + weight->offs, n_size)) {
+                if (check_tensors && !ggml_validate_row_data(cur->type, (uint8_t *) mapping->addr + weight->offs, n_size)) {
                     throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
                 }
 
@@ -3538,7 +3540,7 @@ struct llama_model_loader {
                 if (ggml_backend_buffer_is_host(cur->buffer)) {
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(cur->data, n_size);
-                    if (!ggml_validate_row_data(cur->type, cur->data, n_size)) {
+                    if (check_tensors && !ggml_validate_row_data(cur->type, cur->data, n_size)) {
                         throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
                     }
                 } else {
@@ -3546,7 +3548,7 @@ struct llama_model_loader {
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(read_buf.data(), n_size);
                     ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
-                    if (!ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
+                    if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
                         throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
                     }
                 }
@@ -5981,7 +5983,7 @@ static bool llm_load_tensors(
 // Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
 static int llama_model_load(const std::string & fname, llama_model & model, llama_model_params & params) {
     try {
-        llama_model_loader ml(fname, params.use_mmap, params.kv_overrides);
+        llama_model_loader ml(fname, params.use_mmap, params.check_tensors, params.kv_overrides);
 
         model.hparams.vocab_only = params.vocab_only;
 
@@ -14459,7 +14461,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         auto v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
         kv_overrides = v->data();
     }
-    llama_model_loader ml(fname_inp, use_mmap, kv_overrides);
+    llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
     ml.init_mappings(false); // no prefetching
 
     llama_model model;
@@ -14780,7 +14782,7 @@ static int llama_apply_lora_from_file_internal(
     std::unique_ptr<llama_model_loader> ml;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
-        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*kv_overrides*/ nullptr));
+        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*check_tensors*/ false, /*kv_overrides*/ nullptr));
         ml->init_mappings(/*prefetch*/ false); // no prefetching
     }
 
@@ -15039,6 +15041,7 @@ struct llama_model_params llama_model_default_params() {
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
+        /*.check_tensors               =*/ false,
     };
 
 #ifdef GGML_USE_METAL

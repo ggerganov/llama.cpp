@@ -1089,6 +1089,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.n_print = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "--check-tensors") {
+        params.check_tensors = true;
+        return true;
+    }
     if (arg == "--ppl-output-type") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1554,6 +1558,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -ptc N, --print-token-count N\n");
     printf("                        print token count every N tokens (default: %d)\n", params.n_print);
+    printf("  --check-tensors       check model tensor data for invalid values\n");
     printf("\n");
 #ifndef LOG_DISABLE_LOGS
     log_print_usage();
@@ -1774,6 +1779,7 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
     mparams.tensor_split    = params.tensor_split;
     mparams.use_mmap        = params.use_mmap;
     mparams.use_mlock       = params.use_mlock;
+    mparams.check_tensors   = params.check_tensors;
     if (params.kv_overrides.empty()) {
         mparams.kv_overrides = NULL;
     } else {
