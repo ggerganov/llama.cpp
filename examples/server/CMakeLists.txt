@@ -11,6 +11,7 @@ set(PUBLIC_ASSETS
     index.html
     index.js
     completion.js
+    params.js
     json-schema-to-grammar.mjs
 )
 foreach(asset ${PUBLIC_ASSETS})

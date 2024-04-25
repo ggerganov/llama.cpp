@@ -141,7 +141,7 @@ pub fn build(b: *std.build.Builder) !void {
         server.linkSystemLibrary("ws2_32");
     }
 
-    const server_assets = [_][]const u8{ "index.html", "index.js", "completion.js", "json-schema-to-grammar.mjs" };
+    const server_assets = [_][]const u8{ "index.html", "index.js", "completion.js", "params.js", "json-schema-to-grammar.mjs" };
     for (server_assets) |asset| {
         const input_path = b.fmt("examples/server/public/{s}", .{asset});
         const output_path = b.fmt("examples/server/{s}.hpp", .{asset});

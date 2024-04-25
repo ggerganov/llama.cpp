@@ -14,10 +14,11 @@
 #include "httplib.h"
 #include "json.hpp"
 
-// auto generated files (update with ./deps.sh)
+// auto generated files (update during build time (#6661))
 #include "index.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
+#include "params.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
 
 #include <atomic>
