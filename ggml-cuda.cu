@@ -2405,7 +2405,7 @@ GGML_CALL static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {
     GGML_UNUSED(backend);
 }
 
-#if (CUDART_VERSION >= 12000)
+#if (CUDART_VERSION >= 12000) && defined(GGML_ALLOW_CUDA_GRAPHS)
 #define USE_CUDA_GRAPH
 #endif
 
