@@ -32,34 +32,55 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "IQ3_XXS",LLAMA_FTYPE_MOSTLY_IQ3_XXS," 3.06 bpw quantization",            },
     { "IQ3_S",  LLAMA_FTYPE_MOSTLY_IQ3_S,  " 3.44 bpw quantization",            },
     { "IQ3_M",  LLAMA_FTYPE_MOSTLY_IQ3_M,  " 3.66 bpw quantization mix",        },
-    { "Q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M, "alias for Q3_K_M" },
+    { "Q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M, "alias for Q3_K_M"                   },
     { "IQ3_XS", LLAMA_FTYPE_MOSTLY_IQ3_XS, " 3.3 bpw quantization"   ,          },
     { "Q3_K_S", LLAMA_FTYPE_MOSTLY_Q3_K_S, " 2.75G, +0.5551 ppl @ LLaMA-v1-7B", },
     { "Q3_K_M", LLAMA_FTYPE_MOSTLY_Q3_K_M, " 3.07G, +0.2496 ppl @ LLaMA-v1-7B", },
     { "Q3_K_L", LLAMA_FTYPE_MOSTLY_Q3_K_L, " 3.35G, +0.1764 ppl @ LLaMA-v1-7B", },
     { "IQ4_NL", LLAMA_FTYPE_MOSTLY_IQ4_NL, " 4.50 bpw non-linear quantization", },
     { "IQ4_XS", LLAMA_FTYPE_MOSTLY_IQ4_XS, " 4.25 bpw non-linear quantization", },
-    { "Q4_K",   LLAMA_FTYPE_MOSTLY_Q4_K_M, "alias for Q4_K_M", },
+    { "Q4_K",   LLAMA_FTYPE_MOSTLY_Q4_K_M, "alias for Q4_K_M",                  },
     { "Q4_K_S", LLAMA_FTYPE_MOSTLY_Q4_K_S, " 3.59G, +0.0992 ppl @ LLaMA-v1-7B", },
     { "Q4_K_M", LLAMA_FTYPE_MOSTLY_Q4_K_M, " 3.80G, +0.0532 ppl @ LLaMA-v1-7B", },
-    { "Q5_K",   LLAMA_FTYPE_MOSTLY_Q5_K_M, "alias for Q5_K_M", },
+    { "Q5_K",   LLAMA_FTYPE_MOSTLY_Q5_K_M, "alias for Q5_K_M",                  },
     { "Q5_K_S", LLAMA_FTYPE_MOSTLY_Q5_K_S, " 4.33G, +0.0400 ppl @ LLaMA-v1-7B", },
     { "Q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M, " 4.45G, +0.0122 ppl @ LLaMA-v1-7B", },
     { "Q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K,   " 5.15G, +0.0008 ppl @ LLaMA-v1-7B", },
     { "Q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0,   " 6.70G, +0.0004 ppl @ LLaMA-v1-7B", },
-    { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "13.00G              @ 7B", },
-    { "F32",    LLAMA_FTYPE_ALL_F32,       "26.00G              @ 7B", },
-    { "CUSTOM", LLAMA_FTYPE_CUSTOM,        "per-layer scheme from file (quant.cfg)", },
+    { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "13.00G              @ 7B",          },
+    { "F32",    LLAMA_FTYPE_ALL_F32,       "26.00G              @ 7B",          },
+    { "CUSTOM", LLAMA_FTYPE_CUSTOM,        "[:filename] Custom quant config (quant.cfg if not specified", },
     // Note: Ensure COPY comes after F32 to avoid ftype 0 from matching.
-    { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing", },
+    { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing",  },
 };
 
-static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
+static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out, std::string & custom_cfg_filename_out) {
     std::string ftype_str;
 
     for (auto ch : ftype_str_in) {
         ftype_str.push_back(std::toupper(ch));
     }
+
+    if (ftype_str.find("CUSTOM:") == 0) {
+        // custom quant mix
+        ftype = LLAMA_FTYPE_CUSTOM;
+        ftype_str_out = "CUSTOM";
+        if (ftype_str.length() > 7) {
+            // extract config filename (take from ftype_str_in to get original casing)
+            std::string custom_cfg = ftype_str_in.substr(7);
+            custom_cfg_filename_out = custom_cfg;
+        } else {
+            return false;
+        }
+        return true;
+    } else if (ftype_str.find("CUSTOM") == 0) {
+        // custom quant mix with default config
+        ftype = LLAMA_FTYPE_CUSTOM;
+        ftype_str_out = "CUSTOM";
+        custom_cfg_filename_out = "quant.cfg";
+        return true;
+    }
+
     for (auto & it : QUANT_OPTIONS) {
         if (it.name == ftype_str) {
             ftype = it.ftype;
@@ -203,7 +224,7 @@ static ggml_type parse_ggml_type(const char * arg) {
     for (int j = 0; j < GGML_TYPE_COUNT; ++j) {
         auto type = ggml_type(j);
         const auto * name = ggml_type_name(type);
-        if (name && strcmp(arg, name) == 0) {
+        if (name && strcasecmp(arg, name) == 0) {
             result = type; break;
         }
     }
@@ -253,7 +274,7 @@ static bool read_custom_quant_config(const std::string& filename, llama_model_qu
     std::vector<std::string> names;
     std::vector<ggml_type> types;
 
-    printf("%s: reading custom quantization scheme from %s:\n", __func__, filename.c_str());
+    printf("reading custom quantization mix from %s:\n", filename.c_str());
 
     if (!file.is_open()) {
         fprintf(stderr, "%s: failed to open file: '%s'\n", __func__, filename.c_str());
@@ -261,25 +282,41 @@ static bool read_custom_quant_config(const std::string& filename, llama_model_qu
     }
 
     while (getline(file, line)) {
-        // Skip empty lines and comments
+        // skip empty lines and comments
         if (line.empty() || line[0] == '#') continue;
 
         // default file type
         if (line.find("ftype=") == 0) {
-            int ftype = std::stoi(line.substr(6));
+            std::string ftype_str = line.substr(6);
+            std::string ftype_name;
+            std::string custom_quant_config_filename;
+            llama_ftype ftype;
+            if(!try_parse_ftype(ftype_str, ftype, ftype_name, custom_quant_config_filename)) {
+                fprintf(stderr, "%s: invalid ftype '%s'\n", __func__, ftype_str.c_str());
+                file.close();
+                return false;
+            }
+
             override.default_ftype = static_cast<llama_ftype>(ftype);
-            printf("  default ftype = %i\n", ftype);
+            printf("  default ftype = %i (%s)\n", ftype, ftype_name.c_str());
             continue;
         }
 
         // tensor overrides
         size_t pos = line.find('=');
         if (pos != std::string::npos) {
-            std::string name = line.substr(0, pos);
-            int type = std::stoi(line.substr(pos + 1));
-            names.push_back(name);
+            std::string tensor_name = line.substr(0, pos);
+            std::string type_name = line.substr(pos + 1);
+            ggml_type type = parse_ggml_type(type_name.c_str());
+            if(type < 0 || type >= GGML_TYPE_COUNT) {
+                fprintf(stderr, "%s: invalid ggml_type '%s'\n", __func__, type_name.c_str());
+                file.close();
+                return false;
+            }
+            names.push_back(tensor_name);
             types.push_back(static_cast<ggml_type>(type));
-            printf("  %s = %i\n", name.c_str(), type);
+            printf("  %s = %i (%s)\n", tensor_name.c_str(), type, type_name.c_str());
+        
         }
     }
 
@@ -383,9 +420,10 @@ int main(int argc, char ** argv) {
     const std::string fname_inp = argv[arg_idx];
     arg_idx++;
     std::string fname_out;
+    std::string custom_quant_config_filename;
 
     std::string ftype_str;
-    if (try_parse_ftype(argv[arg_idx], params.ftype, ftype_str)) {
+    if (try_parse_ftype(argv[arg_idx], params.ftype, ftype_str, custom_quant_config_filename)) {
         std::string fpath;
         const size_t pos = fname_inp.find_last_of("/\\");
         if (pos != std::string::npos) {
@@ -406,7 +444,7 @@ int main(int argc, char ** argv) {
             return 1;
         }
        
-        if (!try_parse_ftype(argv[arg_idx], params.ftype, ftype_str)) {
+        if (!try_parse_ftype(argv[arg_idx], params.ftype, ftype_str, custom_quant_config_filename)) {
             fprintf(stderr, "%s: invalid ftype '%s'\n", __func__, argv[3]);
             return 1;
         }
@@ -417,8 +455,7 @@ int main(int argc, char ** argv) {
        
         if (ftype_str == "CUSTOM") {
             params.override_ftype = new llama_model_quantize_ftype_override;
-            if(!read_custom_quant_config("quant.cfg", *params.override_ftype)) {
-                fprintf(stderr, "%s: failed to read custom quant config file!\n", __func__);
+            if(!read_custom_quant_config(custom_quant_config_filename, *params.override_ftype)) {
                 return 1;
             }
         }
