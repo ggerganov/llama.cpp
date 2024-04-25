@@ -41,6 +41,9 @@ typedef struct llama_sampling_params {
     float       mirostat_eta          = 0.10f;              // learning rate
     bool        penalize_nl           = false;              // consider newlines as a repeatable token
     uint32_t    seed                  = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampling_context
+    float       dry_multiplier        = 0.0f;     // 0.0f = disabled, recommended value: 0.8f
+    float       dry_base              = 1.75f;
+    int         dry_allowed_length    = 2;
 
     std::vector<llama_sampler_type> samplers_sequence = {
         llama_sampler_type::TOP_K,
@@ -61,6 +64,7 @@ typedef struct llama_sampling_params {
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
 
     std::vector<llama_token> penalty_prompt_tokens;
+    std::vector<llama_token> dry_sequence_breakers; // sequence breakers for the DRY sampler
     bool                     use_penalty_prompt_tokens = false;
 } llama_sampling_params;
 

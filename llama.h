@@ -924,6 +924,18 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
+    ///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677
+    LLAMA_API void llama_sample_dry(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+               const llama_token * last_tokens,
+                             int   last_tokens_size,
+                           float   dry_base,
+                           float   dry_multiplier,
+                             int   dry_allowed_length,
+               const llama_token * seq_breakers,
+                             int   seq_breakers_size);
+
     /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
     LLAMA_API void llama_sample_tail_free(
             struct llama_context * ctx,
