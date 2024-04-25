@@ -223,22 +223,19 @@ inline bool chaton_tmpl_apply_ex(
         ) {
     ChatParts cp = {};
     std::stringstream ss;
-    ss << conMeta[tmpl][K_GLOBAL][K_BEGIN];
-    cp.add_part(ChatParts::S, conMeta[tmpl][K_GLOBAL][K_BEGIN]);
+    std::string globalBegin = chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_BEGIN});
+    ss << globalBegin;
+    cp.add_part(ChatParts::S, globalBegin);
     int cntSystem = 0;
     int cntUser = 0;
     int cntOthers = 0;
     for(const auto msg: msgs) {
         auto role = msg.role;
         auto content = msg.content;
-        std::string begin = "";
-        try {
-            begin = conMeta[tmpl][role][K_BEGIN];
-            cp.add_part(ChatParts::S, begin);
-        } catch (json::exception &err) {
-
-        }
-        auto prefix = conMeta[tmpl][role][K_PREFIX];
+        std::string begin = chaton_tmpl_role_kv(tmpl, role, {K_BEGIN});
+        auto prefix = chaton_tmpl_role_kv(tmpl, role, {K_PREFIX});
+        auto suffix = chaton_tmpl_role_kv(tmpl, role, {K_SUFFIX});
+        auto end = chaton_tmpl_role_kv(tmpl, role, {K_END});
         if (role == K_SYSTEM) {
             cntSystem += 1;
             ss << begin << prefix;
@@ -266,12 +263,26 @@ inline bool chaton_tmpl_apply_ex(
             cp.add_part(ChatParts::S, begin);
             cp.add_part(ChatParts::S, prefix);
         }
-        ss << content << conMeta[tmpl][role][K_SUFFIX];
+        ss << content;
         cp.add_part(ChatParts::N, content);
-        cp.add_part(ChatParts::S, conMeta[tmpl][role][K_SUFFIX]);
+        if (role == K_SYSTEM) {
+            if (chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX)) {
+                ss << suffix;
+                cp.add_part(ChatParts::S, suffix);
+            }
+            if (chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_END)) {
+                ss << end;
+                cp.add_part(ChatParts::S, end);
+            }
+        } else {
+            ss << suffix << end;
+            cp.add_part(ChatParts::S, suffix);
+            cp.add_part(ChatParts::S, end);
+        }
     }
-    ss << conMeta[tmpl][K_GLOBAL][K_END];
-    cp.add_part(ChatParts::S, conMeta[tmpl][K_GLOBAL][K_END]);
+    auto globalEnd = chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_END});
+    ss << globalEnd;
+    cp.add_part(ChatParts::S, globalEnd);
     cp.dump();
     tagged = ss.str();
     std::string cpStr = cp.str();
