@@ -1325,7 +1325,7 @@ bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length
 }
 
 // Linear interpolation between two points
-inline float lerp(float s, float e, float t) {
+inline float clip_lerp(float s, float e, float t) {
     return s + (e - s) * t;
 }
 // Bilinear resize function
@@ -1347,17 +1347,17 @@ static void bilinear_resize(const clip_image_u8& src, clip_image_u8& dst, int ta
             float y_lerp = py - y_floor;
 
             for (int c = 0; c < 3; c++) {
-                float top = lerp(
+                float top = clip_lerp(
                     static_cast<float>(src.buf[3 * (y_floor * src.nx + x_floor) + c]),
                     static_cast<float>(src.buf[3 * (y_floor * src.nx + (x_floor + 1)) + c]),
                     x_lerp
                 );
-                float bottom = lerp(
+                float bottom = clip_lerp(
                     static_cast<float>(src.buf[3 * ((y_floor + 1) * src.nx + x_floor) + c]),
                     static_cast<float>(src.buf[3 * ((y_floor + 1) * src.nx + (x_floor + 1)) + c]),
                     x_lerp
                 );
-                dst.buf[3 * (y * target_width + x) + c] = static_cast<uint8_t>(lerp(top, bottom, y_lerp));
+                dst.buf[3 * (y * target_width + x) + c] = static_cast<uint8_t>(clip_lerp(top, bottom, y_lerp));
             }
         }
     }
