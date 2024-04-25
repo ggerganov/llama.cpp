@@ -384,6 +384,10 @@ inline void _chaton_meta_dump(std::string &tmpl) {
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_END));
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_BEGIN));
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
+
+        if (!userEnd.empty()) {
+            LOG_TEELN("WARN:%s:User->End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd);
+        }
     }
 }
 
