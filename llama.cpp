@@ -16157,6 +16157,7 @@ size_t llama_state_get_size(const struct llama_context * ctx) {
     const size_t s_kv_head         = sizeof(uint32_t);
     const size_t s_kv_size         = sizeof(uint32_t);
     const size_t s_kv_used         = sizeof(uint32_t);
+    const size_t s_v_trans         = sizeof(uint32_t);
     const size_t s_kv              = ctx->kv_self.total_size();
     const size_t s_kv_cell         = sizeof(llama_pos) + sizeof(size_t) + cparams.n_seq_max*sizeof(llama_seq_id);
     const size_t s_kv_cells        = ctx->kv_self.size * s_kv_cell;
@@ -16174,6 +16175,7 @@ size_t llama_state_get_size(const struct llama_context * ctx) {
         + s_kv_head
         + s_kv_size
         + s_kv_used
+        + s_v_trans
         + s_kv
         + s_kv_cells
     );
