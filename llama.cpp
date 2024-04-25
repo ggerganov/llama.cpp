@@ -14574,7 +14574,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             fout.close();
         }
     };
-    auto new_ofstream = [&](int index = 0) {
+    auto new_ofstream = [&](int index) {
         cur_split = index;
         GGML_ASSERT(ctx_outs[cur_split] && "Find uninitialized gguf_context");
         std::string fname = fname_out;
@@ -14592,7 +14592,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     };
 
     const auto tn = LLM_TN(model.arch);
-    new_ofstream();
+    new_ofstream(0);
     for (int i = 0; i < ml.n_tensors; ++i) {
         auto weight = ml.get_weight(i);
         struct ggml_tensor * tensor = weight->tensor;
