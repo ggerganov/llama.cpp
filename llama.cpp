@@ -14368,14 +14368,20 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
 }
 
 static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const float * f32_data, void * new_data, const int64_t chunk_size, int64_t nrows, int64_t n_per_row, const float * imatrix, std::vector<std::thread> & workers, const int nthread) {
+    if (nthread < 2) {
+        // single-thread
+        size_t new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nrows, n_per_row, imatrix);
+        if (!ggml_validate_row_data(new_type, new_data, new_size)) {
+            throw std::runtime_error("quantized data validation failed");
+        }
+        return new_size;
+    }
+
     std::mutex mutex;
     int64_t counter = 0;
     size_t new_size = 0;
-    if (nthread < 2) {
-        // single-thread
-        return ggml_quantize_chunk(new_type, f32_data, new_data, 0, nrows, n_per_row, imatrix);
-    }
-    auto compute = [&mutex, &counter, &new_size, new_type, f32_data, new_data, chunk_size,
+    bool valid = true;
+    auto compute = [&mutex, &counter, &new_size, &valid, new_type, f32_data, new_data, chunk_size,
             nrows, n_per_row, imatrix]() {
         const int64_t nrows_per_chunk = chunk_size / n_per_row;
         size_t local_size = 0;
@@ -14390,7 +14396,17 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
             }
             lock.unlock();
             const int64_t this_nrow = std::min(nrows - first_row, nrows_per_chunk);
-            local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first_row * n_per_row, this_nrow, n_per_row, imatrix);
+            size_t this_size = ggml_quantize_chunk(new_type, f32_data, new_data, first_row * n_per_row, this_nrow, n_per_row, imatrix);
+            local_size += this_size;
+
+            // validate the quantized data
+            const size_t row_size  = ggml_row_size(new_type, n_per_row);
+            void * this_data = (char *) new_data + first_row * row_size;
+            if (!ggml_validate_row_data(new_type, this_data, this_size)) {
+                std::unique_lock<std::mutex> lock(mutex);
+                valid = false;
+                break;
+            }
         }
     };
     for (int it = 0; it < nthread - 1; ++it) {
@@ -14399,6 +14415,9 @@ static size_t llama_tensor_quantize_internal(enum ggml_type new_type, const floa
     compute();
     for (auto & w : workers) { w.join(); }
     workers.clear();
+    if (!valid) {
+        throw std::runtime_error("quantized data validation failed");
+    }
     return new_size;
 }
 
