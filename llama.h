@@ -289,6 +289,7 @@ extern "C" {
         bool quantize_output_tensor;         // quantize output.weight
         bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                           // quantize all tensors to the default type
+        bool keep_split;                     // quantize to the same number of shards
         void * imatrix;                      // pointer to importance matrix data
         void * kv_overrides;                 // pointer to vector containing overrides
     } llama_model_quantize_params;
@@ -391,8 +392,10 @@ extern "C" {
     LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 
-    LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
-    LLAMA_API enum llama_rope_type  llama_rope_type (const struct llama_model * model);
+    LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
+
+    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model   * model);
+    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model   * model);
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);

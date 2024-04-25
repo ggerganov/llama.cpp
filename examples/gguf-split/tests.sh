@@ -4,16 +4,16 @@ set -eu
 
 if [ $# -lt 1 ]
 then
-  echo "usage:   $0 path_to_build_binary [path_to_temp_folder]"
-  echo "example: $0 ../../build/bin ../../tmp"
-  exit 1
+    echo "usage:   $0 path_to_build_binary [path_to_temp_folder]"
+    echo "example: $0 ../../build/bin ../../tmp"
+    exit 1
 fi
 
 if [ $# -gt 1 ]
 then
-  TMP_DIR=$2
+    TMP_DIR=$2
 else
-  TMP_DIR=/tmp
+    TMP_DIR=/tmp
 fi
 
 set -x
@@ -21,7 +21,7 @@ set -x
 SPLIT=$1/gguf-split
 MAIN=$1/main
 WORK_PATH=$TMP_DIR/gguf-split
-CUR_DIR=$(pwd)
+ROOT_DIR=$(realpath $(dirname $0)/../../)
 
 mkdir -p "$WORK_PATH"
 
@@ -30,8 +30,8 @@ rm -f $WORK_PATH/ggml-model-split*.gguf $WORK_PATH/ggml-model-merge*.gguf
 
 # 1. Get a model
 (
-  cd $WORK_PATH
-  "$CUR_DIR"/../../scripts/hf.sh --repo ggml-org/gemma-1.1-2b-it-Q8_0-GGUF --file gemma-1.1-2b-it.Q8_0.gguf
+cd $WORK_PATH
+"$ROOT_DIR"/scripts/hf.sh --repo ggml-org/gemma-1.1-2b-it-Q8_0-GGUF --file gemma-1.1-2b-it.Q8_0.gguf
 )
 echo PASS
 
