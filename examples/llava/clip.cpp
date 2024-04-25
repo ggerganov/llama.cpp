@@ -1173,7 +1173,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         try {
             vision_model.class_embedding  = get_tensor(new_clip->ctx_data, TN_CLASS_EMBD);
             new_clip->has_class_embedding = true;
-        } catch(const std::exception& e) {
+        } catch (const std::exception& e) {
             new_clip->has_class_embedding = false;
         }
 
