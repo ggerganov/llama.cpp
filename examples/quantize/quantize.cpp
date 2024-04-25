@@ -97,6 +97,7 @@ static void usage(const char * executable) {
     printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
     printf("  --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor\n");
     printf("  --token-embedding-type ggml_type: use this ggml_type for the token embeddings tensor\n");
+    printf("  --keep-split: will generate quatized model in the same shards as input");
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
@@ -300,6 +301,8 @@ int main(int argc, char ** argv) {
             } else {
                 usage(argv[0]);
             }
+        } else if (strcmp(argv[arg_idx], "--keep-split")) {
+            params.keep_split = true;
         } else {
             usage(argv[0]);
         }
@@ -332,20 +335,28 @@ int main(int argc, char ** argv) {
     std::string fname_out;
 
     std::string ftype_str;
+    std::string suffix = ".gguf";
     if (try_parse_ftype(argv[arg_idx], params.ftype, ftype_str)) {
         std::string fpath;
         const size_t pos = fname_inp.find_last_of("/\\");
         if (pos != std::string::npos) {
             fpath = fname_inp.substr(0, pos + 1);
         }
-        // export as [inp path]/ggml-model-[ftype].gguf
-        fname_out = fpath + "ggml-model-" + ftype_str + ".gguf";
+
+        // export as [inp path]/ggml-model-[ftype]. Only add extension if there is no splitting
+        fname_out = fpath + "ggml-model-" + ftype_str;
+        if (!params.keep_split) {
+            fname_out += suffix;
+        }
         arg_idx++;
         if (ftype_str == "COPY") {
             params.only_copy = true;
         }
     } else {
         fname_out = argv[arg_idx];
+        if (params.keep_split && fname_out.find(suffix) != std::string::npos) {
+            fname_out = fname_out.substr(0, fname_out.length() - suffix.length());
+        }
         arg_idx++;
 
         if (argc <= arg_idx) {
