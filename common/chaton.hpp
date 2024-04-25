@@ -75,7 +75,7 @@ const auto K_SUFFIX = "suffix";
 const auto K_BEGIN = "begin";
 const auto K_END = "end";
 const auto K_GLOBAL = "global";
-const auto K_SYSTEMUSER_SYSTEM_HAS_SUFFIX = "systemuser-systemp-has-suffix";
+const auto K_SYSTEMUSER_SYSTEM_HAS_SUFFIX = "systemuser-system-has-suffix";
 const auto K_SYSTEMUSER_SYSTEM_HAS_END = "systemuser-system-has-end";
 const auto K_SYSTEMUSER_1ST_USER_HAS_BEGIN = "systemuser-1st-user-has-begin";
 const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
@@ -388,6 +388,9 @@ inline void _chaton_meta_dump(std::string &tmpl) {
 
         if (!userEnd.empty()) {
             LOG_TEELN("WARN:%s:User->End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
+        }
+        if (!assistantBegin.empty()) {
+            LOG_TEELN("WARN:%s:Assistant->Begin seems to be set to [%s], do cross check if this is proper and needed", __func__, assistantBegin.c_str());
         }
     }
 }
