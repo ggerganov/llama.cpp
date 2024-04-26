@@ -306,6 +306,9 @@ inline bool chaton_tmpl_apply_ex(
         std::vector<int> &lens,
         bool alertAssistantAtEnd
         ) {
+    if (!chaton_tmpl_exists(tmpl)) {
+        return false;
+    }
     ChatParts cp = {};
     std::stringstream ss;
     std::string globalBegin = chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_BEGIN});
@@ -390,16 +393,37 @@ inline bool chaton_tmpl_apply_ex(
 // global-begin + [[role-begin] + [role-prefix] + msg + role-suffix] + global-end
 // if there is a combination of system-user messages,
 //    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
-inline std::string chaton_tmpl_apply(
+inline int32_t chaton_tmpl_apply(
         const std::string &tmpl,
         const std::vector<llama_chat_message> &msgs,
-        bool alertAssistantAtEnd
+        bool alertAssistantAtEnd,
+        std::string &tagged
         ) {
-    std::string tagged;
     std::string types;
     std::vector<int> lens;
-    chaton_tmpl_apply_ex(tmpl, msgs, tagged, types, lens, alertAssistantAtEnd);
-    return tagged;
+    if (!chaton_tmpl_apply_ex(tmpl, msgs, tagged, types, lens, alertAssistantAtEnd)) {
+        return -1;
+    }
+    return tagged.size();
+}
+
+inline int32_t chaton_tmpl_apply_capi(
+        const char *tmpl,
+        const struct llama_chat_message *msgs,
+        const size_t numMsgs,
+        bool alertAssistantAtEnd,
+        char *dest,
+        int32_t destLength
+        ) {
+    if ((tmpl == nullptr) || (dest == nullptr)) {
+        return -1;
+    }
+    std::vector<const llama_chat_message *> vMsgs;
+    for(size_t i=0; i<numMsgs; i++) {
+        vMsgs.push_back(vMsgs[i]);
+    }
+    std::string taggedMsgs;
+    int32_t taggedLength = chaton_tmpl_apply(tmpl, vMsgs, alertAssistantAtEnd, taggedMsgs);
 }
 
 
