@@ -1442,9 +1442,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
     printf("  --chaton-meta-json JsonFile\n");
-    printf("                        specify the json file containing chat-handshake-template-standard(s)");
+    printf("                        specify the json file containing chat-handshake-template-standard(s)\n");
     printf("  --chaton-template-id  ChatHandshakeTemplateId\n");
-    printf("                        specify the specific template standard to use from loaded json file");
+    printf("                        specify the specific template standard to use from loaded json file\n");
     printf("  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     printf("  -r PROMPT, --reverse-prompt PROMPT\n");
     printf("                        halt generation at PROMPT, return control in interactive mode\n");
