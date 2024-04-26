@@ -316,6 +316,7 @@ enum llm_kv {
     LLM_KV_SSM_TIME_STEP_RANK,
 
     LLM_KV_TOKENIZER_MODEL,
+    LLM_KV_TOKENIZER_PRE,
     LLM_KV_TOKENIZER_LIST,
     LLM_KV_TOKENIZER_TOKEN_TYPE,
     LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,
@@ -392,6 +393,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_SSM_TIME_STEP_RANK,            "%s.ssm.time_step_rank" },
 
     { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
+    { LLM_KV_TOKENIZER_PRE,                 "tokenizer.ggml.pre"                },
     { LLM_KV_TOKENIZER_LIST,                "tokenizer.ggml.tokens"             },
     { LLM_KV_TOKENIZER_TOKEN_TYPE,          "tokenizer.ggml.token_type"         },
     { LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,    "tokenizer.ggml.token_type_count"   },
@@ -2114,8 +2116,8 @@ struct llama_vocab {
         ttype type;
     };
 
-    enum llm_arch         arch = LLM_ARCH_UNKNOWN;
-    enum llama_vocab_type type = LLAMA_VOCAB_TYPE_SPM;
+    enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
+    enum llama_vocab_pre_type type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
 
     std::unordered_map<token, id> token_to_id;
     std::vector<token_data>       id_to_token;
@@ -4166,11 +4168,13 @@ static void llm_load_vocab(
 
     // determine vocab type
     {
-        std::string tokenizer_name;
+        std::string tokenizer_model;
+        std::string tokenizer_pre;
 
-        ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_name);
+        ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_model);
+        ml.get_key(LLM_KV_TOKENIZER_PRE,   tokenizer_pre, false);
 
-        if (tokenizer_name == "no_vocab") {
+        if (tokenizer_model == "no_vocab") {
             vocab.type = LLAMA_VOCAB_TYPE_NONE;
 
             // default special tokens
@@ -4184,7 +4188,7 @@ static void llm_load_vocab(
             vocab.linefeed_id     = -1;
 
             return;
-        } else if (tokenizer_name == "llama") {
+        } else if (tokenizer_model == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
             // default special tokens
@@ -4229,7 +4233,7 @@ static void llm_load_vocab(
             if (add_space_prefix_keyidx != -1) {
                 vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
             } // The default value of add_space_prefix is true.
-        } else if (tokenizer_name == "bert") {
+        } else if (tokenizer_model == "bert") {
             vocab.type = LLAMA_VOCAB_TYPE_WPM;
 
             // default special tokens
@@ -4242,10 +4246,10 @@ static void llm_load_vocab(
             vocab.special_mask_id = 103;
             vocab.add_space_prefix = false;
         } else {
-            if (tokenizer_name == "gpt2") {
+            if (tokenizer_model == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
             } else {
-                LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
+                LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_model.c_str());
                 LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
                 vocab.type = LLAMA_VOCAB_TYPE_SPM;
                 return;
@@ -4285,7 +4289,20 @@ static void llm_load_vocab(
             vocab.special_mask_id = -1;
         }
 
-        vocab.arch = model.arch;
+        if (tokenizer_pre.empty()) {
+            LLAMA_LOG_WARN("%s: missing tokenizer pre, using default tokenizer pre: 'default'", __func__);
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+        } else if (tokenizer_pre == "default") {
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+        } else if (tokenizer_pre == "llama3") {
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
+        } else if (tokenizer_pre == "deepseek-llm") {
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
+        } else if (tokenizer_pre == "deepseek-coder") {
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+        } else {
+            throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
+        }
     }
 
     const int token_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_LIST).c_str());
@@ -12011,38 +12028,44 @@ struct llm_tokenizer_bpe {
         std::vector<std::string> word_collection;
         switch (vocab.type) {
             case LLAMA_VOCAB_TYPE_BPE:
-                switch (vocab.arch) {
-                    // TODO: how to detect deepseek and llama v3 models?
-                    //case LLM_ARCH_LLAMA:
-                    //case LLM_ARCH_DEEPSEEK_CODER:
-                    //    word_collection = unicode_regex_split(text, {
-                    //        "[\r\n]",
-                    //        "\\s?\\p{L}+",
-                    //        "\\s?\\p{P}+",
-                    //        "[一-龥ࠀ-一가-퟿]+",
-                    //        "\\p{N}+"
-                    //    });
-                    //    break;
-                    //case LLM_ARCH_DEEPSEEK_LLM:
-                    //    word_collection = unicode_regex_split(text, {
-                    //        "[\r\n]",
-                    //        "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
-                    //        "\\s?[!-/:-~！-／：-～‘-‟　-。]+",
-                    //        "\\s+$",
-                    //        "[一-龥ࠀ-一가-퟿]+",
-                    //        "\\p{N}+"
-                    //    });
-                    //    break;
+                switch (vocab.type_pre) {
+                    case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
+                        word_collection = unicode_regex_split(text, {
+                            // TODO: ??????????????
+                            //"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+
+                            "\\p{P}+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                            "\\p{N}+",
+                            "[0-9][0-9][0-9]"
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM:
+                        word_collection = unicode_regex_split(text, {
+                            "[\r\n]",
+                            "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
+                            "\\s?[!-/:-~！-／：-～‘-‟　-。]+",
+                            "\\s+$",
+                            "[一-龥ࠀ-一가-퟿]+",
+                            "\\p{N}+"
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER:
+                        word_collection = unicode_regex_split(text, {
+                            "[\r\n]",
+                            "\\s?\\p{L}+",
+                            "\\s?\\p{P}+",
+                            "[一-龥ࠀ-一가-퟿]+",
+                            "\\p{N}+"
+                        });
+                        break;
                     default:
                         // default regex for BPE tokenization pre-processing
-                        {
-                            word_collection = unicode_regex_split(text, {
-                                "\\p{P}+",
-                                "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-                                "\\p{N}+",
-                                "[0-9][0-9][0-9]"
-                            });
-                        }
+                        word_collection = unicode_regex_split(text, {
+                            "\\p{P}+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                            "\\p{N}+",
+                            "[0-9][0-9][0-9]"
+                        });
                         break;
                 }
                 break;

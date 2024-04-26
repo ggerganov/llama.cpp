@@ -27,6 +27,8 @@ tests = [
     "   ",
     "\t",
     "\n",
+    "\n\n",
+    "\n\n\n",
     "\t\n",
     "Hello world",
     " Hello world",

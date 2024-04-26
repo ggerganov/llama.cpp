@@ -398,6 +398,9 @@ class Model(ABC):
             if chkhsh == -3290901550109860290:
                 # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/blob/main/tokenizer.json
                 res = "llama3"
+            if chkhsh ==  5332289095291046364:
+                # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-chat/blob/main/tokenizer.json
+                res = "deepseek-llm"
             if chkhsh ==  4190561703949727616:
                 # ref: https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-instruct/blob/main/tokenizer.json
                 res = "deepseek-coder"

@@ -17,6 +17,8 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
         { "   "                   , {     466, }, },
         { "\t"                    , {     192, }, },
         { "\n"                    , {     193, }, },
+        { "\n\n"                  , {    1001, }, },
+        { "\n\n\n"                , {   11331, }, },
         { "\t\n"                  , {   19125, }, },
         { "Hello world"           , {    9856,   1079, }, },
         { " Hello world"          , {   23090,   1079, }, },
