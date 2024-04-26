@@ -82,7 +82,7 @@ const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
 const auto K_REVERSE_PROMPT = "reverse-prompt";
 
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 json conMeta;
 
