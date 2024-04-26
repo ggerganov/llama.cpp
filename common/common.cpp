@@ -231,6 +231,8 @@ int32_t setCpuAffinity(std::bitset<64> cpuMask) {
         if (cpuMask[i] == 1) {
             CPUSET_PRINT_DEBUG("Setting CPU %d\n", i);
             CPU_SET(i, &mask);
+        } else {
+            CPU_CLR(i, &mask);
         }
     }
 
@@ -328,7 +330,10 @@ int32_t get_num_physical_cores() {
         is_hybrid_core = false;
         if (is_hybrid) {
             if (pin_cpu(cpu) == 0) {
-                if (is_running_on_efficiency_core()) is_hybrid_core = true;
+                if (is_running_on_efficiency_core()) {
+                    is_hybrid_core = true;
+                    CPUSET_PRINT_DEBUG("Logical CPU is Hybrid: %d\n", cpu);
+                }
             }
         }
         numLogicalCores++;
@@ -365,6 +370,7 @@ int32_t get_num_physical_cores() {
                 CPU_SET(cpu, &mask);
                 CPUSET_PRINT_DEBUG("CPU %u is physical, siblings: %s\n", cpu, line.c_str());
             } else {
+                CPU_CLR(cpu, &mask);
                 cpuset_smt = true;
             }
         }
@@ -378,7 +384,7 @@ int32_t get_num_physical_cores() {
         if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == -1) {
                 CPUSET_PRINT_DEBUG("pthread_setaffinity_np error\n");
         }
-        fprintf(stderr, "get_num_physical_cores Physical CPU count: %li\n", siblings.size());
+        CPUSET_PRINT_DEBUG("get_num_physical_cores Physical CPU count: %li\n", siblings.size());
 
         cpuset_best = cpuset;
         cpuset_worst = cpuset;

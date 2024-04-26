@@ -18708,6 +18708,33 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
             };
 
             const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
+#if defined(__x86_64__) && defined(__linux__)
+            cpu_set_t procMask;
+            cpu_set_t threadMask;
+            //fprintf(stdout, "sched_getaffinity init\n");
+            if (sched_getaffinity(0, sizeof(cpu_set_t), &procMask) == -1) {
+                fprintf(stderr, "ggml_thread_create sched_getaffinity error\n");
+            } else {
+                int result = pthread_setaffinity_np(workers[j].thrd, sizeof(cpu_set_t), &procMask);
+                if (result !=0) fprintf(stderr, "ggml_thread_create pthread_setaffinity_np: %d", result);
+                //printf("Set returned by sched_getaffinity() contained:\n");
+                //for (size_t k = 0; k < CPU_SETSIZE; k++)
+                    //if (CPU_ISSET(k, &procMask))
+                        //printf("    CPU %zu\n", k);
+            }
+            /*
+            int s;
+            s = pthread_getaffinity_np(workers[j].thrd, sizeof(threadMask), &threadMask);
+            if (s != 0) {
+               fprintf(stderr, "ggml_thread_create pthread_getaffinity_np: %d\n", s);
+            } else {
+                printf("Set returned by pthread_getaffinity_np() contained:\n");
+                for (size_t l = 0; l < CPU_SETSIZE; l++)
+                    if (CPU_ISSET(l, &threadMask))
+                        printf("    CPU %zu\n", l);
+            } 
+            */           
+#endif
             GGML_ASSERT(rc == 0);
             UNUSED(rc);
         }
