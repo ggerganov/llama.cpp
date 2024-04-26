@@ -141,12 +141,12 @@ int main(int argc, char **argv) {
                 llama_detokenize_bpe(ctx, test_kv.second).c_str());
             fprintf(stderr, "%s : expected tokens: ", __func__);
             for (const auto & t : test_kv.second) {
-                fprintf(stderr, "%6d, ", t);
+                fprintf(stderr, "%6d '%s', ", t, llama_token_to_piece(ctx, t).c_str());
             }
             fprintf(stderr, "\n");
             fprintf(stderr, "%s : got tokens:      ", __func__);
             for (const auto & t : res) {
-                fprintf(stderr, "%6d, ", t);
+                fprintf(stderr, "%6d '%s', ", t, llama_token_to_piece(ctx, t).c_str());
             }
             fprintf(stderr, "\n");
 

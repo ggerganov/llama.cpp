@@ -12032,10 +12032,11 @@ struct llm_tokenizer_bpe {
                     case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
                         word_collection = unicode_regex_split(text, {
                             // TODO: ??????????????
-                            //"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+
+                            //"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
 
-                            // TODO: this is wrong - need to use ReFlex and update unicode.cpp to support the regex above
-                            "\\p{P}+",
+                            // TODO: this is not the same as the original regex:
+                            //       - need to use ReFlex and update unicode.cpp to support the regex above
+                            //       - or implement a custom function similar to unicode_gpt2_regex_preprocess()
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                             "\\p{N}+",
                             "[0-9][0-9][0-9]"
