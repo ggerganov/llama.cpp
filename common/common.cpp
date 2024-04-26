@@ -1910,13 +1910,11 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
     struct stat model_file_info;
     auto file_exists = (stat(path.c_str(), &model_file_info) == 0);
 
-    // If the file exists, check for ${path_model}.json file
-    // Alternatively check for legacy ${path_model}.etag & ${path_model}.lastModified files
+    // If the file exists, check its JSON metadata companion file.
     std::string metadata_path = path + ".json";
-
+    nlohmann::json metadata;
     std::string etag;
     std::string last_modified;
-    nlohmann::json metadata;
 
     if (file_exists) {
         // Try and read the JSON metadata file (note: stream autoclosed upon exiting this block).
@@ -1942,8 +1940,21 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
                 fprintf(stderr, "%s: error reading metadata file %s: %s\n", __func__, metadata_path.c_str(), e.what());
                 return false;
             }
-
+        } else {
+            // Check for legacy ${path_model}.etag & ${path_model}.lastModified files (note: both streams autoclosed upon exiting this block).
+            std::ifstream etag_in(path + ".etag");
+            if (etag_in.good()) {
+                std::getline(etag_in, etag);
+                fprintf(stderr, "%s: previous etag file found %s: %s\n", __func__, path.c_str(), etag.c_str());
+            }
+            std::ifstream last_modified_in(path + ".lastModified");
+            if (last_modified_in.good()) {
+                std::getline(last_modified_in, last_modified);
+                fprintf(stderr, "%s: previous lastModified file found %s: %s\n", __func__, path.c_str(), last_modified.c_str());
+            }
         }
+    } else {
+        fprintf(stderr, "%s: no previous model file found %s\n", __func__, path.c_str());
     }
 
     // Send a HEAD request to retrieve the etag and last-modified headers
@@ -1994,9 +2005,12 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
     }
 
     bool should_download = !file_exists || force_download;
-    if (!should_download && !etag.empty() && !last_modified.empty()) {
-        if (etag != headers.etag || last_modified != headers.last_modified) {
-            fprintf(stderr, "%s: ETag or Last-Modified headers are different: triggering a new download\n", __func__);
+    if (!should_download) {
+        if (!etag.empty() && etag != headers.etag) {
+            fprintf(stderr, "%s: ETag header is different (%s != %s): triggering a new download\n", __func__, etag.c_str(), headers.etag.c_str());
+            should_download = true;
+        } else if (!last_modified.empty() && last_modified != headers.last_modified) {
+            fprintf(stderr, "%s: Last-Modified header is different (%s != %s): triggering a new download\n", __func__, last_modified.c_str(), headers.last_modified.c_str());
             should_download = true;
         }
     }
