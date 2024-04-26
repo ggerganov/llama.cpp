@@ -224,6 +224,9 @@ inline bool chaton_tmpl_apply_single_ex(
         std::string &types,
         std::vector<int> &lens
         ) {
+    if (!chaton_tmpl_exists(tmpl)) {
+        return false;
+    }
     ChatParts cp = {};
     std::stringstream ss;
     std::string beginPrefix = chaton_tmpl_role_kv(tmpl, role, {K_BEGIN, K_PREFIX});
@@ -252,12 +255,11 @@ inline size_t chaton_tmpl_apply_single(
         const std::string &content,
         std::string &tagged
         ) {
-    if (!chaton_tmpl_exists(tmpl)) {
-        return -1;
-    }
     std::string types;
     std::vector<int> lens;
-    chaton_tmpl_apply_single_ex(tmpl, role, content, tagged, types, lens);
+    if (!chaton_tmpl_apply_single_ex(tmpl, role, content, tagged, types, lens)) {
+        return -1;
+    }
     return tagged.size();
 }
 
