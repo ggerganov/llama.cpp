@@ -89,8 +89,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_DEEPSEEKLLM) {
-        fprintf(stderr, "%s : error: vocab type is not DEEPSEEKLLM\n", __func__);
+    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
+        fprintf(stderr, "%s : error: vocab type is not BPE\n", __func__);
         llama_free_model(model);
         llama_free(ctx);
         return 2;

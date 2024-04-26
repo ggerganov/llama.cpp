@@ -2114,6 +2114,7 @@ struct llama_vocab {
         ttype type;
     };
 
+    enum llm_arch         arch = LLM_ARCH_UNKNOWN;
     enum llama_vocab_type type = LLAMA_VOCAB_TYPE_SPM;
 
     std::unordered_map<token, id> token_to_id;
@@ -4243,10 +4244,6 @@ static void llm_load_vocab(
         } else {
             if (tokenizer_name == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
-            } else if (tokenizer_name == "deepseek_coder") {
-                vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
-            } else if (tokenizer_name == "deepseek_llm") {
-                vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKLLM;
             } else {
                 LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
                 LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
@@ -4287,6 +4284,8 @@ static void llm_load_vocab(
             vocab.special_cls_id  = -1;
             vocab.special_mask_id = -1;
         }
+
+        vocab.arch = model.arch;
     }
 
     const int token_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_LIST).c_str());
@@ -11784,10 +11783,9 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
             auto buf = token_data.text.substr(3, 2);
             return strtol(buf.c_str(), NULL, 16);
         }
-        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
         case LLAMA_VOCAB_TYPE_BPE: {
             GGML_ASSERT(false);
-            return unicode_utf8_to_byte(token_data.text);
+            return unicode_utf8_to_byte(token_data.text); // TODO: why is this here after GGML_ASSERT?
         }
         case LLAMA_VOCAB_TYPE_WPM: {
             GGML_ASSERT(false);
@@ -11812,7 +11810,6 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
             return vocab.token_to_id.at(buf2);
         }
         case LLAMA_VOCAB_TYPE_WPM:
-        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
         case LLAMA_VOCAB_TYPE_BPE: {
             return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
         }
@@ -12014,33 +12011,43 @@ struct llm_tokenizer_bpe {
         std::vector<std::string> word_collection;
         switch (vocab.type) {
             case LLAMA_VOCAB_TYPE_BPE:
-                word_collection = unicode_regex_split(text, {
-                    "\\p{P}+",
-                    "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-                    "\\p{N}+",
-                    "[0-9][0-9][0-9]"
-                });
-                break;
-            case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
-                word_collection = unicode_regex_split(text, {
-                    "[\r\n]",
-                    "\\s?\\p{L}+",
-                    "\\s?\\p{P}+",
-                    "[一-龥ࠀ-一가-퟿]+",
-                    "\\p{N}+"
-                });
-                break;
-            case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
-                word_collection = unicode_regex_split(text, {
-                    "[\r\n]",
-                    "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
-                    "\\s?[!-/:-~！-／：-～‘-‟　-。]+",
-                    "\\s+$",
-                    "[一-龥ࠀ-一가-퟿]+",
-                    "\\p{N}+"
-                });
+                switch (vocab.arch) {
+                    // TODO: how to detect deepseek and llama v3 models?
+                    //case LLM_ARCH_LLAMA:
+                    //case LLM_ARCH_DEEPSEEK_CODER:
+                    //    word_collection = unicode_regex_split(text, {
+                    //        "[\r\n]",
+                    //        "\\s?\\p{L}+",
+                    //        "\\s?\\p{P}+",
+                    //        "[一-龥ࠀ-一가-퟿]+",
+                    //        "\\p{N}+"
+                    //    });
+                    //    break;
+                    //case LLM_ARCH_DEEPSEEK_LLM:
+                    //    word_collection = unicode_regex_split(text, {
+                    //        "[\r\n]",
+                    //        "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
+                    //        "\\s?[!-/:-~！-／：-～‘-‟　-。]+",
+                    //        "\\s+$",
+                    //        "[一-龥ࠀ-一가-퟿]+",
+                    //        "\\p{N}+"
+                    //    });
+                    //    break;
+                    default:
+                        // default regex for BPE tokenization pre-processing
+                        {
+                            word_collection = unicode_regex_split(text, {
+                                "\\p{P}+",
+                                "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                                "\\p{N}+",
+                                "[0-9][0-9][0-9]"
+                            });
+                        }
+                        break;
+                }
                 break;
             default:
+                GGML_ASSERT(false);
                 break;
         }
 
@@ -12486,8 +12493,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     output.push_back(vocab.special_eos_id);
                 }
             } break;
-        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
-        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
         case LLAMA_VOCAB_TYPE_BPE:
             {
                 if (add_special && vocab.special_add_bos == 1) {
@@ -17188,8 +17193,6 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             }
             break;
         }
-        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
-        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
         case LLAMA_VOCAB_TYPE_BPE: {
             // NOTE: we accept all unsupported token types,
             // suppressing them like CONTROL tokens.

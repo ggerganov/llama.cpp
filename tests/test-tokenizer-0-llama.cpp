@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
         }
         printf("\n");
 
-        bool correct = res_nobos.size() == test_kv.second.size() && res_bos.size() == res_nobos.size() + 1 && res_bos[0] == 1;
+        bool correct = res_nobos.size() == test_kv.second.size() && res_bos.size() == res_nobos.size() + 1 && res_bos[0] == llama_token_bos(model);
 
         for (int i = 0; i < (int) res_nobos.size() && correct; ++i) {
             if (test_kv.second[i] != res_bos[i + 1]) {
