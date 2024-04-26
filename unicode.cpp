@@ -197,18 +197,14 @@ static std::unordered_map<std::string, uint8_t> unicode_utf8_to_byte_map() {
     return map;
 }
 
-static inline std::wstring unicode_wstring_from_utf8(const std::string & s)
-{
+static inline std::wstring unicode_wstring_from_utf8(const std::string & s) {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
     return conv.from_bytes(s);
 }
 
-static inline std::string unicode_wstring_to_utf8(const std::wstring & ws)
-{
-    // code to convert from utf32/utf16 to utf8
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
-    std::string utf8 = converter.to_bytes(ws);
-    return utf8;
+static inline std::string unicode_wstring_to_utf8(const std::wstring & ws) {
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.to_bytes(ws);
 }
 
 static std::vector<std::string> unicode_byte_encoding_process(const std::vector<std::string> & bpe_words) {
@@ -233,7 +229,7 @@ static std::vector<size_t> unicode_gpt2_regex_preprocess(const std::wstring & wt
     bpe_offsets.reserve(offsets.size()); // Reserve memory for the approximate size
     size_t start = 0;
 
-    for(auto offset : offsets) {
+    for (auto offset : offsets) {
         const std::string text = unicode_wstring_to_utf8(std::wstring(wtext, start, offset));
 
         std::string token = "";
@@ -248,15 +244,17 @@ static std::vector<size_t> unicode_gpt2_regex_preprocess(const std::wstring & wt
         text_utf.reserve(text.size());
 
         const auto cpts = unicode_cpts_from_utf8(text);
-        for (size_t i = 0; i < cpts.size(); ++i)
+        for (size_t i = 0; i < cpts.size(); ++i) {
             text_utf.emplace_back(unicode_cpt_to_utf8(cpts[i]));
+        }
 
         for (int i = 0; i < (int)text_utf.size(); i++) {
             const std::string & utf_char = text_utf[i];
             bool split_condition = false;
             int bytes_remain = text_utf.size() - i;
+
             // forward backward lookups
-            const std::string & utf_char_next = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
+            const std::string & utf_char_next      = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
             const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
 
             // handling contractions
@@ -357,6 +355,7 @@ static std::vector<size_t> unicode_gpt2_regex_preprocess(const std::wstring & wt
                 token += utf_char;
             }
         }
+
         start += offset;
     }
 
@@ -402,8 +401,8 @@ static bool unicode_regex_with_custom_preprocessor_exists(const std::string & re
 
 static std::vector<size_t> unicode_regex_custom_preprocess(const std::string & regex, const std::wstring & wtext, const std::vector<size_t> & offsets) {
     std::vector<size_t> bpe_offsets;
-    
-    if(regex == "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)") {
+
+    if (regex == "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)") {
         bpe_offsets = unicode_gpt2_regex_preprocess(wtext, offsets);
     }
 
@@ -491,16 +490,15 @@ char32_t unicode_tolower(char32_t cp) {
     auto it = unicode_map_lowercase.find(cp);
     return it == unicode_map_lowercase.end() ? cp : it->second;
 }
-  
+
 std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::string> & regex_exprs) {
     std::wstring wtext = unicode_wstring_from_utf8(text);
 
     std::vector<size_t> bpe_offsets = {wtext.size()};
 
-    for(auto & regex_expr : regex_exprs) {
-
+    for (auto & regex_expr : regex_exprs) {
         if (unicode_regex_equivalent_wregex_exists(regex_expr)) {
-            const std::wstring& wregex_expr = unicode_regex_equivalent_wregex.at(regex_expr);
+            const std::wstring & wregex_expr = unicode_regex_equivalent_wregex.at(regex_expr);
             bpe_offsets = unicode_regex_preprocess(wtext, bpe_offsets, wregex_expr);
         } else if (unicode_regex_with_custom_preprocessor_exists(regex_expr)) {
             bpe_offsets = unicode_regex_custom_preprocess(regex_expr, wtext, bpe_offsets);
@@ -512,7 +510,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
     std::vector<std::string> bpe_words;
     bpe_words.reserve(bpe_offsets.size()); // Reserve memory for the approximate size
     size_t start = 0;
-    for(size_t & offset : bpe_offsets) {
+    for (size_t & offset : bpe_offsets) {
         bpe_words.emplace_back(unicode_wstring_to_utf8(std::wstring(wtext, start, offset)));
         start += offset;
     }
