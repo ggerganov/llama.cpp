@@ -58,6 +58,7 @@ jobs:
             git \
             cmake \
             python3-pip \
+            python3-venv \
             curl \
             wget \
             language-pack-en \
@@ -100,16 +101,13 @@ jobs:
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
 
-      - name: Python setup
-        id: setup_python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Tests dependencies
-        id: test_dependencies
+      - name: Setup python env
+        id: pipenv
         run: |
-          pip install -r examples/server/tests/requirements.txt
+          cd examples/server/tests
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
 
       - name: Tests
         id: server_integration_tests
