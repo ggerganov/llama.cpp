@@ -1206,6 +1206,8 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
     add_library(ggml_shared SHARED $<TARGET_OBJECTS:ggml>)
     target_link_libraries(ggml_shared PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+    target_link_libraries(ggml_shared PUBLIC "${LLAMA_DIRECT_STORAGE_DIR}/native/lib/x64/dstorage.lib" cuda cudart d3d12)
+
     install(TARGETS ggml_shared LIBRARY)
 endif()
 
