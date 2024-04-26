@@ -12521,7 +12521,7 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
                     uint32x4_t v = vld1q_u32((const uint32_t *)f + i);
                     uint32x4_t vexp = vandq_u32(v, vdupq_n_u32(0x7f800000));
                     uint32x4_t cmp = vceqq_u32(vexp, vdupq_n_u32(0x7f800000));
-                    uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u32(cmp, 8)), 0);
+                    uint64_t mask = vget_lane_u64(vreinterpret_u64_u16(vshrn_n_u32(cmp, 8)), 0);
                     if (mask) {
                         for (size_t j = 0; j < 4; ++j) {
                             if (!validate_float(f[i + j], i + j)) {
