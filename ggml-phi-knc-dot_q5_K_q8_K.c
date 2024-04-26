@@ -31,7 +31,7 @@ void GGML_F32x16_VEC_ZERO(float32x16_t *target)
                           "vbroadcastss\t%[Z]%{uint8%},\t%%zmm0\n\t" // use an upscaling operator to clear our register.
                           "vmovaps\t\t%%zmm0,\t%[RES]\n\t"
                           : [RES]  "+m"  (*target)
-                          : [Z]    "m"   (zero)
+                          : [Z]     "m"  (zero)
                           : "zmm0", "memory");
 
 }
@@ -104,23 +104,23 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
                           "jl\t20f\n\t"
                           "cmp\t$48,%%r10\n\t"
                           "jl\t21f\n\t"
-                          "add\t$64,%%r12\n\t"                                // Greater than 48.
+                          "add\t$64,%%r12\n\t"                                // Greater than 47.
                           "jmp\t18f\n\t"
                           "21:\n\t"
-                          "add\t$64,%%r13\n\t"                                // Between 49 and 32.
+                          "add\t$64,%%r13\n\t"                                // Between 48 and 31.
                           "jmp\t18f\n\t"
                           "20:\n\t"                                           // Less than 32...
                           "cmp\t$16,%%r10\n\t"
                           "jz\t18f\n\t"                                       // Zero.
                           "jl\t23f\n\t"
-                          "add\t$64,%%r14\n\t"                                // Between 32 and 16.
+                          "add\t$64,%%r14\n\t"                                // Between 32 and 15.
                           "jmp\t18f\n\t"
                           "23:\n\t"
                           "add\t$64,%%r15\n\t"                                // Between 16 and zero.
                           "18:\n\t"
                           "vbroadcastss\t%[SCALEY],\t%%zmm3\n\t"              // Load the scale factors coresponding to the two input vectors.
                           "vbroadcastss\t%[SCALEX]%{float16%},\t%%zmm4\n\t"
-                          "vmulps\t%%zmm3,\t%%zmm4,\t%%zmm5\n\t"              // Brepare the factor we're going to multiply the result by..
+                          "vmulps\t%%zmm3,\t%%zmm4,\t%%zmm5\n\t"              // Prepare the factor we're going to multiply the result by..
                           "vmovaps\t\t(%[RES]),\t%%zmm6\n\t"                  // Load our inital state from sum..
                           "vpbroadcastd\t%[Z]%{uint8%},\t%%zmm7\n\t"          // Empty our result.
                           "1:\n\t"
@@ -196,8 +196,8 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vpbroadcastd\t%[MASK]%{uint8%},\t%%zmm0\n\t"     // Load our mask.
                           "vpbroadcastd\t%[BIT5]%{uint8},\t%%zmm1\n\t"      // Load the bit we want to add (conditionally).
                           "vpbroadcastd\t%[M]%{uint8%},\t%%zmm2\n\t"        // Select which bit we want to test for. Start with bit 1.
-                          "vmovdqa32\t(%[SRC1])%{uint8%},\t%%zmm3\n\t"      // Load 16 sets of 8 bit packed single bits.
-                          "vmovdqa32\t16(%[SRC1])%{uint8%},\t%%zmm4\n\t"    // Load the next 16 sets of 8 bit packed single bits.
+                          "vmovdqa32\t(%[SRC1])%{uint8%},\t%%zmm3\n\t"      // Load 16 sets of 8 packed single bits.
+                          "vmovdqa32\t16(%[SRC1])%{uint8%},\t%%zmm4\n\t"    // Load the next 16 sets of 8 packed single bits.
 
                           "1:\n\t"
                           "inc\t%%ecx\n\t"                                  // We are in the loop. increment the counter.
@@ -207,21 +207,21 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
 
                           "vloadunpackld\t\t(%%r9)%{uint8%},\t%%zmm5\n\t"   // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vloadunpackhd\t\t16(%%r9)%{uint8%},\t%%zmm5\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vpandd\t%%zmm0,\t%%zmm5,\t%%zmm6\n\t"            // Apply a mask, storing the low four bits of vector zmm5 into zmm6.
+                          "vpandd\t%%zmm0,\t%%zmm5,\t%%zmm6\n\t"            // Apply a mask, storing the first set of four bits into a vector.
                           "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
                           "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"       // Save our result.
 
                           "vloadunpackld\t\t16(%%r9)%{uint8%},\t%%zmm7\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vloadunpackhd\t\t32(%%r9)%{uint8%},\t%%zmm7\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vprefetch1\t32(%%r9)\n\t"                        // Pull the next set of 4 bit sequences into the L2 cache.
-                          "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"            // Apply a mask, storing the next low four bits of vector zmm1 into zmm5.
+                          "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"            // Apply a mask, storing the next sets of four bits into a vector.
                           "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
                           "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"     // Save our result.
                           
                           "add\t$32,\t%%r8\n\t"
                           "cmp\t$4,\t%%ecx\n\t"
 
-                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                // Select which bit we want to test for.
+                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                // Select the next bit to test for.
                           
                           "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"            // Perform our test.
                           "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"            // Perform our test.
@@ -237,7 +237,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
 
                           "vprefetch0\t32(%%r9)\n\t"
                           "vprefetch1\t96(%%r9)\n\t"
-                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                // Select which bit we want to test for.
+                          "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                // Select the next bit to test for.
                           "add\t$32,\t%%r9\n\t"
                           "add\t$32,\t%%r8\n\t"
                           "jmp\t1b\n\t"
@@ -248,19 +248,18 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                             [MASK]  "m" (lowmask),
                             [M]     "m" (m),
                             [BIT5]  "m" (bit5)
-                          : "zmm0", "zmm1", "zmm2", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r12", "r8", "memory"
-                          );
+                          : "zmm0", "zmm1", "zmm2", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r8", "r9", "memory");
 }
   
 // A function for getting the dot product of two vectors, one of 5 bit resolution, and one of 8.
 // Used during inference, if your model prints "llama_model_loader: - type q5_K:  XXX tensors", and XXX is not zero. :)
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
 
-    /* interpret X and Y as vectors. */
+    /* Interpret X and Y as vectors. */
     const block_q5_K * restrict x = vx;
     const block_q8_K * restrict y = vy;
 
-    /* the number of blocks we will process this in. */
+    /* The number of blocks we will process this in. */
     const int nb = n / QK_K;
 
     static const uint32_t kmask1 = 0x3f3f3f3f;
@@ -274,18 +273,19 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
     float32x16_t sums;
 
-    // clear sums.
+    // Clear sums.
     GGML_F32x16_VEC_ZERO(&sums);
 
     float sumf = 0;
+
     for (int i = 0; i < nb; ++i) {
 
         uint8x16_t q5 [QK_K/16];
 
-        // combine our 4 and 1 bit vector sets into a 5 bit vector (in 8 bits).
+        // Combine our 4 and 1 bit vector sets into a 5 bit vector (in 8 bits).
         GGML_5bit_Unpack_Unaligned((const uint8x16_t *)x[i].qs, x[i].qh, q5);
 
-        // extract scales and mins..
+        // Extract scales and mins..
         memcpy(utmp, x[i].scales, 12);
         utmp[3] = ((utmp[2] >> 4) & kmask2) | (((utmp[1] >> 6) & kmask3) << 4);
         const uint32_t uaux = utmp[1] & kmask1;
