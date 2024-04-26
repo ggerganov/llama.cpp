@@ -1638,6 +1638,8 @@ class MiniCPMModel(Model):
         self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
         self.gguf_writer.add_file_type(self.ftype)
+        if "tie_word_embeddings" in self.hparams:
+            self.gguf_writer.add_tie_lm_head(self.hparams["tie_word_embeddings"])
 
     def set_vocab(self):
         self._set_vocab_llama_hf()
