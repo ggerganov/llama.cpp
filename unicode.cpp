@@ -203,8 +203,14 @@ static inline std::wstring unicode_wstring_from_utf8(const std::string & s) {
 }
 
 static inline std::string unicode_wstring_to_utf8(const std::wstring & ws) {
+#if defined(_WIN32)
+    // code to convert from utf32/utf16 to utf8
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
+    return converter.to_bytes(ws);
+#else
     std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
     return conv.to_bytes(ws);
+#endif
 }
 
 static std::vector<std::string> unicode_byte_encoding_process(const std::vector<std::string> & bpe_words) {
