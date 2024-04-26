@@ -11473,6 +11473,10 @@ static int llama_decode_internal(
         }
     }
 
+    // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
+    // overlap with device computation.
+    ggml_backend_sched_reset(lctx.sched);
+
     return 0;
 }
 
