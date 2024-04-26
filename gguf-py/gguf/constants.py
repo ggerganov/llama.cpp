@@ -863,7 +863,6 @@ QK_K = 256
 GGML_QUANT_SIZES = {
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),
-    GGMLQuantizationType.BF16:    (1, 2),
     GGMLQuantizationType.Q4_0:    (32, 2 + 16),
     GGMLQuantizationType.Q4_1:    (32, 2 + 2 + 16),
     GGMLQuantizationType.Q5_0:    (32, 2 + 4 + 16),
@@ -890,6 +889,7 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.I64:     (1, 8),
     GGMLQuantizationType.F64:     (1, 8),
     GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
+    GGMLQuantizationType.BF16:    (1, 2),
 }
 
 
