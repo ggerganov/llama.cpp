@@ -4247,7 +4247,7 @@ static void llm_load_vocab(
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
             } else if (tokenizer_name == "deepseek_llm") {
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKLLM;
-			} else {
+            } else {
                 LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
                 LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
                 vocab.type = LLAMA_VOCAB_TYPE_SPM;
@@ -11812,7 +11812,7 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
             return vocab.token_to_id.at(buf2);
         }
         case LLAMA_VOCAB_TYPE_WPM:
-		case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
+        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
         case LLAMA_VOCAB_TYPE_BPE: {
             return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
         }

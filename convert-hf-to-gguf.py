@@ -1315,7 +1315,7 @@ class PersimmonModel(Model):
 @Model.register("LlamaForCausalLM")
 class DeepseekCoderModel(Model):
     model_arch = gguf.MODEL_ARCH.LLAMA
-    
+
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         head_count = self.hparams["num_attention_heads"]
