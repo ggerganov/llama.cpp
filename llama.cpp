@@ -11205,6 +11205,10 @@ static int llama_decode_internal(
         }
     }
 
+    // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
+    // overlap with device computation.
+    ggml_backend_sched_reset(lctx.sched);
+
     return 0;
 }
 
@@ -16773,11 +16777,6 @@ float * llama_get_logits(struct llama_context * ctx) {
 
 float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
     int32_t j = -1;
-
-    // Reset state for the next run before the following backend sync,
-    // to allow the CPU activities in the reset to overlap with device computation.
-    ggml_backend_sched_reset(ctx->sched);
-
     llama_synchronize(ctx);
 
     try {
