@@ -20987,7 +20987,7 @@ void gguf_free(struct gguf_context * ctx) {
         GGML_FREE(ctx->infos);
     }
 
-    GGML_ALIGNED_FREE(ctx);
+    GGML_FREE(ctx);
 }
 
 const char * gguf_type_name(enum gguf_type type) {
