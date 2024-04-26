@@ -300,7 +300,7 @@ inline size_t chat_tmpl_apply_single_capi(
 // NOTE: returns types and lens to help identify the parts of the tagged msg, which relate to passed and added tags
 inline bool chaton_tmpl_apply_ex(
         const std::string &tmpl,
-        const std::vector<llama_chat_message> &msgs,
+        const std::vector<const llama_chat_message *> &msgs,
         std::string &tagged,
         std::string &types,
         std::vector<int> &lens,
@@ -318,8 +318,8 @@ inline bool chaton_tmpl_apply_ex(
     int cntUser = 0;
     int cntOthers = 0;
     for(const auto msg: msgs) {
-        auto role = msg.role;
-        auto content = msg.content;
+        auto role = msg->role;
+        auto content = msg->content;
         std::string begin = chaton_tmpl_role_kv(tmpl, role, {K_BEGIN});
         auto prefix = chaton_tmpl_role_kv(tmpl, role, {K_PREFIX});
         auto suffix = chaton_tmpl_role_kv(tmpl, role, {K_SUFFIX});
@@ -395,7 +395,7 @@ inline bool chaton_tmpl_apply_ex(
 //    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
 inline int32_t chaton_tmpl_apply(
         const std::string &tmpl,
-        const std::vector<llama_chat_message> &msgs,
+        const std::vector<const llama_chat_message *> &msgs,
         bool alertAssistantAtEnd,
         std::string &tagged
         ) {
@@ -420,10 +420,17 @@ inline int32_t chaton_tmpl_apply_capi(
     }
     std::vector<const llama_chat_message *> vMsgs;
     for(size_t i=0; i<numMsgs; i++) {
-        vMsgs.push_back(vMsgs[i]);
+        vMsgs.push_back(&msgs[i]);
     }
     std::string taggedMsgs;
     int32_t taggedLength = chaton_tmpl_apply(tmpl, vMsgs, alertAssistantAtEnd, taggedMsgs);
+    if (taggedLength <= 0) {
+        return taggedLength;
+    }
+    if (destLength > 0) {
+        strlcpy(dest, taggedMsgs.c_str(), destLength);
+    }
+    return taggedLength;
 }
 
 
