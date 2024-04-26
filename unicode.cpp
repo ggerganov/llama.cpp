@@ -203,14 +203,8 @@ static inline std::wstring unicode_wstring_from_utf8(const std::string & s) {
 }
 
 static inline std::string unicode_wstring_to_utf8(const std::wstring & ws) {
-#if defined(_WIN32)
-    // code to convert from utf32/utf16 to utf8
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
-    return converter.to_bytes(ws);
-#else
     std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
     return conv.to_bytes(ws);
-#endif
 }
 
 static std::vector<std::string> unicode_byte_encoding_process(const std::vector<std::string> & bpe_words) {
@@ -503,11 +497,11 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
     std::vector<size_t> bpe_offsets = {wtext.size()};
 
     for (auto & regex_expr : regex_exprs) {
-        if (unicode_regex_equivalent_wregex_exists(regex_expr)) {
+        if (unicode_regex_with_custom_preprocessor_exists(regex_expr)) {
+            bpe_offsets = unicode_regex_custom_preprocess(regex_expr, wtext, bpe_offsets);
+        } else if (unicode_regex_equivalent_wregex_exists(regex_expr)) {
             const std::wstring & wregex_expr = unicode_regex_equivalent_wregex.at(regex_expr);
             bpe_offsets = unicode_regex_preprocess(wtext, bpe_offsets, wregex_expr);
-        } else if (unicode_regex_with_custom_preprocessor_exists(regex_expr)) {
-            bpe_offsets = unicode_regex_custom_preprocess(regex_expr, wtext, bpe_offsets);
         } else {
             throw std::runtime_error("Unicode regex is not found");
         }
