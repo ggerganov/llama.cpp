@@ -31,6 +31,8 @@
     fprintf(stderr, "%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);    \
 } while(0)
 
+#define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
 extern char const *LLAMA_COMMIT;

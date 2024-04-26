@@ -50,7 +50,7 @@ static void quantize_stats_print_usage(int /*argc*/, char ** argv) {
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help            show this help message and exit\n");
     fprintf(stderr, "  -m FNAME, --model FNAME\n");
-    fprintf(stderr, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stderr, "                        model path (default: %s)\n", DEFAULT_MODEL_PATH);
     fprintf(stderr, "  -r, --reference\n");
     fprintf(stderr, "                        use reference implementation (default: false)\n");
     fprintf(stderr, "  -v, --verbose\n");

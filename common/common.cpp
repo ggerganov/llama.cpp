@@ -1329,7 +1329,7 @@ void gpt_params_handle_model_default(gpt_params & params) {
             params.model =  "models/" + f;
         }
     } else if (params.model.empty()) {
-        params.model =  "models/7B/ggml-model-f16.gguf";
+        params.model = DEFAULT_MODEL_PATH;
     }
 }
 
@@ -1554,7 +1554,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --control-vector-layer-range START END\n");
     printf("                        layer range to apply the control vector(s) to, start and end inclusive\n");
     printf("  -m FNAME, --model FNAME\n");
-    printf("                        model path (default: %s)\n", params.model.c_str());
+    printf("                        model path (default: models/$filename with filename from --hf-file or --model-url if set, otherwise %s)\n", DEFAULT_MODEL_PATH);
     printf("  -md FNAME, --model-draft FNAME\n");
     printf("                        draft model for speculative decoding (default: unused)\n");
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
@@ -2660,7 +2660,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "mirostat_ent: %f # default: 5.0\n", sparams.mirostat_tau);
     fprintf(stream, "mirostat_lr: %f # default: 0.1\n", sparams.mirostat_eta);
     fprintf(stream, "mlock: %s # default: false\n", params.use_mlock ? "true" : "false");
-    fprintf(stream, "model: %s # default: models/7B/ggml-model.bin\n", params.model.c_str());
+    fprintf(stream, "model: %s # default: %s\n", params.model.c_str(), DEFAULT_MODEL_PATH);
     fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
     fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
     fprintf(stream, "n_gpu_layers: %d # default: -1\n", params.n_gpu_layers);
