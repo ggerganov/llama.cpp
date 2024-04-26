@@ -1345,9 +1345,11 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
         LLM_ARCH_RWKV,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_TOKEN_EMBD_NORM, "token_embd_norm" },
             { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
             { LLM_TENSOR_OUTPUT,          "output" },
             { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_NORM_2,     "blk.%d.attn_norm_2" },
         },
     },
     {
@@ -8238,6 +8240,10 @@ static bool llm_load_tensors(
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
+                    // Block 0, LN0
+                    model.tok_norm = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd});
+                    model.tok_norm_b = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd});
+
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
@@ -8252,6 +8258,9 @@ static bool llm_load_tensors(
 
                         layer.attn_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
                         layer.attn_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd});
+
+                        layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd});
+                        layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd});
                     }
 
                 }
@@ -14740,22 +14749,30 @@ struct llm_build_context {
         ggml_cgraph *gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         // Input embeddings, start of the model after tokenizing ({n_embd, n_tokens})
-        ggml_tensor *input_embeddings = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+        ggml_tensor * input_embeddings = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
 
-        // Dummy operation, just to copy, we're not doing anything with it right now
-        ggml_tensor *output = ggml_scale(ctx0, input_embeddings, 1.0);
+        // x = self.layer_norm(x, self.w.blocks[0].ln0)
+        ggml_tensor * current = llm_build_norm(ctx0, input_embeddings, hparams, model.tok_norm, model.tok_norm_b, LLM_NORM, cb, -1);
+
+        for (int layer_i = 0; layer_i < n_layer; ++layer_i) {
+            const llama_layer * layer = &model.layers[layer_i];
+
+            current = llm_build_norm(ctx0, current, hparams, layer->attn_norm, layer->attn_norm_b, LLM_NORM, cb, -1);
+
+            current = llm_build_norm(ctx0, current, hparams, layer->attn_norm_2, layer->attn_norm_2_b, LLM_NORM, cb, -1);
+        }
 
         // Something related to skipping tokens, specifics unclear
-        struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-        output = ggml_get_rows(ctx0, output, inp_out_ids);
+        ggml_tensor * inp_out_ids = build_inp_out_ids();
+        current = ggml_get_rows(ctx0, current, inp_out_ids);
 
         // Output head, convert result vector to logits
-        output = llm_build_norm(ctx0, output, hparams, model.output_norm, model.output_norm_b, LLM_NORM, cb, -1);
-        output = ggml_mul_mat(ctx0, model.output, output);
+        current = llm_build_norm(ctx0, current, hparams, model.output_norm, model.output_norm_b, LLM_NORM, cb, -1);
+        current = ggml_mul_mat(ctx0, model.output, current);
 
         // Mark the output as being the result
-        cb(output, "result_output", -1);
-        ggml_build_forward_expand(gf, output);
+        cb(current, "result_output", -1);
+        ggml_build_forward_expand(gf, current);
 
         return gf;
     }
