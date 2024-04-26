@@ -307,14 +307,16 @@ int main(int argc, char ** argv) {
             llama_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_FILE);
             kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-            strncpy(kvo.val_str, imatrix_file.c_str(), 128);
+            strncpy(kvo.val_str, imatrix_file.c_str(), 127);
+            kvo.val_str[127] = '\0';
             kv_overrides.emplace_back(std::move(kvo));
         }
         if (!imatrix_dataset.empty()) {
             llama_model_kv_override kvo;
             std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_DATASET);
             kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-            strncpy(kvo.val_str, imatrix_dataset.c_str(), 128);
+            strncpy(kvo.val_str, imatrix_dataset.c_str(), 127);
+            kvo.val_str[127] = '\0';
             kv_overrides.emplace_back(std::move(kvo));
         }
 

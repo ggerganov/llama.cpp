@@ -266,7 +266,12 @@ bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> &
     } else if (strncmp(sep, "str:", 4) == 0) {
         sep += 4;
         kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-        strncpy(kvo.val_str, sep, 128);
+        if (strlen(sep) > 127) {
+            fprintf(stderr, "%s: malformed KV override '%s', value cannot exceed 127 chars\n", __func__, data);
+            return false;
+        }
+        strncpy(kvo.val_str, sep, 127);
+        kvo.val_str[127] = '\0';
     } else {
         fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
         return false;
