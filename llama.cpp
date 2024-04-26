@@ -2883,6 +2883,7 @@ namespace GGUFMeta {
                 case LLAMA_KV_OVERRIDE_TYPE_BOOL:  return "bool";
                 case LLAMA_KV_OVERRIDE_TYPE_INT:   return "int";
                 case LLAMA_KV_OVERRIDE_TYPE_FLOAT: return "float";
+                case LLAMA_KV_OVERRIDE_TYPE_STR:   return "str";
             }
             return "unknown";
         }
@@ -2894,13 +2895,16 @@ namespace GGUFMeta {
                     __func__, override_type_to_str(ovrd->tag), ovrd->key);
                 switch (ovrd->tag) {
                     case LLAMA_KV_OVERRIDE_TYPE_BOOL:  {
-                        LLAMA_LOG_INFO("%s\n", ovrd->bool_value ? "true" : "false");
+                        LLAMA_LOG_INFO("%s\n", ovrd->val_bool ? "true" : "false");
                     } break;
                     case LLAMA_KV_OVERRIDE_TYPE_INT:   {
-                        LLAMA_LOG_INFO("%" PRId64 "\n", ovrd->int_value);
+                        LLAMA_LOG_INFO("%" PRId64 "\n", ovrd->val_i64);
                     } break;
                     case LLAMA_KV_OVERRIDE_TYPE_FLOAT: {
-                        LLAMA_LOG_INFO("%.6f\n", ovrd->float_value);
+                        LLAMA_LOG_INFO("%.6f\n", ovrd->val_f64);
+                    } break;
+                    case LLAMA_KV_OVERRIDE_TYPE_STR: {
+                        LLAMA_LOG_INFO("%s\n", ovrd->val_str);
                     } break;
                     default:
                         // Shouldn't be possible to end up here, but just in case...
@@ -2919,7 +2923,7 @@ namespace GGUFMeta {
         static typename std::enable_if<std::is_same<OT, bool>::value, bool>::type
         try_override(OT & target, const struct llama_model_kv_override * ovrd) {
             if (validate_override(LLAMA_KV_OVERRIDE_TYPE_BOOL, ovrd)) {
-                target = ovrd->bool_value;
+                target = ovrd->val_bool;
                 return true;
             }
             return false;
@@ -2929,7 +2933,7 @@ namespace GGUFMeta {
         static typename std::enable_if<!std::is_same<OT, bool>::value && std::is_integral<OT>::value, bool>::type
         try_override(OT & target, const struct llama_model_kv_override * ovrd) {
             if (validate_override(LLAMA_KV_OVERRIDE_TYPE_INT, ovrd)) {
-                target = ovrd->int_value;
+                target = ovrd->val_i64;
                 return true;
             }
             return false;
@@ -2939,7 +2943,7 @@ namespace GGUFMeta {
         static typename std::enable_if<std::is_floating_point<OT>::value, bool>::type
         try_override(T & target, const struct llama_model_kv_override * ovrd) {
             if (validate_override(LLAMA_KV_OVERRIDE_TYPE_FLOAT, ovrd)) {
-                target = ovrd->float_value;
+                target = ovrd->val_f64;
                 return true;
             }
             return false;
@@ -2948,12 +2952,11 @@ namespace GGUFMeta {
         template<typename OT>
         static typename std::enable_if<std::is_same<OT, std::string>::value, bool>::type
         try_override(T & target, const struct llama_model_kv_override * ovrd) {
-            (void)target;
-            (void)ovrd;
-            if (!ovrd) { return false; }
-            // Currently, we should never end up here so it would be a bug if we do.
-            throw std::runtime_error(format("Unsupported attempt to override string type for metadata key %s\n",
-                ovrd ? ovrd->key : "NULL"));
+            if (validate_override(LLAMA_KV_OVERRIDE_TYPE_STR, ovrd)) {
+                target = ovrd->val_str;
+                return true;
+            }
+            return false;
         }
 
         static bool set(const gguf_context * ctx, const int k, T & target, const struct llama_model_kv_override * ovrd = nullptr) {
@@ -14548,11 +14551,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         for (auto & o : overrides) {
             if (o.key[0] == 0) break;
             if (o.tag == LLAMA_KV_OVERRIDE_TYPE_FLOAT) {
-                gguf_set_val_f32(ctx_out, o.key, o.float_value);
+                gguf_set_val_f32(ctx_out, o.key, o.val_f64);
             } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_INT) {
-                gguf_set_val_i32(ctx_out, o.key, o.int_value);
+                gguf_set_val_i32(ctx_out, o.key, o.val_i64);
             } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_BOOL) {
-                gguf_set_val_bool(ctx_out, o.key, o.bool_value);
+                gguf_set_val_bool(ctx_out, o.key, o.val_bool);
+            } else if (o.tag == LLAMA_KV_OVERRIDE_TYPE_STR) {
+                gguf_set_val_str(ctx_out, o.key, o.val_str);
             } else {
                 LLAMA_LOG_WARN("%s: unknown KV override type for key %s\n", __func__, o.key);
             }

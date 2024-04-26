@@ -171,6 +171,8 @@ struct gpt_params {
     std::string image  = ""; // path to an image file
 };
 
+bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
+
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
