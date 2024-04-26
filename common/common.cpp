@@ -1888,11 +1888,16 @@ void llama_batch_add(
 
 #ifdef LLAMA_USE_CURL
 
-static bool llama_download_file(CURL * curl, const char * url, const char * path) {
+static bool starts_with(const std::string & str, const std::string & prefix) {
+    // While we wait for C++20's std::string::starts_with...
+    return str.rfind(prefix, 0) == 0;
+}
+
+static bool llama_download_file(CURL * curl, const std::string & url, const std::string & path) {
     bool force_download = false;
 
     // Set the URL, allow to follow http redirection
-    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
 #if defined(_WIN32)
@@ -1903,44 +1908,48 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
 
     // Check if the file already exists locally
     struct stat model_file_info;
-    auto file_exists = (stat(path, &model_file_info) == 0);
+    auto file_exists = (stat(path.c_str(), &model_file_info) == 0);
 
-    // If the file exists, check for ${path_model}.etag or ${path_model}.lastModified files
-    char etag[LLAMA_CURL_MAX_HEADER_LENGTH] = {0};
-    char etag_path[PATH_MAX] = {0};
-    snprintf(etag_path, sizeof(etag_path), "%s.etag", path);
+    // If the file exists, check for ${path_model}.json file
+    // Alternatively check for legacy ${path_model}.etag & ${path_model}.lastModified files
+    std::string metadata_path = path + ".json";
 
-    char last_modified[LLAMA_CURL_MAX_HEADER_LENGTH] = {0};
-    char last_modified_path[PATH_MAX] = {0};
-    snprintf(last_modified_path, sizeof(last_modified_path), "%s.lastModified", path);
+    std::string etag;
+    std::string last_modified;
+    nlohmann::json metadata;
 
     if (file_exists) {
-        auto * f_etag = fopen(etag_path, "r");
-        if (f_etag) {
-            if (!fgets(etag, sizeof(etag), f_etag)) {
-                fprintf(stderr, "%s: unable to read file %s\n", __func__, etag_path);
-            } else {
-                fprintf(stderr, "%s: previous file found %s: %s\n", __func__, etag_path, etag);
+        // Try and read the JSON metadata file (note: stream autoclosed upon exiting this block).
+        std::ifstream metadata_in(metadata_path);
+        if (metadata_in.good()) {
+            try {
+                metadata_in >> metadata;
+                fprintf(stderr, "%s: previous metadata file found %s: %s\n", __func__, metadata_path.c_str(), metadata.dump().c_str());
+                if (metadata.contains("url") && metadata["url"].is_string()) {
+                    auto previous_url = metadata["url"].get<std::string>();
+                    if (previous_url != url) {
+                        fprintf(stderr, "%s: Model URL mismatch: %s != %s\n", __func__, url.c_str(), previous_url.c_str());
+                        return false;
+                    }
+                }
+                if (metadata.contains("etag") && metadata["etag"].is_string()) {
+                    etag = metadata["etag"];
+                }
+                if (metadata.contains("lastModified") && metadata["lastModified"].is_string()) {
+                    last_modified = metadata["lastModified"];
+                }
+            } catch (const nlohmann::json::exception & e) {
+                fprintf(stderr, "%s: error reading metadata file %s: %s\n", __func__, metadata_path.c_str(), e.what());
+                return false;
             }
-            fclose(f_etag);
-        }
 
-        auto * f_last_modified = fopen(last_modified_path, "r");
-        if (f_last_modified) {
-            if (!fgets(last_modified, sizeof(last_modified), f_last_modified)) {
-                fprintf(stderr, "%s: unable to read file %s\n", __func__, last_modified_path);
-            } else {
-                fprintf(stderr, "%s: previous file found %s: %s\n", __func__, last_modified_path,
-                        last_modified);
-            }
-            fclose(f_last_modified);
         }
     }
 
     // Send a HEAD request to retrieve the etag and last-modified headers
     struct llama_load_model_from_url_headers {
-        char etag[LLAMA_CURL_MAX_HEADER_LENGTH] = {0};
-        char last_modified[LLAMA_CURL_MAX_HEADER_LENGTH] = {0};
+        std::string etag;
+        std::string last_modified;
     };
     llama_load_model_from_url_headers headers;
     {
@@ -1948,20 +1957,16 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
             llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
 
-            // Convert header field name to lowercase
-            for (size_t i = 0; i < n_items && buffer[i] != ':'; ++i) {
-                buffer[i] = tolower(buffer[i]);
-            }
-
-            const char * etag_prefix = "etag: ";
-            if (strncmp(buffer, etag_prefix, strlen(etag_prefix)) == 0) {
-                strncpy(headers->etag, buffer + strlen(etag_prefix), n_items - strlen(etag_prefix) - 2); // Remove CRLF
-            }
-
-            const char * last_modified_prefix = "last-modified: ";
-            if (strncmp(buffer, last_modified_prefix, strlen(last_modified_prefix)) == 0) {
-                strncpy(headers->last_modified, buffer + strlen(last_modified_prefix),
-                        n_items - strlen(last_modified_prefix) - 2); // Remove CRLF
+            std::string header(buffer, n_items);
+            std::smatch match;
+            if (std::regex_match(header, match, std::regex("([^:]+): (.*)\r\n", std::regex_constants::multiline))) {
+                const std::string & key = match[1];
+                const std::string & value = match[2];
+                if (std::regex_match(key, match, std::regex("ETag", std::regex_constants::icase))) {
+                    headers->etag = value;
+                } else if (std::regex_match(key, match, std::regex("Last-Modified", std::regex_constants::icase))) {
+                    headers->last_modified = value;
+                }
             }
             return n_items;
         };
@@ -1988,28 +1993,29 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
         }
     }
 
-    // If the ETag or the Last-Modified headers are different: trigger a new download
-    bool should_download = !file_exists
-        || force_download
-        || (strlen(headers.etag) > 0 && strcmp(etag, headers.etag) != 0)
-        || (strlen(headers.last_modified) > 0 && strcmp(last_modified, headers.last_modified) != 0);
+    bool should_download = !file_exists || force_download;
+    if (!should_download && !etag.empty() && !last_modified.empty()) {
+        if (etag != headers.etag || last_modified != headers.last_modified) {
+            fprintf(stderr, "%s: ETag or Last-Modified headers are different: triggering a new download\n", __func__);
+            should_download = true;
+        }
+    }
     if (should_download) {
-        char path_temporary[PATH_MAX] = {0};
-        snprintf(path_temporary, sizeof(path_temporary), "%s.downloadInProgress", path);
+        std::string path_temporary = path + ".downloadInProgress";
         if (file_exists) {
-            fprintf(stderr, "%s: deleting previous downloaded file: %s\n", __func__, path);
-            if (remove(path) != 0) {
+            fprintf(stderr, "%s: deleting previous downloaded file: %s\n", __func__, path.c_str());
+            if (remove(path.c_str()) != 0) {
                 curl_easy_cleanup(curl);
-                fprintf(stderr, "%s: unable to delete file: %s\n", __func__, path);
+                fprintf(stderr, "%s: unable to delete file: %s\n", __func__, path.c_str());
                 return false;
             }
         }
 
         // Set the output file
-        auto * outfile = fopen(path_temporary, "wb");
+        auto * outfile = fopen(path_temporary.c_str(), "wb");
         if (!outfile) {
             curl_easy_cleanup(curl);
-            fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path);
+            fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path.c_str());
             return false;
         }
 
@@ -2041,7 +2047,7 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
 
         // start the download
         fprintf(stderr, "%s: downloading from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__,
-                llama_download_hide_password_in_url(url).c_str(), path, headers.etag, headers.last_modified);
+                llama_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
         auto res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
             fclose(outfile);
@@ -2062,30 +2068,18 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
         // Clean up
         fclose(outfile);
 
-        // Write the new ETag to the .etag file
-        if (strlen(headers.etag) > 0) {
-            auto * etag_file = fopen(etag_path, "w");
-            if (etag_file) {
-                fputs(headers.etag, etag_file);
-                fclose(etag_file);
-                fprintf(stderr, "%s: file etag saved %s: %s\n", __func__, etag_path, headers.etag);
-            }
-        }
+        // Write the updated JSON metadata file.
+        metadata.update({
+            {"url", url},
+            {"etag", headers.etag},
+            {"lastModified", headers.last_modified}
+        });
+        std::ofstream(metadata_path) << metadata.dump(4);
+        fprintf(stderr, "%s: file metadata saved: %s\n", __func__, metadata_path.c_str());
 
-        // Write the new lastModified to the .etag file
-        if (strlen(headers.last_modified) > 0) {
-            auto * last_modified_file = fopen(last_modified_path, "w");
-            if (last_modified_file) {
-                fputs(headers.last_modified, last_modified_file);
-                fclose(last_modified_file);
-                fprintf(stderr, "%s: file last modified saved %s: %s\n", __func__, last_modified_path,
-                        headers.last_modified);
-            }
-        }
-
-        if (rename(path_temporary, path) != 0) {
+        if (rename(path_temporary.c_str(), path.c_str()) != 0) {
             curl_easy_cleanup(curl);
-            fprintf(stderr, "%s: unable to rename file: %s to %s\n", __func__, path_temporary, path);
+            fprintf(stderr, "%s: unable to rename file: %s to %s\n", __func__, path_temporary.c_str(), path.c_str());
             return false;
         }
     }
