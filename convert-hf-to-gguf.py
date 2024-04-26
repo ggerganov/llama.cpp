@@ -346,7 +346,7 @@ class Model(ABC):
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
     # used for GPT-2 BPE and WordPiece vocabs
-    def get_basic_vocab(self) -> tuple[list[str], list[int]]:
+    def get_vocab_base(self) -> tuple[list[str], list[int], str]:
         tokens: list[str] = []
         toktypes: list[int] = []
 
@@ -354,6 +354,8 @@ class Model(ABC):
         tokenizer = AutoTokenizer.from_pretrained(self.dir_model)
         vocab_size = self.hparams.get("vocab_size", len(tokenizer.vocab))
         assert max(tokenizer.vocab.values()) < vocab_size
+
+        tokpre = self.get_vocab_base_pre(tokenizer)
 
         reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.vocab.items()}
         added_vocab = tokenizer.get_added_vocab()
@@ -372,11 +374,41 @@ class Model(ABC):
                 tokens.append(reverse_vocab[i])
                 toktypes.append(gguf.TokenType.NORMAL)
 
-        return tokens, toktypes
+        return tokens, toktypes, tokpre
 
-    def _set_vocab_gpt2(self, tokenizer_model:str = "gpt2") -> None:
-        tokens, toktypes = self.get_basic_vocab()
-        self.gguf_writer.add_tokenizer_model(tokenizer_model)
+    def get_vocab_base_pre(self, tokenizer) -> str:
+        # encoding this string and hashing the resulting tokens would (hopefully) give us a unique identifier that
+        # is specific for the BPE pre-tokenizer used by the model
+        # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
+        # use in llama.cpp to implement the same pre-tokenizer
+
+        chktxt = "\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български what's ''''''```````\"\"\"\"......!!!!!!??????"
+
+        chktok = tokenizer.encode(chktxt)
+        chkhsh = hash(tuple(chktok))
+
+        print(f"chktok: {chktok}")
+        print(f"chkhsh: {chkhsh}")
+
+        res = None
+
+        # NOTE: if you get an error here, you need to add the model to the if-elif chain below
+        #       observe the stdout for the chkhsh value and add it to the chain
+        if self.model_arch == gguf.MODEL_ARCH.LLAMA:
+            if chkhsh == -3290901550109860290:
+                # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/blob/main/tokenizer.json
+                res = "llama3"
+            if chkhsh ==  4190561703949727616:
+                # ref: https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-instruct/blob/main/tokenizer.json
+                res = "deepseek-coder"
+
+        if res is None:
+            raise NotImplementedError(f"BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
+
+    def _set_vocab_gpt2(self) -> None:
+        tokens, toktypes, tokpre = self.get_vocab_base()
+        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
@@ -393,6 +425,8 @@ class Model(ABC):
         tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
         vocab_size = hparams["vocab_size"]
         assert max(tokenizer.get_vocab().values()) < vocab_size
+
+        tokpre = self.get_vocab_base_pre(tokenizer)
 
         merges = []
         vocab = {}
@@ -421,6 +455,7 @@ class Model(ABC):
                 toktypes.append(gguf.TokenType.NORMAL)
 
         self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
@@ -493,6 +528,7 @@ class Model(ABC):
         assert len(tokens) == vocab_size
 
         self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
@@ -514,6 +550,7 @@ class Model(ABC):
         assert len(tokens) == vocab.vocab_size
 
         self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
@@ -957,6 +994,7 @@ class XverseModel(Model):
             toktypes.append(toktype)
 
         self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
@@ -2174,6 +2212,7 @@ class Phi3MiniModel(Model):
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
 
         self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
@@ -2416,6 +2455,7 @@ class InternLM2Model(Model):
                     toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
 
         self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
@@ -2565,7 +2605,7 @@ class BertModel(Model):
             self.gguf_writer.add_pooling_type(pooling_type)
 
     def set_vocab(self):
-        tokens, toktypes = self.get_basic_vocab()
+        tokens, toktypes, tokpre = self.get_vocab_base()
         self.vocab_size = len(tokens)
 
         # we need this to validate the size of the token_type embeddings
@@ -2583,6 +2623,7 @@ class BertModel(Model):
 
         # add vocab to gguf
         self.gguf_writer.add_tokenizer_model("bert")
+        self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
@@ -2759,6 +2800,9 @@ class MambaModel(Model):
 
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MODEL)
             self.gguf_writer.add_tokenizer_model(bytes(field.parts[-1]))
+
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.PRE)
+            self.gguf_writer.add_tokenizer_pre(bytes(field.parts[-1]))
 
             field = neox_reader.get_field(gguf.Keys.Tokenizer.LIST)
             self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])

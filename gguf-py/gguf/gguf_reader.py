@@ -140,7 +140,7 @@ class GGUFReader:
     def _push_field(self, field: ReaderField, skip_sum: bool = False) -> int:
         if field.name in self.fields:
             # TODO: add option to generate error on duplicate keys
-            #raise KeyError(f'Duplicate {field.name} already in list at offset {field.offset}')
+            # raise KeyError(f'Duplicate {field.name} already in list at offset {field.offset}')
 
             print(f'Warning: Duplicate key {field.name} at offset {field.offset}')
             self.fields[field.name + '_{}'.format(field.offset)] = field
