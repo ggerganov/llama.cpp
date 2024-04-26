@@ -75,6 +75,7 @@
 #include <forward_list>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <initializer_list>
 #include <locale>
 #include <map>
@@ -3494,6 +3495,8 @@ struct llama_model_loader {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
 
         std::vector<no_init<uint8_t>> read_buf;
+        std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
+
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             const auto * weight = get_weight(ggml_get_name(cur));
             if (weight == nullptr) {
@@ -3515,14 +3518,17 @@ struct llama_model_loader {
                 if (bufs_mmap.count(weight->idx)) {
                     buf_mmap = bufs_mmap.at(weight->idx);
                 }
+                uint8_t * data = (uint8_t *) mapping->addr + weight->offs;
 
-                if (check_tensors && !ggml_validate_row_data(cur->type, (uint8_t *) mapping->addr + weight->offs, n_size)) {
-                    throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+                if (check_tensors) {
+                    validation_result.emplace_back(std::async(std::launch::async, [cur, data, n_size] {
+                        return std::make_pair(cur, ggml_validate_row_data(cur->type, data, n_size));
+                    }));
                 }
 
                 GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
                 if (buf_mmap && cur->data == nullptr) {
-                    ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + weight->offs);
+                    ggml_backend_tensor_alloc(buf_mmap, cur, data);
                     if (lmlocks) {
                         const auto & lmlock = lmlocks->at(weight->idx);
                         lmlock->grow_to(weight->offs + n_size);
@@ -3532,7 +3538,7 @@ struct llama_model_loader {
                     mmap_used.first  = std::min(mmap_used.first,  weight->offs);
                     mmap_used.second = std::max(mmap_used.second, weight->offs + n_size);
                 } else {
-                    ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + weight->offs, 0, n_size);
+                    ggml_backend_tensor_set(cur, data, 0, n_size);
                 }
             } else {
                 GGML_ASSERT(weight->idx < files.size());
@@ -3540,8 +3546,10 @@ struct llama_model_loader {
                 if (ggml_backend_buffer_is_host(cur->buffer)) {
                     file->seek(weight->offs, SEEK_SET);
                     file->read_raw(cur->data, n_size);
-                    if (check_tensors && !ggml_validate_row_data(cur->type, cur->data, n_size)) {
-                        throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+                    if (check_tensors) {
+                        validation_result.emplace_back(std::async(std::launch::async, [cur, n_size] {
+                            return std::make_pair(cur, ggml_validate_row_data(cur->type, cur->data, n_size));
+                        }));
                     }
                 } else {
                     read_buf.resize(n_size);
@@ -3555,6 +3563,19 @@ struct llama_model_loader {
             }
 
             size_done += n_size;
+        }
+
+        // check validation results
+        bool validation_failed = false;
+        for (auto & future : validation_result) {
+            auto result = future.get();
+            if (!result.second) {
+                LLAMA_LOG_ERROR("%s: tensor '%s' has invalid data\n", __func__, ggml_get_name(result.first));
+                validation_failed = true;
+            }
+        }
+        if (validation_failed) {
+            throw std::runtime_error("found tensors with invalid data");
         }
 
         // check if this is the last call and do final cleanup
