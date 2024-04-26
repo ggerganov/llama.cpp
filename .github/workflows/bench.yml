@@ -32,7 +32,7 @@ on:
     -  cron: '04 2 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}-${{ github.event.inputs.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}-${{ github.event.inputs.sha }}
   cancel-in-progress: true
 
 jobs:

@@ -586,7 +586,7 @@ int main(int argc, char ** argv) {
 
             // deal with eot token in infill mode
             if ((llama_sampling_last(ctx_sampling) == llama_token_eot(model) || is_interacting) && params.interactive){
-                if(is_interacting && !params.interactive_first) {
+                if (is_interacting && !params.interactive_first) {
                     // print an eot token
                     printf("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
                 }
@@ -651,8 +651,8 @@ int main(int argc, char ** argv) {
                 // LOG_TEE("took new input\n");
                 is_interacting = false;
             }
-            // deal with end of text token in interactive mode
-            else if (llama_sampling_last(ctx_sampling) == llama_token_eos(model)) {
+            // deal with end of generation tokens in interactive mode
+            else if (llama_token_is_eog(model, llama_sampling_last(ctx_sampling))) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
@@ -731,8 +731,8 @@ int main(int argc, char ** argv) {
             }
         }
 
-        // end of text token
-        if (!embd.empty() && embd.back() == llama_token_eos(model) && !params.interactive) {
+        // end of generation
+        if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !params.interactive) {
             break;
         }
 

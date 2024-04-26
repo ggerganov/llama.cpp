@@ -10,6 +10,7 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Recent API changes
 
+- [2024 Apr 21] `llama_token_to_piece` can now optionally render special tokens https://github.com/ggerganov/llama.cpp/pull/6807
 - [2024 Apr 4] State and session file functions reorganized under `llama_state_*` https://github.com/ggerganov/llama.cpp/pull/6341
 - [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
 - [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
@@ -92,10 +93,11 @@ Typically finetunes of the base models below are supported as well.
 
 - [X] LLaMA 🦙
 - [x] LLaMA 2 🦙🦙
+- [x] LLaMA 3 🦙🦙🦙
 - [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [x] [DBRX](https://huggingface.co/databricks/dbrx-instruct)
-- [X] Falcon
+- [X] [Falcon](https://huggingface.co/models?search=tiiuae/falcon)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
@@ -118,8 +120,9 @@ Typically finetunes of the base models below are supported as well.
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
 - [x] [Mamba](https://github.com/state-spaces/mamba)
+- [x] [Grok-1](https://huggingface.co/keyfan/grok-1-hf)
 - [x] [Xverse](https://huggingface.co/models?search=xverse)
-- [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
+- [x] [Command-R models](https://huggingface.co/models?search=CohereForAI/c4ai-command-r)
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
 - [x] [OLMo](https://allenai.org/olmo)
@@ -134,6 +137,8 @@ Typically finetunes of the base models below are supported as well.
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
+- [x] [Mini CPM](https://huggingface.co/models?search=MiniCPM)
+- [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
 
 **HTTP server**
 
@@ -549,7 +554,7 @@ Building the program with BLAS support may lead to some performance improvements
   OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
 
   You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
-    - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
+    - For Ubuntu, Debian, and Fedora the packages `opencl-headers`, `ocl-icd` may be needed.
 
     - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
 
@@ -573,6 +578,12 @@ Building the program with BLAS support may lead to some performance improvements
   ##### Installing CLBlast
 
   Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
+
+  Linux packaging:
+  Fedora Linux:
+  ```bash
+  sudo dnf install clblast
+  ```
 
   Alternatively, they may be built from source.
 
@@ -1110,7 +1121,9 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m 
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
-- Matrix multiplication is unconventional: [`z = ggml_mul_mat(ctx, x, y)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means `zT = x @ yT`
+- Matrix multiplication is unconventional: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
+
+![matmul](media/matmul.png)
 
 ### Docs
 
