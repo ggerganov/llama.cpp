@@ -406,7 +406,7 @@ class Model(ABC):
                 res = "deepseek-coder"
 
         if res is None:
-            raise NotImplementedError(f"BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
+            raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
         return res
 
