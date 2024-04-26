@@ -12613,7 +12613,7 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
                 const block_iq1_m * q = (const block_iq1_m *) data;
                 for (size_t i = 0; i < nb; ++i) {
                 #if QK_K == 64
-                    if (!validate_f16(q[i].d, i)) {
+                    if (!validate_fp16(q[i].d, i)) {
                         return false;
                     }
                 #else
