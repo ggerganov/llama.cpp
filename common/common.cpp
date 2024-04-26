@@ -127,14 +127,17 @@ int32_t get_count_procMask(ULONG_PTR procMask) {
             std::bitset<64> bMask = procMask;
             return bMask.count();
 }
+#endif
 
-ULONG generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
+uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
     std::bitset<64> bMask;
     std::vector<CPU_SET_INFORMATION> _cpuset;
     int32_t bVal = 0;
     int32_t assigned_t = 0;
     int32_t llcache = -1;
 
+#if defined(_WIN32)
     DWORD_PTR processAffinityMask;
     DWORD_PTR systemAffinityMask;
     HANDLE hToken = nullptr;
@@ -173,6 +176,15 @@ ULONG generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal,
         }
         return bMask.to_ullong();
     }
+
+#else
+    if (cpuMask != 0) {
+        std::bitset<64> reqMask = cpuMask;
+        CPUSET_PRINT_DEBUG("Custom cpuMask: %s\n", reqMask.to_string().c_str());
+        bMask = cpuMask;
+        return bMask.to_ullong();
+    }
+#endif
 
     if (direction == BEST_CORES) {
         _cpuset = cpuset_best;
@@ -230,51 +242,6 @@ int32_t setCpuAffinity(std::bitset<64> cpuMask) {
     }
      
     return coreSelected;
-}
-
-uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
-    std::bitset<64> bMask;
-    std::vector<CPU_SET_INFORMATION> _cpuset;
-    int32_t bVal = 0;
-    int32_t assigned_t = 0;
-    int32_t llcache = -1;
-
-    if (cpuMask != 0) {
-        std::bitset<64> reqMask = cpuMask;
-        CPUSET_PRINT_DEBUG("Custom cpuMask: %s\n", reqMask.to_string().c_str());
-        bMask = cpuMask;
-        return bMask.to_ullong();
-    }
-
-    if (direction == BEST_CORES) {
-        _cpuset = cpuset_best;
-    } else {
-        _cpuset = cpuset_worst;
-    }
-    CPUSET_PRINT_DEBUG("\ngenerate_Mask dir=%d req_threads=%d lltraversal=%d llcache=%d\n", direction, req_threads, lltraversal, llcache);
-    for (auto index : _cpuset) {
-        bVal = 0;
-        if ((index.LogicalProcessorIndex != 0 || allowcz) &&
-            ((cpuset_smt && index.Threads > 1) || !cpuset_smt || allowtc) &&
-            index.EfficiencyClass == 0 &&
-            ((llcache == index.LastLevelCacheIndex && lltraversal == 0) || llcache == -1 || lltraversal == 1)
-            ) {
-            if (lltraversal == 0) {
-                CPUSET_PRINT_DEBUG("### cache for lltraversal %d pre llcache=%d now_cache=%u\n", lltraversal, llcache, index.LastLevelCacheIndex);
-                llcache = index.LastLevelCacheIndex;
-                CPUSET_PRINT_DEBUG("### cache for lltraversal %d pos llcache=%d now_cache=%u\n", lltraversal, llcache, index.LastLevelCacheIndex);
-            } 
-            bVal = 1;
-        }
-        if (req_threads > 0 && assigned_t >= req_threads) { bVal = 0;}
-        if(bVal == 1) {
-            assigned_t++;
-            CPUSET_PRINT_DEBUG("--> Assigned LogicalCoreIndex: %d lltraversal=%d llcache=%d now_cache=%u\n", index.LogicalProcessorIndex, lltraversal, llcache, index.LastLevelCacheIndex);
-        }
-        bMask[index.LogicalProcessorIndex] = bVal;
-        CPUSET_PRINT_DEBUG("LogicalCoreIndex: %d b:%d smt=%d thrds=%d lltraversal=%d acz=%d atc=%d\n", index.LogicalProcessorIndex, bVal, cpuset_smt, index.Threads, lltraversal, allowcz, allowtc);
-    }
-    return bMask.to_ullong();
 }
 
 static void cpuid(unsigned leaf, unsigned subleaf,
@@ -341,7 +308,7 @@ int32_t get_num_physical_cores() {
         return numPhysicalCores;    
     }
     // enumerate the set of thread siblings, num entries is num cores
-    fprintf(stderr, "physical cpus count\n");
+    CPUSET_PRINT_DEBUG("Start: get_num_physical_cores\n");
     std::unordered_set<std::string> siblings;
     int32_t cursize = 0;
     cpu_set_t mask;
@@ -352,7 +319,7 @@ int32_t get_num_physical_cores() {
     int32_t numLogicalCores = 0;
 
     for (uint32_t cpu=0; cpu < UINT32_MAX; ++cpu) {
-        fprintf(stderr, "physical cpu check %d\n", cpu);
+        CPUSET_PRINT_DEBUG("Check for Logical CPU: %d\n", cpu);
         std::ifstream thread_siblings("/sys/devices/system/cpu/cpu"
             + std::to_string(cpu) + "/topology/thread_siblings");
         if (!thread_siblings.is_open()) {
@@ -396,7 +363,7 @@ int32_t get_num_physical_cores() {
             if (static_cast<int32_t>(siblings.size()) > cursize ) {
                 _cpuset.Threads = 2;
                 CPU_SET(cpu, &mask);
-                fprintf(stderr, "physical cpu %u: %s\n", cpu, line.c_str());
+                CPUSET_PRINT_DEBUG("CPU %u is physical, siblings: %s\n", cpu, line.c_str());
             } else {
                 cpuset_smt = true;
             }
@@ -406,21 +373,22 @@ int32_t get_num_physical_cores() {
     if (!siblings.empty()) {
         cpuset_enable = true;
         if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
-                fprintf(stdout, "sched_setaffinity error\n");
+                CPUSET_PRINT_DEBUG("sched_setaffinity error\n");
         }
         if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == -1) {
-                fprintf(stdout, "pthread_setaffinity_np error\n");
+                CPUSET_PRINT_DEBUG("pthread_setaffinity_np error\n");
         }
-        fprintf(stderr, "physical cpus %li\n", siblings.size());
+        fprintf(stderr, "get_num_physical_cores Physical CPU count: %li\n", siblings.size());
 
         cpuset_best = cpuset;
         cpuset_worst = cpuset;
         std::sort(cpuset_best.begin(), cpuset_best.end(), &cpuset_sorter_best);
         std::sort(cpuset_worst.begin(), cpuset_worst.end(), &cpuset_sorter_worst);
 
-        //int32_t physicalCount = 0;
-        int32_t physicalCount = static_cast<int32_t>(siblings.size());
-        //physicalCount = get_count_procMask(generate_Mask(WORST_CORES, 0, 1, 0, 1, 0));
+        int32_t physicalCount = 0;
+        //int32_t physicalCount = static_cast<int32_t>(siblings.size());
+        std::bitset<64> bMask = generate_Mask(WORST_CORES, 0, 1, 0, 1, 0);
+        physicalCount = bMask.count();
 
         CPUSET_PRINT_DEBUG("\n\n### Logical Processors Summary ###\n\n");
 
