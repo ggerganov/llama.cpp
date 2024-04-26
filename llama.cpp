@@ -4290,7 +4290,7 @@ static void llm_load_vocab(
         }
 
         if (tokenizer_pre.empty()) {
-            LLAMA_LOG_WARN("%s: missing tokenizer pre, using default tokenizer pre: 'default'", __func__);
+            LLAMA_LOG_WARN("%s: missing tokenizer pre, using default tokenizer pre: 'default'\n", __func__);
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
         } else if (tokenizer_pre == "default") {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;

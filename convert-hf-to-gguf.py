@@ -408,6 +408,8 @@ class Model(ABC):
         if res is None:
             raise NotImplementedError(f"BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
+        return res
+
     def _set_vocab_gpt2(self) -> None:
         tokens, toktypes, tokpre = self.get_vocab_base()
         self.gguf_writer.add_tokenizer_model("gpt2")
