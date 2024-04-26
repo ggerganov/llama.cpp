@@ -1,4 +1,11 @@
 # tests with BPE tokenizer
+#
+# sample usage:
+#
+#   python3 tests/test-tokenizer-0-bpe.py ~/Data/huggingface/Meta-Llama-3-8B-Instruct/
+#   python3 tests/test-tokenizer-0-bpe.py ~/Data/huggingface/falcon-7b/
+#   python3 tests/test-tokenizer-0-bpe.py ~/Data/huggingface/deepseek-coder-6.7b-instruct/
+#
 
 import argparse
 

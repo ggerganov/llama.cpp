@@ -1,4 +1,11 @@
 # tests with SPM tokenizer
+#
+# sample usage:
+#
+#   python3 tests/test-tokenizer-0-spm.py ~/Data/huggingface/Llama-2-7b-hf/
+#   python3 tests/test-tokenizer-0-spm.py ~/Data/huggingface/CodeLlama-34b-Instruct-hf/
+#
+
 
 import argparse
 
