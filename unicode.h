@@ -1,8 +1,6 @@
 #pragma once
 
-#include <codecvt>
 #include <cstdint>
-#include <locale>
 #include <string>
 #include <vector>
 
