@@ -303,7 +303,8 @@ inline bool chaton_tmpl_apply_ex(
         const std::vector<llama_chat_message> &msgs,
         std::string &tagged,
         std::string &types,
-        std::vector<int> &lens
+        std::vector<int> &lens,
+        bool alertAssistantAtEnd
         ) {
     ChatParts cp = {};
     std::stringstream ss;
@@ -364,6 +365,11 @@ inline bool chaton_tmpl_apply_ex(
             cp.add_part(ChatParts::S, end);
         }
     }
+    if (alertAssistantAtEnd) {
+        auto assistantBeginPrefix = chaton_tmpl_role_kv(tmpl, K_ASSISTANT, {K_BEGIN, K_PREFIX});
+        ss << assistantBeginPrefix;
+        cp.add_part(ChatParts::S, assistantBeginPrefix);
+    }
     auto globalEnd = chaton_tmpl_role_kv(tmpl, K_GLOBAL, {K_END});
     ss << globalEnd;
     cp.add_part(ChatParts::S, globalEnd);
@@ -384,11 +390,15 @@ inline bool chaton_tmpl_apply_ex(
 // global-begin + [[role-begin] + [role-prefix] + msg + role-suffix] + global-end
 // if there is a combination of system-user messages,
 //    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
-inline std::string chaton_tmpl_apply(const std::string &tmpl, const std::vector<llama_chat_message> &msgs) {
+inline std::string chaton_tmpl_apply(
+        const std::string &tmpl,
+        const std::vector<llama_chat_message> &msgs,
+        bool alertAssistantAtEnd
+        ) {
     std::string tagged;
     std::string types;
     std::vector<int> lens;
-    chaton_tmpl_apply_ex(tmpl, msgs, tagged, types, lens);
+    chaton_tmpl_apply_ex(tmpl, msgs, tagged, types, lens, alertAssistantAtEnd);
     return tagged;
 }
 
