@@ -279,7 +279,7 @@ static void test_failure_missing_reference() {
     fprintf(stderr, "🟢 Testing for missing reference node:\n");
 
     // Test case for a grammar that is missing a referenced rule
-    const std::string grammar_str = 
+    const std::string grammar_str =
 R"""(root ::= expr
 expr ::= term ("+" term)*
 term ::= numero
