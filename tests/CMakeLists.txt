@@ -115,6 +115,7 @@ llama_target_and_test(test-quantize-fns.cpp)
 llama_target_and_test(test-quantize-perf.cpp)
 llama_target_and_test(test-sampling.cpp)
 llama_target_and_test(test-chat-template.cpp)
+llama_target_and_test(test-chat-template-chaton.cpp)
 
 llama_target_and_test(test-grammar-parser.cpp)
 llama_target_and_test(test-llama-grammar.cpp)
