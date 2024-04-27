@@ -108,19 +108,26 @@
 			"end": ""
 		},
 		"system": {
-			"prefix": "",
-			"suffix": ""
+			"begin": "",
+			"prefix": "<start_of_turn>user\n",
+			"suffix": "<end_of_turn>\n",
+			"end": ""
 		},
 		"user": {
 			"begin": "",
 			"prefix": "<start_of_turn>user\n",
-			"suffix": "<end_of_turn>\n"
+			"suffix": "<end_of_turn>\n",
+			"end": ""
 		},
 		"assistant": {
+			"begin": "",
 			"prefix": "<start_of_turn>model\n",
-			"suffix": "<end_of_turn>\n"
+			"suffix": "<end_of_turn>\n",
+			"end": ""
 		},
 		"reverse-prompt": "<eos>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": false,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
 	},
