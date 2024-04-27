@@ -240,14 +240,14 @@
 		"system": {
 			"begin": "<s>",
 			"prefix": "[INST] ",
-			"suffix": " [/INST]\n",
-			"end": ""
+			"suffix": " [/INST]",
+			"end": "\n"
 		},
 		"user": {
 			"begin": "",
 			"prefix": "[INST] ",
-			"suffix": " [/INST]\n",
-			"end": ""
+			"suffix": " [/INST]",
+			"end": "\n"
 		},
 		"assistant": {
 			"begin": "",
@@ -257,7 +257,7 @@
 		},
 		"reverse-prompt": "</s>",
 		"systemuser-system-has-suffix": false,
-		"systemuser-system-has-end": false,
+		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": false
 	}
