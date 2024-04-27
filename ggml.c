@@ -74,13 +74,13 @@ static LONG atomic_fetch_sub(atomic_int * ptr, LONG dec) {
 typedef HANDLE pthread_t;
 
 typedef DWORD thread_ret_t;
-static int pthread_create(pthread_t * out, void * unused, thread_ret_t(*func)(void *), void * arg) {
-    (void) unused;
+static int pthread_create(pthread_t * out, int32_t thread, thread_ret_t(*func)(void *), void * arg) {
     HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
 
     HANDLE hToken;
-    DWORD_PTR processAffinityMask;
-    DWORD_PTR systemAffinityMask;
+    ULONG_PTR processAffinityMask;
+    ULONG_PTR systemAffinityMask;
+    ULONG newprocessAffinityMask;
         
     BOOL bToken = OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &hToken);
     if (bToken) {
@@ -88,7 +88,21 @@ static int pthread_create(pthread_t * out, void * unused, thread_ret_t(*func)(vo
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_INFORMATION, FALSE, GetCurrentProcessId());
         if (hProcess) {
             if (GetProcessAffinityMask(hProcess, &processAffinityMask, &systemAffinityMask)) {
-                SetThreadAffinityMask(handle, processAffinityMask);
+                int32_t posCore = 0;
+                for (int32_t i = 0; i < 64; ++i) {
+                    if (processAffinityMask & ((1ULL) << i) ) {
+                        //fprintf(stderr, "Check thread %d for core %d poscore %d\n", thread, i, posCore);
+                        if (posCore+1 == thread) {
+                            //fprintf(stderr, "Thread %d is assigned to core %d\n", thread, i);
+                        } else {
+                            newprocessAffinityMask = newprocessAffinityMask | (0ULL << i-1);
+                            //fprintf(stderr, "Thread %d is NOT assigned to core %d\n", thread, i);
+                            break;
+                        }
+                        posCore++;
+                    }
+                }
+                SetThreadAffinityMask(handle, newprocessAffinityMask);
             }
         }
         if (hProcess)
@@ -139,7 +153,7 @@ static int pthread_join(pthread_t thread, void * unused) {
 }
 
 static int sched_yield (void) {
-    Sleep (0);
+    Sleep(0);
     return 0;
 }
 #else
@@ -18706,8 +18720,11 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
                 .shared = &state_shared,
                 .ec = GGML_STATUS_SUCCESS,
             };
-
+#if defined(_WIN32)
+            const int rc = ggml_thread_create(&workers[j].thrd, j, ggml_graph_compute_thread, &workers[j]);
+#else
             const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
+#endif
 #if defined(__x86_64__) && defined(__linux__)
             cpu_set_t procMask;
             cpu_set_t threadMask;
