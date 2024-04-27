@@ -64,19 +64,26 @@
 			"end": ""
 		},
 		"system": {
+			"begin": "",
 			"prefix": "<|im_start|>system\n",
-			"suffix": "<|im_end|>\n"
+			"suffix": "<|im_end|>\n",
+			"end": ""
 		},
 		"user": {
 			"begin": "",
-			"prefix": "\n<|im_start|>user\n",
-			"suffix": "<|im_end|>\n"
+			"prefix": "<|im_start|>user\n",
+			"suffix": "<|im_end|>\n",
+			"end": ""
 		},
 		"assistant": {
+			"begin": "",
 			"prefix": "<|im_start|>assistant\n",
-			"suffix": "<|im_end|>\n"
+			"suffix": "<|im_end|>\n",
+			"end": ""
 		},
 		"reverse-prompt": "<|im_start|>user\n",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
 	},
