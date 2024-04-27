@@ -131,26 +131,31 @@
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
 	},
-	"deepseek-alt": {
+	"deepseek-coder": {
 		"global": {
 			"begin": "",
 			"end": ""
 		},
 		"system": {
+			"begin": "\n<｜begin▁of▁sentence｜>",
 			"prefix": "",
-			"suffix": "\n"
+			"suffix": "\n",
+			"end": ""
 		},
 		"user": {
 			"begin": "",
 			"prefix": "### Instruction:\n",
-			"suffix": "\n"
+			"suffix": "\n",
+			"end": ""
 		},
 		"assistant": {
 			"prefix": "### Response:\n",
 			"suffix": "\n<|EOT|>\n"
 		},
 		"reverse-prompt": "<|EOT|>",
-		"systemuser-1st-user-has-begin": true,
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": false,
+		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": true
 	},
 	"deepseek": {
