@@ -82,23 +82,32 @@
 	},
 	"zephyr": {
 		"global": {
+			"alt-end": "<|endoftext|>\n",
 			"begin": "",
 			"end": ""
 		},
 		"system": {
+			"begin": "",
 			"prefix": "<|system|>\n",
-			"suffix": "<|endoftext|>\n"
+			"suffix": "",
+			"end": "</s>\n"
 		},
 		"user": {
 			"begin": "",
 			"prefix": "<|user|>\n",
-			"suffix": "<|endoftext|>\n"
+			"suffix": "",
+			"end": "</s>\n"
 		},
 		"assistant": {
+			"end-alt": "<|endoftext|>\n",
+			"begin": "",
 			"prefix": "<|assistant|>\n",
-			"suffix": "<|endoftext|>\n"
+			"suffix": "",
+			"end": "</s>\n"
 		},
 		"reverse-prompt": "</s>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
 	},
