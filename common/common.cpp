@@ -1979,7 +1979,7 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
             llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
 
-            static std::regex header_regex("([^:]+): (.*)\r\n", std::regex_constants::multiline);
+            static std::regex header_regex("([^:]+): (.*)\r\n");
             static std::regex etag_regex("ETag", std::regex_constants::icase);
             static std::regex last_modified_regex("Last-Modified", std::regex_constants::icase);
 
