@@ -229,11 +229,11 @@ source /opt/intel/oneapi/setvars.sh
 # Build LLAMA with MKL BLAS acceleration for intel GPU
 mkdir -p build && cd build
 
-# Option 1: Use FP16 for better performance in long-prompt inference
-#cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
-
-# Option 2: Use FP32 by default
+# Option 1: Use FP32 (recommended for better performance in most cases)
 cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+
+# Option 2: Use FP16
+cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
 #build all binary
 cmake --build . --config Release -j -v
@@ -250,11 +250,11 @@ export CPLUS_INCLUDE_DIR=/path/to/oneMKL/include:$CPLUS_INCLUDE_DIR
 # Build LLAMA with Nvidia BLAS acceleration through SYCL
 mkdir -p build && cd build
 
-# Option 1: Use FP16 for better performance in long-prompt  inference
-cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
-
-# Option 2: Use FP32 by default
+# Option 1: Use FP32 (recommended for better performance in most cases)
 cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+
+# Option 2: Use FP16
+cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
 #build all binary
 cmake --build . --config Release -j -v
@@ -416,6 +416,10 @@ mkdir -p build
 cd build
 @call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 --force
 
+# Option 1: Use FP32 (recommended for better performance in most cases)
+cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
+
+# Option 2: Or FP16
 cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
 
 make -j

@@ -23,7 +23,7 @@ on:
     -  cron: '2 4 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -58,6 +58,7 @@ jobs:
             git \
             cmake \
             python3-pip \
+            python3-venv \
             curl \
             wget \
             language-pack-en \
@@ -100,10 +101,13 @@ jobs:
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
 
-      - name: Tests dependencies
-        id: test_dependencies
+      - name: Setup python env
+        id: pipenv
         run: |
-          pip install -r examples/server/tests/requirements.txt
+          cd examples/server/tests
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install -r requirements.txt
 
       - name: Tests
         id: server_integration_tests
