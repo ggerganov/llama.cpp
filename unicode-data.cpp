@@ -1,4 +1,4 @@
-﻿#include "unicode-data.h"
+#include "unicode-data.h"
 
 #include <cstdint>
 #include <map>
