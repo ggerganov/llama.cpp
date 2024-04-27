@@ -256,10 +256,10 @@
 			"end": "</s> \n"
 		},
 		"reverse-prompt": "</s>",
-		"systemuser-system-has-suffix": true,
-		"systemuser-system-has-end": true,
-		"systemuser-1st-user-has-begin": true,
-		"systemuser-1st-user-has-prefix": true
+		"systemuser-system-has-suffix": false,
+		"systemuser-system-has-end": false,
+		"systemuser-1st-user-has-begin": false,
+		"systemuser-1st-user-has-prefix": false
 	}
 }
 
