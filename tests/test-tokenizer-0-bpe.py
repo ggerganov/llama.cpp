@@ -96,6 +96,21 @@ if fname_tok:
         # write to file
         with open(fname_out, 'w', encoding='utf-8') as f:
             for x in res:
+                # LLaMA v3 for some reason strips the space for these tokens (and others)
+                # if x == 662:
+                #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
+                # elif x == 1174:
+                #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
+                # elif x == 2564:
+                #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
+                # elif x == 758:
+                #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
+                # elif x == 949:
+                #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
+                # elif x == 5354:
+                #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
+                # else:
+                #     f.write(str(x) + ' \'' + tokenizer.decode(x) + '\'\n')
                 f.write(str(x) + ' \'' + tokenizer.decode(x) + '\'\n')
         print('len(res): ', len(res))
         print('len(lines): ', len(lines))
