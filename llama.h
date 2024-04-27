@@ -195,15 +195,19 @@ extern "C" {
         LLAMA_KV_OVERRIDE_TYPE_INT,
         LLAMA_KV_OVERRIDE_TYPE_FLOAT,
         LLAMA_KV_OVERRIDE_TYPE_BOOL,
+        LLAMA_KV_OVERRIDE_TYPE_STR,
     };
 
     struct llama_model_kv_override {
-        char key[128];
         enum llama_model_kv_override_type tag;
+
+        char key[128];
+
         union {
-            int64_t int_value;
-            double float_value;
-            bool bool_value;
+            int64_t val_i64;
+            double  val_f64;
+            bool    val_bool;
+            char    val_str[128];
         };
     };
 
@@ -232,9 +236,10 @@ extern "C" {
         const struct llama_model_kv_override * kv_overrides;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool vocab_only; // only load the vocabulary, no weights
-        bool use_mmap;   // use mmap if possible
-        bool use_mlock;  // force system to keep model in RAM
+        bool vocab_only;    // only load the vocabulary, no weights
+        bool use_mmap;      // use mmap if possible
+        bool use_mlock;     // force system to keep model in RAM
+        bool check_tensors; // validate model tensor data
     };
 
     struct llama_context_params {
