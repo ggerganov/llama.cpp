@@ -242,7 +242,7 @@ inline bool chaton_tmpl_apply_single_ex(
         LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), tagged.c_str());
         exit(2);
     }
-    LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), tagged.c_str());
+    LOGXLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), tagged.c_str());
     types = cp.get_types();
     lens = cp.get_partslens();
     return true;
@@ -383,7 +383,7 @@ inline bool chaton_tmpl_apply_ex(
         LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), tagged.c_str());
         exit(2);
     }
-    LOGLN("DBUG:%s:%s:%s", __func__, tmpl.c_str(), tagged.c_str());
+    LOGXLN("DBUG:%s:%s:%s", __func__, tmpl.c_str(), tagged.c_str());
     LOGLN("DBUG:%s:%s:CntSys[%d]:CntUsr[%d]:CntOthers[%d]", __func__, tmpl.c_str(), cntSystem, cntUser, cntOthers);
     types = cp.get_types();
     lens = cp.get_partslens();
