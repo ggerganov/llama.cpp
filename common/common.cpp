@@ -733,7 +733,7 @@ ULONG set_procMask(int32_t direction = 0, int32_t req_threads = 0, int32_t lltra
  * Returns number of CPUs on system that are useful for math.
  */
 int get_math_cpu_count() {
-#if defined(__x86_164__) && defined(__linux__)
+#if defined(__x86_64__) && defined(__linux__)
     int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
     if (cpu_count < 1) {
         return get_num_physical_cores();
