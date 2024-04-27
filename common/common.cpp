@@ -176,13 +176,11 @@ uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltravers
         }
         return bMask.to_ullong();
     }
-
 #else
     if (cpuMask != 0) {
         std::bitset<64> reqMask = cpuMask;
         CPUSET_PRINT_DEBUG("Custom cpuMask: %s\n", reqMask.to_string().c_str());
-        bMask = cpuMask;
-        return bMask.to_ullong();
+        return reqMask.to_ullong();
     }
 #endif
 

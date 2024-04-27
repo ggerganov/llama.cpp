@@ -60,6 +60,13 @@ bool cpuset_sorter_worst(CPU_SET_INFORMATION const& lhs, CPU_SET_INFORMATION con
 
 int get_math_cpu_count(int32_t req_threads, int32_t cpuset_order, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask);
 #endif
+#if defined(__x86_64__) && defined(__linux__)
+#include <bitset>
+int32_t setCpuAffinity(std::bitset<64> cpuMask);
+uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask);
+uint64_t set_procMask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask);
+#endif
+
 static const int32_t BEST_CORES            = 0;
 static const int32_t WORST_CORES           = 1;
 
