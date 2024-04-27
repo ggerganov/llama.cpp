@@ -29,6 +29,8 @@
 #include <thread>
 #include <signal.h>
 #include <memory>
+#include <iostream>
+#include <boost/asio.hpp>
 
 using json = nlohmann::ordered_json;
 
