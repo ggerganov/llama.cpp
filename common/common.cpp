@@ -1956,14 +1956,18 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
         auto header_callback = [](char * buffer, size_t /*size*/, size_t n_items, void * userdata) -> size_t {
             llama_load_model_from_url_headers *headers = (llama_load_model_from_url_headers *) userdata;
 
+            static std::regex header_regex("([^:]+): (.*)\r\n", std::regex_constants::multiline);
+            static std::regex etag_regex("ETag", std::regex_constants::icase);
+            static std::regex last_modified_regex("Last-Modified", std::regex_constants::icase);
+
             std::string header(buffer, n_items);
             std::smatch match;
-            if (std::regex_match(header, match, std::regex("([^:]+): (.*)\r\n", std::regex_constants::multiline))) {
+            if (std::regex_match(header, match, header_regex)) {
                 const std::string & key = match[1];
                 const std::string & value = match[2];
-                if (std::regex_match(key, match, std::regex("ETag", std::regex_constants::icase))) {
+                if (std::regex_match(key, match, etag_regex)) {
                     headers->etag = value;
-                } else if (std::regex_match(key, match, std::regex("Last-Modified", std::regex_constants::icase))) {
+                } else if (std::regex_match(key, match, last_modified_regex)) {
                     headers->last_modified = value;
                 }
             }
