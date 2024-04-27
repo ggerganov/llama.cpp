@@ -67,7 +67,6 @@
 #include <sys/syslimits.h>
 #endif
 #define LLAMA_CURL_MAX_URL_LENGTH 2084 // Maximum URL Length in Chrome: 2083
-#define LLAMA_CURL_MAX_HEADER_LENGTH 256
 #endif // LLAMA_USE_CURL
 
 using json = nlohmann::ordered_json;
@@ -1893,17 +1892,25 @@ static bool starts_with(const std::string & str, const std::string & prefix) {
     return str.rfind(prefix, 0) == 0;
 }
 
-static bool llama_download_file(CURL * curl, const std::string & url, const std::string & path) {
+static bool llama_download_file(const std::string & url, const std::string & path) {
+
+    // Initialize libcurl
+    std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
+    if (!curl) {
+        fprintf(stderr, "%s: error initializing libcurl\n", __func__);
+        return false;
+    }
+
     bool force_download = false;
 
     // Set the URL, allow to follow http redirection
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
 
 #if defined(_WIN32)
     // CURLSSLOPT_NATIVE_CA tells libcurl to use standard certificate store of
     //   operating system. Currently implemented under MS-Windows.
-    curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
 #endif
 
     // Check if the file already exists locally
@@ -1974,20 +1981,19 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
             return n_items;
         };
 
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1L); // will trigger the HEAD verb
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L); // hide head request progress
-        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, static_cast<CURLOPT_HEADERFUNCTION_PTR>(header_callback));
-        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
+        curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 1L); // will trigger the HEAD verb
+        curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L); // hide head request progress
+        curl_easy_setopt(curl.get(), CURLOPT_HEADERFUNCTION, static_cast<CURLOPT_HEADERFUNCTION_PTR>(header_callback));
+        curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, &headers);
 
-        CURLcode res = curl_easy_perform(curl);
+        CURLcode res = curl_easy_perform(curl.get());
         if (res != CURLE_OK) {
-            curl_easy_cleanup(curl);
             fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
             return false;
         }
 
         long http_code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
         if (http_code != 200) {
             // HEAD not supported, we don't know if the file has changed
             // force trigger downloading
@@ -2011,16 +2017,14 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
         if (file_exists) {
             fprintf(stderr, "%s: deleting previous downloaded file: %s\n", __func__, path.c_str());
             if (remove(path.c_str()) != 0) {
-                curl_easy_cleanup(curl);
                 fprintf(stderr, "%s: unable to delete file: %s\n", __func__, path.c_str());
                 return false;
             }
         }
 
         // Set the output file
-        auto * outfile = fopen(path_temporary.c_str(), "wb");
+        std::unique_ptr<FILE, decltype(&fclose)> outfile(fopen(path_temporary.c_str(), "wb"), fclose);
         if (!outfile) {
-            curl_easy_cleanup(curl);
             fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path.c_str());
             return false;
         }
@@ -2029,12 +2033,12 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
         auto write_callback = [](void * data, size_t size, size_t nmemb, void * fd) -> size_t {
             return fwrite(data, size, nmemb, (FILE *)fd);
         };
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 0L);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, static_cast<CURLOPT_WRITEFUNCTION_PTR>(write_callback));
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
+        curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 0L);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, static_cast<CURLOPT_WRITEFUNCTION_PTR>(write_callback));
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, outfile.get());
 
         //  display download progress
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
 
         // helper function to hide password in URL
         auto llama_download_hide_password_in_url = [](const std::string & url) -> std::string {
@@ -2054,25 +2058,21 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
         // start the download
         fprintf(stderr, "%s: downloading from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__,
                 llama_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
-        auto res = curl_easy_perform(curl);
+        auto res = curl_easy_perform(curl.get());
         if (res != CURLE_OK) {
-            fclose(outfile);
-            curl_easy_cleanup(curl);
             fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
             return false;
         }
 
         long http_code = 0;
-        curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_easy_getinfo (curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
         if (http_code < 200 || http_code >= 400) {
-            fclose(outfile);
-            curl_easy_cleanup(curl);
             fprintf(stderr, "%s: invalid http status code received: %ld\n", __func__, http_code);
             return false;
         }
 
-        // Clean up
-        fclose(outfile);
+        // Causes file to be closed explicitly here before we rename it.
+        outfile.reset();
 
         // Write the updated JSON metadata file.
         metadata.update({
@@ -2084,7 +2084,6 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
         fprintf(stderr, "%s: file metadata saved: %s\n", __func__, metadata_path.c_str());
 
         if (rename(path_temporary.c_str(), path.c_str()) != 0) {
-            curl_easy_cleanup(curl);
             fprintf(stderr, "%s: unable to rename file: %s to %s\n", __func__, path_temporary.c_str(), path.c_str());
             return false;
         }
@@ -2103,15 +2102,7 @@ struct llama_model * llama_load_model_from_url(
         return NULL;
     }
 
-    // Initialize libcurl
-    auto * curl = curl_easy_init();
-
-    if (!curl) {
-        fprintf(stderr, "%s: error initializing libcurl\n", __func__);
-        return NULL;
-    }
-
-    if (!llama_download_file(curl, model_url, path_model)) {
+    if (!llama_download_file(model_url, path_model)) {
         return NULL;
     }
 
@@ -2125,7 +2116,6 @@ struct llama_model * llama_load_model_from_url(
         auto * ctx_gguf = gguf_init_from_file(path_model, gguf_params);
         if (!ctx_gguf) {
             fprintf(stderr, "\n%s:  failed to load input GGUF from %s\n", __func__, path_model);
-            curl_easy_cleanup(curl);
             return NULL;
         }
 
@@ -2136,8 +2126,6 @@ struct llama_model * llama_load_model_from_url(
 
         gguf_free(ctx_gguf);
     }
-
-    curl_easy_cleanup(curl);
 
     if (n_split > 1) {
         char split_prefix[PATH_MAX] = {0};
@@ -2169,11 +2157,7 @@ struct llama_model * llama_load_model_from_url(
                 char split_url[LLAMA_CURL_MAX_URL_LENGTH] = {0};
                 llama_split_path(split_url, sizeof(split_url), split_url_prefix, download_idx, n_split);
 
-                auto * curl = curl_easy_init();
-                bool res = llama_download_file(curl, split_url, split_path);
-                curl_easy_cleanup(curl);
-
-                return res;
+                return llama_download_file(split_url, split_path);
             }, idx));
         }
 
