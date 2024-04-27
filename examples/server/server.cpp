@@ -1208,7 +1208,7 @@ struct server_context {
         }
 
         auto n_ctx_train = llama_n_ctx_train(model);
-        if (slot.params.n_predict < 1 && slot.ga_n == 1
+        if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.ga_n == 1
                     && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
             LOG_WARNING("n_predict is not set and self-context extend is disabled."
                         " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
