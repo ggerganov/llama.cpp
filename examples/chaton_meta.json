@@ -159,20 +159,27 @@
 			"end": ""
 		},
 		"system": {
+			"begin": "<｜begin▁of▁sentence｜>",
 			"prefix": "",
-			"suffix": "\n\n"
+			"suffix": "\n\n",
+			"end": ""
 		},
 		"user": {
-			"begin": "",
+			"begin": "<｜begin▁of▁sentence｜>",
 			"prefix": "User: ",
-			"suffix": "\n\n"
+			"suffix": "\n\n",
+			"end": ""
 		},
 		"assistant": {
+			"begin": "",
 			"prefix": "Assistant: ",
-			"suffix": " <｜end▁of▁sentence｜>\n"
+			"suffix": " <｜end▁of▁sentence｜>\n",
+			"end": ""
 		},
 		"reverse-prompt": "<｜end▁of▁sentence｜>",
-		"systemuser-1st-user-has-begin": true,
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": false,
+		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": true
 	},
 	"monarch": {
