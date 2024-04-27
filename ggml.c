@@ -95,7 +95,7 @@ static int pthread_create(pthread_t * out, int32_t thread, thread_ret_t(*func)(v
                         if (posCore+1 == thread) {
                             //fprintf(stderr, "Thread %d is assigned to core %d\n", thread, i);
                         } else {
-                            newprocessAffinityMask = newprocessAffinityMask | (0ULL << i-1);
+                            newprocessAffinityMask = newprocessAffinityMask | ((0ULL) << (i-1));
                             //fprintf(stderr, "Thread %d is NOT assigned to core %d\n", thread, i);
                             break;
                         }

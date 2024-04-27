@@ -138,8 +138,8 @@ uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltravers
     int32_t llcache = -1;
 
 #if defined(_WIN32)
-    DWORD_PTR processAffinityMask;
-    DWORD_PTR systemAffinityMask;
+    ULONG_PTR processAffinityMask;
+    ULONG_PTR systemAffinityMask;
     HANDLE hToken = nullptr;
     bool gotsystemMask = true;
 
@@ -607,8 +607,8 @@ typedef enum _PROCESSINFOCLASS {
 } PROCESSINFOCLASS;
 
 int32_t setCpuAffinity(std::bitset<64> cpuMask) {
-    DWORD_PTR processAffinityMask;
-    DWORD_PTR systemAffinityMask;
+    ULONG_PTR processAffinityMask;
+    ULONG_PTR systemAffinityMask;
     int32_t coreSelected = get_count_procMask(cpuMask.to_ullong());
     HANDLE hToken = nullptr;
 
