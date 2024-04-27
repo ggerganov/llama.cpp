@@ -1940,18 +1940,6 @@ static bool llama_download_file(CURL * curl, const std::string & url, const std:
                 fprintf(stderr, "%s: error reading metadata file %s: %s\n", __func__, metadata_path.c_str(), e.what());
                 return false;
             }
-        } else {
-            // Check for legacy ${path_model}.etag & ${path_model}.lastModified files (note: both streams autoclosed upon exiting this block).
-            std::ifstream etag_in(path + ".etag");
-            if (etag_in.good()) {
-                std::getline(etag_in, etag);
-                fprintf(stderr, "%s: previous etag file found %s: %s\n", __func__, path.c_str(), etag.c_str());
-            }
-            std::ifstream last_modified_in(path + ".lastModified");
-            if (last_modified_in.good()) {
-                std::getline(last_modified_in, last_modified);
-                fprintf(stderr, "%s: previous lastModified file found %s: %s\n", __func__, path.c_str(), last_modified.c_str());
-            }
         }
     } else {
         fprintf(stderr, "%s: no previous model file found %s\n", __func__, path.c_str());
