@@ -234,7 +234,7 @@ class GGUFReader:
 
     def _build_tensors(self, start_offs: int, fields: list[ReaderField]) -> None:
         tensors = []
-        tensor_names = [] # keep track of name to prevent duplicated tensors
+        tensor_names = set() # keep track of name to prevent duplicated tensors
         for field in fields:
             _name_len, name_data, _n_dims, dims, raw_dtype, offset_tensor = field.parts
             # check if there's any tensor having same name already in the list
