@@ -231,6 +231,35 @@
 		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
+	},
+	"mistral": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"begin": "<s>",
+			"prefix": "[INST] ",
+			"suffix": " [/INST]\n",
+			"end": ""
+		},
+		"user": {
+			"begin": "",
+			"prefix": "[INST] ",
+			"suffix": " [/INST]\n",
+			"end": ""
+		},
+		"assistant": {
+			"begin": "",
+			"prefix": "",
+			"suffix": "",
+			"end": "</s> \n"
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 
