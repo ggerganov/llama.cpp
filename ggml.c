@@ -18727,17 +18727,43 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
 #endif
 #if defined(__x86_64__) && defined(__linux__)
             cpu_set_t procMask;
-            cpu_set_t threadMask;
+            cpu_set_t newprocessAffinityMask;
+            CPU_ZERO(&newprocessAffinityMask);
+            //fprintf(stderr, "\nThread %d checking\n\n", j);
             //fprintf(stdout, "sched_getaffinity init\n");
             if (sched_getaffinity(0, sizeof(cpu_set_t), &procMask) == -1) {
                 fprintf(stderr, "ggml_thread_create sched_getaffinity error\n");
             } else {
-                int result = pthread_setaffinity_np(workers[j].thrd, sizeof(cpu_set_t), &procMask);
-                if (result !=0) fprintf(stderr, "ggml_thread_create pthread_setaffinity_np: %d", result);
-                //printf("Set returned by sched_getaffinity() contained:\n");
-                //for (size_t k = 0; k < CPU_SETSIZE; k++)
-                    //if (CPU_ISSET(k, &procMask))
-                        //printf("    CPU %zu\n", k);
+                int posCore = 0;
+                for (int32_t i = 0; i < 64; ++i) {
+                    if (CPU_ISSET(i, &procMask) ) {
+                        //fprintf(stderr, "Check thread %d for core %d poscore %d\n", thread, i, posCore);
+                        if ((posCore+1) == j) {
+                            CPU_SET(i, &newprocessAffinityMask);
+                            //fprintf(stderr, "\nThread %d is assigned to core %d\n\n", j, i);
+                            break;
+                        } else {
+                            CPU_CLR(i, &newprocessAffinityMask);
+                            //fprintf(stderr, "Thread %d is NOT assigned to core %d\n\n", j, i);
+                        }
+                        posCore++;
+                    }
+                }
+                int result = pthread_setaffinity_np(workers[j].thrd, sizeof(cpu_set_t), &newprocessAffinityMask);
+                if (result !=0) fprintf(stderr, "\n\nggml_thread_create pthread_setaffinity_np for thread %d\n", j);
+                /*
+                printf("Set returned by sched_getaffinity() contained:\n");
+                cpu_set_t nprocMask;
+                CPU_ZERO(&nprocMask);
+                for (size_t k = 0; k < CPU_SETSIZE; k++)
+                    if (CPU_ISSET(k, &procMask))
+                        printf("    CPU %zu\n", k);
+                pthread_getaffinity_np(workers[j].thrd, sizeof(cpu_set_t), &nprocMask);
+                printf("Set returned by pthread_getaffinity_np() contained:\n");
+                for (size_t k = 0; k < CPU_SETSIZE; k++)
+                    if (CPU_ISSET(k, &nprocMask))
+                        printf("    CPU %zu\n", k);
+                */
             }
             /*
             int s;
