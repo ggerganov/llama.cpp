@@ -65,9 +65,9 @@ static void test_grammar(const std::string & grammar_str, const std::vector<std:
         bool matched = match_string(test_string, grammar);
 
         if (!matched) {
-            fprintf(stderr, "  ❌ Failed to match string: %s\n", test_string.c_str());
+            fprintf(stderr, "  ❌ Failed to match string: \"%s\"\n", test_string.c_str());
         } else {
-            fprintf(stdout, "  ✅︎ Matched string: %s\n", test_string.c_str());
+            fprintf(stdout, "  ✅︎ Matched string: \"%s\"\n", test_string.c_str());
         }
 
         assert(matched);
@@ -81,9 +81,9 @@ static void test_grammar(const std::string & grammar_str, const std::vector<std:
         bool matched = match_string(test_string, grammar);
 
         if (matched) {
-            fprintf(stderr, "  ❌ Improperly matched string: %s\n", test_string.c_str());
+            fprintf(stderr, "  ❌ Improperly matched string: \"%s\"\n", test_string.c_str());
         } else {
-            fprintf(stdout, "  ✅︎ Correctly did not match string: %s\n", test_string.c_str());
+            fprintf(stdout, "  ✅︎ Correctly did not match string: \"%s\"\n", test_string.c_str());
         }
         assert(!matched);
 
