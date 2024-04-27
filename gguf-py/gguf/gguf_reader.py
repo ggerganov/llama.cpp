@@ -120,6 +120,21 @@ class GGUFReader:
     # Fetch a key/value metadata field by key.
     def get_field(self, key: str) -> Union[ReaderField, None]:
         return self.fields.get(key, None)
+    
+    def read_field(self, field):
+        if not field.types:
+            return None
+        if field.types[:1] == [GGUFValueType.ARRAY]:
+            itype = field.types[-1]
+            if itype == GGUFValueType.STRING:
+                return [str(bytes(field.parts[idx]), encoding="utf-8") for idx in field.data]
+            else:
+                return [pv for idx in field.data for pv in field.parts[idx].tolist()]
+        elif field.types[0] == GGUFValueType.STRING:
+            return str(bytes(field.parts[-1]), encoding="utf-8")
+        else:
+            assert(field.types[0] in self.gguf_scalar_to_np)
+            return field.parts[-1].tolist()[0]
 
     # Fetch a tensor from the list by index.
     def get_tensor(self, idx: int) -> ReaderTensor:

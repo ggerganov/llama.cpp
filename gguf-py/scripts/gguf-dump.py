@@ -41,11 +41,7 @@ def dump_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
             pretty_type = str(field.types[-1].name)
         print(f'  {n:5}: {pretty_type:10} | {len(field.data):8} | {field.name}', end = '')
         if len(field.types) == 1:
-            curr_type = field.types[0]
-            if curr_type == GGUFValueType.STRING:
-                print(' = {0}'.format(repr(str(bytes(field.parts[-1]), encoding='utf8')[:60])), end = '')
-            elif field.types[0] in reader.gguf_scalar_to_np:
-                print(' = {0}'.format(field.parts[-1][0]), end = '')
+            print(' = {0}'.format(repr(reader.read_field(field))[:60]), end = '')
         print()
     if args.no_tensors:
         return
@@ -75,17 +71,7 @@ def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
         metadata[field.name] = curr
         if field.types[:1] == [GGUFValueType.ARRAY]:
             curr["array_types"] = [t.name for t in field.types][1:]
-            if not args.json_array:
-                continue
-            itype = field.types[-1]
-            if itype == GGUFValueType.STRING:
-                curr["value"] = [str(bytes(field.parts[idx]), encoding="utf-8") for idx in field.data]
-            else:
-                curr["value"] = [pv for idx in field.data for pv in field.parts[idx].tolist()]
-        elif field.types[0] == GGUFValueType.STRING:
-            curr["value"] = str(bytes(field.parts[-1]), encoding="utf-8")
-        else:
-            curr["value"] = field.parts[-1].tolist()[0]
+        curr["value"] = reader.read_field(field)
     if not args.no_tensors:
         for idx, tensor in enumerate(reader.tensors):
             tensors[tensor.name] = {
