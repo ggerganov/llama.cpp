@@ -193,20 +193,27 @@
 			"end": ""
 		},
 		"system": {
-			"prefix": "<s>system\n",
-			"suffix": "</s>\n"
+			"begin": "<s>",
+			"prefix": "system\n",
+			"suffix": "",
+			"end": "</s>\n"
 		},
 		"user": {
 			"begin": "<s>",
 			"prefix": "user\n",
-			"suffix": "</s>\n"
+			"suffix": "",
+			"end": "</s>\n"
 		},
 		"assistant": {
-			"prefix": "<s>assistant\n",
-			"suffix": " </s>\n"
+			"begin": "<s>",
+			"prefix": "assistant\n",
+			"suffix": "",
+			"end": "</s>\n"
 		},
 		"reverse-prompt": "</s>",
-		"systemuser-1st-user-has-begin": false,
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
+		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
 	}
 }
