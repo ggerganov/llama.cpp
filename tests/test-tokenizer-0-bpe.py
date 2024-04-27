@@ -111,7 +111,7 @@ if fname_tok:
                 #     f.write(str(x) + ' \' ' + tokenizer.decode(x) + '\'\n')
                 # else:
                 #     f.write(str(x) + ' \'' + tokenizer.decode(x) + '\'\n')
-                f.write(str(x) + ' \'' + tokenizer.decode(x) + '\'\n')
+                f.write(str(x) + ' \'' + tokenizer.decode(x).strip() + '\'\n')
         print('len(res): ', len(res))
         print('len(lines): ', len(lines))
     print('results written to: ', fname_out)

@@ -183,7 +183,7 @@ int main(int argc, char **argv) {
             }
 
             for (const auto & tok : res) {
-                ofs << tok << " '" << llama_detokenize_bpe(ctx, std::vector<int>{tok}) << "'" << std::endl;
+                ofs << tok << " '" << string_strip(llama_detokenize_bpe(ctx, std::vector<int>{tok})) << "'" << std::endl;
             }
         }
 

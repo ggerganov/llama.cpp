@@ -494,19 +494,81 @@ char32_t unicode_tolower(char32_t cp) {
 std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::string> & regex_exprs) {
     std::wstring wtext = unicode_wstring_from_utf8(text);
 
+    // compute collapsed codepoints only if needed by at least one regex
+    bool need_collapse = false;
+    for (auto & regex_expr : regex_exprs) {
+        // search for \\p{L} or \\p{N}
+        if (std::string::npos != regex_expr.find("\\p{N}") ||
+            std::string::npos != regex_expr.find("\\p{L}") ||
+            std::string::npos != regex_expr.find("\\p{P}")) {
+            need_collapse = true;
+            break;
+        }
+    }
+
+    std::wstring wtext_collapsed;
+    if (need_collapse) {
+        // collapse all digit, letter and punctuation cpts to a single codepoint
+        // the collapsed codepoint is selected to be the one at the end of the range
+        //
+        // - convert text to cpts
+        // - collapse digit       cpts to 0x0001FBF9
+        // - collapse letter      cpts to 0x0003134A
+        // - collapse punctuation cpts to 0x0001E95F
+        // - convert back to text
+        auto cpts = unicode_cpts_from_utf8(text);
+        for (size_t i = 0; i < cpts.size(); ++i) {
+            if (unicode_cpt_type(cpts[i]) == CODEPOINT_TYPE_DIGIT) {
+                cpts[i] = 0x0001FBF9;
+            } else if (unicode_cpt_type(cpts[i]) == CODEPOINT_TYPE_LETTER) {
+                cpts[i] = 0x0003134A;
+            } else if (unicode_cpt_type(cpts[i]) == CODEPOINT_TYPE_PUNCTUATION) {
+                cpts[i] = 0x0001E95F;
+            }
+        }
+        wtext_collapsed = unicode_wstring_from_utf8(unicode_cpts_to_utf8(cpts));
+    }
+
     std::vector<size_t> bpe_offsets = {wtext.size()};
 
     for (auto & regex_expr : regex_exprs) {
         if (unicode_regex_with_custom_preprocessor_exists(regex_expr)) {
             bpe_offsets = unicode_regex_custom_preprocess(regex_expr, wtext, bpe_offsets);
-        } else if (unicode_regex_equivalent_wregex_exists(regex_expr)) {
-            const std::wstring & wregex_expr = unicode_regex_equivalent_wregex.at(regex_expr);
-            bpe_offsets = unicode_regex_preprocess(wtext, bpe_offsets, wregex_expr);
+        //} else if (unicode_regex_equivalent_wregex_exists(regex_expr)) {
+        //    const std::wstring & wregex_expr = unicode_regex_equivalent_wregex.at(regex_expr);
+        //    bpe_offsets = unicode_regex_preprocess(wtext, bpe_offsets, wregex_expr);
         } else {
             // fallback
             try {
-                const std::wstring wregex_expr = unicode_wstring_from_utf8(regex_expr);
-                bpe_offsets = unicode_regex_preprocess(wtext, bpe_offsets, wregex_expr);
+                // if a unicode category is used in the regex, we use the collapsed text and replace the unicode category
+                // with the corresponding collapsed codepoint
+                if (std::string::npos != regex_expr.find("\\p{N}") ||
+                    std::string::npos != regex_expr.find("\\p{L}") ||
+                    std::string::npos != regex_expr.find("\\p{P}")) {
+                    // replace \\p{N} with \U0001FBF9
+                    // replace \\p{L} with \U0003134A
+                    // replace \\p{P} with \U0001E95F
+                    std::wstring wregex_expr = unicode_wstring_from_utf8(regex_expr);
+                    for (size_t i = 0; i < wregex_expr.size(); ++i) {
+                        if (wregex_expr[i] == L'\\' && i + 1 < wregex_expr.size()) {
+                            if (wregex_expr[i + 1] == L'p' && i + 3 < wregex_expr.size()) {
+                                if (wregex_expr[i + 2] == L'{' && wregex_expr[i + 4] == L'}') {
+                                    if (wregex_expr[i + 3] == L'N') {
+                                        wregex_expr.replace(i, 5, L"\U0001FBF9");
+                                    } else if (wregex_expr[i + 3] == L'L') {
+                                        wregex_expr.replace(i, 5, L"\U0003134A");
+                                    } else if (wregex_expr[i + 3] == L'P') {
+                                        wregex_expr.replace(i, 5, L"\U0001E95F");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    bpe_offsets = unicode_regex_preprocess(wtext_collapsed, bpe_offsets, wregex_expr);
+                } else {
+                    const std::wstring wregex_expr = unicode_wstring_from_utf8(regex_expr);
+                    bpe_offsets = unicode_regex_preprocess(wtext, bpe_offsets, wregex_expr);
+                }
             } catch (std::regex_error & e) {
                 fprintf(stderr, "Failed to process regex: '%s'\n", regex_expr.c_str());
                 fprintf(stderr, "Regex error: %s\n", e.what());
