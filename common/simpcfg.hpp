@@ -34,27 +34,27 @@ private:
     std::map<std::string, std::map<std::string, std::string>> mapStrings = {};
     std::map<std::string, std::map<std::string, bool>> mapBools = {};
 public:
-    void set_string(std::string &group, std::string &key, std::string &value) {
+    void set_string(const std::string &group, const std::string &key, const std::string &value) {
         auto gm = mapStrings[group];
         gm[key] = value;
     }
 
-    void set_bool(std::string &group, std::string &key, bool value) {
+    void set_bool(const std::string &group, const std::string &key, bool value) {
         auto gm = mapBools[group];
         gm[key] = value;
     }
 
-    std::string get_string(std::string &group, std::string &key) {
+    std::string get_string(const std::string &group, const std::string &key) {
         auto gm = mapStrings[group];
         return gm[key];
     }
 
-    bool get_bool(std::string &group, std::string &key) {
+    bool get_bool(const std::string &group, const std::string &key) {
         auto gm = mapBools[group];
         return gm[key];
     }
 
-    void load(std::string &fname) {
+    void load(const std::string &fname) {
         std::ifstream f {fname};
         if (!f) {
             LOG_TEELN("ERRR:%s:%s:failed to load...", __func__, fname.c_str());
@@ -115,6 +115,7 @@ int main(int argc, char **argv) {
     std::string fname {argv[1]};
     SimpCfg sc;
     sc.load(fname);
+    sc.get_bool("testme", "key101");
     return 0;
 }
 #endif
