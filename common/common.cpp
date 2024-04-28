@@ -92,7 +92,7 @@ int32_t PhysicalCores = std::thread::hardware_concurrency();
 // CPUSET logging
 //
 
-#define CPUSET_DEBUG 0
+#define CPUSET_DEBUG 1
 #if (CPUSET_DEBUG >= 1)
 #define CPUSET_PRINT_DEBUG(...) printf(__VA_ARGS__)
 #else
@@ -127,9 +127,7 @@ int32_t get_count_procMask(ULONG_PTR procMask) {
             std::bitset<64> bMask = procMask;
             return bMask.count();
 }
-#endif
 
-#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
 uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
     std::bitset<64> bMask;
     std::vector<CPU_SET_INFORMATION> _cpuset;
@@ -137,7 +135,6 @@ uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltravers
     int32_t assigned_t = 0;
     int32_t llcache = -1;
 
-#if defined(_WIN32)
     ULONG_PTR processAffinityMask;
     ULONG_PTR systemAffinityMask;
     HANDLE hToken = nullptr;
@@ -176,13 +173,6 @@ uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltravers
         }
         return bMask.to_ullong();
     }
-#else
-    if (cpuMask != 0) {
-        std::bitset<64> reqMask = cpuMask;
-        CPUSET_PRINT_DEBUG("Custom cpuMask: %s\n", reqMask.to_string().c_str());
-        return reqMask.to_ullong();
-    }
-#endif
 
     if (direction == BEST_CORES) {
         _cpuset = cpuset_best;
@@ -192,7 +182,7 @@ uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltravers
     CPUSET_PRINT_DEBUG("\ngenerate_Mask dir=%d req_threads=%d lltraversal=%d llcache=%d\n", direction, req_threads, lltraversal, llcache);
     for (auto index : _cpuset) {
         bVal = 0;
-        if ((index.LogicalProcessorIndex != 0 || allowcz) &&
+        if ((index.LogicalProcessorIndex != 0 || allowcz == 1) &&
             ((cpuset_smt && index.Threads > 1) || !cpuset_smt || allowtc) &&
             index.EfficiencyClass == 0 &&
             ((llcache == index.LastLevelCacheIndex && lltraversal == 0) || llcache == -1 || lltraversal == 1)
@@ -214,33 +204,73 @@ uint64_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltravers
     }
     return bMask.to_ullong();
 }
-#endif
 
-#if defined(__x86_64__) && defined(__linux__)
+#elif defined(__x86_64__) && defined(__linux__)
 #include <pthread.h>
 
-int32_t setCpuAffinity(std::bitset<64> cpuMask) {
-    int32_t coreSelected = cpuMask.count();
+cpu_set_t generate_Mask(int32_t direction, int32_t req_threads, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
+    cpu_set_t bMask;
+    CPU_ZERO(&bMask);
+    std::vector<CPU_SET_INFORMATION> _cpuset;
+    int32_t bVal = 0;
+    int32_t assigned_t = 0;
+    int32_t llcache = -1;
+    std::bitset<64> reqMask = cpuMask;
 
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-
-    for (int32_t i = 0; i < 64; ++i) {
-        if (cpuMask[i] == 1) {
-            CPUSET_PRINT_DEBUG("Setting CPU %d\n", i);
-            CPU_SET(i, &mask);
-        } else {
-            CPU_CLR(i, &mask);
-        }
+    if (cpuMask != 0) {
+        CPUSET_PRINT_DEBUG("Custom cpuMask: %s\n", reqMask.to_string().c_str());
     }
 
-    if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
+    if (direction == BEST_CORES) {
+        _cpuset = cpuset_best;
+    } else {
+        _cpuset = cpuset_worst;
+    }
+    CPUSET_PRINT_DEBUG("\ngenerate_Mask: dir=%d req_threads=%d lltraversal=%d llcache=%d\n", direction, req_threads, lltraversal, llcache);
+    for (auto index : _cpuset) {
+        bVal = 0;
+        if ((index.LogicalProcessorIndex != 0 || allowcz == 1) &&
+            ((cpuset_smt && index.Threads > 1) || !cpuset_smt || allowtc) &&
+            index.EfficiencyClass == 0 &&
+            ((llcache == index.LastLevelCacheIndex && lltraversal == 0) || llcache == -1 || lltraversal == 1)
+            ) {
+            if (lltraversal == 0) {
+                CPUSET_PRINT_DEBUG("### cache for lltraversal %d pre llcache=%d now_cache=%u\n", lltraversal, llcache, index.LastLevelCacheIndex);
+                llcache = index.LastLevelCacheIndex;
+                CPUSET_PRINT_DEBUG("### cache for lltraversal %d pos llcache=%d now_cache=%u\n", lltraversal, llcache, index.LastLevelCacheIndex);
+            } 
+            bVal = 1;
+        }
+        if (req_threads > 0 && assigned_t >= req_threads) { bVal = 0;}
+        if (cpuMask != 0) {
+            bVal = 1;
+            if (reqMask[index.LogicalProcessorIndex] == 0) {
+                bVal = 0;
+            }
+        }
+        if(bVal == 1) {
+            assigned_t++;
+            CPU_SET(index.LogicalProcessorIndex, &bMask);
+            CPUSET_PRINT_DEBUG("--> Assigned LogicalCoreIndex: %d lltraversal=%d llcache=%d now_cache=%u\n", index.LogicalProcessorIndex, lltraversal, llcache, index.LastLevelCacheIndex);
+        } else {
+            CPU_CLR(index.LogicalProcessorIndex, &bMask);
+        }
+        CPUSET_PRINT_DEBUG("LogicalCoreIndex: %d b:%d smt=%d thrds=%d lltraversal=%d acz=%d atc=%d\n", index.LogicalProcessorIndex, bVal, cpuset_smt, index.Threads, lltraversal, allowcz, allowtc);
+    }
+    return bMask;
+}
+
+int32_t setCpuAffinity(cpu_set_t bMask) {
+    const cpu_set_t cpuMask = bMask;
+    int32_t coreSelected = CPU_COUNT(&cpuMask);
+
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuMask) == -1) {
             CPUSET_PRINT_DEBUG("setCpuAffinity sched_setaffinity error\n");
     }
-    if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == -1) {
+    if (pthread_setaffinity_np(pthread_self(), sizeof(cpuMask), &cpuMask) == -1) {
             CPUSET_PRINT_DEBUG("setCpuAffinity pthread_setaffinity_np error\n");
-    }
-     
+    }     
+    
     return coreSelected;
 }
 
@@ -289,15 +319,16 @@ static int count_math_cpus(int cpu_count) {
     return result;
 }
 
-uint64_t set_procMask(int32_t direction = 0 , int32_t req_threads = 0, int32_t lltraversal = 0, int32_t allowtc = 0, int32_t allowcz = 0, int64_t cpuMask = 0) {
-    std::bitset<64> bMask;
-
+cpu_set_t set_procMask(int32_t direction = 0 , int32_t req_threads = 0, int32_t lltraversal = 0, int32_t allowtc = 0, int32_t allowcz = 0, int64_t cpuMask = 0) {
+    cpu_set_t bMask;
+    CPU_ZERO(&bMask);
     bMask = generate_Mask(direction, req_threads, lltraversal, allowtc, allowcz, cpuMask);
 
-    numPhysicalCores = bMask.count();
+    numPhysicalCores = CPU_COUNT(&bMask);
 
-    CPUSET_PRINT_DEBUG("Generated Mask: %s\n", bMask.to_string().c_str());
-    return bMask.to_ullong();
+    CPUSET_PRINT_DEBUG("Generated Mask Count CPU: %d\n", numPhysicalCores);
+    
+    return bMask;
 }
 
 #endif
@@ -318,7 +349,7 @@ int32_t get_num_physical_cores() {
     std::vector<CPU_SET_INFORMATION> _cpuset;
     int32_t numLogicalCores = 0;
 
-    for (uint32_t cpu=0; cpu < UINT32_MAX; ++cpu) {
+    for (uint32_t cpu=0; cpu < 1024; ++cpu) {
         CPUSET_PRINT_DEBUG("Check for Logical CPU: %d\n", cpu);
         std::ifstream thread_siblings("/sys/devices/system/cpu/cpu"
             + std::to_string(cpu) + "/topology/thread_siblings");
@@ -390,9 +421,8 @@ int32_t get_num_physical_cores() {
         std::sort(cpuset_worst.begin(), cpuset_worst.end(), &cpuset_sorter_worst);
 
         int32_t physicalCount = 0;
-        //int32_t physicalCount = static_cast<int32_t>(siblings.size());
-        std::bitset<64> bMask = generate_Mask(WORST_CORES, 0, 1, 0, 1, 0);
-        physicalCount = bMask.count();
+        cpu_set_t bMask = generate_Mask(WORST_CORES, 0, 1, 0, 1, 0);
+        physicalCount = CPU_COUNT(&bMask);
 
         CPUSET_PRINT_DEBUG("\n\n### Logical Processors Summary ###\n\n");
 
@@ -554,7 +584,7 @@ int32_t get_num_physical_cores() {
     std::sort(cpuset_worst.begin(), cpuset_worst.end(), &cpuset_sorter_worst);
 
     int32_t physicalCount = 0;
-    physicalCount = get_count_procMask(generate_Mask(WORST_CORES, 0, 1, 0, 1, 0));
+    physicalCount = get_count_procMask(generate_Mask(WORST_CORES, 0, 1, 0, 2, 0));
 
     CPUSET_PRINT_DEBUG("\n\n1st PhysicalCount: %d\n\n", physicalCount);
 
@@ -731,7 +761,14 @@ ULONG set_procMask(int32_t direction = 0, int32_t req_threads = 0, int32_t lltra
  * Returns number of CPUs on system that are useful for math.
  */
 int get_math_cpu_count() {
-#if defined(__x86_64__) && defined(__linux__)
+#if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
+    int32_t _numPhysical = get_num_physical_cores();
+    if (cpuset_enable) {
+        // Initial Affinity set
+        setCpuAffinity(set_procMask(WORST_CORES, 0, 1, 0, 0));
+    }
+    return _numPhysical;
+#elif defined(__linux__)
     int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
     if (cpu_count < 1) {
         return get_num_physical_cores();
@@ -746,14 +783,6 @@ int get_math_cpu_count() {
             }
         }
     }
-
-#elif defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
-    int32_t _numPhysical = get_num_physical_cores();
-    if (cpuset_enable) {
-        // Initial Affinity set
-        setCpuAffinity(set_procMask(WORST_CORES, 0, 1));
-    }
-    return _numPhysical;
 #endif
     return get_num_physical_cores();
 }
@@ -762,6 +791,7 @@ int get_math_cpu_count() {
 int get_math_cpu_count(int32_t req_threads, int32_t cpuset_order, int32_t lltraversal, int32_t allowtc, int32_t allowcz, int64_t cpuMask) {
     int32_t _numPhysical = get_num_physical_cores();
     if (cpuset_enable) {
+        if (_numPhysical < 7 && allowcz == 2) allowcz = 1;
         _numPhysical = setCpuAffinity(set_procMask(cpuset_order, req_threads, lltraversal, allowtc, allowcz, cpuMask));
     }
     return _numPhysical;
@@ -2191,7 +2221,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 #if defined(_WIN32) || (defined(__x86_64__) && defined(__linux__))
         printf("  -bco                  change the order of the selected cores from the best to worst (default: worst to best)\n");
         printf("  -llct                 allow the core selection to traverse the last level cache (default: disabled)\n");
-        printf("  -acz                  allow the core selection to pick the core 0 as well (default: disabled)\n");
+        printf("  -acz                  allow the core selection to pick the core 0 as well (default: disabled for more than 6 cores)\n");
         printf("  -atc                  allow the core selection to pick non physical, threaded, cores (default: disabled)\n");
         printf("  -ccm                  specify a custom CPU Affinity bitmask in hex for the core selection (default: disabled)\n");
 #endif
@@ -3392,7 +3422,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "threads: %d # default: %u\n", params.n_threads, get_math_cpu_count());
     fprintf(stream, "bco: %d # default: 0\n", params.cpuset_order);
     fprintf(stream, "llct: %d # default: 0\n", params.cpuset_lltraversal);
-    fprintf(stream, "acz: %d # default: 0\n", params.cpuset_allowzero);
+    fprintf(stream, "acz: %d # default: auto\n", params.cpuset_allowzero);
     fprintf(stream, "atc: %d # default: 0\n", params.cpuset_allowthreads);
 #if defined(_WIN32)
     fprintf(stream, "ccm: %lli # default: none\n", params.cpuset_cpumask);
