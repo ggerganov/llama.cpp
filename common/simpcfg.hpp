@@ -34,27 +34,27 @@ private:
     std::map<std::string, std::map<std::string, std::string>> mapStrings = {};
     std::map<std::string, std::map<std::string, bool>> mapBools = {};
 public:
-    void sc_set_string(std::string &group, std::string &key, std::string &value) {
+    void set_string(std::string &group, std::string &key, std::string &value) {
         auto gm = mapStrings[group];
         gm[key] = value;
     }
 
-    void sc_set_bool(std::string &group, std::string &key, bool value) {
+    void set_bool(std::string &group, std::string &key, bool value) {
         auto gm = mapBools[group];
         gm[key] = value;
     }
 
-    std::string sc_get_string(std::string &group, std::string &key) {
+    std::string get_string(std::string &group, std::string &key) {
         auto gm = mapStrings[group];
         return gm[key];
     }
 
-    bool sc_get_bool(std::string &group, std::string &key) {
+    bool get_bool(std::string &group, std::string &key) {
         auto gm = mapBools[group];
         return gm[key];
     }
 
-    void sc_load(std::string &fname) {
+    void load(std::string &fname) {
         std::ifstream f {fname};
         if (!f) {
             LOG_TEELN("ERRR:%s:%s:failed to load...", __func__, fname.c_str());
@@ -98,10 +98,10 @@ public:
             value = str_trim(value, ",");
             std::string vtype = "bool";
             if ((value == "true") || (value == "false")) {
-                sc_set_bool(group, key, value == "true" ? true : false);
+                set_bool(group, key, value == "true" ? true : false);
             } else {
                 vtype = "string";
-                sc_set_string(group, key, value);
+                set_string(group, key, value);
             }
             LOG_TEELN("DBUG:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
         }
@@ -114,7 +114,7 @@ public:
 int main(int argc, char **argv) {
     std::string fname {argv[1]};
     SimpCfg sc;
-    sc.sc_load(fname);
+    sc.load(fname);
     return 0;
 }
 #endif
