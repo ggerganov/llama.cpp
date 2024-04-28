@@ -14,8 +14,12 @@
 #include <vector>
 #include <fstream>
 
+#define TEST_LOGIC
+#ifdef TEST_LOGIC
+#define LOG_TEELN(FMT, ...) printf(FMT, __VA_ARGS__)
+#else
 #include "log.h"
-
+#endif
 
 std::map<std::string, std::map<std::string, std::string>> mapStrings = {};
 std::map<std::string, std::map<std::string, bool>> mapBools = {};
@@ -40,23 +44,63 @@ bool sc_get_bool(std::string &group, std::string &key) {
     return gm[key];
 }
 
-std::string str_trim(std::string &sin) {
-    std::string sout = sin;
-    sout.erase(sout.find_last);
+std::string str_trim(std::string sin) {
+    sin.erase(sin.find_last_not_of(" \t\n")+1);
+    sin.erase(0, sin.find_first_not_of(" \t\n"));
+    return sin;
 }
 
 bool sc_load(std::string &fname) {
     std::ifstream f {fname};
     if (!f) {
         LOG_TEELN("ERRR:%s:%s:failed to load...", __func__, fname);
-        exit(2);
+        throw std::runtime_error { "ERRR:SimpCfg:File not found" };
+    } else {
+        LOG_TEELN("DBUG:%s:%s", __func__, fname);
     }
+    std::string group;
+    int iLine = 0;
     while(!f.eof()) {
-        std::string curl;
-        getline(f, curl);
-        if (curl.empty()) {
+        iLine += 1;
+        std::string curL;
+        getline(f, curL);
+        if (curL.empty()) {
             continue;
         }
-
+        if (curL[0] == '#') {
+            continue;
+        }
+        bool bGroup = !isspace(curL[0]);
+        curL = str_trim(curL);
+        if (bGroup) {
+            group = curL;
+            LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, group);
+            continue;
+        }
+        auto dPos = curL.find(':');
+        if (dPos == std::string::npos) {
+            LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL);
+            throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
+        }
+        auto dEnd = curL.length() - dPos;
+        if ((dPos == 0) || (dEnd < 2)) {
+            LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL);
+            throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
+        }
+        std::string key = curL.substr(0, dPos);
+        key = str_trim(key);
+        std::string value = curL.substr(dPos+1);
+        value = str_trim(value);
+        LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, group, key, value);
+        sc_set_string(group, key, value);
     }
 }
+
+
+#ifdef TEST_LOGIC
+int main(int argc, char **argv) {
+    std::string fname {argv[1]};
+    sc_load(fname);
+    return 0;
+}
+#endif
