@@ -388,13 +388,13 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
         size_t _prev_end = offset_ini;
         auto _add_token = [&] (const size_t end) -> size_t {
             assert(_prev_end <= end && end <= offset_end);
-            int len = end - _prev_end;
+            size_t len = end - _prev_end;
             if(len > 0)
                 bpe_offsets.push_back(len);
             _prev_end = end;
             //if(len) {
             //    std::string s = "";
-            //    for(int p = end-len; p < end; p++)
+            //    for(size_t p = end-len; p < end; p++)
             //        s += unicode_cpt_to_utf8(cpts[p]);
             //    printf(">>> '%s'\n", s.c_str());
             //}
@@ -435,7 +435,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
             // regex: \p{N}{1,3}
             if (cpt_type == CODEPOINT_TYPE_DIGIT) {
-                int ini = pos;
+                size_t ini = pos;
                 while(_get_cpt_type(pos) == CODEPOINT_TYPE_DIGIT) {
                     if (++pos - ini >= 3 ) {
                         _add_token(pos);
@@ -460,18 +460,18 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
                 continue;
             }
 
-            int num_whitespaces = 0;
-            int last_pos_r_or_n = -1;
+            size_t num_whitespaces = 0;
+            size_t last_end_r_or_n = 0;
             while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_WHITESPACE) {
                 cpt2 = _get_cpt(pos+num_whitespaces);
                 if (cpt2 == '\r' || cpt2 == '\n')
-                    last_pos_r_or_n = pos+num_whitespaces;
+                    last_end_r_or_n = pos + num_whitespaces + 1;
                 num_whitespaces++;
             }
 
             // regex: \s*[\r\n]+
-            if (last_pos_r_or_n >= 0) {
-                pos = last_pos_r_or_n + 1;
+            if (last_end_r_or_n > 0) {
+                pos = last_end_r_or_n;
                 _add_token(pos);
                 continue;
             }
