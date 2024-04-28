@@ -409,17 +409,15 @@ b. Download & install mingw-w64 make for Windows provided by w64devkit
 On the oneAPI command line window, step into the llama.cpp main directory and run the following:
 
 ```
-mkdir -p build
-cd build
 @call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 --force
 
 # Option 1: Use FP32 (recommended for better performance in most cases)
-cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
+cmake -B build -G "MinGW Makefiles" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
 
 # Option 2: Or FP16
-cmake -G "MinGW Makefiles" ..  -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
+cmake -B build "MinGW Makefiles" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
 
-make -j
+cmake --build build -j
 ```
 
 Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former instructions:
