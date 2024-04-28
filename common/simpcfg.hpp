@@ -134,6 +134,22 @@ public:
         return value;
     }
 
+    int64_t get_int64(const std::string &group, const std::string &key, int64_t defaultValue) {
+        auto gm = mapInt64s[group];
+#ifdef SC_DEBUG
+        for(auto k: gm) {
+            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%lld", __func__, k.first.c_str(), k.second);
+        }
+#endif
+        if (gm.find(key) == gm.end()) {
+            LWARN_LN("DBUG:SC:%s:%s:%s:%lld[default]", __func__, group.c_str(), key.c_str(), defaultValue);
+            return defaultValue;
+        }
+        auto value = gm[key];
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%lld", __func__, group.c_str(), key.c_str(), value);
+        return value;
+    }
+
     void load(const std::string &fname) {
         std::ifstream f {fname};
         if (!f) {
@@ -207,12 +223,19 @@ int main(int argc, char **argv) {
     std::string fname {argv[1]};
     SimpCfg sc;
     sc.load(fname);
+
     sc.get_bool("testme", "key101b", false);
     sc.get_string("testme", "key101s", "Not found");
+    sc.get_int64("testme", "key101i", 123456);
+
     sc.set_bool("testme", "key201b", true);
     sc.set_string("testme", "key201s", "hello world");
+    sc.set_int64("testme", "key201i", 987654);
+
     sc.get_bool("testme", "key201b", false);
     sc.get_string("testme", "key201s", "Not found");
+    sc.get_int64("testme", "key201i", 123456);
+
     sc.get_string("mistral", "system-prefix", "Not found");
     sc.get_string("\"mistral\"", "\"system-prefix\"", "Not found");
     return 0;
