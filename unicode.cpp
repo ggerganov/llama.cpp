@@ -1,4 +1,4 @@
-﻿#include "unicode.h"
+#include "unicode.h"
 #include "unicode-data.h"
 
 #include <cassert>
@@ -377,7 +377,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
         assert(offset_end <= cpts.size());
         start = offset_end;
 
-        auto _get_cpt = [&] (const size_t pos) -> uint32_t {
+        auto _get_cpt = [&] (const size_t pos) -> char32_t {
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
         };
 
@@ -385,7 +385,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_type(cpts[pos]) : CODEPOINT_TYPE_UNIDENTIFIED;
         };
 
-        auto _tolower = [] (const uint32_t cpt) -> uint32_t {
+        auto _tolower = [] (const char32_t cpt) -> char32_t {
             return cpt + ('A' <= cpt && cpt <= 'Z' ? ('a'-'A') : 0);
         };
 
@@ -406,17 +406,17 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
         };
 
         for(size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
-            const uint32_t cpt = _get_cpt(pos);
+            const char32_t cpt = _get_cpt(pos);
             const int cpt_type = _get_cpt_type(pos);
 
             // regex: (?i:'s|'t|'re|'ve|'m|'ll|'d) // case insensitive
             if (cpt == '\'' && pos+1 < offset_end) {
-                uint32_t cpt_next = _tolower(_get_cpt(pos+1));
+                char32_t cpt_next = _tolower(_get_cpt(pos+1));
                 if (cpt_next == 's' || cpt_next == 't' || cpt_next == 'm' || cpt_next == 'd') {
                     pos += _add_token(pos+2);
                     continue;
                 } else if (pos+2 < offset_end) {
-                    uint32_t cpt_next_next = _tolower(_get_cpt(pos+2));
+                    char32_t cpt_next_next = _tolower(_get_cpt(pos+2));
                     if ((cpt_next == 'r' && cpt_next_next == 'e') ||
                         (cpt_next == 'v' && cpt_next_next == 'e') ||
                         (cpt_next == 'l' && cpt_next_next == 'l')) {
@@ -451,7 +451,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             }
 
             // regex: <space>?[^\s\p{L}\p{N}]+[\r\n]*
-            uint32_t cpt2 = (cpt == ' ' ? _get_cpt(pos+1) : cpt);
+            char32_t cpt2 = (cpt == ' ' ? _get_cpt(pos+1) : cpt);
             int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
             if (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                 pos += (cpt == ' ');
