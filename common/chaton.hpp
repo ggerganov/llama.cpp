@@ -321,7 +321,14 @@ inline bool chaton_tmpl_kv_bool(const std::string &tmpl, const std::string &key)
 }
 
 
-// Return user-prefix + msg + user-suffix
+// Given the template standard, role and a message, this returns
+// a tagged message, types string and lens vector wrt the parts that make up the returned string
+//
+// * a string containing the tagged message
+//   * user-(begin+prefix) + msg + user-(suffix+end)
+// * a string where the chars contain info about
+//   type of sub-strings/parts that make up the tagged message.
+// * a vector of ints, which give the length of each part in the tagged message.
 inline bool chaton_tmpl_apply_single_ex(
         const std::string &tmpl,
         const std::string &role,
@@ -334,27 +341,23 @@ inline bool chaton_tmpl_apply_single_ex(
         return false;
     }
     ChatParts cp = {};
-    std::stringstream ss;
     std::string beginPrefix = chaton_tmpl_role_kv(tmpl, role, {K_BEGIN, K_PREFIX});
     std::string suffixEnd = chaton_tmpl_role_kv(tmpl, role, {K_SUFFIX, K_END});
     cp.add_part(ChatParts::S, beginPrefix);
     cp.add_part(ChatParts::N, content);
     cp.add_part(ChatParts::S, suffixEnd);
     cp.dump();
-    ss << beginPrefix << content << suffixEnd;
-    tagged = ss.str();
-    std::string cpStr = cp.str();
-    if (tagged != cpStr) {
-        LOG_TEELN("DBUG:%s:Mismatch between CP[%s] and SS[%s]", __func__, cpStr.c_str(), tagged.c_str());
-        exit(2);
-    }
+    tagged = cp.str();
     LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), tagged.c_str());
     types = cp.get_types();
     lens = cp.get_partslens();
     return true;
 }
 
-// Return user-prefix + msg + user-suffix, types string and lens vector wrt the parts that make up the returned string
+// Given the template standard, role and a message, this returns the tagged message.
+//
+// * a string containing the tagged message
+//   * user-(begin+prefix) + msg + user-(suffix+end)
 inline size_t chaton_tmpl_apply_single(
         const std::string &tmpl,
         const std::string &role,
@@ -371,11 +374,11 @@ inline size_t chaton_tmpl_apply_single(
 
 /**
  * Apply chat-handshake-template for the specified template standard and role.
- * If the passed char array is smaller that that required for the tagged message,
+ * If the passed char array is smaller than that required for the tagged message,
  * * part of the tagged message which fits within dest buffer is copied
- * * the returned value, indicates the size of the tagged message
+ * * the returned value, indicates the size of the actual tagged message
  * NOTE:
- * * the passed char array should be able to fit the tagged message+0|null char.
+ * * ideally the passed char array should be able to fit the tagged message+0|null char.
  * * if the return value from this function is larger than or equal to destLength,
  *   then you will have to increase the size of the dest buffer, and call this
  *   function a second time, to ensure that one gets the full tagged message.
