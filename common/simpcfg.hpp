@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <regex>
+
 
 #define SC_DEBUG
 #define SC_TEST_PRG
@@ -61,6 +63,10 @@ class SimpCfg {
 private:
     std::map<std::string, std::map<std::string, std::string>> mapStrings = {};
     std::map<std::string, std::map<std::string, bool>> mapBools = {};
+    std::map<std::string, std::map<std::string, int>> mapInts = {};
+    std::map<std::string, std::map<std::string, double>> mapDoubles = {};
+    std::regex rInt {R"(^[-+]?\d+$)"};
+    std::regex rFloat {R"(^[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$)"};
 public:
     void set_string(const std::string &group, const std::string &key, const std::string &value) {
         auto &gm = mapStrings[group];
@@ -153,6 +159,12 @@ public:
             std::string vtype = "bool";
             if ((value == "true") || (value == "false")) {
                 set_bool(group, key, value == "true" ? true : false);
+            } else if (std::regex_match(value, rInt)) {
+                vtype = "int";
+                set_int(group, key, value);
+            } else if (std::regex_match(value, rFloat)) {
+                vtype = "float";
+                set_float(group, key, value);
             } else {
                 vtype = "string";
                 value = str_trim_single(value, "\"");
