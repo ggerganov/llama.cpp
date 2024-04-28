@@ -63,16 +63,14 @@ private:
     std::map<std::string, std::map<std::string, bool>> mapBools = {};
 public:
     void set_string(const std::string &group, const std::string &key, const std::string &value) {
-        auto gm = mapStrings[group];
+        auto &gm = mapStrings[group];
         gm[key] = value;
-        mapStrings[group] = gm;
         LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
     }
 
     void set_bool(const std::string &group, const std::string &key, bool value) {
-        auto gm = mapBools[group];
+        auto &gm = mapBools[group];
         gm[key] = value;
-        mapBools[group] = gm;
         LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
     }
 
