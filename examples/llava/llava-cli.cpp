@@ -112,7 +112,7 @@ struct llava_context {
 };
 
 static void show_additional_info(int /*argc*/, char ** argv) {
-    fprintf(stderr, "\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
+    fprintf(stderr, "\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> --image <path/to/another/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
     fprintf(stderr, "  note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
@@ -281,7 +281,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    for (auto & image : image) {
+    for (auto & image : params.image) {
 
         auto ctx_llava = llava_init_context(&params, model);
 
