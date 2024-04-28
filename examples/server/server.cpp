@@ -704,7 +704,7 @@ struct server_context {
 
         return res > 0;
     }
-    //MARK: Init
+
     void init() {
         const int32_t n_ctx_slot = n_ctx / params.n_parallel;
 
