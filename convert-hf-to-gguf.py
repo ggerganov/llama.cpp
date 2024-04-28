@@ -298,15 +298,15 @@ class Model(ABC):
             res = "bert-bge"
 
         if res is None:
-            print( "\n")
-            print( "**************************************************************************************")
-            print( "** WARNING: The BPE pre-tokenizer was not recognized!")
-            print( "**          This means that it was not added yet or you are using an older version.")
-            print( "**          Check convert-hf-to-gguf-update.py and update it accordingly.")
-            print( "**")
+            print("\n")
+            print("**************************************************************************************")
+            print("** WARNING: The BPE pre-tokenizer was not recognized!")
+            print("**          This means that it was not added yet or you are using an older version.")
+            print("**          Check convert-hf-to-gguf-update.py and update it accordingly.")
+            print("**")
             print(f"** chkhsh:  {chkhsh}")
-            print( "**************************************************************************************")
-            print( "\n")
+            print("**************************************************************************************")
+            print("\n")
             raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
         print(f"tokenizer.ggml.pre: {res}")
