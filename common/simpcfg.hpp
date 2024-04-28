@@ -44,9 +44,9 @@ bool sc_get_bool(std::string &group, std::string &key) {
     return gm[key];
 }
 
-std::string str_trim(std::string sin) {
-    sin.erase(sin.find_last_not_of(" \t\n")+1);
-    sin.erase(0, sin.find_first_not_of(" \t\n"));
+std::string str_trim(std::string sin, std::string trimChars=" \t\n") {
+    sin.erase(sin.find_last_not_of(trimChars)+1);
+    sin.erase(0, sin.find_first_not_of(trimChars));
     return sin;
 }
 
@@ -91,12 +91,15 @@ void sc_load(std::string &fname) {
         key = str_trim(key);
         std::string value = curL.substr(dPos+1);
         value = str_trim(value);
-        LOG_TEELN("DBUG:%s:kv:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
+        value = str_trim(value, ",");
+        std::string vtype = "bool";
         if ((value == "true") || (value == "false")) {
             sc_set_bool(group, key, value == "true" ? true : false);
         } else {
+            vtype = "string";
             sc_set_string(group, key, value);
         }
+        LOG_TEELN("DBUG:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
     }
 }
 
