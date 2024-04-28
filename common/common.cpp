@@ -1896,6 +1896,21 @@ static int shard_progress_callback(void* clientp, double dltotal, double dlnow, 
     return 0;
 }
 
+// function to get the console width
+static int get_console_width() {
+#ifdef _WIN32
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    return csbi.dwSize.X;
+#elif defined(__linux__) || defined(__APPLE__)
+    struct winsize ws;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+    return ws.ws_col;
+#else
+    return 80; // Default value
+#endif
+}
+
 static void print_shard_progress_table(bool first_progress) {
     if (first_progress) {
         fprintf(stderr, "=========================\n");
@@ -1910,9 +1925,8 @@ static void print_shard_progress_table(bool first_progress) {
         }
     }
 
-    struct winsize ws;
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
-    int progress_bar_width = ws.ws_col - LLAMA_PROGRESS_PERCENTAGE_WIDTH;
+
+    int progress_bar_width = get_console_width() - LLAMA_PROGRESS_PERCENTAGE_WIDTH;
 
     // Print the progress information for each downloading file
     {
