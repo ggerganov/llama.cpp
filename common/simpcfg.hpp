@@ -74,7 +74,7 @@ void sc_load(std::string &fname) {
         curL = str_trim(curL);
         if (bGroup) {
             group = curL;
-            LOG_TEELN("DBUG:%s:%s", __func__, group.c_str());
+            LOG_TEELN("DBUG:%s:group:%s", __func__, group.c_str());
             continue;
         }
         auto dPos = curL.find(':');
@@ -91,8 +91,12 @@ void sc_load(std::string &fname) {
         key = str_trim(key);
         std::string value = curL.substr(dPos+1);
         value = str_trim(value);
-        LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
-        sc_set_string(group, key, value);
+        LOG_TEELN("DBUG:%s:kv:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
+        if ((value == "true") || (value == "false")) {
+            sc_set_bool(group, key, value == "true" ? true : false);
+        } else {
+            sc_set_string(group, key, value);
+        }
     }
 }
 
