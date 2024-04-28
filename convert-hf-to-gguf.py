@@ -282,6 +282,7 @@ class Model(ABC):
         res = None
 
         # NOTE: if you get an error here, you need to add the model to the if-elif chain below
+        #       don't do this manually - use the convert-hf-to-gguf-update.py script!
         if chkhsh == "0fc850edd52197e357970116fbf58f6c2567f259cdc1bfc3df081d7e4bc658c1":
             # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
             res = "llama-v3"

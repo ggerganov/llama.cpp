@@ -1,3 +1,12 @@
+# This script downloads the tokenizer models of the specified models from Huggingface and
+# generates the get_vocab_base_pre() function for convert-hf-to-gguf.py
+#
+# This is necessary in order to analyze the type of pre-tokenizer used by the model and
+# provide the necessary information to llama.cpp via the GGUF header in order to implement
+# the same pre-tokenizer.
+#
+# ref: https://github.com/ggerganov/llama.cpp/pull/6920
+#
 # Instructions:
 #
 # - Add a new model to the "models" list
@@ -9,6 +18,7 @@
 # - Update llama.cpp with the new pre-tokenizer if necessary
 #
 # TODO: generate tokenizer tests for llama.cpp
+# TODO: automate the update of convert-hf-to-gguf.py
 #
 
 import os
@@ -138,6 +148,7 @@ src_func +=  "\n"
 src_func +=  "        res = None\n"
 src_func +=  "\n"
 src_func +=  "        # NOTE: if you get an error here, you need to add the model to the if-elif chain below\n"
+src_func +=  "        #       don't do this manually - use the convert-hf-to-gguf-update.py script!\n"
 src_func += f"{src_ifs}\n"
 src_func +=  "        if res is None:\n"
 src_func +=  "            print( \"\\n\")\n"
