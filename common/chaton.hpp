@@ -325,7 +325,7 @@ inline bool chaton_tmpl_kv_bool(const std::string &tmpl, const std::string &key)
 // a tagged message, types string and lens vector wrt the parts that make up the returned string
 //
 // * a string containing the tagged message
-//   * user-(begin+prefix) + msg + user-(suffix+end)
+//   * role-(begin+prefix) + msg + role-(suffix+end)
 // * a string where the chars contain info about
 //   type of sub-strings/parts that make up the tagged message.
 // * a vector of ints, which give the length of each part in the tagged message.
@@ -357,7 +357,7 @@ inline bool chaton_tmpl_apply_single_ex(
 // Given the template standard, role and a message, this returns the tagged message.
 //
 // * a string containing the tagged message
-//   * user-(begin+prefix) + msg + user-(suffix+end)
+//   * role-(begin+prefix) + msg + role-(suffix+end)
 inline size_t chaton_tmpl_apply_single(
         const std::string &tmpl,
         const std::string &role,
@@ -403,10 +403,19 @@ inline size_t chat_tmpl_apply_single_capi(
     return taggedLength;
 }
 
-// global-begin + [[role-begin] + [role-prefix] + msg + role-suffix] + global-end
-// if there is a combination of system-user messages,
-//    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
-// NOTE: returns types and lens to help identify the parts of the tagged msg, which relate to passed and added tags
+
+// Given the template standard and a bunch of messages including their roles, this returns
+// tagged messages, types string and lens vector. Returned types string and lens vector help
+// identify the parts of the tagged msgs string, which relate to passed msgs and added tags.
+//
+// * a string containing the tagged messages
+//   * global-begin + 1 or more [[role-begin] + [role-prefix] + msg + [role-suffix] +[role-end]] + global-end
+// * a string where the chars contain info about
+//   type of sub-strings/parts that make up the tagged messages string.
+// * a vector of ints, which give the length of each part in the tagged messages string.
+//
+// if a combination of system-user messages is passed, then tags between the system
+// and the 1st user message, is based on the flags set wrt the corresponding template standard.
 inline bool chaton_tmpl_apply_ex(
         const std::string &tmpl,
         const std::vector<const llama_chat_message *> &msgs,
@@ -499,9 +508,9 @@ inline bool chaton_tmpl_apply_ex(
     return true;
 }
 
-// global-begin + [[role-begin] + [role-prefix] + msg + role-suffix] + global-end
-// if there is a combination of system-user messages,
-//    then 1st user message will have user-prefix only if systemuser-1st-user-has-prefix is true
+// Given the template standard and a bunch of messages including their roles, this returns
+// the tagged messages as a string.
+// global-begin + 1 or more [[role-begin] + [role-prefix] + msg + [role-suffix] +[role-end]] + global-end
 inline int32_t chaton_tmpl_apply(
         const std::string &tmpl,
         const std::vector<const llama_chat_message *> &msgs,
@@ -516,6 +525,18 @@ inline int32_t chaton_tmpl_apply(
     return tagged.size();
 }
 
+// Given the template standard and a bunch of messages including their roles, this returns
+// the tagged messages as a string.
+// global-begin + 1 or more [[role-begin] + [role-prefix] + msg + [role-suffix] +[role-end]] + global-end
+//
+// If the passed char array is smaller than that required for the tagged messages string,
+// * part of the tagged messages string which fits within dest buffer is copied
+// * the returned value, indicates the size of the actual tagged message
+// NOTE:
+// * ideally the passed char array should be able to fit the tagged messages string + 0|null char.
+// * if the return value from this function is larger than or equal to destLength,
+//   then you will have to increase the size of the dest buffer, and call this
+//   function a second time, to ensure that one gets the full tagged messages string.
 inline int32_t chaton_tmpl_apply_capi(
         const char *tmpl,
         const struct llama_chat_message *msgs,
