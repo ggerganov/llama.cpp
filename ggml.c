@@ -20819,6 +20819,14 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             // TODO: return an error instead of crashing with GGML_ASSERT
             gguf_tensor_info_sanitize(info);
 
+            // make sure there is no duplicated tensor names
+            for (uint64_t j = 0; j < i; ++j) {
+                if (strcmp(info->name.data, ctx->infos[j].name.data) == 0) {
+                    fprintf(stderr, "%s: duplicated tensor name %s\n", __func__, info->name.data);
+                    ok = false;
+                }
+            }
+
             if (!ok) {
                 fprintf(stderr, "%s: failed to read tensor info\n", __func__);
                 fclose(file);
@@ -21355,6 +21363,10 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
 void gguf_add_tensor(
              struct gguf_context * ctx,
         const struct ggml_tensor * tensor) {
+    if (gguf_find_tensor(ctx, tensor->name) != -1) {
+        GGML_ASSERT(false && "duplicated tensor name");
+    }
+
     const int idx = ctx->header.n_tensors;
     ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
 
