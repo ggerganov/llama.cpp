@@ -165,8 +165,10 @@
 			"end": ""
 		},
 		"assistant": {
+			"begin": "",
 			"prefix": "### Response:\n",
-			"suffix": "\n<|EOT|>\n"
+			"suffix": "\n<|EOT|>\n",
+			"end": ""
 		},
 		"reverse-prompt": "<|EOT|>",
 		"systemuser-system-has-suffix": true,
