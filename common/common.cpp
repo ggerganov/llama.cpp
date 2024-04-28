@@ -70,6 +70,7 @@
 #define LLAMA_CURL_MAX_HEADER_LENGTH 256
 #define LLAMA_PROGRESS_UPDATE_INTERVAL 1
 #define LLAMA_PROGRESS_PERCENTAGE_WIDTH 10
+#define LLAMA_DEFAULT_CONSOLE_WIDTH 80
 #endif // LLAMA_USE_CURL
 
 using json = nlohmann::ordered_json;
@@ -1907,7 +1908,7 @@ static int get_console_width() {
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
     return ws.ws_col;
 #else
-    return 80; // Default value
+    return LLAMA_DEFAULT_CONSOLE_WIDTH; // Default value
 #endif
 }
 
