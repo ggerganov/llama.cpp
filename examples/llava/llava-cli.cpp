@@ -116,7 +116,7 @@ static void show_additional_info(int /*argc*/, char ** argv) {
     fprintf(stderr, "  note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
-static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_params * params, std::string * image) {
+static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_params * params, const std::string & fname) {
 
     // load and preprocess the image
     llava_image_embed * embed = NULL;
