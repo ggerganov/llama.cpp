@@ -4330,19 +4330,29 @@ static void llm_load_vocab(
             vocab.special_mask_id = -1;
         }
 
-        if (tokenizer_pre.empty()) {
-            LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-        } else if (tokenizer_pre == "default") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-        } else if (tokenizer_pre == "llama3") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
-        } else if (tokenizer_pre == "deepseek-llm") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
-        } else if (tokenizer_pre == "deepseek-coder") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+        // for now, only BPE models have pre-tokenizers
+        if (vocab.type == LLAMA_VOCAB_TYPE_BPE) {
+            if (tokenizer_pre.empty()) {
+                LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            } else if (
+                    tokenizer_pre == "default") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            } else if (
+                    tokenizer_pre == "llama3" ||
+                    tokenizer_pre == "llama-v3") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
+            } else if (
+                    tokenizer_pre == "deepseek-llm") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
+            } else if (
+                    tokenizer_pre == "deepseek-coder") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+            } else {
+                throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
+            }
         } else {
-            throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
         }
     }
 
