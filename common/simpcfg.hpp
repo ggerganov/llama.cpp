@@ -34,6 +34,28 @@ std::string str_trim(std::string sin, std::string trimChars=" \t\n") {
     return sin;
 }
 
+// Remove atmost 1 char at the begin and 1 char at the end of the passed string,
+// provided the char belongs to one of the chars in trimChars.
+// NOTE: Not sure this handles non english utf8 multibyte chars properly,
+// need to cross check.
+std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
+    if (sin.empty()) return sin;
+    for(auto c: trimChars) {
+        if (c == sin.front()) {
+            sin = sin.substr(1, std::string::npos);
+            break;
+        }
+    }
+    if (sin.empty()) return sin;
+    for(auto c: trimChars) {
+        if (c == sin.back()) {
+            sin = sin.substr(0, sin.length()-1);
+            break;
+        }
+    }
+    return sin;
+}
+
 
 class SimpCfg {
 private:
@@ -109,6 +131,7 @@ public:
             bool bGroup = !isspace(curL[0]);
             curL = str_trim(curL);
             if (bGroup) {
+                curL = str_trim_single(curL, "\"");
                 group = curL;
                 LDBUG_LN("DBUG:%s:group:%s", __func__, group.c_str());
                 continue;
@@ -125,6 +148,7 @@ public:
             }
             std::string key = curL.substr(0, dPos);
             key = str_trim(key);
+            key = str_trim_single(key, "\"");
             std::string value = curL.substr(dPos+1);
             value = str_trim(value);
             value = str_trim(value, ",");
@@ -133,6 +157,7 @@ public:
                 set_bool(group, key, value == "true" ? true : false);
             } else {
                 vtype = "string";
+                value = str_trim_single(value, "\"");
                 set_string(group, key, value);
             }
             //LDBUG_LN("DBUG:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
