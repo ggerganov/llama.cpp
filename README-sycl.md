@@ -185,7 +185,7 @@ Upon a successful installation, SYCL is enabled for the available intel devices,
 ```sh
 git clone https://github.com/oneapi-src/oneMKL
 cd oneMKL
-cmake -B buildWithCublas . -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DENABLE_MKLGPU_BACKEND=OFF -DENABLE_MKLCPU_BACKEND=OFF -DENABLE_CUBLAS_BACKEND=ON -DTARGET_DOMAINS=blas
+cmake -B buildWithCublas -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DENABLE_MKLGPU_BACKEND=OFF -DENABLE_MKLCPU_BACKEND=OFF -DENABLE_CUBLAS_BACKEND=ON -DTARGET_DOMAINS=blas
 cmake --build buildWithCublas
 ```
 
