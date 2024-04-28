@@ -620,25 +620,22 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                             continue;
                         }
 
-                        if (regex_expr[i] == '\\' && i + 1 < regex_expr.size()) {
-                            if (regex_expr[i + 1] == 'p') {
-                                if (i + 3 < regex_expr.size() && regex_expr[i + 2] == '{') {
-                                    if (regex_expr[i + 4] == '}') {
-                                        const std::string pat = regex_expr.substr(i, 5);
-                                        if (k_ucat_enum.find(pat) != k_ucat_enum.end()) {
-                                            if (!inside) {
-                                                regex_expr_collapsed += '[';
-                                            }
-                                            regex_expr_collapsed += k_ucat_cpt.at(k_ucat_enum.at(pat));
-                                            regex_expr_collapsed += k_ucat_map.at(k_ucat_enum.at(pat));
-                                            if (!inside) {
-                                                regex_expr_collapsed += ']';
-                                            }
-                                            i += 4;
-                                            continue;
-                                        }
-                                    }
+                        if (regex_expr[i + 0] == '\\' && i + 4 < regex_expr.size() &&
+                            regex_expr[i + 1] == 'p' &&
+                            regex_expr[i + 2] == '{' &&
+                            regex_expr[i + 4] == '}') {
+                            const std::string pat = regex_expr.substr(i, 5);
+                            if (k_ucat_enum.find(pat) != k_ucat_enum.end()) {
+                                if (!inside) {
+                                    regex_expr_collapsed += '[';
                                 }
+                                regex_expr_collapsed += k_ucat_cpt.at(k_ucat_enum.at(pat));
+                                regex_expr_collapsed += k_ucat_map.at(k_ucat_enum.at(pat));
+                                if (!inside) {
+                                    regex_expr_collapsed += ']';
+                                }
+                                i += 4;
+                                continue;
                             }
                         }
 
