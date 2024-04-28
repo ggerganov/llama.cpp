@@ -363,7 +363,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
 }
 
 // use std::wregex to split the text
-static std::vector<size_t> unicode_regex_split_stl(const std::wstring & wtext, const std::vector<size_t> & offsets, const std::wstring & regex_expr) {
+static std::vector<size_t> unicode_regex_split_stl(const std::wstring & wtext, const std::wstring & regex_expr, const std::vector<size_t> & offsets) {
     std::wregex expr(regex_expr);
     std::vector<size_t> bpe_offsets; // store the offset of each word
     bpe_offsets.reserve(offsets.size()); // Reserve memory for the approximate size
@@ -393,7 +393,7 @@ static std::vector<size_t> unicode_regex_split_stl(const std::wstring & wtext, c
 }
 
 // use std::regex to split the text
-static std::vector<size_t> unicode_regex_split_stl(const std::string & text, const std::vector<size_t> & offsets, const std::string & regex_expr) {
+static std::vector<size_t> unicode_regex_split_stl(const std::string & text, const std::string & regex_expr, const std::vector<size_t> & offsets) {
     std::regex expr(regex_expr);
     std::vector<size_t> bpe_offsets; // store the offset of each word
     bpe_offsets.reserve(offsets.size()); // Reserve memory for the approximate size
@@ -422,10 +422,10 @@ static std::vector<size_t> unicode_regex_split_stl(const std::string & text, con
     return bpe_offsets;
 }
 
-static std::vector<size_t> unicode_regex_split_custom(const std::string & regex, const std::string & text, const std::vector<size_t> & offsets) {
+static std::vector<size_t> unicode_regex_split_custom(const std::string & text, const std::string & regex_expr, const std::vector<size_t> & offsets) {
     std::vector<size_t> bpe_offsets;
 
-    if (regex == "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)") {
+    if (regex_expr == "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)") {
         bpe_offsets = unicode_regex_split_custom_gpt2(text, offsets);
     }
 
@@ -548,7 +548,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
 
     const auto cpts = unicode_cpts_from_utf8(text);
 
-    // generated a "collapsed" representation of the text, where all codepoints are replaced by a single byte
+    // generate a "collapsed" representation of the text, where all codepoints are replaced by a single byte
     // ref: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2081479935
     std::string text_collapsed;
     if (need_collapse) {
@@ -576,7 +576,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
 
     for (auto & regex_expr : regex_exprs) {
         // first, see if we have an efficient custom regex implementation
-        auto tmp = unicode_regex_split_custom(regex_expr, text, bpe_offsets);
+        auto tmp = unicode_regex_split_custom(text, regex_expr, bpe_offsets);
 
         if (!tmp.empty()) {
             bpe_offsets = std::move(tmp);
@@ -644,7 +644,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
 
                     //printf("text_collapsed: %s\n", text_collapsed.c_str());
                     //printf("regex_expr_collapsed: %s\n", regex_expr_collapsed.c_str());
-                    bpe_offsets = unicode_regex_split_stl(text_collapsed, bpe_offsets, regex_expr_collapsed);
+                    bpe_offsets = unicode_regex_split_stl(text_collapsed, regex_expr_collapsed, bpe_offsets);
                 } else {
                     // no unicode category used, we can use std::wregex directly
                     const std::wstring wtext       = unicode_wstring_from_utf8(text);
@@ -652,7 +652,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
 
                     //printf("text: %s\n", text.c_str());
                     //printf("regex_expr: %s\n", regex_expr.c_str());
-                    bpe_offsets = unicode_regex_split_stl(wtext, bpe_offsets, wregex_expr);
+                    bpe_offsets = unicode_regex_split_stl(wtext, wregex_expr, bpe_offsets);
                 }
             } catch (std::regex_error & e) {
                 fprintf(stderr, "Failed to process regex: '%s'\n", regex_expr.c_str());
