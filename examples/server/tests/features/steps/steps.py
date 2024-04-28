@@ -51,6 +51,8 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.n_ga = None
     context.n_ga_w = None
     context.n_predict = None
+    context.n_keep = 0
+    context.n_truncate = 0
     context.n_prompts = 0
     context.n_server_predict = None
     context.slot_save_path = None
@@ -71,6 +73,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.response_format = None
     context.temperature = None
 
+    context.stop_string = []
     context.tasks_result = []
     context.concurrent_tasks = []
     context.prompts = []
@@ -241,19 +244,35 @@ async def step_all_slots_status(context, expected_slot_status_string: Literal['i
 @step('a completion request with {api_error} api error')
 @async_run_until_complete
 async def step_request_completion(context, api_error: Literal['raised'] | str):
+   await make_completion_request(context, api_error)
+
+
+@step('an ongoing completion request')
+@async_run_until_complete
+async def step_request_ongoing_completion(context):
+   await make_completion_request(context, '', True)
+
+
+async def make_completion_request(context, api_error:  Literal['raised'] | str, ongoing=False):
     expect_api_error = api_error == 'raised'
     seeds = await completions_seed(context, num_seeds=1)
-    completion = await request_completion(context.prompts.pop(),
+    prompt = context.prompts[-1] if ongoing else context.prompts.pop()
+    completion = await request_completion(prompt,
                                           seeds[0] if seeds is not None else seeds,
                                           context.base_url,
                                           debug=context.debug,
                                           n_predict=context.n_predict,
+                                          n_keep=context.n_keep,
+                                          n_truncate=context.n_truncate,
                                           cache_prompt=context.cache_prompt,
+                                          stop_string=context.stop_string,
                                           id_slot=context.id_slot,
                                           expect_api_error=expect_api_error,
                                           user_api_key=context.user_api_key,
                                           temperature=context.temperature)
     context.tasks_result.append(completion)
+    if ongoing and isinstance(completion, dict) and not expect_api_error:
+        context.prompts[-1] += completion['content']
     if context.debug:
         print(f"Completion response: {completion}")
     if expect_api_error:
@@ -336,6 +355,16 @@ def step_max_tokens(context, max_tokens):
     context.n_predict = max_tokens
 
 
+@step('{n_keep:d} tokens to keep')
+def step_keep_tokens(context, n_keep):
+    context.n_keep = n_keep
+
+
+@step('{n_truncate:d} tokens to truncate')
+def step_truncate_tokens(context, n_truncate):
+    context.n_truncate = n_truncate
+
+
 @step('a response format {response_format}')
 def step_response_format(context, response_format):
     context.response_format = json.loads(response_format)
@@ -397,6 +426,11 @@ def step_seed(context, seed):
 @step('BOS token is {bos:d}')
 def step_bos_token(context, bos):
     context.bos = bos
+
+
+@step('a list of stop strings {stop_list}')
+def step_stop_string(context, stop_list):
+    context.stop_string = json.loads(stop_list)
 
 
 @step('a prefix prompt')
@@ -508,6 +542,11 @@ def step_many_prompts(context, num_prompts, prompt, seed):
         context.seed.append(seed)
         context.prompts.append(prompt)
     context.n_prompts = len(context.prompts)
+
+
+@step('an ongoing prompt')
+def step_a_ongoing_prompt(context):
+    context.prompts[-1] += context_text(context)
 
 
 @step('concurrent completion requests')
@@ -861,7 +900,10 @@ async def request_completion(prompt,
                              prompt_prefix=None,
                              prompt_suffix=None,
                              n_predict=None,
+                             n_keep=0,
+                             n_truncate=0,
                              cache_prompt=False,
+                             stop_string=None,
                              id_slot=None,
                              expect_api_error=None,
                              user_api_key=None,
@@ -884,7 +926,10 @@ async def request_completion(prompt,
                                     "prompt": prompt,
                                     "input_suffix": prompt_suffix,
                                     "n_predict": n_predict if n_predict is not None else -1,
+                                    "n_keep": n_keep,
+                                    "n_truncate": n_truncate,
                                     "cache_prompt": cache_prompt,
+                                    "stop": stop_string if stop_string is not None else [],
                                     "id_slot": id_slot,
                                     "seed": seed if seed is not None else 42,
                                     "temperature": temperature if temperature is not None else 0.8,
