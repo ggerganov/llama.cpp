@@ -362,6 +362,146 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
     return bpe_offsets;
 }
 
+// LLAMA3 system regex: "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"
+static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string & text, const std::vector<size_t> & offsets) {
+    std::vector<size_t> bpe_offsets; // store the offset of each word
+    bpe_offsets.reserve(offsets.size()); // Reserve memory for the approximate size
+
+    const auto cpts = unicode_cpts_from_utf8(text);
+
+    size_t start = 0;
+    for (auto offset : offsets) {
+
+        const size_t offset_ini = start;
+        const size_t offset_end = start + offset;
+        assert(offset_end <= cpts.size());
+        start = offset_end;
+
+        auto _get_cpt = [&] (const size_t pos) -> uint32_t {
+            return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
+        };
+
+        auto _get_cpt_type = [&] (const size_t pos) -> int {
+            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_type(cpts[pos]) : CODEPOINT_TYPE_UNIDENTIFIED;
+        };
+
+        auto _tolower = [] (const uint32_t cpt) -> uint32_t {
+            return cpt + ('A' <= cpt && cpt <= 'Z' ? ('a'-'A') : 0);
+        };
+
+        size_t _prev_end = offset_ini;
+        auto _add_token = [&] (const size_t end) -> size_t {
+            assert(_prev_end <= end && end <= offset_end);
+            int len = end - _prev_end;
+            if(len > 0)
+                bpe_offsets.push_back(len);
+            _prev_end = end;
+            //if(len) {
+            //    std::string s = "";
+            //    for(int p = end-len; p < end; p++)
+            //        s += unicode_cpt_to_utf8(cpts[p]);
+            //    printf(">>> '%s'\n", s.c_str());
+            //}
+            return len;
+        };
+
+        for(size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
+            const uint32_t cpt = _get_cpt(pos);
+            const int cpt_type = _get_cpt_type(pos);
+
+            // regex: (?i:'s|'t|'re|'ve|'m|'ll|'d) // case insensitive
+            if (cpt == '\'' && pos+1 < offset_end) {
+                uint32_t cpt_next = _tolower(_get_cpt(pos+1));
+                if (cpt_next == 's' || cpt_next == 't' || cpt_next == 'm' || cpt_next == 'd') {
+                    pos += _add_token(pos+2);
+                    continue;
+                } else if (pos+2 < offset_end) {
+                    uint32_t cpt_next_next = _tolower(_get_cpt(pos+2));
+                    if ((cpt_next == 'r' && cpt_next_next == 'e') ||
+                        (cpt_next == 'v' && cpt_next_next == 'e') ||
+                        (cpt_next == 'l' && cpt_next_next == 'l')) {
+                        pos += _add_token(pos+3);
+                        continue;
+                    }
+                }
+            }
+
+            // regex: [^\r\n\p{L}\p{N}]?\p{L}+  //####FIXME: the first \p{L} is correct?
+            if (cpt != '\r' && cpt != '\n' && /*cpt_type != CODEPOINT_TYPE_LETTER &&*/ cpt_type != CODEPOINT_TYPE_DIGIT) {
+                if(cpt_type == CODEPOINT_TYPE_LETTER || _get_cpt_type(pos+1) == CODEPOINT_TYPE_LETTER) {  // one or more letters
+                    pos++;
+                    while(_get_cpt_type(pos) == CODEPOINT_TYPE_LETTER)
+                        pos++;
+                    _add_token(pos);
+                    continue;
+                }
+            }
+
+            // regex: \p{N}{1,3}
+            if (cpt_type == CODEPOINT_TYPE_DIGIT) {
+                int ini = pos;
+                while(_get_cpt_type(pos) == CODEPOINT_TYPE_DIGIT) {
+                    if (++pos - ini >= 3 ) {
+                        _add_token(pos);
+                        ini = pos;
+                    }
+                }
+                _add_token(pos);
+                continue;
+            }
+
+            // regex: <space>?[^\s\p{L}\p{N}]+[\r\n]*
+            uint32_t cpt2 = (cpt == ' ' ? _get_cpt(pos+1) : cpt);
+            int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
+            if (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+                pos += (cpt == ' ');
+                while(cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED)
+                    cpt2_type = _get_cpt_type(++pos);
+                cpt2 = _get_cpt(pos);
+                while(cpt2 == '\r' || cpt2 == '\n')
+                    cpt2 = _get_cpt(++pos);
+                _add_token(pos);
+                continue;
+            }
+
+            int num_whitespaces = 0;
+            int last_pos_r_or_n = -1;
+            while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_WHITESPACE) {
+                cpt2 = _get_cpt(pos+num_whitespaces);
+                if (cpt2 == '\r' || cpt2 == '\n')
+                    last_pos_r_or_n = pos+num_whitespaces;
+                num_whitespaces++;
+            }
+
+            // regex: \s*[\r\n]+
+            if (last_pos_r_or_n >= 0) {
+                pos = last_pos_r_or_n + 1;
+                _add_token(pos);
+                continue;
+            }
+
+            // regex: \s+(?!\S)
+            if(num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != 0) {
+                pos += num_whitespaces - 1;
+                _add_token(pos);
+                continue;
+            }
+
+            // regex: \s+
+            if(num_whitespaces > 0) {
+                pos += num_whitespaces;
+                _add_token(pos);
+                continue;
+            }
+
+            // no matches
+            _add_token(++pos);
+        }
+    }
+
+    return bpe_offsets;
+}
+
 // use std::wregex to split the text
 static std::vector<size_t> unicode_regex_split_stl(const std::wstring & wtext, const std::vector<size_t> & offsets, const std::wstring & regex_expr) {
     std::wregex expr(regex_expr);
@@ -427,6 +567,8 @@ static std::vector<size_t> unicode_regex_split_custom(const std::string & regex,
 
     if (regex == "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)") {
         bpe_offsets = unicode_regex_split_custom_gpt2(text, offsets);
+    } else if (regex == "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+") {
+        bpe_offsets = unicode_regex_split_custom_llama3(text, offsets);
     }
 
     return bpe_offsets;
