@@ -185,9 +185,8 @@ Upon a successful installation, SYCL is enabled for the available intel devices,
 ```sh
 git clone https://github.com/oneapi-src/oneMKL
 cd oneMKL
-mkdir -p buildWithCublas && cd buildWithCublas
-cmake ../ -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DENABLE_MKLGPU_BACKEND=OFF -DENABLE_MKLCPU_BACKEND=OFF -DENABLE_CUBLAS_BACKEND=ON -DTARGET_DOMAINS=blas
-make
+cmake -B buildWithCublas . -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DENABLE_MKLGPU_BACKEND=OFF -DENABLE_MKLCPU_BACKEND=OFF -DENABLE_CUBLAS_BACKEND=ON -DTARGET_DOMAINS=blas
+cmake --build buildWithCublas
 ```
 
 
@@ -227,16 +226,15 @@ Similarly, user targeting Nvidia GPUs should expect at least one SYCL-CUDA devic
 source /opt/intel/oneapi/setvars.sh
 
 # Build LLAMA with MKL BLAS acceleration for intel GPU
-mkdir -p build && cd build
 
 # Option 1: Use FP32 (recommended for better performance in most cases)
-cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+cmake . -B build -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 
 # Option 2: Use FP16
-cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
+cmake . -B build -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
-#build all binary
-cmake --build . --config Release -j -v
+# build all binary
+cmake --build build -j -v
 ```
 
 #### Nvidia GPU
@@ -248,16 +246,15 @@ export CPLUS_INCLUDE_DIR=/path/to/oneMKL/buildWithCublas/include:$CPLUS_INCLUDE_
 export CPLUS_INCLUDE_DIR=/path/to/oneMKL/include:$CPLUS_INCLUDE_DIR
 
 # Build LLAMA with Nvidia BLAS acceleration through SYCL
-mkdir -p build && cd build
 
 # Option 1: Use FP32 (recommended for better performance in most cases)
-cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+cmake . -B build -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 
 # Option 2: Use FP16
-cmake .. -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
+cmake . -B build -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
-#build all binary
-cmake --build . --config Release -j -v
+# build all binary
+cmake --build build -j -v
 
 ```
 
