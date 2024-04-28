@@ -13545,7 +13545,7 @@ void llama_sample_repetition_penalties(
     }
 }
 
-void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, struct llama_grammar * grammar) {
+void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
     GGML_ASSERT(ctx);
     const int64_t t_start_sample_us = ggml_time_us();
 
@@ -13557,7 +13557,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         }
     }
 
-    // Store decoded codepoints when they are not cached.
+    // Store decoded codepoints when they are not cached (happens when there's a partial utf8 string prefix).
     std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
     if (grammar->partial_utf8.n_remain > 0) {
         candidates_decoded.reserve(candidates->size);
