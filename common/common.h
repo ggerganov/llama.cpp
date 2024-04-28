@@ -161,6 +161,7 @@ struct gpt_params {
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
     bool no_kv_offload     = false; // disable KV offloading
     bool warmup            = true;  // warmup run
+    bool check_tensors     = false; // validate tensor data
 
     std::string cache_type_k = "f16"; // KV cache data type for the K
     std::string cache_type_v = "f16"; // KV cache data type for the V
@@ -169,6 +170,8 @@ struct gpt_params {
     std::string mmproj = ""; // path to multimodal projector
     std::string image  = ""; // path to an image file
 };
+
+bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
