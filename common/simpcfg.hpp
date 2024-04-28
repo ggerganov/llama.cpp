@@ -16,9 +16,12 @@
 
 #define TEST_LOGIC
 #ifdef TEST_LOGIC
-#define LOG_TEELN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
+#define LDBUG_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
+#define LERRR_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
 #else
 #include "log.h"
+#define LDBUG_LN LOGLN
+#define LERRR_LN LOG_TEELN
 #endif
 
 
@@ -37,30 +40,36 @@ public:
     void set_string(const std::string &group, const std::string &key, const std::string &value) {
         auto gm = mapStrings[group];
         gm[key] = value;
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
     }
 
     void set_bool(const std::string &group, const std::string &key, bool value) {
         auto gm = mapBools[group];
         gm[key] = value;
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
     }
 
     std::string get_string(const std::string &group, const std::string &key) {
         auto gm = mapStrings[group];
-        return gm[key];
+        auto value = gm[key];
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
+        return value;
     }
 
     bool get_bool(const std::string &group, const std::string &key) {
         auto gm = mapBools[group];
-        return gm[key];
+        auto value = gm[key];
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
+        return value;
     }
 
     void load(const std::string &fname) {
         std::ifstream f {fname};
         if (!f) {
-            LOG_TEELN("ERRR:%s:%s:failed to load...", __func__, fname.c_str());
+            LERRR_LN("ERRR:%s:%s:failed to load...", __func__, fname.c_str());
             throw std::runtime_error { "ERRR:SimpCfg:File not found" };
         } else {
-            LOG_TEELN("DBUG:%s:%s", __func__, fname.c_str());
+            LDBUG_LN("DBUG:%s:%s", __func__, fname.c_str());
         }
         std::string group;
         int iLine = 0;
@@ -78,17 +87,17 @@ public:
             curL = str_trim(curL);
             if (bGroup) {
                 group = curL;
-                LOG_TEELN("DBUG:%s:group:%s", __func__, group.c_str());
+                LDBUG_LN("DBUG:%s:group:%s", __func__, group.c_str());
                 continue;
             }
             auto dPos = curL.find(':');
             if (dPos == std::string::npos) {
-                LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
+                LERRR_LN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
                 throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
             }
             auto dEnd = curL.length() - dPos;
             if ((dPos == 0) || (dEnd < 2)) {
-                LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
+                LERRR_LN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
                 throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
             }
             std::string key = curL.substr(0, dPos);
@@ -103,7 +112,7 @@ public:
                 vtype = "string";
                 set_string(group, key, value);
             }
-            LOG_TEELN("DBUG:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
+            //LDBUG_LN("DBUG:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
         }
     }
 
@@ -115,7 +124,8 @@ int main(int argc, char **argv) {
     std::string fname {argv[1]};
     SimpCfg sc;
     sc.load(fname);
-    sc.get_bool("testme", "key101");
+    sc.get_bool("testme", "key101b");
+    sc.get_string("testme", "key101s");
     return 0;
 }
 #endif
