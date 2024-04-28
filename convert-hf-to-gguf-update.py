@@ -6,6 +6,7 @@
 #   python3 convert-hf-to-gguf-update.py <huggingface_token>
 #
 # - Copy-paste the generated get_vocab_base_pre() function into convert-hf-to-gguf.py
+# - Update llama.cpp with the new pre-tokenizer if necessary
 #
 # TODO: generate tokenizer tests for llama.cpp
 #
@@ -33,13 +34,14 @@ else:
     print("Usage: python convert-hf-to-gguf-update.py <huggingface_token>")
     sys.exit(1)
 
-# TODO: add models here
+# TODO: add models here, base models preferred
 models = [
-        { "name": "llama-v2",       "tokenizer_type": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/meta-llama/Llama-2-7b-hf",                },
-        { "name": "llama-v3",       "tokenizer_type": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/meta-llama/Meta-Llama-3-8B",              },
-        { "name": "deepseek-llm",   "tokenizer_type": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-llm-7b-chat",        },
-        { "name": "deepseek-coder", "tokenizer_type": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-base",    },
-        { "name": "bert-bge",       "tokenizer_type": TOKENIZER_TYPE.WPM, "repo": "https://huggingface.co/BAAI/bge-small-en-v1.5",                  },
+        { "name": "llama-v2",       "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/meta-llama/Llama-2-7b-hf",                },
+        { "name": "llama-v3",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/meta-llama/Meta-Llama-3-8B",              },
+        { "name": "deepseek-llm",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-llm-7b-base",        },
+        { "name": "deepseek-coder", "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-base",    },
+        { "name": "falcon",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/tiiuae/falcon-7b",                        },
+        { "name": "bert-bge",       "tokt": TOKENIZER_TYPE.WPM, "repo": "https://huggingface.co/BAAI/bge-small-en-v1.5",                  },
         ]
 
 # make directory "models/tokenizers" if it doesn't exist
@@ -59,7 +61,7 @@ def download_file_with_auth(url, token, save_path):
 for model in models:
     name = model["name"]
     repo = model["repo"]
-    tokenizer_type = model["tokenizer_type"]
+    tokt = model["tokt"]
 
     if not os.path.exists(f"models/tokenizers/{name}"):
         os.makedirs(f"models/tokenizers/{name}")
@@ -73,7 +75,7 @@ for model in models:
     save_path = f"models/tokenizers/{name}/tokenizer.json"
     download_file_with_auth(url, token, save_path)
 
-    if tokenizer_type == TOKENIZER_TYPE.SPM:
+    if tokt == TOKENIZER_TYPE.SPM:
         url = f"{repo}/resolve/main/tokenizer.model"
         save_path = f"models/tokenizers/{name}/tokenizer.model"
         download_file_with_auth(url, token, save_path)
@@ -88,9 +90,9 @@ for model in models:
 src_ifs = ""
 for model in models:
     name = model["name"]
-    tokenizer_type = model["tokenizer_type"]
+    tokt = model["tokt"]
 
-    if tokenizer_type == TOKENIZER_TYPE.SPM:
+    if tokt == TOKENIZER_TYPE.SPM:
         continue
 
     # create the tokenizer
@@ -101,7 +103,7 @@ for model in models:
     chkhsh = sha256(str(chktok).encode()).hexdigest()
 
     print(f"model: {name}")
-    print(f"tokenizer_type: {tokenizer_type}")
+    print(f"tokt: {tokt}")
     print(f"repo: {model['repo']}")
     print(f"chktok: {chktok}")
     print(f"chkhsh: {chkhsh}")

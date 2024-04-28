@@ -401,11 +401,14 @@ class Model(ABC):
             # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
             res = "llama-v3"
         if chkhsh == "58c3d0e812ae7fa6a20931006d2398274732c105a9a964c148c43cf898c5fb7a":
-            # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-chat
+            # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-base
             res = "deepseek-llm"
         if chkhsh == "0438d2a948d7fb26c7a662705ac68374f3138ee29e44f133b1f059203500fb4d":
             # ref: https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-base
             res = "deepseek-coder"
+        if chkhsh == "822bdd323c3ef8667a9526b16b5bfe97974059838d992a170f965063f99c9b9e":
+            # ref: https://huggingface.co/tiiuae/falcon-7b
+            res = "falcon"
         if chkhsh == "406f3f61e1c67d7b0456c5df2fce5cbb30c77dd3671a436b07a6c510303f721e":
             # ref: https://huggingface.co/BAAI/bge-small-en-v1.5
             res = "bert-bge"

@@ -4348,6 +4348,9 @@ static void llm_load_vocab(
             } else if (
                     tokenizer_pre == "deepseek-coder") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+            } else if (
+                    tokenizer_pre == "falcon") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -12110,6 +12113,14 @@ struct llm_tokenizer_bpe {
                             "\\s?\\p{P}+",
                             "[一-龥ࠀ-一가-퟿]+",
                             "\\p{N}+",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_FALCON:
+                        word_collection = unicode_regex_split(text, {
+                            "[\\p{P}\\$\\+<=>\\^~\\|]+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                            "\\p{N}+",
+                            "[0-9][0-9][0-9]",
                         });
                         break;
                     default:
