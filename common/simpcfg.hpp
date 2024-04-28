@@ -15,8 +15,8 @@
 #include <fstream>
 
 #define SC_DEBUG
-#define TEST_LOGIC
-#ifdef TEST_LOGIC
+#define SC_TEST_PRG
+#ifdef SC_TEST_PRG
 #define LDBUG_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
 #define LERRR_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
 #define LWARN_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
@@ -167,7 +167,7 @@ public:
 };
 
 
-#ifdef TEST_LOGIC
+#ifdef SC_TEST_PRG
 int main(int argc, char **argv) {
     std::string fname {argv[1]};
     SimpCfg sc;
