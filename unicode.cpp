@@ -385,10 +385,6 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_type(cpts[pos]) : CODEPOINT_TYPE_UNIDENTIFIED;
         };
 
-        auto _tolower = [] (const char32_t cpt) -> char32_t {
-            return cpt + ('A' <= cpt && cpt <= 'Z' ? ('a'-'A') : 0);
-        };
-
         size_t _prev_end = offset_ini;
         auto _add_token = [&] (const size_t end) -> size_t {
             assert(_prev_end <= end && end <= offset_end);
@@ -411,12 +407,12 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
             // regex: (?i:'s|'t|'re|'ve|'m|'ll|'d) // case insensitive
             if (cpt == '\'' && pos+1 < offset_end) {
-                char32_t cpt_next = _tolower(_get_cpt(pos+1));
+                char32_t cpt_next = unicode_tolower(_get_cpt(pos+1));
                 if (cpt_next == 's' || cpt_next == 't' || cpt_next == 'm' || cpt_next == 'd') {
                     pos += _add_token(pos+2);
                     continue;
                 } else if (pos+2 < offset_end) {
-                    char32_t cpt_next_next = _tolower(_get_cpt(pos+2));
+                    char32_t cpt_next_next = unicode_tolower(_get_cpt(pos+2));
                     if ((cpt_next == 'r' && cpt_next_next == 'e') ||
                         (cpt_next == 'v' && cpt_next_next == 'e') ||
                         (cpt_next == 'l' && cpt_next_next == 'l')) {
