@@ -2326,9 +2326,9 @@ struct llama_context {
     struct llama_control_vector cvec;
 
     // caching token pieces & their decoded codepoints.
-    std::vector<std::string>                                token_pieces;
-    std::vector<std::pair<std::vector<uint32_t>,
-                                  llama_partial_utf8>>      token_codepoints_without_partial_utf8_prefix;
+    std::vector<std::string>   token_pieces;
+    std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>>
+                               token_codepoints_without_partial_utf8_prefix;
 
 #ifdef GGML_USE_MPI
     ggml_mpi_context * ctx_mpi = NULL;
