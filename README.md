@@ -481,7 +481,7 @@ Building the program with BLAS support may lead to some performance improvements
 
     ```bash
     cmake . -B build -DLLAMA_CUDA=ON
-    cmake --build build .
+    cmake --build build
     ```
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
