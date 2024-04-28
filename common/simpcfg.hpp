@@ -18,10 +18,12 @@
 #ifdef TEST_LOGIC
 #define LDBUG_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
 #define LERRR_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
+#define LWARN_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
 #else
 #include "log.h"
 #define LDBUG_LN LOGLN
 #define LERRR_LN LOG_TEELN
+#define LWARN_LN LOG_TEELN
 #endif
 
 
@@ -49,15 +51,23 @@ public:
         LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
     }
 
-    std::string get_string(const std::string &group, const std::string &key) {
+    std::string get_string(const std::string &group, const std::string &key, const std::string &defaultValue) {
         auto gm = mapStrings[group];
+        if (gm.find(key) == gm.end()) {
+            LWARN_LN("DBUG:SC:%s:%s:%s:%s[default]", __func__, group.c_str(), key.c_str(), defaultValue.c_str());
+            return defaultValue;
+        }
         auto value = gm[key];
         LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
         return value;
     }
 
-    bool get_bool(const std::string &group, const std::string &key) {
+    bool get_bool(const std::string &group, const std::string &key, bool defaultValue) {
         auto gm = mapBools[group];
+        if (gm.find(key) == gm.end()) {
+            LWARN_LN("DBUG:SC:%s:%s:%s:%d[default]", __func__, group.c_str(), key.c_str(), defaultValue);
+            return defaultValue;
+        }
         auto value = gm[key];
         LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
         return value;
@@ -124,8 +134,12 @@ int main(int argc, char **argv) {
     std::string fname {argv[1]};
     SimpCfg sc;
     sc.load(fname);
-    sc.get_bool("testme", "key101b");
-    sc.get_string("testme", "key101s");
+    sc.get_bool("testme", "key101b", false);
+    sc.get_string("testme", "key101s", "Not found");
+    sc.set_bool("testme", "key201b", true);
+    sc.set_string("testme", "key201s", "hello world");
+    sc.get_bool("testme", "key201b", false);
+    sc.get_string("testme", "key201s", "Not found");
     return 0;
 }
 #endif
