@@ -14,6 +14,7 @@
 #include <vector>
 #include <fstream>
 
+#define SC_DEBUG
 #define TEST_LOGIC
 #ifdef TEST_LOGIC
 #define LDBUG_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
@@ -42,17 +43,24 @@ public:
     void set_string(const std::string &group, const std::string &key, const std::string &value) {
         auto gm = mapStrings[group];
         gm[key] = value;
+        mapStrings[group] = gm;
         LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
     }
 
     void set_bool(const std::string &group, const std::string &key, bool value) {
         auto gm = mapBools[group];
         gm[key] = value;
+        mapBools[group] = gm;
         LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
     }
 
     std::string get_string(const std::string &group, const std::string &key, const std::string &defaultValue) {
         auto gm = mapStrings[group];
+#ifdef SC_DEBUG
+        for(auto k: gm) {
+            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%s", __func__, k.first.c_str(), k.second.c_str());
+        }
+#endif
         if (gm.find(key) == gm.end()) {
             LWARN_LN("DBUG:SC:%s:%s:%s:%s[default]", __func__, group.c_str(), key.c_str(), defaultValue.c_str());
             return defaultValue;
@@ -64,6 +72,11 @@ public:
 
     bool get_bool(const std::string &group, const std::string &key, bool defaultValue) {
         auto gm = mapBools[group];
+#ifdef SC_DEBUG
+        for(auto k: gm) {
+            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%d", __func__, k.first.c_str(), k.second);
+        }
+#endif
         if (gm.find(key) == gm.end()) {
             LWARN_LN("DBUG:SC:%s:%s:%s:%d[default]", __func__, group.c_str(), key.c_str(), defaultValue);
             return defaultValue;
@@ -140,6 +153,8 @@ int main(int argc, char **argv) {
     sc.set_string("testme", "key201s", "hello world");
     sc.get_bool("testme", "key201b", false);
     sc.get_string("testme", "key201s", "Not found");
+    sc.get_string("mistral", "system-prefix", "Not found");
+    sc.get_string("\"mistral\"", "\"system-prefix\"", "Not found");
     return 0;
 }
 #endif
