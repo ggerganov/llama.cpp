@@ -3118,7 +3118,7 @@ struct llama_model_loader {
             const std::string name(w.tensor->name);
             auto found = tensor_names.find(name);
             if (found != tensor_names.end()) {
-                LLAMA_LOG_ERROR("%s: Found duplicated tensor name %s", __func__, w.tensor->name);
+                throw std::runtime_error(format("invalid model: tensor '%s' is duplicated", w.tensor->name));
             }
             tensor_names.insert(name);
         }
