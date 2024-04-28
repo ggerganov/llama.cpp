@@ -1,4 +1,4 @@
-#include "unicode-data.h"
+﻿#include "unicode-data.h"
 
 #include <cstdint>
 #include <map>
@@ -1648,8 +1648,4 @@ const std::map<char32_t, char32_t> unicode_map_lowercase = {
 {0x1E911, 0x1E933}, {0x1E912, 0x1E934}, {0x1E913, 0x1E935}, {0x1E914, 0x1E936}, {0x1E915, 0x1E937}, {0x1E916, 0x1E938},
 {0x1E917, 0x1E939}, {0x1E918, 0x1E93A}, {0x1E919, 0x1E93B}, {0x1E91A, 0x1E93C}, {0x1E91B, 0x1E93D}, {0x1E91C, 0x1E93E},
 {0x1E91D, 0x1E93F}, {0x1E91E, 0x1E940}, {0x1E91F, 0x1E941}, {0x1E920, 0x1E942}, {0x1E921, 0x1E943},
-};
-
-const std::set<std::string> unicode_regex_with_custom_preprocessor = {
-    "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)"
 };
