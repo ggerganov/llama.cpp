@@ -137,10 +137,10 @@ public:
     void load(const std::string &fname) {
         std::ifstream f {fname};
         if (!f) {
-            LERRR_LN("ERRR:%s:%s:failed to load...", __func__, fname.c_str());
+            LERRR_LN("ERRR:SC:%s:%s:failed to load...", __func__, fname.c_str());
             throw std::runtime_error { "ERRR:SimpCfg:File not found" };
         } else {
-            LDBUG_LN("DBUG:%s:%s", __func__, fname.c_str());
+            LDBUG_LN("DBUG:SC:%s:%s", __func__, fname.c_str());
         }
         std::string group;
         int iLine = 0;
@@ -159,17 +159,17 @@ public:
             if (bGroup) {
                 curL = str_trim_single(curL, "\"");
                 group = curL;
-                LDBUG_LN("DBUG:%s:group:%s", __func__, group.c_str());
+                LDBUG_LN("DBUG:SC:%s:group:%s", __func__, group.c_str());
                 continue;
             }
             auto dPos = curL.find(':');
             if (dPos == std::string::npos) {
-                LERRR_LN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
+                LERRR_LN("ERRR:SC:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
                 throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
             }
             auto dEnd = curL.length() - dPos;
             if ((dPos == 0) || (dEnd < 2)) {
-                LERRR_LN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
+                LERRR_LN("ERRR:SC:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
                 throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
             }
             std::string key = curL.substr(0, dPos);
@@ -189,10 +189,13 @@ public:
                 set_double(group, key, value);
             } else {
                 vtype = "string";
+                if (!value.empty() && (value.front() != '"')) {
+                    LWARN_LN("WARN:SC:%s:kv:is this string:%s", __func__, value.c_str());
+                }
                 value = str_trim_single(value, "\"");
                 set_string(group, key, value);
             }
-            //LDBUG_LN("DBUG:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
+            //LDBUG_LN("DBUG:SC:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
         }
     }
 

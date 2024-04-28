@@ -226,8 +226,14 @@
 "testme"
 	"int": 		1234
 	"sint": 	-9876543210
+	"another int":	0xff
 	"float": 	12.34
 	"double1": 	+12.0e-123
 	"double2": 	-12.0e-123678
 	"double3": 	-12.0e300
+	"isit double1":	-12.e300
+	"isit double2":	-12.
+	"yes  double2":	-12.0
+	"isit double3":	.0123
+	"yes  double3":	0.0123
 
