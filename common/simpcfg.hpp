@@ -94,7 +94,7 @@ public:
     void set_double(const std::string &group, const std::string &key, double value) {
         auto &gm = mapDoubles[group];
         gm[key] = value;
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%f", __func__, group.c_str(), key.c_str(), value);
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%f[%e]", __func__, group.c_str(), key.c_str(), value, value);
     }
 
     void set_double(const std::string &group, const std::string &key, std::string &value) {
