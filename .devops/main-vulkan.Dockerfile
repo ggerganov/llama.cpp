@@ -14,7 +14,7 @@ RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key 
 # Build it
 WORKDIR /app
 COPY . .
-RUN cmake . -B build -DLLAMA_VULKAN=1 && \
+RUN cmake -B build -DLLAMA_VULKAN=1 && \
     cmake --build build --target main
 
 # Clean up

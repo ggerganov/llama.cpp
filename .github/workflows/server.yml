@@ -94,7 +94,7 @@ jobs:
       - name: Build
         id: cmake_build
         run: |
-          cmake . -B build \
+          cmake -B build \
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
               -DLLAMA_CURL=ON \
@@ -141,7 +141,7 @@ jobs:
       - name: Build
         id: cmake_build
         run: |
-          cmake . -B build -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
+          cmake -B build -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
           cmake --build build -j ${env:NUMBER_OF_PROCESSORS} --target server
 
       - name: Python setup

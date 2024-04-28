@@ -80,7 +80,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - Using `CMake`:
 
   ```bash
-  cmake . -B build
+  cmake -B build
   cmake --build build -t server
   ```
 
@@ -102,7 +102,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - Using `CMake`:
 
   ```bash
-  cmake . -B build -DLLAMA_SERVER_SSL=ON
+  cmake -B build -DLLAMA_SERVER_SSL=ON
   cmake --build build -t server
   ```
 

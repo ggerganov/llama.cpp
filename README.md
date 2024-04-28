@@ -321,7 +321,7 @@ In order to build llama.cpp you have three different options.
 - Using `CMake`:
 
     ```bash
-    cmake . -B build # Note: add -DCMAKE_BUILD_TYPE=Debug here for debug builds
+    cmake -B build # Note: add -DCMAKE_BUILD_TYPE=Debug here for debug builds
     cmake --build build
     ```
 
@@ -436,7 +436,7 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake` on Linux:
 
       ```bash
-      cmake . -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
       cmake --build build
       ```
 
@@ -458,7 +458,7 @@ Building the program with BLAS support may lead to some performance improvements
     By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
       ```bash
       source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit docker image, only required for manual installation
-      cmake . -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
+      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
       cmake --build build
       ```
 
@@ -480,7 +480,7 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake`:
 
     ```bash
-    cmake . -B build -DLLAMA_CUDA=ON
+    cmake -B build -DLLAMA_CUDA=ON
     cmake --build build
     ```
 
@@ -556,7 +556,7 @@ Building the program with BLAS support may lead to some performance improvements
         ```sh
         git clone --recurse-submodules https://github.com/KhronosGroup/OpenCL-SDK.git
         cd OpenCL-SDK
-        cmake . -B build -DBUILD_DOCS=OFF \
+        cmake -B build -DBUILD_DOCS=OFF \
           -DBUILD_EXAMPLES=OFF \
           -DBUILD_TESTING=OFF \
           -DOPENCL_SDK_BUILD_SAMPLES=OFF \
@@ -585,7 +585,7 @@ Building the program with BLAS support may lead to some performance improvements
       set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
       git clone https://github.com/CNugteren/CLBlast.git
       cd CLBlast
-      cmake . -B build -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
+      cmake -B build -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
       cmake --build build --config Release
       cmake --install build --prefix C:/CLBlast
       ```
@@ -598,7 +598,7 @@ Building the program with BLAS support may lead to some performance improvements
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
       cd CLBlast
-      cmake . -B build -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
+      cmake -B build -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
       cmake --build build
       cmake --install build --prefix /some/path
       ```
@@ -614,7 +614,7 @@ Building the program with BLAS support may lead to some performance improvements
     ```
   - CMake (Unix):
     ```sh
-    cmake . -B build -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
+    cmake -B build -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
     cmake --build build
     ```
   - CMake (Windows):
@@ -622,7 +622,7 @@ Building the program with BLAS support may lead to some performance improvements
     set CL_BLAST_CMAKE_PKG="C:/CLBlast/lib/cmake/CLBlast"
     git clone https://github.com/ggerganov/llama.cpp
     cd llama.cpp
-    cmake . -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
+    cmake -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
     cmake --build build --config Release
     cmake --install build --prefix C:/LlamaCPP
     ```
@@ -680,7 +680,7 @@ Building the program with BLAS support may lead to some performance improvements
   Then, build llama.cpp using the cmake command below:
 
   ```bash
-  cmake . -B build -DLLAMA_VULKAN=1
+  cmake -B build -DLLAMA_VULKAN=1
   cmake --build build
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
   ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4

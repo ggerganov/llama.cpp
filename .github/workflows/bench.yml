@@ -96,7 +96,7 @@ jobs:
         id: cmake_build
         run: |
           set -eux
-          cmake . -B build \
+          cmake -B build \
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
               -DLLAMA_CURL=ON \
