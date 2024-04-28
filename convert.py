@@ -24,13 +24,15 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, IO, Iterable, Literal, Protocol, TypeVar, runtime_checkable
+import importlib
+gguf = importlib.import_module("gguf-py.gguf")
 
 import numpy as np
 from sentencepiece import SentencePieceProcessor
 
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
-import gguf
+# import gguf
 
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
@@ -46,15 +48,6 @@ DEFAULT_CONCURRENCY = 8
 
 ADDED_TOKENS_FILE = 'added_tokens.json'
 FAST_TOKENIZER_FILE = 'tokenizer.json'
-
-LLM_KV_SPLIT_NO = "split.no"
-LLM_KV_SPLIT_COUNT = "split.count"
-LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count"
-SHARD_NAME_FORMAT = "{:s}-{:05d}-of-{:05d}.gguf"
-
-SPLIT_STYLE_NONE = 0
-SPLIT_STYLE_BY_TENSORS = 1
-SPLIT_STYLE_BY_SIZE = 2
 
 #
 # data types
@@ -1066,8 +1059,8 @@ def check_vocab_size(params: Params, vocab: BaseVocab, pad_vocab: bool = False) 
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
-        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
+    def __init__(self, fname_out: Path, args: argparse.Namespace, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
+        self.gguf = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], args, endianess=endianess)
 
     def add_meta_arch(self, params: Params) -> None:
         name = "LLaMA"
@@ -1146,21 +1139,15 @@ class OutputFile:
     def add_meta_special_vocab(self, svocab: gguf.SpecialVocab) -> None:
         svocab.add_to_gguf(self.gguf)
 
-    def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
-        n_elements = int(np.prod(tensor.shape))
-        raw_dtype = getattr(tensor.data_type, 'ggml_type', None)
-        data_type = getattr(tensor.data_type, 'quantized_type', None) or tensor.data_type.dtype
-        data_nbytes = tensor.data_type.elements_to_bytes(n_elements)
-        self.gguf.add_tensor_info(name, tensor.shape, data_type, data_nbytes, raw_dtype=raw_dtype)
-
     def write_meta(self) -> None:
-        self.gguf.write_header_to_file()
-        self.gguf.write_kv_data_to_file()
+        self.gguf.write_to_file(meta_only=True)
 
-    def write_tensor_info(self) -> None:
-        self.gguf.write_ti_data_to_file()
+    def write_tensors(self, ftype: GGMLFileType, concurrency: int) -> None:
+        self.gguf.write_to_file(ftype=ftype, concurrency=concurrency, write_tensor_data=OutputFile.write_tensor_data)
 
-    def write_tensor_data(self, ftype: GGMLFileType, model: LazyModel, concurrency: int) -> None:
+    # really awkward with how this is managed with gguf_manager.py: maybe refactor at some point?
+    @staticmethod
+    def write_tensor_data(ftype: GGMLFileType, model: LazyModel, concurrency: int, writer: gguf.GGUFWriter) -> None:
         ndarrays_inner = bounded_parallel_map(OutputFile.do_item, model.items(), concurrency=concurrency)
         if ftype == GGMLFileType.MostlyQ8_0:
             ndarrays = bounded_parallel_map(
@@ -1178,7 +1165,7 @@ class OutputFile:
             print(
                 f"[{i + 1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}"
             )
-            self.gguf.write_tensor_data(ndarray)
+            writer.write_tensor_data(ndarray)
 
     def close(self) -> None:
         self.gguf.close()
@@ -1217,156 +1204,26 @@ class OutputFile:
     @staticmethod
     def write_all(
         fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: BaseVocab, svocab: gguf.SpecialVocab,
-        tensors_per_shard: int, tensors_max_size: int, dry_run: bool = False, concurrency: int = DEFAULT_CONCURRENCY,
-        endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE, pad_vocab: bool = False, small_first_shard: bool = True,
+        args: argparse.Namespace, concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE
     ) -> None:
-        check_vocab_size(params, vocab, pad_vocab=pad_vocab)
+        check_vocab_size(params, vocab, pad_vocab=args.pad_vocab)
+        of = OutputFile(fname_out, args, endianess=endianess)
 
-        total_tensors = len(model)
-        total_size = sum(get_tensor_size(lazy_tensor) for lazy_tensor in model.values())
+        # meta data
+        of.add_meta_arch(params)
+        if isinstance(vocab, Vocab):
+            of.add_meta_vocab(vocab)
+            of.add_meta_special_vocab(svocab)
+        else:  # NoVocab
+            of.gguf.add_tokenizer_model(vocab.tokenizer_model)
 
-        if tensors_per_shard:
-            split_style = SPLIT_STYLE_BY_TENSORS
-        elif tensors_max_size:
-            split_style = SPLIT_STYLE_BY_SIZE
-        else:
-            split_style = SPLIT_STYLE_NONE
+        # tensor info
+        for name, lazy_tensor in model.items():
+            of.gguf.add_tensor_info(name, lazy_tensor)
 
-        if tensors_per_shard and total_tensors < tensors_per_shard:
-            print("Model has fewer tensors than the split threshold, not splitting")
-            split_style = SPLIT_STYLE_NONE
+        of.write_tensors(ftype, concurrency)
 
-        if tensors_max_size and total_size < tensors_max_size:
-            print("Model has smaller size than the split threshold, not splitting")
-            split_style = SPLIT_STYLE_NONE
-
-        split_strategy = create_split_strategy(split_style, fname_out, model, tensors_per_shard, tensors_max_size, small_first_shard)
-        total_shards = len(split_strategy)
-
-        print("Writing the following files:")
-        for shard_path, shard_tensors in split_strategy:
-            size = format_n_bytes_to_str(sum(get_tensor_size(t[1]) for t in shard_tensors)) if shard_tensors else "negligible - metadata only"
-            print(f"  {shard_path}: n_tensors = {len(shard_tensors) if shard_tensors else 0}, total_size = {size}")
-
-        if dry_run:
-            print("Dry run, not writing files")
-            return
-
-        for i, (shard_path, shard_tensors) in enumerate(split_strategy):
-            of = OutputFile(shard_path, endianess=endianess)
-
-            if i == 0:
-                # meta data
-                of.add_meta_arch(params)
-                if isinstance(vocab, Vocab):
-                    of.add_meta_vocab(vocab)
-                    of.add_meta_special_vocab(svocab)
-                else:  # NoVocab
-                    of.gguf.add_tokenizer_model(vocab.tokenizer_model)
-
-            # have the option to write a first shard with only the metadata
-            if split_style != SPLIT_STYLE_NONE:
-
-                of.gguf.add_uint16(LLM_KV_SPLIT_NO, i)
-                of.gguf.add_uint16(LLM_KV_SPLIT_COUNT, total_shards)
-                of.gguf.add_int32(LLM_KV_SPLIT_TENSORS_COUNT, total_tensors)
-
-                if small_first_shard and i == 0:
-                    of.write_meta()
-                    of.close()
-                    continue
-
-                print(f"Writing shard {i + 1}/{total_shards} with {len(shard_tensors)} tensors")
-
-            # tensor info
-            for name, lazy_tensor in shard_tensors:
-                of.add_tensor_info(name, lazy_tensor)
-
-            of.write_meta()
-            of.write_tensor_info()
-            of.write_tensor_data(ftype, dict(shard_tensors), concurrency)
-
-            of.close()
-
-
-def split_str_to_n_bytes(split_str: str) -> int:
-    if split_str.endswith("K"):
-        n = int(split_str[:-1]) * 1024
-    elif split_str.endswith("M"):
-        n = int(split_str[:-1]) * 1024 * 1024
-    elif split_str.endswith("G"):
-        n = int(split_str[:-1]) * 1024 * 1024 * 1024
-    elif split_str.isnumeric():
-        n = int(split_str)
-    else:
-        raise ValueError(f"Invalid split size: {split_str}, must be a number, optionally followed by K, M, or G")
-
-    if n <= 0:
-        raise ValueError(f"Invalid split size: {split_str}, must be positive")
-
-    return n
-
-
-def format_n_bytes_to_str(num: int) -> str:
-    num = float(num)
-    for unit in ("", "K", "M", "G"):
-        if abs(num) < 1024.0:
-            return f"{num:3.1f}{unit}"
-        num /= 1024.0
-    return f"{num:.1f}T - over 1TB, --split recommended"
-
-
-def get_tensor_size(tensor: LazyTensor) -> int:
-    return tensor.data_type.elements_to_bytes(np.prod(tensor.shape))
-
-
-SplitStrategy: TypeAlias = 'list[tuple[Path, list[tuple[str, LazyTensor]]]]'
-
-
-def create_split_strategy(split_style: int, fname_out: Path, model: LazyModel, tensors_per_shard: int, tensors_max_size: int, small_first_shard: bool) -> SplitStrategy:
-    if split_style == SPLIT_STYLE_NONE:
-        return [(fname_out, list(model.items()))]
-
-    elif split_style == SPLIT_STYLE_BY_TENSORS:
-        total_shards = math.ceil(len(model) / tensors_per_shard) + small_first_shard
-        shard_files = [fname_out.with_name(SHARD_NAME_FORMAT.format(fname_out.stem, i + 1, total_shards)) for i in range(total_shards)]
-        splits = []
-
-        if small_first_shard:
-            splits.append((shard_files[0], None))
-
-        for i, shard in enumerate(shard_files[small_first_shard:]):
-            start = i * tensors_per_shard
-            stop = min((i + 1) * tensors_per_shard, len(model))
-            splits.append((shard, list(model.items())[start:stop]))
-
-        return splits
-
-    elif split_style == SPLIT_STYLE_BY_SIZE:
-        shards = []
-
-        # we have to determine the shards first to determine how many shards there will be in total - two passes
-        for i, shard in enumerate(list(model.items())):
-            if i == 0:
-                shards.append([shard])
-                continue
-            if get_tensor_size(shard[1]) + sum(get_tensor_size(t[1]) for t in shards[-1]) > tensors_max_size:
-                shards.append([shard])
-            else:
-                shards[-1].append(shard)
-
-        total_shards = len(shards) + small_first_shard
-        shard_offset = 1
-        splits = []
-
-        if small_first_shard:
-            splits.append((fname_out.with_name(SHARD_NAME_FORMAT.format(fname_out.stem, shard_offset, total_shards)), None))
-            shard_offset += 1
-
-        for i, shard in enumerate(shards):
-            splits.append((fname_out.with_name(SHARD_NAME_FORMAT.format(fname_out.stem, i + shard_offset, total_shards)), shard))
-
-        return splits
+        of.close()
 
 
 def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileType:
@@ -1607,8 +1464,8 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--pad-vocab",    action="store_true",    help="add pad tokens when model vocab expects more than tokenizer metadata provides")
     parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
     parser.add_argument("--split", action="store_true", help="split the converted model into multiple files")
-    parser.add_argument("--split-max-tensors", type=int, help=f"max tensors in each split")
-    parser.add_argument("--split-max-size", type=str, help=f"max size per split")
+    parser.add_argument("--split-max-tensors", type=int, help="max tensors in each split")
+    parser.add_argument("--split-max-size", type=str, help="max size per split N(M|G)+")
     parser.add_argument("--dry-run", action="store_true", help="only print out a split plan and exit, without writing any new files")
     parser.add_argument("--large-first-shard", action="store_true", help="include tensors in the first shard when splitting (default: metadata only)")
 
@@ -1628,7 +1485,7 @@ def main(args_in: list[str] | None = None) -> None:
         raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
 
     if args.split_max_size:
-        args.split_max_size = split_str_to_n_bytes(args.split_max_size)
+        args.split_max_size = gguf.SplitStrategy.split_str_to_n_bytes(args.split_max_size)
 
     if not args.vocab_only:
         model_plus = load_some_model(args.model)
@@ -1693,9 +1550,8 @@ def main(args_in: list[str] | None = None) -> None:
     params.ftype = ftype
 
     print(f"Writing {outfile}, format {ftype}")
-    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, args.split_max_tensors,
-                         args.split_max_size, dry_run=args.dry_run, concurrency=args.concurrency,
-                         endianess=endianess, pad_vocab=args.pad_vocab, small_first_shard=not args.large_first_shard)
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, args,
+                         concurrency=args.concurrency, endianess=endianess)
     if not args.dry_run:
         print(f"Wrote {outfile}")
 
