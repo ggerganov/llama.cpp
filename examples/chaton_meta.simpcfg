@@ -223,3 +223,10 @@
 		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": false
 
+"testme"
+	"int": 		1234
+	"sint": 	-9876543210
+	"float": 	12.34
+	"double1": 	+12.0e-123
+	"double2": 	-12.0e-123
+
