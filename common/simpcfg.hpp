@@ -16,7 +16,7 @@
 
 #define TEST_LOGIC
 #ifdef TEST_LOGIC
-#define LOG_TEELN(FMT, ...) printf(FMT, __VA_ARGS__)
+#define LOG_TEELN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
 #else
 #include "log.h"
 #endif
@@ -50,13 +50,13 @@ std::string str_trim(std::string sin) {
     return sin;
 }
 
-bool sc_load(std::string &fname) {
+void sc_load(std::string &fname) {
     std::ifstream f {fname};
     if (!f) {
-        LOG_TEELN("ERRR:%s:%s:failed to load...", __func__, fname);
+        LOG_TEELN("ERRR:%s:%s:failed to load...", __func__, fname.c_str());
         throw std::runtime_error { "ERRR:SimpCfg:File not found" };
     } else {
-        LOG_TEELN("DBUG:%s:%s", __func__, fname);
+        LOG_TEELN("DBUG:%s:%s", __func__, fname.c_str());
     }
     std::string group;
     int iLine = 0;
@@ -74,24 +74,24 @@ bool sc_load(std::string &fname) {
         curL = str_trim(curL);
         if (bGroup) {
             group = curL;
-            LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, group);
+            LOG_TEELN("DBUG:%s:%s", __func__, group.c_str());
             continue;
         }
         auto dPos = curL.find(':');
         if (dPos == std::string::npos) {
-            LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL);
+            LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
             throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
         }
         auto dEnd = curL.length() - dPos;
         if ((dPos == 0) || (dEnd < 2)) {
-            LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL);
+            LOG_TEELN("ERRR:%s:%d:invalid key value line:%s", __func__, iLine, curL.c_str());
             throw std::runtime_error { "ERRR:SimpCfg:Invalid key value line" };
         }
         std::string key = curL.substr(0, dPos);
         key = str_trim(key);
         std::string value = curL.substr(dPos+1);
         value = str_trim(value);
-        LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, group, key, value);
+        LOG_TEELN("DBUG:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
         sc_set_string(group, key, value);
     }
 }
