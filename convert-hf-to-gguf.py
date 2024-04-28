@@ -216,76 +216,6 @@ class Model(ABC):
         except KeyError:
             raise NotImplementedError(f'Architecture {arch!r} not supported!') from None
 
-    # @staticmethod
-    # def from_model_architecture(model_architecture):
-    #     if model_architecture == "GPTNeoXForCausalLM":
-    #         return GPTNeoXModel
-    #     if model_architecture == "BloomForCausalLM":
-    #         return BloomModel
-    #     if model_architecture == "MPTForCausalLM":
-    #         return MPTModel
-    #     if model_architecture in ("BaichuanForCausalLM", "BaiChuanForCausalLM"):
-    #         return BaichuanModel
-    #     if model_architecture in ("FalconForCausalLM", "RWForCausalLM"):
-    #         return FalconModel
-    #     if model_architecture == "GPTBigCodeForCausalLM":
-    #         return StarCoderModel
-    #     if model_architecture == "GPTRefactForCausalLM":
-    #         return RefactModel
-    #     if model_architecture == "PersimmonForCausalLM":
-    #         return PersimmonModel
-    #     if model_architecture == "LlamaForCausalLM":
-    #         return LlamaModel
-    #     if model_architecture in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
-    #         return StableLMModel
-    #     if model_architecture == "QWenLMHeadModel":
-    #         return QwenModel
-    #     if model_architecture == "Qwen2ForCausalLM":
-    #         return Model
-    #     if model_architecture == "MixtralForCausalLM":
-    #         return MixtralModel
-    #     if model_architecture == "GPT2LMHeadModel":
-    #         return GPT2Model
-    #     if model_architecture == "PhiForCausalLM":
-    #         return Phi2Model
-    #     if model_architecture == "PlamoForCausalLM":
-    #         return PlamoModel
-    #     if model_architecture == "CodeShellForCausalLM":
-    #         return CodeShellModel
-    #     if model_architecture == "OrionForCausalLM":
-    #         return OrionModel
-    #     if model_architecture == "InternLM2ForCausalLM":
-    #         return InternLM2Model
-    #     if model_architecture == "MiniCPMForCausalLM":
-    #         return MiniCPMModel
-    #     if model_architecture == "BertModel":
-    #         return BertModel
-
-    @staticmethod
-    def from_model_name(model_name: str):
-        model_name_lower = model_name.lower()
-        if model_name_lower in ("stablelmepoch", "llavastablelmepoch"):
-            return StableLMModel
-        if model_name_lower == "gptneox":
-            return GPTNeoXModel
-        if model_name_lower == "bloom":
-            return BloomModel
-        if model_name_lower == "mpt":
-            return MPTModel
-        if model_name_lower in ("baichuan"):
-            return BaichuanModel
-        if model_name_lower in ("falcon", "rw"):
-            return FalconModel
-        if model_name_lower == "gptbigcode":
-            return StarCoderModel
-        if model_name_lower == "gptrefact":
-            return RefactModel
-        if model_name_lower == "persimmon":
-            return PersimmonModel
-        if model_name_lower in ("llama", "deepseekcoder", "deepseekllm"):
-            return LlamaModel
-        return Model
-
     def _is_model_safetensors(self) -> bool:
         return Model.count_model_parts(self.dir_model, ".safetensors") > 0
 
@@ -298,51 +228,6 @@ class Model(ABC):
         if self.num_parts == 1:  # there's only one .bin file
             return ("pytorch_model.bin",)
         return (f"pytorch_model-{n:05}-of-{self.num_parts:05}.bin" for n in range(1, self.num_parts + 1))
-
-    def _get_model_architecture(self) -> gguf.MODEL_ARCH:
-        arch = self.hparams["architectures"][0]
-        if arch == "GPTNeoXForCausalLM":
-            return gguf.MODEL_ARCH.GPTNEOX
-        if arch == "BloomForCausalLM":
-            return gguf.MODEL_ARCH.BLOOM
-        if arch == "MPTForCausalLM":
-            return gguf.MODEL_ARCH.MPT
-        if arch in ("BaichuanForCausalLM", "BaiChuanForCausalLM"):
-            return gguf.MODEL_ARCH.BAICHUAN
-        if arch in ("FalconForCausalLM", "RWForCausalLM"):
-            return gguf.MODEL_ARCH.FALCON
-        if arch == "GPTBigCodeForCausalLM":
-            return gguf.MODEL_ARCH.STARCODER
-        if arch == "GPTRefactForCausalLM":
-            return gguf.MODEL_ARCH.REFACT
-        if arch == "PersimmonForCausalLM":
-            return gguf.MODEL_ARCH.PERSIMMON
-        if arch == "LlamaForCausalLM":
-            return gguf.MODEL_ARCH.LLAMA
-        if arch in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
-            return gguf.MODEL_ARCH.STABLELM
-        if arch == "QWenLMHeadModel":
-            return gguf.MODEL_ARCH.QWEN
-        if arch == "Qwen2ForCausalLM":
-            return gguf.MODEL_ARCH.QWEN2
-        if arch == "MixtralForCausalLM":
-            return gguf.MODEL_ARCH.LLAMA
-        if arch == "GPT2LMHeadModel":
-            return gguf.MODEL_ARCH.GPT2
-        if arch == "PhiForCausalLM":
-            return gguf.MODEL_ARCH.PHI2
-        if arch == "PlamoForCausalLM":
-            return gguf.MODEL_ARCH.PLAMO
-        if arch == "CodeShellForCausalLM":
-            return gguf.MODEL_ARCH.CODESHELL
-        if arch == "OrionForCausalLM":
-            return gguf.MODEL_ARCH.ORION
-        if arch == "InternLM2ForCausalLM":
-            return gguf.MODEL_ARCH.INTERNLM2
-        if arch == "MiniCPMForCausalLM":
-            return gguf.MODEL_ARCH.MINICPM
-        if arch == "BertModel":
-            return gguf.MODEL_ARCH.BERT
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
