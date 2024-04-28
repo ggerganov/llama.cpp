@@ -132,9 +132,9 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_para
         }
         params->prompt = remove_image_from_prompt(prompt);
     } else {
-        embed = llava_image_embed_make_with_filename(ctx_llava->ctx_clip, params->n_threads, image.c_str());
+        embed = llava_image_embed_make_with_filename(ctx_llava->ctx_clip, params->n_threads, fname.c_str());
         if (!embed) {
-            fprintf(stderr, "%s: is %s really an image file?\n", __func__, image.c_str());
+            fprintf(stderr, "%s: is %s really an image file?\n", __func__, fname.c_str());
             return NULL;
         }
     }
@@ -285,7 +285,7 @@ int main(int argc, char ** argv) {
 
         auto ctx_llava = llava_init_context(&params, model);
 
-        auto image_embed = load_image(ctx_llava, &params, &image);
+        auto image_embed = load_image(ctx_llava, &params, image);
         if (!image_embed) {
             std::cerr << "error: failed to load image " << image << ". Terminating\n\n";
             return 1;
