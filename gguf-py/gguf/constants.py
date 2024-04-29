@@ -72,6 +72,7 @@ class Keys:
 
     class Tokenizer:
         MODEL            = "tokenizer.ggml.model"
+        PRE              = "tokenizer.ggml.pre"
         LIST             = "tokenizer.ggml.tokens"
         TOKEN_TYPE       = "tokenizer.ggml.token_type"
         TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # for BERT-style token types
@@ -940,6 +941,7 @@ KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
+KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
 KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
 KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES

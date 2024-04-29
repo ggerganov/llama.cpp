@@ -892,7 +892,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-        params.image = argv[i];
+        params.image.emplace_back(argv[i]);
         return true;
     }
     if (arg == "-i" || arg == "--interactive") {
@@ -1514,7 +1514,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ps N, --p-split N    speculative decoding split probability (default: %.1f)\n", (double)params.p_split);
     printf("  -cb, --cont-batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
     printf("  --mmproj MMPROJ_FILE  path to a multimodal projector file for LLaVA. see examples/llava/README.md\n");
-    printf("  --image IMAGE_FILE    path to an image file. use with multimodal models\n");
+    printf("  --image IMAGE_FILE    path to an image file. use with multimodal models. Specify multiple times for batching\n");
     if (llama_supports_mlock()) {
         printf("  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }
@@ -1710,6 +1710,18 @@ std::vector<std::string> string_split(std::string input, char separator) {
     }
     parts.emplace_back(input);
     return parts;
+}
+
+std::string string_strip(const std::string & str) {
+    size_t start = 0;
+    size_t end = str.size();
+    while (start < end && std::isspace(str[start])) {
+        start++;
+    }
+    while (end > start && std::isspace(str[end - 1])) {
+        end--;
+    }
+    return str.substr(start, end - start);
 }
 
 std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
