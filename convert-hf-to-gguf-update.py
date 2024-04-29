@@ -221,6 +221,7 @@ tests = [
     "3333333",
     "33333333",
     "333333333",
+    chktxt,
 ]
 
 # write the tests to ./models/ggml-vocab-{name}.gguf.inp

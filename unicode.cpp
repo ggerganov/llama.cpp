@@ -438,28 +438,31 @@ static std::vector<size_t> unicode_regex_split_custom(const std::string & text, 
 
 std::string unicode_cpt_to_utf8(uint32_t cp) {
     std::string result;
+
     if (/* 0x00 <= cp && */ cp <= 0x7f) {
         result.push_back(cp);
+        return result;
     }
-    else if (0x80 <= cp && cp <= 0x7ff) {
+    if (0x80 <= cp && cp <= 0x7ff) {
         result.push_back(0xc0 | ((cp >> 6) & 0x1f));
         result.push_back(0x80 | (cp & 0x3f));
+        return result;
     }
-    else if (0x800 <= cp && cp <= 0xffff) {
+    if (0x800 <= cp && cp <= 0xffff) {
         result.push_back(0xe0 | ((cp >> 12) & 0x0f));
         result.push_back(0x80 | ((cp >> 6) & 0x3f));
         result.push_back(0x80 | (cp & 0x3f));
+        return result;
     }
-    else if (0x10000 <= cp && cp <= 0x10ffff) {
+    if (0x10000 <= cp && cp <= 0x10ffff) {
         result.push_back(0xf0 | ((cp >> 18) & 0x07));
         result.push_back(0x80 | ((cp >> 12) & 0x3f));
         result.push_back(0x80 | ((cp >> 6) & 0x3f));
         result.push_back(0x80 | (cp & 0x3f));
+        return result;
     }
-    else {
-        throw std::invalid_argument("invalid codepoint");
-    }
-    return result;
+
+    throw std::invalid_argument("invalid codepoint");
 }
 
 std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
@@ -580,85 +583,86 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
 
         if (!tmp.empty()) {
             bpe_offsets = std::move(tmp);
-        } else {
-            // fallback to general-purpose std::regex / std::wregex
-            try {
-                // if a unicode category is used in the regex, we use the collapsed text and replace the unicode category
-                // with the corresponding collapsed representation
-                bool use_collapsed = false;
-                for (auto & ucat : k_ucat_enum) {
-                    if (std::string::npos != regex_expr.find(ucat.first)) {
-                        use_collapsed = true;
-                        break;
-                    }
+            continue;
+        }
+
+        // fallback to general-purpose std::regex / std::wregex
+        try {
+            // if a unicode category is used in the regex, we use the collapsed text and replace the unicode category
+            // with the corresponding collapsed representation
+            bool use_collapsed = false;
+            for (auto & ucat : k_ucat_enum) {
+                if (std::string::npos != regex_expr.find(ucat.first)) {
+                    use_collapsed = true;
+                    break;
                 }
-
-                if (use_collapsed) {
-                    // sanity-check that the original regex does not contain any non-ASCII characters
-                    const auto cpts_regex = unicode_cpts_from_utf8(regex_expr);
-                    for (size_t i = 0; i < cpts_regex.size(); ++i) {
-                        if (cpts_regex[i] >= 128) {
-                            throw std::runtime_error("Regex includes both unicode categories and non-ASCII characters - not supported");
-                        }
-                    }
-
-                    // generate a collapsed representation of the regex
-                    std::string regex_expr_collapsed;
-
-                    // track if we are inside [], because nested [] are not allowed
-                    bool inside = false;
-                    for (size_t i = 0; i < regex_expr.size(); ++i) {
-                        if (regex_expr[i] == '[' && (i == 0 || regex_expr[i - 1] != '\\')) {
-                            regex_expr_collapsed += '[';
-                            inside = true;
-                            continue;
-                        }
-
-                        if (inside && regex_expr[i] == ']' && regex_expr[i - 1] != '\\') {
-                            regex_expr_collapsed += ']';
-                            inside = false;
-                            continue;
-                        }
-
-                        if (regex_expr[i + 0] == '\\' && i + 4 < regex_expr.size() &&
-                            regex_expr[i + 1] == 'p' &&
-                            regex_expr[i + 2] == '{' &&
-                            regex_expr[i + 4] == '}') {
-                            const std::string pat = regex_expr.substr(i, 5);
-                            if (k_ucat_enum.find(pat) != k_ucat_enum.end()) {
-                                if (!inside) {
-                                    regex_expr_collapsed += '[';
-                                }
-                                regex_expr_collapsed += k_ucat_cpt.at(k_ucat_enum.at(pat));
-                                regex_expr_collapsed += k_ucat_map.at(k_ucat_enum.at(pat));
-                                if (!inside) {
-                                    regex_expr_collapsed += ']';
-                                }
-                                i += 4;
-                                continue;
-                            }
-                        }
-
-                        regex_expr_collapsed += regex_expr[i];
-                    }
-
-                    //printf("text_collapsed: %s\n", text_collapsed.c_str());
-                    //printf("regex_expr_collapsed: %s\n", regex_expr_collapsed.c_str());
-                    bpe_offsets = unicode_regex_split_stl(text_collapsed, regex_expr_collapsed, bpe_offsets);
-                } else {
-                    // no unicode category used, we can use std::wregex directly
-                    const std::wstring wtext       = unicode_wstring_from_utf8(text);
-                    const std::wstring wregex_expr = unicode_wstring_from_utf8(regex_expr);
-
-                    //printf("text: %s\n", text.c_str());
-                    //printf("regex_expr: %s\n", regex_expr.c_str());
-                    bpe_offsets = unicode_regex_split_stl(wtext, wregex_expr, bpe_offsets);
-                }
-            } catch (std::regex_error & e) {
-                fprintf(stderr, "Failed to process regex: '%s'\n", regex_expr.c_str());
-                fprintf(stderr, "Regex error: %s\n", e.what());
-                throw std::runtime_error("Failed to process regex");
             }
+
+            if (use_collapsed) {
+                // sanity-check that the original regex does not contain any non-ASCII characters
+                const auto cpts_regex = unicode_cpts_from_utf8(regex_expr);
+                for (size_t i = 0; i < cpts_regex.size(); ++i) {
+                    if (cpts_regex[i] >= 128) {
+                        throw std::runtime_error("Regex includes both unicode categories and non-ASCII characters - not supported");
+                    }
+                }
+
+                // generate a collapsed representation of the regex
+                std::string regex_expr_collapsed;
+
+                // track if we are inside [], because nested [] are not allowed
+                bool inside = false;
+                for (size_t i = 0; i < regex_expr.size(); ++i) {
+                    if (regex_expr[i] == '[' && (i == 0 || regex_expr[i - 1] != '\\')) {
+                        regex_expr_collapsed += '[';
+                        inside = true;
+                        continue;
+                    }
+
+                    if (inside && regex_expr[i] == ']' && regex_expr[i - 1] != '\\') {
+                        regex_expr_collapsed += ']';
+                        inside = false;
+                        continue;
+                    }
+
+                    if (regex_expr[i + 0] == '\\' && i + 4 < regex_expr.size() &&
+                        regex_expr[i + 1] == 'p' &&
+                        regex_expr[i + 2] == '{' &&
+                        regex_expr[i + 4] == '}') {
+                        const std::string pat = regex_expr.substr(i, 5);
+                        if (k_ucat_enum.find(pat) != k_ucat_enum.end()) {
+                            if (!inside) {
+                                regex_expr_collapsed += '[';
+                            }
+                            regex_expr_collapsed += k_ucat_cpt.at(k_ucat_enum.at(pat));
+                            regex_expr_collapsed += k_ucat_map.at(k_ucat_enum.at(pat));
+                            if (!inside) {
+                                regex_expr_collapsed += ']';
+                            }
+                            i += 4;
+                            continue;
+                        }
+                    }
+
+                    regex_expr_collapsed += regex_expr[i];
+                }
+
+                //printf("text_collapsed: %s\n", text_collapsed.c_str());
+                //printf("regex_expr_collapsed: %s\n", regex_expr_collapsed.c_str());
+                bpe_offsets = unicode_regex_split_stl(text_collapsed, regex_expr_collapsed, bpe_offsets);
+            } else {
+                // no unicode category used, we can use std::wregex directly
+                const std::wstring wtext       = unicode_wstring_from_utf8(text);
+                const std::wstring wregex_expr = unicode_wstring_from_utf8(regex_expr);
+
+                //printf("text: %s\n", text.c_str());
+                //printf("regex_expr: %s\n", regex_expr.c_str());
+                bpe_offsets = unicode_regex_split_stl(wtext, wregex_expr, bpe_offsets);
+            }
+        } catch (std::regex_error & e) {
+            fprintf(stderr, "Failed to process regex: '%s'\n", regex_expr.c_str());
+            fprintf(stderr, "Regex error: %s\n", e.what());
+            throw std::runtime_error("Failed to process regex");
         }
     }
 
