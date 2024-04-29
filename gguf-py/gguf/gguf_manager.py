@@ -188,7 +188,7 @@ class GGUFManager:
             print("Model has smaller size than the split threshold, not splitting")
             self.split_style = SplitStyle.NONE
 
-        self.split_strategy = SplitStrategy(self.split_style, self.path, self.tensors, self.args, not self.args.large_first_shard)
+        self.split_strategy = SplitStrategy(self.split_style, self.path, self.tensors, self.args, self.arch)
         self.total_shards = len(self.split_strategy)
 
         # only the first shard needs all the KV data
