@@ -186,7 +186,7 @@ Upon a successful installation, SYCL is enabled for the available intel devices,
 git clone https://github.com/oneapi-src/oneMKL
 cd oneMKL
 cmake -B buildWithCublas -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DENABLE_MKLGPU_BACKEND=OFF -DENABLE_MKLCPU_BACKEND=OFF -DENABLE_CUBLAS_BACKEND=ON -DTARGET_DOMAINS=blas
-cmake --build buildWithCublas
+cmake --build buildWithCublas --config Release
 ```
 
 
@@ -234,7 +234,7 @@ cmake -B build -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
 cmake -B build -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
 # build all binary
-cmake --build build -j -v
+cmake --build build --config Release -j -v
 ```
 
 #### Nvidia GPU
@@ -254,7 +254,7 @@ cmake -B build -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx
 cmake -B build -DLLAMA_SYCL=ON -DLLAMA_SYCL_TARGET=NVIDIA -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON
 
 # build all binary
-cmake --build build -j -v
+cmake --build build --config Release -j -v
 
 ```
 
@@ -417,7 +417,7 @@ cmake -B build -G "MinGW Makefiles" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMA
 # Option 2: Or FP16
 cmake -B build -G "MinGW Makefiles" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
 
-cmake --build build -j
+cmake --build build --config Release -j
 ```
 
 Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former instructions:

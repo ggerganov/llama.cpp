@@ -307,6 +307,8 @@ In order to build llama.cpp you have three different options.
       make
       ```
 
+      **Note**: for `Debug` builds, run `make LLAMA_DEBUG=1`
+
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
@@ -321,9 +323,25 @@ In order to build llama.cpp you have three different options.
 - Using `CMake`:
 
     ```bash
-    cmake -B build # Note: add -DCMAKE_BUILD_TYPE=Debug here for debug builds
-    cmake --build build
+    cmake -B build
+    cmake --build build --config Release
     ```
+
+    **Note**: for `Debug` builds, there are two cases:
+
+    - General case (esp. for default Makefile or Ninja generation):
+
+      ```bash
+      cmake -B build -DCMAKE_BUILD_TYPE=Debug
+      cmake --build build
+      ```
+
+    - Special case for multi-config generators (`-G` param set to Visual Studio, XCode...; note that `--config` is ignored by other generators):
+
+      ```bash
+      cmake -B build -G "Xcode"
+      cmake --build build --config Debug
+      ```
 
 - Using `Zig` (version 0.11 or later):
 
@@ -509,7 +527,7 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ \
         cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build build -- -j 16
+        && cmake --build build --config Release -j 16
     ```
     On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
     However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).

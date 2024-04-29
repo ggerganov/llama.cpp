@@ -81,7 +81,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 
   ```bash
   cmake -B build
-  cmake --build build -t server
+  cmake --build build --config Release -t server
   ```
 
   Binary is at `./build/bin/server`
@@ -103,7 +103,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 
   ```bash
   cmake -B build -DLLAMA_SERVER_SSL=ON
-  cmake --build build -t server
+  cmake --build build --config Release -t server
   ```
 
 ## Quick Start
