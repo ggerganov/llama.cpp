@@ -122,7 +122,7 @@ class TensorNameMap:
             "h.{bid}.attn.c_attn",                                                 # gpt2
             "transformer.h.{bid}.mixer.Wqkv",                                      # phi2
             "encoder.layers.{bid}.attn.Wqkv",                                      # nomic-bert
-            "model.layers.{bid}.self_attn.qkv_proj"                                # phi3
+            "model.layers.{bid}.self_attn.qkv_proj",                               # phi3
             "encoder.layers.{bid}.self_attention.query_key_value",                 # chatglm
         ),
 
@@ -134,7 +134,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.q_proj",                           # gpt-j
             "model.layers.layers.{bid}.self_attn.q_proj",                # plamo
             "model.layers.{bid}.attention.wq",                           # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.query" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.query",# Grok
         ),
 
         # Attention key
@@ -145,7 +145,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.k_proj",                         # gpt-j
             "model.layers.layers.{bid}.self_attn.k_proj",              # plamo
             "model.layers.{bid}.attention.wk",                         # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.key" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.key",# Grok
         ),
 
         # Attention value
@@ -156,7 +156,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.v_proj",                           # gpt-j
             "model.layers.layers.{bid}.self_attn.v_proj",                # plamo
             "model.layers.{bid}.attention.wv",                           # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.value" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.value",# Grok
         ),
 
         # Attention output
