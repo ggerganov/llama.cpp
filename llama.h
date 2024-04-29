@@ -195,15 +195,19 @@ extern "C" {
         LLAMA_KV_OVERRIDE_TYPE_INT,
         LLAMA_KV_OVERRIDE_TYPE_FLOAT,
         LLAMA_KV_OVERRIDE_TYPE_BOOL,
+        LLAMA_KV_OVERRIDE_TYPE_STR,
     };
 
     struct llama_model_kv_override {
-        char key[128];
         enum llama_model_kv_override_type tag;
+
+        char key[128];
+
         union {
-            int64_t int_value;
-            double float_value;
-            bool bool_value;
+            int64_t val_i64;
+            double  val_f64;
+            bool    val_bool;
+            char    val_str[128];
         };
     };
 
@@ -232,9 +236,10 @@ extern "C" {
         const struct llama_model_kv_override * kv_overrides;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool vocab_only; // only load the vocabulary, no weights
-        bool use_mmap;   // use mmap if possible
-        bool use_mlock;  // force system to keep model in RAM
+        bool vocab_only;    // only load the vocabulary, no weights
+        bool use_mmap;      // use mmap if possible
+        bool use_mlock;     // force system to keep model in RAM
+        bool check_tensors; // validate model tensor data
     };
 
     struct llama_context_params {
@@ -288,6 +293,7 @@ extern "C" {
         bool quantize_output_tensor;         // quantize output.weight
         bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                           // quantize all tensors to the default type
+        bool keep_split;                     // quantize to the same number of shards
         void * imatrix;                      // pointer to importance matrix data
         void * kv_overrides;                 // pointer to vector containing overrides
     } llama_model_quantize_params;
@@ -390,8 +396,10 @@ extern "C" {
     LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 
-    LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
-    LLAMA_API enum llama_rope_type  llama_rope_type (const struct llama_model * model);
+    LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
+
+    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model   * model);
+    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model   * model);
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
@@ -987,7 +995,7 @@ extern "C" {
             struct llama_context * ctx,
           llama_token_data_array * candidates);
 
-    /// @details Randomly selects a token from the candidates based on their probabilities.
+    /// @details Randomly selects a token from the candidates based on their probabilities using the RNG of ctx.
     LLAMA_API llama_token llama_sample_token(
             struct llama_context * ctx,
           llama_token_data_array * candidates);
@@ -1074,8 +1082,9 @@ extern "C" {
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
 #ifdef LLAMA_API_INTERNAL
 
-#include <vector>
+#include <random>
 #include <string>
+#include <vector>
 
 struct ggml_tensor;
 
@@ -1111,6 +1120,10 @@ void llama_grammar_accept(
 std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
         const std::string & src,
         llama_partial_utf8   partial_start);
+
+// Randomly selects a token from the candidates based on their probabilities using given std::mt19937.
+// This is a temporary workaround in order to fix race conditions when sampling with multiple sequences.
+llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng);
 
 #endif // LLAMA_API_INTERNAL
 

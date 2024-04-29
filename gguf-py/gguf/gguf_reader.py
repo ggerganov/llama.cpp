@@ -234,8 +234,14 @@ class GGUFReader:
 
     def _build_tensors(self, start_offs: int, fields: list[ReaderField]) -> None:
         tensors = []
+        tensor_names = set() # keep track of name to prevent duplicated tensors
         for field in fields:
             _name_len, name_data, _n_dims, dims, raw_dtype, offset_tensor = field.parts
+            # check if there's any tensor having same name already in the list
+            tensor_name = str(bytes(name_data), encoding = 'utf-8')
+            if tensor_name in tensor_names:
+                raise ValueError(f'Found duplicated tensor with name {tensor_name}')
+            tensor_names.add(tensor_name)
             ggml_type = GGMLQuantizationType(raw_dtype[0])
             n_elems = np.prod(dims)
             block_size, type_size = GGML_QUANT_SIZES[ggml_type]
@@ -267,7 +273,7 @@ class GGUFReader:
                 item_count = n_bytes
                 item_type = np.uint8
             tensors.append(ReaderTensor(
-                name = str(bytes(name_data), encoding = 'utf-8'),
+                name = tensor_name,
                 tensor_type = ggml_type,
                 shape = dims,
                 n_elements = n_elems,
