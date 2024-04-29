@@ -329,14 +329,14 @@ In order to build llama.cpp you have three different options.
 
     **Note**: for `Debug` builds, there are two cases:
 
-    - General case (esp. for default Makefile or Ninja generation):
+    - Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
       ```bash
       cmake -B build -DCMAKE_BUILD_TYPE=Debug
       cmake --build build
       ```
 
-    - Special case for multi-config generators (`-G` param set to Visual Studio, XCode...; note that `--config` is ignored by other generators):
+    - Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
       ```bash
       cmake -B build -G "Xcode"
