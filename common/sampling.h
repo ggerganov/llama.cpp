@@ -41,9 +41,10 @@ typedef struct llama_sampling_params {
     float       mirostat_eta          = 0.10f;              // learning rate
     bool        penalize_nl           = false;              // consider newlines as a repeatable token
     uint32_t    seed                  = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampling_context
-    float       dry_multiplier        = 0.0f;     // 0.0f = disabled, recommended value: 0.8f
+    float       dry_multiplier        = 0.0f;               // 0.0f = disabled, recommended value: 0.8f
     float       dry_base              = 1.75f;
     uint32_t    dry_allowed_length    = 2;
+    uint32_t    dry_penalty_last_n    = -1;                 // DRY last n tokens to penalize (0 = disable penalty, -1 = context size)
 
     std::vector<llama_sampler_type> samplers_sequence = {
         llama_sampler_type::TOP_K,
