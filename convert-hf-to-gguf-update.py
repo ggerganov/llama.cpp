@@ -68,6 +68,7 @@ def download_file_with_auth(url, token, save_path):
     else:
         print(f"Failed to download file. Status code: {response.status_code}")
 
+# download the tokenizer models
 for model in models:
     name = model["name"]
     repo = model["repo"]
@@ -173,3 +174,84 @@ print("\n")
 print("!!! Copy-paste the function above into convert-hf-to-gguf.py !!!")
 print("\n")
 
+# generate tests for each tokenizer model
+
+tests = [
+    "",
+    " ",
+    "  ",
+    "   ",
+    "\t",
+    "\n",
+    "\n\n",
+    "\n\n\n",
+    "\t\n",
+    "Hello world",
+    " Hello world",
+    "Hello World",
+    " Hello World",
+    " Hello World!",
+    "Hello, world!",
+    " Hello, world!",
+    " this is 🦙.cpp",
+    "w048 7tuijk dsdfhu",
+    "нещо на Български",
+    "កាន់តែពិសេសអាចខលចេញ",
+    "🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ (only emoji that has its own token)",
+    "Hello",
+    " Hello",
+    "  Hello",
+    "   Hello",
+    "    Hello",
+    "    Hello\n    Hello",
+    " (",
+    "\n =",
+    "' era",
+    "Hello, y'all! How are you 😁 ?我想在apple工作1314151天～",
+    "3",
+    "33",
+    "333",
+    "3333",
+    "33333",
+    "333333",
+    "3333333",
+    "33333333",
+    "333333333",
+]
+
+# write the tests in ./models/test-vocab-inp.txt
+# the format is:
+#
+# test0
+# __ggml_vocab_test__
+# test1
+# __ggml_vocab_test__
+# ...
+#
+
+with open(f"models/test-vocab-inp.txt", "w") as f:
+    for text in tests:
+        f.write(f"{text}")
+        f.write("\n__ggml_vocab_test__\n")
+
+print("Tests written in ./models/test-vocab-inp.txt")
+
+# with each model, encode all tests and write the results in ./models/test-vocab-out-{name}.txt
+# for each test, write the resulting tokens on a separate line
+
+for model in models:
+    name = model["name"]
+    tokt = model["tokt"]
+
+    # create the tokenizer
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+
+    with open(f"models/test-vocab-out-{name}.txt", "w") as f:
+        for text in tests:
+            res = tokenizer.encode(text)
+            for r in res:
+                f.write(f" {r}")
+            f.write("\n")
+
+    print(f"Test results for {name} written in ./models/test-vocab-out-{name}.txt")
