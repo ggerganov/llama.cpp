@@ -56,23 +56,22 @@ static uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset)
         offset += 4;
         return result;
     }
-    throw std::invalid_argument("invalid string");
+    throw std::invalid_argument("failed to convert utf8 to codepoint");
 }
 
-static std::vector<uint16_t> unicode_cpt_to_utf16(uint32_t cp) {
-    std::vector<uint16_t> result;
-    if (/* 0x0000 <= cp && */ cp <= 0xffff) {
-        result.emplace_back(cp);
-    }
-    else if (0x10000 <= cp && cp <= 0x10ffff) {
-        result.emplace_back(0xd800 | ((cp - 0x10000) >> 10));
-        result.emplace_back(0xdc00 | ((cp - 0x10000) & 0x03ff));
-    }
-    else {
-        throw std::invalid_argument("invalid cpt");
-    }
-    return result;
-}
+//static std::vector<uint16_t> unicode_cpt_to_utf16(uint32_t cp) {
+//    std::vector<uint16_t> result;
+//    if (/* 0x0000 <= cp && */ cp <= 0xffff) {
+//        result.emplace_back(cp);
+//        return result;
+//    }
+//    if (0x10000 <= cp && cp <= 0x10ffff) {
+//        result.emplace_back(0xd800 | ((cp - 0x10000) >> 10));
+//        result.emplace_back(0xdc00 | ((cp - 0x10000) & 0x03ff));
+//        return result;
+//    }
+//    throw std::invalid_argument("failed to convert codepoint to utf16");
+//}
 
 //static std::vector<uint16_t> unicode_cpts_to_utf16(const std::vector<uint32_t> & cps) {
 //    std::vector<uint16_t> result;
@@ -83,28 +82,28 @@ static std::vector<uint16_t> unicode_cpt_to_utf16(uint32_t cp) {
 //    return result;
 //}
 
-static uint32_t cpt_from_utf16(const std::vector<uint16_t> & utf16, size_t & offset) {
-    assert(offset < utf16.size());
-    if (((utf16[0] >> 10) << 10) != 0xd800) {
-        auto result = utf16[offset + 0];
-        offset += 1;
-        return result;
-    }
-
-    if (offset + 1 >= utf16.size() || !((utf16[1] & 0xdc00) == 0xdc00)) {
-        throw std::invalid_argument("invalid character");
-    }
-
-    auto result = 0x10000 + (((utf16[0] & 0x03ff) << 10) | (utf16[1] & 0x03ff));
-    offset += 2;
-    return result;
-}
+//static uint32_t unicode_cpt_from_utf16(const std::vector<uint16_t> & utf16, size_t & offset) {
+//    assert(offset < utf16.size());
+//    if (((utf16[0] >> 10) << 10) != 0xd800) {
+//        auto result = utf16[offset + 0];
+//        offset += 1;
+//        return result;
+//    }
+//
+//    if (offset + 1 >= utf16.size() || !((utf16[1] & 0xdc00) == 0xdc00)) {
+//        throw std::invalid_argument("invalid character");
+//    }
+//
+//    auto result = 0x10000 + (((utf16[0] & 0x03ff) << 10) | (utf16[1] & 0x03ff));
+//    offset += 2;
+//    return result;
+//}
 
 //static std::vector<uint32_t> unicode_cpts_from_utf16(const std::vector<uint16_t> & utf16) {
 //    std::vector<uint32_t> result;
 //    size_t offset = 0;
 //    while (offset < utf16.size()) {
-//        result.push_back(cpt_from_utf16(utf16, offset));
+//        result.push_back(unicode_cpt_from_utf16(utf16, offset));
 //    }
 //    return result;
 //}
