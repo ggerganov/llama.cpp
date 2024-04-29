@@ -43,6 +43,8 @@ else()
     set(LLAMA_METAL_DEFAULT OFF)
 endif()
 
+set(LLAMA_LLAMAFILE_DEFAULT ON)
+
 # general
 option(BUILD_SHARED_LIBS                "build shared libraries"                                OFF)
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)

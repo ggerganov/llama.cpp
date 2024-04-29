@@ -69,6 +69,18 @@ extern "C" {
         LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
     };
 
+    // pre-tokenization types
+    enum llama_vocab_pre_type {
+        LLAMA_VOCAB_PRE_TYPE_DEFAULT        = 0,
+        LLAMA_VOCAB_PRE_TYPE_LLAMA3         = 1,
+        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM   = 2,
+        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER = 3,
+        LLAMA_VOCAB_PRE_TYPE_FALCON         = 4,
+        LLAMA_VOCAB_PRE_TYPE_MPT            = 5,
+        LLAMA_VOCAB_PRE_TYPE_STARCODER      = 6,
+        LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
+    };
+
     // note: these values should be synchronized with ggml_rope
     // TODO: maybe move this enum to ggml.h (ggml_rope_type)
     enum llama_rope_type {
@@ -195,15 +207,19 @@ extern "C" {
         LLAMA_KV_OVERRIDE_TYPE_INT,
         LLAMA_KV_OVERRIDE_TYPE_FLOAT,
         LLAMA_KV_OVERRIDE_TYPE_BOOL,
+        LLAMA_KV_OVERRIDE_TYPE_STR,
     };
 
     struct llama_model_kv_override {
-        char key[128];
         enum llama_model_kv_override_type tag;
+
+        char key[128];
+
         union {
-            int64_t int_value;
-            double float_value;
-            bool bool_value;
+            int64_t val_i64;
+            double  val_f64;
+            bool    val_bool;
+            char    val_str[128];
         };
     };
 
@@ -232,9 +248,10 @@ extern "C" {
         const struct llama_model_kv_override * kv_overrides;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool vocab_only; // only load the vocabulary, no weights
-        bool use_mmap;   // use mmap if possible
-        bool use_mlock;  // force system to keep model in RAM
+        bool vocab_only;    // only load the vocabulary, no weights
+        bool use_mmap;      // use mmap if possible
+        bool use_mlock;     // force system to keep model in RAM
+        bool check_tensors; // validate model tensor data
     };
 
     struct llama_context_params {
