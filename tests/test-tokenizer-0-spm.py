@@ -12,7 +12,7 @@ import argparse
 
 from sentencepiece import SentencePieceProcessor
 
-logger = logging.getLogger("test-tokenizer-0-llama")
+logger = logging.getLogger("test-tokenizer-0-spm")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")

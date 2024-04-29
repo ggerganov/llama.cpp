@@ -12,7 +12,7 @@ import argparse
 
 from transformers import AutoTokenizer
 
-logger = logging.getLogger("convert")
+logger = logging.getLogger("test-tokenizer-0-bpe")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")
