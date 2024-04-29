@@ -2482,6 +2482,10 @@ class BertModel(Model):
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
 
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
             data = data_torch.squeeze().numpy()
             n_dims = len(data.shape)
             new_dtype: type[np.floating[Any]]
