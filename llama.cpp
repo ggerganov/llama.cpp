@@ -4339,8 +4339,9 @@ static void llm_load_vocab(
                     tokenizer_pre == "default") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             } else if (
-                    tokenizer_pre == "llama3" ||
-                    tokenizer_pre == "llama-v3") {
+                    tokenizer_pre == "llama3"   ||
+                    tokenizer_pre == "llama-v3" ||
+                    tokenizer_pre == "llama-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
             } else if (
                     tokenizer_pre == "deepseek-llm") {
@@ -12583,7 +12584,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
-                if (add_special && vocab.special_add_bos == 1) {
+                if (add_special && vocab.special_add_bos != 0) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
                     output.push_back(vocab.special_bos_id);
                 }

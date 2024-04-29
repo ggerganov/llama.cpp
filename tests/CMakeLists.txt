@@ -65,21 +65,16 @@ function(llama_target_and_test source)
     set_property(TEST ${TEST_TARGET} PROPERTY LABELS ${LLAMA_TEST_LABEL})
 endfunction()
 
-# llama_target_and_test(test-double-float.cpp) # SLOW
-llama_target_and_test(test-quantize-fns.cpp)
-llama_target_and_test(test-quantize-perf.cpp)
-llama_target_and_test(test-sampling.cpp)
-llama_target_and_test(test-chat-template.cpp)
+# build test-tokenizer-0 target once and add many tests
+add_executable(test-tokenizer-0 test-tokenizer-0.cpp get-model.cpp)
+target_link_libraries(test-tokenizer-0 PRIVATE common)
+install(TARGETS test-tokenizer-0 RUNTIME)
 
-llama_target_and_test(test-tokenizer-0-llama.cpp    NAME test-tokenizer-0-llama                ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
-llama_target_and_test(test-tokenizer-0-llama-v3.cpp NAME test-tokenizer-0-llama-v3             ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama-v3.gguf)
-llama_target_and_test(test-tokenizer-0-falcon.cpp   NAME test-tokenizer-0-falcon               ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
-
-llama_target_and_test(test-tokenizer-0-deepseek-coder.cpp NAME test-tokenizer-0-deepseek-coder ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-coder.gguf)
-llama_target_and_test(test-tokenizer-0-deepseek-llm.cpp   NAME test-tokenizer-0-deepseek-llm   ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-llm.gguf)
-
-llama_target_and_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-llama                  ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama.gguf)
-llama_target_and_test(test-tokenizer-1-llama.cpp  NAME test-tokenizer-1-baichuan               ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-baichuan.gguf)
+llama_test(test-tokenizer-0 NAME test-tokenizer-0-llama-spm         ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama-spm.gguf)
+llama_test(test-tokenizer-0 NAME test-tokenizer-0-llama-bpe         ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama-bpe.gguf)
+llama_test(test-tokenizer-0 NAME test-tokenizer-0-falcon            ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
+llama_test(test-tokenizer-0 NAME test-tokenizer-0-deepseek-llm      ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-llm.gguf)
+llama_test(test-tokenizer-0 NAME test-tokenizer-0-deepseek-coder    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-deepseek-coder.gguf)
 
 # build test-tokenizer-1-bpe target once and add many tests
 add_executable(test-tokenizer-1-bpe test-tokenizer-1-bpe.cpp get-model.cpp)
@@ -96,9 +91,19 @@ llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-starcoder ARGS ${CMAKE_CUR
 llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-gpt2      ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt2.gguf)
 #llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-bloom     ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-bloom.gguf) # BIG
 
+# build test-tokenizer-1-spm target once and add many tests
+add_executable(test-tokenizer-1-spm test-tokenizer-1-spm.cpp get-model.cpp)
+target_link_libraries(test-tokenizer-1-spm PRIVATE common)
+install(TARGETS test-tokenizer-1-spm RUNTIME)
 
+llama_target_and_test(test-tokenizer-1-spm  NAME test-tokenizer-1-llama-spm ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama-spm.gguf)
+llama_target_and_test(test-tokenizer-1-spm  NAME test-tokenizer-1-baichuan  ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-baichuan.gguf)
 
-
+# llama_target_and_test(test-double-float.cpp) # SLOW
+llama_target_and_test(test-quantize-fns.cpp)
+llama_target_and_test(test-quantize-perf.cpp)
+llama_target_and_test(test-sampling.cpp)
+llama_target_and_test(test-chat-template.cpp)
 
 llama_target_and_test(test-grammar-parser.cpp)
 llama_target_and_test(test-llama-grammar.cpp)

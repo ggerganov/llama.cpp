@@ -46,8 +46,8 @@ else:
 
 # TODO: add models here, base models preferred
 models = [
-        { "name": "llama-v2",       "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/meta-llama/Llama-2-7b-hf",                },
-        { "name": "llama-v3",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/meta-llama/Meta-Llama-3-8B",              },
+        { "name": "llama-spm",      "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/meta-llama/Llama-2-7b-hf",                },
+        { "name": "llama-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/meta-llama/Meta-Llama-3-8B",              },
         { "name": "deepseek-llm",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-llm-7b-base",        },
         { "name": "deepseek-coder", "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-base",    },
         { "name": "falcon",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/tiiuae/falcon-7b",                        },
@@ -64,7 +64,7 @@ def download_file_with_auth(url, token, save_path):
     if response.status_code == 200:
         with open(save_path, 'wb') as f:
             f.write(response.content)
-        print("File downloaded successfully.")
+        print(f"File {save_path} downloaded successfully")
     else:
         print(f"Failed to download file. Status code: {response.status_code}")
 
@@ -81,6 +81,10 @@ for model in models:
         continue
 
     print(f"Downloading {name} to models/tokenizers/{name}")
+
+    url = f"{repo}/raw/main/config.json"
+    save_path = f"models/tokenizers/{name}/config.json"
+    download_file_with_auth(url, token, save_path)
 
     url = f"{repo}/raw/main/tokenizer.json"
     save_path = f"models/tokenizers/{name}/tokenizer.json"
@@ -219,7 +223,7 @@ tests = [
     "333333333",
 ]
 
-# write the tests in ./models/test-vocab-inp.txt
+# write the tests to ./models/ggml-vocab-{name}.gguf.inp
 # the format is:
 #
 # test0
@@ -229,14 +233,7 @@ tests = [
 # ...
 #
 
-with open(f"models/test-vocab-inp.txt", "w") as f:
-    for text in tests:
-        f.write(f"{text}")
-        f.write("\n__ggml_vocab_test__\n")
-
-print("Tests written in ./models/test-vocab-inp.txt")
-
-# with each model, encode all tests and write the results in ./models/test-vocab-out-{name}.txt
+# with each model, encode all tests and write the results in ./models/ggml-vocab-{name}.gguf.out
 # for each test, write the resulting tokens on a separate line
 
 for model in models:
@@ -247,11 +244,27 @@ for model in models:
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
 
-    with open(f"models/test-vocab-out-{name}.txt", "w") as f:
+    with open(f"models/ggml-vocab-{name}.gguf.inp", "w") as f:
         for text in tests:
-            res = tokenizer.encode(text)
+            f.write(f"{text}")
+            f.write("\n__ggml_vocab_test__\n")
+
+    with open(f"models/ggml-vocab-{name}.gguf.out", "w") as f:
+        for text in tests:
+            res = tokenizer.encode(text, add_special_tokens=False)
             for r in res:
                 f.write(f" {r}")
             f.write("\n")
 
-    print(f"Test results for {name} written in ./models/test-vocab-out-{name}.txt")
+    print(f"Tests for {name} written in ./models/ggml-vocab-{name}.gguf.*")
+
+# generate commands for creating vocab files
+
+print("\nRun the following commands to generate the vocab files for testing:\n")
+
+for model in models:
+    name = model["name"]
+
+    print(f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only")
+
+print("\n")
