@@ -4330,19 +4330,33 @@ static void llm_load_vocab(
             vocab.special_mask_id = -1;
         }
 
-        if (tokenizer_pre.empty()) {
-            LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-        } else if (tokenizer_pre == "default") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-        } else if (tokenizer_pre == "llama3") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
-        } else if (tokenizer_pre == "deepseek-llm") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
-        } else if (tokenizer_pre == "deepseek-coder") {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+        // for now, only BPE models have pre-tokenizers
+        if (vocab.type == LLAMA_VOCAB_TYPE_BPE) {
+            if (tokenizer_pre.empty()) {
+                LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            } else if (
+                    tokenizer_pre == "default") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            } else if (
+                    tokenizer_pre == "llama3"   ||
+                    tokenizer_pre == "llama-v3" ||
+                    tokenizer_pre == "llama-bpe") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
+            } else if (
+                    tokenizer_pre == "deepseek-llm") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
+            } else if (
+                    tokenizer_pre == "deepseek-coder") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+            } else if (
+                    tokenizer_pre == "falcon") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON;
+            } else {
+                throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
+            }
         } else {
-            throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
         }
     }
 
@@ -12102,6 +12116,14 @@ struct llm_tokenizer_bpe {
                             "\\p{N}+",
                         });
                         break;
+                    case LLAMA_VOCAB_PRE_TYPE_FALCON:
+                        word_collection = unicode_regex_split(text, {
+                            "[\\p{P}\\$\\+<=>\\^~\\|]+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                            "\\p{N}+",
+                            "[0-9][0-9][0-9]",
+                        });
+                        break;
                     default:
                         // default regex for BPE tokenization pre-processing
                         word_collection = unicode_regex_split(text, {
@@ -12562,7 +12584,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
-                if (add_special && vocab.special_add_bos == 1) {
+                if (add_special && vocab.special_add_bos != 0) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
                     output.push_back(vocab.special_bos_id);
                 }
