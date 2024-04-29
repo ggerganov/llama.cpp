@@ -17579,7 +17579,43 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|assistant|>\n";
         }
-    } else {
+    } else if (tmpl == "minicpm" || (tmpl.find("<用户>") != std::string::npos && tmpl.find("<AI>") != std::string::npos )) {
+
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "user"){
+                ss << "<用户>: " << trim(message->content) << "\n";
+            }else{
+                ss << "<AI>: " << trim(message->content) << "\n";
+            }
+        }
+        if (add_ass) {
+            ss << "\n<AI>: ";
+        }
+    }else if (tmpl == "minicpm-128k" || tmpl.find("<|im_start|>") != std::string::npos) {
+        // chatml template
+        std::string tmp = "";
+        for (auto message : chat) {
+            std::string role(message->role);
+            std::string content(message->content);
+            //remove system ...
+            if (message->role == "system"){
+                role = "user";
+                tmp = message->content;
+                continue;
+            }
+
+            if(role == "user" && tmp !=""){
+                content =tmp+"\n\n"+ message->content;
+                tmp = "";
+            }
+
+            ss << "<|im_start|>" << role << "\n" << content << "<|im_end|>\n";
+        }
+        if (add_ass) {
+            ss << "<|im_start|>assistant\n";
+        }
+    }else {
         // template not supported
         return -1;
     }
