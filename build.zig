@@ -140,4 +140,33 @@ pub fn build(b: *std.build.Builder) !void {
     if (server.target.isWindows()) {
         server.linkSystemLibrary("ws2_32");
     }
+
+    const server_assets = [_][]const u8{ "index.html", "index.js", "completion.js", "json-schema-to-grammar.mjs" };
+    for (server_assets) |asset| {
+        const input_path = b.fmt("examples/server/public/{s}", .{asset});
+        const output_path = b.fmt("examples/server/{s}.hpp", .{asset});
+
+        // Portable equivalent of `b.addSystemCommand(&.{ "xxd", "-n", asset, "-i", input_path, output_path }) })`:
+
+        const input = try std.fs.cwd().readFileAlloc(b.allocator, input_path, std.math.maxInt(usize));
+        defer b.allocator.free(input);
+
+        var buf = std.ArrayList(u8).init(b.allocator);
+        defer buf.deinit();
+
+        for (input) |byte| {
+            try std.fmt.format(buf.writer(), "0x{X:0>2}, ", .{byte});
+        }
+
+        var name = try std.mem.replaceOwned(u8, b.allocator, asset, "-", "_");
+        defer b.allocator.free(name);
+        std.mem.replaceScalar(u8, name, '.', '_');
+
+        try std.fs.cwd().writeFile(output_path, b.fmt(
+            "unsigned char {s}[] = {{{s}}};\nunsigned int {s}_len = {d};\n",
+            .{ name, buf.items, name, input.len },
+        ));
+
+        std.debug.print("Dumped hex of \"{s}\" ({s}) to {s}\n", .{ input_path, name, output_path });
+    }
 }
