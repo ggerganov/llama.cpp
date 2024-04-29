@@ -551,14 +551,18 @@ inline int32_t chaton_tmpl_apply_capi(
  * * empty string, then dump the full loaded chaton-meta
  * * chaton-template-id, then dump contents related to that specific chat-handshake-template-standard
  */
-inline void _chaton_meta_dump(std::string &tmpl) {
+inline bool _chaton_meta_dump(std::string &tmpl) {
     json theJson;
     if (tmpl.empty()) {
         theJson = conMeta;
     } else {
         theJson = conMeta[tmpl];
+        if (theJson.empty()) {
+            LOGXLN("ERRR:%s:Specified template-id [%s] not found", __func__, tmpl.c_str());
+            return false;
+        }
     }
-    LOGXLN("\n\nINFO:%s:ChatOn Meta\n%s", __func__, theJson.dump(4).c_str());
+    LOGXLN("\n\nINFO:%s:ChatOn Meta:%s:\n%s", __func__, tmpl.c_str(), theJson.dump(4).c_str());
     if (!tmpl.empty()) {
         std::string globalBegin = conMeta[tmpl][K_GLOBAL][K_BEGIN];
         std::string globalEnd = conMeta[tmpl][K_GLOBAL][K_END];
@@ -602,6 +606,7 @@ inline void _chaton_meta_dump(std::string &tmpl) {
             LOG_TEELN("WARN:%s:Assistant->Begin seems to be set to [%s], do cross check if this is proper and needed", __func__, assistantBegin.c_str());
         }
     }
+    return true;
 }
 
 /**
@@ -610,9 +615,8 @@ inline void _chaton_meta_dump(std::string &tmpl) {
  */
 inline bool chaton_meta_ok(std::string &tmpl) {
     if (conMeta == nullptr) {
-        LOG_TEELN("ERRR:%s:ChatOn Meta: Not loaded yet...", __func__);
+        LOG_TEELN("ERRR:%s:%s:ChatOn Meta: Not loaded yet...", __func__, tmpl.c_str());
         return false;
     }
-    _chaton_meta_dump(tmpl);
-    return true;
+    return _chaton_meta_dump(tmpl);
 }

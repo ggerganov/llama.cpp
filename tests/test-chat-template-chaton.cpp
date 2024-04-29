@@ -120,6 +120,9 @@ static void check_chaton(std::string &metaJson) {
     for(auto tmplId: templateIds) {
         formatted_chat.resize(1024);
         std::cout << "\n----------" << tmplId << "---------------\n";
+        if (!chaton_meta_ok(tmplId)) {
+            exit(1);
+        }
         res = chaton_tmpl_apply_capi(tmplId.c_str(), conversation, message_count, true, formatted_chat.data(), formatted_chat.size());
         assert(res > 0);
         formatted_chat.resize(res);
