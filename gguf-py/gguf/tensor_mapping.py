@@ -24,6 +24,7 @@ class TensorNameMap:
             "backbone.embedding",                        # mamba
             "backbone.embeddings",                       # mamba-hf
             "transformer.in_out_embed",                  # Grok
+            "transformer.token_embeddings.weight",       # openelm
         ),
 
         # Token type embeddings
@@ -36,6 +37,7 @@ class TensorNameMap:
             "word_embeddings_layernorm",  # bloom
             "embeddings.LayerNorm",       # bert
             "emb_ln",                     # nomic-bert
+            "transformer.norm.weight",    # openelm
         ),
 
         # Position embeddings
@@ -68,6 +70,7 @@ class TensorNameMap:
             "model.norm_f",                            # mamba-qbert
             "backbone.norm_f",                         # mamba
             "transformer.rms_norm",                    # Grok
+            "transformer.norm.weight"                  # openelm
         ),
 
         # Rope frequencies
@@ -97,6 +100,7 @@ class TensorNameMap:
             "backbone.layers.{bid}.norm",                           # mamba
             "transformer.decoder_layer.{bid}.rms_norm",             # Grok
             "transformer.blocks.{bid}.norm_attn_norm.norm_1",       # dbrx
+            "transformer.layers.{bid}.attn_norm.weight"             # openelm
         ),
 
         # Attention norm 2
@@ -117,7 +121,8 @@ class TensorNameMap:
             "h.{bid}.attn.c_attn",                                                 # gpt2
             "transformer.h.{bid}.mixer.Wqkv",                                      # phi2
             "encoder.layers.{bid}.attn.Wqkv",                                      # nomic-bert
-            "model.layers.{bid}.self_attn.qkv_proj"                                # phi3
+            "model.layers.{bid}.self_attn.qkv_proj",                               # phi3
+            "transformer.layers.{bid}.attn.qkv_proj.weight"                        # openelm
         ),
 
         # Attention query
@@ -128,7 +133,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.q_proj",                           # gpt-j
             "model.layers.layers.{bid}.self_attn.q_proj",                # plamo
             "model.layers.{bid}.attention.wq",                           # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.query" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.query",# Grok
         ),
 
         # Attention key
@@ -139,7 +144,8 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.k_proj",                         # gpt-j
             "model.layers.layers.{bid}.self_attn.k_proj",              # plamo
             "model.layers.{bid}.attention.wk",                         # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.key" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.key", # Grok
+            "transformer.layers.{bid}.attn.k_norm.weight"               # openelm
         ),
 
         # Attention value
@@ -150,7 +156,8 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.v_proj",                           # gpt-j
             "model.layers.layers.{bid}.self_attn.v_proj",                # plamo
             "model.layers.{bid}.attention.wv",                           # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.value" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.value",# Grok
+
         ),
 
         # Attention output
@@ -173,6 +180,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.attn.out_proj",                           # nomic-bert
             "transformer.decoder_layer.{bid}.multi_head_attention.linear",  # Grok
             "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj",        # dbrx
+            "transformer.layers.{bid}.attn.out_proj.weight"                 # openelm
         ),
 
         # Attention output norm
@@ -204,6 +212,7 @@ class TensorNameMap:
             "h.{bid}.ln_2",                                                  # gpt2
             "model.layers.{bid}.ffn_norm",                                   # internlm2
             "transformer.decoder_layer.{bid}.rms_norm_2",                    # Grok
+            "transformer.layers.{bid}.ffn_norm.weight",                      # openelm
         ),
 
         MODEL_TENSOR.FFN_GATE_INP: (
@@ -240,6 +249,7 @@ class TensorNameMap:
             "model.layers.{bid}.feed_forward.w3",                     # internlm2
             "encoder.layers.{bid}.mlp.fc11",                          # nomic-bert
             "model.layers.{bid}.mlp.c_fc",                            # starcoder2
+            "transformer.layers.{bid}.ffn.proj_1.weight"              # openelm
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -299,6 +309,7 @@ class TensorNameMap:
             "model.layers.{bid}.feed_forward.w2",                     # internlm2
             "encoder.layers.{bid}.mlp.fc2",                           # nomic-bert
             "model.layers.{bid}.mlp.c_proj",                          # starcoder2
+            "transformer.layers.{bid}.ffn.proj_2.weight"              # openelm
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
@@ -317,6 +328,7 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.q_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.q_norm",                            # cohere
             "transformer.blocks.{bid}.attn.q_ln",                             # sea-lion
+            "transformer.layers.{bid}.attn.q_norm.weight"                     # openelm
         ),
 
         MODEL_TENSOR.ATTN_K_NORM: (
@@ -324,6 +336,7 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.k_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.k_norm",                            # cohere
             "transformer.blocks.{bid}.attn.k_ln",                             # sea-lion
+            "transformer.layers.{bid}.attn.k_norm.weight"
         ),
 
         MODEL_TENSOR.ROPE_FREQS: (

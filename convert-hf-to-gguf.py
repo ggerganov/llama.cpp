@@ -56,7 +56,7 @@ class Model(ABC):
         self.part_names = self._get_part_names()
         self.hparams = Model.load_hparams(self.dir_model)
         self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
-        self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
+        self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer", "num_transformer_layers"])
 
     @property
     @abstractmethod
@@ -2901,6 +2901,105 @@ class OlmoModel(Model):
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
+            self.gguf_writer.add_tensor(new_name, data)
+
+@Model.register("OpenELMForCausalLM")
+class OpenELM(Model):
+    model_arch = gguf.MODEL_ARCH.OPENELM
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name("OpenElm")
+        self.block_count = self.find_hparam(["num_transformer_layers"])
+        self.gguf_writer.add_layer_norm_eps(1e-5)
+        self.gguf_writer.add_layer_norm_rms_eps(1e-6) # https://github.com/apple/corenet/blob/0333b1fbb29c31809663c4e6de2654b9ff2d27de/mlx_examples/open_elm/open_elm.py#L20
+        n_embd = self.find_hparam(["model_dim"])
+        self.gguf_writer.add_embedding_length(n_embd)
+        head_dim = self.find_hparam(["head_dim"])
+        n_head = n_embd // head_dim
+        rot_pct = 1.0
+        self.gguf_writer.add_context_length(self.find_hparam(["max_context_length"]))
+        self.gguf_writer.add_embedding_length(n_embd)
+        self.gguf_writer.add_block_count(self.block_count)
+        self.gguf_writer.add_head_count(n_head)
+        self.gguf_writer.add_head_count_kv(n_head)
+        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def set_vocab(self):
+        from sentencepiece import SentencePieceProcessor
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+        if not tokenizer_path.is_file():
+            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
+            sys.exit(1)
+        tokenizer = SentencePieceProcessor(str(tokenizer_path))
+        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        for token_id in range(tokenizer.vocab_size()):
+            piece = tokenizer.id_to_piece(token_id)
+            text = piece.encode("utf-8")
+            score = tokenizer.get_score(token_id)
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.is_unknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.is_control(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.is_unused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.is_byte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
+        added_tokens_file = self.dir_model / 'added_tokens.json'
+        if added_tokens_file.is_file():
+            with open(added_tokens_file, "r", encoding="utf-8") as f:
+                added_tokens_json = json.load(f)
+                for key in added_tokens_json:
+                    token_id = added_tokens_json[key]
+                    if (token_id >= vocab_size):
+                        print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        continue
+                    tokens[token_id] = key.encode("utf-8")
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    # Same as super class, but permuting q_proj, k_proj
+    # Copied from: LlamaModel
+    def write_tensors(self):
+        block_count = self.hparams.get("num_transformer_layers", self.hparams.get("num_hidden_layers", self.hparams.get("num_transformer_layers")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_head = self.hparams.get("model_dim") //  self.hparams.get("head_dim") # TODO: propagate this
+        for name, data_torch in self.get_tensors():
+            old_dtype = data_torch.dtype
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+            data = data_torch.numpy()
+            data = data.squeeze()
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+            new_name += ".weight"
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+            # 1d tensors need to be converted to float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and n_dims == 2:
+                data = data.astype(np.float16)
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
 

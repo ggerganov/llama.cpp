@@ -818,7 +818,7 @@ bool llamafile_sgemm(int64_t m, int64_t n, int64_t k, const void *A, int64_t lda
     assert(m >= 0);
     assert(n >= 0);
     assert(k >= 0);
-    assert(lda >= k);
+    assert(lda >= k); // Currently failing here
     assert(ldb >= k);
     assert(ldc >= m);
     assert(nth > 0);
