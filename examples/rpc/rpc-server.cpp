@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,6 +92,14 @@ int main(int argc, char * argv[])
         if (client_socket < 0) {
             fprintf(stderr, "Failed to accept client connection\n");
             return 1;
+        }
+        // set TCP_NODELAY to disable Nagle's algorithm
+        int flag = 1;
+        int ret = setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
+        if (ret < 0) {
+            fprintf(stderr, "Failed to set TCP_NODELAY\n");
+            close(client_socket);
+            continue;
         }
         printf("Accepted client connection\n");
         rpc_serve_client(backend, client_socket);

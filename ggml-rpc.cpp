@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
@@ -55,6 +56,12 @@ static int socket_connect(const char * host, int port) {
     struct sockaddr_in addr;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
+        return -1;
+    }
+    // set TCP_NODELAY to disable Nagle's algorithm
+    int flag = 1;
+    int ret = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
+    if (ret < 0) {
         return -1;
     }
     addr.sin_family = AF_INET;
