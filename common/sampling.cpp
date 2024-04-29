@@ -275,9 +275,9 @@ static llama_token_data_array llama_sampling_prepare_impl(
     const bool    penalize_nl     = params.penalize_nl;
 
     // DRY sampler parameters
-    const float   dry_multiplier        = params.dry_multiplier;
-    const float   dry_base              = params.dry_base;
-    const int     dry_allowed_length    = params.dry_allowed_length;
+    const float     dry_multiplier        = params.dry_multiplier;
+    const float     dry_base              = params.dry_base;
+    const uint32_t  dry_allowed_length    = params.dry_allowed_length;
 
     auto & prev = ctx_sampling->prev;
     auto & cur  = ctx_sampling->cur;
@@ -320,11 +320,11 @@ static llama_token_data_array llama_sampling_prepare_impl(
                 penalty_tokens_used_size, penalty_repeat, penalty_freq, penalty_present);
 
         // DRY penalties (multiplier > 0 means enabled)
-        if(dry_multiplier > 0.0f) {
+        if (dry_multiplier > 0.0f) {
             llama_sample_dry(ctx_main, &cur_p,
                             penalty_tokens.data() + penalty_tokens.size() - penalty_tokens_used_size,
                             penalty_tokens_used_size, dry_base, dry_multiplier, dry_allowed_length,
-                            params.dry_sequence_breakers.data(), params.dry_sequence_breakers.size());
+                            params.dry_seq_breakers.data(), params.dry_seq_breakers.size());
         }
 
         if (!penalize_nl) {
