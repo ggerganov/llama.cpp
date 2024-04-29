@@ -1693,6 +1693,18 @@ std::vector<std::string> string_split(std::string input, char separator) {
     return parts;
 }
 
+std::string string_strip(const std::string & str) {
+    size_t start = 0;
+    size_t end = str.size();
+    while (start < end && std::isspace(str[start])) {
+        start++;
+    }
+    while (end > start && std::isspace(str[end - 1])) {
+        end--;
+    }
+    return str.substr(start, end - start);
+}
+
 std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
     std::unordered_map<std::string, llama_sampler_type> sampler_canonical_name_map {
         {"top_k",       llama_sampler_type::TOP_K},

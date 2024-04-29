@@ -139,8 +139,13 @@ class GGUFReader:
 
     def _push_field(self, field: ReaderField, skip_sum: bool = False) -> int:
         if field.name in self.fields:
-            raise KeyError(f'Duplicate {field.name} already in list at offset {field.offset}')
-        self.fields[field.name] = field
+            # TODO: add option to generate error on duplicate keys
+            # raise KeyError(f'Duplicate {field.name} already in list at offset {field.offset}')
+
+            print(f'Warning: Duplicate key {field.name} at offset {field.offset}')
+            self.fields[field.name + '_{}'.format(field.offset)] = field
+        else:
+            self.fields[field.name] = field
         return 0 if skip_sum else sum(int(part.nbytes) for part in field.parts)
 
     def _get_str(self, offset: int) -> tuple[npt.NDArray[np.uint64], npt.NDArray[np.uint8]]:

@@ -99,6 +99,7 @@ def main():
 
     tokens, scores, toktypes = _get_sentencepiece_tokenizer_info(args.model_dir)
     gguf_writer.add_tokenizer_model('llama')
+    gguf_writer.add_tokenizer_pre('default')
     gguf_writer.add_token_list(tokens)
     gguf_writer.add_token_scores(scores)
     gguf_writer.add_token_types(toktypes)

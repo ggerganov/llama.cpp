@@ -317,6 +317,7 @@ enum llm_kv {
     LLM_KV_SSM_TIME_STEP_RANK,
 
     LLM_KV_TOKENIZER_MODEL,
+    LLM_KV_TOKENIZER_PRE,
     LLM_KV_TOKENIZER_LIST,
     LLM_KV_TOKENIZER_TOKEN_TYPE,
     LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,
@@ -393,6 +394,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_SSM_TIME_STEP_RANK,            "%s.ssm.time_step_rank" },
 
     { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
+    { LLM_KV_TOKENIZER_PRE,                 "tokenizer.ggml.pre"                },
     { LLM_KV_TOKENIZER_LIST,                "tokenizer.ggml.tokens"             },
     { LLM_KV_TOKENIZER_TOKEN_TYPE,          "tokenizer.ggml.token_type"         },
     { LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,    "tokenizer.ggml.token_type_count"   },
@@ -2115,7 +2117,8 @@ struct llama_vocab {
         ttype type;
     };
 
-    enum llama_vocab_type type = LLAMA_VOCAB_TYPE_SPM;
+    enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
+    enum llama_vocab_pre_type type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
 
     std::unordered_map<token, id> token_to_id;
     std::vector<token_data>       id_to_token;
@@ -4214,11 +4217,13 @@ static void llm_load_vocab(
 
     // determine vocab type
     {
-        std::string tokenizer_name;
+        std::string tokenizer_model;
+        std::string tokenizer_pre;
 
-        ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_name);
+        ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_model);
+        ml.get_key(LLM_KV_TOKENIZER_PRE,   tokenizer_pre, false);
 
-        if (tokenizer_name == "no_vocab") {
+        if (tokenizer_model == "no_vocab") {
             vocab.type = LLAMA_VOCAB_TYPE_NONE;
 
             // default special tokens
@@ -4232,7 +4237,7 @@ static void llm_load_vocab(
             vocab.linefeed_id     = -1;
 
             return;
-        } else if (tokenizer_name == "llama") {
+        } else if (tokenizer_model == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
             // default special tokens
@@ -4277,9 +4282,27 @@ static void llm_load_vocab(
             if (add_space_prefix_keyidx != -1) {
                 vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
             } // The default value of add_space_prefix is true.
-        } else if (tokenizer_name == "gpt2") {
-            vocab.type = LLAMA_VOCAB_TYPE_BPE;
+        } else if (tokenizer_model == "bert") {
+            vocab.type = LLAMA_VOCAB_TYPE_WPM;
 
+            // default special tokens
+            vocab.special_bos_id  = -1;
+            vocab.special_eos_id  = -1;
+            vocab.special_unk_id  = 100;
+            vocab.special_sep_id  = 102;
+            vocab.special_pad_id  = 0;
+            vocab.special_cls_id  = 101;
+            vocab.special_mask_id = 103;
+            vocab.add_space_prefix = false;
+        } else {
+            if (tokenizer_model == "gpt2") {
+                vocab.type = LLAMA_VOCAB_TYPE_BPE;
+            } else {
+                LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_model.c_str());
+                LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
+                vocab.type = LLAMA_VOCAB_TYPE_SPM;
+                return;
+            }
             // read bpe merges and populate bpe ranks
             const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
             if (merges_keyidx == -1) {
@@ -4313,23 +4336,50 @@ static void llm_load_vocab(
             vocab.special_pad_id  = -1;
             vocab.special_cls_id  = -1;
             vocab.special_mask_id = -1;
-        } else if (tokenizer_name == "bert") {
-            vocab.type = LLAMA_VOCAB_TYPE_WPM;
+        }
 
-            // default special tokens
-            vocab.special_bos_id  = -1;
-            vocab.special_eos_id  = -1;
-            vocab.special_unk_id  = 100;
-            vocab.special_sep_id  = 102;
-            vocab.special_pad_id  = 0;
-            vocab.special_cls_id  = 101;
-            vocab.special_mask_id = 103;
-            vocab.add_space_prefix = false;
+        // for now, only BPE models have pre-tokenizers
+        if (vocab.type == LLAMA_VOCAB_TYPE_BPE) {
+            if (tokenizer_pre.empty()) {
+                LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
+                LLAMA_LOG_WARN("%s:                                             \n", __func__);
+                LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
+                LLAMA_LOG_WARN("%s: GENERATION QUALITY WILL BE DEGRADED!        \n", __func__);
+                LLAMA_LOG_WARN("%s: CONSIDER REGENERATING THE MODEL             \n", __func__);
+                LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
+                LLAMA_LOG_WARN("%s:                                             \n", __func__);
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            } else if (
+                    tokenizer_pre == "default") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            } else if (
+                    tokenizer_pre == "llama3"   ||
+                    tokenizer_pre == "llama-v3" ||
+                    tokenizer_pre == "llama-bpe") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
+            } else if (
+                    tokenizer_pre == "deepseek-llm") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
+            } else if (
+                    tokenizer_pre == "deepseek-coder") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER;
+            } else if (
+                    tokenizer_pre == "falcon") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON;
+            } else if (
+                    tokenizer_pre == "mpt") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_MPT;
+            } else if (
+                    tokenizer_pre == "starcoder") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STARCODER;
+            } else if (
+                    tokenizer_pre == "gpt-2") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
+            } else {
+                throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
+            }
         } else {
-            LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
-            LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
-
-            vocab.type = LLAMA_VOCAB_TYPE_SPM;
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
         }
     }
 
@@ -11834,7 +11884,7 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
         }
         case LLAMA_VOCAB_TYPE_BPE: {
             GGML_ASSERT(false);
-            return unicode_utf8_to_byte(token_data.text);
+            return unicode_utf8_to_byte(token_data.text); // TODO: why is this here after GGML_ASSERT?
         }
         case LLAMA_VOCAB_TYPE_WPM: {
             GGML_ASSERT(false);
@@ -12056,7 +12106,79 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
-        auto word_collection = bpe_gpt2_preprocess(text);
+
+        std::vector<std::string> word_collection;
+        switch (vocab.type) {
+            case LLAMA_VOCAB_TYPE_BPE:
+                switch (vocab.type_pre) {
+                    case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
+                        word_collection = unicode_regex_split(text, {
+                            // original regex from tokenizer.json
+                            //"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+
+                            // adapted: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2080233989
+                            "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM:
+                        word_collection = unicode_regex_split(text, {
+                            "[\r\n]",
+                            "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
+                            "\\s?[!-/:-~！-／：-～‘-‟　-。]+",
+                            "\\s+$",
+                            "[一-龥ࠀ-一가-퟿]+",
+                            "\\p{N}+",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER:
+                        word_collection = unicode_regex_split(text, {
+                            "[\r\n]",
+                            "\\s?\\p{L}+",
+                            "\\s?\\p{P}+",
+                            "[一-龥ࠀ-一가-퟿]+",
+                            "\\p{N}+",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_FALCON:
+                        word_collection = unicode_regex_split(text, {
+                            "[\\p{P}\\$\\+<=>\\^~\\|]+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                            "\\p{N}+",
+                            "[0-9][0-9][0-9]",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_MPT:
+                        // TODO: MPT pre-tokenization regexes are unknown
+                        //       the following are close, but not exact. run the following:
+                        //       ./bin/test-tokenizer-0 ../models/ggml-vocab-mpt.gguf
+                        GGML_ASSERT("MPT pre-tokenization regexes are unknown - fixes needed");
+                        word_collection = unicode_regex_split(text, {
+                            "\\s?\\p{L}+",
+                            "\\s?\\p{P}+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_STARCODER:
+                    case LLAMA_VOCAB_PRE_TYPE_GPT2:
+                        word_collection = unicode_regex_split(text, {
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                        });
+                        break;
+                    default:
+                        // default regex for BPE tokenization pre-processing
+                        word_collection = unicode_regex_split(text, {
+                            "[\\p{P}\\$\\+<=>\\^~\\|]+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                            "\\p{N}+",
+                            "[0-9][0-9][0-9]",
+                        });
+                        break;
+                }
+                break;
+            default:
+                GGML_ASSERT(false);
+                break;
+        }
 
         symbols_final.clear();
 
@@ -12181,145 +12303,6 @@ private:
         bigram.rank  = rank_found;
 
         work_queue.push(bigram);
-    }
-
-    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
-        std::vector<std::string> bpe_words;
-        std::vector<std::string> bpe_encoded_words;
-
-        std::string token = "";
-        // GPT2 system regex:  's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
-        bool collecting_numeric = false;
-        bool collecting_letter = false;
-        bool collecting_special = false;
-        bool collecting_whitespace_lookahead = false;
-        bool collecting = false;
-
-        std::vector<std::string> text_utf;
-        text_utf.reserve(text.size());
-        bpe_words.reserve(text.size());
-        bpe_encoded_words.reserve(text.size());
-
-        const auto cpts = unicode_cpts_from_utf8(text);
-        for (size_t i = 0; i < cpts.size(); ++i)
-            text_utf.emplace_back(unicode_cpt_to_utf8(cpts[i]));
-
-        for (int i = 0; i < (int)text_utf.size(); i++) {
-            const std::string & utf_char = text_utf[i];
-            bool split_condition = false;
-            int bytes_remain = text_utf.size() - i;
-            // forward backward lookups
-            const std::string & utf_char_next = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
-            const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
-
-            // handling contractions
-            if (!split_condition && bytes_remain >= 2) {
-                // 's|'t|'m|'d
-                if (utf_char == "\'" && (utf_char_next == "s" || utf_char_next == "t" || utf_char_next == "m" || utf_char_next == "d")) {
-                    split_condition = true;
-                }
-                if (split_condition) {
-                    if (token.size()) {
-                        bpe_words.emplace_back(token); // push previous content as token
-                    }
-                    token = utf_char + utf_char_next;
-                    bpe_words.emplace_back(token);
-                    token = "";
-                    i++;
-                    continue;
-                }
-            }
-            if (!split_condition && bytes_remain >= 3) {
-                // 're|'ve|'ll
-                if (utf_char == "\'" && (
-                    (utf_char_next == "r" && utf_char_next_next == "e") ||
-                    (utf_char_next == "v" && utf_char_next_next == "e") ||
-                    (utf_char_next == "l" && utf_char_next_next == "l"))
-                    ) {
-                    split_condition = true;
-                }
-                if (split_condition) {
-                    // current token + next token can be defined
-                    if (token.size()) {
-                        bpe_words.emplace_back(token); // push previous content as token
-                    }
-                    token = utf_char + utf_char_next + utf_char_next_next;
-                    bpe_words.emplace_back(token); // the contraction
-                    token = "";
-                    i += 2;
-                    continue;
-                }
-            }
-
-            if (!split_condition && !collecting) {
-                if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER)) {
-                    collecting_letter = true;
-                    collecting = true;
-                }
-                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
-                    collecting_numeric = true;
-                    collecting = true;
-                }
-                else if (
-                    ((unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (unicode_cpt_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
-                    (!token.size() && utf_char == " " && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
-                    ) {
-                    collecting_special = true;
-                    collecting = true;
-                }
-                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_WHITESPACE) {
-                    collecting_whitespace_lookahead = true;
-                    collecting = true;
-                }
-                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE) {
-                    split_condition = true;
-                }
-            }
-            else if (!split_condition && collecting) {
-                if (collecting_letter && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER) {
-                    split_condition = true;
-                }
-                else if (collecting_numeric && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) {
-                    split_condition = true;
-                }
-                else if (collecting_special && (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
-                    split_condition = true;
-                }
-                else if (collecting_whitespace_lookahead && (unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
-                    split_condition = true;
-                }
-            }
-
-            if (utf_char_next == "") {
-                split_condition = true; // final
-                token += utf_char;
-            }
-
-            if (split_condition) {
-                if (token.size()) {
-                    bpe_words.emplace_back(token);
-                }
-                token = utf_char;
-                collecting = false;
-                collecting_letter = false;
-                collecting_numeric = false;
-                collecting_special = false;
-                collecting_whitespace_lookahead = false;
-            }
-            else {
-                token += utf_char;
-            }
-        }
-
-        for (std::string & word : bpe_words) {
-            std::string encoded_token = "";
-            for (char & c : word) {
-                encoded_token += unicode_byte_to_utf8(c);
-            }
-            bpe_encoded_words.emplace_back(encoded_token);
-        }
-
-        return bpe_encoded_words;
     }
 
     const llama_vocab & vocab;
@@ -12641,7 +12624,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
-                if (add_special && vocab.special_add_bos == 1) {
+                if (add_special && vocab.special_add_bos != 0) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
                     output.push_back(vocab.special_bos_id);
                 }

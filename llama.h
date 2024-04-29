@@ -69,6 +69,18 @@ extern "C" {
         LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
     };
 
+    // pre-tokenization types
+    enum llama_vocab_pre_type {
+        LLAMA_VOCAB_PRE_TYPE_DEFAULT        = 0,
+        LLAMA_VOCAB_PRE_TYPE_LLAMA3         = 1,
+        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM   = 2,
+        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER = 3,
+        LLAMA_VOCAB_PRE_TYPE_FALCON         = 4,
+        LLAMA_VOCAB_PRE_TYPE_MPT            = 5,
+        LLAMA_VOCAB_PRE_TYPE_STARCODER      = 6,
+        LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
+    };
+
     // note: these values should be synchronized with ggml_rope
     // TODO: maybe move this enum to ggml.h (ggml_rope_type)
     enum llama_rope_type {
