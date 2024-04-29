@@ -854,12 +854,12 @@ struct server_context {
         slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
         slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
         slot.params.n_discard          = json_value(data, "n_discard",         default_params.n_discard);
-        slot.params.seed               = json_value(data, "seed",              default_params.seed);
+        slot.sparams.seed              = json_value(data, "seed",              default_sparams.seed);
         slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
         slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
         // process "json_schema" and "grammar"
-        if (data.contains("json_schema") && data.contains("grammar")) {
+        if (data.contains("json_schema") && !data["json_schema"].is_null() && data.contains("grammar") && !data["grammar"].is_null()) {
             send_error(task, "Either \"json_schema\" or \"grammar\" can be specified, but not both", ERROR_TYPE_INVALID_REQUEST);
             return false;
         } else if (data.contains("json_schema") && !data.contains("grammar")) {
@@ -1028,7 +1028,6 @@ struct server_context {
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
                 return false;
             }
-            llama_set_rng_seed(ctx, slot.params.seed);
         }
 
         slot.command = SLOT_COMMAND_LOAD_PROMPT;
@@ -1083,7 +1082,7 @@ struct server_context {
                 };
 
                 if (llama_decode(ctx, batch_view) != 0) {
-                    LOG_TEE("%s: llama_decode() failed\n", __func__);
+                    LOG_ERROR("llama_decode() failed", {});
                     return;
                 }
             }
@@ -1118,7 +1117,7 @@ struct server_context {
 
     bool process_token(completion_token_output & result, server_slot & slot) {
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = llama_token_to_piece(ctx, result.tok);
+        const std::string token_str = llama_token_to_piece(ctx, result.tok, false);
         slot.sampled = result.tok;
 
         // search stop word and delete it
@@ -1201,11 +1200,32 @@ struct server_context {
             });
         }
 
-        if (result.tok == llama_token_eos(model)) {
+        if (llama_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
             LOG_VERBOSE("eos token found", {});
+        }
+
+        auto n_ctx_train = llama_n_ctx_train(model);
+        if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.ga_n == 1
+                    && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
+            LOG_WARNING("n_predict is not set and self-context extend is disabled."
+                        " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
+                    { "id_slot",              slot.id },
+                    { "params.n_predict",     slot.params.n_predict },
+                    { "slot.n_prompt_tokens", slot.n_prompt_tokens },
+                    { "slot.n_decoded",       slot.n_decoded },
+                    { "slot.n_predict",       slot.n_predict },
+                    { "n_slots",              params.n_parallel },
+                    { "slot.n_ctx",           slot.n_ctx },
+                    { "n_ctx",                n_ctx },
+                    { "n_ctx_train",          n_ctx_train },
+                    { "ga_n",                 slot.ga_n },
+                });
+            slot.truncated      = true;
+            slot.stopped_limit  = true;
+            slot.has_next_token = false; // stop prediction
         }
 
         LOG_VERBOSE("next token", {
@@ -1281,7 +1301,11 @@ struct server_context {
     }
 
     void send_error(const int id_task, const int id_multi, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
-        LOG_TEE("task %i - error: %s\n", id_task, error.c_str());
+        LOG_ERROR("task error", {
+            {"id_multi", id_multi},
+            {"id_task", id_task},
+            {"error", error},
+        });
 
         server_task_result res;
         res.id       = id_task;
@@ -2138,7 +2162,7 @@ struct server_context {
         });
 
         // process the created batch of tokens
-        for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch) {
+        for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
             const int32_t n_tokens = std::min(n_batch, batch.n_tokens - i);
 
             for (auto & slot : slots) {
@@ -2186,7 +2210,11 @@ struct server_context {
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
-                    LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
+                    LOG_ERROR("failed to decode the batch: KV cache is full - try increasing it via the context size", {
+                        {"i",   i},
+                        {"n_batch",  ret},
+                        {"ret",   ret},
+                    });
                     for (auto & slot : slots) {
                         slot.state = SLOT_STATE_PROCESSING;
                         slot.command = SLOT_COMMAND_NONE;
@@ -2196,11 +2224,15 @@ struct server_context {
                     break; // break loop of n_batch
                 }
 
-                LOG_TEE("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
-
                 // retry with half the batch size to try to find a free slot in the KV cache
                 n_batch /= 2;
                 i -= n_batch;
+
+                LOG_WARNING("failed to find free space in the KV cache, retrying with smaller batch size - try increasing it via the context size or enable defragmentation", {
+                    {"i",   i},
+                    {"n_batch",  n_batch},
+                    {"ret",   ret},
+                });
 
                 continue; // continue loop of n_batch
             }
@@ -2360,7 +2392,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                            advanced option to override model metadata by key. may be specified multiple times.\n");
-    printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
+    printf("                            types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`\n");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`\n");
     printf("  --chat-template JINJA_TEMPLATE\n");
@@ -2791,43 +2823,11 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            char * sep = strchr(argv[i], '=');
-            if (sep == nullptr || sep - argv[i] >= 128) {
-                fprintf(stderr, "error: Malformed KV override: %s\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-
-            struct llama_model_kv_override kvo;
-            std::strncpy(kvo.key, argv[i], sep - argv[i]);
-            kvo.key[sep - argv[i]] = 0;
-            sep++;
-            if (strncmp(sep, "int:", 4) == 0) {
-                sep += 4;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-                kvo.int_value = std::atol(sep);
-            } else if (strncmp(sep, "float:", 6) == 0) {
-                sep += 6;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-                kvo.float_value = std::atof(sep);
-            } else if (strncmp(sep, "bool:", 5) == 0) {
-                sep += 5;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
-                if (std::strcmp(sep, "true") == 0) {
-                    kvo.bool_value = true;
-                } else if (std::strcmp(sep, "false") == 0) {
-                    kvo.bool_value = false;
-                } else {
-                    fprintf(stderr, "error: Invalid boolean value for KV override: %s\n", argv[i]);
-                    invalid_param = true;
-                    break;
-                }
-            } else {
+            if (!parse_kv_override(argv[i], params.kv_overrides)) {
                 fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
                 invalid_param = true;
                 break;
             }
-            params.kv_overrides.push_back(kvo);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             server_print_usage(argv[0], default_params, default_sparams);

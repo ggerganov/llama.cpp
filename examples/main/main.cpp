@@ -240,7 +240,6 @@ int main(int argc, char ** argv) {
                 return 1;
             }
             session_tokens.resize(n_token_count_out);
-            llama_set_rng_seed(ctx, params.seed);
             LOG_TEE("%s: loaded a session with prompt size of %d tokens\n", __func__, (int)session_tokens.size());
         }
     }
@@ -795,8 +794,8 @@ int main(int argc, char ** argv) {
                 }
             }
 
-            // deal with end of text token in interactive mode
-            if (llama_sampling_last(ctx_sampling) == llama_token_eos(model)) {
+            // deal with end of generation tokens in interactive mode
+            if (llama_token_is_eog(model, llama_sampling_last(ctx_sampling))) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
@@ -920,8 +919,8 @@ int main(int argc, char ** argv) {
             }
         }
 
-        // end of text token
-        if (!embd.empty() && embd.back() == llama_token_eos(model) && !(params.instruct || params.interactive || params.chatml)) {
+        // end of generation
+        if (!embd.empty() && llama_token_is_eog(model, embd.back()) && !(params.instruct || params.interactive || params.chatml)) {
             LOG_TEE(" [end of text]\n");
             break;
         }

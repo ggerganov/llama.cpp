@@ -525,7 +525,14 @@ class LlamaHfVocab(Vocab):
 
         # pre-check so we know if we need transformers
         tokenizer_model: dict[str, Any] = tokenizer_json['model']
-        if (
+        is_llama3 = (
+            tokenizer_model['type'] == 'BPE' and tokenizer_model.get('ignore_merges', False)
+            and not tokenizer_model.get('byte_fallback', True)
+        )
+        if is_llama3:
+            raise TypeError('Llama 3 must be converted with BpeVocab')
+
+        if not is_llama3 and (
             tokenizer_model['type'] != 'BPE' or not tokenizer_model.get('byte_fallback', False)
             or tokenizer_json['decoder']['type'] != 'Sequence'
         ):
@@ -1350,7 +1357,7 @@ def load_some_model(path: Path) -> ModelPlus:
     # Be extra-friendly and accept either a file or a directory:
     if path.is_dir():
         # Check if it's a set of safetensors files first
-        globs = ["model-00001-of-*.safetensors", "model.safetensors"]
+        globs = ["model-00001-of-*.safetensors", "model.safetensors", "consolidated.safetensors"]
         files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             # Try the PyTorch patterns too, with lower priority

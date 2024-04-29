@@ -14,47 +14,6 @@
 #include <stdlib.h> // for qsort
 #include <stdio.h>  // for GGML_ASSERT
 
-#ifdef __ARM_NEON
-
-// if YCM cannot find <arm_neon.h>, make a symbolic link to it, for example:
-//
-//   $ ln -sfn /Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/include/arm_neon.h ./src/
-//
-#include <arm_neon.h>
-
-#else
-
-#ifdef __wasm_simd128__
-#include <wasm_simd128.h>
-#else
-#if defined(__POWER9_VECTOR__) || defined(__powerpc64__)
-#include <altivec.h>
-#undef bool
-#define bool _Bool
-#else
-#if defined(_MSC_VER) || defined(__MINGW32__)
-#include <intrin.h>
-#else
-#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__) || defined(__SSE3__)
-#if !defined(__riscv)
-#include <immintrin.h>
-#endif
-#endif
-#endif
-#endif
-#endif
-#endif
-
-#ifdef __riscv_v_intrinsic
-#include <riscv_vector.h>
-#endif
-
-#undef MIN
-#undef MAX
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-
 #define UNUSED GGML_UNUSED
 
 // some compilers don't provide _mm256_set_m128i, e.g. gcc 7
@@ -132,7 +91,7 @@ static inline __m256 sum_i16_pairs_float(const __m256i x) {
 }
 
 static inline __m256 mul_sum_us8_pairs_float(const __m256i ax, const __m256i sy) {
-#if defined(__AVXVNNI__) || defined(__AVX512VNNI__)
+#if defined(__AVXVNNI__) || (defined(__AVX512VNNI__) && defined(__AVX512VL__))
     const __m256i zero = _mm256_setzero_si256();
     const __m256i summed_pairs = _mm256_dpbusd_epi32(zero, ax, sy);
     return _mm256_cvtepi32_ps(summed_pairs);
@@ -275,258 +234,6 @@ static inline float hsum_float_4x4(const __m128 a, const __m128 b, const __m128 
 }
 #endif // __AVX__ || __AVX2__ || __AVX512F__
 #endif // defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__)
-
-#if defined(__ARM_NEON)
-
-#ifdef _MSC_VER
-
-#define ggml_vld1q_u32(w,x,y,z) { ((w) + ((uint64_t)(x) << 32)), ((y) + ((uint64_t)(z) << 32)) }
-
-#else
-
-#define ggml_vld1q_u32(w,x,y,z) { (w), (x), (y), (z) }
-
-#endif
-
-#if !defined(__aarch64__)
-
-// 64-bit compatibility
-
-// vaddvq_s16
-// vpaddq_s16
-// vpaddq_s32
-// vaddvq_s32
-// vaddvq_f32
-// vmaxvq_f32
-// vcvtnq_s32_f32
-// vzip1_u8
-// vzip2_u8
-
-inline static int32_t vaddvq_s16(int16x8_t v) {
-    return
-        (int32_t)vgetq_lane_s16(v, 0) + (int32_t)vgetq_lane_s16(v, 1) +
-        (int32_t)vgetq_lane_s16(v, 2) + (int32_t)vgetq_lane_s16(v, 3) +
-        (int32_t)vgetq_lane_s16(v, 4) + (int32_t)vgetq_lane_s16(v, 5) +
-        (int32_t)vgetq_lane_s16(v, 6) + (int32_t)vgetq_lane_s16(v, 7);
-}
-
-inline static int16x8_t vpaddq_s16(int16x8_t a, int16x8_t b) {
-    int16x4_t a0 = vpadd_s16(vget_low_s16(a), vget_high_s16(a));
-    int16x4_t b0 = vpadd_s16(vget_low_s16(b), vget_high_s16(b));
-    return vcombine_s16(a0, b0);
-}
-
-inline static int32x4_t vpaddq_s32(int32x4_t a, int32x4_t b) {
-    int32x2_t a0 = vpadd_s32(vget_low_s32(a), vget_high_s32(a));
-    int32x2_t b0 = vpadd_s32(vget_low_s32(b), vget_high_s32(b));
-    return vcombine_s32(a0, b0);
-}
-
-inline static int32_t vaddvq_s32(int32x4_t v) {
-    return vgetq_lane_s32(v, 0) + vgetq_lane_s32(v, 1) + vgetq_lane_s32(v, 2) + vgetq_lane_s32(v, 3);
-}
-
-inline static float vaddvq_f32(float32x4_t v) {
-    return vgetq_lane_f32(v, 0) + vgetq_lane_f32(v, 1) + vgetq_lane_f32(v, 2) + vgetq_lane_f32(v, 3);
-}
-
-inline static float vmaxvq_f32(float32x4_t v) {
-    return
-        MAX(MAX(vgetq_lane_f32(v, 0), vgetq_lane_f32(v, 1)),
-            MAX(vgetq_lane_f32(v, 2), vgetq_lane_f32(v, 3)));
-}
-
-inline static int32x4_t vcvtnq_s32_f32(float32x4_t v) {
-    int32x4_t res;
-
-    res[0] = roundf(vgetq_lane_f32(v, 0));
-    res[1] = roundf(vgetq_lane_f32(v, 1));
-    res[2] = roundf(vgetq_lane_f32(v, 2));
-    res[3] = roundf(vgetq_lane_f32(v, 3));
-
-    return res;
-}
-
-inline static uint8x8_t vzip1_u8(uint8x8_t a, uint8x8_t b) {
-    uint8x8_t res;
-
-    res[0] = a[0]; res[1] = b[0];
-    res[2] = a[1]; res[3] = b[1];
-    res[4] = a[2]; res[5] = b[2];
-    res[6] = a[3]; res[7] = b[3];
-
-    return res;
-}
-
-inline static uint8x8_t vzip2_u8(uint8x8_t a, uint8x8_t b) {
-    uint8x8_t res;
-
-    res[0] = a[4]; res[1] = b[4];
-    res[2] = a[5]; res[3] = b[5];
-    res[4] = a[6]; res[5] = b[6];
-    res[6] = a[7]; res[7] = b[7];
-
-    return res;
-}
-
-// vld1q_s16_x2
-// vld1q_u8_x2
-// vld1q_u8_x4
-// vld1q_s8_x2
-// vld1q_s8_x4
-// TODO: double-check these work correctly
-
-typedef struct ggml_int16x8x2_t {
-    int16x8_t val[2];
-} ggml_int16x8x2_t;
-
-inline static ggml_int16x8x2_t ggml_vld1q_s16_x2(const int16_t * ptr) {
-    ggml_int16x8x2_t res;
-
-    res.val[0] = vld1q_s16(ptr + 0);
-    res.val[1] = vld1q_s16(ptr + 8);
-
-    return res;
-}
-
-typedef struct ggml_uint8x16x2_t {
-    uint8x16_t val[2];
-} ggml_uint8x16x2_t;
-
-inline static ggml_uint8x16x2_t ggml_vld1q_u8_x2(const uint8_t * ptr) {
-    ggml_uint8x16x2_t res;
-
-    res.val[0] = vld1q_u8(ptr + 0);
-    res.val[1] = vld1q_u8(ptr + 16);
-
-    return res;
-}
-
-typedef struct ggml_uint8x16x4_t {
-    uint8x16_t val[4];
-} ggml_uint8x16x4_t;
-
-inline static ggml_uint8x16x4_t ggml_vld1q_u8_x4(const uint8_t * ptr) {
-    ggml_uint8x16x4_t res;
-
-    res.val[0] = vld1q_u8(ptr + 0);
-    res.val[1] = vld1q_u8(ptr + 16);
-    res.val[2] = vld1q_u8(ptr + 32);
-    res.val[3] = vld1q_u8(ptr + 48);
-
-    return res;
-}
-
-typedef struct ggml_int8x16x2_t {
-    int8x16_t val[2];
-} ggml_int8x16x2_t;
-
-inline static ggml_int8x16x2_t ggml_vld1q_s8_x2(const int8_t * ptr) {
-    ggml_int8x16x2_t res;
-
-    res.val[0] = vld1q_s8(ptr + 0);
-    res.val[1] = vld1q_s8(ptr + 16);
-
-    return res;
-}
-
-typedef struct ggml_int8x16x4_t {
-    int8x16_t val[4];
-} ggml_int8x16x4_t;
-
-inline static ggml_int8x16x4_t ggml_vld1q_s8_x4(const int8_t * ptr) {
-    ggml_int8x16x4_t res;
-
-    res.val[0] = vld1q_s8(ptr + 0);
-    res.val[1] = vld1q_s8(ptr + 16);
-    res.val[2] = vld1q_s8(ptr + 32);
-    res.val[3] = vld1q_s8(ptr + 48);
-
-    return res;
-}
-
-// NOTE: not tested
-inline static int8x16_t ggml_vqtbl1q_s8(int8x16_t a, uint8x16_t b) {
-    int8x16_t res;
-
-    res[ 0] = a[b[ 0]];
-    res[ 1] = a[b[ 1]];
-    res[ 2] = a[b[ 2]];
-    res[ 3] = a[b[ 3]];
-    res[ 4] = a[b[ 4]];
-    res[ 5] = a[b[ 5]];
-    res[ 6] = a[b[ 6]];
-    res[ 7] = a[b[ 7]];
-    res[ 8] = a[b[ 8]];
-    res[ 9] = a[b[ 9]];
-    res[10] = a[b[10]];
-    res[11] = a[b[11]];
-    res[12] = a[b[12]];
-    res[13] = a[b[13]];
-    res[14] = a[b[14]];
-    res[15] = a[b[15]];
-
-    return res;
-}
-
-// NOTE: not tested
-inline static uint8x16_t ggml_vqtbl1q_u8(uint8x16_t a, uint8x16_t b) {
-    uint8x16_t res;
-
-    res[ 0] = a[b[ 0]];
-    res[ 1] = a[b[ 1]];
-    res[ 2] = a[b[ 2]];
-    res[ 3] = a[b[ 3]];
-    res[ 4] = a[b[ 4]];
-    res[ 5] = a[b[ 5]];
-    res[ 6] = a[b[ 6]];
-    res[ 7] = a[b[ 7]];
-    res[ 8] = a[b[ 8]];
-    res[ 9] = a[b[ 9]];
-    res[10] = a[b[10]];
-    res[11] = a[b[11]];
-    res[12] = a[b[12]];
-    res[13] = a[b[13]];
-    res[14] = a[b[14]];
-    res[15] = a[b[15]];
-
-    return res;
-}
-
-#else
-
-#define ggml_int16x8x2_t  int16x8x2_t
-#define ggml_uint8x16x2_t uint8x16x2_t
-#define ggml_uint8x16x4_t uint8x16x4_t
-#define ggml_int8x16x2_t  int8x16x2_t
-#define ggml_int8x16x4_t  int8x16x4_t
-
-#define ggml_vld1q_s16_x2 vld1q_s16_x2
-#define ggml_vld1q_u8_x2  vld1q_u8_x2
-#define ggml_vld1q_u8_x4  vld1q_u8_x4
-#define ggml_vld1q_s8_x2  vld1q_s8_x2
-#define ggml_vld1q_s8_x4  vld1q_s8_x4
-#define ggml_vqtbl1q_s8   vqtbl1q_s8
-#define ggml_vqtbl1q_u8   vqtbl1q_u8
-
-#endif
-
-#if !defined(__ARM_FEATURE_DOTPROD)
-
-inline static int32x4_t ggml_vdotq_s32(int32x4_t acc, int8x16_t a, int8x16_t b) {
-    const int16x8_t p0 = vmull_s8(vget_low_s8 (a), vget_low_s8 (b));
-    const int16x8_t p1 = vmull_s8(vget_high_s8(a), vget_high_s8(b));
-
-    return vaddq_s32(acc, vaddq_s32(vpaddlq_s16(p0), vpaddlq_s16(p1)));
-}
-
-#else
-
-#define ggml_vdotq_s32(a, b, c) vdotq_s32(a, b, c)
-
-#endif
-
-#endif
 
 #if defined(__ARM_NEON) || defined(__wasm_simd128__)
 #define B1(c,s,n)  0x ## n ## c ,  0x ## n ## s
@@ -12675,4 +12382,288 @@ void quantize_row_iq2_s(const float * restrict x, void * restrict vy, int64_t k)
     assert(k % QK_K == 0);
     block_iq2_s * restrict y = vy;
     quantize_row_iq2_s_reference(x, y, k);
+}
+
+static bool validate_float(float f, size_t i) {
+    if (isinf(f)) {
+        fprintf(stderr, "ggml_validate_row_data: found inf value at block %zu\n", i);
+        return false;
+    }
+
+    if (isnan(f)) {
+        fprintf(stderr, "ggml_validate_row_data: found nan value at block %zu\n", i);
+        return false;
+    }
+
+    return true;
+}
+
+static bool isinf_fp16(ggml_fp16_t f) {
+    return (f & 0x7c00) == 0x7c00 && (f & 0x03ff) == 0;
+}
+
+static bool isnan_fp16(ggml_fp16_t f) {
+    return (f & 0x7c00) == 0x7c00 && (f & 0x03ff) != 0;
+}
+
+static bool validate_fp16(ggml_fp16_t f, size_t i) {
+    if (isinf_fp16(f)) {
+        fprintf(stderr, "ggml_validate_row_data: found inf value at block %zu\n", i);
+        return false;
+    }
+
+    if (isnan_fp16(f)) {
+        fprintf(stderr, "ggml_validate_row_data: found nan value at block %zu\n", i);
+        return false;
+    }
+
+    return true;
+}
+
+#define VALIDATE_ROW_DATA_D_F16_IMPL(type, data, nb) \
+    const type * q = (const type *) (data); \
+    for (size_t i = 0; i < (nb); ++i) { \
+        if (!validate_fp16(q[i].d, i)) { \
+            return false; \
+        } \
+    }
+
+#define VALIDATE_ROW_DATA_DM_F16_IMPL(type, data, nb, d, m) \
+    const type * q = (const type *) (data); \
+    for (size_t i = 0; i < (nb); ++i) { \
+        if (!validate_fp16(q[i].d, i) || !validate_fp16(q[i].m, i)) { \
+            return false; \
+        } \
+    }
+
+bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbytes) {
+    if (type < 0 || type >= GGML_TYPE_COUNT) {
+        fprintf(stderr, "%s: invalid type %d\n", __func__, type);
+        return false;
+    }
+
+    if (nbytes % ggml_type_size(type) != 0) {
+        fprintf(stderr, "%s: invalid size %zu for type %d\n", __func__, nbytes, type);
+        return false;
+    }
+
+    const size_t nb = nbytes/ggml_type_size(type);
+
+    switch (type) {
+        case GGML_TYPE_F16:
+            {
+                const ggml_fp16_t * f = (const ggml_fp16_t *) data;
+                size_t i = 0;
+#if defined(__AVX2__)
+                for (; i + 15 < nb; i += 16) {
+                    __m256i v = _mm256_loadu_si256((const __m256i *)(f + i));
+                    __m256i vexp = _mm256_and_si256(v, _mm256_set1_epi16(0x7c00));
+                    __m256i cmp = _mm256_cmpeq_epi16(vexp, _mm256_set1_epi16(0x7c00));
+                    int mask = _mm256_movemask_epi8(cmp);
+                    if (mask) {
+                        for (size_t j = 0; j < 16; ++j) {
+                            if (!validate_fp16(f[i + j], i + j)) {
+                                return false;
+                            }
+                        }
+                        GGML_UNREACHABLE();
+                    }
+                }
+#elif defined(__ARM_NEON)
+                for (; i + 7 < nb; i += 8) {
+                    uint16x8_t v = vld1q_u16(f + i);
+                    uint16x8_t vexp = vandq_u16(v, vdupq_n_u16(0x7c00));
+                    uint16x8_t cmp = vceqq_u16(vexp, vdupq_n_u16(0x7c00));
+                    uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(cmp, 4)), 0);
+                    if (mask) {
+                        for (size_t j = 0; j < 8; ++j) {
+                            if (!validate_fp16(f[i + j], i + j)) {
+                                return false;
+                            }
+                        }
+                        GGML_UNREACHABLE();
+                    }
+                }
+#endif
+                for (; i < nb; ++i) {
+                    if (!validate_fp16(f[i], i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_F32:
+            {
+                const float * f = (const float *) data;
+                size_t i = 0;
+#if defined(__AVX2__)
+                for (; i + 7 < nb; i += 8) {
+                    __m256i v = _mm256_loadu_si256((const __m256i *)(f + i));
+                    __m256i vexp = _mm256_and_si256(v, _mm256_set1_epi32(0x7f800000));
+                    __m256i cmp = _mm256_cmpeq_epi32(vexp, _mm256_set1_epi32(0x7f800000));
+                    int mask = _mm256_movemask_epi8(cmp);
+                    if (mask) {
+                        for (size_t j = 0; j < 8; ++j) {
+                            if (!validate_float(f[i + j], i + j)) {
+                                return false;
+                            }
+                        }
+                        GGML_UNREACHABLE();
+                    }
+                }
+#elif defined(__ARM_NEON)
+                for (; i + 3 < nb; i += 4) {
+                    uint32x4_t v = vld1q_u32((const uint32_t *)f + i);
+                    uint32x4_t vexp = vandq_u32(v, vdupq_n_u32(0x7f800000));
+                    uint32x4_t cmp = vceqq_u32(vexp, vdupq_n_u32(0x7f800000));
+                    uint64_t mask = vget_lane_u64(vreinterpret_u64_u16(vshrn_n_u32(cmp, 8)), 0);
+                    if (mask) {
+                        for (size_t j = 0; j < 4; ++j) {
+                            if (!validate_float(f[i + j], i + j)) {
+                                return false;
+                            }
+                        }
+                        GGML_UNREACHABLE();
+                    }
+                }
+#endif
+                for (; i < nb; ++i) {
+                    if (!validate_float(f[i], i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_F64:
+            {
+                const double * f = (const double *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                    if (!validate_float(f[i], i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_Q4_0:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q4_0, data, nb);
+            } break;
+        case GGML_TYPE_Q4_1:
+            {
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q4_1, data, nb, d, m);
+            } break;
+        case GGML_TYPE_Q5_0:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q5_0, data, nb);
+            } break;
+        case GGML_TYPE_Q5_1:
+            {
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q5_1, data, nb, d, m);
+            } break;
+        case GGML_TYPE_Q8_0:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q8_0, data, nb);
+            } break;
+        case GGML_TYPE_Q2_K:
+            {
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q2_K, data, nb, d, dmin);
+            } break;
+        case GGML_TYPE_Q3_K:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q3_K, data, nb);
+            } break;
+        case GGML_TYPE_Q4_K:
+            {
+            #ifdef GGML_QKK_64
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q4_K, data, nb, d[0], d[1]);
+            #else
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q4_K, data, nb, d, dmin);
+            #endif
+            } break;
+        case GGML_TYPE_Q5_K:
+            {
+            #ifdef GGML_QKK_64
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q5_K, data, nb);
+            #else
+                VALIDATE_ROW_DATA_DM_F16_IMPL(block_q5_K, data, nb, d, dmin);
+            #endif
+            } break;
+        case GGML_TYPE_Q6_K:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q6_K, data, nb);
+            } break;
+        case GGML_TYPE_Q8_K:
+            {
+                const block_q8_K * q = (const block_q8_K *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                    if (!validate_float(q[i].d, i)) {
+                        return false;
+                    }
+                }
+            } break;
+        case GGML_TYPE_IQ1_S:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq1_s, data, nb);
+            } break;
+        case GGML_TYPE_IQ1_M:
+            {
+                const block_iq1_m * q = (const block_iq1_m *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                #if QK_K == 64
+                    if (!validate_fp16(q[i].d, i)) {
+                        return false;
+                    }
+                #else
+                    iq1m_scale_t scale;
+                    const uint16_t * sc = (const uint16_t *)q[i].scales;
+                    scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+                    if (!validate_fp16(scale.f16, i)) {
+                        return false;
+                    }
+                #endif
+                }
+            } break;
+        case GGML_TYPE_IQ2_XXS:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq2_xxs, data, nb);
+            } break;
+        case GGML_TYPE_IQ2_XS:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq2_xs, data, nb);
+            } break;
+        case GGML_TYPE_IQ2_S:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq2_s, data, nb);
+            } break;
+        case GGML_TYPE_IQ3_XXS:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq3_xxs, data, nb);
+            } break;
+
+        case GGML_TYPE_IQ3_S:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq3_s, data, nb);
+            } break;
+        case GGML_TYPE_IQ4_XS:
+        #if QK_K != 64
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq4_xs, data, nb);
+            } break;
+        #endif
+        // with QK_K == 64, iq4_xs is iq4_nl
+        case GGML_TYPE_IQ4_NL:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_iq4_nl, data, nb);
+            } break;
+        case GGML_TYPE_I8:
+        case GGML_TYPE_I16:
+        case GGML_TYPE_I32:
+        case GGML_TYPE_I64:
+            // nothing to validate
+            break;
+        default:
+            {
+                fprintf(stderr, "%s: invalid type %d\n", __func__, type);
+                return false;
+            }
+    }
+
+    return true;
 }

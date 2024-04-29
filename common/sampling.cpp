@@ -1,4 +1,6 @@
+#define LLAMA_API_INTERNAL
 #include "sampling.h"
+#include <random>
 
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
     struct llama_sampling_context * result = new llama_sampling_context();
@@ -33,6 +35,8 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 
     result->prev.resize(params.n_prev);
 
+    llama_sampling_set_rng_seed(result, params.seed);
+
     return result;
 }
 
@@ -60,6 +64,13 @@ void llama_sampling_reset(llama_sampling_context * ctx) {
 
     std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
     ctx->cur.clear();
+}
+
+void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t seed) {
+    if (seed == LLAMA_DEFAULT_SEED) {
+        seed = std::random_device{}();
+    }
+    ctx->rng.seed(seed);
 }
 
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst) {
@@ -203,7 +214,7 @@ static llama_token llama_sampling_sample_impl(
 
             sampler_queue(ctx_main, params, cur_p, min_keep);
 
-            id = llama_sample_token(ctx_main, &cur_p);
+            id = llama_sample_token_with_rng(ctx_main, &cur_p, ctx_sampling->rng);
 
             //{
             //    const int n_top = 10;
