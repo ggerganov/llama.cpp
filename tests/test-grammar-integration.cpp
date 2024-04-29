@@ -53,21 +53,27 @@ static bool match_string(const std::string & input, llama_grammar* grammar) {
 }
 
 static void test_grammar(const std::string & grammar_str, const std::vector<std::string> & passing_strings, const std::vector<std::string> & failing_strings) {
-    fprintf(stderr, "🟢 Testing grammar: %s\n", grammar_str.c_str());
+    fprintf(stderr, "⚪ Testing grammar: %s\n", grammar_str.c_str());
+    fflush(stderr);
 
     auto grammar = build_grammar(grammar_str);
 
     // Save the original grammar stacks so that we can reset after every new string we want to test
     auto original_stacks = grammar->stacks;
 
+    fprintf(stderr, "  Checking valid strings:\n");
+
     // Passing strings
     for (const auto & test_string : passing_strings) {
+        fprintf(stderr, "    \"%s\" ", test_string.c_str());
+        fflush(stderr);
+
         bool matched = match_string(test_string, grammar);
 
         if (!matched) {
-            fprintf(stderr, "  ❌ Failed to match string: \"%s\"\n", test_string.c_str());
+            fprintf(stderr, "❌ (failed to match)\n");
         } else {
-            fprintf(stdout, "  ✅︎ Matched string: \"%s\"\n", test_string.c_str());
+            fprintf(stdout, "✅︎\n");
         }
 
         assert(matched);
@@ -76,14 +82,19 @@ static void test_grammar(const std::string & grammar_str, const std::vector<std:
         grammar->stacks = original_stacks;
     }
 
+    fprintf(stderr, "  Checking invalid strings:\n");
+
     // Failing strings
     for (const auto & test_string : failing_strings) {
+        fprintf(stderr, "    \"%s\" ", test_string.c_str());
+        fflush(stderr);
+
         bool matched = match_string(test_string, grammar);
 
         if (matched) {
-            fprintf(stderr, "  ❌ Improperly matched string: \"%s\"\n", test_string.c_str());
+            fprintf(stderr, "❌ (incorrectly matched)\n");
         } else {
-            fprintf(stdout, "  ✅︎ Correctly did not match string: \"%s\"\n", test_string.c_str());
+            fprintf(stdout, "✅︎\n");
         }
         assert(!matched);
 
