@@ -122,34 +122,11 @@ size_t quantize_q4_1(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, 
 size_t quantize_q5_0(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrows, int64_t n_per_row, const float * imatrix);
 size_t quantize_q5_1(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrows, int64_t n_per_row, const float * imatrix);
 size_t quantize_q8_0(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrows, int64_t n_per_row, const float * imatrix);
-size_t quantize_q4_0_aarch64(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrows, int64_t n_per_row, const float * imatrix);
 
 void iq2xs_init_impl(enum ggml_type type);
 void iq2xs_free_impl(enum ggml_type type);
 void iq3xs_init_impl(int grid_size);
 void iq3xs_free_impl(int grid_size);
-
-block_q4_0x4 make_block_q4_0x4(const block_q4_0 * const in[4], unsigned int block_len, unsigned int xor_mask);
-block_q4_0x8 make_block_q4_0x8(const block_q4_0 * const in[8], unsigned int block_len, unsigned int xor_mask);
-block_q8_0x4 make_block_q8_0x4(const block_q8_0 * const in[4], unsigned int block_len);
-block_q8_0x8 make_block_q8_0x8(const block_q8_0 * const in[8], unsigned int block_len);
-void quantize_row_q8_0_aarch64(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int k, int nrows_interleaved, int blocklen_per_row);
-
-// GEMV
-void ggml_gemv_q4_0_q8_0_blocked8_neon(const int n, int output_channels, int input_width, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemv_q4_0_q8_0_blocked8_sve(const int n, int output_channels, int input_width, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemv_q4_0_q8_0_aarch64_sve256(size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemv_q4_0_q8_0_aarch64_neon(size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemv_q4_0_q8_0_aarch64_neon_noi8mm(size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemv_q8_0_q8_0_blocked8_neon(const int n, int output_channels, int input_width, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemv_q8_0_q8_0_blocked8_sve(const int n, int output_channels, int input_width, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-
-// GEMM
-void ggml_gemm_q4_0_q8_0(const int n, int rows, int output_channels, int input_width, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemm_q4_0_q8_0_aarch64_sve256(size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemm_q4_0_q8_0_aarch64_neon(size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemm_q4_0_q8_0_aarch64_neon_noi8mm(size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-void ggml_gemm_q8_0_q8_0(const int n, int rows, int output_channels, int input_width, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
 
 #ifdef __cplusplus
 }

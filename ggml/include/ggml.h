@@ -2410,9 +2410,11 @@ extern "C" {
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
     typedef void (*ggml_vec_dot_t)   (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x, size_t bx,
                                       const void * GGML_RESTRICT y, size_t by, int nrc);
-    typedef void (*ggml_from_float_to_mat_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k, int n, int b);
-    typedef void (*ggml_gemv_t)      (size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
-    typedef void (*ggml_gemm_t)      (size_t depth, size_t output_channels, size_t height, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, int ith, int nth);
+    typedef void (*ggml_from_float_to_mat_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k, int n, int b);
+    typedef void (*ggml_gemv_t)      (int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
+                                      int nr, int nc, int ith, int nth);
+    typedef void (*ggml_gemm_t)      (int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
+                                      int nr, int nc, int ith, int nth);
 
     typedef struct {
         const char      * type_name;
