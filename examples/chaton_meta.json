@@ -262,6 +262,35 @@
 		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": false
+	},
+	"phi3": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"begin": "",
+			"prefix": "<|system|>\n",
+			"suffix": "<|end|>\n",
+			"end": ""
+		},
+		"user": {
+			"begin": "",
+			"prefix": "<|user|>\n",
+			"suffix": "<|end|>\n",
+			"end": ""
+		},
+		"assistant": {
+			"begin": "",
+			"prefix": "<|assistant|>\n",
+			"suffix": "<|end|>\n",
+			"end": ""
+		},
+		"reverse-prompt": "<|end|>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 
