@@ -313,7 +313,7 @@ inline static int32x4_t ggml_vdotq_s32(int32x4_t acc, int8x16_t a, int8x16_t b) 
 
 #endif // defined(__ARM_NEON)
 
-#if defined(__ARM_NEON) && !defined(__MSC_VER)
+#if defined(__ARM_NEON) && !defined(_MSC_VER)
 
 #define GGML_COMPUTE_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
 #define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
