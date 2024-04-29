@@ -52,8 +52,8 @@ static bool match_string(const std::string & input, llama_grammar* grammar) {
     return false;
 }
 
-static void test_grammar(const std::string & grammar_str, const std::vector<std::string> & passing_strings, const std::vector<std::string> & failing_strings) {
-    fprintf(stderr, "⚪ Testing grammar: %s\n", grammar_str.c_str());
+static void test_grammar(const std::string & test_desc, const std::string & grammar_str, const std::vector<std::string> & passing_strings, const std::vector<std::string> & failing_strings) {
+    fprintf(stderr, "⚪ Testing %s. Grammar: %s\n", test_desc.c_str(), grammar_str.c_str());
     fflush(stderr);
 
     auto grammar = build_grammar(grammar_str);
@@ -61,7 +61,7 @@ static void test_grammar(const std::string & grammar_str, const std::vector<std:
     // Save the original grammar stacks so that we can reset after every new string we want to test
     auto original_stacks = grammar->stacks;
 
-    fprintf(stderr, "  Checking valid strings:\n");
+    fprintf(stderr, "  Valid strings:\n");
 
     // Passing strings
     for (const auto & test_string : passing_strings) {
@@ -82,7 +82,7 @@ static void test_grammar(const std::string & grammar_str, const std::vector<std:
         grammar->stacks = original_stacks;
     }
 
-    fprintf(stderr, "  Checking invalid strings:\n");
+    fprintf(stderr, "  Invalid strings:\n");
 
     // Failing strings
     for (const auto & test_string : failing_strings) {
@@ -108,24 +108,33 @@ static void test_grammar(const std::string & grammar_str, const std::vector<std:
 
 static void test_simple_grammar() {
     // Test case for a simple grammar
-    const std::string grammar_str = R"""(root ::= expr
-expr ::= term ("+" term)*
-term ::= number
-number ::= [0-9]+)""";
-
-    auto grammar = build_grammar(grammar_str);
-
-    bool matched = match_string("123+456", grammar);
-
-    assert(matched);
-
-    // Clean up allocated memory
-    llama_grammar_free(grammar);
+    test_grammar(
+        "simple grammar",
+        R"""(
+            root ::= expr
+            expr ::= term ("+" term)*
+            term ::= number
+            number ::= [0-9]+)""",
+        // Passing strings
+        {
+            "42",
+            "1+2+3+4+5",
+            "123+456",
+        },
+        // Failing strings
+        {
+            "+",
+            "/ 3",
+            "1+2+3+4+5+",
+            "12a45",
+        }
+    );
 }
 
 static void test_complex_grammar() {
     // Test case for a more complex grammar, with both failure strings and success strings
     test_grammar(
+        "medium complexity grammar",
         // Grammar
         R"""(
             root ::= expression
@@ -187,6 +196,7 @@ static void test_quantifiers() {
     // A collection of tests to exercise * + and ? quantifiers
 
     test_grammar(
+        "* quantifier",
         // Grammar
         R"""(root ::= "a"*)""",
         // Passing strings
@@ -207,6 +217,7 @@ static void test_quantifiers() {
         }
     );
     test_grammar(
+        "+ quantifier",
         // Grammar
         R"""(root ::= "a"+)""",
         // Passing strings
@@ -227,6 +238,7 @@ static void test_quantifiers() {
         }
     );
     test_grammar(
+        "? quantifier",
         // Grammar
         R"""(root ::= "a"?)""",
         // Passing strings
@@ -243,6 +255,7 @@ static void test_quantifiers() {
         }
     );
     test_grammar(
+        "mixed quantifiers",
         // Grammar
         R"""(
             root ::= cons+ vowel* cons? (vowel cons)*
@@ -269,7 +282,7 @@ static void test_quantifiers() {
 }
 
 static void test_failure_missing_root() {
-    fprintf(stderr, "🟢 Testing for missing root node:\n");
+    fprintf(stderr, "⚪ Testing missing root node:\n");
     // Test case for a grammar that is missing a root rule
     const std::string grammar_str = R"""(rot ::= expr
 expr ::= term ("+" term)*
@@ -287,7 +300,7 @@ number ::= [0-9]+)""";
 }
 
 static void test_failure_missing_reference() {
-    fprintf(stderr, "🟢 Testing for missing reference node:\n");
+    fprintf(stderr, "⚪ Testing missing reference node:\n");
 
     // Test case for a grammar that is missing a referenced rule
     const std::string grammar_str =
