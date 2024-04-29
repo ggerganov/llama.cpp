@@ -4334,6 +4334,12 @@ static void llm_load_vocab(
         if (vocab.type == LLAMA_VOCAB_TYPE_BPE) {
             if (tokenizer_pre.empty()) {
                 LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
+                LLAMA_LOG_WARN("%s:                                             \n", __func__);
+                LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
+                LLAMA_LOG_WARN("%s: GENERATION QUALITY WILL BE DEGRADED!        \n", __func__);
+                LLAMA_LOG_WARN("%s: CONSIDER REGENERATING THE MODEL             \n", __func__);
+                LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
+                LLAMA_LOG_WARN("%s:                                             \n", __func__);
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             } else if (
                     tokenizer_pre == "default") {
@@ -4352,6 +4358,15 @@ static void llm_load_vocab(
             } else if (
                     tokenizer_pre == "falcon") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_FALCON;
+            } else if (
+                    tokenizer_pre == "mpt") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_MPT;
+            } else if (
+                    tokenizer_pre == "starcoder") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STARCODER;
+            } else if (
+                    tokenizer_pre == "gpt-2") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -12122,6 +12137,23 @@ struct llm_tokenizer_bpe {
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                             "\\p{N}+",
                             "[0-9][0-9][0-9]",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_MPT:
+                        // TODO: MPT pre-tokenization regexes are unknown
+                        //       the following are close, but not exact. run the following:
+                        //       ./bin/test-tokenizer-0 ../models/ggml-vocab-mpt.gguf
+                        GGML_ASSERT("MPT pre-tokenization regexes are unknown - fixes needed");
+                        word_collection = unicode_regex_split(text, {
+                            "\\s?\\p{L}+",
+                            "\\s?\\p{P}+",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_STARCODER:
+                    case LLAMA_VOCAB_PRE_TYPE_GPT2:
+                        word_collection = unicode_regex_split(text, {
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                         });
                         break;
                     default:

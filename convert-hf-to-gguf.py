@@ -296,6 +296,15 @@ class Model(ABC):
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/BAAI/bge-small-en-v1.5
             res = "bert-bge"
+        if chkhsh == "b6dc8df998e1cfbdc4eac8243701a65afe638679230920b50d6f17d81c098166":
+            # ref: https://huggingface.co/mosaicml/mpt-7b
+            res = "mpt"
+        if chkhsh == "35d91631860c815f952d711435f48d356ebac988362536bed955d43bfa436e34":
+            # ref: https://huggingface.co/bigcode/starcoder2-3b
+            res = "starcoder"
+        if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
+            # ref: https://huggingface.co/openai-community/gpt2
+            res = "gpt-2"
 
         if res is None:
             print("\n")
