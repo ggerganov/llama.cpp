@@ -455,7 +455,7 @@ Building the program with BLAS support may lead to some performance improvements
 
       ```bash
       cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
-      cmake --build build
+      cmake --build build --config Release
       ```
 
 - #### BLIS
@@ -477,7 +477,7 @@ Building the program with BLAS support may lead to some performance improvements
       ```bash
       source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit docker image, only required for manual installation
       cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
-      cmake --build build
+      cmake --build build --config Release
       ```
 
   - Using oneAPI docker image:
@@ -499,7 +499,7 @@ Building the program with BLAS support may lead to some performance improvements
 
     ```bash
     cmake -B build -DLLAMA_CUDA=ON
-    cmake --build build
+    cmake --build build --config Release
     ```
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
@@ -527,7 +527,7 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ \
         cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build build --config Release -j 16
+        && cmake --build build --config Release -- -j 16
     ```
     On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
     However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
@@ -617,7 +617,7 @@ Building the program with BLAS support may lead to some performance improvements
       git clone https://github.com/CNugteren/CLBlast.git
       cd CLBlast
       cmake -B build -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
-      cmake --build build
+      cmake --build build --config Release
       cmake --install build --prefix /some/path
       ```
 
@@ -633,7 +633,7 @@ Building the program with BLAS support may lead to some performance improvements
   - CMake (Unix):
     ```sh
     cmake -B build -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
-    cmake --build build
+    cmake --build build --config Release
     ```
   - CMake (Windows):
     ```cmd
@@ -699,7 +699,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   ```bash
   cmake -B build -DLLAMA_VULKAN=1
-  cmake --build build
+  cmake --build build --config Release
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
   ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
 

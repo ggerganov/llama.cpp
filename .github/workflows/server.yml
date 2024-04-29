@@ -100,7 +100,7 @@ jobs:
               -DLLAMA_CURL=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
-          cmake --build build --config Release -j $(nproc) --target server
+          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target server
 
 
       - name: Tests
