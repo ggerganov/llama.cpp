@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright 2024 Arm Ltd.
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 

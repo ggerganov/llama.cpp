@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright 2024 Arm Ltd.
 #pragma once
 
 #include "ggml.h"
