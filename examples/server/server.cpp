@@ -2353,7 +2353,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
         printf("                            disable KV offload\n");
     }
     printf("  -m FNAME, --model FNAME\n");
-    printf("                            model path (default: %s)\n", params.model.c_str());
+    printf("                            model path (default: models/$filename with filename from --hf-file or --model-url if set, otherwise %s)\n", DEFAULT_MODEL_PATH);
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
     printf("                            model download url (default: unused)\n");
     printf("  -hfr REPO, --hf-repo REPO\n");
@@ -2834,6 +2834,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             exit(1);
         }
     }
+
+    gpt_params_handle_model_default(params);
 
     if (!params.kv_overrides.empty()) {
         params.kv_overrides.emplace_back();
