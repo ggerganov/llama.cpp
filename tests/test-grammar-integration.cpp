@@ -53,7 +53,7 @@ static bool match_string(const std::string & input, llama_grammar* grammar) {
 }
 
 static void test_grammar(const std::string & test_desc, const std::string & grammar_str, const std::vector<std::string> & passing_strings, const std::vector<std::string> & failing_strings) {
-    fprintf(stderr, "⚪ Testing %s. Grammar: %s\n", test_desc.c_str(), grammar_str.c_str());
+    fprintf(stderr, "⚫ Testing %s. Grammar: %s\n", test_desc.c_str(), grammar_str.c_str());
     fflush(stderr);
 
     auto grammar = build_grammar(grammar_str);
@@ -61,7 +61,7 @@ static void test_grammar(const std::string & test_desc, const std::string & gram
     // Save the original grammar stacks so that we can reset after every new string we want to test
     auto original_stacks = grammar->stacks;
 
-    fprintf(stderr, "  Valid strings:\n");
+    fprintf(stderr, "  🔵 Valid strings:\n");
 
     // Passing strings
     for (const auto & test_string : passing_strings) {
@@ -82,7 +82,7 @@ static void test_grammar(const std::string & test_desc, const std::string & gram
         grammar->stacks = original_stacks;
     }
 
-    fprintf(stderr, "  Invalid strings:\n");
+    fprintf(stderr, "  🟠 Invalid strings:\n");
 
     // Failing strings
     for (const auto & test_string : failing_strings) {
@@ -282,7 +282,7 @@ static void test_quantifiers() {
 }
 
 static void test_failure_missing_root() {
-    fprintf(stderr, "⚪ Testing missing root node:\n");
+    fprintf(stderr, "⚫ Testing missing root node:\n");
     // Test case for a grammar that is missing a root rule
     const std::string grammar_str = R"""(rot ::= expr
 expr ::= term ("+" term)*
@@ -300,7 +300,7 @@ number ::= [0-9]+)""";
 }
 
 static void test_failure_missing_reference() {
-    fprintf(stderr, "⚪ Testing missing reference node:\n");
+    fprintf(stderr, "⚫ Testing missing reference node:\n");
 
     // Test case for a grammar that is missing a referenced rule
     const std::string grammar_str =
