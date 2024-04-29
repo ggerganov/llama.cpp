@@ -2887,7 +2887,6 @@ static bool llama_cache_init(
                               bool   offload) {
     const struct llama_hparams & hparams = model.hparams;
 
-
     // TODO: per layer n_embd_*
     const uint32_t n_embd_k_gqa = hparams.n_embd_k_gqa();
     const uint32_t n_embd_v_gqa = hparams.n_embd_v_gqa();
@@ -3009,6 +3008,8 @@ static bool llama_cache_find_slot(
     const uint32_t kv_size  = cache.kv.size;
     const uint32_t rs_size  = cache.rs.size;
     const uint32_t n_tokens = batch.n_tokens;
+
+    // FIXME: on failure, leave all caches in a consistent state.
 
     if (rs_size > 0) {
         // For recurrent state architectures (like Mamba),
@@ -3509,7 +3510,7 @@ static void llama_cache_seq_keep(struct llama_cache & cache, llama_seq_id seq_id
     }
 }
 
-static llama_pos llama_cache_seq_add(
+static void llama_cache_seq_add(
         struct llama_cache & cache,
               llama_seq_id   seq_id,
                  llama_pos   p0,
@@ -3518,8 +3519,6 @@ static llama_pos llama_cache_seq_add(
 
     if (p0 < 0) { p0 = 0; }
     if (p1 < 0) { p1 = std::numeric_limits<llama_pos>::max(); }
-
-    llama_pos n_past = p0;
 
     if (cache.rs.size > 0) {
         // for Mamba-like models, only the pos needs to be shifted
@@ -3540,9 +3539,6 @@ static llama_pos llama_cache_seq_add(
                         new_head = cell_id;
                     }
                 }
-            }
-            if (n_past <= rs_cell.pos) {
-                n_past = rs_cell.pos + 1;
             }
         }
 
@@ -3573,9 +3569,6 @@ static llama_pos llama_cache_seq_add(
                         }
                     }
                 }
-                if (n_past <= kv_cell.pos) {
-                    n_past = kv_cell.pos + 1;
-                }
             }
         }
 
@@ -3583,11 +3576,9 @@ static llama_pos llama_cache_seq_add(
         // Otherwise we just start the next search from the beginning.
         cache.kv.head = new_head != cache.kv.size ? new_head : 0;
     }
-
-    return n_past;
 }
 
-static llama_pos llama_cache_seq_div(
+static void llama_cache_seq_div(
         struct llama_cache & cache,
               llama_seq_id   seq_id,
                  llama_pos   p0,
@@ -3595,8 +3586,6 @@ static llama_pos llama_cache_seq_div(
                        int   d) {
     if (p0 < 0) { p0 = 0; }
     if (p1 < 0) { p1 = std::numeric_limits<llama_pos>::max(); }
-
-    llama_pos n_past = p0;
 
     if (cache.rs.size > 0) {
         // for Mamba-like models, only the pos needs to be changed
@@ -3609,9 +3598,6 @@ static llama_pos llama_cache_seq_div(
                 rs_cell.pos /= d;
             }
             cell_id = rs_cell.prev;
-            if (n_past <= rs_cell.pos) {
-                n_past = rs_cell.pos + 1;
-            }
         }
     }
 
@@ -3628,14 +3614,9 @@ static llama_pos llama_cache_seq_div(
                         kv_cell.delta  += kv_cell.pos - p_old;
                     }
                 }
-                if (n_past <= kv_cell.pos) {
-                    n_past = kv_cell.pos + 1;
-                }
             }
         }
     }
-
-    return n_past;
 }
 
 static llama_pos llama_cache_seq_pos_max(struct llama_cache & cache, llama_seq_id seq_id) {
@@ -16935,13 +16916,11 @@ void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
     llama_cache_seq_keep(ctx, seq_id);
 }
 
-llama_pos llama_cache_seq_add(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
-    if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return 0; }
-    if (delta == 0) {
-        return llama_cache_seq_pos_max(ctx->cache, seq_id) + 1;
-    }
+void llama_cache_seq_add(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
+    if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return; }
+    if (delta == 0) { return; }
 
-    return llama_cache_seq_add(ctx->cache, seq_id, p0, p1, delta);
+    llama_cache_seq_add(ctx->cache, seq_id, p0, p1, delta);
 }
 
 // deprecated
@@ -16949,13 +16928,11 @@ void llama_kv_cache_seq_add(struct llama_context * ctx, llama_seq_id seq_id, lla
     llama_cache_seq_add(ctx, seq_id, p0, p1, delta);
 }
 
-llama_pos llama_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
-    if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return 0; }
-    if (d == 1) {
-        return llama_cache_seq_pos_max(ctx->cache, seq_id) + 1;
-    }
+void llama_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
+    if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return; }
+    if (d == 1) { return; }
 
-    return llama_cache_seq_div(ctx->cache, seq_id, p0, p1, d);
+    llama_cache_seq_div(ctx->cache, seq_id, p0, p1, d);
 }
 
 // deprecated

@@ -562,7 +562,8 @@ extern "C" {
     // seq_id < 0 : match any sequence
     // p0 < 0     : [0,  p1]
     // p1 < 0     : [p0, inf)
-    // Returns n_past
+    // Returns n_past (one more than the largest remaining pos in the seq_id)
+    // which is only meaningful to handle for partial removals.
     LLAMA_API llama_pos llama_cache_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
@@ -579,7 +580,8 @@ extern "C" {
     // Note that this does not allocate extra KV or RS cache memory - it simply assigns the tokens to the new sequence
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
-    // Returns n_past
+    // Returns n_past (one more than the largest remaining pos in the destination seq_id)
+    // which is only meaningful to handle when partially copying.
     LLAMA_API llama_pos llama_cache_seq_cp(
             struct llama_context * ctx,
                     llama_seq_id   seq_id_src,
@@ -609,8 +611,7 @@ extern "C" {
     //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
-    // Returns n_past
-    LLAMA_API llama_pos llama_cache_seq_add(
+    LLAMA_API void llama_cache_seq_add(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
                        llama_pos   p0,
@@ -630,8 +631,7 @@ extern "C" {
     //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
-    // Returns n_past
-    LLAMA_API llama_pos llama_cache_seq_div(
+    LLAMA_API void llama_cache_seq_div(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
                        llama_pos   p0,
@@ -652,7 +652,7 @@ extern "C" {
     LLAMA_API DEPRECATED(llama_pos llama_kv_cache_seq_pos_max(
             struct llama_context * ctx,
                     llama_seq_id   seq_id),
-        "use llama_cache_seq_pos_max instead, which also now returns -1 instead of 0 when the seq_id has no cells");
+        "use llama_cache_seq_pos_max instead, which now returns -1 instead of 0 when the seq_id has no cells");
 
     // Defragment the KV cache
     // This will be applied:
