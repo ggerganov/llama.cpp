@@ -64,10 +64,13 @@ test: $(TEST_TARGETS)
 		if [ "$$test_target" = "tests/test-tokenizer-0" ]; then \
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama-spm.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama-bpe.gguf; \
+			./$$test_target $(CURDIR)/models/ggml-vocab-phi-3.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-falcon.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-deepseek-coder.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-deepseek-llm.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-bert-bge.gguf; \
+			./$$test_target $(CURDIR)/models/ggml-vocab-starcoder.gguf; \
+			./$$test_target $(CURDIR)/models/ggml-vocab-gpt-2.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1-spm" ]; then \
 			continue; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1-bpe" ]; then \

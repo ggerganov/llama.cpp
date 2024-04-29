@@ -424,9 +424,14 @@ static std::vector<size_t> unicode_regex_split_stl(const std::string & text, con
 static std::vector<size_t> unicode_regex_split_custom(const std::string & text, const std::string & regex_expr, const std::vector<size_t> & offsets) {
     std::vector<size_t> bpe_offsets;
 
-    if (regex_expr == "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)") {
-        bpe_offsets = unicode_regex_split_custom_gpt2(text, offsets);
-    }
+    (void)(text);
+    (void)(regex_expr);
+    (void)(offsets);
+    // TODO: this implementation is actually wrong, uncomment and run:
+    //       make -j && ./bin/test-tokenizer-0 ../models/ggml-vocab-gpt-2.gguf
+    //if (regex_expr == "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)") {
+    //    bpe_offsets = unicode_regex_split_custom_gpt2(text, offsets);
+    //}
 
     return bpe_offsets;
 }

@@ -76,6 +76,9 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM   = 2,
         LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER = 3,
         LLAMA_VOCAB_PRE_TYPE_FALCON         = 4,
+        LLAMA_VOCAB_PRE_TYPE_MPT            = 5,
+        LLAMA_VOCAB_PRE_TYPE_STARCODER      = 6,
+        LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
     };
 
     // note: these values should be synchronized with ggml_rope

@@ -177,6 +177,11 @@ int main(int argc, char **argv) {
 
     const auto k_tests = read_tests(fname_inp, fname_out);
 
+    if (k_tests.empty()) {
+        fprintf(stderr, "%s : error: no tests found\n", __func__);
+        return 1;
+    }
+
     const bool add_special = false;
 
     for (const auto & test_kv : k_tests) {
@@ -258,6 +263,9 @@ int main(int argc, char **argv) {
     llama_free(ctx);
 
     llama_backend_free();
+
+    printf("\n");
+    printf("Tests %s\n", success ? "passed" : "failed");
 
     return success ? 0 : 3;
 }
