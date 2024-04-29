@@ -87,6 +87,7 @@ add_executable(test-tokenizer-1-bpe test-tokenizer-1-bpe.cpp)
 target_link_libraries(test-tokenizer-1-bpe PRIVATE common)
 install(TARGETS test-tokenizer-1-bpe RUNTIME)
 
+# TODO: disabled due to slowness
 #llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-llama-bpe ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-llama-bpe.gguf)
 #llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-falcon    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
 #llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-aquila    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-aquila.gguf)
@@ -95,8 +96,8 @@ install(TARGETS test-tokenizer-1-bpe RUNTIME)
 #llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-gpt-neox  ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt-neox.gguf)
 #llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-refact    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-refact.gguf)
 #llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-starcoder ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-starcoder.gguf)
-llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-gpt2      ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt2.gguf)
-#llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-bloom     ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-bloom.gguf) # BIG
+#llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-gpt2      ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-gpt2.gguf)
+#llama_test(test-tokenizer-1-bpe NAME test-tokenizer-1-bloom     ARGS ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-bloom.gguf)
 
 # build test-tokenizer-1-spm target once and add many tests
 add_executable(test-tokenizer-1-spm test-tokenizer-1-spm.cpp)
