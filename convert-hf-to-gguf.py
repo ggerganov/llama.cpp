@@ -2923,6 +2923,7 @@ class OpenELM(Model):
         self.gguf_writer.add_head_count_kv(n_head)
         self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
         self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_feed_forward_length(0) # dynamically calculated
 
     def set_vocab(self):
         from sentencepiece import SentencePieceProcessor
