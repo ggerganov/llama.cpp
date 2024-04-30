@@ -1208,7 +1208,7 @@ struct server_context {
         }
 
         auto n_ctx_train = llama_n_ctx_train(model);
-        if (slot.params.n_predict < 1 && slot.ga_n == 1
+        if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.ga_n == 1
                     && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
             LOG_WARNING("n_predict is not set and self-context extend is disabled."
                         " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
@@ -2353,7 +2353,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
         printf("                            disable KV offload\n");
     }
     printf("  -m FNAME, --model FNAME\n");
-    printf("                            model path (default: %s)\n", params.model.c_str());
+    printf("                            model path (default: models/$filename with filename from --hf-file or --model-url if set, otherwise %s)\n", DEFAULT_MODEL_PATH);
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
     printf("                            model download url (default: unused)\n");
     printf("  -hfr REPO, --hf-repo REPO\n");
@@ -2377,6 +2377,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --embeddings              enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N       number of slots for process requests (default: %d)\n", params.n_parallel);
     printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: enabled)\n");
+    printf("  -fa, --flash-attn         enable Flash Attention (default: %s)\n", params.flash_attn ? "enabled" : "disabled");
     printf("  -spf FNAME, --system-prompt-file FNAME\n");
     printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
     printf("  -ctk TYPE, --cache-type-k TYPE\n");
@@ -2742,6 +2743,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             params.embedding = true;
         } else if (arg == "-cb" || arg == "--cont-batching") {
             params.cont_batching = true;
+        } else if (arg == "-fa" || arg == "--flash-attn") {
+            params.flash_attn = true;
         } else if (arg == "-np" || arg == "--parallel") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2834,6 +2837,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             exit(1);
         }
     }
+
+    gpt_params_handle_model_default(params);
 
     if (!params.kv_overrides.empty()) {
         params.kv_overrides.emplace_back();
