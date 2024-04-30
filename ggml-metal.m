@@ -2780,46 +2780,8 @@ static enum ggml_status ggml_metal_graph_compute(
         if (status != MTLCommandBufferStatusCompleted) {
             GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, i, status);
             if (status == MTLCommandBufferStatusError) {
-                MTLCommandBufferError error_code = [command_buffer error].code;
-                switch (error_code) {
-                    // use constants rather than the explicit enum cases so
-                    // this works even when building for platforms which don't support
-                    // some specific error
-                    // https://developer.apple.com/documentation/metal/mtlcommandbuffererror?language=objc
-                    case 0: // MTLCommandBufferErrorNone
-                        GGML_METAL_LOG_INFO("no error code reported\n");
-                        break;
-                    case 2: // MTLCommandBufferErrorTimeout
-                        GGML_METAL_LOG_INFO("timeout\n");
-                        break;
-                    case 3: // MTLCommandBufferErrorPageFault
-                        GGML_METAL_LOG_INFO("unserviceable page fault\n");
-                        break;
-                    case 8: // MTLCommandBufferErrorOutOfMemory
-                        GGML_METAL_LOG_INFO("out of memory\n");
-                        break;
-                    case 9: // MTLCommandBufferErrorInvalidResource
-                        GGML_METAL_LOG_INFO("invalid reference to resource\n");
-                        break;
-                    case 10: // MTLCommandBufferErrorMemoryless
-                        GGML_METAL_LOG_INFO("GPU ran out of one or more of its internal resources that support memoryless render pass attachments\n");
-                        break;
-                    case 11: // MTLCommandBufferErrorDeviceRemoved
-                        GGML_METAL_LOG_INFO("device removed\n");
-                        break;
-                    case 12: // MTLCommandBufferErrorStackOverflow
-                        GGML_METAL_LOG_INFO("kernel function of tile shader used too many stack frames\n");
-                        break;
-                    case 4: // MTLCommandBufferErrorAccessRevoked
-                        GGML_METAL_LOG_INFO("access to device revoked by system\n");
-                        break;
-                    case 1: // MTLCommandBufferErrorInternal
-                        GGML_METAL_LOG_INFO("internal error\n");
-                        break;
-                    default:
-                        GGML_METAL_LOG_INFO("unknown error %lu\n", error_code);
-                        break;
-                }
+                NSString * error_code = [command_buffer error].localizedDescription;
+                GGML_METAL_LOG_INFO("error: %s\n", [error_code UTF8String]);
             }
 
             return GGML_STATUS_FAILED;
