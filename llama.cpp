@@ -15480,7 +15480,9 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
 }
 
 size_t llama_max_devices(void) {
-#if defined(GGML_USE_METAL)
+#if defined(GGML_USE_RPC)
+    return GGML_RPC_MAX_SERVERS;
+#elif defined(GGML_USE_METAL)
     return 1;
 #elif defined(GGML_USE_CUDA)
     return GGML_CUDA_MAX_DEVICES;
