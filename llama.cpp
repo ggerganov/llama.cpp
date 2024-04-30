@@ -6410,7 +6410,7 @@ static struct ggml_tensor * llm_build_ffn(
         case LLM_FFN_SILU2:
         {
             struct ggml_tensor * one = ggml_view_2d(ctx, cur, cur->ne[0]/2, cur->ne[1], cur->nb[1], 0);
-            int offset = (cur->ne[0]/2) * (cur->ne[1]);
+            int offset = sizeof(float) * (cur->ne[0]/2) * (cur->ne[1]);
             struct ggml_tensor * two = ggml_view_2d(ctx, cur, cur->ne[0]/2, cur->ne[1], cur->nb[1], offset);
             cur = ggml_mul(ctx, ggml_silu(ctx, one), two);
             cb(cur, "ffn_silu", il);
@@ -10768,9 +10768,9 @@ struct llm_build_context {
                 // [model_dim][(n_head_k+n_head_v+n_head_q)*head_dim]
                 // In most other impls, this is [model_dim][3*above]
                 // This matches up with the dimensions of the huggingface version
-                Qcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_tokens, num_query_heads[il], cur->nb[1], cur->nb[2], 0 * sizeof(float) * (n_embd_head)));
+                Qcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head, n_tokens, num_query_heads[il], cur->nb[1], cur->nb[2], 0));
                 Kcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head,n_tokens, n_head_k, cur->nb[1], cur->nb[2], 1 * sizeof(float) * (n_embd_head)));
-                Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head,n_tokens, n_head_k, cur->nb[1], cur->nb[2], 1 * sizeof(float) * (n_embd_head + n_embd_head)));
+                Vcur = ggml_cont(ctx0, ggml_view_3d(ctx0, cur, n_embd_head,n_tokens, n_head_k, cur->nb[1], cur->nb[2], 2 * sizeof(float) * (n_embd_head)));
                 // Q/K Layernorm
                 Qcur = llm_build_norm(ctx0, Qcur, modified_hparams,
                         model.layers[il].attn_q_norm,
@@ -10842,15 +10842,15 @@ struct llm_build_context {
                 // 4 == num groups
                 int64_t nev[GGML_MAX_DIMS] = {2*Vcur->ne[0], Vcur->ne[1], Vcur->ne[2], Vcur->ne[3]};
                 struct ggml_tensor * Vcur2 = ggml_new_tensor(ctx0, Vcur->type, GGML_MAX_DIMS, nev);
-                Vcur2->op   = GGML_OP_REPEAT;
+                // Vcur2->op   = GGML_OP_REPEAT;
                 Vcur2->grad = ggml_dup_tensor(ctx0, Vcur);
                 Vcur2 = ggml_reshape_2d(ctx0, Vcur2, modified_hparams.n_embd_k_gqa(),  n_tokens);
 
                 int64_t nek[GGML_MAX_DIMS] = {2*Kcur->ne[0], Kcur->ne[1], Kcur->ne[2], Kcur->ne[3]};
                 struct ggml_tensor * Kcur2 = ggml_new_tensor(ctx0, Kcur->type, GGML_MAX_DIMS, nek);
-                Kcur2->op   = GGML_OP_REPEAT;
-                Kcur2->grad = ggml_dup_tensor(ctx0, Vcur);
-                Kcur2 = ggml_reshape_2d(ctx0, Vcur2, modified_hparams.n_embd_k_gqa(),  n_tokens);
+                // Kcur2->op   = GGML_OP_REPEAT;
+                Kcur2->grad = ggml_dup_tensor(ctx0, Kcur);
+                Kcur2 = ggml_reshape_2d(ctx0, Kcur2, modified_hparams.n_embd_k_gqa(),  n_tokens);
                 cb(Kcur, "Kcur", il);
                 cur = llm_build_kv(ctx0, model, modified_hparams, kv_self, gf,
                      model.layers[il].wo, NULL,
