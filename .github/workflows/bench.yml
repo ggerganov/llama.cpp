@@ -32,7 +32,7 @@ on:
     -  cron: '04 2 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}-${{ github.event.inputs.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}-${{ github.event.inputs.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -96,9 +96,7 @@ jobs:
         id: cmake_build
         run: |
           set -eux
-          mkdir build
-          cd build
-          cmake .. \
+          cmake -B build \
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
               -DLLAMA_CURL=ON \
@@ -109,7 +107,7 @@ jobs:
               -DLLAMA_FATAL_WARNINGS=OFF \
               -DLLAMA_ALL_WARNINGS=OFF \
               -DCMAKE_BUILD_TYPE=Release;
-          cmake --build . --config Release -j $(nproc) --target server
+          cmake --build build --config Release -j $(nproc) --target server
 
       - name: Download the dataset
         id: download_dataset

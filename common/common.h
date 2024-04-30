@@ -31,6 +31,8 @@
     fprintf(stderr, "%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);    \
 } while(0)
 
+#define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
 extern char const *LLAMA_COMMIT;
@@ -86,13 +88,13 @@ struct gpt_params {
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
-    llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
-    llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
+    enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
+    enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
 
     // // sampling parameters
     struct llama_sampling_params sparams;
 
-    std::string model                = "models/7B/ggml-model-f16.gguf"; // model path
+    std::string model                = "";  // model path
     std::string model_draft          = "";  // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = "";  // model url to download
@@ -148,6 +150,7 @@ struct gpt_params {
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
     bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
+    bool flash_attn        = false; // flash attention
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
@@ -161,14 +164,19 @@ struct gpt_params {
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
     bool no_kv_offload     = false; // disable KV offloading
     bool warmup            = true;  // warmup run
+    bool check_tensors     = false; // validate tensor data
 
     std::string cache_type_k = "f16"; // KV cache data type for the K
     std::string cache_type_v = "f16"; // KV cache data type for the V
 
     // multimodal models (see examples/llava)
-    std::string mmproj = ""; // path to multimodal projector
-    std::string image  = ""; // path to an image file
+    std::string mmproj = "";        // path to multimodal projector
+    std::vector<std::string> image; // path to image file(s)
 };
+
+void gpt_params_handle_model_default(gpt_params & params);
+
+bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
@@ -193,6 +201,7 @@ bool validate_file_name(const std::string & filename);
 std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
 std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string);
 std::vector<std::string> string_split(std::string input, char separator);
+std::string string_strip(const std::string & str);
 std::string sampler_type_to_name_string(llama_sampler_type sampler_type);
 
 //
@@ -237,11 +246,12 @@ std::vector<llama_token> llama_tokenize(
                         bool   add_special,
                         bool   parse_special = false);
 
-// tokenizes a token into a piece
+// tokenizes a token into a piece, optionally renders special/control tokens
 // should work similar to Python's `tokenizer.id_to_piece`
 std::string llama_token_to_piece(
         const struct llama_context * ctx,
-                       llama_token   token);
+                       llama_token   token,
+                       bool          special = true);
 
 // TODO: these should be moved in llama.h C-style API under single `llama_detokenize` function
 //       that takes into account the tokenizer type and decides how to handle the leading space
