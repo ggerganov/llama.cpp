@@ -172,7 +172,6 @@
 
 #define GGML_CUDA_MAX_STREAMS 8
 
-[[noreturn]]
 void ggml_cuda_error(const char * stmt, const char * func, const char * file, int line, const char * msg);
 
 #define CUDA_CHECK_GEN(err, success, error_fn)                                      \
@@ -479,6 +478,8 @@ struct ggml_tensor_extra_gpu {
     cudaEvent_t events[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS]; // events for synchronizing multiple GPUs
 };
 
+struct ggml_cuda_graph;
+
 struct ggml_backend_cuda_context {
     int device;
     std::string name;
@@ -486,6 +487,8 @@ struct ggml_backend_cuda_context {
 
     cudaStream_t streams[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = { { nullptr } };
     cublasHandle_t cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
+
+    ggml_cuda_graph * cuda_graph = nullptr;
 
     explicit ggml_backend_cuda_context(int device) :
         device(device),
@@ -506,6 +509,7 @@ struct ggml_backend_cuda_context {
                 CUBLAS_CHECK(cublasDestroy(cublas_handles[i]));
             }
         }
+        if(cuda_graph != nullptr) free(cuda_graph);
     }
 
     cudaStream_t stream(int device, int stream) {
