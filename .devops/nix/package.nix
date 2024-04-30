@@ -86,6 +86,7 @@ let
   # TODO(Green-Sky): find a better way to opt-into the heavy ml python runtime
   llama-python-extra = python3.withPackages (
     ps: [
+      ps.einops
       ps.numpy
       ps.sentencepiece
       ps.tiktoken

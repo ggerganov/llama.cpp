@@ -43,7 +43,7 @@ def dump_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
         if len(field.types) == 1:
             curr_type = field.types[0]
             if curr_type == GGUFValueType.STRING:
-                print(' = {0}'.format(repr(str(bytes(field.parts[-1]), encoding='utf8')[:60])), end = '')
+                print(' = {0}'.format(repr(str(bytes(field.parts[-1]), encoding='utf-8')[:60])), end = '')
             elif field.types[0] in reader.gguf_scalar_to_np:
                 print(' = {0}'.format(field.parts[-1][0]), end = '')
         print()

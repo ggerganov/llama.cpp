@@ -173,7 +173,7 @@ class GGUFWriter:
         if pack_fmt is not None:
             self.kv_data += self._pack(pack_fmt, val, skip_pack_prefix = vtype == GGUFValueType.BOOL)
         elif vtype == GGUFValueType.STRING:
-            encoded_val = val.encode("utf8") if isinstance(val, str) else val
+            encoded_val = val.encode("utf-8") if isinstance(val, str) else val
             self.kv_data += self._pack("Q", len(encoded_val))
             self.kv_data += encoded_val
         elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and val:
@@ -202,7 +202,7 @@ class GGUFWriter:
             raise ValueError(f'Duplicated tensor name {name}')
         self.ti_names.add(name)
 
-        encoded_name = name.encode("utf8")
+        encoded_name = name.encode("utf-8")
         self.ti_data += self._pack("Q", len(encoded_name))
         self.ti_data += encoded_name
         n_dims = len(tensor_shape)
@@ -476,7 +476,7 @@ class GGUFWriter:
         self.add_bool(Keys.Tokenizer.ADD_PREFIX, value)
 
     def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
-        if isinstance(value, list):
+        if not isinstance(value, str):
             template_default = None
             template_names = set()
 
