@@ -17,11 +17,9 @@ In this case, CLBlast was already installed so the CMake package is referenced i
 ```cmd
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-mkdir build
-cd build
-cmake .. -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=C:/CLBlast/lib/cmake/CLBlast -G "Visual Studio 17 2022" -A x64
-cmake --build . --config Release
-cmake --install . --prefix C:/LlamaCPP
+cmake -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=C:/CLBlast/lib/cmake/CLBlast -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+cmake --install build --prefix C:/LlamaCPP
 ```
 
 ### Build main-cmake-pkg
@@ -29,9 +27,7 @@ cmake --install . --prefix C:/LlamaCPP
 
 ```cmd
 cd ..\examples\main-cmake-pkg
-mkdir build
-cd build
-cmake .. -DBUILD_SHARED_LIBS=OFF -DCMAKE_PREFIX_PATH="C:/CLBlast/lib/cmake/CLBlast;C:/LlamaCPP/lib/cmake/Llama" -G "Visual Studio 17 2022" -A x64
-cmake --build . --config Release
-cmake --install . --prefix C:/MyLlamaApp
+cmake -B build -DBUILD_SHARED_LIBS=OFF -DCMAKE_PREFIX_PATH="C:/CLBlast/lib/cmake/CLBlast;C:/LlamaCPP/lib/cmake/Llama" -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+cmake --install build --prefix C:/MyLlamaApp
 ```
