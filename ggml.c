@@ -5469,7 +5469,7 @@ static struct ggml_tensor * ggml_soft_max_impl(
     }
 
     if (pos) {
-        GGML_ASSERT(ggml_is_vector(pos));
+        GGML_ASSERT(ggml_is_vector(pos) || ggml_is_matrix(pos));
         GGML_ASSERT(pos->type == GGML_TYPE_F16 || pos->type == GGML_TYPE_F32);
         GGML_ASSERT(pos->ne[0] == a->ne[0]);
     }
@@ -12401,6 +12401,7 @@ static void ggml_compute_forward_soft_max_f32(
     float * wp = (float *) params->wdata + (nc + CACHE_LINE_SIZE_F32) * ith;
 
     // when max_bias <= 0.0f, src2 is not used and we default it to src0 to avoid branching
+    const bool is_pos_matrix = src2 ? ggml_is_matrix(src2): false;
     ggml_fp16_t * pos_f16 = src2 ? (ggml_fp16_t *) src2->data : src0->data;
     float       * pos_f32 = src2 ? (float       *) src2->data : src0->data;
 
@@ -12435,13 +12436,11 @@ static void ggml_compute_forward_soft_max_f32(
 
             if (use_f16) {
                 for (int i = 0; i < nc; ++i) {
-                    //wp[i] -= slope*GGML_FP16_TO_FP32(pos_f16[i]);
-                    wp[i] -= slope*abs(i1%nc - i);
+                    wp[i] += slope*GGML_FP16_TO_FP32(pos_f16[is_pos_matrix ? i1%nc * nc + i: i]);
                 }
             } else {
                 for (int i = 0; i < nc; ++i) {
-                    //wp[i] -= slope*pos_f32[i];
-                    wp[i] -= slope*abs(i1%nc - i);
+                    wp[i] += slope*pos_f32[is_pos_matrix ? i1%nc * nc + i: i];
                 }
             }
         }

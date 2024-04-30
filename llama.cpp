@@ -6998,7 +6998,7 @@ struct llm_build_context {
         } else {
             // TODO: this will be needed for ALiBi-based BERT models
             //       https://github.com/ggerganov/llama.cpp/pull/6826
-            lctx.inp_KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, n_tokens);
+            lctx.inp_KQ_pos = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_tokens, n_tokens);
         }
         cb(lctx.inp_KQ_pos, "KQ_pos", -1);
         ggml_set_input(lctx.inp_KQ_pos);
@@ -11166,11 +11166,22 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
         GGML_ASSERT(lctx.inp_KQ_pos);
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_KQ_pos->buffer));
+        GGML_ASSERT(ggml_is_vector(lctx.inp_KQ_pos) || ggml_is_matrix(lctx.inp_KQ_pos));
+        if (ggml_is_vector(lctx.inp_KQ_pos)) {
+            float * data = (float *) lctx.inp_KQ_pos->data;
 
-        float * data = (float *) lctx.inp_KQ_pos->data;
+            for (int i = 0; i < n_kv; ++i) {
+                data[i] = float(lctx.kv_self.cells[i].pos);
+            }
+        } else if(ggml_is_matrix(lctx.inp_KQ_pos)) {
+            const int64_t n_tokens = batch.n_tokens;
+            float * data = (float *) lctx.inp_KQ_pos->data;
 
-        for (int i = 0; i < n_kv; ++i) {
-            data[i] = float(lctx.kv_self.cells[i].pos);
+            for (int i = 0; i < n_tokens; ++i) {
+                for (int j = 0; j < n_tokens; ++j) {
+                    data[i * n_tokens + j] = -1.0 * abs(i - j);
+                }
+            }
         }
     }
 
