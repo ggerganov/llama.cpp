@@ -172,6 +172,7 @@
 
 #define GGML_CUDA_MAX_STREAMS 8
 
+[[noreturn]]
 void ggml_cuda_error(const char * stmt, const char * func, const char * file, int line, const char * msg);
 
 #define CUDA_CHECK_GEN(err, success, error_fn)                                      \
