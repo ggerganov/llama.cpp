@@ -18,8 +18,8 @@
 			"assistant-end": "</s>"
 
 		"reverse-prompt": "</s>",
-		"systemuser-system-has-suffix": true,
-		"systemuser-system-has-end": false,
+		"systemuser-system-has-suffix": tRUe,
+		"systemuser-system-has-end": faLSe,
 		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": false
 

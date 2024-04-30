@@ -65,6 +65,7 @@ std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
 std::string str_tolower(const std::string &sin) {
     std::string sout;
     std::transform(sin.begin(), sin.end(),sout.begin(), [](char c)->char {return std::tolower(c);});
+    LDBUG_LN("DBUG:%s:%s:%s", __func__, sin.c_str(), sout.c_str());
     return sout;
 }
 
@@ -107,7 +108,10 @@ public:
     }
 
     void set_bool(const std::string &group, const std::string &key, const std::string &value) {
-        set_bool(group, key, str_tolower(value) == "true" ? true : false);
+        std::string sValue = str_tolower(value);
+        bool bValue = sValue == "true" ? true : false;
+        LDBUG_LN("DBUG:%s:%s:%s:%d", __func__, value.c_str(), sValue.c_str(), bValue);
+        set_bool(group, key, bValue);
     }
 
     void set_int64(const std::string &group, const std::string &key, int64_t value) {
