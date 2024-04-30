@@ -1760,7 +1760,7 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
             return 0.0;
         }
         double var = sumab/count - (suma/count)*(sumb/count);
-        var /= count - 1; // TODO does Bessel's correction need to be modified here?
+        var /= count - 1;
         return var;
     };
 
