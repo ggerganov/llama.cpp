@@ -20,7 +20,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- **MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387**
+- **BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920**
+- MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
 - Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
 - Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
 - Multi-GPU pipeline parallelism support https://github.com/ggerganov/llama.cpp/pull/6017
@@ -93,6 +94,7 @@ Typically finetunes of the base models below are supported as well.
 
 - [X] LLaMA 🦙
 - [x] LLaMA 2 🦙🦙
+- [x] LLaMA 3 🦙🦙🦙
 - [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
 - [x] [DBRX](https://huggingface.co/databricks/dbrx-instruct)
@@ -119,8 +121,9 @@ Typically finetunes of the base models below are supported as well.
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
 - [x] [Mamba](https://github.com/state-spaces/mamba)
+- [x] [Grok-1](https://huggingface.co/keyfan/grok-1-hf)
 - [x] [Xverse](https://huggingface.co/models?search=xverse)
-- [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
+- [x] [Command-R models](https://huggingface.co/models?search=CohereForAI/c4ai-command-r)
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
 - [x] [OLMo](https://allenai.org/olmo)
@@ -135,6 +138,8 @@ Typically finetunes of the base models below are supported as well.
 - [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
+- [x] [Mini CPM](https://huggingface.co/models?search=MiniCPM)
+- [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
 
 **HTTP server**
 
@@ -303,6 +308,8 @@ In order to build llama.cpp you have three different options.
       make
       ```
 
+      **Note**: for `Debug` builds, run `make LLAMA_DEBUG=1`
+
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
@@ -317,11 +324,25 @@ In order to build llama.cpp you have three different options.
 - Using `CMake`:
 
     ```bash
-    mkdir build
-    cd build
-    cmake ..
-    cmake --build . --config Release
+    cmake -B build
+    cmake --build build --config Release
     ```
+
+    **Note**: for `Debug` builds, there are two cases:
+
+    - Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
+
+      ```bash
+      cmake -B build -DCMAKE_BUILD_TYPE=Debug
+      cmake --build build
+      ```
+
+    - Multi-config generators (`-G` param set to Visual Studio, XCode...):
+
+      ```bash
+      cmake -B build -G "Xcode"
+      cmake --build build --config Debug
+      ```
 
 - Using `Zig` (version 0.11 or later):
 
@@ -434,10 +455,8 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake` on Linux:
 
       ```bash
-      mkdir build
-      cd build
-      cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
-      cmake --build . --config Release
+      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+      cmake --build build --config Release
       ```
 
 - #### BLIS
@@ -457,11 +476,9 @@ Building the program with BLAS support may lead to some performance improvements
   - Using manual oneAPI installation:
     By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
       ```bash
-      mkdir build
-      cd build
       source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit docker image, only required for manual installation
-      cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
-      cmake --build . --config Release
+      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
+      cmake --build build --config Release
       ```
 
   - Using oneAPI docker image:
@@ -482,10 +499,8 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake`:
 
     ```bash
-    mkdir build
-    cd build
-    cmake .. -DLLAMA_CUDA=ON
-    cmake --build . --config Release
+    cmake -B build -DLLAMA_CUDA=ON
+    cmake --build build --config Release
     ```
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
@@ -512,8 +527,8 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
     ```bash
     CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ \
-        cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build build -- -j 16
+        cmake -B build -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build --config Release -- -j 16
     ```
     On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
     However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
@@ -559,15 +574,14 @@ Building the program with BLAS support may lead to some performance improvements
 
         ```sh
         git clone --recurse-submodules https://github.com/KhronosGroup/OpenCL-SDK.git
-        mkdir OpenCL-SDK/build
-        cd OpenCL-SDK/build
-        cmake .. -DBUILD_DOCS=OFF \
+        cd OpenCL-SDK
+        cmake -B build -DBUILD_DOCS=OFF \
           -DBUILD_EXAMPLES=OFF \
           -DBUILD_TESTING=OFF \
           -DOPENCL_SDK_BUILD_SAMPLES=OFF \
           -DOPENCL_SDK_TEST_SAMPLES=OFF
-        cmake --build . --config Release
-        cmake --install . --prefix /some/path
+        cmake --build build
+        cmake --install build --prefix /some/path
         ```
       </details>
 
@@ -589,23 +603,23 @@ Building the program with BLAS support may lead to some performance improvements
       ```cmd
       set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
       git clone https://github.com/CNugteren/CLBlast.git
-      mkdir CLBlast\build
-      cd CLBlast\build
-      cmake .. -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
-      cmake --build . --config Release
-      cmake --install . --prefix C:/CLBlast
+      cd CLBlast
+      cmake -B build -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
+      cmake --build build --config Release
+      cmake --install build --prefix C:/CLBlast
       ```
+
+      (note: `--config Release` at build time is the default and only relevant for Visual Studio builds - or multi-config Ninja builds)
 
   - <details>
     <summary>Unix:</summary>
 
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
-      mkdir CLBlast/build
-      cd CLBlast/build
-      cmake .. -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
-      cmake --build . --config Release
-      cmake --install . --prefix /some/path
+      cd CLBlast
+      cmake -B build -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
+      cmake --build build --config Release
+      cmake --install build --prefix /some/path
       ```
 
       Where `/some/path` is where the built library will be installed (default is `/usr/local`).
@@ -619,21 +633,17 @@ Building the program with BLAS support may lead to some performance improvements
     ```
   - CMake (Unix):
     ```sh
-    mkdir build
-    cd build
-    cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
-    cmake --build . --config Release
+    cmake -B build -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
+    cmake --build build --config Release
     ```
   - CMake (Windows):
     ```cmd
     set CL_BLAST_CMAKE_PKG="C:/CLBlast/lib/cmake/CLBlast"
     git clone https://github.com/ggerganov/llama.cpp
     cd llama.cpp
-    mkdir build
-    cd build
-    cmake .. -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
-    cmake --build . --config Release
-    cmake --install . --prefix C:/LlamaCPP
+    cmake -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
+    cmake --build build --config Release
+    cmake --install build --prefix C:/LlamaCPP
     ```
 
   ##### Running Llama with CLBlast
@@ -689,10 +699,8 @@ Building the program with BLAS support may lead to some performance improvements
   Then, build llama.cpp using the cmake command below:
 
   ```bash
-  mkdir -p build
-  cd build
-  cmake .. -DLLAMA_VULKAN=1
-  cmake --build . --config Release
+  cmake -B build -DLLAMA_VULKAN=1
+  cmake --build build --config Release
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
   ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
 
@@ -1117,7 +1125,9 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m 
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 - Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
-- Matrix multiplication is unconventional: [`z = ggml_mul_mat(ctx, x, y)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means `zT = x @ yT`
+- Matrix multiplication is unconventional: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
+
+![matmul](media/matmul.png)
 
 ### Docs
 
