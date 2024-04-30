@@ -15729,7 +15729,7 @@ struct llama_context * llama_new_context_with_model(
         for (auto & server : model->rpc_servers) {
             ggml_backend_t backend = ggml_backend_rpc_init(server);
             if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize RPC backend, endpoint: %s\n", __func__, server.c_str());
+                LLAMA_LOG_ERROR("%s: failed to connect RPC backend to %s\n", __func__, server.c_str());
                 llama_free(ctx);
                 return nullptr;
             }
