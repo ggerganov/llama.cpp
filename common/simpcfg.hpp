@@ -14,6 +14,8 @@
 #include <vector>
 #include <fstream>
 #include <regex>
+#include <variant>
+#include <sstream>
 
 
 #define SC_DEBUG
@@ -60,30 +62,33 @@ std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
 
 
 class SimpCfg {
+
 private:
-    std::map<std::string, std::map<std::string, std::string>> mapStrings = {};
-    std::map<std::string, std::map<std::string, bool>> mapBools = {};
-    std::map<std::string, std::map<std::string, int64_t>> mapInt64s = {};
-    std::map<std::string, std::map<std::string, double>> mapDoubles = {};
+    std::map<std::string, std::map<std::string, std::variant<std::string, bool, int64_t, double>>> mapV = {};
     std::regex rInt {R"(^[-+]?\d+$)"};
     std::regex rFloat {R"(^[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$)"};
+
 public:
-    void set_string(const std::string &group, const std::string &key, const std::string &value) {
-        auto &gm = mapStrings[group];
+
+    template<typename SupportedDataType>
+    void set_value(const std::string &group, const std::string &key, const SupportedDataType &value) {
+        auto &gm = mapV[group];
         gm[key] = value;
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
+        std::stringstream ss;
+        ss << value;
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), ss.str().c_str());
+    }
+
+    void set_string(const std::string &group, const std::string &key, const std::string &value) {
+        set_value(group, key, value);
     }
 
     void set_bool(const std::string &group, const std::string &key, bool value) {
-        auto &gm = mapBools[group];
-        gm[key] = value;
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
+        set_value(group, key, value);
     }
 
     void set_int64(const std::string &group, const std::string &key, int64_t value) {
-        auto &gm = mapInt64s[group];
-        gm[key] = value;
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%lld", __func__, group.c_str(), key.c_str(), value);
+        set_value(group, key, value);
     }
 
     void set_int64(const std::string &group, const std::string &key, std::string &value) {
@@ -92,9 +97,7 @@ public:
     }
 
     void set_double(const std::string &group, const std::string &key, double value) {
-        auto &gm = mapDoubles[group];
-        gm[key] = value;
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%f[%e]", __func__, group.c_str(), key.c_str(), value, value);
+        set_value(group, key, value);
     }
 
     void set_double(const std::string &group, const std::string &key, std::string &value) {
@@ -102,68 +105,40 @@ public:
         set_double(group, key, dvalue);
     }
 
-    std::string get_string(const std::string &group, const std::string &key, const std::string &defaultValue) {
-        auto gm = mapStrings[group];
+    template<typename SupportedDataType>
+    SupportedDataType get_value(const std::string &group, const std::string &key, const SupportedDataType &defaultValue) {
+        auto gm = mapV[group];
 #ifdef SC_DEBUG
         for(auto k: gm) {
-            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%s", __func__, k.first.c_str(), k.second.c_str());
+            std::stringstream ss << k.second;
+            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%s", __func__, k.first.c_str(), ss.str().c_str());
         }
 #endif
         if (gm.find(key) == gm.end()) {
-            LWARN_LN("DBUG:SC:%s:%s:%s:%s[default]", __func__, group.c_str(), key.c_str(), defaultValue.c_str());
+            std::stringstream ss << defaultValue;
+            LWARN_LN("DBUG:SC:%s:%s:%s:%s[default]", __func__, group.c_str(), key.c_str(), ss.str().c_str());
             return defaultValue;
         }
         auto value = gm[key];
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), value.c_str());
+        std::stringstream ss << defaultValue;
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), ss.str().c_str());
         return value;
+    }
+
+    std::string get_string(const std::string &group, const std::string &key, const std::string &defaultValue) {
+        return get_value(group, key, defaultValue);
     }
 
     bool get_bool(const std::string &group, const std::string &key, bool defaultValue) {
-        auto gm = mapBools[group];
-#ifdef SC_DEBUG
-        for(auto k: gm) {
-            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%d", __func__, k.first.c_str(), k.second);
-        }
-#endif
-        if (gm.find(key) == gm.end()) {
-            LWARN_LN("DBUG:SC:%s:%s:%s:%d[default]", __func__, group.c_str(), key.c_str(), defaultValue);
-            return defaultValue;
-        }
-        auto value = gm[key];
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%d", __func__, group.c_str(), key.c_str(), value);
-        return value;
+        return get_value(group, key, defaultValue);
     }
 
     int64_t get_int64(const std::string &group, const std::string &key, int64_t defaultValue) {
-        auto gm = mapInt64s[group];
-#ifdef SC_DEBUG
-        for(auto k: gm) {
-            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%lld", __func__, k.first.c_str(), k.second);
-        }
-#endif
-        if (gm.find(key) == gm.end()) {
-            LWARN_LN("DBUG:SC:%s:%s:%s:%lld[default]", __func__, group.c_str(), key.c_str(), defaultValue);
-            return defaultValue;
-        }
-        auto value = gm[key];
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%lld", __func__, group.c_str(), key.c_str(), value);
-        return value;
+        return get_value(group, key, defaultValue);
     }
 
     double get_double(const std::string &group, const std::string &key, double defaultValue) {
-        auto gm = mapDoubles[group];
-#ifdef SC_DEBUG
-        for(auto k: gm) {
-            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%f[%e]", __func__, k.first.c_str(), k.second, k.second);
-        }
-#endif
-        if (gm.find(key) == gm.end()) {
-            LWARN_LN("DBUG:SC:%s:%s:%s:%f[%e][default]", __func__, group.c_str(), key.c_str(), defaultValue, defaultValue);
-            return defaultValue;
-        }
-        auto value = gm[key];
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%f[%e]", __func__, group.c_str(), key.c_str(), value, value);
-        return value;
+        return get_value(group, key, defaultValue);
     }
 
     void load(const std::string &fname) {
