@@ -60,6 +60,12 @@ std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
     return sin;
 }
 
+std::string str_tolower(const std::string &sin) {
+    std::string sout;
+    std::transform(sin.begin(), sin.end(),sout.begin(), [](char c)->char {return std::tolower(c);});
+    return sout;
+}
+
 
 typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
 
@@ -73,7 +79,7 @@ private:
 public:
 
     std::string to_str(const SimpCfgData &value) {
-        auto visitor = [](auto value) {
+        auto visitor = [](auto value) -> auto {
             std::stringstream ss;
             ss << value;
             return ss.str();
@@ -87,7 +93,7 @@ public:
         gm[key] = value;
         std::stringstream ss;
         ss << value;
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), ss.str().c_str());
+        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, typeid(value).name(), group.c_str(), key.c_str(), ss.str().c_str());
     }
 
     void set_string(const std::string &group, const std::string &key, const std::string &value) {
@@ -96,6 +102,10 @@ public:
 
     void set_bool(const std::string &group, const std::string &key, bool value) {
         set_value(group, key, value);
+    }
+
+    void set_bool(const std::string &group, const std::string &key, const std::string &value) {
+        set_bool(group, key, str_tolower(value) == "true" ? true : false);
     }
 
     void set_int64(const std::string &group, const std::string &key, int64_t value) {
@@ -197,7 +207,7 @@ public:
             value = str_trim(value, ",");
             std::string vtype = "bool";
             if ((value == "true") || (value == "false")) {
-                set_bool(group, key, value == "true" ? true : false);
+                set_bool(group, key, value);
             } else if (std::regex_match(value, rInt)) {
                 vtype = "int";
                 set_int64(group, key, value);
