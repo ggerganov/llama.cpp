@@ -725,7 +725,7 @@ class tinyBLAS_Q0_AVX {
             __m256 Cv[RN][RM] = {};
             for (int64_t l = 0; l < k; ++l)
                 for (int64_t j = 0; j < RN; ++j)
-                    for (int64_t i = 0; i < RM; ++i)
+                    for (int64_t i = 0; i < RM; ++i) {
 #if defined(__AVX2__)
                         __m256 udTmp = updot(_mm256_sign_epi8(load(A + lda * (ii + i) + l),
                                                               load(A + lda * (ii + i) + l)),
