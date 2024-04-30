@@ -119,7 +119,7 @@ public:
     void set_bool(const std::string &group, const std::string &key, const std::string &value) {
         std::string sValue = str_tolower(value);
         bool bValue = sValue == "true" ? true : false;
-        LDBUG_LN("DBUG:%s:%s:%s:%d", __func__, value.c_str(), sValue.c_str(), bValue);
+        //LDBUG_LN("DBUG:%s:%s:%s:%d", __func__, value.c_str(), sValue.c_str(), bValue);
         set_bool(group, key, bValue);
     }
 
@@ -229,9 +229,6 @@ public:
             value = str_trim(value, ",");
             std::string vtype = "bool";
             auto valueLower = str_tolower(value);
-            LDBUG_LN("DBUG:%s:BoolCheck:%s:%s", __func__, value.c_str(), valueLower.c_str());
-            str_compare_dump(value, valueLower);
-            str_compare_dump(valueLower, "true");
             if ((valueLower.compare("true") == 0) || (valueLower.compare("false") == 0)) {
                 set_bool(group, key, value);
             } else if (std::regex_match(value, rInt)) {
@@ -243,12 +240,12 @@ public:
             } else {
                 vtype = "string";
                 if (!value.empty() && (value.front() != '"')) {
-                    LWARN_LN("WARN:SC:%s:kv:is this string:%s", __func__, value.c_str());
+                    LWARN_LN("WARN:SC:%s:%d:%s:k:%s:v:%s:is this string?", __func__, iLine, group.c_str(), key.c_str(), value.c_str());
                 }
                 value = str_trim_single(value, "\"");
                 set_string(group, key, value);
             }
-            //LDBUG_LN("DBUG:SC:%s:kv:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
+            //LDBUG_LN("DBUG:SC:%s:%d:kv:%s:%s:%s:%s", __func__, iLine, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
         }
     }
 
