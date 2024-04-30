@@ -2780,42 +2780,8 @@ static enum ggml_status ggml_metal_graph_compute(
         if (status != MTLCommandBufferStatusCompleted) {
             GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, i, status);
             if (status == MTLCommandBufferStatusError) {
-                MTLCommandBufferError error_code = [command_buffer error].code;
-                switch (error_code) {
-                    case MTLCommandBufferErrorNone:
-                        GGML_METAL_LOG_INFO("no error code reported\n");
-                        break;
-                    case MTLCommandBufferErrorTimeout:
-                        GGML_METAL_LOG_INFO("timeout\n");
-                        break;
-                    case MTLCommandBufferErrorPageFault:
-                        GGML_METAL_LOG_INFO("unserviceable page fault\n");
-                        break;
-                    case MTLCommandBufferErrorOutOfMemory:
-                        GGML_METAL_LOG_INFO("out of memory\n");
-                        break;
-                    case MTLCommandBufferErrorInvalidResource:
-                        GGML_METAL_LOG_INFO("invalid reference to resource\n");
-                        break;
-                    case MTLCommandBufferErrorMemoryless:
-                        GGML_METAL_LOG_INFO("GPU ran out of one or more of its internal resources that support memoryless render pass attachments\n");
-                        break;
-                  //case MTLCommandBufferErrorDeviceRemoved:
-                  //    GGML_METAL_LOG_INFO("device removed\n");
-                  //    break;
-                    case MTLCommandBufferErrorStackOverflow:
-                        GGML_METAL_LOG_INFO("kernel function of tile shader used too many stack frames\n");
-                        break;
-                    case MTLCommandBufferErrorAccessRevoked:
-                        GGML_METAL_LOG_INFO("access to device revoked by system\n");
-                        break;
-                    case MTLCommandBufferErrorInternal:
-                        GGML_METAL_LOG_INFO("internal error\n");
-                        break;
-                    default:
-                        GGML_METAL_LOG_INFO("unknown error %lu\n", error_code);
-                        break;
-                }
+                NSString * error_code = [command_buffer error].localizedDescription;
+                GGML_METAL_LOG_INFO("error: %s\n", [error_code UTF8String]);
             }
 
             return GGML_STATUS_FAILED;
