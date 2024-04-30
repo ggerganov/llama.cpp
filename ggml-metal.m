@@ -2800,9 +2800,9 @@ static enum ggml_status ggml_metal_graph_compute(
                     case MTLCommandBufferErrorMemoryless:
                         GGML_METAL_LOG_INFO("GPU ran out of one or more of its internal resources that support memoryless render pass attachments\n");
                         break;
-                    case MTLCommandBufferErrorDeviceRemoved:
-                        GGML_METAL_LOG_INFO("device removed\n");
-                        break;
+                  //case MTLCommandBufferErrorDeviceRemoved:
+                  //    GGML_METAL_LOG_INFO("device removed\n");
+                  //    break;
                     case MTLCommandBufferErrorStackOverflow:
                         GGML_METAL_LOG_INFO("kernel function of tile shader used too many stack frames\n");
                         break;
