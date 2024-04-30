@@ -8,13 +8,12 @@ from gguf.constants import Keys
 
 class GGUFKeyValues:
     def __init__(self, model: Path):
-        reader = GGUFReader(model.as_posix())
-        self.fields = reader.fields
+        self.reader = GGUFReader(model.as_posix())
     def __getitem__(self, key: str):
         if '{arch}' in key:
             key = key.replace('{arch}', self[Keys.General.ARCHITECTURE])
-        return self.fields[key].read()
+        return self.reader.read_field(self.reader.fields[key])
     def __contains__(self, key: str):
-        return key in self.fields
+        return key in self.reader.fields
     def keys(self):
-        return self.fields.keys()
+        return self.reader.fields.keys()

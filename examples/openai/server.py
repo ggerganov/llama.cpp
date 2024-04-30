@@ -37,12 +37,8 @@ def main(
 ):
     import uvicorn
 
-    if endpoint:
-        sys.stderr.write(f"# WARNING: Unsure which model we're talking to, fetching its chat template from HuggingFace tokenizer of {template_hf_model_id_fallback}\n")
-        assert template_hf_model_id_fallback, "template_hf_model_id_fallback is required when using an endpoint"
-        chat_template = ChatTemplate.from_huggingface(template_hf_model_id_fallback)
-
-    else:
+    chat_template = None
+    if model:
         metadata = GGUFKeyValues(Path(model))
 
         if not context_length:
@@ -58,6 +54,12 @@ def main(
         if verbose:
             sys.stderr.write(f"# CHAT TEMPLATE:\n\n{chat_template}\n\n")
 
+    if not chat_template:
+        sys.stderr.write(f"# WARNING: Unsure which model we're talking to, fetching its chat template from HuggingFace tokenizer of {template_hf_model_id_fallback}\n")
+        assert template_hf_model_id_fallback or chat_template, "template_hf_model_id_fallback is required when using an endpoint without a model"
+        chat_template = ChatTemplate.from_huggingface(template_hf_model_id_fallback)
+
+    if not endpoint:
         if verbose:
             sys.stderr.write(f"# Starting C++ server with model {model} on {server_host}:{server_port}\n")
         cmd = [

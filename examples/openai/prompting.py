@@ -180,7 +180,7 @@ class ChatTemplate(BaseModel):
 
 class ChatHandlerArgs(BaseModel):
     chat_template: ChatTemplate
-    response_schema: Optional[Json[Any]] = None
+    response_schema: Optional[dict[str,Any]] = None
     tools: Optional[list[Tool]] = None
 
 class ChatHandler(ABC):
@@ -719,7 +719,7 @@ def get_chat_handler(args: ChatHandlerArgs, parallel_calls: bool, tool_style: Op
         raise ValueError(f"Unsupported tool call style: {tool_style}")
 
 # os.environ.get('NO_TS')
-def _please_respond_with_schema(schema: Json[Any]) -> str:
+def _please_respond_with_schema(schema: dict[str, Any]) -> str:
     sig = json.dumps(schema, indent=2)
     # _ts_converter = SchemaToTypeScriptConverter()
     # # _ts_converter.resolve_refs(schema, 'schema')

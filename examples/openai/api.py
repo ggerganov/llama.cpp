@@ -29,7 +29,7 @@ class Tool(BaseModel):
 
 class ResponseFormat(BaseModel):
     type: Literal["json_object"]
-    schema: Optional[Json[Any]] = None  # type: ignore
+    schema: Optional[dict[str, Any]] = None  # type: ignore
 
 class LlamaCppParams(BaseModel):
     n_predict: Optional[int] = None
@@ -67,7 +67,7 @@ class ChatCompletionRequest(LlamaCppParams):
 class Choice(BaseModel):
     index: int
     message: Message
-    logprobs: Optional[Json[Any]] = None
+    logprobs: Optional[dict[str, Any]] = None
     finish_reason: Union[Literal["stop"], Literal["tool_calls"]]
 
 class Usage(BaseModel):
