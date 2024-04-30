@@ -61,14 +61,25 @@ std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
 }
 
 
+typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
+
 class SimpCfg {
 
 private:
-    std::map<std::string, std::map<std::string, std::variant<std::string, bool, int64_t, double>>> mapV = {};
+    std::map<std::string, std::map<std::string, SimpCfgData>> mapV = {};
     std::regex rInt {R"(^[-+]?\d+$)"};
     std::regex rFloat {R"(^[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$)"};
 
 public:
+
+    std::string to_str(const SimpCfgData &value) {
+        auto visitor = [](auto value) {
+            std::stringstream ss;
+            ss << value;
+            return ss.str();
+        };
+        return std::visit(visitor, value);
+    }
 
     template<typename SupportedDataType>
     void set_value(const std::string &group, const std::string &key, const SupportedDataType &value) {
@@ -110,19 +121,18 @@ public:
         auto gm = mapV[group];
 #ifdef SC_DEBUG
         for(auto k: gm) {
-            std::stringstream ss << k.second;
-            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%s", __func__, k.first.c_str(), ss.str().c_str());
+            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%s", __func__, k.first.c_str(), to_str(k.second).c_str());
         }
 #endif
         if (gm.find(key) == gm.end()) {
-            std::stringstream ss << defaultValue;
+            std::stringstream ss;
+            ss << defaultValue;
             LWARN_LN("DBUG:SC:%s:%s:%s:%s[default]", __func__, group.c_str(), key.c_str(), ss.str().c_str());
             return defaultValue;
         }
         auto value = gm[key];
-        std::stringstream ss << defaultValue;
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), ss.str().c_str());
-        return value;
+        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), to_str(value).c_str());
+        return std::get<SupportedDataType>(value);
     }
 
     std::string get_string(const std::string &group, const std::string &key, const std::string &defaultValue) {
