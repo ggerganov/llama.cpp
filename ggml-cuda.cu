@@ -48,11 +48,20 @@
 
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
-[[noreturn]]
+static bool disable_cuda_graphs_due_to_failed_capture = false;
+
 void ggml_cuda_error(const char * stmt, const char * func, const char * file, int line, const char * msg) {
     int id = -1; // in case cudaGetDevice fails
     cudaGetDevice(&id);
 
+    if(strcmp(msg,"operation not permitted when stream is capturing")==0 ||
+       strcmp(msg,"operation failed due to a previous error during capture")==0) {
+        // CUDA graph capture has failed, but we can fall back to regular stream-based CUDA
+        // so mark as failed, clear the error and return.
+        disable_cuda_graphs_due_to_failed_capture = true;
+        cudaGetLastError();
+        return;
+    }
     fprintf(stderr, "CUDA error: %s\n", msg);
     fprintf(stderr, "  current device: %d, in function %s at %s:%d\n", id, func, file, line);
     fprintf(stderr, "  %s\n", stmt);
@@ -2428,6 +2437,7 @@ struct ggml_cuda_graph {
     cudaKernelNodeParams params[MAX_NODES_IN_CUDA_GRAPH];
     bool disable_due_to_gpu_arch = false;
     bool disable_due_to_too_many_updates = false;
+    bool disable_due_to_failed_graph_capture = false;
     int number_consecutive_updates = 0;
     ggml_graph_node_properties ggml_graph_properties[MAX_NODES_IN_CUDA_GRAPH];
 };
@@ -2481,9 +2491,11 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
         }
     }
 
-    // Disable CUDA graphs in presence of env var, old GPU or use-case which is changing too rapidly.
+    // Disable CUDA graphs in presence of env var, old GPU, use-case which is changing too rapidly,
+    // or previous graph capture failure.
     // Also disable for multi-gpu for now. TO DO investigate
-    if(disable_cuda_graphs || cuda_graph.disable_due_to_gpu_arch || cuda_graph.disable_due_to_too_many_updates ||
+    if(disable_cuda_graphs || cuda_graph.disable_due_to_gpu_arch ||
+       cuda_graph.disable_due_to_too_many_updates || cuda_graph.disable_due_to_failed_graph_capture ||
        ggml_backend_cuda_get_device_count() > 1){
         use_cuda_graph = false;
     }
@@ -2540,11 +2552,16 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
     bool use_cuda_graph = false;
     bool cuda_graph_update_required = false;
 #endif // USE_CUDA_GRAPH
-    
+
+    bool graph_evaluated_or_captured = false;
+
+    while(!graph_evaluated_or_captured) {
+    // Temporarily avoid indenting here (and below the following if) to make code review easier
+
     // Only perform the graph execution if CUDA graphs are not enabled, or we are capturing the graph.
     // With the use of CUDA graphs, the execution will be performed by the graph launch.
     if(!use_cuda_graph || cuda_graph_update_required) {
-        //temporarily avoid indenting here to make code review easier
+
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_tensor * node = cgraph->nodes[i];
 
@@ -2572,6 +2589,14 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
 #ifdef USE_CUDA_GRAPH
     if(use_cuda_graph && (cuda_graph_update_required)) { // End CUDA graph capture
         CUDA_CHECK(cudaStreamEndCapture(cuda_ctx->stream(), &cuda_graph.graph));
+        if(disable_cuda_graphs_due_to_failed_capture) {
+            use_cuda_graph = false;
+            cuda_graph.disable_due_to_failed_graph_capture = true;
+        }
+    }
+    else {
+        graph_evaluated_or_captured = true;
+    }
     }
     if(use_cuda_graph){
 
