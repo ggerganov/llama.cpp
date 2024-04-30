@@ -21,11 +21,13 @@
 #define SC_DEBUG
 #define SC_TEST_PRG
 #ifdef SC_TEST_PRG
+#define LINFO_LN(FMT, ...) fprintf(stdout, FMT"\n", __VA_ARGS__)
 #define LDBUG_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
 #define LERRR_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
 #define LWARN_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
 #else
 #include "log.h"
+#define LINFO_LN LOG_TEELN
 #define LDBUG_LN LOGLN
 #define LERRR_LN LOG_TEELN
 #define LWARN_LN LOG_TEELN
@@ -126,14 +128,21 @@ public:
         set_double(group, key, dvalue);
     }
 
+    void dump(const std::string &group) {
+        for (auto gm: mapV) {
+            if (!group.empty() && (gm.first != group)) {
+                LINFO_LN("INFO:SC:%s:%s:Skipping...", __func__, gm.first.c_str());
+                continue;
+            }
+            for(auto k: gm.second) {
+                LINFO_LN("DBUG:SC:%s:%s:Iterate:%s:%s", __func__, gm.first.c_str(), k.first.c_str(), to_str(k.second).c_str());
+            }
+        }
+    }
+
     template<typename SupportedDataType>
     SupportedDataType get_value(const std::string &group, const std::string &key, const SupportedDataType &defaultValue, const std::string &callerName="") {
         auto gm = mapV[group];
-#ifdef SC_DEBUG
-        for(auto k: gm) {
-            LDBUG_LN("DBUG:SC:%s:Iterate:%s:%s", __func__, k.first.c_str(), to_str(k.second).c_str());
-        }
-#endif
         if (gm.find(key) == gm.end()) {
             std::stringstream ss;
             ss << defaultValue;
@@ -234,6 +243,7 @@ int main(int argc, char **argv) {
     std::string fname {argv[1]};
     SimpCfg sc;
     sc.load(fname);
+    sc.dump("");
 
     sc.get_bool("testme", "key101b", false);
     sc.get_string("testme", "key101s", "Not found");
@@ -245,6 +255,7 @@ int main(int argc, char **argv) {
     sc.set_int64("testme", "key201i", 987654);
     sc.set_double("testme", "key201d", 9988.7766);
 
+    sc.dump("testme");
     sc.get_bool("testme", "key201b", false);
     sc.get_string("testme", "key201s", "Not found");
     sc.get_int64("testme", "key201i", 123456);
