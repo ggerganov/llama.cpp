@@ -13416,11 +13416,16 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
     version += std::to_string(prop.get_minor_version());
 
     device_type = std::regex_replace(device_type, std::regex("ext_oneapi_"), "");
+    std::string name = std::string(prop.get_name());
+    name = std::regex_replace(name, std::regex("\\(R\\)"), "");
+    name = std::regex_replace(name, std::regex("\\(TM\\)"), "");
 
-    fprintf(stderr, "|%2d|%18s|%45s|%10s|%11d|%8d|%7d|%15lu|\n", id, device_type.c_str(),
-            prop.get_name(), version.c_str(), prop.get_max_compute_units(),
+    auto global_mem_size = prop.get_global_mem_size()/1000000;
+
+    fprintf(stderr, "|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|\n", id, device_type.c_str(),
+            name.c_str(), version.c_str(), prop.get_max_compute_units(),
             prop.get_max_work_group_size(), prop.get_max_sub_group_size(),
-            prop.get_global_mem_size());
+            global_mem_size, device.get_info<sycl::info::device::driver_version>().c_str());
 }
 
 void ggml_backend_sycl_print_sycl_devices() {
@@ -13428,9 +13433,10 @@ void ggml_backend_sycl_print_sycl_devices() {
     int device_count = dpct::dev_mgr::instance().device_count();
     std::map<std::string, size_t> DeviceNums;
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
-    fprintf(stderr, "|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |\n");
-    fprintf(stderr, "|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|\n");
-    fprintf(stderr, "|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|\n");
+    fprintf(stderr, "|  |                   |                                       |       |Max    |        |Max  |Global |                     |\n");
+    fprintf(stderr, "|  |                   |                                       |       |compute|Max work|sub  |mem    |                     |\n");
+    fprintf(stderr, "|ID|        Device Type|                                   Name|Version|units  |group   |group|size   |       Driver version|\n");
+    fprintf(stderr, "|--|-------------------|---------------------------------------|-------|-------|--------|-----|-------|---------------------|\n");
     for (int id = 0; id < device_count; ++id) {
         sycl::device device = dpct::dev_mgr::instance().get_device(id);
         sycl::backend backend = device.get_backend();

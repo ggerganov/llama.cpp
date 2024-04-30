@@ -281,6 +281,7 @@ class GGMLToGGUF:
     def add_vocab(self, gguf_writer):
         hp = self.model.hyperparameters
         gguf_writer.add_tokenizer_model('llama')
+        gguf_writer.add_tokenizer_pre('default')
         tokens = []
         scores = []
         toktypes = []
