@@ -5990,7 +5990,7 @@ static bool llm_load_tensors(
                     const int64_t n_head_v = num_kv_heads[i];
                     const int64_t n_head_kv = n_head_k+n_head_v;
                     const int64_t n_head =  n_head_kv+ num_query_heads[i];
-                    const int64_t n_kv =  (num_kv_heads[i]+num_kv_heads[i])*n_embd_head;
+                    // const int64_t n_kv =  (num_kv_heads[i]+num_kv_heads[i])*n_embd_head;
                     modified_hparams.n_head = n_head;
                     modified_hparams.n_head_kv = n_head_kv;
                     const int64_t n_embd_gqa =  n_embd_head * n_head;
@@ -6589,7 +6589,7 @@ static struct ggml_tensor * llm_build_kqv(
     struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
     cb(kq, "kq", il);
 
-    if (model.arch == LLM_ARCH_PHI2 || model.arch == LLM_ARCH_PHI3) {
+    if (model.arch == LLM_ARCH_PHI2 || model.arch == LLM_ARCH_PHI3 || model.arch == LLM_ARCH_OPENELM) {
         // for this arch, we need to perform the KQ multiplication with F32 precision, otherwise we get NaNs
         // ref: https://github.com/ggerganov/llama.cpp/pull/4490#issuecomment-1859055847
         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
@@ -6642,6 +6642,8 @@ static struct ggml_tensor * llm_build_kqv(
                 ggml_element_size(kv.v_l[il])*n_ctx*n_embd_head_v,
                 0);
     cb(v, "v", il);
+
+    // assert(n_kv <= n_tokens);
 
     struct ggml_tensor * kqv = ggml_mul_mat(ctx, v, kq);
     cb(kqv, "kqv", il);
@@ -10733,6 +10735,9 @@ struct llm_build_context {
         llama_hparams modified_hparams(hparams);
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
+        // struct ggml_tensor * KQ_mask = build_inp_KQ_mask2(n_kv);
+        struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
+
 
         for (int il = 0; il < n_layer; ++il) {
             auto residual = inpL;
@@ -10742,7 +10747,7 @@ struct llm_build_context {
             const int64_t n_head_v = num_kv_heads[il];
             const int64_t n_head_kv = n_head_k+n_head_v;
             const int64_t n_head =  n_head_kv+ num_query_heads[il];
-            const int64_t n_kv =  (num_kv_heads[il]+num_kv_heads[il])*n_embd_head;
+            // const int64_t n_kv =  (num_kv_heads[il]+num_kv_heads[il])*n_embd_head; // This makes asserts fail
             modified_hparams.n_head = n_head;
             modified_hparams.n_head = 4*n_head_k; // somehow this works. Some places expect this to be groups*n_head_kv insteal of n_head. maybe this is the defintiion somewhere.
             modified_hparams.n_head_kv = n_head_kv;
@@ -10789,7 +10794,6 @@ struct llm_build_context {
                 // reshape, Kcur -> [64][3(first layer)][n_tokens]
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head,  num_query_heads[il], n_tokens);
                 Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head,  n_head_k, n_tokens);
-                struct ggml_tensor * KQ_mask = build_inp_KQ_mask2(n_kv);
 
                 Qcur = ggml_rope_custom(
                     ctx0, Qcur, inp_pos, n_rot, rope_type, 0, n_orig_ctx,
@@ -10804,54 +10808,24 @@ struct llm_build_context {
                     ctx0, Kcur, inp_pos, n_rot, rope_type, 0, n_orig_ctx,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
-
-                // So because our original wo matrix wasn't 3x, the below function fails because there aren't enough elems in it.
-                // Got: [head_dim][n_tokens][n_head_v]
-                // Want: [n_embd_v_gqa(384)][n_tokens]
-                // I guess this means that i need to be able to able to repeat them
-                // Assertion failed: (v_cur->ne[0] == n_embd_v_gqa && v_cur->ne[1] == n_tokens), function llm_build_kv_store, file llama.cpp, line 6309.
-                // In the python version it does this:
-                /*
-                if self.num_groups != 1:
-                        # GQA
-                        # [B, k_h, S, h] --> [B, q_h, S, h] // so, k=3 -> q=12
-                        keys = keys.repeat_interleave(self.num_groups, dim=1)
-                        # [B, v_h, S, h] --> [B, q_h, S, h] // so, v=3 -> q=12
-                        values = values.repeat_interleave(self.num_groups, dim=1)
-
-                ...
-
-                attn_output = F.scaled_dot_product_attention(
-                    queries,
-                    keys,
-                    values,
-                    attn_mask=causal_mask,
-                    dropout_p=0,
-                )
-
-                attn_output = attn_output.transpose(1, 2).contiguous()
-                attn_output = attn_output.reshape(
-                    batch_size, seq_length, self.num_q_heads * self.head_dim
-                )
-                attn_output = self.out_proj(attn_output)
-                if not output_attentions:
-                    attn_weights = None
-                return attn_output, attn_weights, past_key_value
-                 *
-                 */
-                // 4 == num groups
                 int64_t nev[GGML_MAX_DIMS] = {2*Vcur->ne[0], Vcur->ne[1], Vcur->ne[2], Vcur->ne[3]};
                 struct ggml_tensor * Vcur2 = ggml_new_tensor(ctx0, Vcur->type, GGML_MAX_DIMS, nev);
-                // Vcur2->op   = GGML_OP_REPEAT;
                 Vcur2->grad = ggml_dup_tensor(ctx0, Vcur);
                 Vcur2 = ggml_reshape_2d(ctx0, Vcur2, modified_hparams.n_embd_k_gqa(),  n_tokens);
-
                 int64_t nek[GGML_MAX_DIMS] = {2*Kcur->ne[0], Kcur->ne[1], Kcur->ne[2], Kcur->ne[3]};
                 struct ggml_tensor * Kcur2 = ggml_new_tensor(ctx0, Kcur->type, GGML_MAX_DIMS, nek);
-                // Kcur2->op   = GGML_OP_REPEAT;
                 Kcur2->grad = ggml_dup_tensor(ctx0, Kcur);
                 Kcur2 = ggml_reshape_2d(ctx0, Kcur2, modified_hparams.n_embd_k_gqa(),  n_tokens);
                 cb(Kcur, "Kcur", il);
+                // Attempt at transscreibing from python:
+                // cur = ggml_flash_attn(ctx0, Qcur, Kcur, Vcur, true);
+                // cur = ggml_transpose(ctx0, cur);
+                // cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
+                // cur = ggml_cont(ctx0, cur);
+                // cur = ggml_reshape_2d(ctx0, cur, n_embd_head_k*(2*n_head_kv),  n_tokens);
+                // cur = ggml_mul_mat(ctx0, cur, model.layers[il].wo);
+                // cur = ggml_transpose(ctx0, cur);
+
                 cur = llm_build_kv(ctx0, model, modified_hparams, kv_self, gf,
                      model.layers[il].wo, NULL,
                     Kcur2, Vcur2, Qcur, KQ_mask, nullptr, n_ctx, n_tokens, kv_head, n_kv, 1.0f, cb, il);
