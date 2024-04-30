@@ -102,6 +102,8 @@ static bool recv_data(int sockfd, void * data, size_t size) {
     return true;
 }
 
+// RPC request : | rpc_cmd (1 byte) | request_size (8 bytes) | request_data (request_size bytes) |
+// RPC response: | response_size (8 bytes) | response_data (response_size bytes) |
 static bool send_rpc_cmd(int sockfd, enum rpc_cmd cmd, const std::vector<uint8_t> & input, std::vector<uint8_t> & output) {
     uint8_t cmd_byte = cmd;
     if (!send_data(sockfd, &cmd_byte, sizeof(cmd_byte))) {
@@ -468,36 +470,17 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .event_synchronize       = */ NULL,
 };
 
-static std::vector<std::string> endpoints;
+static std::unordered_map<std::string, ggml_backend_t> instances;
 
-GGML_API GGML_CALL void ggml_rpc_init(const char * rpc_servers) {
-    endpoints.clear();
-    GGML_ASSERT(rpc_servers != NULL);
-    std::string servers(rpc_servers);
-    size_t pos = 0;
-    while ((pos = servers.find(",")) != std::string::npos) {
-        std::string server = servers.substr(0, pos);
-        endpoints.push_back(server);
-        servers.erase(0, pos + 1);
-    }
-    endpoints.push_back(servers);
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const std::string & endpoint) {
+    ggml_backend_t backend = ggml_backend_rpc_init(endpoint);
+    return ggml_backend_rpc_get_default_buffer_type(backend);
 }
 
-static ggml_backend_t instances[GGML_RPC_MAX_SERVERS] = {0};
-
-GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(int server_id) {
-    ggml_backend_rpc_init(server_id);
-    return ggml_backend_rpc_get_default_buffer_type(instances[server_id]);
-}
-
-GGML_CALL ggml_backend_t ggml_backend_rpc_init(int server_id) {
-    if (server_id < 0 || server_id >= ggml_backend_rpc_get_server_count()) {
-        return nullptr;
+GGML_CALL ggml_backend_t ggml_backend_rpc_init(const std::string & endpoint) {
+    if (instances.find(endpoint) != instances.end()) {
+        return instances[endpoint];
     }
-    if (instances[server_id]) {
-        return instances[server_id];
-    }
-    std::string endpoint = endpoints[server_id];
     GGML_PRINT_DEBUG("Connecting to %s\n", endpoint.c_str());
     // split the endpoint into host and port
     size_t pos = endpoint.find(":");
@@ -508,7 +491,7 @@ GGML_CALL ggml_backend_t ggml_backend_rpc_init(int server_id) {
 
     ggml_backend_rpc_buffer_type_context * buft_ctx = new ggml_backend_rpc_buffer_type_context {
         /* .sockfd = */ sockfd,
-        /* .name   = */ "RPC" + std::to_string(server_id)
+        /* .name   = */ "RPC" + std::to_string(sockfd)
     };
 
     ggml_backend_buffer_type_t buft = new ggml_backend_buffer_type {
@@ -523,21 +506,24 @@ GGML_CALL ggml_backend_t ggml_backend_rpc_init(int server_id) {
         /* .buft     = */ buft
     };
 
-    instances[server_id] = new ggml_backend {
+    instances[endpoint] = new ggml_backend {
         /* .guid      = */ ggml_backend_rpc_guid(),
         /* .interface = */ ggml_backend_rpc_interface,
         /* .context   = */ ctx
     };
 
-    return instances[server_id];
+    return instances[endpoint];
 }
 
 GGML_API GGML_CALL bool ggml_backend_is_rpc(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_rpc_guid());
 }
 
-GGML_API GGML_CALL int ggml_backend_rpc_get_server_count(void) {
-    return endpoints.size();
+GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const std::string & endpoint, size_t * free, size_t * total) {
+    UNUSED(endpoint);
+    UNUSED(total);
+    // TODO: implement
+    *free = 1;
 }
 
 // RPC server-side implementation
