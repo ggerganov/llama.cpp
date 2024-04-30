@@ -2643,13 +2643,25 @@ static enum ggml_status ggml_metal_graph_compute(
                             GGML_ASSERT(nqptg  % 8  == 0);
                             GGML_ASSERT(ncpsg  % 32 == 0);
 
+                            int64_t nsgmax = 2;
+
+                            while (true) {
+                                const size_t smem = nqptg*(ne00 + 2*nsgmax*(ncpsg + nqptg))*(sizeof(float)/2);
+                                if (smem > ctx->device.maxThreadgroupMemoryLength) {
+                                    break;
+                                }
+                                nsgmax *= 2;
+                            }
+                            nsgmax /= 2;
+
                             // simdgroups per threadgroup (a.k.a. warps)
-                            const int64_t nsg = ne01 <= nqptg ? MAX(4, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32)) : 4;
+                            const int64_t nsg = ne01 <= nqptg ? MAX(4, MIN(nsgmax, MIN(ne11/ncpsg, (int64_t) pipeline.maxTotalThreadsPerThreadgroup/32))) : 4;
 
                             const size_t smem = nqptg*(ne00 + 2*nsg*(ncpsg + nqptg))*(sizeof(float)/2);
 
                             //printf("smem: %zu, max: %zu\n", smem, ctx->device.maxThreadgroupMemoryLength);
                             GGML_ASSERT(smem <= ctx->device.maxThreadgroupMemoryLength);
+
                             [encoder setThreadgroupMemoryLength:GGML_PAD(smem, 16) atIndex:0];
 
                             [encoder dispatchThreadgroups:MTLSizeMake((ne01 + nqptg - 1)/nqptg, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, nsg, 1)];
