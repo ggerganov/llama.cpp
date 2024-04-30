@@ -19,9 +19,9 @@
 #define SC_DEBUG
 #define SC_TEST_PRG
 #ifdef SC_TEST_PRG
-#define LDBUG_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
-#define LERRR_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
-#define LWARN_LN(FMT, ...) printf(FMT"\n", __VA_ARGS__)
+#define LDBUG_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
+#define LERRR_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
+#define LWARN_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
 #else
 #include "log.h"
 #define LDBUG_LN LOGLN
