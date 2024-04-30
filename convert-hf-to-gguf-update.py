@@ -128,7 +128,7 @@ for model in models:
     print(f"chkhsh: {chkhsh}")
 
     # print the "pre_tokenizer" content from the tokenizer.json
-    with open(f"models/tokenizers/{name}/tokenizer.json", "r") as f:
+    with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
         cfg = json.load(f)
         pre_tokenizer = cfg["pre_tokenizer"]
         print("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
@@ -249,7 +249,7 @@ for model in models:
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
 
-    with open(f"models/ggml-vocab-{name}.gguf.inp", "w") as f:
+    with open(f"models/ggml-vocab-{name}.gguf.inp", "w", encoding="utf-8") as f:
         for text in tests:
             f.write(f"{text}")
             f.write("\n__ggml_vocab_test__\n")
