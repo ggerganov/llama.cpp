@@ -996,6 +996,7 @@ mv model.gguf ~/
 
 Build & run `llama.cpp`:
 ```
+apt install git
 $HOME
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
