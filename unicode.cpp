@@ -228,7 +228,6 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
 
     size_t start = 0;
     for (auto offset : offsets) {
-
         const size_t offset_ini = start;
         const size_t offset_end = start + offset;
         assert(offset_end <= cpts.size());
@@ -246,10 +245,11 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
         auto _add_token = [&] (const size_t end) -> size_t {
             assert(_prev_end <= end && end <= offset_end);
             size_t len = end - _prev_end;
-            if(len > 0)
+            if (len > 0) {
                 bpe_offsets.push_back(len);
+            }
             _prev_end = end;
-            //if(len) {
+            //if (len > 0) {
             //    std::string s = "";
             //    for(size_t p = end-len; p < end; p++)
             //        s += unicode_cpt_to_utf8(cpts[p]);
@@ -258,7 +258,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             return len;
         };
 
-        for(size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
+        for (size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
             const char32_t cpt = _get_cpt(pos);
             const int cpt_type = _get_cpt_type(pos);
 
@@ -268,7 +268,8 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
                 if (cpt_next == 's' || cpt_next == 't' || cpt_next == 'm' || cpt_next == 'd') {
                     pos += _add_token(pos+2);
                     continue;
-                } else if (pos+2 < offset_end) {
+                }
+                if (pos+2 < offset_end) {
                     char32_t cpt_next_next = _get_cpt(pos+2);
                     if ((cpt_next == 'r' && cpt_next_next == 'e') ||
                         (cpt_next == 'v' && cpt_next_next == 'e') ||
@@ -283,24 +284,27 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             // regex: <space>?\p{L}+
             if (cpt2_type == CODEPOINT_TYPE_LETTER) {
                 pos += (cpt == ' ');
-                while(cpt2_type == CODEPOINT_TYPE_LETTER)
+                while (cpt2_type == CODEPOINT_TYPE_LETTER) {
                     cpt2_type = _get_cpt_type(++pos);
+                }
                 _add_token(pos);
                 continue;
             }
             // regex: <space>?\p{N}+
             if (cpt2_type == CODEPOINT_TYPE_DIGIT) {
                 pos += (cpt == ' ');
-                while(cpt2_type == CODEPOINT_TYPE_DIGIT)
+                while (cpt2_type == CODEPOINT_TYPE_DIGIT) {
                     cpt2_type = _get_cpt_type(++pos);
+                }
                 _add_token(pos);
                 continue;
             }
             // regex: <space>?[^\s\p{L}\p{N}]+
             if (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                 pos += (cpt == ' ');
-                while(cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED)
+                while (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                     cpt2_type = _get_cpt_type(++pos);
+                }
                 _add_token(pos);
                 continue;
             }
@@ -308,17 +312,17 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             size_t num_whitespaces = 0;
             while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_WHITESPACE) {
                 num_whitespaces++;
-                }
+            }
 
             // regex: \s+(?!\S)
-            if(num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != 0) {
+            if (num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != 0) {
                 pos += num_whitespaces - 1;
                 _add_token(pos);
                 continue;
             }
 
             // regex: \s+
-            if(num_whitespaces > 0) {
+            if (num_whitespaces > 0) {
                 pos += num_whitespaces;
                 _add_token(pos);
                 continue;
@@ -341,7 +345,6 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
     size_t start = 0;
     for (auto offset : offsets) {
-
         const size_t offset_ini = start;
         const size_t offset_end = start + offset;
         assert(offset_end <= cpts.size());
@@ -359,10 +362,11 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
         auto _add_token = [&] (const size_t end) -> size_t {
             assert(_prev_end <= end && end <= offset_end);
             size_t len = end - _prev_end;
-            if(len > 0)
+            if (len > 0) {
                 bpe_offsets.push_back(len);
+            }
             _prev_end = end;
-            //if(len) {
+            //if (len > 0) {
             //    std::string s = "";
             //    for(size_t p = end-len; p < end; p++)
             //        s += unicode_cpt_to_utf8(cpts[p]);
@@ -371,7 +375,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             return len;
         };
 
-        for(size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
+        for (size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
             const char32_t cpt = _get_cpt(pos);
             const int cpt_type = _get_cpt_type(pos);
 
@@ -381,7 +385,8 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
                 if (cpt_next == 's' || cpt_next == 't' || cpt_next == 'm' || cpt_next == 'd') {
                     pos += _add_token(pos+2);
                     continue;
-                } else if (pos+2 < offset_end) {
+                }
+                if (pos+2 < offset_end) {
                     char32_t cpt_next_next = unicode_tolower(_get_cpt(pos+2));
                     if ((cpt_next == 'r' && cpt_next_next == 'e') ||
                         (cpt_next == 'v' && cpt_next_next == 'e') ||
@@ -394,10 +399,11 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
             // regex: [^\r\n\p{L}\p{N}]?\p{L}+  //####FIXME: the first \p{L} is correct?
             if (cpt != '\r' && cpt != '\n' && /*cpt_type != CODEPOINT_TYPE_LETTER &&*/ cpt_type != CODEPOINT_TYPE_DIGIT) {
-                if(cpt_type == CODEPOINT_TYPE_LETTER || _get_cpt_type(pos+1) == CODEPOINT_TYPE_LETTER) {  // one or more letters
+                if (cpt_type == CODEPOINT_TYPE_LETTER || _get_cpt_type(pos+1) == CODEPOINT_TYPE_LETTER) {  // one or more letters
                     pos++;
-                    while(_get_cpt_type(pos) == CODEPOINT_TYPE_LETTER)
+                    while (_get_cpt_type(pos) == CODEPOINT_TYPE_LETTER) {
                         pos++;
+                    }
                     _add_token(pos);
                     continue;
                 }
@@ -406,7 +412,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             // regex: \p{N}{1,3}
             if (cpt_type == CODEPOINT_TYPE_DIGIT) {
                 size_t ini = pos;
-                while(_get_cpt_type(pos) == CODEPOINT_TYPE_DIGIT) {
+                while (_get_cpt_type(pos) == CODEPOINT_TYPE_DIGIT) {
                     if (++pos - ini >= 3 ) {
                         _add_token(pos);
                         ini = pos;
@@ -420,11 +426,13 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
             if (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                 pos += (cpt == ' ');
-                while(cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED)
+                while (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_DIGIT && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                     cpt2_type = _get_cpt_type(++pos);
+                }
                 char32_t cpt2 = _get_cpt(pos);
-                while(cpt2 == '\r' || cpt2 == '\n')
+                while (cpt2 == '\r' || cpt2 == '\n') {
                     cpt2 = _get_cpt(++pos);
+                }
                 _add_token(pos);
                 continue;
             }
@@ -433,8 +441,9 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             size_t last_end_r_or_n = 0;
             while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_WHITESPACE) {
                 char32_t cpt2 = _get_cpt(pos+num_whitespaces);
-                if (cpt2 == '\r' || cpt2 == '\n')
+                if (cpt2 == '\r' || cpt2 == '\n') {
                     last_end_r_or_n = pos + num_whitespaces + 1;
+                }
                 num_whitespaces++;
             }
 
@@ -446,14 +455,14 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             }
 
             // regex: \s+(?!\S)
-            if(num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != 0) {
+            if (num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != 0) {
                 pos += num_whitespaces - 1;
                 _add_token(pos);
                 continue;
             }
 
             // regex: \s+
-            if(num_whitespaces > 0) {
+            if (num_whitespaces > 0) {
                 pos += num_whitespaces;
                 _add_token(pos);
                 continue;
