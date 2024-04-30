@@ -195,6 +195,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
         if (min_value == 0) {
             if (top_level) {
                 out << "[1-9] ";
+                out << "[0] | [1-9] ";
                 more_digits(0, less_decimals);
             } else {
                 more_digits(1, decimals_left);

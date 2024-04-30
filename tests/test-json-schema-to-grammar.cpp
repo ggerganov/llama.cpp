@@ -88,7 +88,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "minimum": 0
         })""",
         R"""(
-            root ::= ([1-9] [0-9]{0,15}) space
+            root ::= ([0] | [1-9] [0-9]{0,15}) space
             space ::= " "?
         )"""
     });
