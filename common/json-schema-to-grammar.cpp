@@ -16,7 +16,7 @@ static std::string join(Iterator begin, Iterator end, const std::string & separa
 
 static std::string repeat(const std::string & str, size_t n);
 
-static std::string build_repetition(const std::string & item_rule, int min_items, int max_items, const std::string & separator_rule = "") {
+static std::string build_repetition(const std::string & item_rule, const int min_items, int max_items, const std::string & separator_rule = "") {
     auto has_max = max_items != std::numeric_limits<int>::max();
 
     if (min_items == 0 && max_items == 1) {
@@ -160,6 +160,82 @@ static std::string format_literal(const std::string & literal) {
     return "\"" + escaped + "\"";
 }
 
+static void _generate_min_max_int(int min_value, int max_value, std::stringstream & out, int decimals_left = 16, bool top_level = true) {
+    auto has_max = max_value != std::numeric_limits<int>::max();
+    auto has_min = min_value != std::numeric_limits<int>::min();
+
+    if (has_min && has_max && min_value > max_value) {
+        throw std::invalid_argument("min value must be less than or equal to max value");
+    }
+    if (has_min && has_max && min_value == max_value) {
+        out << "\"" << min_value << "\"";
+    } else if (has_min && has_max) {
+        throw std::invalid_argument("min and max values not supported yet");
+    } else if (has_min) {
+        if (min_value < 0) {
+            throw std::invalid_argument("negative min values not supported yet");
+            // out << "\"-\" ";
+            // _generate_min_max_int(std::nullopt, -min_value, out);
+            // ...
+        }
+        auto less_decimals = std::max(decimals_left - 1, 1);
+        auto more_digits = [&](int min_digits, int decimals) {
+            out << "[0-9]{" << min_digits << "," << decimals << "}";
+        };
+        auto digit_range = [&](char from, char to) {
+            out << "[";
+            if (from == to) {
+                out << from;
+            } else {
+                out << from << "-" << to;
+            }
+            out << "]";
+        };
+
+        if (min_value == 0) {
+            if (top_level) {
+                out << "[1-9] ";
+                more_digits(0, less_decimals);
+            } else {
+                more_digits(1, decimals_left);
+            }
+        } else if (min_value <= 9) {
+            char c = '0' + min_value;
+            if (min_value > (top_level ? 1 : 0)) {
+                digit_range('0', c - 1);
+                out << " ";
+                more_digits(1, less_decimals);
+                out << " | ";
+            }
+            digit_range(c, '9');
+            out << " ";
+            more_digits(0, less_decimals);
+        } else {
+            auto min_s = std::to_string(min_value);
+            auto len = min_s.length();
+            auto c = min_s[0];
+
+            if (c > '1') {
+                digit_range(top_level ? '1' : '0', c - 1);
+                out << " ";
+                more_digits(len, less_decimals);
+                out << " | ";
+            }
+            digit_range(c, c);
+            out << " (";
+            _generate_min_max_int(std::stoi(min_s.substr(1)), std::numeric_limits<int>::max(), out, less_decimals, /* top_level= */ false);
+            out << ")";
+            if (c < '9') {
+                out << " | ";
+                digit_range(c + 1, '9');
+                out << " ";
+                more_digits(len - 1, less_decimals);
+            }
+        }
+    } else {
+        throw std::invalid_argument("max values not supported yet");
+    }
+}
 
 class SchemaConverter {
 private:
@@ -681,6 +757,24 @@ public:
         } else if ((schema_type.is_null() || schema_type == "string") && STRING_FORMAT_RULES.find(schema_format + "-string") != STRING_FORMAT_RULES.end()) {
             auto prim_name = schema_format + "-string";
             return _add_rule(rule_name, _add_primitive(prim_name, STRING_FORMAT_RULES.at(prim_name)));
+        } else if (schema_type == "integer" && (schema.contains("minimum") || schema.contains("exclusiveMinimum") || schema.contains("maximum") || schema.contains("exclusiveMaximum"))) {
+            int min_value = std::numeric_limits<int>::min();
+            int max_value = std::numeric_limits<int>::max();
+            if (schema.contains("minimum")) {
+                min_value = schema["minimum"].get<int>();
+            } else if (schema.contains("exclusiveMinimum")) {
+                min_value = schema["exclusiveMinimum"].get<int>() + 1;
+            }
+            if (schema.contains("maximum")) {
+                max_value = schema["maximum"].get<int>();
+            } else if (schema.contains("exclusiveMaximum")) {
+                max_value = schema["exclusiveMaximum"].get<int>() - 1;
+            }
+            std::stringstream out;
+            out << "(";
+            _generate_min_max_int(min_value, max_value, out);
+            out << ") space";
+            return _add_rule(rule_name, out.str());
         } else if (schema_type == "string" && (schema.contains("minLength") || schema.contains("maxLength"))) {
             std::string char_rule = _add_primitive("char", PRIMITIVE_RULES.at("char"));
             int min_len = schema.contains("minLength") ? schema["minLength"].get<int>() : 0;

@@ -81,6 +81,84 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
     };
 
     test({
+        SUCCESS,
+        "min 0",
+        R"""({
+            "type": "integer",
+            "minimum": 0
+        })""",
+        R"""(
+            root ::= ([1-9] [0-9]{0,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 1",
+        R"""({
+            "type": "integer",
+            "minimum": 1
+        })""",
+        R"""(
+            root ::= ([1-9] [0-9]{0,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 3",
+        R"""({
+            "type": "integer",
+            "minimum": 3
+        })""",
+        R"""(
+            root ::= ([0-2] [0-9]{1,15} | [3-9] [0-9]{0,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 9",
+        R"""({
+            "type": "integer",
+            "minimum": 9
+        })""",
+        R"""(
+            root ::= ([0-8] [0-9]{1,15} | [9] [0-9]{0,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 10",
+        R"""({
+            "type": "integer",
+            "minimum": 10
+        })""",
+        R"""(
+            root ::= ([1] ([0-9]{1,15}) | [2-9] [0-9]{1,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 25",
+        R"""({
+            "type": "integer",
+            "minimum": 25
+        })""",
+        R"""(
+            root ::= ([1] [0-9]{2,15} | [2] ([0-4] [0-9]{1,14} | [5-9] [0-9]{0,14}) | [3-9] [0-9]{1,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
         FAILURE,
         "unknown type",
         R"""({
@@ -870,7 +948,6 @@ int main() {
         }
     });
 
-    if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python --version") == 0)) {
         test_all("Python", [](const TestCase & tc) {
             write("test-json-schema-input.tmp", tc.schema);
             tc.verify_status(std::system(
