@@ -279,8 +279,9 @@ class Model(ABC):
 
         res = None
 
-        # NOTE: if you get an error here, you need to add the model to the if-elif chain below
-        #       don't do this manually - use the convert-hf-to-gguf-update.py script!
+        # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script
+        #       or pull the latest version of the model from Huggingface
+        #       don't edit the hashes manually!
         if chkhsh == "0ef9807a4087ebef797fc749390439009c3b9eda9ad1a097abbe738f486c01e5":
             # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
             res = "llama-bpe"
@@ -310,8 +311,11 @@ class Model(ABC):
             print("\n")
             print("**************************************************************************************")
             print("** WARNING: The BPE pre-tokenizer was not recognized!")
-            print("**          This means that it was not added yet or you are using an older version.")
-            print("**          Check convert-hf-to-gguf-update.py and update it accordingly.")
+            print("**          There are 2 possible reasons for this:")
+            print("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
+            print("**          - the pre-tokenization config has changed upstream")
+            print("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
+            print("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
             print("**")
             print(f"** chkhsh:  {chkhsh}")
             print("**************************************************************************************")

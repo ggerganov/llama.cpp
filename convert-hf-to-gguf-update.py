@@ -128,7 +128,7 @@ for model in models:
     print(f"chkhsh: {chkhsh}")
 
     # print the "pre_tokenizer" content from the tokenizer.json
-    with open(f"models/tokenizers/{name}/tokenizer.json", "r") as f:
+    with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
         cfg = json.load(f)
         pre_tokenizer = cfg["pre_tokenizer"]
         print("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
@@ -156,15 +156,19 @@ src_func +=  "        print(f\"chkhsh: {chkhsh}\")\n"
 src_func +=  "\n"
 src_func +=  "        res = None\n"
 src_func +=  "\n"
-src_func +=  "        # NOTE: if you get an error here, you need to add the model to the if-elif chain below\n"
-src_func +=  "        #       don't do this manually - use the convert-hf-to-gguf-update.py script!\n"
+src_func +=  "        # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script\n"
+src_func +=  "        #       or pull the latest version of the model from Huggingface\n"
+src_func +=  "        #       don't edit the hashes manually!\n"
 src_func += f"{src_ifs}\n"
 src_func +=  "        if res is None:\n"
 src_func +=  "            print(\"\\n\")\n"
 src_func +=  "            print(\"**************************************************************************************\")\n"
 src_func +=  "            print(\"** WARNING: The BPE pre-tokenizer was not recognized!\")\n"
-src_func +=  "            print(\"**          This means that it was not added yet or you are using an older version.\")\n"
-src_func +=  "            print(\"**          Check convert-hf-to-gguf-update.py and update it accordingly.\")\n"
+src_func +=  "            print(\"**          There are 2 possible reasons for this:\")\n"
+src_func +=  "            print(\"**          - the model has not been added to convert-hf-to-gguf-update.py yet\")\n"
+src_func +=  "            print(\"**          - the pre-tokenization config has changed upstream\")\n"
+src_func +=  "            print(\"**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.\")\n"
+src_func +=  "            print(\"** ref:     https://github.com/ggerganov/llama.cpp/pull/6920\")\n"
 src_func +=  "            print(\"**\")\n"
 src_func +=  "            print(f\"** chkhsh:  {chkhsh}\")\n"
 src_func +=  "            print(\"**************************************************************************************\")\n"
@@ -249,7 +253,7 @@ for model in models:
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
 
-    with open(f"models/ggml-vocab-{name}.gguf.inp", "w") as f:
+    with open(f"models/ggml-vocab-{name}.gguf.inp", "w", encoding="utf-8") as f:
         for text in tests:
             f.write(f"{text}")
             f.write("\n__ggml_vocab_test__\n")
