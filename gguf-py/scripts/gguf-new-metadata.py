@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 # Necessary to load the local gguf package
 if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():

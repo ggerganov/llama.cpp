@@ -165,10 +165,10 @@ class Model(Protocol):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         return [(self.map_tensor_name(name), data_torch)]
 
-    def extra_f32_tensors(self, n_dims: int, name: str, new_name: str, bid: int | None) -> bool:
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
         return False
 
-    def extra_f16_tensors(self, n_dims: int, name: str, new_name: str, bid: int | None) -> bool:
+    def extra_f16_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
         return False
 
     def write_tensors(self):
@@ -199,8 +199,8 @@ class Model(Protocol):
                     data = data.astype(np.float32)
 
                 # when both are true, the tensor keeps its original type
-                extra_f32 = self.extra_f32_tensors(n_dims, name, new_name, bid)
-                extra_f16 = self.extra_f16_tensors(n_dims, name, new_name, bid)
+                extra_f32 = self.extra_f32_tensors(name, new_name, bid)
+                extra_f16 = self.extra_f16_tensors(name, new_name, bid)
 
                 # 1d tensors need to be converted to float32
                 if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or extra_f32) and not extra_f16:
@@ -1038,8 +1038,8 @@ class PersimmonModel(Model):
         # self.gguf_writer.add_bos_token_id(71013)
         # self.gguf_writer.add_eos_token_id(71013)
 
-    def extra_f32_tensors(self, n_dims: int, name: str, new_name: str) -> bool:
-        del n_dims, name, new_name  # unused
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
+        del name, new_name, bid  # unused
 
         # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
         return True
@@ -2152,8 +2152,8 @@ class BertModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def extra_f32_tensors(self, n_dims: int, name: str, new_name: str, bid: int | None) -> bool:
-        del n_dims, new_name, bid  # unused
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
+        del new_name, bid  # unused
 
         # not used with get_rows, must be F32
         return name == "embeddings.token_type_embeddings.weight"
@@ -2345,9 +2345,7 @@ class MambaModel(Model):
 
         return [(new_name, data_torch)]
 
-    def extra_f32_tensors(self, n_dims: int, name: str, new_name: str, bid: int | None) -> bool:
-        del n_dims  # unused
-
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
         return new_name in (self.format_tensor_name(n, bid, ".weight" if name.endswith(".weight") else "") for n in [
             gguf.MODEL_TENSOR.SSM_CONV1D,
             gguf.MODEL_TENSOR.SSM_X,
