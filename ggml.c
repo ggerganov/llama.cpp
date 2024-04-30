@@ -5478,9 +5478,9 @@ static struct ggml_tensor * ggml_soft_max_impl(
         GGML_ASSERT(pos->type == mask->type);
     }
 
-    /*if (max_bias > 0.0f) {
+    if (max_bias > 0.0f) {
         GGML_ASSERT(pos);
-    }*/
+    }
 
     bool is_node = false;
 
@@ -12401,7 +12401,6 @@ static void ggml_compute_forward_soft_max_f32(
     float * wp = (float *) params->wdata + (nc + CACHE_LINE_SIZE_F32) * ith;
 
     // when max_bias <= 0.0f, src2 is not used and we default it to src0 to avoid branching
-    //float * pos = src2 ? (float *) src2->data : NULL;
     ggml_fp16_t * pos_f16 = src2 ? (ggml_fp16_t *) src2->data : src0->data;
     float       * pos_f32 = src2 ? (float       *) src2->data : src0->data;
 
@@ -12436,13 +12435,13 @@ static void ggml_compute_forward_soft_max_f32(
 
             if (use_f16) {
                 for (int i = 0; i < nc; ++i) {
-                    wp[i] += slope*GGML_FP16_TO_FP32(pos_f16[i]);
-                    //wp[i] = wp[i] - slope*abs(i1%nc - i);
+                    //wp[i] -= slope*GGML_FP16_TO_FP32(pos_f16[i]);
+                    wp[i] -= slope*abs(i1%nc - i);
                 }
             } else {
                 for (int i = 0; i < nc; ++i) {
-                    wp[i] += slope*pos_f32[i];
-                    //wp[i] = wp[i] - slope*abs(i1%nc - i);
+                    //wp[i] -= slope*pos_f32[i];
+                    wp[i] -= slope*abs(i1%nc - i);
                 }
             }
         }
