@@ -382,6 +382,10 @@ static json oaicompat_completion_params_parse(
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
+    if( chat_template.find("minicpm") != std::string::npos){
+        llama_params["stop"].insert(llama_params["stop"].end(), {"<|im_end|>", "</s>"});
+    }
+
     // Handle "response_format" field
     if (body.contains("response_format")) {
         json response_format      = json_value(body, "response_format", json::object());
