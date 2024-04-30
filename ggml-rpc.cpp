@@ -223,6 +223,7 @@ static ggml_tensor * deserialize_tensor(struct ggml_context * ctx, const rpc_ten
 GGML_CALL static void ggml_backend_rpc_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
     UNUSED(buffer);
     if (ggml_is_quantized(tensor->type)) {
+        // TODO: this check is due to MATRIX_ROW_PADDING in CUDA and should be generalized
         GGML_ASSERT(tensor->ne[0] % 512 == 0 && "unsupported quantized tensor");
     }
 }
@@ -339,7 +340,7 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_rpc_buffer_type_alloc_buffer
 GGML_CALL static size_t ggml_backend_rpc_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
     UNUSED(buft);
     // TODO: this is hardcoded for now but it should come from the remote backend
-    return 32;
+    return 128;
 }
 
 GGML_CALL static size_t ggml_backend_rpc_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
