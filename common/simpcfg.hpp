@@ -88,20 +88,20 @@ public:
     }
 
     template<typename SupportedDataType>
-    void set_value(const std::string &group, const std::string &key, const SupportedDataType &value) {
+    void set_value(const std::string &group, const std::string &key, const SupportedDataType &value, const std::string &callerName="") {
         auto &gm = mapV[group];
         gm[key] = value;
         std::stringstream ss;
         ss << value;
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, typeid(value).name(), group.c_str(), key.c_str(), ss.str().c_str());
+        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), ss.str().c_str());
     }
 
     void set_string(const std::string &group, const std::string &key, const std::string &value) {
-        set_value(group, key, value);
+        set_value(group, key, value, __func__);
     }
 
     void set_bool(const std::string &group, const std::string &key, bool value) {
-        set_value(group, key, value);
+        set_value(group, key, value, __func__);
     }
 
     void set_bool(const std::string &group, const std::string &key, const std::string &value) {
@@ -109,7 +109,7 @@ public:
     }
 
     void set_int64(const std::string &group, const std::string &key, int64_t value) {
-        set_value(group, key, value);
+        set_value(group, key, value, __func__);
     }
 
     void set_int64(const std::string &group, const std::string &key, std::string &value) {
@@ -118,7 +118,7 @@ public:
     }
 
     void set_double(const std::string &group, const std::string &key, double value) {
-        set_value(group, key, value);
+        set_value(group, key, value, __func__);
     }
 
     void set_double(const std::string &group, const std::string &key, std::string &value) {
@@ -127,7 +127,7 @@ public:
     }
 
     template<typename SupportedDataType>
-    SupportedDataType get_value(const std::string &group, const std::string &key, const SupportedDataType &defaultValue) {
+    SupportedDataType get_value(const std::string &group, const std::string &key, const SupportedDataType &defaultValue, const std::string &callerName="") {
         auto gm = mapV[group];
 #ifdef SC_DEBUG
         for(auto k: gm) {
@@ -137,7 +137,7 @@ public:
         if (gm.find(key) == gm.end()) {
             std::stringstream ss;
             ss << defaultValue;
-            LWARN_LN("DBUG:SC:%s:%s:%s:%s[default]", __func__, group.c_str(), key.c_str(), ss.str().c_str());
+            LWARN_LN("DBUG:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), ss.str().c_str());
             return defaultValue;
         }
         auto value = gm[key];
@@ -146,19 +146,19 @@ public:
     }
 
     std::string get_string(const std::string &group, const std::string &key, const std::string &defaultValue) {
-        return get_value(group, key, defaultValue);
+        return get_value(group, key, defaultValue, __func__);
     }
 
     bool get_bool(const std::string &group, const std::string &key, bool defaultValue) {
-        return get_value(group, key, defaultValue);
+        return get_value(group, key, defaultValue, __func__);
     }
 
     int64_t get_int64(const std::string &group, const std::string &key, int64_t defaultValue) {
-        return get_value(group, key, defaultValue);
+        return get_value(group, key, defaultValue, __func__);
     }
 
     double get_double(const std::string &group, const std::string &key, double defaultValue) {
-        return get_value(group, key, defaultValue);
+        return get_value(group, key, defaultValue, __func__);
     }
 
     void load(const std::string &fname) {
