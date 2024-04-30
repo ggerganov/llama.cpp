@@ -12436,13 +12436,13 @@ static void ggml_compute_forward_soft_max_f32(
 
             if (use_f16) {
                 for (int i = 0; i < nc; ++i) {
-                    wp[i] += slope*GGML_FP16_TO_FP32(pos_f16[i]);
-                    //wp[i] = wp[i] - slope*abs(i1%nc - i);
+                    //wp[i] -= slope*GGML_FP16_TO_FP32(pos_f16[i]);
+                    wp[i] -= slope*abs(i1%nc - i);
                 }
             } else {
                 for (int i = 0; i < nc; ++i) {
-                    wp[i] += slope*pos_f32[i];
-                    //wp[i] = wp[i] - slope*abs(i1%nc - i);
+                    //wp[i] -= slope*pos_f32[i];
+                    wp[i] -= slope*abs(i1%nc - i);
                 }
             }
         }
