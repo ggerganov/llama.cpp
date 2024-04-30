@@ -65,7 +65,7 @@ std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
 std::string str_tolower(const std::string &sin) {
     std::string sout;
     std::transform(sin.begin(), sin.end(),sout.begin(), [](char c)->char {return std::tolower(c);});
-    LDBUG_LN("DBUG:%s:%s:%s", __func__, sin.c_str(), sout.c_str());
+    //LDBUG_LN("DBUG:%s:%s:%s", __func__, sin.c_str(), sout.c_str());
     return sout;
 }
 
@@ -219,7 +219,9 @@ public:
             value = str_trim(value);
             value = str_trim(value, ",");
             std::string vtype = "bool";
-            if ((value == "true") || (value == "false")) {
+            auto valueLower = str_tolower(value);
+            LDBUG_LN("DBUG:%s:BoolCheck:%s:%s", __func__, value.c_str(), valueLower.c_str());
+            if ((valueLower.compare("true") == 0) || (valueLower.compare("false") == 0)) {
                 set_bool(group, key, value);
             } else if (std::regex_match(value, rInt)) {
                 vtype = "int";
