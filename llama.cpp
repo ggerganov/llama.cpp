@@ -2301,7 +2301,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
         buft = llama_default_buffer_type_cpu(true);
     }
     return buft;
-
+    GGML_UNUSED(model);
     GGML_UNUSED(gpu);
 }
 
