@@ -64,11 +64,20 @@ std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
 
 std::string str_tolower(const std::string &sin) {
     std::string sout;
-    std::transform(sin.begin(), sin.end(),sout.begin(), [](char c)->char {return std::tolower(c);});
+    sout.resize(sin.size());
+    std::transform(sin.begin(), sin.end(), sout.begin(), [](char c)->char {return std::tolower(c);});
     //LDBUG_LN("DBUG:%s:%s:%s", __func__, sin.c_str(), sout.c_str());
     return sout;
 }
 
+void str_compare_dump(const std::string &s1, const std::string &s2) {
+    LDBUG_LN("DBUG:%s:%s:Len:%zu", __func__, s1.c_str(), s1.length());
+    LDBUG_LN("DBUG:%s:%s:Len:%zu", __func__, s2.c_str(), s2.length());
+    int minLen = s1.length() < s2.length() ? s1.length() : s2.length();
+    for(int i=0; i<minLen; i++) {
+        LDBUG_LN("DBUG:%s:%d:%c:%c", __func__, i, s1[i], s2[i]);
+    }
+}
 
 typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
 
@@ -221,6 +230,8 @@ public:
             std::string vtype = "bool";
             auto valueLower = str_tolower(value);
             LDBUG_LN("DBUG:%s:BoolCheck:%s:%s", __func__, value.c_str(), valueLower.c_str());
+            str_compare_dump(value, valueLower);
+            str_compare_dump(valueLower, "true");
             if ((valueLower.compare("true") == 0) || (valueLower.compare("false") == 0)) {
                 set_bool(group, key, value);
             } else if (std::regex_match(value, rInt)) {
