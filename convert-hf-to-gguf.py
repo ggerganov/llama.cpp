@@ -23,7 +23,7 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
-from convert import LlamaHfVocab, permute
+from convert import LlamaHfVocab
 
 
 ###### MODEL DEFINITIONS ######
@@ -165,10 +165,10 @@ class Model(Protocol):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         return [(self.map_tensor_name(name), data_torch)]
 
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         return False
 
-    def extra_f16_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
+    def extra_f16_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         return False
 
     def write_tensors(self):
@@ -199,15 +199,16 @@ class Model(Protocol):
                     data = data.astype(np.float32)
 
                 # when both are true, the tensor keeps its original type
-                extra_f32 = self.extra_f32_tensors(name, new_name, bid)
-                extra_f16 = self.extra_f16_tensors(name, new_name, bid)
+                extra_f32 = self.extra_f32_tensors(name, new_name, bid, n_dims)
+                extra_f16 = self.extra_f16_tensors(name, new_name, bid, n_dims)
 
                 # 1d tensors need to be converted to float32
+                # Most of the codebase that takes in 1D tensors only handles F32 tensors
                 if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or extra_f32) and not extra_f16:
                     data = data.astype(np.float32)
 
                 # if f16 desired, convert any float32 2-dim weight tensors to float16
-                if self.ftype == 1 and data_dtype == np.float32 and (name.endswith(".weight") and n_dims == 2 or extra_f16) and not extra_f32:
+                if self.ftype == 1 and data_dtype == np.float32 and (name.endswith(".weight") and n_dims >= 2 or extra_f16) and not extra_f32:
                     data = data.astype(np.float16)
 
                 print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
@@ -1038,8 +1039,8 @@ class PersimmonModel(Model):
         # self.gguf_writer.add_bos_token_id(71013)
         # self.gguf_writer.add_eos_token_id(71013)
 
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
-        del name, new_name, bid  # unused
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
+        del name, new_name, bid, n_dims  # unused
 
         # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
         return True
@@ -1072,90 +1073,73 @@ class StableLMModel(Model):
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(self.find_hparam(["layer_norm_eps", "norm_eps"]))
 
+    _q_norms: list[dict[str, Tensor]] | None = None
+    _k_norms: list[dict[str, Tensor]] | None = None
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # FIXME
-        return super().modify_tensors(data_torch, name, bid)
+        n_head = self.hparams["num_attention_heads"]
+        n_kv_head = self.hparams["num_key_value_heads"]
+
+
+        if name.find("q_layernorm.norms") != -1:
+            assert bid is not None
+
+            if self._q_norms is None:
+                self._q_norms = [{} for _ in range(self.block_count)]
+
+            self._q_norms[bid][name] = data_torch
+
+            if len(self._q_norms[bid]) >= n_head:
+                return self._stack_qk_norm(bid, n_head, self._q_norms[bid], "q_layernorm")
+            else:
+                return []
+
+        if name.find("k_layernorm.norms") != -1:
+            assert bid is not None
+
+            if self._k_norms is None:
+                self._k_norms = [{} for _ in range(self.block_count)]
+
+            self._k_norms[bid][name] = data_torch
+
+            if len(self._k_norms[bid]) >= n_kv_head:
+                return self._stack_qk_norm(bid, n_kv_head, self._k_norms[bid], "k_layernorm")
+            else:
+                return []
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
+        del name, bid, n_dims  # unused
+
+        return new_name.endswith("_norm.weight")
+
+    def _stack_qk_norm(self, bid: int, n_head: int, norms: dict[str, Tensor], layer_name: str = "q_layernorm"):
+        datas: list[Tensor] = []
+        # extract the norms in order
+        for xid in range(n_head):
+            ename = f"model.layers.{bid}.self_attn.{layer_name}.norms.{xid}.weight"
+            datas.append(norms[ename])
+            del norms[ename]
+        data_torch = torch.cat(datas, dim=0)
+
+        merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
+        new_name = self.map_tensor_name(merged_name)
+
+        return [(new_name, data_torch)]
 
     def write_tensors(self):
-        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        n_head = self.hparams.get("num_attention_heads")
-        n_kv_head = self.hparams.get("num_key_value_heads")
-        q_norms = dict()
-        k_norms = dict()
-        for name, data_torch in self.get_tensors():
-            # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
-                continue
+        super().write_tensors()
 
-            old_dtype = data_torch.dtype
-
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
-
-            data = data_torch.squeeze().numpy()
-            n_dims = len(data.shape)
-            if name.find("q_layernorm.norms") != -1:
-                q_norms[name] = data
-                if len(q_norms) >= (block_count * n_head):
-                    self._stack_qk_norm(block_count, name, tensor_map, n_head, q_norms, n_dims, layer_name="q_layernorm")
-                continue
-            if name.find("k_layernorm.norms") != -1:
-                k_norms[name] = data
-                if len(k_norms) >= (block_count * n_kv_head):
-                    self._stack_qk_norm(block_count, name, tensor_map, n_kv_head, k_norms, n_dims, layer_name="k_layernorm")
-                continue
-
-            # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
-
-    def _stack_qk_norm(self, block_count, name, tensor_map, n_head, norms, n_dims, layer_name="q_layernorm"):
-        for bid in range(block_count):
-            datas = []
-            for xid in range(n_head):
-                ename = f"model.layers.{bid}.self_attn.{layer_name}.norms.{xid}.weight"
-                datas.append(norms[ename])
-                del norms[ename]
-            data = np.stack(datas, axis=0)
-            data_dtype = data.dtype
-            merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
-            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
+        if self._q_norms is not None or self._k_norms is not None:
+            # flatten two `list[dict[str, Tensor]]` into a single `list[str]`
+            norms = (
+                [k for d in self._q_norms for k in d.keys()] if self._q_norms is not None else []
+            ) + (
+                [k for d in self._k_norms for k in d.keys()] if self._k_norms is not None else []
+            )
+            if len(norms) > 0:
+                raise ValueError(f"Unprocessed norms: {norms}")
 
 
 @Model.register("LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
@@ -1195,108 +1179,69 @@ class LlamaModel(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
 
+    @staticmethod
+    def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
+        if n_head_kv is not None and n_head != n_head_kv:
+            n_head = n_head_kv
+        return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+                .swapaxes(1, 2)
+                .reshape(weights.shape))
+
+    _experts: list[dict[str, Tensor]] | None = None
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # FIXME
-        return super().modify_tensors(data_torch, name, bid)
-
-    # Same as super class, but permuting q_proj, k_proj
-    def write_tensors(self):
-        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        n_head = self.hparams.get("num_attention_heads")
+        n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams.get("num_key_value_heads")
-        n_experts = self.hparams.get("num_local_experts")
-        experts = dict()
-        for name, data_torch in self.get_tensors():
-            # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
-                continue
 
-            old_dtype = data_torch.dtype
+        if name.endswith("q_proj.weight"):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+        if name.endswith("k_proj.weight"):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
+        # process the experts separately
+        if name.find("block_sparse_moe.experts") != -1:
+            n_experts = self.hparams["num_local_experts"]
 
-            data = data_torch.numpy()
+            assert bid is not None
 
-            if name.endswith("q_proj.weight"):
-                data = permute(data, n_head, n_head)
-            if name.endswith("k_proj.weight"):
-                data = permute(data, n_head, n_kv_head)
+            if self._experts is None:
+                self._experts = [{} for _ in range(n_experts)]
 
-            data = data.squeeze()
+            self._experts[bid][name] = data_torch
 
-            # process the experts separately
-            if name.find("block_sparse_moe.experts") != -1:
-                experts[name] = data
-                if len(experts) >= n_experts:
-                    # merge the experts into a single 3d tensor
-                    for bid in range(block_count):
-                        for wid in range(1, 4):
-                            full = True
-                            for xid in range(n_experts):
-                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
-                                if ename not in experts:
-                                    full = False
-                                    break
-                            if not full:
-                                continue
+            if len(self._experts[bid]) >= n_experts * 3:
+                tensors: list[tuple[str, Tensor]] = []
 
-                            datas = []
-                            for xid in range(n_experts):
-                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
-                                datas.append(experts[ename])
-                                del experts[ename]
+                # merge the experts into a single 3d tensor
+                for wid in ["w1", "w2", "w3"]:
+                    datas: list[Tensor] = []
 
-                            data = np.stack(datas, axis=0)
-                            data_dtype = data.dtype
+                    for xid in range(n_experts):
+                        ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.{wid}.weight"
+                        datas.append(self._experts[bid][ename])
+                        del self._experts[bid][ename]
 
-                            if self.ftype == 0 and data_dtype == np.float16:
-                                data = data.astype(np.float32)
+                    data_torch = torch.cat(datas, dim=0)
 
-                            if self.ftype == 1 and data_dtype == np.float32:
-                                data = data.astype(np.float16)
+                    merged_name = f"layers.{bid}.feed_forward.experts.{wid}.weight"
 
-                            merged_name = f"layers.{bid}.feed_forward.experts.w{wid}.weight"
+                    new_name = self.map_tensor_name(merged_name)
 
-                            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
-                            if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
+                    tensors.append((new_name, data_torch))
+                return tensors
+            else:
+                return []
 
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+        return [(self.map_tensor_name(name), data_torch)]
 
-                            self.gguf_writer.add_tensor(new_name, data)
-                continue
+    def write_tensors(self):
+        super().write_tensors()
 
-            # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # 1d tensors need to be converted to float32
-            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
-
-        if len(experts) > 0:
-            raise ValueError(f"Unprocessed experts: {experts.keys()}")
+        if self._experts is not None:
+            # flatten `list[dict[str, Tensor]]` into `list[str]`
+            experts = [k for d in self._experts for k in d.keys()]
+            if len(experts) > 0:
+                raise ValueError(f"Unprocessed experts: {experts}")
 
 
 @Model.register("GrokForCausalLM")
@@ -1313,95 +1258,44 @@ class GrokModel(Model):
         super().set_gguf_parameters()
         self.gguf_writer.add_name("Grok")
 
+    _experts: list[dict[str, Tensor]] | None = None
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # FIXME
-        return super().modify_tensors(data_torch, name, bid)
+        # process the experts separately
+        if name.find(".moe.") != -1:
+            n_experts = self.hparams["num_local_experts"]
 
-    def write_tensors(self):
-        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        n_experts = self.hparams.get("num_local_experts")
-        experts = dict()
-        for name, data_torch in self.get_tensors():
-            # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
-                continue
+            assert bid is not None
 
-            old_dtype = data_torch.dtype
+            if self._experts is None:
+                self._experts = [{} for _ in range(n_experts)]
 
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
+            self._experts[bid][name] = data_torch
 
-            data = data_torch.squeeze().numpy()
+            if len(self._experts[bid]) >= n_experts * 3:
+                tensors: list[tuple[str, Tensor]] = []
 
-            # process the experts separately
-            if name.find(".moe.") != -1:
-                experts[name] = data
-                if len(experts) >= n_experts:
-                    # merge the experts into a single 3d tensor
-                    for bid in range(block_count):
-                        for wid in ["linear", "linear_1", "linear_v"]:
-                            full = True
-                            for xid in range(n_experts):
-                                ename = f"transformer.decoder_layer.{bid}.moe.{xid}.{wid}.weight"
-                                if ename not in experts:
-                                    full = False
-                                    break
-                            if not full:
-                                continue
+                # merge the experts into a single 3d tensor
+                for wid in ["linear", "linear_1", "linear_v"]:
+                    datas: list[Tensor] = []
 
-                            datas = []
-                            for xid in range(n_experts):
-                                ename = f"transformer.decoder_layer.{bid}.moe.{xid}.{wid}.weight"
-                                datas.append(experts[ename])
-                                del experts[ename]
+                    for xid in range(n_experts):
+                        ename = f"transformer.decoder_layer.{bid}.moe.{xid}.{wid}.weight"
+                        datas.append(self._experts[bid][ename])
+                        del self._experts[bid][ename]
 
-                            data = np.stack(datas, axis=0)
-                            data_dtype = data.dtype
+                    data_torch = torch.cat(datas, dim=0)
 
-                            if self.ftype == 0 and data_dtype == np.float16:
-                                data = data.astype(np.float32)
+                    merged_name = f"transformer.decoder_layer.{bid}.moe.{wid}.weight"
 
-                            if self.ftype == 1 and data_dtype == np.float32:
-                                data = data.astype(np.float16)
+                    new_name = self.map_tensor_name(merged_name)
 
-                            merged_name = f"transformer.decoder_layer.{bid}.moe.{wid}.weight"
+                    tensors.append((new_name, data_torch))
+                return tensors
+            else:
+                return []
 
-                            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
-                            if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
-
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
-
-                            self.gguf_writer.add_tensor(new_name, data)
-                continue
-
-            # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
+        return [(self.map_tensor_name(name), data_torch)]
 
 
 @Model.register("DbrxForCausalLM")
@@ -1435,73 +1329,44 @@ class DbrxModel(Model):
         print(f"gguf: file type = {self.ftype}")
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # FIXME
-        return super().modify_tensors(data_torch, name, bid)
+        del bid  # unused
 
-    def write_tensors(self):
-        block_count = self.hparams.get("n_layers")
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        for name, data_torch in self.get_tensors():
-            n_expert = self.hparams["ffn_config"]["moe_num_experts"]
-            n_ff = self.hparams["ffn_config"]["ffn_hidden_size"]
-            n_embd = self.hparams["d_model"]
+        n_expert = self.hparams["ffn_config"]["moe_num_experts"]
+        n_ff = self.hparams["ffn_config"]["ffn_hidden_size"]
+        n_embd = self.hparams["d_model"]
 
-            # Specific behavior for experts tensors: suffix .weight, view as 3D and transpose
-            # original implementation expects (n_expert, n_ff, n_embd) for all experts weights
-            # But llama.cpp moe graph works differently
-            # AND the dimensions in ggml are typically in the reverse order of the pytorch dimensions
-            # so (n_expert, n_ff, n_embd) in pytorch is {n_embd, n_ff, n_expert} in ggml_tensor
-            exp_tensor_names = {"ffn.experts.mlp.w1": None,       # LLM_TENSOR_FFN_GATE_EXPS ggml_tensor->ne{n_embd, n_ff,   n_expert}
-                                "ffn.experts.mlp.w2": (0, 2, 1),  # LLM_TENSOR_FFN_DOWN_EXPS ggml_tensor->ne{n_ff,   n_embd, n_expert}
-                                "ffn.experts.mlp.v1": None}       # LLM_TENSOR_FFN_UP_EXPS   ggml_tensor->ne{n_embd, n_ff,   n_expert}
-            experts = False
-            for exp_tensor_name in exp_tensor_names.keys():
-                if name.find(exp_tensor_name) != -1 and name.find(".weight") == -1:
-                    experts = True
-                    data_torch = data_torch.view(n_expert, n_ff, n_embd)
-                    if (permute_tensor := exp_tensor_names[exp_tensor_name]) is not None:
-                        data_torch = data_torch.permute(*permute_tensor)
-                    break
+        # Specific behavior for experts tensors: suffix .weight, view as 3D and transpose
+        # original implementation expects (n_expert, n_ff, n_embd) for all experts weights
+        # But llama.cpp moe graph works differently
+        # AND the dimensions in ggml are typically in the reverse order of the pytorch dimensions
+        # so (n_expert, n_ff, n_embd) in pytorch is {n_embd, n_ff, n_expert} in ggml_tensor
+        exp_tensor_names = {"ffn.experts.mlp.w1": None,       # LLM_TENSOR_FFN_GATE_EXPS ggml_tensor->ne{n_embd, n_ff,   n_expert}
+                            "ffn.experts.mlp.w2": (0, 2, 1),  # LLM_TENSOR_FFN_DOWN_EXPS ggml_tensor->ne{n_ff,   n_embd, n_expert}
+                            "ffn.experts.mlp.v1": None}       # LLM_TENSOR_FFN_UP_EXPS   ggml_tensor->ne{n_embd, n_ff,   n_expert}
+        experts = False
 
-            old_dtype = data_torch.dtype
+        for exp_tensor_name in exp_tensor_names.keys():
+            if name.find(exp_tensor_name) != -1 and name.find(".weight") == -1:
+                experts = True
+                data_torch = data_torch.view(n_expert, n_ff, n_embd)
+                if (permute_tensor := exp_tensor_names[exp_tensor_name]) is not None:
+                    data_torch = data_torch.permute(*permute_tensor)
+                break
 
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
+        # map tensor names
+        # In MoE models the ffn tensors are typically most of the model weights,
+        # and need to be quantizable. Quantize expects tensor names to be suffixed by .weight.
+        # Every other model has the weight names ending in .weight,
+        # let's assume that is the convention which is not the case for dbrx:
+        # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
+        new_name = self.map_tensor_name(name if not experts else name + ".weight", try_suffixes=(".weight",))
 
-            data = data_torch.squeeze().numpy()
+        return [(new_name, data_torch)]
 
-            # map tensor names
-            # In MoE models the ffn tensors are typically most of the model weights,
-            # and need to be quantizable. Quantize expects tensor names to be suffixed by .weight.
-            # Every other model has the weight names ending in .weight,
-            # let's assume that is the convention which is not the case for dbrx:
-            # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
-            new_name = tensor_map.get_name(name if not experts else name + ".weight", try_suffixes=(".weight",))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+    def extra_f16_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
+        del name, new_name, bid  # unused
 
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # Most of the codebase that takes in 1D tensors only handles F32 tensors
-            # and most of the outputs tensors are F32.
-            if data_dtype != np.float32 and n_dims == 1:
-                print(f"Can not map tensor {name!r}: all 1D tensors must be F32")
-                sys.exit()
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and n_dims > 1:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
+        return n_dims > 1;
 
 
 @Model.register("MiniCPMForCausalLM")
@@ -1611,98 +1476,57 @@ class Qwen2MoeModel(Model):
         if (n_experts := self.hparams.get("num_experts")) is not None:
             self.gguf_writer.add_expert_count(n_experts)
 
+    _experts: list[dict[str, Tensor]] | None = None
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # FIXME
-        return super().modify_tensors(data_torch, name, bid)
+        # process the experts separately
+        if name.find("experts") != -1:
+            n_experts = self.hparams["num_experts"]
+            assert bid is not None
+
+            if self._experts is None:
+                self._experts = [{} for _ in range(n_experts)]
+
+            self._experts[bid][name] = data_torch
+
+            if len(self._experts[bid]) >= n_experts * 3:
+                tensors: list[tuple[str, Tensor]] = []
+
+                # merge the experts into a single 3d tensor
+                for w_name in ["down_proj", "gate_proj", "up_proj"]:
+                    datas: list[Tensor] = []
+
+                    for xid in range(n_experts):
+                        ename = f"model.layers.{bid}.mlp.experts.{xid}.{w_name}.weight"
+                        datas.append(self._experts[bid][ename])
+                        del self._experts[bid][ename]
+
+                    data_torch = torch.cat(datas, dim=0)
+
+                    merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
+
+                    new_name = self.map_tensor_name(merged_name)
+
+                    tensors.append((new_name, data_torch))
+                return tensors
+            else:
+                return []
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
+        del name, bid, n_dims  # unused
+
+        return new_name.endswith("_norm.weight")
 
     def write_tensors(self):
-        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        n_experts = self.hparams.get("num_experts")
-        experts = dict()
-        for name, data_torch in self.get_tensors():
-            # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
-                continue
+        super().write_tensors()
 
-            old_dtype = data_torch.dtype
-
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
-
-            data = data_torch.squeeze().numpy()
-
-            # process the experts separately
-            if name.find("experts") != -1:
-                experts[name] = data
-                if len(experts) >= n_experts * 3:
-                    # merge the experts into a single 3d tensor
-                    for bid in range(block_count):
-                        for w_name in ["down_proj", "gate_proj", "up_proj"]:
-                            full = True
-                            for xid in range(n_experts):
-                                ename = f"model.layers.{bid}.mlp.experts.{xid}.{w_name}.weight"
-                                if ename not in experts:
-                                    full = False
-                                    break
-                            if not full:
-                                continue
-
-                            datas = []
-                            for xid in range(n_experts):
-                                ename = f"model.layers.{bid}.mlp.experts.{xid}.{w_name}.weight"
-                                datas.append(experts[ename])
-                                del experts[ename]
-
-                            data = np.stack(datas, axis=0)
-                            data_dtype = data.dtype
-
-                            if self.ftype == 0 and data_dtype == np.float16:
-                                data = data.astype(np.float32)
-
-                            if self.ftype == 1 and data_dtype == np.float32:
-                                data = data.astype(np.float16)
-
-                            merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
-
-                            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
-                            if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
-
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
-
-                            self.gguf_writer.add_tensor(new_name, data)
-                continue
-
-            # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-            if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
-
-        if len(experts) > 0:
-            raise ValueError(f"Unprocessed experts: {experts.keys()}")
+        if self._experts is not None:
+            # flatten `list[dict[str, Tensor]]` into `list[str]`
+            experts = [k for d in self._experts for k in d.keys()]
+            if len(experts) > 0:
+                raise ValueError(f"Unprocessed experts: {experts}")
 
 
 @Model.register("GPT2LMHeadModel")
@@ -2152,8 +1976,8 @@ class BertModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
-        del new_name, bid  # unused
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
+        del new_name, bid, n_dims  # unused
 
         # not used with get_rows, must be F32
         return name == "embeddings.token_type_embeddings.weight"
@@ -2345,7 +2169,9 @@ class MambaModel(Model):
 
         return [(new_name, data_torch)]
 
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None) -> bool:
+    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
+        del n_dims  # unused
+
         return new_name in (self.format_tensor_name(n, bid, ".weight" if name.endswith(".weight") else "") for n in [
             gguf.MODEL_TENSOR.SSM_CONV1D,
             gguf.MODEL_TENSOR.SSM_X,
@@ -2386,54 +2212,17 @@ class OlmoModel(Model):
     # Same as super class, but permuting q_proj, k_proj
     # Copied from: LlamaModel
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # FIXME
-        return super().modify_tensors(data_torch, name, bid)
+        del bid  # unused
 
-    def write_tensors(self):
-        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        n_head = self.hparams.get("num_attention_heads")
+        n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams.get("num_key_value_heads")
-        for name, data_torch in self.get_tensors():
-            old_dtype = data_torch.dtype
 
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
+        if name.endswith("q_proj.weight"):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+        if name.endswith("k_proj.weight"):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
-            data = data_torch.numpy()
-
-            if name.endswith("q_proj.weight"):
-                data = permute(data, n_head, n_head)
-            if name.endswith("k_proj.weight"):
-                data = permute(data, n_head, n_kv_head)
-
-            data = data.squeeze()
-
-            # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # 1d tensors need to be converted to float32
-            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
+        return [(self.map_tensor_name(name), data_torch)]
 
 
 ###### CONVERSION LOGIC ######
