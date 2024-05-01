@@ -135,7 +135,7 @@ struct gpt_params {
     bool   multiple_choice = false; // compute TruthfulQA score over random tasks from datafile supplied in prompt
     size_t multiple_choice_tasks = 0;     // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
 
-    bool   kl_divergence   = false; // compute KL-divergence
+    bool   kl_divergence   = false; // compute KL divergence
 
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
@@ -150,6 +150,7 @@ struct gpt_params {
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
     bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
+    bool flash_attn        = false; // flash attention
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
