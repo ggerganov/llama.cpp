@@ -463,7 +463,7 @@ class SentencePieceVocab(Vocab):
             raise FileNotFoundError('Cannot find tokenizer.model')
 
         self.sentencepiece_tokenizer = SentencePieceProcessor()
-        self.sentencepiece_tokenizer.LoadFromFile(fname_tokenizer)
+        self.sentencepiece_tokenizer.LoadFromFile(str(fname_tokenizer))
         vocab_size = self.sentencepiece_tokenizer.vocab_size()
 
         new_tokens       = {id: piece for piece, id in added_tokens.items() if id >= vocab_size}
