@@ -49,9 +49,8 @@ class Model(Protocol):
     is_big_endian: bool
     endianess: gguf.GGUFEndian
     use_temp_file: bool
+    part_names: list[str]
     is_safetensors: bool
-    num_parts: int
-    part_names: Iterable[str]
     hparams: dict[str, Any]
     gguf_writer: gguf.GGUFWriter
     block_count: int
@@ -67,9 +66,10 @@ class Model(Protocol):
         self.is_big_endian = is_big_endian
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
-        self.is_safetensors = self._is_model_safetensors()
-        self.num_parts = Model.count_model_parts(self.dir_model, ".safetensors" if self.is_safetensors else ".bin")
-        self.part_names = self._get_part_names()
+        self.part_names = Model.get_model_part_names(self.dir_model, ".safetensors")
+        self.is_safetensors = len(self.part_names) > 0
+        if not self.is_safetensors:
+            self.part_names = Model.get_model_part_names(self.dir_model, ".bin")
         self.hparams = Model.load_hparams(self.dir_model)
         self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
@@ -109,7 +109,7 @@ class Model(Protocol):
             sys.exit()
         if "{bid}" in name:
             assert bid is not None
-            name = name.format(bid)
+            name = name.format(bid=bid)
         return name + suffix
 
     def map_tensor_name(self, name: str, try_suffixes: Sequence[str] = (".weight", ".bias")) -> str:
@@ -228,13 +228,13 @@ class Model(Protocol):
         self.gguf_writer.close()
 
     @staticmethod
-    def count_model_parts(dir_model: Path, prefix: str) -> int:
-        num_parts = 0
+    def get_model_part_names(dir_model: Path, suffix: str) -> list[str]:
+        part_names: list[str] = []
         for filename in os.listdir(dir_model):
-            if filename.endswith(prefix):
-                num_parts += 1
+            if filename.endswith(suffix):
+                part_names.append(filename)
 
-        return num_parts
+        return part_names
 
     @staticmethod
     def load_hparams(dir_model):
@@ -257,19 +257,6 @@ class Model(Protocol):
             return cls._model_classes[arch]
         except KeyError:
             raise NotImplementedError(f'Architecture {arch!r} not supported!') from None
-
-    def _is_model_safetensors(self) -> bool:
-        return Model.count_model_parts(self.dir_model, ".safetensors") > 0
-
-    def _get_part_names(self) -> Iterable[str]:
-        if self.is_safetensors:
-            if self.num_parts == 1:  # there's only one .safetensors file
-                return ("model.safetensors",)
-            return (f"model-{n:05}-of-{self.num_parts:05}.safetensors" for n in range(1, self.num_parts + 1))
-
-        if self.num_parts == 1:  # there's only one .bin file
-            return ("pytorch_model.bin",)
-        return (f"pytorch_model-{n:05}-of-{self.num_parts:05}.bin" for n in range(1, self.num_parts + 1))
 
     # used for GPT-2 BPE and WordPiece vocabs
     def get_vocab_base(self) -> tuple[list[str], list[int], str]:
@@ -446,7 +433,7 @@ class Model(Protocol):
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
         tokenizer = SentencePieceProcessor()
-        tokenizer.LoadFromFile(tokenizer_path)
+        tokenizer.LoadFromFile(str(tokenizer_path))
 
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
 
@@ -1120,7 +1107,7 @@ class StableLMModel(Model):
             ename = f"model.layers.{bid}.self_attn.{layer_name}.norms.{xid}.weight"
             datas.append(norms[ename])
             del norms[ename]
-        data_torch = torch.cat(datas, dim=0)
+        data_torch = torch.stack(datas, dim=0)
 
         merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
         new_name = self.map_tensor_name(merged_name)
@@ -1204,7 +1191,7 @@ class LlamaModel(Model):
             assert bid is not None
 
             if self._experts is None:
-                self._experts = [{} for _ in range(n_experts)]
+                self._experts = [{} for _ in range(self.block_count)]
 
             self._experts[bid][name] = data_torch
 
@@ -1220,7 +1207,7 @@ class LlamaModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.cat(datas, dim=0)
+                    data_torch = torch.stack(datas, dim=0)
 
                     merged_name = f"layers.{bid}.feed_forward.experts.{wid}.weight"
 
@@ -1267,7 +1254,7 @@ class GrokModel(Model):
             assert bid is not None
 
             if self._experts is None:
-                self._experts = [{} for _ in range(n_experts)]
+                self._experts = [{} for _ in range(self.block_count)]
 
             self._experts[bid][name] = data_torch
 
@@ -1283,7 +1270,7 @@ class GrokModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.cat(datas, dim=0)
+                    data_torch = torch.stack(datas, dim=0)
 
                     merged_name = f"transformer.decoder_layer.{bid}.moe.{wid}.weight"
 
@@ -1484,7 +1471,7 @@ class Qwen2MoeModel(Model):
             assert bid is not None
 
             if self._experts is None:
-                self._experts = [{} for _ in range(n_experts)]
+                self._experts = [{} for _ in range(self.block_count)]
 
             self._experts[bid][name] = data_torch
 
@@ -1500,7 +1487,7 @@ class Qwen2MoeModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.cat(datas, dim=0)
+                    data_torch = torch.stack(datas, dim=0)
 
                     merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
 
@@ -1604,7 +1591,7 @@ class Phi3MiniModel(Model):
             sys.exit(1)
 
         tokenizer = SentencePieceProcessor()
-        tokenizer.LoadFromFile(tokenizer_path)
+        tokenizer.LoadFromFile(str(tokenizer_path))
 
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
 
@@ -1786,7 +1773,7 @@ class InternLM2Model(Model):
         add_prefix = sentencepiece_model.normalizer_spec.add_dummy_prefix
 
         tokenizer = SentencePieceProcessor()
-        tokenizer.LoadFromFile(tokenizer_path)
+        tokenizer.LoadFromFile(str(tokenizer_path))
         tokenizer.serialized_model_proto
 
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
@@ -2171,13 +2158,15 @@ class MambaModel(Model):
     def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         del n_dims  # unused
 
-        return new_name in (self.format_tensor_name(n, bid, ".weight" if name.endswith(".weight") else "") for n in [
-            gguf.MODEL_TENSOR.SSM_CONV1D,
-            gguf.MODEL_TENSOR.SSM_X,
-            gguf.MODEL_TENSOR.SSM_DT,
-            gguf.MODEL_TENSOR.SSM_A,
-            gguf.MODEL_TENSOR.SSM_D,
-        ])
+        return bid is not None and new_name in (
+            self.format_tensor_name(n, bid, ".weight" if name.endswith(".weight") else "") for n in [
+                gguf.MODEL_TENSOR.SSM_CONV1D,
+                gguf.MODEL_TENSOR.SSM_X,
+                gguf.MODEL_TENSOR.SSM_DT,
+                gguf.MODEL_TENSOR.SSM_A,
+                gguf.MODEL_TENSOR.SSM_D,
+            ]
+        )
 
 
 @Model.register("CohereForCausalLM")
