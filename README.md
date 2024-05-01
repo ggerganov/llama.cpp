@@ -979,13 +979,9 @@ https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b0
 
 #### Build on Android using Termux (F-Droid)
 F-Droid Termux is an alternative to execute `llama.cpp` on an Android device(*no root required*).
-
-Below are instructions to install `llama.cpp` including CPU and OpenBLAS inference.
-
-If you opt to utilize OpenBLAS, you'll need to install the corresponding package.
 ```
 apt update && apt upgrade -y
-apt install libopenblas
+apt install git
 ```
 
 Due to permission limitations in the Android API, it's essential to move your model inside the `~/` directory for best performance:
@@ -994,16 +990,7 @@ cd storage/downloads
 mv model.gguf ~/
 ```
 
-Build & run `llama.cpp`:
-```
-apt install git
-$HOME
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp
-cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS && cd build && cmake --build . --config Release
-cd bin
-./main -m ~/model.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:"
-```
+[Follow Linux Build instruction](https://github.com/ggerganov/llama.cpp#build) to build & run `llama.cpp`.
 
 ### Docker
 
