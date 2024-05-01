@@ -191,6 +191,7 @@ class Model(Protocol):
                     break
 
             for new_name, data in ((n, d.squeeze().numpy()) for n, d in self.modify_tensors(data_torch, name, bid)):
+                data: np.ndarray = data  # type hint
                 n_dims = len(data.shape)
                 data_dtype = data.dtype
 
@@ -211,7 +212,11 @@ class Model(Protocol):
                 if self.ftype == 1 and data_dtype == np.float32 and (name.endswith(".weight") and n_dims >= 2 or extra_f16) and not extra_f32:
                     data = data.astype(np.float16)
 
-                print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+                # reverse shape to make it similar to the internal ggml dimension order
+                shape_str = f"{{{', '.join(str(n) for n in reversed(data.shape))}}}"
+
+                # n_dims is implicit in the shape
+                print(f"{new_name}, shape = {shape_str}, {old_dtype} --> {data.dtype}")
 
                 self.gguf_writer.add_tensor(new_name, data)
 
@@ -1774,7 +1779,6 @@ class InternLM2Model(Model):
 
         tokenizer = SentencePieceProcessor()
         tokenizer.LoadFromFile(str(tokenizer_path))
-        tokenizer.serialized_model_proto
 
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
 
