@@ -79,6 +79,29 @@ void str_compare_dump(const std::string &s1, const std::string &s2) {
     }
 }
 
+
+template<typename TypeWithStrSupp>
+std::string str(TypeWithStrSupp value) {
+    std::stringstream ss;
+    ss << value;
+    return ss.str();
+}
+
+template<typename TypeWithStrSupp>
+std::string str(std::vector<TypeWithStrSupp> values) {
+    std::stringstream ss;
+    ss << "[ ";
+    int cnt = 0;
+    for(auto value: values) {
+        cnt += 1;
+        if (cnt != 1) ss << ", ";
+        ss << value;
+    }
+    ss << " ]";
+    return ss.str();
+}
+
+
 typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
 
 class SimpCfg {
@@ -197,14 +220,13 @@ public:
                 break;
             }
             array.push_back(std::get<SupportedDataType>(gm[arrayKey]));
+            i += 1;
         }
         if (array.empty()) {
-            std::stringstream ss;
-            ss << defaultValue;
-            LWARN_LN("DBUG:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), ss.str().c_str());
+            LWARN_LN("DBUG:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(defaultValue).c_str());
             return defaultValue;
         }
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
+        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(array).c_str());
         return array;
     }
 
@@ -308,10 +330,11 @@ int main(int argc, char **argv) {
     sc.get_string("mistral", "system-prefix", "Not found");
     sc.get_string("\"mistral\"", "\"system-prefix\"", "Not found");
 
+    sc.get_array<int64_t>("testme", "keyA100", {1, 2, 3});
     sc.set_int64("testme", "keyA300-0", 330);
     sc.set_int64("testme", "keyA300-1", 331);
     sc.set_int64("testme", "keyA300-2", 332);
-    sc.get_array<int>("testme", "keyA300", {1, 2, 3});
+    sc.get_array<int64_t>("testme", "keyA300", {1, 2, 3});
     return 0;
 }
 #endif
