@@ -243,6 +243,8 @@ class Model(Protocol):
             if filename.endswith(suffix):
                 part_names.append(filename)
 
+        part_names.sort()
+
         return part_names
 
     @staticmethod
