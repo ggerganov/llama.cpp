@@ -233,7 +233,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "maximum": 300
         })""",
         R"""(
-            root ::= ([1] [5-9] | [2-9] [0-9] | [1-2] [0-9]{2} | [3] "00") space
+            root ::= ([1] ([5-9] | [2-9] [0-9]) | [1-2] [0-9]{2} | [3] "00") space
             space ::= " "?
         )"""
     });
@@ -571,6 +571,44 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             integral-part ::= [0] | [1-9] [0-9]{0,15}
             item ::= number | integer
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
+            root ::= "[" space item ("," space item){2,4} "]" space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min + max items with min + max values across zero",
+        R"""({
+            "items": {
+                "type": "integer",
+                "minimum": -122,
+                "maximum": 207
+            },
+            "minItems": 3,
+            "maxItems": 5
+        })""",
+        R"""(
+            item ::= ("-" ([0-9] | [1-8] [0-9] | [9] [0-9] | "1" [0-1] [0-9] | [2] [0-2]) | [0-9] | [1-8] [0-9] | [9] [0-9] | [1] [0-9]{2} | [2] "0" [0-7]) space
+            root ::= "[" space item ("," space item){2,4} "]" space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min + max items with min + max values",
+        R"""({
+            "items": {
+                "type": "integer",
+                "minimum": 122,
+                "maximum": 207
+            },
+            "minItems": 3,
+            "maxItems": 5
+        })""",
+        R"""(
+            item ::= ([1] ([2] ([2-9] | [3-9] [0-9])) | [2] "0" [0-7]) space
             root ::= "[" space item ("," space item){2,4} "]" space
             space ::= " "?
         )"""

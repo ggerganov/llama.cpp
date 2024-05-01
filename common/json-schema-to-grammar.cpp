@@ -214,6 +214,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
                     more_digits(sub_len, sub_len);
                 } else {
                     out << "[" << from[i] << "] ";
+                    out << "(";
                     uniform_range(from_sub, sub_nines);
                     if (from[i] < to[i] - 1) {
                         out << " | ";
@@ -226,6 +227,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
                         out << " ";
                         more_digits(sub_len, sub_len);
                     }
+                    out << ")";
                 }
                 if (!to_reached) {
                     out << " | ";
