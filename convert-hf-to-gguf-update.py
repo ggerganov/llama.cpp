@@ -146,46 +146,47 @@ for model in models:
     src_ifs += f"            # ref: {model['repo']}\n"
     src_ifs += f"            res = \"{name}\"\n"
 
-src_func = "" # noqa: E222
-src_func +=  "    def get_vocab_base_pre(self, tokenizer) -> str:\n" # noqa: E222
-src_func +=  "        # encoding this string and hashing the resulting tokens would (hopefully) give us a unique identifier that\n" # noqa: E222
-src_func +=  "        # is specific for the BPE pre-tokenizer used by the model\n" # noqa: E222
-src_func +=  "        # we will use this unique identifier to write a \"tokenizer.ggml.pre\" entry in the GGUF file which we can\n" # noqa: E222
-src_func +=  "        # use in llama.cpp to implement the same pre-tokenizer\n" # noqa: E222
-src_func +=  "\n" # noqa: E222
-src_func += f"        chktxt = {repr(chktxt)}\n" # noqa: E222
-src_func +=  "\n" # noqa: E222
-src_func +=  "        chktok = tokenizer.encode(chktxt)\n" # noqa: E222
-src_func +=  "        chkhsh = sha256(str(chktok).encode()).hexdigest()\n" # noqa: E222
-src_func +=  "\n" # noqa: E222
-src_func +=  "        print(f\"chktok: {chktok}\")\n" # noqa: E222
-src_func +=  "        print(f\"chkhsh: {chkhsh}\")\n" # noqa: E222
-src_func +=  "\n" # noqa: E222
-src_func +=  "        res = None\n" # noqa: E222
-src_func +=  "\n" # noqa: E222
-src_func +=  "        # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script\n" # noqa: E222
-src_func +=  "        #       or pull the latest version of the model from Huggingface\n" # noqa: E222
-src_func +=  "        #       don't edit the hashes manually!\n" # noqa: E222
-src_func += f"{src_ifs}\n" # noqa: E222
-src_func +=  "        if res is None:\n" # noqa: E222
-src_func +=  "            print(\"\\n\")\n" # noqa: E222
-src_func +=  "            print(\"**************************************************************************************\")\n" # noqa: E222
-src_func +=  "            print(\"** WARNING: The BPE pre-tokenizer was not recognized!\")\n" # noqa: E222
-src_func +=  "            print(\"**          There are 2 possible reasons for this:\")\n" # noqa: E222
-src_func +=  "            print(\"**          - the model has not been added to convert-hf-to-gguf-update.py yet\")\n" # noqa: E222
-src_func +=  "            print(\"**          - the pre-tokenization config has changed upstream\")\n" # noqa: E222
-src_func +=  "            print(\"**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.\")\n" # noqa: E222
-src_func +=  "            print(\"** ref:     https://github.com/ggerganov/llama.cpp/pull/6920\")\n" # noqa: E222
-src_func +=  "            print(\"**\")\n" # noqa: E222
-src_func +=  "            print(f\"** chkhsh:  {chkhsh}\")\n" # noqa: E222
-src_func +=  "            print(\"**************************************************************************************\")\n" # noqa: E222
-src_func +=  "            print(\"\\n\")\n" # noqa: E222
-src_func +=  "            raise NotImplementedError(\"BPE pre-tokenizer was not recognized - update get_vocab_base_pre()\")\n" # noqa: E222
-src_func +=  "\n" # noqa: E222
-src_func +=  "        print(f\"tokenizer.ggml.pre: {res}\")\n" # noqa: E222
-src_func +=  "        print(f\"chkhsh: {chkhsh}\")\n" # noqa: E222
-src_func +=  "\n" # noqa: E222
-src_func +=  "        return res\n" # noqa: E222
+src_func = f"""
+    def get_vocab_base_pre(self, tokenizer) -> str:
+        # encoding this string and hashing the resulting tokens would (hopefully) give us a unique identifier that
+        # is specific for the BPE pre-tokenizer used by the model
+        # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
+        # use in llama.cpp to implement the same pre-tokenizer
+
+        chktxt = {repr(chktxt)}
+
+        chktok = tokenizer.encode(chktxt)
+        chkhsh = sha256(str(chktok).encode()).hexdigest()
+
+        print(f"chktok: {{chktok}}")
+        print(f"chkhsh: {{chkhsh}}")
+
+        res = None
+
+        # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script
+        #       or pull the latest version of the model from Huggingface
+        #       don't edit the hashes manually!
+{src_ifs}
+        if res is None:
+            print("\\n")
+            print("**************************************************************************************")
+            print("** WARNING: The BPE pre-tokenizer was not recognized!")
+            print("**          There are 2 possible reasons for this:")
+            print("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
+            print("**          - the pre-tokenization config has changed upstream")
+            print("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
+            print("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
+            print("**")
+            print(f"** chkhsh:  {{chkhsh}}")
+            print("**************************************************************************************")
+            print("\\n")
+            raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
+
+        print(f"tokenizer.ggml.pre: {{repr(res)}}")
+        print(f"chkhsh: {{chkhsh}}")
+
+        return res
+"""
 
 print(src_func) # noqa: NP100
 
