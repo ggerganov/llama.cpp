@@ -2181,7 +2181,7 @@ class PlamoModel(Model):
                 continue
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight",))
             if new_name is None:
                 raise ValueError(f"Can not map tensor {name!r}")
 
