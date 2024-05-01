@@ -58,10 +58,10 @@ static __global__ void rope(
     dst[i + 1] = x0*sin_theta + x1*cos_theta;
 }
 
-template<typename T, bool has_pos>
+template<typename T, bool has_pos, bool has_freq_facs>
 static __global__ void rope_neox(
     const T * x, T * dst, int ncols, int n_dims, const int32_t * pos, float freq_scale, int p_delta_rows,
-    float ext_factor, float attn_factor, rope_corr_dims corr_dims, float theta_scale, float inv_ndims
+    float ext_factor, float attn_factor, rope_corr_dims corr_dims, float theta_scale, float inv_ndims, const float * freq_factors
 ) {
     const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
 
@@ -88,7 +88,9 @@ static __global__ void rope_neox(
     float cur_rot = inv_ndims * ic - ib;
 
     const int p = has_pos ? pos[i2] : 0;
-    const float theta_base = p*freq_scale*powf(theta_scale, col/2.0f);
+    const float freq_factor = has_freq_facs ? freq_factors[col/2] : 1.0f;
+
+    const float theta_base = p*freq_scale*powf(theta_scale, col/2.0f)/freq_factor;
 
     float cos_theta, sin_theta;
     rope_yarn(theta_base, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
@@ -164,7 +166,7 @@ static void rope_cuda(
 template<typename T>
 static void rope_neox_cuda(
     const T * x, T * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
-    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, cudaStream_t stream
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float* freq_factors, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 2 == 0);
     const dim3 block_dims(1, CUDA_ROPE_BLOCK_SIZE, 1);
@@ -175,15 +177,32 @@ static void rope_neox_cuda(
     const float inv_ndims = -1.0f / n_dims;
 
     if (pos == nullptr) {
-        rope_neox<T, false><<<block_nums, block_dims, 0, stream>>>(
-            x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
-            theta_scale, inv_ndims
-        );
-    } else {
-        rope_neox<T, true><<<block_nums, block_dims, 0, stream>>>(
-            x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
-            theta_scale, inv_ndims
-        );
+        if (freq_factors == nullptr) {
+            rope_neox<T, false, false><<<block_nums, block_dims, 0, stream>>>(
+                x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
+                theta_scale, inv_ndims, freq_factors
+                );
+        }
+        else {
+            rope_neox<T, false, true><<<block_nums, block_dims, 0, stream>>>(
+                x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
+                theta_scale, inv_ndims, freq_factors
+                );
+        }
+    }
+    else {
+        if (freq_factors == nullptr) {
+            rope_neox<T, true, false><<<block_nums, block_dims, 0, stream>>>(
+                x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
+                theta_scale, inv_ndims, freq_factors
+                );
+        }
+        else {
+            rope_neox<T, true, true><<<block_nums, block_dims, 0, stream>>>(
+                x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
+                theta_scale, inv_ndims, freq_factors
+                );
+        }
     }
 }
 
@@ -214,17 +233,17 @@ static void rope_cuda_f32(
 
 static void rope_neox_cuda_f16(
     const half * x, half * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
-    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, cudaStream_t stream) {
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float* freq_factors, cudaStream_t stream) {
 
-    rope_neox_cuda<half>(x, dst, ncols, n_dims, nrows, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, stream);
+    rope_neox_cuda<half>(x, dst, ncols, n_dims, nrows, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, stream);
 }
 
 static void rope_neox_cuda_f32(
     const float * x, float * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
-    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, cudaStream_t stream
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float* freq_factors, cudaStream_t stream
 ) {
 
-    rope_neox_cuda<float>(x, dst, ncols, n_dims, nrows, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, stream);
+    rope_neox_cuda<float>(x, dst, ncols, n_dims, nrows, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, stream);
 }
 
 void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
@@ -259,11 +278,18 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
     memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
+    const float* freq_factors = nullptr;
     const int32_t * pos = nullptr;
     if ((mode & 1) == 0) {
         GGML_ASSERT(src1->type == GGML_TYPE_I32);
         GGML_ASSERT(src1->ne[0] == ne2);
         pos = (const int32_t *) src1_d;
+
+        if (dst->src[2] != nullptr) {
+            GGML_ASSERT(dst->src[2]->type == GGML_TYPE_F32);
+            GGML_ASSERT(dst->src[2]->ne[0] >= n_dims / 2);
+            freq_factors = (const float*) dst->src[2]->data;
+        }
     }
 
     const bool is_neox = mode & 2;
@@ -280,12 +306,12 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         if (src0->type == GGML_TYPE_F32) {
             rope_neox_cuda_f32(
                 (const float *)src0_d, (float *)dst_d, ne00, n_dims, nrows, pos, freq_scale, ne01, freq_base, ext_factor,
-                attn_factor, corr_dims, stream
+                attn_factor, corr_dims, freq_factors, stream
             );
         } else if (src0->type == GGML_TYPE_F16) {
             rope_neox_cuda_f16(
                 (const half *)src0_d, (half *)dst_d, ne00, n_dims, nrows, pos, freq_scale, ne01, freq_base, ext_factor,
-                attn_factor, corr_dims, stream
+                attn_factor, corr_dims, freq_factors, stream
             );
         } else {
             GGML_ASSERT(false);

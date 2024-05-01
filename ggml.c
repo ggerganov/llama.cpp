@@ -6275,6 +6275,13 @@ static struct ggml_tensor * ggml_rope_impl(
     return result;
 }
 
+struct ggml_tensor * ggml_rope_with_freq_factors(
+        struct ggml_tensor* rope_tensor,
+        struct ggml_tensor* freq_factors) {
+    rope_tensor->src[2] = freq_factors;
+    return rope_tensor;
+}
+
 struct ggml_tensor * ggml_rope(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
@@ -18915,21 +18922,23 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
 
                     src0->grad = ggml_add_or_set(ctx,
                             src0->grad,
-                            ggml_rope_back(ctx,
-                                tensor->grad,
-                                src1,
-                                n_dims,
-                                mode,
-                                n_ctx,
-                                n_orig_ctx,
-                                freq_base,
-                                freq_scale,
-                                ext_factor,
-                                attn_factor,
-                                beta_fast,
-                                beta_slow,
-                                xpos_base,
-                                xpos_down),
+                            ggml_rope_with_freq_factors(
+                                ggml_rope_back(ctx,
+                                    tensor->grad,
+                                    src1,
+                                    n_dims,
+                                    mode,
+                                    n_ctx,
+                                    n_orig_ctx,
+                                    freq_base,
+                                    freq_scale,
+                                    ext_factor,
+                                    attn_factor,
+                                    beta_fast,
+                                    beta_slow,
+                                    xpos_base,
+                                    xpos_down),
+                                tensor->src[2]),
                             zero_table);
                 }
             } break;
@@ -18954,22 +18963,24 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
 
                     src0->grad = ggml_add_or_set(ctx,
                             src0->grad,
-                            ggml_rope_impl(ctx,
-                                tensor->grad,
-                                src1,
-                                n_dims,
-                                mode,
-                                n_ctx,
-                                n_orig_ctx,
-                                freq_base,
-                                freq_scale,
-                                ext_factor,
-                                attn_factor,
-                                beta_fast,
-                                beta_slow,
-                                xpos_base,
-                                xpos_down,
-                                false),
+                            ggml_rope_with_freq_factors(
+                                ggml_rope_impl(ctx,
+                                    tensor->grad,
+                                    src1,
+                                    n_dims,
+                                    mode,
+                                    n_ctx,
+                                    n_orig_ctx,
+                                    freq_base,
+                                    freq_scale,
+                                    ext_factor,
+                                    attn_factor,
+                                    beta_fast,
+                                    beta_slow,
+                                    xpos_base,
+                                    xpos_down,
+                                    false),
+                                tensor->src[2]),
                             zero_table);
                 }
             } break;
