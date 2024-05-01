@@ -3345,7 +3345,7 @@ struct llama_model_loader {
         GGML_ASSERT((arr_info.gt != GGUF_TYPE_INT32 || std::is_same<T, int>::value));
 
         result.resize(arr_info.length);
-        result.assign((T*)arr_info.data, (T*)arr_info.data + arr_info.length);
+        result.assign((const T*)arr_info.data, (const T*)arr_info.data + arr_info.length);
 
         return true;
     }
@@ -10979,7 +10979,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
         GGML_ASSERT(hparams.rope_short_factors.size() == freq_dim);
 
         auto max_pos = batch.n_tokens > 0 && batch.pos != nullptr ? *std::max_element(batch.pos, batch.pos + batch.n_tokens) : batch.n_tokens - 1;
-        if (max_pos + 1 > hparams.n_yarn_orig_ctx) {
+        if ((uint32_t)(max_pos + 1) > hparams.n_yarn_orig_ctx) {
             ggml_backend_tensor_set(lctx.freq_factors, hparams.rope_long_factors.data(), 0, freq_dim * ggml_element_size(lctx.freq_factors));
         }
         else {
