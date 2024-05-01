@@ -13,7 +13,7 @@ extern "C" {
 #endif
 
 // Quantization
-void quantize_row_q8_0_aarch64(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k, int nrows_interleaved, int blocklen_per_row);
+void quantize_q8_0_aarch64(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, int64_t k, int nrows_interleaved, int blocklen_per_row);
 
 // Quantization utilizing an importance matrix (a.k.a. "Activation aWare Quantization")
 size_t quantize_q4_0_aarch64(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrows, int64_t n_per_row, const float * imatrix);

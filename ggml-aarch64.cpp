@@ -92,7 +92,7 @@ size_t quantize_q4_0_aarch64(const float * GGML_RESTRICT src, void * GGML_RESTRI
     }
 }
 
-void quantize_row_q8_0_aarch64(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int64_t k, int nrows_interleaved, int blocklen_per_row) {
+void quantize_q8_0_aarch64(const float * GGML_RESTRICT x, void * GGML_RESTRICT vy, int64_t k, int nrows_interleaved, int blocklen_per_row) {
     assert(QK8_0 == 32);
     assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
