@@ -161,40 +161,109 @@ static std::string format_literal(const std::string & literal) {
 }
 
 static void _generate_min_max_int(int min_value, int max_value, std::stringstream & out, int decimals_left = 16, bool top_level = true) {
-    auto has_max = max_value != std::numeric_limits<int>::max();
     auto has_min = min_value != std::numeric_limits<int>::min();
+    auto has_max = max_value != std::numeric_limits<int>::max();
 
-    if (has_min && has_max && min_value > max_value) {
-        throw std::invalid_argument("min value must be less than or equal to max value");
-    }
-    if (has_min && has_max && min_value == max_value) {
-        out << "\"" << min_value << "\"";
-    } else if (has_min && has_max) {
-        throw std::invalid_argument("min and max values not supported yet");
-    } else if (has_min) {
-        if (min_value < 0) {
-            throw std::invalid_argument("negative min values not supported yet");
-            // out << "\"-\" ";
-            // _generate_min_max_int(std::nullopt, -min_value, out);
-            // ...
+    auto digit_range = [&](char from, char to) {
+        out << "[";
+        if (from == to) {
+            out << from;
+        } else {
+            out << from << "-" << to;
         }
-        auto less_decimals = std::max(decimals_left - 1, 1);
-        auto more_digits = [&](int min_digits, int decimals) {
-            out << "[0-9]{" << min_digits << "," << decimals << "}";
-        };
-        auto digit_range = [&](char from, char to) {
-            out << "[";
-            if (from == to) {
-                out << from;
-            } else {
-                out << from << "-" << to;
+        out << "]";
+    };
+    auto more_digits = [&](int min_digits, int max_digits) {//} = std::numeric_limits<int>::max()) {
+        out << "[0-9]";
+        if (min_digits == max_digits && min_digits == 1) {
+            return;
+        }
+        out << "{";
+        out << min_digits;
+        if (max_digits != min_digits) {
+            out << ",";
+            if (max_digits != std::numeric_limits<int>::max()) {
+                out << max_digits;
             }
-            out << "]";
-        };
+        }
+        out << "}";
+    };
+    std::function<void(const std::string_view &, const std::string_view &)> uniform_range = [&](const std::string_view & from, const std::string_view & to) {
+        size_t i = 0;
+        while (from[i] == to[i]) {
+            i++;
+        }
+        if (i > 0) {
+            out << "\"" << from.substr(0, i) << "\"";
+        }
+        if (i < from.length()) {
+            if (i > 0) {
+                out << " ";
+            }
+            auto sub_len = from.length() - i - 1;
+            if (sub_len > 0) {
+                auto from_sub = from.substr(i + 1);
+                auto to_sub = to.substr(i + 1);
+                auto sub_zeros = repeat("0", sub_len);
+                auto sub_nines = repeat("9", sub_len);
 
-        if (min_value == 0) {
+                auto to_reached = false;
+                if (from_sub == sub_zeros) {
+                    digit_range(from[i], to[i] - 1);
+                    out << " ";
+                    more_digits(sub_len, sub_len);
+                } else {
+                    out << "[" << from[i] << "] ";
+                    uniform_range(from_sub, sub_nines);
+                    if (from[i] < to[i] - 1) {
+                        out << " | ";
+                        if (to_sub == sub_nines) {
+                            digit_range(from[i] + 1, to[i]);
+                            to_reached = true;
+                        } else {
+                            digit_range(from[i] + 1, to[i] - 1);
+                        }
+                        out << " ";
+                        more_digits(sub_len, sub_len);
+                    }
+                }
+                if (!to_reached) {
+                    out << " | ";
+                    digit_range(to[i], to[i]);
+                    out << " ";
+                    uniform_range(sub_zeros, to_sub);
+                }
+            } else {
+                out << "[" << from[i] << "-" << to[i] << "]";
+            }
+        }
+    };
+
+    if (has_min && has_max) {
+        auto min_s = std::to_string(min_value);
+        auto max_s = std::to_string(max_value);
+        auto min_digits = min_s.length();
+        auto max_digits = max_s.length();
+
+        for (auto digits = min_digits; digits < max_digits; digits++) {
+            uniform_range(min_s, repeat("9", digits));
+            min_s = "1" + repeat("0", digits);
+            out << " | ";
+        }
+        uniform_range(min_s, max_s);
+        return;
+    }
+
+    auto less_decimals = std::max(decimals_left - 1, 1);
+
+    if (has_min) {
+        if (min_value < 0) {
+            out << "\"-\" ";
+            _generate_min_max_int(std::numeric_limits<int>::min(), -min_value, out, decimals_left, /* top_level= */ false);
+            out << " | [0] | [1-9] ";
+            more_digits(0, decimals_left - 1);
+        } else if (min_value == 0) {
             if (top_level) {
-                out << "[1-9] ";
                 out << "[0] | [1-9] ";
                 more_digits(0, less_decimals);
             } else {
@@ -233,9 +302,26 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
                 more_digits(len - 1, less_decimals);
             }
         }
-    } else {
-        throw std::invalid_argument("max values not supported yet");
+        return;
     }
+
+    if (has_max) {
+        if (max_value >= 0) {
+            if (top_level) {
+                out << "\"-\" [1-9] ";
+                more_digits(0, less_decimals);
+                out << " | ";
+            }
+            _generate_min_max_int(0, max_value, out, decimals_left, /* top_level= */ true);
+        } else {
+            out << "\"-\" (";
+            _generate_min_max_int(std::numeric_limits<int>::min(), -max_value, out, decimals_left, /* top_level= */ false);
+            out << ")";
+        }
+        return;
+    }
+
+    assert(false);
 }
 
 class SchemaConverter {

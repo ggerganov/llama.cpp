@@ -159,6 +159,100 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
     });
 
     test({
+        SUCCESS,
+        "max 30",
+        R"""({
+            "type": "integer",
+            "maximum": 30
+        })""",
+        R"""(
+            root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | [1-2] [0-9] | [3] "0") space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min -5",
+        R"""({
+            "type": "integer",
+            "minimum": -5
+        })""",
+        R"""(
+            root ::= ("-" [0-5] | [0] | [1-9] [0-9]{0,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "max 1",
+        R"""({
+            "type": "integer",
+            "maximum": 1
+        })""",
+        R"""(
+            root ::= ("-" [1-9] [0-9]{0,15} | [0-1]) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "max 100",
+        R"""({
+            "type": "integer",
+            "maximum": 100
+        })""",
+        R"""(
+            root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | [1-8] [0-9] | [9] [0-9] | "100") space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 0 max 23",
+        R"""({
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+        })""",
+        R"""(
+            root ::= ([0-9] | [1] [0-9] | [2] [0-3]) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 15 max 300",
+        R"""({
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 300
+        })""",
+        R"""(
+            root ::= ([1] [5-9] | [2-9] [0-9] | [1-2] [0-9]{2} | [3] "00") space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min 5 max 30",
+        R"""({
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 30
+        })""",
+        R"""(
+            root ::= ([5-9] | [1-2] [0-9] | [3] "0") space
+            space ::= " "?
+        )"""
+    });
+
+    test({
         FAILURE,
         "unknown type",
         R"""({
