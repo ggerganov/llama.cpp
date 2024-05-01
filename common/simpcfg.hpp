@@ -183,6 +183,32 @@ public:
         return get_value(group, key, defaultValue, __func__);
     }
 
+
+    template<typename SupportedDataType>
+    std::vector<SupportedDataType> get_array(const std::string &group, const std::string &key, const std::vector<SupportedDataType> &defaultValue, const std::string &callerName="") {
+        auto gm = mapV[group];
+        std::vector<SupportedDataType> array;
+        int i = 0;
+        while(true) {
+            std::stringstream ssArrayKey;
+            ssArrayKey << key << "-" << i;
+            auto arrayKey = ssArrayKey.str();
+            if (gm.find(arrayKey) == gm.end()) {
+                break;
+            }
+            array.push_back(std::get<SupportedDataType>(gm[arrayKey]));
+        }
+        if (array.empty()) {
+            std::stringstream ss;
+            ss << defaultValue;
+            LWARN_LN("DBUG:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), ss.str().c_str());
+            return defaultValue;
+        }
+        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
+        return array;
+    }
+
+
     void load(const std::string &fname) {
         std::ifstream f {fname};
         if (!f) {
@@ -281,6 +307,11 @@ int main(int argc, char **argv) {
 
     sc.get_string("mistral", "system-prefix", "Not found");
     sc.get_string("\"mistral\"", "\"system-prefix\"", "Not found");
+
+    sc.set_int64("testme", "keyA300-0", 330);
+    sc.set_int64("testme", "keyA300-1", 331);
+    sc.set_int64("testme", "keyA300-2", 332);
+    sc.get_array<int>("testme", "keyA300", {1, 2, 3});
     return 0;
 }
 #endif
