@@ -57,12 +57,15 @@ class Keys:
         CAUSAL            = "{arch}.attention.causal"
 
     class Rope:
-        DIMENSION_COUNT      = "{arch}.rope.dimension_count"
-        FREQ_BASE            = "{arch}.rope.freq_base"
-        SCALING_TYPE         = "{arch}.rope.scaling.type"
-        SCALING_FACTOR       = "{arch}.rope.scaling.factor"
-        SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
-        SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
+        DIMENSION_COUNT         = "{arch}.rope.dimension_count"
+        FREQ_BASE               = "{arch}.rope.freq_base"
+        SCALING_TYPE            = "{arch}.rope.scaling.type"
+        SCALING_FACTOR          = "{arch}.rope.scaling.factor"
+        SCALING_LONG_FACTORS    = "{arch}.rope.scaling.freq_long_factors"
+        SCALING_SHORT_FACTORS   = "{arch}.rope.scaling.freq_short_factors"
+        SCALING_ATTN_FACTOR     = "{arch}.rope.scaling.attn_factor"
+        SCALING_ORIG_CTX_LEN    = "{arch}.rope.scaling.original_context_length"
+        SCALING_FINETUNED       = "{arch}.rope.scaling.finetuned"
 
     class SSM:
         CONV_KERNEL    = "{arch}.ssm.conv_kernel"
@@ -780,6 +783,7 @@ class RopeScalingType(Enum):
     NONE   = 'none'
     LINEAR = 'linear'
     YARN   = 'yarn'
+    SU     = 'su'
 
 
 class PoolingType(IntEnum):
