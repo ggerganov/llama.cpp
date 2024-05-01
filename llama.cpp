@@ -15730,7 +15730,7 @@ struct llama_context * llama_new_context_with_model(
         }
     }
 
-    // cache tokens & their decoded codepoints (for common case where there's no partial utf8 prefix bytes) for grammar constrained sampling.
+    // cache tokens & their decoded codepoints (for common case where there's no partial utf8 prefix bytes) for grammar-constrained sampling.
     {
         auto n_vocab = llama_n_vocab(llama_get_model(ctx));
         ctx->token_codepoints_without_partial_utf8_prefix.resize(n_vocab);
