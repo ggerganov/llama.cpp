@@ -163,7 +163,7 @@ public:
             return defaultValue;
         }
         auto value = gm[key];
-        LDBUG_LN("DBUG:SC:%s:%s:%s:%s", __func__, group.c_str(), key.c_str(), to_str(value).c_str());
+        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
         return std::get<SupportedDataType>(value);
     }
 
@@ -229,7 +229,7 @@ public:
             value = str_trim(value, ",");
             std::string vtype = "bool";
             auto valueLower = str_tolower(value);
-            if ((valueLower.compare("true") == 0) || (valueLower.compare("false") == 0)) {
+            if ((valueLower.compare("true") == 0) || (valueLower == "false")) {
                 set_bool(group, key, value);
             } else if (std::regex_match(value, rInt)) {
                 vtype = "int";
@@ -254,6 +254,10 @@ public:
 
 #ifdef SC_TEST_PRG
 int main(int argc, char **argv) {
+    if (argc != 2) {
+        LERRR_LN("USAGE:%s simp.cfg", argv[0]);
+        exit(1);
+    }
     std::string fname {argv[1]};
     SimpCfg sc;
     sc.load(fname);
