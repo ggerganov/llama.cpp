@@ -1080,7 +1080,6 @@ class StableLMModel(Model):
         n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams["num_key_value_heads"]
 
-
         if name.find("q_layernorm.norms") != -1:
             assert bid is not None
 
@@ -1366,7 +1365,7 @@ class DbrxModel(Model):
     def extra_f16_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         del name, new_name, bid  # unused
 
-        return n_dims > 1;
+        return n_dims > 1
 
 
 @Model.register("MiniCPMForCausalLM")
