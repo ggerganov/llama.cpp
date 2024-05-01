@@ -199,17 +199,21 @@ class Model(Protocol):
                 if self.ftype == 0 and data_dtype == np.float16:
                     data = data.astype(np.float32)
 
-                # when both are true, the tensor keeps its original type
+                # when both are True, f32 should win
                 extra_f32 = self.extra_f32_tensors(name, new_name, bid, n_dims)
                 extra_f16 = self.extra_f16_tensors(name, new_name, bid, n_dims)
 
-                # 1d tensors need to be converted to float32
-                # Most of the codebase that takes in 1D tensors only handles F32 tensors
-                if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or extra_f32) and not extra_f16:
-                    data = data.astype(np.float32)
+                # Most of the codebase that takes in 1D tensors or norms only handles F32 tensors
+                extra_f32 = extra_f32 or n_dims == 1 or new_name.endswith("_norm.weight")
 
                 # if f16 desired, convert any float32 2-dim weight tensors to float16
-                if self.ftype == 1 and data_dtype == np.float32 and (name.endswith(".weight") and n_dims >= 2 or extra_f16) and not extra_f32:
+                extra_f16 = extra_f16 or (name.endswith(".weight") and n_dims >= 2)
+
+                # when both extra_f32 and extra_f16 are False, convert to float32 by default
+                if self.ftype == 1 and data_dtype == np.float16 and (extra_f32 or not extra_f16):
+                    data = data.astype(np.float32)
+
+                if self.ftype == 1 and data_dtype == np.float32 and extra_f16 and not extra_f32:
                     data = data.astype(np.float16)
 
                 # reverse shape to make it similar to the internal ggml dimension order
@@ -1100,11 +1104,6 @@ class StableLMModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
-        del name, bid, n_dims  # unused
-
-        return new_name.endswith("_norm.weight")
-
     def _stack_qk_norm(self, bid: int, n_head: int, norms: dict[str, Tensor], layer_name: str = "q_layernorm"):
         datas: list[Tensor] = []
         # extract the norms in order
@@ -1504,11 +1503,6 @@ class Qwen2MoeModel(Model):
                 return []
 
         return [(self.map_tensor_name(name), data_torch)]
-
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
-        del name, bid, n_dims  # unused
-
-        return new_name.endswith("_norm.weight")
 
     def write_tensors(self):
         super().write_tensors()
