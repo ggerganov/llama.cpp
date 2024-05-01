@@ -1007,6 +1007,11 @@ if (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR CMAKE_GENERATOR_PLATFORM_LWR STR
         if (GGML_COMPILER_SUPPORT_DOTPROD)
             add_compile_definitions(__ARM_FEATURE_DOTPROD)
         endif ()
+        check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmlaq_f32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_MATMUL_INT8)
+        if (GGML_COMPILER_SUPPORT_MATMUL_INT8)
+            add_compile_definitions(__ARM_FEATURE_MATMUL_INT8)
+        endif ()
+
         check_cxx_source_compiles("#include <arm_neon.h>\nint main() { float16_t _a; float16x8_t _s = vdupq_n_f16(_a); return 0; }" GGML_COMPILER_SUPPORT_FP16_VECTOR_ARITHMETIC)
         if (GGML_COMPILER_SUPPORT_FP16_VECTOR_ARITHMETIC)
             add_compile_definitions(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
