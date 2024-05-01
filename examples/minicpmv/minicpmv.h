@@ -36,9 +36,7 @@ LLAVA_API bool llava_image_embed_make_with_clip_img(struct clip_ctx * ctx_clip, 
 /** build an image embed from image file bytes */
 LLAVA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length);
 /** build an image embed from a path to an image filename */
-LLAVA_API std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_bytes_slice(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length);
 LLAVA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx * ctx_clip, int n_threads, const char * image_path);
-LLAVA_API std::pair<struct llava_image_embed *, std::vector<std::vector<struct llava_image_embed *>>> llava_image_embed_make_with_filename_slice(struct clip_ctx * ctx_clip, int n_threads, const char * image_path);
 LLAVA_API void llava_image_embed_free(struct llava_image_embed * embed);
 /** free an embedding made with llava_image_embed_make_* */
 
@@ -48,5 +46,8 @@ LLAVA_API bool llava_eval_image_embed(struct llama_context * ctx_llama, const st
 #ifdef __cplusplus
 }
 #endif
+
+LLAVA_API std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_bytes_slice(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length);
+LLAVA_API std::pair<struct llava_image_embed *, std::vector<std::vector<struct llava_image_embed *>>> llava_image_embed_make_with_filename_slice(struct clip_ctx * ctx_clip, int n_threads, const char * image_path);
 
 #endif
