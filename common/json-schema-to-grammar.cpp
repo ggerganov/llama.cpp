@@ -240,6 +240,20 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
     };
 
     if (has_min && has_max) {
+        if (min_value < 0 && max_value < 0) {
+            out << "\"-\" (";
+            _generate_min_max_int(-max_value, -min_value, out, decimals_left, /* top_level= */ true);
+            out << ")";
+            return;
+        }
+
+        if (min_value < 0) {
+            out << "\"-\" (";
+            _generate_min_max_int(0, -min_value, out, decimals_left, /* top_level= */ true);
+            out << ") | ";
+            min_value = 0;
+        }
+
         auto min_s = std::to_string(min_value);
         auto max_s = std::to_string(max_value);
         auto min_digits = min_s.length();

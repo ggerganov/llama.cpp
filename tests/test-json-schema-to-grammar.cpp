@@ -253,6 +253,20 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
     });
 
     test({
+        SUCCESS,
+        "min -10 max 10",
+        R"""({
+            "type": "integer",
+            "minimum": -10,
+            "maximum": 10
+        })""",
+        R"""(
+            root ::= ("-" ([0-9] | "10") | [0-9] | "10") space
+            space ::= " "?
+        )"""
+    });
+
+    test({
         FAILURE,
         "unknown type",
         R"""({
