@@ -21,4 +21,4 @@ jobs:
         uses: py-actions/flake8@v2
         with:
             ignore: "E203,E211,E221,E225,E231,E241,E251,E261,E266,E501,E701,E704,W503"
-            exclude: "examples/*,examples/*/**,*/**/__init__.py"
+            exclude: "examples/*,examples/*/**,*/**/__init__.py,convert-hf-to-gguf-update.py"
