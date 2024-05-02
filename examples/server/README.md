@@ -74,14 +74,17 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - Using `make`:
 
   ```bash
-  make
+  make server
   ```
 
 - Using `CMake`:
 
   ```bash
-  cmake --build . --config Release
+  cmake -B build
+  cmake --build build --config Release -t server
   ```
+
+  Binary is at `./build/bin/server`
 
 ## Build with SSL
 
@@ -99,10 +102,8 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - Using `CMake`:
 
   ```bash
-  mkdir build
-  cd build
-  cmake .. -DLLAMA_SERVER_SSL=ON
-  make server
+  cmake -B build -DLLAMA_SERVER_SSL=ON
+  cmake --build build --config Release -t server
   ```
 
 ## Quick Start

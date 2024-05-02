@@ -427,6 +427,9 @@ class GGUFWriter:
     def add_tokenizer_model(self, model: str) -> None:
         self.add_string(Keys.Tokenizer.MODEL, model)
 
+    def add_tokenizer_pre(self, pre: str) -> None:
+        self.add_string(Keys.Tokenizer.PRE, pre)
+
     def add_token_list(self, tokens: Sequence[str] | Sequence[bytes] | Sequence[bytearray]) -> None:
         self.add_array(Keys.Tokenizer.LIST, tokens)
 
