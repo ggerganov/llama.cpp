@@ -4383,6 +4383,9 @@ static void llm_load_vocab(
             } else if (
                     tokenizer_pre == "gpt-2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
+            } else if (
+                tokenizer_pre == "command-r") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_COMMAND_R;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -12236,6 +12239,11 @@ struct llm_tokenizer_bpe {
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_STARCODER:
                     case LLAMA_VOCAB_PRE_TYPE_GPT2:
+                        word_collection = unicode_regex_split(text, {
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_COMMAND_R:
                         word_collection = unicode_regex_split(text, {
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                         });
