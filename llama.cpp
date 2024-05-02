@@ -2359,7 +2359,7 @@ static bool llama_kv_cache_init(
     cache.recurrent = model.arch == LLM_ARCH_MAMBA;
     cache.v_trans   = !cparams.flash_attn;
 
-    // TODO: support mixed reccurent Transformer architectues
+    // TODO: support mixed recurrent Transformer architectures
     // NOTE: (!a || b) is a logical implication (a -> b)
     GGML_ASSERT(!cache.recurrent || n_embd_k_gqa == hparams.n_embd_k_s());
     GGML_ASSERT(!cache.recurrent || n_embd_v_gqa == hparams.n_embd_v_s());
