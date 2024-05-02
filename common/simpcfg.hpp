@@ -36,6 +36,13 @@
 #endif
 
 
+// Remove chars from begin and end of the passed string, provided the char belongs
+// to one of the chars in trimChars.
+// NOTE: Chars being trimmed (ie trimChars) needs to be 1byte encoded chars.
+// NOTE: This will work provided the string being trimmed as well the chars being
+// trimmed are made up of 1byte encoded chars including in utf8 encoding space.
+// If the string being trimmed includes multibyte encoded characters at the end,
+// then trimming can mess things up.
 std::string str_trim(std::string sin, std::string trimChars=" \t\n") {
     sin.erase(sin.find_last_not_of(trimChars)+1);
     sin.erase(0, sin.find_first_not_of(trimChars));
@@ -44,8 +51,11 @@ std::string str_trim(std::string sin, std::string trimChars=" \t\n") {
 
 // Remove atmost 1 char at the begin and 1 char at the end of the passed string,
 // provided the char belongs to one of the chars in trimChars.
-// NOTE: Not sure this handles non english utf8 multibyte chars properly,
-// need to cross check.
+// NOTE: Chars being trimmed (ie trimChars) needs to be 1byte encoded chars.
+// NOTE: This will work provided the string being trimmed as well the chars being
+// trimmed are made up of 1byte encoded chars including in utf8 encoding space.
+// If the string being trimmed includes multibyte encoded characters at the end,
+// then trimming can mess things up.
 std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
     if (sin.empty()) return sin;
     for(auto c: trimChars) {
@@ -64,6 +74,8 @@ std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
     return sin;
 }
 
+// This works for 1byte encoded chars, including in utf8 encoding space.
+// This wont work for multibyte encoded chars.
 std::string str_tolower(const std::string &sin) {
     std::string sout;
     sout.resize(sin.size());
