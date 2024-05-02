@@ -4417,6 +4417,15 @@ static void llm_load_vocab(
             } else if (
                     tokenizer_pre == "gpt-2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
+            } else if (
+                    tokenizer_pre == "jina-embeddings-v2-base-es") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_ES;
+            } else if (
+                    tokenizer_pre == "jina-embeddings-v2-base-de") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_DE;
+            } else if (
+                    tokenizer_pre == "jina-embeddings-v2-base-zh") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_ZH;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }

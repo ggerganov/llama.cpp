@@ -307,6 +307,15 @@ class Model(ABC):
         if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
             # ref: https://huggingface.co/openai-community/gpt2
             res = "gpt-2"
+        if chkhsh == "171aeeedd6fb548d418a7461d053f11b6f1f1fc9b387bd66640d28a4b9f5c643":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-es
+            res = "jina-embeddings-v2-base-es"
+        if chkhsh == "27949a2493fc4a9f53f5b9b029c82689cfbe5d3a1929bb25e043089e28466de6":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
+            res = "jina-embeddings-v2-base-de"
+        if chkhsh == "c7699093ba4255a91e702aa38a596aa81669f3525dae06c2953267dde580f448":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-zh
+            res = "jina-embeddings-v2-base-zh"
 
         if res is None:
             print("\n")
