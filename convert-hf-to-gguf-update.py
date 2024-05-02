@@ -95,6 +95,14 @@ for model in models:
     save_path = f"models/tokenizers/{name}/tokenizer.json"
     download_file_with_auth(url, token, save_path)
 
+    # if downloaded file is less than 1KB, we likely need to download an LFS instead
+    if os.path.getsize(save_path) < 1024:
+        # remove the file
+        os.remove(save_path)
+        url = f"{repo}/resolve/main/tokenizer.json"
+        save_path = f"models/tokenizers/{name}/tokenizer.json"
+        download_file_with_auth(url, token, save_path)
+
     if tokt == TOKENIZER_TYPE.SPM:
         url = f"{repo}/resolve/main/tokenizer.model"
         save_path = f"models/tokenizers/{name}/tokenizer.model"
