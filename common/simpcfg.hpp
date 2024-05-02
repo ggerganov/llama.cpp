@@ -40,9 +40,8 @@ size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
     std::mbstate_t mbState = std::mbstate_t();
     const wchar_t *wSrcP = wSrc.c_str();
     auto reqLen = std::wcsrtombs(nullptr, &wSrcP, 0, &mbState);
-    LDBUG_LN("DBUG:%s:%zu", __func__, reqLen);
     sDest.resize(reqLen);
-    return std::wcstombs(sDest.data(), wSrc.c_str(), sDest.length());
+    return std::wcsrtombs(sDest.data(), &wSrcP, sDest.length(), &mbState);
 }
 
 size_t mbs_to_wcs(std::wstring &wDest, std::string &sSrc) {
@@ -361,10 +360,10 @@ void check_u8string() {
     }
 }
 
-void check_wstring() {
+void check_wstring_wcout() {
     std::wcout.imbue(std::locale("en_US.UTF-8"));
     std::vector<std::wstring> vWide = { L"123", L"1अ3" };
-    std::cout << "**** wstring **** " << vWide.size() << std::endl;
+    std::cout << "**** wstring wcout **** " << vWide.size() << std::endl;
     for(auto sCur: vWide) {
         std::wcout << sCur << std::endl;
         std::wcout << std::format(L"wstring: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
@@ -376,12 +375,10 @@ void check_wstring() {
     }
 }
 
-void check_wstring_basic() {
+void check_wstring_cout() {
     std::vector<std::wstring> vWide = { L"123", L"1अ3" };
-    std::cout << "**** wstring basic **** " << vWide.size() << std::endl;
+    std::cout << "**** wstring cout **** " << vWide.size() << std::endl;
     for(auto sCur: vWide) {
-        std::string sCurx (sCur.begin(), sCur.end());
-        std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCurx, sCur.length(), sCur.size()) << std::endl;
         std::string sCury;
         wcs_to_mbs(sCury, sCur);
         std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCury, sCur.length(), sCur.size()) << std::endl;
@@ -389,13 +386,9 @@ void check_wstring_basic() {
         for(auto c: sCur) {
             std::wstringstream wsc;
             wsc << c;
-            /*
-            std::string u8 (ws.str().begin(), ws.str().end());
-            std::cout << std::format("wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCurx, i, u8, (uint32_t)c);
-            */
             std::string ssc;
             wcs_to_mbs(ssc, wsc.str());
-            std::cout << std::format("wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCurx, i, ssc, (uint32_t)c);
+            std::cout << std::format("wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCury, i, ssc, (uint32_t)c);
             i += 1;
         }
     }
@@ -408,8 +401,8 @@ void check_strings() {
     LDBUG_LN("DBUG:%s:Locale:%s", __func__, prevLoc.c_str());
     check_string();
     check_u8string();
-    //check_wstring();
-    check_wstring_basic();
+    //check_wstring_wcout();
+    check_wstring_cout();
 }
 
 int main(int argc, char **argv) {
