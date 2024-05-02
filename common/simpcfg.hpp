@@ -36,6 +36,18 @@
 #endif
 
 
+size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
+    auto reqLen = std::wcstombs(nullptr, wSrc.c_str(), 0);
+    sDest.resize(reqLen);
+    return std::wcstombs(sDest.data(), wSrc.c_str(), sDest.length());
+}
+
+size_t mbs_to_wcs(std::wstring &wDest, std::string &sSrc) {
+    auto reqLen = std::mbstowcs(nullptr, sSrc.c_str(), 0);
+    wDest.resize(reqLen);
+    return std::mbstowcs(wDest.data(), sSrc.c_str(), wDest.length());
+}
+
 // Remove chars from begin and end of the passed string, provided the char belongs
 // to one of the chars in trimChars.
 // NOTE: Chars being trimmed (ie trimChars) needs to be 1byte encoded chars.
@@ -366,10 +378,21 @@ void check_wstring_basic() {
     std::cout << "**** wstring basic **** " << vWide.size() << std::endl;
     for(auto sCur: vWide) {
         std::string sCurx (sCur.begin(), sCur.end());
+        std::string sCury;
+        wcs_to_mbs(sCury, sCur);
         std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCurx, sCur.length(), sCur.size()) << std::endl;
+        std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCury, sCur.length(), sCur.size()) << std::endl;
         int i = 0;
         for(auto c: sCur) {
-            std::cout << std::format("wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCurx, i, c, c);
+            std::wstringstream wsc;
+            wsc << c;
+            /*
+            std::string u8 (ws.str().begin(), ws.str().end());
+            std::cout << std::format("wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCurx, i, u8, (uint32_t)c);
+            */
+            std::string ssc;
+            wcs_to_mbs(ssc, wsc.str());
+            std::cout << std::format("wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCurx, i, ssc, (uint32_t)c);
             i += 1;
         }
     }
