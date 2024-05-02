@@ -308,10 +308,15 @@ public:
 
 void check_strings() {
 
-    std::string sT11 = "123";
-    std::string sT12 = "1अ3";
-    std::cout << std::format("string: [{}] len[{}] size[{}]", sT11, sT11.length(), sT11.size()) << std::endl;
-    std::cout << std::format("string: [{}] len[{}] size[{}]", sT12, sT12.length(), sT12.size()) << std::endl;
+    std::vector<std::string> vStandard = { "123", "1अ3" };
+    for(auto sCur: vStandard) {
+        std::cout << std::format("string: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
+        int i = 0;
+        for(auto c: sCur) {
+            std::cout << std::format("string:{}:pos:{}:char:{}[{:x}]\n", sCur, i, c, (uint8_t)c);
+            i += 1;
+        }
+    }
 
     std::u8string sT21 = u8"123";
     std::u8string sT22 = u8"1अ3";
