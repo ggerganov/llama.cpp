@@ -12235,6 +12235,11 @@ struct llm_tokenizer_bpe {
                         });
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_STARCODER:
+                        word_collection = unicode_regex_split(text, {
+                            "\\p{N}",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                        });
+                        break;
                     case LLAMA_VOCAB_PRE_TYPE_GPT2:
                         word_collection = unicode_regex_split(text, {
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
