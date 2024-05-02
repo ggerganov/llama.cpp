@@ -37,7 +37,10 @@
 
 
 size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
-    auto reqLen = std::wcstombs(nullptr, wSrc.c_str(), 0);
+    std::mbstate_t mbState = std::mbstate_t();
+    const wchar_t *wSrcP = wSrc.c_str();
+    auto reqLen = std::wcsrtombs(nullptr, &wSrcP, 0, &mbState);
+    LDBUG_LN("DBUG:%s:%zu", __func__, reqLen);
     sDest.resize(reqLen);
     return std::wcstombs(sDest.data(), wSrc.c_str(), sDest.length());
 }
@@ -378,9 +381,9 @@ void check_wstring_basic() {
     std::cout << "**** wstring basic **** " << vWide.size() << std::endl;
     for(auto sCur: vWide) {
         std::string sCurx (sCur.begin(), sCur.end());
+        std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCurx, sCur.length(), sCur.size()) << std::endl;
         std::string sCury;
         wcs_to_mbs(sCury, sCur);
-        std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCurx, sCur.length(), sCur.size()) << std::endl;
         std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCury, sCur.length(), sCur.size()) << std::endl;
         int i = 0;
         for(auto c: sCur) {
@@ -399,6 +402,10 @@ void check_wstring_basic() {
 }
 
 void check_strings() {
+    std::string prevLoc = std::setlocale(LC_ALL, nullptr);
+    LDBUG_LN("DBUG:%s:Locale:%s", __func__, prevLoc.c_str());
+    prevLoc = std::setlocale(LC_ALL, "en_US.UTF-8");
+    LDBUG_LN("DBUG:%s:Locale:%s", __func__, prevLoc.c_str());
     check_string();
     check_u8string();
     //check_wstring();
