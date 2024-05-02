@@ -271,10 +271,12 @@ class Model(ABC):
 
         chktxt = '\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶\u200d🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български \'\'\'\'\'\'```````""""......!!!!!!?????? I\'ve been \'told he\'s there, \'RE you sure? \'M not sure I\'ll make it, \'D you like some tea? We\'Ve a\'lL'
 
-        chktok = tokenizer.decode(tokenizer.encode(chktxt))
-        chkhsh = sha256(str(chktok).encode()).hexdigest()
+        token_ids = tokenizer.encode(chktxt)
+        token_list = tokenizer.convert_ids_to_tokens(token_ids)
+        chkhsh = sha256(str(token_list).encode()).hexdigest()
 
-        print(f"chktok: {chktok}")
+        print(f"token_ids: {token_ids}")
+        print(f"token_list: {token_list}")
         print(f"chkhsh: {chkhsh}")
 
         res = None
