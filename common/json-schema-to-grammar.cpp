@@ -200,28 +200,28 @@ static std::string format_literal(const std::string & literal) {
     return "\"" + escaped + "\"";
 }
 
-
 /*
     not_literal('a') -> '[^a]'
     not_literal('abc') -> '([^a] | "a" ([^b] | "b" ([^c])?)?)?'
 */
-static std::string not_literal(const std::string & literal, bool dotall = true) {
-    assert(literal.size() > 0);
-    std::stringstream out;
-    std::function<void(int)> recurse = [&](size_t i) {
-        const auto & c = literal[i];
-        out << "[^" << c << "]";
-        if (i < literal.size() - 1) {
-            out << " | " << format_literal(std::to_string(c)) << " (";
-            recurse(i + 1);
-            out << ")?";
-        }
-    };
-    out << "(";
-    recurse(0);
-    out << ")" << (dotall ? DOTALL : DOT) << "*";
-    return out.str();
-}
+// static std::string not_literal(const std::string & literal, bool dotall = true) {
+//     assert(literal.size() > 0);
+//     std::stringstream out;
+//     std::function<void(int)> recurse = [&](size_t i) {
+//         const char & c = literal[i];
+//         out << "[^" << c << "]";
+//         out << " " << (dotall ? DOTALL : DOT) << "*";
+//         if (i < literal.size() - 1) {
+//             out << " | " << format_literal(literal.substr(i, 1)) << " (";
+//             recurse(i + 1);
+//             out << ")?";
+//         }
+//     };
+//     out << "(";
+//     recurse(0);
+//     out << ")";
+//     return out.str();
+// }
 
 
 class SchemaConverter {
@@ -625,17 +625,57 @@ public:
         visit_refs(schema);
     }
 
+/*
+    reply ::= prefix tool-call*
+
+    prefix ::= [^<] prefix
+                | "<" [^t] prefix
+                | "<t" [^o] prefix
+                | "<to" [^o] prefix
+                | "<too" [^l] prefix
+                | "<tool" [^_] prefix
+                | "<tool_" [^c] prefix
+                | "<tool_c" [^a] prefix
+                | "<tool_ca" [^l] prefix
+                | "<tool_cal" [^l] prefix
+                | "<tool_call" [^l] prefix
+                | "<tool_call" [^>] prefix
+                |
+
+*/
+
+    std::string not_literal(const std::string & literal) {
+        auto rule_name = _find_rule_name("not" + literal, "!!!");
+        std::stringstream out;
+        for (size_t i = 0, n = literal.size(); i < n; i++) {
+            out << " | ";
+            if (i > 0) {
+                out << format_literal(literal.substr(0, i)) << " ";
+            }
+            out << "[^" << literal[i] << "] " << rule_name.c_str();
+        }
+        _rules[rule_name] = out.str();
+        return rule_name;
+    }
+
+    std::string _escape_name(const std::string & name) {
+        return regex_replace(name, INVALID_RULE_CHARS_RE, "-");
+    }
+    std::string _find_rule_name(const std::string & name, const std::string & rule) {
+        auto esc_name = _escape_name(name);
+        int i = 0;
+        while (_rules.find(esc_name + std::to_string(i)) != _rules.end() && _rules[esc_name + std::to_string(i)] != rule) {
+            i++;
+        }
+        return esc_name + std::to_string(i);
+    }
     std::string add_rule(const std::string & name, const std::string & rule) {
-        std::string esc_name = regex_replace(name, INVALID_RULE_CHARS_RE, "-");
+        auto esc_name = _escape_name(name);
         if (_rules.find(esc_name) == _rules.end() || _rules[esc_name] == rule) {
             _rules[esc_name] = rule;
             return esc_name;
         } else {
-            int i = 0;
-            while (_rules.find(esc_name + std::to_string(i)) != _rules.end() && _rules[esc_name + std::to_string(i)] != rule) {
-                i++;
-            }
-            std::string key = esc_name + std::to_string(i);
+            auto key = _find_rule_name(esc_name, rule);
             _rules[key] = rule;
             return key;
         }
@@ -789,7 +829,7 @@ std::string json_schema_to_grammar(const json & schema) {
     return converter.format_grammar();
 }
 
-std::string tool_call_grammar(const json & tools) {
+std::string tool_call_grammar(const json & tools, bool allow_parallel_calls) {
     SchemaConverter converter([](const std::string &) { return json::object(); }, /* dotall= */ false);
     
     std::vector<std::string> tool_rules;
@@ -814,12 +854,13 @@ std::string tool_call_grammar(const json & tools) {
 
     converter.add_rule(
         "root",
-        not_literal("<tool_call>") + " | "
-        + converter.add_rule(
+        converter.not_literal("<tool_call>") + " " +
+        converter.add_rule(
             "tool_call",
-            "\"<tool_call>\" " 
+            "\"<tool_call>\" (" 
             + join(tool_rules.begin(), tool_rules.end(), " | ")
-            + " \"</tool_call>\""));
+            + ") \"</tool_call>\""
+        ) + (allow_parallel_calls ? "*" : "?"));
 
     converter.check_errors();
     return converter.format_grammar();

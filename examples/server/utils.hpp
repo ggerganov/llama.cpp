@@ -123,7 +123,7 @@ inline bool verify_custom_template(const std::string & tmpl) {
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages, const std::string & tools_tag) {
+inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages, const std::string & extra_system_message) {
     size_t alloc_size = 0;
     // vector holding all allocated string to be passed to llama_chat_apply_template
     std::vector<std::string> str(messages.size() * 2);
@@ -138,18 +138,12 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         chat[i].content = str[i*2 + 1].c_str();
     }
 
-    if (!tools_tag.empty()) {
-        alloc_size += tools_tag.size();
-        if (chat.empty()) {
-            str.resize(2);
-            str[0] = "user";
-            str[1] = tools_tag;
-            chat.push_back({str[0].c_str(), str[1].c_str()});
-        } else {
-            auto & content = str[str.size() - 1];
-            content += tools_tag;
-            chat[chat.size() - 1].content = content.c_str();
-        }
+    if (!extra_system_message.empty()) {
+        alloc_size += extra_system_message.size();
+
+        llama_chat_message msg { "system", extra_system_message.c_str() };
+        chat.insert(chat.begin(), msg);
+        // chat.push_back(msg);
     }
 
     const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
@@ -387,22 +381,7 @@ static json oaicompat_completion_params_parse(
     llama_params["temperature"]       = json_value(body,   "temperature",       0.0);
     llama_params["top_p"]             = json_value(body,   "top_p",             1.0);
 
-    std::string tools_tag;
-    if (body.contains("tools") && body["tools"].is_array()) {
-        const auto & tools = body["tools"];
-        llama_params["grammar"] = tool_call_grammar(tools);
-        tools_tag = (std::stringstream() << "\n\n<tools>" << tools.dump(2) << "</tools>").str();
-    }
-
-    // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body["messages"], tools_tag);
-
-    // Handle "stop" field
-    if (body.contains("stop") && body["stop"].is_string()) {
-        llama_params["stop"] = json::array({body["stop"].get<std::string>()});
-    } else {
-        llama_params["stop"] = json_value(body, "stop", json::array());
-    }
+    std::string extra_system_message;
 
     // Handle "response_format" field
     if (body.contains("response_format")) {
@@ -410,9 +389,40 @@ static json oaicompat_completion_params_parse(
         std::string response_type = json_value(response_format, "type", std::string());
         if (response_type == "json_object") {
             llama_params["json_schema"] = json_value(response_format, "schema", json::object());
+            extra_system_message = (std::stringstream()
+                << "You are a helpful assistant that answers in JSON. Here's the json schema you must adhere to:\n<schema>\n"
+                << llama_params["json_schema"].dump().c_str() 
+                << "\n</schema>"
+            ).str();
         } else if (!response_type.empty() && response_type != "text") {
             throw std::runtime_error("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
         }
+    } else if (body.contains("tools") && body["tools"].is_array()) {
+        const auto & tools = body["tools"];
+        llama_params["grammar"] = tool_call_grammar(tools);
+
+        extra_system_message = (std::stringstream()
+            << "You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. "
+            << "You may call one or more functions to assist with the user query. "
+            << "Don't make assumptions about what values to plug into functions. "
+            << "Here are the available tools: <tools>"
+            << tools.dump().c_str()
+            << "</tools>\n"
+            << "For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:"
+            << "<tool_call>"
+            << "{\"arguments\": <args-dict>, \"name\": <function-name>}"
+            << "</tool_call>"
+        ).str();
+    }
+
+    // Apply chat template to the list of messages
+    llama_params["prompt"] = format_chat(model, chat_template, body["messages"], extra_system_message);
+
+    // Handle "stop" field
+    if (body.contains("stop") && body["stop"].is_string()) {
+        llama_params["stop"] = json::array({body["stop"].get<std::string>()});
+    } else {
+        llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
     // Handle "n" field
