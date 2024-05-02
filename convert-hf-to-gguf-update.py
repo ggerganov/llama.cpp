@@ -189,7 +189,8 @@ print("\n")
 # generate tests for each tokenizer model
 
 tests = [
-    "ied 4 ½ months"
+    "ied 4 ½ months",
+    "Führer",
     "",
     " ",
     "  ",
