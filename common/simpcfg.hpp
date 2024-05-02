@@ -309,6 +309,7 @@ public:
 void check_strings() {
 
     std::vector<std::string> vStandard = { "123", "1अ3" };
+    std::cout << "**** string **** " << vStandard.size() << std::endl;
     for(auto sCur: vStandard) {
         std::cout << std::format("string: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
         int i = 0;
@@ -319,6 +320,7 @@ void check_strings() {
     }
 
     std::vector<std::u8string> vU8s = { u8"123", u8"1अ3" };
+    std::cout << "**** u8string **** " << vU8s.size() << std::endl;
     for(auto sCur: vU8s) {
         std::string sCurx (sCur.begin(), sCur.end());
         std::cout << std::format("u8string: [{}] len[{}] size[{}]", sCurx, sCur.length(), sCur.size()) << std::endl;
@@ -330,7 +332,16 @@ void check_strings() {
         }
     }
 
-    std::wstring sT31 = L"1अ3";
+    std::vector<std::wstring> vWide = { L"123", L"1अ3" };
+    std::cout << "**** wstring **** " << vWide.size() << std::endl;
+    for(auto sCur: vWide) {
+        std::wcout << std::format(L"wstring: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
+        int i = 0;
+        for(auto c: sCur) {
+            std::wcout << std::format(L"wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCur, i, c, (uint8_t)c);
+            i += 1;
+        }
+    }
 
 }
 
