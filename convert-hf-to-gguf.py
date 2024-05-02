@@ -1427,7 +1427,7 @@ class LlamaModel(Model):
         experts = dict()
         for name, data_torch in self.get_tensors():
             # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
                 continue
 
             old_dtype = data_torch.dtype
