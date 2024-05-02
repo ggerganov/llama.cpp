@@ -12212,14 +12212,13 @@ struct llm_tokenizer_bpe {
                             "\\s?\\p{L}+",
                             "\\s?\\p{P}+",
                             "[一-龥ࠀ-一가-퟿]+",
-                            "\\p{N}+",
+                            "\\p{N}",
                         });
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_FALCON:
                         word_collection = unicode_regex_split(text, {
                             "[\\p{P}\\$\\+<=>\\^~\\|]+",
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-                            "\\p{N}+",
                             "[0-9][0-9][0-9]",
                         });
                         break;
