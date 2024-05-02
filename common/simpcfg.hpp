@@ -45,9 +45,11 @@ size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
 }
 
 size_t mbs_to_wcs(std::wstring &wDest, std::string &sSrc) {
-    auto reqLen = std::mbstowcs(nullptr, sSrc.c_str(), 0);
+    std::mbstate_t mbState = std::mbstate_t();
+    const char *sSrcP = sSrc.c_str();
+    auto reqLen = std::mbsrtowcs(nullptr, &sSrcP, 0, &mbState);
     wDest.resize(reqLen);
-    return std::mbstowcs(wDest.data(), sSrc.c_str(), wDest.length());
+    return std::mbsrtowcs(wDest.data(), &sSrcP, wDest.length(), &mbState);
 }
 
 // Remove chars from begin and end of the passed string, provided the char belongs
