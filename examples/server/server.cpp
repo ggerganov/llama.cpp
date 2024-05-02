@@ -3031,7 +3031,7 @@ int main(int argc, char ** argv) {
         chat.push_back({{"role", "assistant"}, {"content", "Hi there"}});
         chat.push_back({{"role", "user"},      {"content", "How are you?"}});
 
-        const std::string chat_example = format_chat(ctx_server.model, sparams.chat_template, chat);
+        const std::string chat_example = format_chat(ctx_server.model, sparams.chat_template, chat, "");
 
         LOG_INFO("chat template", {
             {"chat_example", chat_example},

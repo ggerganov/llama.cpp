@@ -4,6 +4,7 @@
 #include "common.h"
 
 #include "json.hpp"
+#include "json-schema-to-grammar.h"
 
 #include <string>
 #include <vector>
@@ -122,7 +123,7 @@ inline bool verify_custom_template(const std::string & tmpl) {
 }
 
 // Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
+inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages, const std::string & tools_tag) {
     size_t alloc_size = 0;
     // vector holding all allocated string to be passed to llama_chat_apply_template
     std::vector<std::string> str(messages.size() * 2);
@@ -135,6 +136,20 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         alloc_size     += str[i*2 + 1].length();
         chat[i].role    = str[i*2 + 0].c_str();
         chat[i].content = str[i*2 + 1].c_str();
+    }
+
+    if (!tools_tag.empty()) {
+        alloc_size += tools_tag.size();
+        if (chat.empty()) {
+            str.resize(2);
+            str[0] = "user";
+            str[1] = tools_tag;
+            chat.push_back({str[0].c_str(), str[1].c_str()});
+        } else {
+            auto & content = str[str.size() - 1];
+            content += tools_tag;
+            chat[chat.size() - 1].content = content.c_str();
+        }
     }
 
     const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
@@ -372,8 +387,15 @@ static json oaicompat_completion_params_parse(
     llama_params["temperature"]       = json_value(body,   "temperature",       0.0);
     llama_params["top_p"]             = json_value(body,   "top_p",             1.0);
 
+    std::string tools_tag;
+    if (body.contains("tools") && body["tools"].is_array()) {
+        const auto & tools = body["tools"];
+        llama_params["grammar"] = tool_call_grammar(tools);
+        tools_tag = (std::stringstream() << "\n\n<tools>" << tools.dump(2) << "</tools>").str();
+    }
+
     // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body["messages"]);
+    llama_params["prompt"] = format_chat(model, chat_template, body["messages"], tools_tag);
 
     // Handle "stop" field
     if (body.contains("stop") && body["stop"].is_string()) {
@@ -408,7 +430,7 @@ static json oaicompat_completion_params_parse(
     }
 
     // Params supported by OAI but unsupported by llama.cpp
-    static const std::vector<std::string> unsupported_params { "tools", "tool_choice" };
+    static const std::vector<std::string> unsupported_params { "tool_choice" };
     for (auto & param : unsupported_params) {
         if (body.contains(param)) {
             throw std::runtime_error("Unsupported param: " + param);
