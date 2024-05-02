@@ -143,7 +143,11 @@ def main(
     verbose: bool = False,
     style: Optional[ToolsPromptStyle] = None,
 
-    model: Annotated[str, typer.Option("--model", "-m")] = "models/7B/ggml-model-f16.gguf",
+    model: Optional[Annotated[str, typer.Option("--model", "-m")]] = None,# = "models/7B/ggml-model-f16.gguf",
+    model_url: Optional[Annotated[str, typer.Option("--model-url", "-mu")]] = None,
+    hf_repo: Optional[Annotated[str, typer.Option("--hf-repo", "-hfr")]] = None,
+    hf_file: Optional[Annotated[str, typer.Option("--hf-file", "-hff")]] = None,
+    
     endpoint: Optional[str] = None,
     context_length: Optional[int] = None,
     # endpoint: str = 'http://localhost:8080/v1/chat/completions',
