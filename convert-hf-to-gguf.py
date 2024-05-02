@@ -1516,6 +1516,7 @@ class LlamaModel(Model):
         if len(experts) > 0:
             raise ValueError(f"Unprocessed experts: {experts.keys()}")
 
+
 @Model.register("ArcticForCausalLM")
 class ArcticModel(Model):
     model_arch = gguf.MODEL_ARCH.ARCTIC
@@ -1627,7 +1628,6 @@ class ArcticModel(Model):
 
         if len(experts) > 0:
             raise ValueError(f"Unprocessed experts: {experts.keys()}")
-
 
 
 @Model.register("GrokForCausalLM")

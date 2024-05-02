@@ -427,7 +427,7 @@ class TensorNameMap:
             MODEL_TENSOR.FFN_NORM_EXP: (
                 "model.layers.{bid}.post_attention_layernorm",
             ),
-        }, 
+        },
     }
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]
