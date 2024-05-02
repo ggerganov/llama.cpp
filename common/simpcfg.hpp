@@ -332,13 +332,15 @@ void check_strings() {
         }
     }
 
+    std::wcout.imbue(std::locale("en_US.UTF-8"));
     std::vector<std::wstring> vWide = { L"123", L"1अ3" };
     std::cout << "**** wstring **** " << vWide.size() << std::endl;
     for(auto sCur: vWide) {
+        std::wcout << sCur << std::endl;
         std::wcout << std::format(L"wstring: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
         int i = 0;
         for(auto c: sCur) {
-            std::wcout << std::format(L"wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCur, i, c, (uint8_t)c);
+            std::wcout << std::format(L"wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCur, i, c, c);
             i += 1;
         }
     }
