@@ -313,19 +313,24 @@ void check_strings() {
         std::cout << std::format("string: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
         int i = 0;
         for(auto c: sCur) {
-            std::cout << std::format("string:{}:pos:{}:char:{}[{:x}]\n", sCur, i, c, (uint8_t)c);
+            std::cout << std::format("string:{}:pos:{}:char:{}[0x{:x}]\n", sCur, i, c, (uint8_t)c);
             i += 1;
         }
     }
 
-    std::u8string sT21 = u8"123";
-    std::u8string sT22 = u8"1अ3";
+    std::vector<std::u8string> vU8s = { u8"123", u8"1अ3" };
+    for(auto sCur: vU8s) {
+        std::string sCurx (sCur.begin(), sCur.end());
+        std::cout << std::format("u8string: [{}] len[{}] size[{}]", sCurx, sCur.length(), sCur.size()) << std::endl;
+        int i = 0;
+        for(auto c: sCur) {
+            //std::cout << c << std::endl;
+            std::cout << std::format("u8string:{}:pos:{}:char:{}[0x{:x}]\n", sCurx, i, (unsigned char)c, (unsigned char)c);
+            i += 1;
+        }
+    }
+
     std::wstring sT31 = L"1अ3";
-    std::wstring sT32 (sT22.begin(), sT22.end());
-    std::string sT21x (sT21.begin(), sT21.end());
-    std::string sT22x (sT22.begin(), sT22.end());
-    std::cout << std::format("u8string: [{}] len[{}] size[{}]", sT21x, sT21.length(), sT21.size()) << std::endl;
-    std::cout << std::format("u8string: [{}] len[{}] size[{}]", sT22x, sT22.length(), sT22.size()) << std::endl;
 
 }
 
