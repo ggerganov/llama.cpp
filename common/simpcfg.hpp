@@ -16,6 +16,8 @@
 #include <regex>
 #include <variant>
 #include <sstream>
+#include <format>
+#include <cuchar>
 
 
 #define SC_DEBUG
@@ -301,11 +303,35 @@ public:
 
 
 #ifdef SC_TEST_PRG
+
+#include <iostream>
+
+void check_strings() {
+
+    std::string sT11 = "123";
+    std::string sT12 = "1अ3";
+    std::cout << std::format("string: [{}] len[{}] size[{}]", sT11, sT11.length(), sT11.size()) << std::endl;
+    std::cout << std::format("string: [{}] len[{}] size[{}]", sT12, sT12.length(), sT12.size()) << std::endl;
+
+    std::u8string sT21 = u8"123";
+    std::u8string sT22 = u8"1अ3";
+    std::wstring sT31 = L"1अ3";
+    std::wstring sT32 (sT22.begin(), sT22.end());
+    std::string sT21x (sT21.begin(), sT21.end());
+    std::string sT22x (sT22.begin(), sT22.end());
+    std::cout << std::format("u8string: [{}] len[{}] size[{}]", sT21x, sT21.length(), sT21.size()) << std::endl;
+    std::cout << std::format("u8string: [{}] len[{}] size[{}]", sT22x, sT22.length(), sT22.size()) << std::endl;
+
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         LERRR_LN("USAGE:%s simp.cfg", argv[0]);
         exit(1);
     }
+
+    check_strings();
+
     std::string fname {argv[1]};
     SimpCfg sc;
     sc.load(fname);
