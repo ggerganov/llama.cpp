@@ -984,7 +984,7 @@ apt update && apt upgrade -y
 apt install git
 ```
 
-Due to permission limitations in the Android API, it's essential to move your model inside the `~/` directory for best performance:
+It's essential to move your model inside the `~/` directory for best performance:
 ```
 cd storage/downloads
 mv model.gguf ~/
