@@ -990,7 +990,7 @@ cd storage/downloads
 mv model.gguf ~/
 ```
 
-[Follow Linux Build instruction](https://github.com/ggerganov/llama.cpp#build) to build `llama.cpp`.
+[Follow the Linux build instructions](https://github.com/ggerganov/llama.cpp#build) to build `llama.cpp`.
 
 ### Docker
 
