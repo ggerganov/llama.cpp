@@ -75,25 +75,59 @@ size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
     return std::mbsrtowcs(wDest.data(), &sSrcP, wDest.length(), &mbState);
 }
 
-void dumphex_string(const std::string &sIn, const std::string &msgTag){
+template <typename TString>
+void dumphex_string(const TString &sIn, const std::string &msgTag){
     std::cout << msgTag << "[ ";
     for(auto c: sIn) {
-        std::cout << std::format("{:02x}, ", (uint8_t)c);
+        auto cSize = sizeof(c);
+        if (cSize == 1) {
+            std::cout << std::format("{:02x}, ", (uint8_t)c);
+        } else if (cSize == 2) {
+            std::cout << std::format("{:04x}, ", (uint16_t)c);
+        } else if (cSize == 4) {
+            std::cout << std::format("{:08x}, ", (uint32_t)c);
+        } else {
+            throw std::runtime_error( std::format("ERRR:{}:Unsupported char type with size [{}]", __func__, cSize) );
+        }
     }
     std::cout << " ]" << std::endl;
 }
 
-// Remove chars from begin and end of the passed string, provided the char belongs
-// to one of the chars in trimChars.
-// NOTE: Chars being trimmed (ie trimChars) needs to be 1byte encoded chars.
-// NOTE: This will work provided the string being trimmed as well the chars being
-// trimmed are made up of 1byte encoded chars including in utf8 encoding space.
-// If the string being trimmed includes multibyte encoded characters at the end,
-// then trimming can mess things up.
+// Remove chars from begin and end of the passed string, provided the char
+// belongs to one of the chars in trimChars.
+//
+// NOTE: This will work perfectly provided the string being trimmed as well as
+// chars being trimmed are made up of FixedSize chars from the same encoded space.
+// For utf-8, this means the ascii equivalent 1byteSized chars of utf8 and not
+// variable length ones.
+// NOTE: It will also work, if atleast either end of string have fixedSize chars
+// from their encoding space, rather than variable length based chars if any.
+// And the trimChars are also fixedSize encoded chars.
+//
+// NOTE: Given the way UTF-8 char encoding is designed, where fixedSize 1byte
+// encoded chars are fully unique and dont overlap with any bytes from any of
+// the variable length encoded chars in the utf-8 space, so as long as the
+// trimChars belong to the fixedSize chars subset, the logic should work, even
+// if the string has a mixture of fixed and variable length encoded chars.
+// Chances are utf-16 and utf-32 also have similar characteristics wrt thier
+// fixedSize encoded chars, and so equivalent semantic applies to them also.
+//
+// ALERT: Given that this simple minded logic, works at individual bytes level
+// only, If trimChars involve variable length encoded chars, then
+// * because different bytes from different trim chars when clubbed together
+//   can map to some other new char, if there is that new char at either end
+//   of the string, it may get trimmed, because of the possibility of mix up
+//   mentioned.
+// * given that different variable length encoded chars may have some common
+//   bytes between them, if one of these chars is at either end of the string
+//   and another char is in trimChars, then string may get partially trimmed.
+//
 template <typename TString>
 TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
+#ifdef SC_DEBUG
     dumphex_string(sin, "DBUG:TrimDumb:Str:");
     dumphex_string(trimChars, "DBUG:TrimDumb:Tim:");
+#endif
     sin.erase(sin.find_last_not_of(trimChars)+1);
     sin.erase(0, sin.find_first_not_of(trimChars));
     return sin;
@@ -102,8 +136,9 @@ TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
 // Remove chars from begin and end of the passed string, provided the char belongs
 // to one of the chars in trimChars.
 // NOTE: Internally converts to wchar/wstring to try and support proper trimming,
-// wrt possibly more languages, to some extent, ie even if the passed string
-// contains multibyte encoded characters in it.
+// wrt possibly more languages, to some extent. IE even if the passed string
+// contains multibyte encoded characters in it in utf-8 space, it may get converted
+// to fixed size chars in the expanded wchar_t encoding space.
 std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \t\n") {
     std::wstring wIn;
     mbs_to_wcs(wIn, sIn);
@@ -118,11 +153,13 @@ std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \
 
 // Remove atmost 1 char at the begin and 1 char at the end of the passed string,
 // provided the char belongs to one of the chars in trimChars.
-// NOTE: Chars being trimmed (ie trimChars) needs to be 1byte encoded chars.
+// NOTE: Chars being trimmed (ie in trimChars) needs to be 1byte encoded chars, to
+// avoid mix up when working utf-8/variable length encoded strings.
 // NOTE: This will work provided the string being trimmed as well the chars being
 // trimmed are made up of 1byte encoded chars including in utf8 encoding space.
 // If the string being trimmed includes multibyte encoded characters at the end,
-// then trimming can mess things up.
+// then trimming can mess things up, if you have multibyte encoded utf-8 chars
+// in the trimChars set.
 std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
     if (sin.empty()) return sin;
     for(auto c: trimChars) {
@@ -462,11 +499,18 @@ void check_nonenglish() {
         std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t"});
         std::cout << std::format("{}: Test1[{}] Dumb[{}] OverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
     }
-    std::vector<std::string> vTest2 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ "};
+    std::vector<std::string> vTest2 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ ", "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ "};
     for (auto sTest: vTest2) {
         std::string sGotDumb = str_trim_dumb(sTest, {" \n\t0अ"});
+        std::cout << std::format("{}: Test2[{}] Dumb[{}]", __func__, sTest, sGotDumb) << std::endl;
+    }
+    // This partly invalid utf8 string will mess up str_trim_dumb "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ "
+    // but will trigger a exception with oversmart.
+    // std::vector<std::string> vTest3 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ ", "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ "};
+    std::vector<std::string> vTest3 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ ", "\n\tthis र remove 0s and अs at end 000रअ0\xe0\xa4\x30अ "}; // \xe0\xa4
+    for (auto sTest: vTest3) {
         std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t0अ"});
-        std::cout << std::format("{}: Test2[{}] Dumb[{}] OverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
+        std::cout << std::format("{}: Test3[{}] OverSmart[{}]", __func__, sTest, sGotOSmart) << std::endl;
     }
 }
 
