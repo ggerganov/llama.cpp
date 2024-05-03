@@ -33,6 +33,7 @@
 #include <sstream>
 #include <format>
 #include <cuchar>
+#include <iostream>
 
 
 #define SC_DEBUG
@@ -74,6 +75,14 @@ size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
     return std::mbsrtowcs(wDest.data(), &sSrcP, wDest.length(), &mbState);
 }
 
+void dumphex_string(const std::string &sIn, const std::string &msgTag){
+    std::cout << msgTag << "[ ";
+    for(auto c: sIn) {
+        std::cout << std::format("{:02x}, ", (uint8_t)c);
+    }
+    std::cout << " ]" << std::endl;
+}
+
 // Remove chars from begin and end of the passed string, provided the char belongs
 // to one of the chars in trimChars.
 // NOTE: Chars being trimmed (ie trimChars) needs to be 1byte encoded chars.
@@ -81,7 +90,10 @@ size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
 // trimmed are made up of 1byte encoded chars including in utf8 encoding space.
 // If the string being trimmed includes multibyte encoded characters at the end,
 // then trimming can mess things up.
-std::string str_trim_dumb(std::string sin, const std::string &trimChars=" \t\n") {
+template <typename TString>
+TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
+    dumphex_string(sin, "DBUG:TrimDumb:Str:");
+    dumphex_string(trimChars, "DBUG:TrimDumb:Tim:");
     sin.erase(sin.find_last_not_of(trimChars)+1);
     sin.erase(0, sin.find_first_not_of(trimChars));
     return sin;
@@ -353,7 +365,7 @@ public:
             key = str_trim_single(key, "\"");
             std::string value = curL.substr(dPos+1);
             value = str_trim(value);
-            value = str_trim(value, ",");
+            value = str_trim(value, {","});
             std::string vtype = "bool";
             auto valueLower = str_tolower(value);
             if ((valueLower.compare("true") == 0) || (valueLower == "false")) {
@@ -380,8 +392,6 @@ public:
 
 
 #ifdef SC_TEST_PRG
-
-#include <iostream>
 
 void check_string() {
     std::vector<std::string> vStandard = { "123", "1अ3" };
@@ -445,6 +455,21 @@ void check_wstring_cout() {
     }
 }
 
+void check_nonenglish() {
+    std::vector<std::string> vTest1 = { "\n\tAഅअಅ\n\t", "\n\tAഅअಅ " };
+    for (auto sTest: vTest1) {
+        std::string sGotDumb = str_trim_dumb(sTest, {" \n\t"});
+        std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t"});
+        std::cout << std::format("{}: Test1[{}] Dumb[{}] OverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
+    }
+    std::vector<std::string> vTest2 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ "};
+    for (auto sTest: vTest2) {
+        std::string sGotDumb = str_trim_dumb(sTest, {" \n\t0अ"});
+        std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t0अ"});
+        std::cout << std::format("{}: Test2[{}] Dumb[{}] OverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
+    }
+}
+
 void check_strings() {
     std::string sSavedLocale;
     SimpCfg::locale_prepare(sSavedLocale);
@@ -452,6 +477,7 @@ void check_strings() {
     check_u8string();
     //check_wstring_wcout();
     check_wstring_cout();
+    check_nonenglish();
     SimpCfg::locale_restore(sSavedLocale);
 }
 
