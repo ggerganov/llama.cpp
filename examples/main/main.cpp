@@ -264,8 +264,12 @@ int main(int argc, char ** argv) {
     LOG("prompt: \"%s\"\n", log_tostr(params.prompt));
     LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
 
+    if (sparams.token_healing_enabled && (params.instruct || params.chatml || !params.input_suffix.empty())) {
+        sparams.token_healing_enabled = false;
+        LOG("token_healing: disabled due to custom suffix");
+    }
     std::string token_healing_prefix;
-    if (sparams.token_healing_enabled) {
+    if (!params.interactive_first && sparams.token_healing_enabled) {
         token_healing_prefix = llama_token_healing_prepare(ctx, sparams.token_healing_type, embd_inp,
                                                                 sparams.token_healing_n_rollback);
     }
@@ -820,6 +824,7 @@ int main(int argc, char ** argv) {
                 }
             }
 
+            int token_healing_n_removed = 0;
             if (n_past > 0 && is_interacting) {
                 LOG("waiting for user input\n");
 
@@ -903,13 +908,23 @@ int main(int argc, char ** argv) {
                         embd_inp.insert(embd_inp.end(), cml_sfx.begin(), cml_sfx.end());
                     }
 
+                    if (sparams.token_healing_enabled) {
+                        // Limit token healing rollback to new tokens only (otherwise would need to shift everything)
+                        const int n_new_tokens = embd_inp.size() - original_size;
+                        const int max_to_remove = sparams.token_healing_n_rollback < 0
+                                                   ? n_new_tokens
+                                                   : std::min(sparams.token_healing_n_rollback, n_new_tokens);
+                        token_healing_prefix = llama_token_healing_prepare(ctx, sparams.token_healing_type, embd_inp,
+                                                                           max_to_remove, &token_healing_n_removed);
+                    }
+
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
                         const llama_token token = embd_inp[i];
                         output_tokens.push_back(token);
                         output_ss << llama_token_to_piece(ctx, token);
                     }
 
-                    n_remain -= line_inp.size();
+                    n_remain -= line_inp.size() + token_healing_n_removed;
                     LOG("n_remain: %d\n", n_remain);
                 } else {
                     LOG("empty line, passing control back\n");
@@ -921,6 +936,10 @@ int main(int argc, char ** argv) {
             if (n_past > 0) {
                 if (is_interacting) {
                     llama_sampling_reset(ctx_sampling);
+                    if (token_healing_n_removed > 0) {
+                        // Set new prefix after an interaction
+                        ctx_sampling->token_healing_prefix = token_healing_prefix;
+                    }
                 }
                 is_interacting = false;
             }

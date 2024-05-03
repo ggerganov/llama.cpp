@@ -1298,7 +1298,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         auto & th_n_rollback = sparams.token_healing_n_rollback;
         std::string value(argv[i]);
         /**/ if (value    == "0" ) { sparams.token_healing_enabled = false; }
-        else if (value    == "1" ) { th_type = llama_token_healing_type::ROLLBACK_LAST; th_n_rollback = 1; }
+        else if (value    == "1" ) { th_type = llama_token_healing_type::ROLLBACK_LAST; }
         else if (value    == "d1") { th_type = llama_token_healing_type::DYNAMIC_ONCE; }
         else if (value    == "d" ) { th_type = llama_token_healing_type::DYNAMIC_MULTI; }
         else if (value[0] == 'r' ) {

@@ -72,7 +72,7 @@ typedef struct llama_sampling_params {
 
     llama_token_healing_type token_healing_type       = llama_token_healing_type::ROLLBACK_LAST;
     bool                     token_healing_enabled    = false;
-    int                      token_healing_n_rollback = 1;  // number of tokens to roll back
+    int                      token_healing_n_rollback = -1;  // number of tokens to roll back
 } llama_sampling_params;
 
 // general sampler context
@@ -174,4 +174,5 @@ std::string llama_token_healing_prepare(
             const llama_context * ctx_main,
             llama_token_healing_type th_type,
             std::vector<llama_token> & tokens,
-            int n_rollback = 1);
+            int max_to_remove = -1,
+            int * n_removed = nullptr);

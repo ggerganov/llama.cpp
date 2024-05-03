@@ -46,20 +46,26 @@ std::string llama_token_healing_prepare(
             const llama_context * ctx_main,
             llama_token_healing_type th_type,
             std::vector<llama_token> & tokens,
-            int n_rollback) {
+            int max_to_remove,
+            int * n_removed) {
+    if (n_removed != nullptr) {
+        *n_removed = 0;
+    }
     if (tokens.empty()) {
         return "";
     }
+
     const llama_model * model = llama_get_model(ctx_main);
     const bool is_dynamic = th_type == llama_token_healing_type::DYNAMIC_ONCE || th_type == llama_token_healing_type::DYNAMIC_MULTI;
     const int n_ctx = tokens.size();
-    const int max_to_remove = is_dynamic ? n_ctx : std::min(n_rollback, n_ctx);
-    int n_removed = 0;
+    max_to_remove = th_type == llama_token_healing_type::ROLLBACK_LAST ? 1 : max_to_remove;
+    max_to_remove = max_to_remove < 0 ? n_ctx : std::min(max_to_remove, n_ctx);
+    int removed = 0;
     std::string prefix;
     // Roll back tokens a fixed amount or until there does not exist a token that can cover the prompt
     // and stop early if a special token is encountered
-    while (n_removed < max_to_remove) {
-        const llama_token next_token_id = tokens[n_ctx - n_removed - 1];
+    while (removed < max_to_remove) {
+        const llama_token next_token_id = tokens[n_ctx - removed - 1];
         if (llama_token_get_type(model, next_token_id) != LLAMA_TOKEN_TYPE_NORMAL) {
             // Don't roll back e.g. <|endoftext|> (if parse_special=true in llama_tokenize)
             break;
@@ -68,23 +74,26 @@ std::string llama_token_healing_prepare(
         if (is_dynamic && !token_healing_prefix_exists(ctx_main, new_prefix)) {
             break;
         }
-        n_removed += 1;
+        removed += 1;
         prefix = new_prefix;
     }
-
-    if (n_removed == 0) {  // E.g. if the last token is a special token
+    if (removed == 0) {  // E.g. if the last token is a special token
         return "";
     }
     // If constrained decoding would give back the original prompt, there is no need to modify the context
     const bool is_multi_step = th_type == llama_token_healing_type::ROLLBACK_MULTI ||
                                th_type == llama_token_healing_type::DYNAMIC_MULTI;
     const std::vector<llama_token> candidates = token_healing_find_prefix(ctx_main, prefix, is_multi_step);
-    LOG("token_healing: prefix = '%s' (%d tokens)\n", prefix.c_str(), n_removed);
-    if (n_removed == 1 && candidates.size() == 1) {
+    LOG("token_healing: prefix = '%s' (%d tokens)\n", prefix.c_str(), removed);
+    if (removed == 1 && candidates.size() == 1) {
         LOG("token_healing: nothing to heal\n");
         return "";
     }
-    tokens.resize(n_ctx - n_removed);
+    // Finalize outputs
+    if (n_removed != nullptr) {
+        *n_removed = removed;
+    }
+    tokens.resize(n_ctx - removed);
     return prefix;
 }
 
