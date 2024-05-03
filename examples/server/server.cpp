@@ -103,7 +103,7 @@ struct slot_params {
     uint32_t seed       = -1; // RNG seed
     int32_t  n_keep     =  0; // number of tokens to keep from initial prompt
     int32_t  n_discard  =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
-    int32_t  n_truncate =  0;
+    int32_t  n_truncate =  0; // number of tokens after n_keep that will be discarded when the prompt is bigger than the context
     int32_t  n_predict  = -1; // new tokens to predict
 
     std::vector<std::string> antiprompt;
@@ -192,7 +192,7 @@ struct server_slot {
     int32_t ga_n = 1;   // group-attention factor
     int32_t ga_w = 512; // group-attention width
 
-    int32_t n_past_se = 0; // self-extend 
+    int32_t n_past_se = 0; // self-extend
 
     // stats
     size_t n_sent_text = 0; // number of sent text character
@@ -2057,7 +2057,12 @@ struct server_context {
                                             {"new_cache_size", new_cache_size},
                                             {"cache_tokens",   tokens_to_str(ctx, slot.cache_tokens.cbegin(), slot.cache_tokens.cend())},
                                         });
-                                    } // else somebody trying to use n_truncate w/o previous cache
+                                    } else {
+                                        LOG_ERROR("n_truncate needs to be used with cache_prompt", {
+                                            {"id_slot", slot.id},
+                                            {"id_task", slot.id_task},
+                                        });
+                                    }
                                 }
 
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
@@ -2074,7 +2079,7 @@ struct server_context {
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
 
-                                LOG_INFO("[cached_tokens, prompt_tokens]", {
+                                LOG_INFO("[cache_tokens, prompt_tokens]", {
                                     { "id_slot",     slot.id },
                                     { "id_task",     slot.id_task },
                                     { "common_part", slot.n_past}
@@ -2113,7 +2118,7 @@ struct server_context {
                     // shift KV cache if needed
                     const int n_keep = slot.params.n_keep + add_bos_token;
                     const int n_truncate = slot.params.n_truncate;
-                    if (n_truncate && slot.params.cache_prompt) {
+                    if (n_truncate && slot.params.cache_prompt && slot.truncated) {
                         llama_kv_cache_seq_rm(ctx, slot.id + 1, n_keep, n_keep + n_truncate);
 
                         LOG_INFO("kv cache rm", {
