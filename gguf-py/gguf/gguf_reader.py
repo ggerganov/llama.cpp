@@ -4,6 +4,7 @@
 #
 from __future__ import annotations
 
+import logging
 import os
 from collections import OrderedDict
 from typing import Any, Literal, NamedTuple, TypeVar, Union
@@ -27,6 +28,7 @@ from gguf.constants import (
     GGUFValueType,
 )
 
+logger = logging.getLogger(__name__)
 
 READER_SUPPORTED_VERSIONS = [2, GGUF_VERSION]
 
@@ -142,7 +144,7 @@ class GGUFReader:
             # TODO: add option to generate error on duplicate keys
             # raise KeyError(f'Duplicate {field.name} already in list at offset {field.offset}')
 
-            print(f'Warning: Duplicate key {field.name} at offset {field.offset}')
+            logger.warning(f'Duplicate key {field.name} at offset {field.offset}')
             self.fields[field.name + '_{}'.format(field.offset)] = field
         else:
             self.fields[field.name] = field

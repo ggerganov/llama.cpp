@@ -171,7 +171,7 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    typedef bool (*llama_progress_callback)(float progress, void *ctx);
+    typedef bool (*llama_progress_callback)(float progress, void * user_data);
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences

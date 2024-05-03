@@ -7,14 +7,21 @@
 #
 
 
+import logging
 import argparse
 
 from sentencepiece import SentencePieceProcessor
 
+logger = logging.getLogger("test-tokenizer-0-spm")
+
 parser = argparse.ArgumentParser()
 parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")
 parser.add_argument("--fname-tok",   help="path to a text file to tokenize")
+parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
+
 args = parser.parse_args()
+
+logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
 dir_tokenizer = args.dir_tokenizer
 
@@ -65,41 +72,46 @@ tests = [
 
 
 for text in tests:
-    print('text: ', text)
-    print('\nwith bos:')
-    print(tokenizer.encode(text, add_bos=True))
-    print(tokenizer.decode(tokenizer.encode(text, add_bos=True)))
-    print('\nwithout bos:')
-    print(tokenizer.encode(text, add_bos=False))
-    print(tokenizer.decode(tokenizer.encode(text, add_bos=False)))
+    message_log = (f"text: {text}\n"
+                   "with bos:\n"
+                   f"{tokenizer.encode(text, add_bos=True)}\n"
+                   f"{tokenizer.decode(tokenizer.encode(text, add_bos=True))}\n"
+                   "without bos:\n"
+                   f"{tokenizer.encode(text, add_bos=False)}\n"
+                   f"{tokenizer.decode(tokenizer.encode(text, add_bos=False))}\n")
+    logger.info(message_log)
 
-print("'" + tokenizer.id_to_piece(15043) + "'") # '_Hello'
-print("'" + tokenizer.id_to_piece(29871) + "'") # '_'
-print("'" + tokenizer.decode([15043]) + "'")        # 'Hello'
-print("'" + tokenizer.decode([15043, 15043]) + "'") # 'Hello Hello'
-print("'" + tokenizer.decode([29871, 15043]) + "'")               # ' Hello'
-print("'" + tokenizer.decode([29871, 15043, 29871, 15043]) + "'") # ' Hello  Hello'
+logger.info(f"'{tokenizer.id_to_piece(15043)}'") # '_Hello'
+logger.info(f"'{tokenizer.id_to_piece(29871)}'") # '_'
+logger.info(f"'{tokenizer.decode([15043])}'")        # 'Hello'
+logger.info(f"'{tokenizer.decode([15043, 15043])}'") # 'Hello Hello'
+logger.info(f"'{tokenizer.decode([29871, 15043])}'")               # ' Hello'
+logger.info(f"'{tokenizer.decode([29871, 15043, 29871, 15043])}'") # ' Hello  Hello'
 
-print("\n\ntests for C++:\n")
+logger.info("\n\ntests for C++:\n")
 for text in tests:
     res = tokenizer.encode(text, add_bos=False)
 
+    # Modify text representation for logging
     k = text.replace('\n', '\\n')
     k = k.replace('\t', '\\t')
     k = '"' + k + '"'
-    print("{ %-24s, { " % k, end='')
-    for x in res:
-        print("%7d," % x, end='')
-    print(" }, },")
 
-print(tokenizer.encode('hello'))
-print(tokenizer.encode('world'))
-print(tokenizer.encode(' world'))
-print(tokenizer.encode('hello world'))
+    # Log the modified text and its encoding
+    log_message = "{ %-24s, { " % k
+    for x in res:
+        log_message += "%7d," % x
+    log_message += " }, },"
+    logger.info(log_message)
+
+logger.info(tokenizer.encode('hello'))
+logger.info(tokenizer.encode('world'))
+logger.info(tokenizer.encode(' world'))
+logger.info(tokenizer.encode('hello world'))
 
 fname_tok = args.fname_tok
 if fname_tok:
-    print('tokenizing file: ', fname_tok)
+    logger.info(f"tokenizing file: {fname_tok}")
     fname_out = fname_tok + '.tok'
     with open(fname_tok, 'r', encoding='utf-8') as f:
         lines = f.readlines()
@@ -109,6 +121,6 @@ if fname_tok:
         with open(fname_out, 'w', encoding='utf-8') as f:
             for x in res:
                 f.write(str(x) + ' \'' + tokenizer.decode(x) + '\'\n')
-        print('len(res): ', len(res))
-        print('len(lines): ', len(lines))
-    print('results written to: ', fname_out)
+        logger.info(f"len(res): {len(res)}")
+        logger.info(f"len(lines): {len(lines)}")
+    logger.info(f"results written to: {fname_out}")

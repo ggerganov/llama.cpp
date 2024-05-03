@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import argparse
 import os
 import sys
@@ -13,6 +14,8 @@ from sentencepiece import SentencePieceProcessor
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
+
+logger = logging.getLogger("persimmon-to-gguf")
 
 
 def _flatten_dict(dct, tensors, prefix=None):
@@ -30,9 +33,9 @@ def _flatten_dict(dct, tensors, prefix=None):
 
 def _get_sentencepiece_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
-    print('gguf: getting sentencepiece tokenizer from', tokenizer_path)
+    logger.info('getting sentencepiece tokenizer from', tokenizer_path)
     tokenizer = SentencePieceProcessor(str(tokenizer_path))
-    print('gguf: adding tokens')
+    logger.info('adding tokens')
     tokens: list[bytes] = []
     scores: list[float] = []
     toktypes: list[int] = []
@@ -67,8 +70,10 @@ def main():
     parser.add_argument("--outfile",             type=Path, help="path to write to; default: based on input")
     parser.add_argument("--ckpt-path",           type=Path, help="path to persimmon checkpoint .pt file")
     parser.add_argument("--model-dir",           type=Path, help="directory containing model e.g. 8b_chat_model_release")
-    parser.add_argument("--adept-inference-dir", type=str, help="path to adept-inference code directory")
+    parser.add_argument("--adept-inference-dir", type=str,  help="path to adept-inference code directory")
+    parser.add_argument("--verbose",  action="store_true",  help="increase output verbosity")
     args = parser.parse_args()
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     sys.path.append(str(args.adept_inference_dir))
     persimmon_model = torch.load(args.ckpt_path)
     hparams = persimmon_model['args']
@@ -107,7 +112,7 @@ def main():
     gguf_writer.add_eos_token_id(71013)
 
     tensor_map = gguf.get_tensor_name_map(arch, block_count)
-    print(tensor_map)
+    logger.info(tensor_map)
     for name in tensors.keys():
         data_torch = tensors[name]
         if name.endswith(".self_attention.rotary_emb.inv_freq"):
@@ -117,22 +122,21 @@ def main():
         data = data_torch.to(torch.float32).squeeze().numpy()
         new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
         if new_name is None:
-            print("Can not map tensor '" + name + "'")
-            sys.exit()
+            raise ValueError(f"Can not map tensor '{name}'")
+
         n_dims = len(data.shape)
-        print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+        logger.debug(f"{new_name}, n_dims = {str(n_dims)}, {str(old_dtype)} --> {str(data.dtype)}")
         gguf_writer.add_tensor(new_name, data)
-    print("gguf: write header")
+    logger.info("gguf: write header")
     gguf_writer.write_header_to_file()
-    print("gguf: write metadata")
+    logger.info("gguf: write metadata")
     gguf_writer.write_kv_data_to_file()
-    print("gguf: write tensors")
+    logger.info("gguf: write tensors")
     gguf_writer.write_tensors_to_file()
 
     gguf_writer.close()
 
-    print(f"gguf: model successfully exported to '{args.outfile}'")
-    print("")
+    logger.info(f"gguf: model successfully exported to '{args.outfile}'")
 
 
 if __name__ == '__main__':
