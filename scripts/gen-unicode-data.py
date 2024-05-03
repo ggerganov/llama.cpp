@@ -1,5 +1,5 @@
 import regex
-import struct
+
 
 def cpt_to_utf8_str(cpt):
     if cpt <= 0xFF:
@@ -11,12 +11,14 @@ def cpt_to_utf8_str(cpt):
     else:
         return bytes([cpt & 0xFF, (cpt >> 8) & 0xFF, (cpt >> 16) & 0xFF, cpt >> 24])
 
+
 def is_match(codepoint, regex_expr):
     try:
         res = regex.match(regex_expr, cpt_to_utf8_str(codepoint).decode('utf-32'))
         return res is not None
-    except:
+    except Exception:
         return False
+
 
 def get_matches(regex_expr):
     unicode_ranges = []
@@ -37,6 +39,7 @@ def get_matches(regex_expr):
 
     return unicode_ranges
 
+
 def print_cat(cat, ranges):
     print("const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_{} = {{".format(cat))
     cnt = 0
@@ -53,6 +56,7 @@ def print_cat(cat, ranges):
     print("};")
     print("")
 
+
 print_cat("number",      get_matches(r'\p{N}'))
 print_cat("letter",      get_matches(r'\p{L}'))
 print_cat("whitespace",  get_matches(r'\p{Z}'))
@@ -60,4 +64,3 @@ print_cat("accent_mark", get_matches(r'\p{M}'))
 print_cat("punctuation", get_matches(r'\p{P}'))
 print_cat("symbol",      get_matches(r'\p{S}'))
 print_cat("control",     get_matches(r'\p{C}'))
-
