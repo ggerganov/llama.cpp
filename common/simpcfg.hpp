@@ -260,6 +260,16 @@ public:
         return array;
     }
 
+    static void locale_prepare(std::string &sSavedLocale) {
+        sSavedLocale = std::setlocale(LC_ALL, nullptr);
+        auto sUpdatedLocale = std::setlocale(LC_ALL, "en_US.UTF-8");
+        LDBUG_LN("DBUG:%s:Locale:Prev:%s:Cur:%s", __func__, sSavedLocale.c_str(), sUpdatedLocale);
+    }
+
+    static void locale_restore(const std::string &sSavedLocale) {
+        auto sCurLocale = std::setlocale(LC_ALL, sSavedLocale.c_str());
+        LDBUG_LN("DBUG:%s:Locale:Requested:%s:Got:%s", __func__, sSavedLocale.c_str(), sCurLocale);
+    }
 
     void load(const std::string &fname) {
         std::ifstream f {fname};
@@ -397,14 +407,13 @@ void check_wstring_cout() {
 }
 
 void check_strings() {
-    std::string prevLoc = std::setlocale(LC_ALL, nullptr);
-    LDBUG_LN("DBUG:%s:Locale:%s", __func__, prevLoc.c_str());
-    prevLoc = std::setlocale(LC_ALL, "en_US.UTF-8");
-    LDBUG_LN("DBUG:%s:Locale:%s", __func__, prevLoc.c_str());
+    std::string sSavedLocale;
+    SimpCfg::locale_prepare(sSavedLocale);
     check_string();
     check_u8string();
     //check_wstring_wcout();
     check_wstring_cout();
+    SimpCfg::locale_restore(sSavedLocale);
 }
 
 int main(int argc, char **argv) {
