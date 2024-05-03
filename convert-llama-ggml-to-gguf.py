@@ -402,7 +402,7 @@ def handle_args():
                         help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
     parser.add_argument("--vocabtype", default="spm,hfft",
                         help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm,hfft)")
-    parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
+    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
     return parser.parse_args()
 
 

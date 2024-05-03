@@ -119,7 +119,7 @@ def main() -> None:
         "--dry-run", action="store_true",
         help="Don't actually change anything",
     )
-    parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
+    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
     args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
 

@@ -59,7 +59,7 @@ parser.add_argument("-bin", "--binary", help="The binary to run.")
 parser.add_argument("yaml_files", nargs="*",
                     help="Arbitrary number of YAML files from which to read preset values. "
                     "If two files specify the same values the later one will be used.")
-parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
+parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
 known_args, unknown_args = parser.parse_known_args()
 
