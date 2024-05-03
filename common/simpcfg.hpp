@@ -144,10 +144,9 @@ std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \
     mbs_to_wcs(wIn, sIn);
     std::wstring wTrimChars;
     mbs_to_wcs(wTrimChars, trimChars);
-    wIn.erase(wIn.find_last_not_of(wTrimChars)+1);
-    wIn.erase(0, wIn.find_first_not_of(wTrimChars));
+    auto wOut = str_trim_dumb(wIn, wTrimChars);
     std::string sOut;
-    wcs_to_mbs(sOut, wIn);
+    wcs_to_mbs(sOut, wOut);
     return sOut;
 }
 
