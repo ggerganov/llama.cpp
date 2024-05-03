@@ -1288,6 +1288,28 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         sparams.grammar = json_schema_to_grammar(json::parse(argv[i]));
         return true;
     }
+    if (arg == "-th" || arg == "--token-healing") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        sparams.token_healing_enabled = true;
+        auto & th_type = sparams.token_healing_type;
+        auto & th_n_rollback = sparams.token_healing_n_rollback;
+        std::string value(argv[i]);
+        /**/ if (value    == "0" ) { sparams.token_healing_enabled = false; }
+        else if (value    == "1" ) { th_type = llama_token_healing_type::ROLLBACK_LAST; th_n_rollback = 1; }
+        else if (value    == "d1") { th_type = llama_token_healing_type::DYNAMIC_ONCE; }
+        else if (value    == "d" ) { th_type = llama_token_healing_type::DYNAMIC_MULTI; }
+        else if (value[0] == 'r' ) {
+            th_type = llama_token_healing_type::ROLLBACK_MULTI;
+            th_n_rollback = std::stoi(value.substr(1));
+            if (th_n_rollback <= 0) {
+                sparams.token_healing_enabled = false;
+            }
+        } else { invalid_param = true; }
+        return true;
+    }
     if (arg == "--override-kv") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1480,6 +1502,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -j SCHEMA, --json-schema SCHEMA\n");
     printf("                        JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object.\n");
     printf("                        For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead\n");
+    printf("  -th {0,1,d1,d,r{N}}, --token-healing {0,1,d1,d,r{N}}\n");
+    printf("                        Token healing type. (default: 0, disabled)\n");
+    printf("                        1: replace one token, d1: replace longest suffix with one token, d: replace longest suffix, r{N}: roll back N tokens\n");
     printf("  --cfg-negative-prompt PROMPT\n");
     printf("                        negative prompt to use for guidance. (default: empty)\n");
     printf("  --cfg-negative-prompt-file FNAME\n");

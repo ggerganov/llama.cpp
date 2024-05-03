@@ -264,6 +264,12 @@ int main(int argc, char ** argv) {
     LOG("prompt: \"%s\"\n", log_tostr(params.prompt));
     LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
 
+    std::string token_healing_prefix;
+    if (sparams.token_healing_enabled) {
+        token_healing_prefix = llama_token_healing_prepare(ctx, sparams.token_healing_type, embd_inp,
+                                                                sparams.token_healing_n_rollback);
+    }
+
     // Should not run without any tokens
     if (embd_inp.empty()) {
         embd_inp.push_back(llama_token_bos(model));
@@ -520,6 +526,7 @@ int main(int argc, char ** argv) {
     }
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
+    ctx_sampling->token_healing_prefix = token_healing_prefix;
 
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict

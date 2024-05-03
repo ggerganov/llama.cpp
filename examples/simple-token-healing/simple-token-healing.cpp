@@ -8,13 +8,6 @@
 
 #define TH_VERBOSE  // print token healing candidates
 
-enum class token_healing_type : uint8_t {
-    ROLLBACK_LAST,   // roll back last token with a single constrained decoding step
-    ROLLBACK_MULTI,  // roll back a fixed amount of tokens, multiple constrained decoding steps
-    DYNAMIC_ONCE,    // dynamic roll back, single constrained decoding step
-    DYNAMIC_MULTI    // dynamic roll back, multiple constrained decoding steps
-};
-
 struct token_healing_context {
     std::string prefix;  // remaining prefix to generate (the input prompt's suffix)
 
@@ -44,8 +37,8 @@ static std::vector<llama_token> token_healing_find_prefix(
     std::vector<llama_token> candidates;
     const auto & vocab = th_ctx->vocab;
     for (size_t token_id = 0; token_id < vocab.size(); ++token_id) {
-        if (startswith(vocab[token_id], prefix)
-            || (include_partial_prefix && startswith(prefix, vocab[token_id]))) {
+        if (startswith(vocab[token_id], prefix) ||
+                (include_partial_prefix && startswith(prefix, vocab[token_id]))) {
             candidates.push_back((llama_token)token_id);
         }
     }
@@ -71,14 +64,14 @@ static void token_healing_free(token_healing_context * th_ctx) {
 static int token_healing_heal(
            const llama_context * ctx,
            std::vector<llama_token> & tokens_list,
-           const token_healing_type th_type,
+           const llama_token_healing_type th_type,
            token_healing_context * th_ctx,
            int n_rollback = 1) {
     if (tokens_list.empty()) {
         return 0;
     }
     const llama_model * model = llama_get_model(ctx);
-    const bool is_dynamic = th_type == token_healing_type::DYNAMIC_ONCE || th_type == token_healing_type::DYNAMIC_MULTI;
+    const bool is_dynamic = th_type == llama_token_healing_type::DYNAMIC_ONCE || th_type == llama_token_healing_type::DYNAMIC_MULTI;
     const int n_ctx = tokens_list.size();
     const int max_to_remove = is_dynamic ? n_ctx : std::min(n_rollback, n_ctx);
     int n_removed = 0;
@@ -104,7 +97,7 @@ static int token_healing_heal(
         return 0;
     }
     // If constrained decoding would give back the original prompt, there is no need to modify the context
-    const bool is_multi_decoding = th_type == token_healing_type::DYNAMIC_MULTI || th_type == token_healing_type::ROLLBACK_MULTI;
+    const bool is_multi_decoding = th_type == llama_token_healing_type::DYNAMIC_MULTI || th_type == llama_token_healing_type::ROLLBACK_MULTI;
     const std::vector<llama_token> candidates = token_healing_find_prefix(th_ctx, prefix, is_multi_decoding);
     fprintf(stderr, "token_healing: prefix = '%s' (%d tokens)\n", prefix.c_str(), n_removed);
     if (n_removed == 1 && candidates.size() == 1) {
@@ -119,9 +112,7 @@ static int token_healing_heal(
         }
     }
 #endif
-    for (int i = 0; i < n_removed; ++i) {
-        tokens_list.pop_back();
-    }
+    tokens_list.resize(n_ctx - n_removed);
     if (tokens_list.empty()) {
         // If the first token was removed, llama_decode would crash with an empty sequence, so add bos.
         tokens_list.emplace_back(llama_token_bos(model));
@@ -146,16 +137,16 @@ int main(int argc, char ** argv) {
     }
 
     bool token_healing_enabled = true;
-    auto th_type = token_healing_type::DYNAMIC_MULTI;
+    auto th_type = llama_token_healing_type::DYNAMIC_MULTI;
     int th_n_rollback = 1;
     if (argc >= 4) {
         std::string value(argv[3]);
         /**/ if (value    == "0" ) { token_healing_enabled = false; }
-        else if (value    == "1" ) { th_type = token_healing_type::ROLLBACK_LAST; th_n_rollback = 1; }
-        else if (value    == "d1") { th_type = token_healing_type::DYNAMIC_ONCE; }
-        else if (value    == "d" ) { th_type = token_healing_type::DYNAMIC_MULTI; }
+        else if (value    == "1" ) { th_type = llama_token_healing_type::ROLLBACK_LAST; th_n_rollback = 1; }
+        else if (value    == "d1") { th_type = llama_token_healing_type::DYNAMIC_ONCE; }
+        else if (value    == "d" ) { th_type = llama_token_healing_type::DYNAMIC_MULTI; }
         else if (value[0] == 'r' ) {
-            th_type = token_healing_type::ROLLBACK_MULTI;
+            th_type = llama_token_healing_type::ROLLBACK_MULTI;
             th_n_rollback = std::stoi(value.substr(1));
             if (th_n_rollback <= 0) {
                 token_healing_enabled = false;
@@ -281,7 +272,7 @@ int main(int argc, char ** argv) {
                 // Constrain tokens based on the remaining token healing prefix
                 // N.B. We could also set token constraints by setting rejected tokens' logits to -inf
                 std::vector<llama_token> th_candidates;
-                if (th_type == token_healing_type::ROLLBACK_LAST || th_type == token_healing_type::DYNAMIC_ONCE) {
+                if (th_type == llama_token_healing_type::ROLLBACK_LAST || th_type == llama_token_healing_type::DYNAMIC_ONCE) {
                     th_candidates = token_healing_find_prefix(th_ctx, th_ctx->prefix, false);
                 } else {
                     th_candidates = token_healing_find_prefix(th_ctx, th_ctx->prefix, true);

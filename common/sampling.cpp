@@ -2,6 +2,96 @@
 #include "sampling.h"
 #include <random>
 
+//
+// Token healing (internal)
+//
+
+static bool startswith(const std::string & str, const std::string & prefix) {
+    return str.rfind(prefix, 0) != std::string::npos;
+}
+
+static bool token_healing_prefix_exists(const llama_context * ctx_main, const std::string & prefix) {
+    const int32_t n_vocab = llama_n_vocab(llama_get_model(ctx_main));
+    for (llama_token token_id = 0; token_id < n_vocab; ++token_id) {
+        if (startswith(llama_token_to_piece(ctx_main, token_id), prefix)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::vector<llama_token> token_healing_find_prefix(
+                                const llama_context * ctx_main,
+                                const std::string & prefix,
+                                const bool include_partial_prefix) {
+    // Example: prefix=" world" -> " world", " worldwide", ...
+    // If `include_partial_prefix`, include also: " w", " wo", ...
+    std::vector<llama_token> candidates;
+    const int32_t n_vocab = llama_n_vocab(llama_get_model(ctx_main));
+    for (llama_token token_id = 0; token_id < n_vocab; ++token_id) {
+        std::string token = llama_token_to_piece(ctx_main, token_id);
+        if (startswith(token, prefix) ||
+                (include_partial_prefix && startswith(prefix, token))) {
+            candidates.push_back(token_id);
+        }
+    }
+    return candidates;
+}
+
+//
+// Token healing (external)
+//
+
+std::string llama_token_healing_prepare(
+            const llama_context * ctx_main,
+            llama_token_healing_type th_type,
+            std::vector<llama_token> & tokens,
+            int n_rollback) {
+    if (tokens.empty()) {
+        return "";
+    }
+    const llama_model * model = llama_get_model(ctx_main);
+    const bool is_dynamic = th_type == llama_token_healing_type::DYNAMIC_ONCE || th_type == llama_token_healing_type::DYNAMIC_MULTI;
+    const int n_ctx = tokens.size();
+    const int max_to_remove = is_dynamic ? n_ctx : std::min(n_rollback, n_ctx);
+    int n_removed = 0;
+    std::string prefix;
+    // Roll back tokens a fixed amount or until there does not exist a token that can cover the prompt
+    // and stop early if a special token is encountered
+    while (n_removed < max_to_remove) {
+        const llama_token next_token_id = tokens[n_ctx - n_removed - 1];
+        if (llama_token_get_type(model, next_token_id) != LLAMA_TOKEN_TYPE_NORMAL) {
+            // Don't roll back e.g. <|endoftext|> (if parse_special=true in llama_tokenize)
+            break;
+        }
+        std::string new_prefix = llama_token_to_piece(ctx_main, next_token_id) + prefix;
+        if (is_dynamic && !token_healing_prefix_exists(ctx_main, new_prefix)) {
+            break;
+        }
+        n_removed += 1;
+        prefix = new_prefix;
+    }
+
+    if (n_removed == 0) {  // E.g. if the last token is a special token
+        return "";
+    }
+    // If constrained decoding would give back the original prompt, there is no need to modify the context
+    const bool is_multi_step = th_type == llama_token_healing_type::ROLLBACK_MULTI ||
+                               th_type == llama_token_healing_type::DYNAMIC_MULTI;
+    const std::vector<llama_token> candidates = token_healing_find_prefix(ctx_main, prefix, is_multi_step);
+    LOG("token_healing: prefix = '%s' (%d tokens)\n", prefix.c_str(), n_removed);
+    if (n_removed == 1 && candidates.size() == 1) {
+        LOG("token_healing: nothing to heal\n");
+        return "";
+    }
+    tokens.resize(n_ctx - n_removed);
+    return prefix;
+}
+
+//
+// Sampling
+//
+
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
     struct llama_sampling_context * result = new llama_sampling_context();
 
@@ -33,6 +123,8 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
                 grammar_rules.size(), result->parsed_grammar.symbol_ids.at("root"));
     }
 
+    result->token_healing_prefix.clear();
+
     result->prev.resize(params.n_prev);
 
     llama_sampling_set_rng_seed(result, params.seed);
@@ -61,6 +153,8 @@ void llama_sampling_reset(llama_sampling_context * ctx) {
                 grammar_rules.data(),
                 grammar_rules.size(), ctx->parsed_grammar.symbol_ids.at("root"));
     }
+
+    ctx->token_healing_prefix.clear();
 
     std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
     ctx->cur.clear();
@@ -119,7 +213,7 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
 }
 
 std::string llama_sampling_order_print(const llama_sampling_params & params) {
-    std::string result = "CFG -> Penalties ";
+    std::string result = "(Token healing) -> CFG -> Penalties ";
     if (params.mirostat == 0) {
         for (auto sampler_type : params.samplers_sequence) {
             const auto sampler_type_name = sampler_type_to_name_string(sampler_type);
@@ -297,11 +391,32 @@ static llama_token_data_array llama_sampling_prepare_impl(
 
     cur.clear();
 
-    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-        cur.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
+    // Constrain tokens based on the remaining token healing prefix (if any)
+    const auto & th_type = params.token_healing_type;
+    const auto & th_prefix = ctx_sampling->token_healing_prefix;
+    if (params.token_healing_enabled && !th_prefix.empty()) {
+        const bool is_multi_step = th_type == llama_token_healing_type::ROLLBACK_MULTI ||
+                                   th_type == llama_token_healing_type::DYNAMIC_MULTI;
+        std::vector<llama_token> th_candidates = token_healing_find_prefix(ctx_main, th_prefix, is_multi_step);
+
+        LOG("token_healing: prefix = '%s'\n", th_prefix.c_str());
+        for (const llama_token token_id : th_candidates) {
+            LOG(" [%6d] '%s'\n", token_id, llama_token_to_piece(ctx_main, token_id).c_str());
+        }
+
+        // N.B. We could also set token constraints by setting rejected tokens' logits to -inf
+        for (const llama_token token_id: th_candidates) {
+            cur.emplace_back(llama_token_data{ token_id, logits[token_id], 0.0f });
+        }
+    } else {
+        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+            cur.emplace_back(llama_token_data{ token_id, logits[token_id], 0.0f });
+        }
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
+
+    // TODO should we skip penalties and grammar while token healing?
 
     // apply penalties
     const auto& penalty_tokens = params.use_penalty_prompt_tokens ? params.penalty_prompt_tokens : prev;
@@ -360,5 +475,20 @@ void llama_sampling_accept(
 
     if (ctx_sampling->grammar != NULL && apply_grammar) {
         llama_grammar_accept_token(ctx_main, ctx_sampling->grammar, id);
+    }
+
+    if (ctx_sampling->params.token_healing_enabled && apply_grammar) {
+        std::string & th_prefix = ctx_sampling->token_healing_prefix;
+        if (!th_prefix.empty()) {
+            const std::string new_token_piece = llama_token_to_piece(ctx_main, id);
+            if (new_token_piece.size() < th_prefix.size()) {
+                // Shift prefix constraint (for multi step token healing)
+                th_prefix = th_prefix.substr(new_token_piece.size());
+            } else {
+                // Prefix has been generated => no more constrained generation
+                th_prefix.clear();
+                LOG("token_healing: done\n");
+            }
+        }
     }
 }
