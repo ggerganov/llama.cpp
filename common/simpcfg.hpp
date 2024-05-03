@@ -66,7 +66,7 @@ size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
     return std::wcsrtombs(sDest.data(), &wSrcP, sDest.length(), &mbState);
 }
 
-size_t mbs_to_wcs(std::wstring &wDest, std::string &sSrc) {
+size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
     std::mbstate_t mbState = std::mbstate_t();
     const char *sSrcP = sSrc.c_str();
     auto reqLen = std::mbsrtowcs(nullptr, &sSrcP, 0, &mbState);
@@ -81,7 +81,7 @@ size_t mbs_to_wcs(std::wstring &wDest, std::string &sSrc) {
 // trimmed are made up of 1byte encoded chars including in utf8 encoding space.
 // If the string being trimmed includes multibyte encoded characters at the end,
 // then trimming can mess things up.
-std::string str_trim_dumb(std::string sin, std::string trimChars=" \t\n") {
+std::string str_trim_dumb(std::string sin, const std::string &trimChars=" \t\n") {
     sin.erase(sin.find_last_not_of(trimChars)+1);
     sin.erase(0, sin.find_first_not_of(trimChars));
     return sin;
@@ -92,7 +92,7 @@ std::string str_trim_dumb(std::string sin, std::string trimChars=" \t\n") {
 // NOTE: Internally converts to wchar/wstring to try and support proper trimming,
 // wrt possibly more languages, to some extent, ie even if the passed string
 // contains multibyte encoded characters in it.
-std::string str_trim_oversmart(std::string sIn, std::string trimChars=" \t\n") {
+std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \t\n") {
     std::wstring wIn;
     mbs_to_wcs(wIn, sIn);
     std::wstring wTrimChars;
