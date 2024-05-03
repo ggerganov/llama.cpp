@@ -110,7 +110,7 @@ static uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset)
 
 static std::unordered_map<uint32_t, int> unicode_cpt_type_map() {
     std::unordered_map<uint32_t, int> cpt_types;
-    for (auto p : unicode_ranges_digit) {
+    for (auto p : unicode_ranges_number) {
         for (auto i = p.first; i <= p.second; ++ i) {
             cpt_types[i] = CODEPOINT_TYPE_DIGIT;
         }
