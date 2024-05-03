@@ -26,6 +26,8 @@ const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_digit = {
 {0x00011950, 0x00011959}, {0x00011C50, 0x00011C59}, {0x00011D50, 0x00011D59}, {0x00011DA0, 0x00011DA9},
 {0x00016A60, 0x00016A69}, {0x00016B50, 0x00016B59}, {0x0001D7CE, 0x0001D7FF}, {0x0001E140, 0x0001E149},
 {0x0001E2F0, 0x0001E2F9}, {0x0001E950, 0x0001E959}, {0x0001F100, 0x0001F10A}, {0x0001FBF0, 0x0001FBF9},
+{0x000000BC, 0x000000BE}, {0x00003007, 0x00003007},
+//{0x00002150, 0x0000218F}, // Number Forms
 };
 
 const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_letter = {
@@ -188,10 +190,22 @@ const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_letter = {
 };
 
 const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_whitespace = {
-{0x00000009, 0x0000000D}, {0x0000001C, 0x00000020}, {0x00000085, 0x00000085}, {0x000000A0, 0x000000A0},
+{0x00000009, 0x0000000D}, {0x00000020, 0x00000020}, {0x00000085, 0x00000085}, {0x000000A0, 0x000000A0},
 {0x00001680, 0x00001680}, {0x00002000, 0x0000200A}, {0x00002028, 0x00002029}, {0x0000202F, 0x0000202F},
 {0x0000205F, 0x0000205F}, {0x00003000, 0x00003000},
 };
+
+
+//const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_separator_ = {
+//{0x00000020, 0x00000020}, {0x000000A0, 0x000000A0}, {0x00001680, 0x00001680},
+//{0x00002000, 0x0000200A}, {0x00002028, 0x00002029}, {0x0000202F, 0x0000202F},
+//{0x0000205F, 0x0000205F}, {0x00003000, 0x00003000},
+//};
+
+//const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_whitespace_ = {
+//{'\r', '\r'}, {'\n', '\n'}, {'\t', '\t'}, {'\f', '\f'}, {'\v', '\v'}, {' ', ' '}, 
+//};
+
 
 const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_accent_mark = {
 {0x00000300, 0x0000036F}, {0x00000483, 0x00000489}, {0x00000591, 0x000005BD}, {0x000005BF, 0x000005BF},
@@ -381,6 +395,8 @@ const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_symbol = {
 };
 
 const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_control = {
+//{0x00000009, 0x0000000D}, {0x00000085, 0x00000085},
+{0x0000001C, 0x0000001F},
 {0x00000000, 0x00000008}, {0x0000000E, 0x0000001B}, {0x0000007F, 0x00000084}, {0x00000086, 0x0000009F},
 {0x000000AD, 0x000000AD}, {0x00000378, 0x00000379}, {0x00000380, 0x00000383}, {0x0000038B, 0x0000038B},
 {0x0000038D, 0x0000038D}, {0x000003A2, 0x000003A2}, {0x00000530, 0x00000530}, {0x00000557, 0x00000558},
