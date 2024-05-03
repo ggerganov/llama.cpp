@@ -1,12 +1,27 @@
 #pragma once
 
 /**
- * Provide a simple config file logic
+ * Provides a simple direct 1-level only config file logic
+ * 
+ * ## File format
+ * 
  * It can consist of multiple config groups.
  * * the group name needs to start at the begining of the line.
- * Each group can inturn contain multiple config fields wrt that group.
+ * Each group can inturn contain multiple config fields (key:value pairs) wrt that group.
  * * the group fields need to have 1 or more space at the begining of line.
  * 
+ * ## Supported data types
+ * 
+ * The fields can have values belonging to ane one of the below types
+ * * strings - enclosed in double quotes
+ *             this is also the fallback catch all type, but dont rely on this behaviour.
+ * * int - using decimal number system
+ * * float - needs to have a decimal point and or e/E
+ *           if decimal point is used, there should be atleast one decimal number on its either side
+ * * bool - either true or false
+ * 
+ * It tries to provide a crude expanded form of array wrt any of the above supported types.
+ * For this one needs to define keys using the pattern TheKeyName-0, TheKeyName-1, ....
  */
 
 #include <map>
@@ -35,6 +50,13 @@
 #define LWARN_LN LOG_TEELN
 #endif
 
+#undef SC_STR_OVERSMART
+#ifdef SC_STR_OVERSMART
+#define str_trim str_trim_oversmart
+#else
+#define str_trim str_trim_dumb
+#endif
+
 
 size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
     std::mbstate_t mbState = std::mbstate_t();
@@ -59,10 +81,27 @@ size_t mbs_to_wcs(std::wstring &wDest, std::string &sSrc) {
 // trimmed are made up of 1byte encoded chars including in utf8 encoding space.
 // If the string being trimmed includes multibyte encoded characters at the end,
 // then trimming can mess things up.
-std::string str_trim(std::string sin, std::string trimChars=" \t\n") {
+std::string str_trim_dumb(std::string sin, std::string trimChars=" \t\n") {
     sin.erase(sin.find_last_not_of(trimChars)+1);
     sin.erase(0, sin.find_first_not_of(trimChars));
     return sin;
+}
+
+// Remove chars from begin and end of the passed string, provided the char belongs
+// to one of the chars in trimChars.
+// NOTE: Internally converts to wchar/wstring to try and support proper trimming,
+// wrt possibly more languages, to some extent, ie even if the passed string
+// contains multibyte encoded characters in it.
+std::string str_trim_oversmart(std::string sIn, std::string trimChars=" \t\n") {
+    std::wstring wIn;
+    mbs_to_wcs(wIn, sIn);
+    std::wstring wTrimChars;
+    mbs_to_wcs(wTrimChars, trimChars);
+    wIn.erase(wIn.find_last_not_of(wTrimChars)+1);
+    wIn.erase(0, wIn.find_first_not_of(wTrimChars));
+    std::string sOut;
+    wcs_to_mbs(sOut, wIn);
+    return sOut;
 }
 
 // Remove atmost 1 char at the begin and 1 char at the end of the passed string,
