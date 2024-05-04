@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+from tqdm import tqdm
 from typing import Any, Sequence, NamedTuple
 
 # Necessary to load the local gguf package
@@ -113,10 +114,15 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
         writer.add_key(key)
         writer.add_val(val.value, val.type)
 
+    total_bytes = 0
+
     for tensor in reader.tensors:
+        total_bytes += tensor.n_bytes
         # Dimensions are written in reverse order, so flip them first
         shape = np.flipud(tensor.shape).tolist()
         writer.add_tensor_info(tensor.name, shape, tensor.data.dtype, tensor.data.nbytes, tensor.tensor_type)
+
+    bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
 
     writer.write_header_to_file()
     writer.write_kv_data_to_file()
@@ -124,6 +130,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
 
     for tensor in reader.tensors:
         writer.write_tensor_data(tensor.data)
+        bar.update(tensor.n_bytes)
 
     writer.close()
 
