@@ -39,6 +39,17 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
+# In GNU make default CXX is g++ instead of c++.  Let's fix that so that users
+# of non-gcc compilers don't have to provide g++ alias or wrapper.
+DEFCC  := cc
+DEFCXX := c++
+ifeq ($(origin CC),default)
+CC  := $(DEFCC)
+endif
+ifeq ($(origin CXX),default)
+CXX := $(DEFCXX)
+endif
+
 # Mac OS + Arm can report x86_64
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
@@ -66,11 +77,10 @@ test: $(TEST_TARGETS)
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama-bpe.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-phi-3.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-falcon.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-deepseek-coder.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-deepseek-llm.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-bert-bge.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-starcoder.gguf; \
 			./$$test_target $(CURDIR)/models/ggml-vocab-gpt-2.gguf; \
+			./$$test_target $(CURDIR)/models/ggml-vocab-refact.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1-spm" ]; then \
 			continue; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1-bpe" ]; then \

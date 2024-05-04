@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+import logging
 import argparse
 import asyncio
 import os
 import sys
 from tempfile import gettempdir, NamedTemporaryFile
+
+logger = logging.getLogger("ggml-vk-generate-shaders")
 
 shader_f32 = """
 #define FLOAT_TYPE float
@@ -2498,7 +2501,7 @@ async def string_to_spv(name, code, defines, fp16=True):
 
         stdout, stderr = await proc.communicate()
 
-        print(" ".join(cmd))
+        logger.info(" ".join(cmd))
 
         if proc.returncode:
             raise RuntimeError(f"{name=} {f.name=} {stdout=} {stderr=}")
@@ -2507,7 +2510,7 @@ async def string_to_spv(name, code, defines, fp16=True):
 
         cmd.extend([f"-D{key}={value}" for key, value in defines.items()])
         code_with_lines = "\n".join([f"{i + 1}: {line}" for i, line in enumerate(preprocessed_code.splitlines())])
-        print(f"ERROR compiling {name}\n\n{code_with_lines}\n\n{error}")
+        logger.error(f"cannot compile {name}\n\n{code_with_lines}\n\n{error}")
         f.close()
         os.remove(f.name)
         sys.exit(proc.returncode)
@@ -2520,7 +2523,7 @@ async def string_to_spv(name, code, defines, fp16=True):
 
 
 async def main():
-    print("ggml_vulkan: Generating and compiling shaders to SPIR-V")
+    logger.info("ggml_vulkan: Generating and compiling shaders to SPIR-V")
 
     tasks = []
 
@@ -2768,8 +2771,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GGML Vulkan Shader Generator")
 
     parser.add_argument("--glslc", help="Path to glslc")
+    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     if args.glslc:
         GLSLC = args.glslc

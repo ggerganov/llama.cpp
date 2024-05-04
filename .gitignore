@@ -2,6 +2,7 @@
 *.a
 *.so
 *.gguf
+*.gguf.json
 *.bin
 *.exe
 *.dll

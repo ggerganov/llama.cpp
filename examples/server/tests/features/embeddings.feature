@@ -5,7 +5,7 @@ Feature: llama.cpp server
   Background: Server startup
     Given a server listening on localhost:8080
     And   a model url https://huggingface.co/ggml-org/models/resolve/main/bert-bge-small/ggml-model-f16.gguf
-    And   a model file ggml-model-f16.gguf
+    And   a model file bert-bge-small.gguf
     And   a model alias bert-bge-small
     And   42 as server seed
     And   2 slots
