@@ -265,7 +265,7 @@ static void ggml_metal_log(enum ggml_log_level level, const char * format, ...){
 
 static void * ggml_metal_host_malloc(size_t n) {
     void * data = malloc(n);
-    if (data == null) {
+    if (data == NULL) {
         GGML_METAL_LOG_ERROR("%s: error: malloc failed\n", __func__);
         return NULL;
     }
