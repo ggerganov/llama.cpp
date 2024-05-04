@@ -264,10 +264,9 @@ static void ggml_metal_log(enum ggml_log_level level, const char * format, ...){
 }
 
 static void * ggml_metal_host_malloc(size_t n) {
-    void * data = NULL;
-    const int result = posix_memalign((void **) &data, sysconf(_SC_PAGESIZE), n);
-    if (result != 0) {
-        GGML_METAL_LOG_ERROR("%s: error: posix_memalign failed\n", __func__);
+    void * data = malloc(n);
+    if (data == null) {
+        GGML_METAL_LOG_ERROR("%s: error: malloc failed\n", __func__);
         return NULL;
     }
 
