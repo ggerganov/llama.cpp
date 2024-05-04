@@ -395,7 +395,8 @@ public:
 
 
     template<typename SupportedDataType>
-    std::vector<SupportedDataType> get_vector(const std::string &group, const std::string &key, const std::vector<SupportedDataType> &defaultValue, const std::string &callerName="") {
+    std::vector<SupportedDataType> get_vector(const std::string &group, const MultiPart &keyParts, const std::vector<SupportedDataType> &defaultValue, const std::string &callerName="") {
+        auto key = joiner(keyParts);
         auto gm = mapV[group];
         std::vector<SupportedDataType> array;
         int i = 0;
@@ -624,16 +625,16 @@ int main(int argc, char **argv) {
     sc.get_string("mistral", {"system-prefix"}, "Not found");
     sc.get_string("\"mistral\"", {"\"system-prefix\""}, "Not found");
 
-    sc.get_vector<int64_t>("testme", "keyA100", {1, 2, 3});
-    sc.get_vector<std::string>("testme", "keyA100", { "A", "അ", "अ", "ಅ" });
+    sc.get_vector<int64_t>("testme", {"keyA100"}, {1, 2, 3});
+    sc.get_vector<std::string>("testme", {"keyA100"}, { "A", "അ", "अ", "ಅ" });
     sc.set_int64("testme", {"keyA300-0"}, 330);
     sc.set_int64("testme", {"keyA300-1"}, 331);
     sc.set_int64("testme", {"keyA300-2"}, 332);
     sc.set_string("testme", {"keyA301-0"}, "India");
     sc.set_value<std::string>("testme", {"keyA301", "1"}, "World");
     sc.set_string("testme", {"keyA301", "2"}, "AkashaGanga");
-    sc.get_vector<int64_t>("testme", "keyA300", {1, 2, 3});
-    sc.get_vector<std::string>("testme", "keyA301", { "yes 1", "No 2", "very well 3" });
+    sc.get_vector<int64_t>("testme", {"keyA300"}, {1, 2, 3});
+    sc.get_vector<std::string>("testme", {"keyA301"}, { "yes 1", "No 2", "very well 3" });
     return 0;
 }
 #endif
