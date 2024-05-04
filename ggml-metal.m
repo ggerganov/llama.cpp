@@ -264,9 +264,10 @@ static void ggml_metal_log(enum ggml_log_level level, const char * format, ...){
 }
 
 static void * ggml_metal_host_malloc(size_t n) {
-    void * data = malloc(n);
-    if (data == NULL) {
-        GGML_METAL_LOG_ERROR("%s: error: malloc failed\n", __func__);
+    void * data = NULL;
+    kern_return_t err = vm_allocate((vm_map_t) mach_task_self(), (void *) &data, n, VM_FLAGS_ANYWHERE);
+    if (err != KERN_SUCCESS) {
+        GGML_METAL_LOG_ERROR("%s: error: vm_allocate failed\n", __func__);
         return NULL;
     }
 
@@ -2839,7 +2840,7 @@ GGML_CALL static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_
     ggml_backend_metal_free_device();
 
     if (ctx->owned) {
-        free(ctx->all_data);
+        vm_deallocate((vm_map_t)mach_task_self(), (vm_address_t)ctx->all_data, ctx->all_size);
     }
 
     free(ctx);
