@@ -56,6 +56,7 @@
 
 
 #define SC_DEBUG
+#undef SC_DEBUG_VERBOSE
 #define SC_TEST_PRG
 #ifdef SC_TEST_PRG
 #define LINFO_LN(FMT, ...) fprintf(stdout, FMT"\n", __VA_ARGS__)
@@ -148,7 +149,7 @@ void dumphex_string(const TString &sIn, const std::string &msgTag){
 //
 template <typename TString>
 TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
-#ifdef SC_DEBUG
+#ifdef SC_DEBUG_VERBOSE
     dumphex_string(sin, "DBUG:TrimDumb:Str:");
     dumphex_string(trimChars, "DBUG:TrimDumb:Tim:");
 #endif
