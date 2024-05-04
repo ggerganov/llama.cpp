@@ -41,20 +41,20 @@ def get_matches(regex_expr):
 
 
 def print_cat(cat, ranges):
-    print("const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_{} = {{".format(cat))
+    print("const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_{} = {{".format(cat)) # noqa: NP100
     cnt = 0
     for start, end in ranges:
         if cnt % 4 != 0:
-            print(" ", end="")
-        print("{{0x{:08X}, 0x{:08X}}},".format(start, end), end="")
+            print(" ", end="") # noqa: NP100
+        print("{{0x{:08X}, 0x{:08X}}},".format(start, end), end="") # noqa: NP100
         if cnt % 4 == 3:
-            print("")
+            print("") # noqa: NP100
         cnt += 1
 
     if cnt % 4 != 0:
-        print("")
-    print("};")
-    print("")
+        print("") # noqa: NP100
+    print("};") # noqa: NP100
+    print("") # noqa: NP100
 
 
 print_cat("number",      get_matches(r'\p{N}'))
