@@ -144,12 +144,13 @@ def test_custom_texts(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBase):
     ]
 
     more_tests = [
-        '\x1f-a',  # unicode_ranges_control, {0x00001C, 0x00001F}
-        '¼-a',     # unicode_ranges_digit, 0x00BC
-        '½-a',     # unicode_ranges_digit, 0x00BD
-        '¾-a',     # unicode_ranges_digit, 0x00BE
-        'a 〇b',   # unicode_ranges_digit, 0x3007
-        'Ⅵ-a',    # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
+        '\x1f-a',   # unicode_ranges_control, {0x00001C, 0x00001F}
+        '¼-a',      # unicode_ranges_digit, 0x00BC
+        '½-a',      # unicode_ranges_digit, 0x00BD
+        '¾-a',      # unicode_ranges_digit, 0x00BE
+        'a 〇b',    # unicode_ranges_digit, 0x3007
+        'Ⅵ-a',     # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
+        '\uFEFF//', # unicode_ranges_control, 0xFEFF (BOM)
     ]
 
     for text in tests+more_tests:

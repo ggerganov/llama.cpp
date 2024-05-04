@@ -281,6 +281,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
                 }
             }
 
+            char32_t cpt2 = (cpt == ' ' ? _get_cpt(pos+1) : cpt);
             int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
             // regex: <space>?\p{L}+
             if (cpt2_type == CODEPOINT_TYPE_LETTER) {
@@ -301,17 +302,18 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
                 continue;
             }
             // regex: <space>?[^\s\p{L}\p{N}]+
-            if (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+            if (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                 pos += (cpt == ' ');
-                while (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+                while (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                     cpt2_type = _get_cpt_type(++pos);
+                    cpt2 = _get_cpt(pos);
                 }
                 _add_token(pos);
                 continue;
             }
 
             size_t num_whitespaces = 0;
-            while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_SEPARATOR) {
+            while (unicode_cpt_is_whitespace(_get_cpt(pos+num_whitespaces))) {
                 num_whitespaces++;
             }
 
@@ -424,13 +426,14 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             }
 
             // regex: <space>?[^\s\p{L}\p{N}]+[\r\n]*
+            char32_t cpt2 = (cpt == ' ' ? _get_cpt(pos+1) : cpt);
             int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
-            if (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+            if (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                 pos += (cpt == ' ');
-                while (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+                while (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                     cpt2_type = _get_cpt_type(++pos);
+                    cpt2 = _get_cpt(pos);
                 }
-                char32_t cpt2 = _get_cpt(pos);
                 while (cpt2 == '\r' || cpt2 == '\n') {
                     cpt2 = _get_cpt(++pos);
                 }
@@ -440,7 +443,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
             size_t num_whitespaces = 0;
             size_t last_end_r_or_n = 0;
-            while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_SEPARATOR) {
+            while (unicode_cpt_is_whitespace(_get_cpt(pos+num_whitespaces))) {
                 char32_t cpt2 = _get_cpt(pos+num_whitespaces);
                 if (cpt2 == '\r' || cpt2 == '\n') {
                     last_end_r_or_n = pos + num_whitespaces + 1;
