@@ -977,8 +977,8 @@ Here is a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
-#### Build on Android using Termux (F-Droid)
-F-Droid Termux is an alternative to execute `llama.cpp` on an Android device (no root required).
+#### Build on Android using Termux
+[Termux](https://github.com/termux/termux-app#installation) is an alternative to execute `llama.cpp` on an Android device (no root required).
 ```
 apt update && apt upgrade -y
 apt install git
