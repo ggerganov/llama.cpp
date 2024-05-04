@@ -5,12 +5,15 @@
 #   python3 tests/test-tokenizer-0-bpe.py ./models/ggml-vocab-llama-bpe.gguf ~/Data/huggingface/Meta-Llama-3-8B-Instruct/
 #
 
-import random
+import logging
 import argparse
 import subprocess
+import random
 
 import cffi
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
+
+logger = logging.getLogger("test-tokenizer-random-bpe")
 
 
 class LibLlama:
@@ -152,11 +155,11 @@ def test_custom_texts(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBase):
     for text in tests+more_tests:
         ids1 = model.tokenize(text, parse_special=True)
         ids2 = tokenizer.encode(text)
-        print(repr(text))
+        logger.info(repr(text))
         if ids1 != ids2:
-            print(" TokenIDs:", list(ids1))
-            print(" Expected:", list(ids2))
-            print(" Index:", find_first_mismatch(ids1, ids2) )
+            logger.info(" TokenIDs: " + str(list(ids1)))
+            logger.info(" Expected: " + str(list(ids2)))
+            logger.info(" Index: %d" % find_first_mismatch(ids1, ids2))
             raise Exception()
 
 
@@ -171,11 +174,11 @@ def test_random_chars(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBase, it
         .-,*/-+ª!"·$%&/()=?¿[]{}<>\\|@#~½¬~;:_
     """))
     
-    print( "Bruteforce random chars encodings ..." )
+    logger.info("Bruteforce random chars encodings ...")
     rand = random.Random()
     for m in range(iterations):
 
-        print(m)
+        logger.debug("%d/%d" % (m+1,iterations))
         rand.seed(m)
 
         text = []
@@ -194,17 +197,17 @@ def test_random_chars(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBase, it
 
 def test_random_vocab_chars(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBase, iterations=100):
 
-    print( "Building vocab char list ..." )
+    logger.info("Building vocab char list ...")
     vocab_ids = list(tokenizer.vocab.values())
     vocab_text = tokenizer.decode(vocab_ids)
     vocab_chars = list(set(vocab_text))
     del vocab_ids, vocab_text
     
-    print( "Bruteforce random text encodings ..." )
+    logger.info("Bruteforce random text encodings ...")
     rand = random.Random()
     for m in range(iterations):
 
-        print(m)
+        logger.debug("%d/%d" % (m+1,iterations))
         rand.seed(m)
         
         text = rand.choices(vocab_chars, k=1024)
@@ -212,12 +215,12 @@ def test_random_vocab_chars(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBa
 
         ids1 = model.tokenize(text, parse_special=True)
         ids2 = tokenizer.encode(text)
-        assert( ids1 == ids2 )
+        assert(ids1 == ids2)
 
 
 def test_random_vocab_tokens(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBase, iterations=100):
 
-    print( "Building token list ..." )
+    logger.info("Building token list ...")
     space_id = tokenizer.encode(" ")[0]
     vocab_ids = list(tokenizer.vocab.values())
     vocab_ids = list(sorted(vocab_ids + vocab_ids))
@@ -227,17 +230,17 @@ def test_random_vocab_tokens(model:LibLlamaModel, tokenizer:PreTrainedTokenizerB
     vocab_tokens = vocab_tokens.split(" ")
     del vocab_ids
     
-    print( "Checking single token encodings ..." )
+    logger.info("Checking single token encodings ...")
     for token in vocab_tokens:
         ids1 = model.tokenize(token, parse_special=True)
         ids2 = tokenizer.encode(token)
         assert(ids1 == ids2)
 
-    print( "Bruteforce random text encodings ..." )
+    logger.info("Bruteforce random text encodings ...")
     rand = random.Random()
     for m in range(iterations):
 
-        print(m)
+        logger.debug("%d/%d" % (m+1,iterations))
         rand.seed(m)
         
         text = []
@@ -252,18 +255,18 @@ def test_random_vocab_tokens(model:LibLlamaModel, tokenizer:PreTrainedTokenizerB
 
         ids1 = model.tokenize(text, parse_special=True)
         ids2 = tokenizer.encode(text)
-        assert( ids1 == ids2 )
+        assert(ids1 == ids2)
 
 
 def test_random_bytes(model:LibLlamaModel, tokenizer:PreTrainedTokenizerBase, iterations=100):
 
     WHITESPACES = list(" "*20 + "\n"*5 + "\r\n"*5 + "\t"*5)
 
-    print( "Bruteforce random bytes encodings ..." )
+    logger.info("Bruteforce random bytes encodings ...")
     rand = random.Random()
     for m in range(iterations):
 
-        print(m)
+        logger.debug("%d/%d" % (m+1,iterations))
         rand.seed(m)
 
         text = []
@@ -285,7 +288,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("vocab_file", help="path to vocab 'gguf' file")
     parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")
+    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     model = LibLlamaModel(LibLlama(), args.vocab_file, mparams=dict(vocab_only=True), cparams=dict(n_ctx=2048))
 
