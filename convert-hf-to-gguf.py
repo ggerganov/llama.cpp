@@ -2236,7 +2236,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--awq-path", type=Path, default=None,
-        help="Path to scale awq cache file")
+        help="Path to scale awq cache file",
+    )
     parser.add_argument(
         "--outfile", type=Path,
         help="path to write to; default: based on input",
@@ -2245,14 +2246,26 @@ def parse_args() -> argparse.Namespace:
         "--outtype", type=str, choices=["f32", "f16"], default="f16",
         help="output format - use f32 for float32, f16 for float16",
     )
-    parser.add_argument("--bigendian", action="store_true", help="model is executed on big endian machine")
+    parser.add_argument(
+        "--bigendian", action="store_true",
+        help="model is executed on big endian machine",
+    )
     parser.add_argument(
         "model", type=Path,
         help="directory containing model file",
     )
-    parser.add_argument("--use-temp-file", action="store_true", help="use the tempfile library while processing (helpful when running out of memory, process killed)")
-    parser.add_argument("--model-name", type=str, default=None, help="name of the model")
-    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
+    parser.add_argument(
+        "--use-temp-file", action="store_true",
+        help="use the tempfile library while processing (helpful when running out of memory, process killed)",
+    )
+    parser.add_argument(
+        "--model-name", type=str, default=None,
+        help="name of the model",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="increase output verbosity",
+    )
 
     return parser.parse_args()
 
