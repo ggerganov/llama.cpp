@@ -361,7 +361,8 @@ public:
     }
 
     template<typename SupportedDataType>
-    SupportedDataType get_value(const std::string &group, const std::string &key, const SupportedDataType &defaultValue, const std::string &callerName="") {
+    SupportedDataType get_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &defaultValue, const std::string &callerName="") {
+        auto key = joiner(keyParts);
         auto gm = mapV[group];
         if (gm.find(key) == gm.end()) {
 #ifdef SC_DEBUG
@@ -376,20 +377,20 @@ public:
         return std::get<SupportedDataType>(value);
     }
 
-    std::string get_string(const std::string &group, const std::string &key, const std::string &defaultValue) {
-        return get_value(group, key, defaultValue, __func__);
+    std::string get_string(const std::string &group, const MultiPart &keyParts, const std::string &defaultValue) {
+        return get_value(group, keyParts, defaultValue, __func__);
     }
 
-    bool get_bool(const std::string &group, const std::string &key, bool defaultValue) {
-        return get_value(group, key, defaultValue, __func__);
+    bool get_bool(const std::string &group, const MultiPart &keyParts, bool defaultValue) {
+        return get_value(group, keyParts, defaultValue, __func__);
     }
 
-    int64_t get_int64(const std::string &group, const std::string &key, int64_t defaultValue) {
-        return get_value(group, key, defaultValue, __func__);
+    int64_t get_int64(const std::string &group, const MultiPart &keyParts, int64_t defaultValue) {
+        return get_value(group, keyParts, defaultValue, __func__);
     }
 
-    double get_double(const std::string &group, const std::string &key, double defaultValue) {
-        return get_value(group, key, defaultValue, __func__);
+    double get_double(const std::string &group, const MultiPart &keyParts, double defaultValue) {
+        return get_value(group, keyParts, defaultValue, __func__);
     }
 
 
@@ -604,10 +605,10 @@ int main(int argc, char **argv) {
     sc.load(fname);
     sc.dump("");
 
-    sc.get_bool("testme", "key101b", false);
-    sc.get_string("testme", "key101s", "Not found");
-    sc.get_int64("testme", "key101i", 123456);
-    sc.get_double("testme", "key101d", 123456.789);
+    sc.get_bool("testme", {"key101b"}, false);
+    sc.get_string("testme", {"key101s"}, "Not found");
+    sc.get_int64("testme", {"key101i"}, 123456);
+    sc.get_double("testme", {"key101d"}, 123456.789);
 
     sc.set_bool("testme", {"key201b"}, true);
     sc.set_string("testme", {"key201s"}, "hello world");
@@ -615,13 +616,13 @@ int main(int argc, char **argv) {
     sc.set_double("testme", {"key201d"}, 9988.7766);
 
     sc.dump("testme");
-    sc.get_bool("testme", "key201b", false);
-    sc.get_string("testme", "key201s", "Not found");
-    sc.get_int64("testme", "key201i", 123456);
-    sc.get_double("testme", "key201d", 123456.789);
+    sc.get_bool("testme", {"key201b"}, false);
+    sc.get_string("testme", {"key201s"}, "Not found");
+    sc.get_int64("testme", {"key201i"}, 123456);
+    sc.get_double("testme", {"key201d"}, 123456.789);
 
-    sc.get_string("mistral", "system-prefix", "Not found");
-    sc.get_string("\"mistral\"", "\"system-prefix\"", "Not found");
+    sc.get_string("mistral", {"system-prefix"}, "Not found");
+    sc.get_string("\"mistral\"", {"\"system-prefix\""}, "Not found");
 
     sc.get_vector<int64_t>("testme", "keyA100", {1, 2, 3});
     sc.get_vector<std::string>("testme", "keyA100", { "A", "അ", "अ", "ಅ" });
