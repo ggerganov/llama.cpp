@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import struct
@@ -23,6 +24,8 @@ from .constants import (
     PoolingType,
     TokenType,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class WriterState(Enum):
@@ -67,7 +70,7 @@ class GGUFWriter:
         self.use_temp_file = use_temp_file
         self.temp_file = None
         self.tensors = []
-        print("gguf: This GGUF file is for {0} Endian only".format(
+        logger.info("gguf: This GGUF file is for {0} Endian only".format(
             "Big" if self.endianess == GGUFEndian.BIG else "Little",
         ))
         self.state = WriterState.EMPTY
