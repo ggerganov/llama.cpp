@@ -56,7 +56,8 @@ jobs:
       github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3'
       || (
         github.event.schedule
-        && github.repository_owner == 'ggerganov')
+        && github.repository_owner == 'ggerganov'
+      )
       || github.event.pull_request
       || github.head_ref == 'master'
       || (
