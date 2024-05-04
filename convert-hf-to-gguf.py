@@ -327,7 +327,7 @@ class Model(ABC):
             logger.warning("\n")
             raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
-        logger.debug(f"tokenizer.ggml.pre: {res}")
+        logger.debug(f"tokenizer.ggml.pre: {repr(res)}")
         logger.debug(f"chkhsh: {chkhsh}")
 
         return res

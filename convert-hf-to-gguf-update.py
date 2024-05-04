@@ -159,8 +159,8 @@ src_func = f"""
         chktok = tokenizer.encode(chktxt)
         chkhsh = sha256(str(chktok).encode()).hexdigest()
 
-        print(f"chktok: {{chktok}}")
-        print(f"chkhsh: {{chkhsh}}")
+        logger.debug(f"chktok: {{chktok}}")
+        logger.debug(f"chkhsh: {{chkhsh}}")
 
         res = None
 
@@ -169,22 +169,22 @@ src_func = f"""
         #       don't edit the hashes manually!
 {src_ifs}
         if res is None:
-            print("\\n")
-            print("**************************************************************************************")
-            print("** WARNING: The BPE pre-tokenizer was not recognized!")
-            print("**          There are 2 possible reasons for this:")
-            print("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
-            print("**          - the pre-tokenization config has changed upstream")
-            print("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
-            print("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
-            print("**")
-            print(f"** chkhsh:  {{chkhsh}}")
-            print("**************************************************************************************")
-            print("\\n")
+            logger.warning("\\n")
+            logger.warning("**************************************************************************************")
+            logger.warning("** WARNING: The BPE pre-tokenizer was not recognized!")
+            logger.warning("**          There are 2 possible reasons for this:")
+            logger.warning("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
+            logger.warning("**          - the pre-tokenization config has changed upstream")
+            logger.warning("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
+            logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
+            logger.warning("**")
+            logger.warning(f"** chkhsh:  {{chkhsh}}")
+            logger.warning("**************************************************************************************")
+            logger.warning("\\n")
             raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
-        print(f"tokenizer.ggml.pre: {{repr(res)}}")
-        print(f"chkhsh: {{chkhsh}}")
+        logger.debug(f"tokenizer.ggml.pre: {{repr(res)}}")
+        logger.debug(f"chkhsh: {{chkhsh}}")
 
         return res
 """
