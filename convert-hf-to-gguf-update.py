@@ -31,6 +31,7 @@ from hashlib import sha256
 from enum import IntEnum, auto
 from transformers import AutoTokenizer
 
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("convert-hf-to-gguf-update")
 
 
@@ -284,6 +285,6 @@ logger.info("\nRun the following commands to generate the vocab files for testin
 for model in models:
     name = model["name"]
 
-    logger.info(f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only")
+    print(f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only") # noqa: NP100
 
 logger.info("\n")
