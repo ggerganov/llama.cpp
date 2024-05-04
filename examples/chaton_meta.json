@@ -291,6 +291,35 @@
 		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
+	},
+	"command-r": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"begin": "",
+			"prefix": "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>",
+			"suffix": "<|END_OF_TURN_TOKEN|>",
+			"end": ""
+		},
+		"user": {
+			"begin": "",
+			"prefix": "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>",
+			"suffix": "<|END_OF_TURN_TOKEN|>",
+			"end": ""
+		},
+		"assistant": {
+			"begin": "",
+			"prefix": "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>",
+			"suffix": "<|END_OF_TURN_TOKEN|>",
+			"end": ""
+		},
+		"reverse-prompt": "<|END_OF_TURN_TOKEN|>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
 	}
 }
 
