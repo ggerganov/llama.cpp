@@ -2,6 +2,9 @@
 
 /**
  * 
+ * Generic tagging logic + text config file based chat templates handling
+ * by Humans for All
+ * 
  * ## Overview
  * 
  * Helps chat with models, by tagging chat messages based on the specified

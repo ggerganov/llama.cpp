@@ -2,6 +2,7 @@
 
 /**
  * Provides a simple direct 1-level only config file logic
+ * by Humans for All
  * 
  * ## File format
  * 
