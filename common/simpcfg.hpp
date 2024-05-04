@@ -272,6 +272,7 @@ std::string str(std::vector<TypeWithStrSupp> values) {
 
 
 typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
+typedef std::vector<std::string> MultiPart;
 
 class SimpCfg {
 
@@ -281,6 +282,19 @@ private:
     std::regex rFloat {R"(^[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$)"};
 
 public:
+
+    static std::string joiner(const MultiPart& parts) {
+        std::stringstream joined;
+        int iCnt = 0;
+        for(auto part: parts) {
+            if (iCnt != 0) {
+                joined << "-";
+            }
+            iCnt += 1;
+            joined << part;
+        }
+        return joined.str();
+    }
 
     std::string to_str(const SimpCfgData &value) {
         auto visitor = [](auto value) -> auto {
@@ -292,7 +306,8 @@ public:
     }
 
     template<typename SupportedDataType>
-    void set_value(const std::string &group, const std::string &key, const SupportedDataType &value, const std::string &callerName="") {
+    void set_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &value, const std::string &callerName="") {
+        auto key = joiner(keyParts);
         auto &gm = mapV[group];
         gm[key] = value;
 #ifdef SC_DEBUG
@@ -300,37 +315,37 @@ public:
 #endif
     }
 
-    void set_string(const std::string &group, const std::string &key, const std::string &value) {
-        set_value(group, key, value, __func__);
+    void set_string(const std::string &group, const MultiPart &keyParts, const std::string &value) {
+        set_value(group, keyParts, value, __func__);
     }
 
-    void set_bool(const std::string &group, const std::string &key, bool value) {
-        set_value(group, key, value, __func__);
+    void set_bool(const std::string &group, const MultiPart &keyParts, bool value) {
+        set_value(group, keyParts, value, __func__);
     }
 
-    void set_bool(const std::string &group, const std::string &key, const std::string &value) {
+    void set_bool(const std::string &group, const MultiPart &keyParts, const std::string &value) {
         std::string sValue = str_tolower(value);
         bool bValue = sValue == "true" ? true : false;
         //LDBUG_LN("DBUG:%s:%s:%s:%d", __func__, value.c_str(), sValue.c_str(), bValue);
-        set_bool(group, key, bValue);
+        set_bool(group, keyParts, bValue);
     }
 
-    void set_int64(const std::string &group, const std::string &key, int64_t value) {
-        set_value(group, key, value, __func__);
+    void set_int64(const std::string &group, const MultiPart &keyParts, int64_t value) {
+        set_value(group, keyParts, value, __func__);
     }
 
-    void set_int64(const std::string &group, const std::string &key, std::string &value) {
+    void set_int64(const std::string &group, const MultiPart &keyParts, std::string &value) {
         auto ivalue = strtoll(value.c_str(), nullptr, 0);
-        set_int64(group, key, ivalue);
+        set_int64(group, keyParts, ivalue);
     }
 
-    void set_double(const std::string &group, const std::string &key, double value) {
-        set_value(group, key, value, __func__);
+    void set_double(const std::string &group, const MultiPart &keyParts, double value) {
+        set_value(group, keyParts, value, __func__);
     }
 
-    void set_double(const std::string &group, const std::string &key, std::string &value) {
+    void set_double(const std::string &group, const MultiPart &keyParts, std::string &value) {
         auto dvalue = strtod(value.c_str(), nullptr);
-        set_double(group, key, dvalue);
+        set_double(group, keyParts, dvalue);
     }
 
     void dump(const std::string &group) {
@@ -459,20 +474,20 @@ public:
             std::string vtype = "bool";
             auto valueLower = str_tolower(value);
             if ((valueLower.compare("true") == 0) || (valueLower == "false")) {
-                set_bool(group, key, value);
+                set_bool(group, {key}, value);
             } else if (std::regex_match(value, rInt)) {
                 vtype = "int";
-                set_int64(group, key, value);
+                set_int64(group, {key}, value);
             } else if (std::regex_match(value, rFloat)) {
                 vtype = "float";
-                set_double(group, key, value);
+                set_double(group, {key}, value);
             } else {
                 vtype = "string";
                 if (!value.empty() && (value.front() != '"')) {
                     LWARN_LN("WARN:SC:%s:%d:%s:k:%s:v:%s:is this string?", __func__, iLine, group.c_str(), key.c_str(), value.c_str());
                 }
                 value = str_trim_single(value, {"\""});
-                set_string(group, key, value);
+                set_string(group, {key}, value);
             }
             //LDBUG_LN("DBUG:SC:%s:%d:kv:%s:%s:%s:%s", __func__, iLine, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
         }
@@ -594,10 +609,10 @@ int main(int argc, char **argv) {
     sc.get_int64("testme", "key101i", 123456);
     sc.get_double("testme", "key101d", 123456.789);
 
-    sc.set_bool("testme", "key201b", true);
-    sc.set_string("testme", "key201s", "hello world");
-    sc.set_int64("testme", "key201i", 987654);
-    sc.set_double("testme", "key201d", 9988.7766);
+    sc.set_bool("testme", {"key201b"}, true);
+    sc.set_string("testme", {"key201s"}, "hello world");
+    sc.set_int64("testme", {"key201i"}, 987654);
+    sc.set_double("testme", {"key201d"}, 9988.7766);
 
     sc.dump("testme");
     sc.get_bool("testme", "key201b", false);
@@ -610,12 +625,12 @@ int main(int argc, char **argv) {
 
     sc.get_vector<int64_t>("testme", "keyA100", {1, 2, 3});
     sc.get_vector<std::string>("testme", "keyA100", { "A", "അ", "अ", "ಅ" });
-    sc.set_int64("testme", "keyA300-0", 330);
-    sc.set_int64("testme", "keyA300-1", 331);
-    sc.set_int64("testme", "keyA300-2", 332);
-    sc.set_string("testme", "keyA301-0", "India");
-    sc.set_value<std::string>("testme", "keyA301-1", "World");
-    sc.set_string("testme", "keyA301-2", "AkashaGanga");
+    sc.set_int64("testme", {"keyA300-0"}, 330);
+    sc.set_int64("testme", {"keyA300-1"}, 331);
+    sc.set_int64("testme", {"keyA300-2"}, 332);
+    sc.set_string("testme", {"keyA301-0"}, "India");
+    sc.set_value<std::string>("testme", {"keyA301", "1"}, "World");
+    sc.set_string("testme", {"keyA301", "2"}, "AkashaGanga");
     sc.get_vector<int64_t>("testme", "keyA300", {1, 2, 3});
     sc.get_vector<std::string>("testme", "keyA301", { "yes 1", "No 2", "very well 3" });
     return 0;
