@@ -1,4 +1,4 @@
-#include "unicode.h"
+﻿#include "unicode.h"
 #include "unicode-data.h"
 
 #include <cassert>
