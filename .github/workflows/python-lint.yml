@@ -20,20 +20,20 @@ jobs:
       - name: flake8 Lint
         uses: py-actions/flake8@v2
         if: |
-          github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3'
+          inputs.gpu-series == 'Standard_NC4as_T4_v3'
           || (
-            github.event.schedule
+            github.event_name == 'schedule'
             && github.repository_owner == 'ggerganov'
           )
-          || github.event.pull_request
+          || github.event_name == 'pull_request'
           || github.head_ref == 'master'
           || (
-            github.event.push
-            && github.event.push.ref == 'refs/heads/master'
+            github.event_name == 'push'
+            && github.event.ref == 'refs/heads/master'
             && github.repository_owner == 'ggerganov'
           )
           || (
-            !github.event.push
+            github.event_name != 'push'
             && github.ref_name == 'master'
           )
         with:
