@@ -31,6 +31,7 @@ from hashlib import sha256
 from enum import IntEnum, auto
 from transformers import AutoTokenizer
 
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("convert-hf-to-gguf-update")
 
 
@@ -62,6 +63,7 @@ models = [
     {"name": "mpt",            "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mosaicml/mpt-7b", },
     {"name": "starcoder",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/bigcode/starcoder2-3b", },
     {"name": "gpt-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/openai-community/gpt2", },
+    {"name": "refact",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/smallcloudai/Refact-1_6-base", },
 ]
 
 # make directory "models/tokenizers" if it doesn't exist
@@ -158,8 +160,8 @@ src_func = f"""
         chktok = tokenizer.encode(chktxt)
         chkhsh = sha256(str(chktok).encode()).hexdigest()
 
-        print(f"chktok: {{chktok}}")
-        print(f"chkhsh: {{chkhsh}}")
+        logger.debug(f"chktok: {{chktok}}")
+        logger.debug(f"chkhsh: {{chkhsh}}")
 
         res = None
 
@@ -168,22 +170,22 @@ src_func = f"""
         #       don't edit the hashes manually!
 {src_ifs}
         if res is None:
-            print("\\n")
-            print("**************************************************************************************")
-            print("** WARNING: The BPE pre-tokenizer was not recognized!")
-            print("**          There are 2 possible reasons for this:")
-            print("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
-            print("**          - the pre-tokenization config has changed upstream")
-            print("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
-            print("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
-            print("**")
-            print(f"** chkhsh:  {{chkhsh}}")
-            print("**************************************************************************************")
-            print("\\n")
+            logger.warning("\\n")
+            logger.warning("**************************************************************************************")
+            logger.warning("** WARNING: The BPE pre-tokenizer was not recognized!")
+            logger.warning("**          There are 2 possible reasons for this:")
+            logger.warning("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
+            logger.warning("**          - the pre-tokenization config has changed upstream")
+            logger.warning("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
+            logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
+            logger.warning("**")
+            logger.warning(f"** chkhsh:  {{chkhsh}}")
+            logger.warning("**************************************************************************************")
+            logger.warning("\\n")
             raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
-        print(f"tokenizer.ggml.pre: {{repr(res)}}")
-        print(f"chkhsh: {{chkhsh}}")
+        logger.debug(f"tokenizer.ggml.pre: {{repr(res)}}")
+        logger.debug(f"chkhsh: {{chkhsh}}")
 
         return res
 """
@@ -197,6 +199,8 @@ logger.info("\n")
 # generate tests for each tokenizer model
 
 tests = [
+    "ied 4 ½ months",
+    "Führer",
     "",
     " ",
     "  ",
@@ -281,6 +285,6 @@ logger.info("\nRun the following commands to generate the vocab files for testin
 for model in models:
     name = model["name"]
 
-    logger.info(f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only")
+    print(f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only") # noqa: NP100
 
 logger.info("\n")

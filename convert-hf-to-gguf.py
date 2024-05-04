@@ -308,6 +308,9 @@ class Model(ABC):
         if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
             # ref: https://huggingface.co/openai-community/gpt2
             res = "gpt-2"
+        if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
+            # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
+            res = "refact"
 
         if res is None:
             logger.warning("\n")
@@ -324,7 +327,7 @@ class Model(ABC):
             logger.warning("\n")
             raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
-        logger.debug(f"tokenizer.ggml.pre: {res}")
+        logger.debug(f"tokenizer.ggml.pre: {repr(res)}")
         logger.debug(f"chkhsh: {chkhsh}")
 
         return res

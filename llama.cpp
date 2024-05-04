@@ -4383,6 +4383,9 @@ static void llm_load_vocab(
             } else if (
                     tokenizer_pre == "gpt-2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
+            } else if (
+                    tokenizer_pre == "refact") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_REFACT;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -11952,7 +11955,7 @@ static bool llama_is_user_defined_token(const llama_vocab& vocab, llama_token id
 static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
     GGML_ASSERT(llama_vocab_get_type(vocab) != LLAMA_VOCAB_TYPE_NONE);
     GGML_ASSERT(llama_is_byte_token(vocab, id));
-    const auto& token_data = vocab.id_to_token.at(id);
+    const auto & token_data = vocab.id_to_token.at(id);
     switch (llama_vocab_get_type(vocab)) {
         case LLAMA_VOCAB_TYPE_SPM: {
             auto buf = token_data.text.substr(3, 2);
@@ -12212,14 +12215,13 @@ struct llm_tokenizer_bpe {
                             "\\s?\\p{L}+",
                             "\\s?\\p{P}+",
                             "[一-龥ࠀ-一가-퟿]+",
-                            "\\p{N}+",
+                            "\\p{N}",
                         });
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_FALCON:
                         word_collection = unicode_regex_split(text, {
                             "[\\p{P}\\$\\+<=>\\^~\\|]+",
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-                            "\\p{N}+",
                             "[0-9][0-9][0-9]",
                         });
                         break;
@@ -12235,6 +12237,12 @@ struct llm_tokenizer_bpe {
                         });
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_STARCODER:
+                    case LLAMA_VOCAB_PRE_TYPE_REFACT:
+                        word_collection = unicode_regex_split(text, {
+                            "\\p{N}",
+                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                        });
+                        break;
                     case LLAMA_VOCAB_PRE_TYPE_GPT2:
                         word_collection = unicode_regex_split(text, {
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
@@ -17466,9 +17474,10 @@ int32_t llama_tokenize(
 
 static std::string llama_decode_text(const std::string & text) {
     std::string decoded_text;
-    auto unicode_sequences = unicode_cpts_from_utf8(text);
-    for (auto & unicode_sequence : unicode_sequences) {
-        decoded_text += unicode_utf8_to_byte(unicode_cpt_to_utf8(unicode_sequence));
+
+    const auto cpts = unicode_cpts_from_utf8(text);
+    for (const auto cpt : cpts) {
+        decoded_text += unicode_utf8_to_byte(unicode_cpt_to_utf8(cpt));
     }
 
     return decoded_text;
