@@ -42,6 +42,7 @@ jobs:
       RUNNER_LABEL: Standard_NC4as_T4_v3 # FIXME Do not find a way to not duplicate it
       N_USERS: 8
       DURATION: 10m
+      ACTIONS_STEP_DEBUG: true
 
     strategy:
       matrix:
