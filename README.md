@@ -984,7 +984,7 @@ apt update && apt upgrade -y
 apt install git
 ```
 
-It's essential to move your model inside the `~/` directory for best performance:
+It's recommended to move your model inside the `~/` directory for best performance:
 ```
 cd storage/downloads
 mv model.gguf ~/
