@@ -10,23 +10,6 @@ jobs:
   flake8-lint:
     runs-on: ubuntu-latest
     name: Lint
-    if: |
-      github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3'
-      || (
-        github.event.schedule
-        && github.repository_owner == 'ggerganov'
-      )
-      || github.event.pull_request
-      || github.head_ref == 'master'
-      || (
-        github.event.push
-        && github.event.push.ref == 'refs/heads/master'
-        && github.repository_owner == 'ggerganov'
-      )
-      || (
-        !github.event.push
-        && github.ref_name == 'master'
-      )
     steps:
       - name: Check out source repository
         uses: actions/checkout@v4
@@ -36,6 +19,23 @@ jobs:
           python-version: "3.11"
       - name: flake8 Lint
         uses: py-actions/flake8@v2
+        if: |
+          github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3'
+          || (
+            github.event.schedule
+            && github.repository_owner == 'ggerganov'
+          )
+          || github.event.pull_request
+          || github.head_ref == 'master'
+          || (
+            github.event.push
+            && github.event.push.ref == 'refs/heads/master'
+            && github.repository_owner == 'ggerganov'
+          )
+          || (
+            !github.event.push
+            && github.ref_name == 'master'
+          )
         with:
             ignore: "E203,E211,E221,E225,E231,E241,E251,E261,E266,E501,E701,E704,W503"
             exclude: "examples/*,examples/*/**,*/**/__init__.py,convert-hf-to-gguf-update.py"
