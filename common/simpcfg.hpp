@@ -59,6 +59,9 @@
 #endif
 
 
+// **** **** **** String related helpers **** **** **** //
+
+
 size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
     std::mbstate_t mbState = std::mbstate_t();
     const wchar_t *wSrcP = wSrc.c_str();
@@ -156,18 +159,27 @@ std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \
 
 // Remove atmost 1 char at the begin and 1 char at the end of the passed string,
 // provided the char belongs to one of the chars in trimChars.
-// NOTE: Chars being trimmed (ie in trimChars) needs to be FixedSize encoded chars,
-// to avoid mix up when working with strings which can utf-8/variable length encoded strings.
-// NOTE: This will work provided the string being trimmed as well the chars being
-// trimmed are made up of 1byte encoded chars including in utf8 encoding space.
-// If the string being trimmed includes multibyte encoded characters at the end,
-// then trimming can mess things up, if you have multibyte encoded utf-8 chars
-// in the trimChars set.
-std::string str_trim_single(std::string sin, std::string trimChars=" \t\n") {
+//
+// NOTE: Chars being trimmed (ie in trimChars) needs to be part of NativeCharSize
+// subset of the string's encoded char space, to avoid mix up when working with
+// strings which can be utf-8/utf-16/utf-32/sane-variable-length encoded strings.
+// NOTE:UTF8: This will work provided the string being trimmed as well the chars
+// being trimmed are made up of 1byte encoded chars in case of utf8 encoding space.
+// If the string being trimmed includes multibyte (ie MultiNativeCharSize) encoded
+// characters at the end, then trimming can mess things up, if you have multibyte
+// encoded utf-8 chars in the trimChars set.
+//
+// Currently given that SimpCfg only uses this with NativeCharSize chars in the
+// trimChars and most of the platforms are likely to be using utf-8 based char
+// space (which is a realtively sane variable length char encoding from this
+// logics perspective), so not providing oversmart variant.
+//
+template <typename TString>
+TString str_trim_single(TString sin, const TString& trimChars=" \t\n") {
     if (sin.empty()) return sin;
     for(auto c: trimChars) {
         if (c == sin.front()) {
-            sin = sin.substr(1, std::string::npos);
+            sin = sin.substr(1, TString::npos);
             break;
         }
     }
@@ -221,6 +233,9 @@ std::string str(std::vector<TypeWithStrSupp> values) {
     ss << " ]";
     return ss.str();
 }
+
+
+// **** **** **** SimpCfg related helpers **** **** **** //
 
 
 typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
@@ -385,7 +400,7 @@ public:
             bool bGroup = !isspace(curL[0]);
             curL = str_trim(curL);
             if (bGroup) {
-                curL = str_trim_single(curL, "\"");
+                curL = str_trim_single(curL, {"\""});
                 group = curL;
                 LDBUG_LN("DBUG:SC:%s:group:%s", __func__, group.c_str());
                 continue;
@@ -402,7 +417,7 @@ public:
             }
             std::string key = curL.substr(0, dPos);
             key = str_trim(key);
-            key = str_trim_single(key, "\"");
+            key = str_trim_single(key, {"\""});
             std::string value = curL.substr(dPos+1);
             value = str_trim(value);
             value = str_trim(value, {","});
@@ -421,7 +436,7 @@ public:
                 if (!value.empty() && (value.front() != '"')) {
                     LWARN_LN("WARN:SC:%s:%d:%s:k:%s:v:%s:is this string?", __func__, iLine, group.c_str(), key.c_str(), value.c_str());
                 }
-                value = str_trim_single(value, "\"");
+                value = str_trim_single(value, {"\""});
                 set_string(group, key, value);
             }
             //LDBUG_LN("DBUG:SC:%s:%d:kv:%s:%s:%s:%s", __func__, iLine, group.c_str(), key.c_str(), vtype.c_str(), value.c_str());
