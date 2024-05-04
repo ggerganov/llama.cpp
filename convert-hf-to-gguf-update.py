@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # This script downloads the tokenizer models of the specified models from Huggingface and
 # generates the get_vocab_base_pre() function for convert-hf-to-gguf.py
 #
@@ -32,6 +34,7 @@ from enum import IntEnum, auto
 from transformers import AutoTokenizer
 
 logger = logging.getLogger("convert-hf-to-gguf-update")
+logging.basicConfig(level=logging.INFO)
 
 
 class TOKENIZER_TYPE(IntEnum):
