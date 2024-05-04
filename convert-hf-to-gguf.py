@@ -12,7 +12,7 @@ import sys
 from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Sequence, TypeVar, cast, overload
 
 import numpy as np
 import torch
@@ -63,7 +63,7 @@ class Model:
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool):
+    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool):
         if self.__class__ == Model:
             raise TypeError(f"{self.__class__.__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
@@ -81,6 +81,9 @@ class Model:
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensors = dict(self.get_tensors())
+        if not eager:
+            for k, v in self.tensors.items():
+                self.tensors[k] = LazyTorchTensor.from_eager(v)
 
     @classmethod
     def __init_subclass__(cls):
@@ -245,9 +248,11 @@ class Model:
 
     def write(self):
         self.write_tensors()
+        self.tensors.clear()  # save memory by not keeping references to the tensors
+
         self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
-        self.gguf_writer.write_tensors_to_file()
+        self.gguf_writer.write_tensors_to_file(progress=True)
         self.gguf_writer.close()
 
     def write_vocab(self):
@@ -2229,6 +2234,124 @@ class OlmoModel(Model):
 ###### CONVERSION LOGIC ######
 
 
+# tree of lazy tensors
+class LazyTorchTensor:
+    _meta: Tensor
+    _data: Tensor | None
+    _args: list[Any]
+    _func: Callable[[list[Any]], Tensor] | None = None
+
+    def __init__(self, *, meta: Tensor, data: Tensor | None = None, args: list[Any] | None = None, func: Callable[[list[Any]], Tensor] | None = None):
+        self._meta = meta
+        self._data = data
+        self._args = args if args is not None else []
+        self._func = func
+
+    @staticmethod
+    def _recurse_apply(o: Any, fn: Callable[[Any], Any]) -> Any:
+        # TODO: dicts
+        if isinstance(o, (list, tuple)):
+            l = []
+            for item in o:
+                l.append(LazyTorchTensor._recurse_apply(item, fn))
+            if isinstance(o, tuple):
+                l = tuple(l)
+            return l
+        elif isinstance(o, LazyTorchTensor):
+            return fn(o)
+        else:
+            return o
+
+    def _wrap_fn(self, fn: Callable, use_self: bool = False) -> Callable[[Any], LazyTorchTensor]:
+        def wrapped_fn(*args, **kwargs):
+            if kwargs is None:
+                kwargs = {}
+            args_list = ([self] if use_self else []) + list(args)
+
+            meta_args = LazyTorchTensor._recurse_apply(args_list, lambda t: t._meta)
+
+            return LazyTorchTensor(meta=fn(*meta_args, **kwargs), args=args_list, func=lambda a: fn(*a, **kwargs))
+        return wrapped_fn
+
+    def __getattr__(self, __name: str) -> Any:
+        meta_attr = getattr(self._meta, __name)
+        if not callable(meta_attr):
+            return meta_attr
+        else:
+            return self._wrap_fn(getattr(torch.Tensor, __name), use_self=True)
+
+    _dtype_map: dict[torch.dtype, type] = {
+        torch.float16: np.float16,
+        torch.float32: np.float32,
+    }
+
+    def numpy(self) -> gguf.LazyTensor:
+        dtype = self._dtype_map[self.dtype]
+        return gguf.LazyTensor(lambda: LazyTorchTensor.to_eager(self).numpy(), dtype=dtype, shape=self.shape)
+
+    @overload
+    @staticmethod
+    def to_eager(t: Tensor | LazyTorchTensor) -> Tensor: ...
+
+    @overload
+    @staticmethod
+    def to_eager(t: list[Tensor | LazyTorchTensor]) -> list[Tensor]: ...
+
+    @staticmethod
+    def to_eager(t: Any) -> Any:
+        def simple_to_eager(_t: LazyTorchTensor) -> Tensor:
+            # wake up the lazy tensor
+            if _t._data is None and _t._func is not None:
+                # recurse into its arguments
+                _t._args = LazyTorchTensor.to_eager(_t._args)
+                _t._data = _t._func(_t._args)
+            if _t._data is not None:
+                return _t._data
+            else:
+                raise ValueError(f"Could not compute lazy tensor {_t!r} with args {_t._args!r}")
+
+        # recurse into lists and/or tuples, keeping their structure
+        return LazyTorchTensor._recurse_apply(t, simple_to_eager)
+
+    @staticmethod
+    def from_eager(t: Tensor) -> Tensor:
+        if (t.__class__ == LazyTorchTensor):
+            return t
+        return LazyTorchTensor(meta=t.detach().to("meta"), data=t)  # type: ignore
+
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        del types  # unused
+
+        if kwargs is None:
+            kwargs = {}
+
+        if func is torch.Tensor.numpy:
+            return args[0].numpy()
+        if func is torch.equal:
+            eager_args = LazyTorchTensor.to_eager(args)
+            return func(*eager_args, **kwargs)
+
+        return LazyTorchTensor._wrap_fn(args[0], func)(*args, **kwargs)
+
+    # special methods bypass __getattr__, so they need to be added manually
+    # ref: https://docs.python.org/3/reference/datamodel.html#special-lookup
+    # NOTE: LazyTorchTensor can't be a subclass of Tensor (and then be used
+    #       as self._meta is currently used), because then the following
+    #       operations would by default not be wrapped, and so not propagated
+    #       when the tensor is made eager.
+    #       It's better to get non-silent errors for not-yet-supported operators.
+    # TODO: add more when needed to avoid clutter, or find a more concise way
+    def __neg__(self, *args):  # mamba
+        return self._wrap_fn(torch.Tensor.__neg__)(self, *args)
+
+    def __add__(self, *args):  # gemma
+        return self._wrap_fn(torch.Tensor.__add__)(self, *args)
+
+    def __getitem__(self, *args):  # bloom falcon internlm2
+        return self._wrap_fn(torch.Tensor.__getitem__)(self, *args)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Convert a huggingface model to a GGML compatible file")
@@ -2259,6 +2382,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--use-temp-file", action="store_true",
         help="use the tempfile library while processing (helpful when running out of memory, process killed)",
+    )
+    parser.add_argument(
+        "--no-lazy", action="store_true",
+        help="use more RAM by computing all outputs before writing (use in case lazy evaluation is broken)",
     )
     parser.add_argument(
         "--model-name", type=str, default=None,
@@ -2313,7 +2440,7 @@ def main() -> None:
 
     with torch.inference_mode():
         model_class = Model.from_model_architecture(hparams["architectures"][0])
-        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file)
+        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file, args.no_lazy)
 
         logger.info("Set model parameters")
         model_instance.set_gguf_parameters()
