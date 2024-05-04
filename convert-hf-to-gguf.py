@@ -2251,12 +2251,12 @@ class LazyTorchTensor:
     def _recurse_apply(o: Any, fn: Callable[[Any], Any]) -> Any:
         # TODO: dicts
         if isinstance(o, (list, tuple)):
-            l = []
+            L = []
             for item in o:
-                l.append(LazyTorchTensor._recurse_apply(item, fn))
+                L.append(LazyTorchTensor._recurse_apply(item, fn))
             if isinstance(o, tuple):
-                l = tuple(l)
-            return l
+                L = tuple(L)
+            return L
         elif isinstance(o, LazyTorchTensor):
             return fn(o)
         else:
