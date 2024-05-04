@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from typing import Any, Mapping, Sequence, NamedTuple
+from typing import Any, Sequence, NamedTuple
 
 # Necessary to load the local gguf package
 if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
@@ -40,7 +40,7 @@ def get_byteorder(reader: gguf.GGUFReader) -> gguf.GGUFEndian:
         return host_endian
 
 
-def decode_field(field: gguf.ReaderField) -> Any:
+def decode_field(field: gguf.ReaderField | None) -> Any:
     if field and field.types:
         main_type = field.types[0]
 
@@ -74,7 +74,7 @@ def find_token(token_list: Sequence[int], token: str) -> Sequence[int]:
     return token_ids
 
 
-def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new_metadata: Mapping[str, MetadataDetails], remove_metadata: Sequence[str]) -> None:
+def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new_metadata: dict[str, MetadataDetails], remove_metadata: Sequence[str]) -> None:
     for field in reader.fields.values():
         # Suppress virtual fields and fields written by GGUFWriter
         if field.name == gguf.Keys.General.ARCHITECTURE or field.name.startswith('GGUF.'):
@@ -115,7 +115,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
 
     for tensor in reader.tensors:
         # Dimensions are written in reverse order, so flip them first
-        shape = np.flipud(tensor.shape)
+        shape = np.flipud(tensor.shape).tolist()
         writer.add_tensor_info(tensor.name, shape, tensor.data.dtype, tensor.data.nbytes, tensor.tensor_type)
 
     writer.write_header_to_file()
