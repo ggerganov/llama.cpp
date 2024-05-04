@@ -1,4 +1,4 @@
-﻿#include "unicode.h"
+#include "unicode.h"
 #include "unicode-data.h"
 
 #include <cassert>
@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <locale>
@@ -120,9 +121,9 @@ static std::unordered_map<uint32_t, int> unicode_cpt_type_map() {
             cpt_types[i] = CODEPOINT_TYPE_LETTER;
         }
     }
-    for (auto p : unicode_ranges_whitespace) {
+    for (auto p : unicode_ranges_separator) {
         for (auto i = p.first; i <= p.second; ++ i) {
-            cpt_types[i] = CODEPOINT_TYPE_WHITESPACE;
+            cpt_types[i] = CODEPOINT_TYPE_SEPARATOR;
         }
     }
     for (auto p : unicode_ranges_accent_mark) {
@@ -300,9 +301,9 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
                 continue;
             }
             // regex: <space>?[^\s\p{L}\p{N}]+
-            if (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+            if (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                 pos += (cpt == ' ');
-                while (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+                while (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                     cpt2_type = _get_cpt_type(++pos);
                 }
                 _add_token(pos);
@@ -310,7 +311,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             }
 
             size_t num_whitespaces = 0;
-            while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_WHITESPACE) {
+            while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_SEPARATOR) {
                 num_whitespaces++;
             }
 
@@ -424,9 +425,9 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
             // regex: <space>?[^\s\p{L}\p{N}]+[\r\n]*
             int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
-            if (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+            if (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                 pos += (cpt == ' ');
-                while (cpt2_type != CODEPOINT_TYPE_WHITESPACE && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+                while (cpt2_type != CODEPOINT_TYPE_SEPARATOR && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
                     cpt2_type = _get_cpt_type(++pos);
                 }
                 char32_t cpt2 = _get_cpt(pos);
@@ -439,7 +440,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
             size_t num_whitespaces = 0;
             size_t last_end_r_or_n = 0;
-            while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_WHITESPACE) {
+            while (_get_cpt_type(pos+num_whitespaces) == CODEPOINT_TYPE_SEPARATOR) {
                 char32_t cpt2 = _get_cpt(pos+num_whitespaces);
                 if (cpt2 == '\r' || cpt2 == '\n') {
                     last_end_r_or_n = pos + num_whitespaces + 1;
@@ -619,6 +620,19 @@ int unicode_cpt_type(const std::string & utf8) {
     }
     size_t offset = 0;
     return unicode_cpt_type(unicode_cpt_from_utf8(utf8, offset));
+}
+
+bool unicode_cpt_is_whitespace(uint32_t cp) {
+    static const std::unordered_set<uint32_t> is_whitespace = [] {
+        std::unordered_set<uint32_t> is_whitespace;
+        for (auto p : unicode_ranges_whitespace) {
+            for (auto i = p.first; i <= p.second; ++ i) {
+                is_whitespace.insert(i);
+            }
+        }
+        return is_whitespace;
+    }();
+    return (bool)is_whitespace.count(cp);
 }
 
 std::string unicode_byte_to_utf8(uint8_t byte) {
