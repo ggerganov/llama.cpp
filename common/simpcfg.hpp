@@ -295,9 +295,9 @@ public:
     void set_value(const std::string &group, const std::string &key, const SupportedDataType &value, const std::string &callerName="") {
         auto &gm = mapV[group];
         gm[key] = value;
-        std::stringstream ss;
-        ss << value;
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), ss.str().c_str());
+#ifdef SC_DEBUG
+        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
+#endif
     }
 
     void set_string(const std::string &group, const std::string &key, const std::string &value) {
@@ -349,13 +349,15 @@ public:
     SupportedDataType get_value(const std::string &group, const std::string &key, const SupportedDataType &defaultValue, const std::string &callerName="") {
         auto gm = mapV[group];
         if (gm.find(key) == gm.end()) {
-            std::stringstream ss;
-            ss << defaultValue;
-            LWARN_LN("DBUG:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), ss.str().c_str());
+#ifdef SC_DEBUG
+            LWARN_LN("WARN:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
+#endif
             return defaultValue;
         }
         auto value = gm[key];
+#ifdef SC_DEBUG
         LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
+#endif
         return std::get<SupportedDataType>(value);
     }
 
