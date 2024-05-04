@@ -541,18 +541,15 @@ void check_nonenglish() {
         std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t"});
         std::cout << std::format("{}: Test1[{}] Dumb[{}] OverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
     }
-    std::vector<std::string> vTest2 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ ", "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ "};
+    // The string "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ ",
+    // * will mess up str_trim_dumb,
+    // * but will rightly trigger a exception with oversmart.
+    std::vector<std::string> vTest2 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s, अs, ഇs at end 000रअ0अ ", "\n\tthis र remove 0s, अs, ഇs at end 000रअ0इअ "};
+    std::string trimChars = {" \n\tഇ0अ"};
     for (auto sTest: vTest2) {
-        std::string sGotDumb = str_trim_dumb(sTest, {" \n\t0अ"});
-        std::cout << std::format("{}: Test2[{}] Dumb[{}]", __func__, sTest, sGotDumb) << std::endl;
-    }
-    // This partly invalid utf8 string will mess up str_trim_dumb "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ "
-    // but will trigger a exception with oversmart.
-    // std::vector<std::string> vTest3 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ ", "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ "};
-    std::vector<std::string> vTest3 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s and अs at end 000रअ0अ ", "\n\tthis र remove 0s and अs at end 000रअ0\xe0\xa4\x30अ "}; // \xe0\xa4
-    for (auto sTest: vTest3) {
-        std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t0अ"});
-        std::cout << std::format("{}: Test3[{}] OverSmart[{}]", __func__, sTest, sGotOSmart) << std::endl;
+        std::string sGotDumb = str_trim_dumb(sTest, trimChars);
+        std::string sGotOSmart = str_trim_oversmart(sTest, trimChars);
+        std::cout << std::format("{}: Test2 [{}]\n\tDumb[{}]\n\tOverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
     }
 }
 
